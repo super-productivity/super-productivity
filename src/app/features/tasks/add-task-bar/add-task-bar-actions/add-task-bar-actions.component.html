@@ -196,12 +196,12 @@
         <span
           matMenuItemIcon
           class="menu-icon-emoji"
-          [style.color]="project.theme.primary"
+          [style.color]="project.theme?.primary"
         >
           {{ project.icon || DEFAULT_PROJECT_ICON }}
         </span>
       } @else {
-        <mat-icon [style.color]="project.theme.primary">
+        <mat-icon [style.color]="project.theme?.primary">
           {{ project.icon || DEFAULT_PROJECT_ICON }}
         </mat-icon>
       }
@@ -226,13 +226,13 @@
         @if (isTagEmojiIcon(tag)) {
           <span
             matMenuItemIcon
-            [style.color]="tag.color || tag.theme.primary"
+            [style.color]="tag.color || tag.theme?.primary"
             class="tag-ico tag-ico-emoji"
             >{{ tag.icon || 'label' }}</span
           >
         } @else {
           <mat-icon
-            [style.color]="tag.color || tag.theme.primary"
+            [style.color]="tag.color || tag.theme?.primary"
             class="tag-ico"
             >{{ tag.icon || 'label' }}
           </mat-icon>
