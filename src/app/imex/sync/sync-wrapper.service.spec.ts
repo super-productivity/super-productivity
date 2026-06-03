@@ -107,7 +107,11 @@ describe('SyncWrapperService', () => {
     mockSyncService = jasmine.createSpyObj('OperationLogSyncService', [
       'downloadRemoteOps',
       'uploadPendingOps',
+      'hasSyncedOps',
     ]);
+    // Steady-state default: this client has synced before. Tests that exercise the
+    // never-synced path override this.
+    mockSyncService.hasSyncedOps.and.resolveTo(true);
     mockSyncService.downloadRemoteOps.and.returnValue(
       Promise.resolve({
         kind: 'no_new_ops' as const,
@@ -498,7 +502,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true },
+        { forceFromSeq0: true, isNeverSynced: false },
       );
     });
 
@@ -512,7 +516,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        undefined,
+        { forceFromSeq0: undefined, isNeverSynced: false },
       );
     });
 
@@ -523,7 +527,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        undefined,
+        { forceFromSeq0: undefined, isNeverSynced: false },
       );
     });
 

@@ -456,10 +456,20 @@ export class SyncWrapperService {
         );
       }
 
+      // Capture sync history BEFORE download. The SYNC_IMPORT conflict gate (both the
+      // download and piggyback-upload paths) uses this to decide whether a USE_LOCAL
+      // choice would overwrite a populated remote with throwaway pre-first-sync state.
+      // It MUST be read here, before this sync persists any synced ops, or the
+      // never-synced guard reads its own just-written state and disarms itself.
+      const isNeverSyncedAtSyncStart = !(await this._opLogSyncService.hasSyncedOps());
+
       // 1. Download remote ops first (important for fresh clients to receive data)
       const downloadResult = await this._opLogSyncService.downloadRemoteOps(
         syncCapableProvider,
-        isProviderSwitch ? { forceFromSeq0: true } : undefined,
+        {
+          forceFromSeq0: isProviderSwitch || undefined,
+          isNeverSynced: isNeverSyncedAtSyncStart,
+        },
       );
       // Auth is confirmed working if download didn't throw AuthFailSPError.
       // Reset here rather than only at InSync so early returns (cancelled,
@@ -480,8 +490,10 @@ export class SyncWrapperService {
       this._providerManager.setLastSyncedProviderId(providerId);
 
       // 2. Upload pending local ops
-      const uploadResult =
-        await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
+      const uploadResult = await this._opLogSyncService.uploadPendingOps(
+        syncCapableProvider,
+        { isNeverSynced: isNeverSyncedAtSyncStart },
+      );
       if (uploadResult.kind === 'completed') {
         SyncLog.log(
           `SyncWrapperService: Upload complete. uploaded=${uploadResult.uploadedCount}, piggybacked=${uploadResult.piggybackedOpsCount}`,
@@ -605,7 +617,14 @@ export class SyncWrapperService {
 
       return didChange ? SyncStatus.UpdateRemote : SyncStatus.InSync;
     } catch (error) {
-      SyncLog.err(error);
+      // DecryptNoPasswordError is expected control flow, not a failure: it signals the
+      // app to prompt for the encryption password (handled below). The download/upload
+      // service already logged it at the right severity — quiet for a fresh-client
+      // onboarding prompt, loud for the dropped-credential signature. Re-logging it here
+      // at error level would re-raise the very noise that scoping was meant to remove.
+      if (!(error instanceof DecryptNoPasswordError)) {
+        SyncLog.err(error);
+      }
 
       // Reset consecutive SuperSync auth failure counter for non-auth errors.
       // Only AuthFailSPError for SuperSync should accumulate the counter.

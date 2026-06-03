@@ -329,6 +329,68 @@ describe('OperationLogSyncService', () => {
         }
       });
 
+      it('should flag the piggybacked SYNC_IMPORT conflict as never-synced using PRE-upload history', async () => {
+        // Regression: the never-synced guard must be captured before the upload marks
+        // accepted ops synced. uploadService.uploadPendingOps flips hasSyncedOps() to true
+        // as a side effect; if the gate read it afterwards it would clear the guard and
+        // re-open the data-loss trap (USE_LOCAL force-overwriting a populated remote).
+        opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+
+        const piggybackedSyncImport: Operation = {
+          id: 'remote-sync-import',
+          clientId: 'client-B',
+          actionType: ActionType.LOAD_ALL_DATA,
+          opType: OpType.SyncImport,
+          entityType: 'ALL',
+          payload: {},
+          vectorClock: { clientB: 5 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+        // A meaningful local op remains pending so the gate produces dialog data.
+        opLogStoreSpy.getUnsynced.and.resolveTo([
+          {
+            seq: 1,
+            op: {
+              id: 'local-task-create',
+              clientId: 'client-A',
+              actionType: 'test' as ActionType,
+              opType: OpType.Create,
+              entityType: 'TASK',
+              entityId: 'task-1',
+              payload: { title: 'Example task' },
+              vectorClock: { clientA: 1 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            appliedAt: Date.now(),
+            source: 'local',
+          },
+        ]);
+
+        // Simulate the upload marking ops synced: hasSyncedOps() now reports true.
+        uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
+          opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+          return {
+            uploadedCount: 1,
+            piggybackedOps: [piggybackedSyncImport],
+            rejectedCount: 0,
+            rejectedOps: [],
+          };
+        });
+
+        const mockProvider = { isReady: () => Promise.resolve(true) } as any;
+
+        const result = await service.uploadPendingOps(mockProvider);
+
+        // CANCEL is the default dialog result, so the upload reports cancelled.
+        expect(result.kind).toBe('cancelled');
+        // The dialog must have been shown with the PRE-upload never-synced value.
+        expect(
+          syncImportConflictDialogServiceSpy.showConflictDialog,
+        ).toHaveBeenCalledWith(jasmine.objectContaining({ isNeverSynced: true }));
+      });
+
       describe('rejected ops handling delegation', () => {
         let mockProvider: any;
 

@@ -133,6 +133,17 @@ export class OperationLogSyncService {
   }
 
   /**
+   * Whether this client has ever completed a sync, for the SYNC_IMPORT conflict gate's
+   * never-synced guard. The orchestrator (SyncWrapperService) MUST read this BEFORE
+   * download and thread it into both downloadRemoteOps() and uploadPendingOps(): a sync
+   * persists downloaded ops with `syncedAt` and marks accepted uploads synced, so a read
+   * taken mid-cycle would see the sync's own writes and disarm the guard.
+   */
+  async hasSyncedOps(): Promise<boolean> {
+    return this.opLogStore.hasSyncedOps();
+  }
+
+  /**
    * Upload pending local operations to remote storage.
    * Any piggybacked operations received during upload are automatically processed.
    *
@@ -154,13 +165,25 @@ export class OperationLogSyncService {
    */
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
-    options?: { skipPiggybackProcessing?: boolean; skipServerMigrationCheck?: boolean },
+    options?: {
+      skipPiggybackProcessing?: boolean;
+      skipServerMigrationCheck?: boolean;
+      isNeverSynced?: boolean;
+    },
   ): Promise<UploadOutcome> {
     // CRITICAL: Ensure all pending write operations have completed before uploading.
     // The effect that writes operations uses concatMap for sequential processing,
     // but if sync is triggered before all operations are written to IndexedDB,
     // we would upload an incomplete set. This flush waits for all queued writes.
     await this.writeFlushService.flushPendingWrites();
+
+    // Capture never-synced status BEFORE the upload runs: uploadService.uploadPendingOps
+    // marks accepted ops synced, which flips hasSyncedOps() and would defeat the piggyback
+    // conflict gate's never-synced guard if it read live state afterwards. The orchestrator
+    // passes a value captured even earlier (pre-download, since download also persists
+    // synced ops); fall back to a local read for standalone upload callers.
+    const isNeverSyncedAtSyncStart =
+      options?.isNeverSynced ?? !(await this.opLogStore.hasSyncedOps());
 
     // SAFETY: Block upload from wholly fresh clients
     // A fresh client has nothing meaningful to upload and uploading could overwrite
@@ -213,6 +236,7 @@ export class OperationLogSyncService {
       const piggybackedConflict =
         await this.syncImportConflictGateService.checkIncomingFullStateConflict(
           result.piggybackedOps,
+          { isNeverSynced: isNeverSyncedAtSyncStart },
         );
       if (piggybackedConflict.fullStateOp) {
         const { fullStateOp, pendingOps, dialogData } = piggybackedConflict;
@@ -347,7 +371,7 @@ export class OperationLogSyncService {
    */
   async downloadRemoteOps(
     syncProvider: OperationSyncCapable,
-    options?: { forceFromSeq0?: boolean },
+    options?: { forceFromSeq0?: boolean; isNeverSynced?: boolean },
   ): Promise<DownloadOutcome> {
     const result = await this.downloadService.downloadRemoteOps(syncProvider, options);
 
@@ -650,6 +674,9 @@ export class OperationLogSyncService {
         result.newOps,
         {
           flushPendingWrites: true,
+          // Pre-download snapshot from the orchestrator (falls back to a live read here,
+          // which is correct on this path: no ops are persisted until processRemoteOps).
+          isNeverSynced: options?.isNeverSynced,
         },
       );
     if (incomingConflict.fullStateOp) {
