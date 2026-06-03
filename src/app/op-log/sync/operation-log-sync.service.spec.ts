@@ -59,7 +59,9 @@ describe('OperationLogSyncService', () => {
       'clearFullStateOps',
       'getVectorClock',
       'appendBatchSkipDuplicates',
+      'hasSyncedOps',
     ]);
+    opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
     opLogStoreSpy.setVectorClock.and.resolveTo();
     opLogStoreSpy.clearFullStateOps.and.resolveTo();
     opLogStoreSpy.getVectorClock.and.resolveTo(null);
@@ -2446,6 +2448,61 @@ describe('OperationLogSyncService', () => {
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).not.toHaveBeenCalled();
       expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
       expect(result.kind).toBe('cancelled');
+    });
+
+    // End-to-end guard for the reported data-loss trap: a genuinely-fresh client
+    // (only the seeded example-task ops, never synced) meets a populated remote
+    // SYNC_IMPORT. The dialog must receive isNeverSynced=true so USE_LOCAL — which
+    // would overwrite the real remote with throwaway data — is guarded. Spans
+    // service -> real conflict gate -> real coordinator -> dialog.
+    it('flags isNeverSynced=true on the dialog for a never-synced client meeting a populated remote SYNC_IMPORT', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+
+      // Fresh client: has meaningful pending work (a seeded example task) but has
+      // never completed a sync.
+      opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        {
+          seq: 1,
+          op: {
+            id: 'example-task-create',
+            clientId: 'client-A',
+            actionType: 'test' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'Example Task' },
+            vectorClock: { clientA: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        },
+      ]);
+      syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.downloadRemoteOps(mockProvider);
+
+      expect(syncImportConflictDialogServiceSpy.showConflictDialog).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          scenario: 'INCOMING_IMPORT',
+          isNeverSynced: true,
+        }),
+      );
     });
 
     it('should flush pending writes before checking incoming SYNC_IMPORT conflicts', async () => {

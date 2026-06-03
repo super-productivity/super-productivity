@@ -85,6 +85,12 @@ export class SyncImportConflictGateService {
       return result;
     }
 
+    // A client that has never completed a sync cannot have diverged from remote — its
+    // "meaningful" pending ops are pre-first-sync startup state (e.g. example tasks).
+    // Flag this so the dialog guards the destructive USE_LOCAL choice with an extra
+    // confirmation (it would overwrite the populated remote with throwaway data).
+    const isNeverSynced = !(await this.opLogStore.hasSyncedOps());
+
     return {
       ...result,
       dialogData: {
@@ -92,6 +98,7 @@ export class SyncImportConflictGateService {
         localImportTimestamp: fullStateOp.timestamp ?? Date.now(),
         syncImportReason: fullStateOp.syncImportReason,
         scenario: 'INCOMING_IMPORT',
+        isNeverSynced,
       },
     };
   }

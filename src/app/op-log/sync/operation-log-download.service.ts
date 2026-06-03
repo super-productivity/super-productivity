@@ -248,10 +248,25 @@ export class OperationLogDownloadService implements OnDestroy {
         const hasEncryptedOps = syncOps.some((op) => op.isPayloadEncrypted);
         if (hasEncryptedOps) {
           if (!encryptKey) {
-            // No encryption key available - throw error to let sync wrapper show password dialog
-            OpLog.error(
-              'OperationLogDownloadService: Received encrypted operations but no encryption key is configured.',
-            );
+            // No encryption key available - throw to let the sync wrapper show the
+            // password dialog. Severity depends on history: a client that has never
+            // synced AND has no local encryption config is EXPECTED to hit this on
+            // first connect to an encrypted dataset (it just needs the password
+            // prompt), so log it quietly. Anything else — an already-synced client, or
+            // one whose local config still flags encryption on but has no key (the
+            // dropped-credential signature, e.g. after a wiped op store) — is dangerous,
+            // so keep it loud. See SyncCredentialStore.load.
+            const everSynced = await this.opLogStore.hasSyncedOps();
+            const localEncryptionEnabled = syncProvider.isEncryptionEnabled
+              ? await syncProvider.isEncryptionEnabled()
+              : false;
+            const msg =
+              'OperationLogDownloadService: Received encrypted operations but no encryption key is configured.';
+            if (everSynced || localEncryptionEnabled) {
+              OpLog.error(msg);
+            } else {
+              OpLog.normal(msg);
+            }
             throw new DecryptNoPasswordError(
               'Encrypted data received but no encryption password is configured',
             );
