@@ -83,7 +83,6 @@ import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
 import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
-import { isSingleEmoji } from '../../../util/extract-first-emoji';
 
 @Component({
   selector: 'add-task-bar',
@@ -885,14 +884,5 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onScheduleDialogOpenChange(isOpen: boolean): void {
     this.isScheduleDialogOpen.set(isOpen);
-  }
-
-  isEmojiIcon(tag: any): boolean {
-    const icon = tag?.icon;
-    return icon ? isSingleEmoji(icon) : false;
-  }
-
-  isProjectItem(item: any): boolean {
-    return !!item && 'backlogTaskIds' in item;
   }
 }

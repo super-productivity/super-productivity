@@ -15,6 +15,7 @@ import { isInputOrTextAreaElement, getContentEditableCaretCoords } from './menti
 import { getCaretCoordinates } from './caret-coords';
 import { MentionItem } from './mention-config';
 import { Log } from '../../core/log';
+import { MatIcon } from '@angular/material/icon';
 
 /**
  * Angular Mentions.
@@ -25,13 +26,32 @@ import { Log } from '../../core/log';
 @Component({
   selector: 'mention-list',
   styleUrls: ['./mention-list.component.scss'],
-  imports: [CommonModule],
+  imports: [CommonModule, MatIcon],
   template: `
     <ng-template
       #defaultItemTemplate
       let-item="item"
     >
-      {{ item[labelKey] }}
+      <div class="custom-option-layout">
+        @if (item.icon) {
+          @if (item.isEmoji) {
+            <span
+              class="tag-ico-emoji"
+              [style.color]="item.color"
+            >
+              {{ item.icon }}
+            </span>
+          } @else {
+            <mat-icon
+              class="option-main-icon"
+              [style.color]="item.color"
+            >
+              {{ item.icon }}
+            </mat-icon>
+          }
+        }
+        <span class="option-title">{{ item[labelKey] || item }}</span>
+      </div>
     </ng-template>
     <ul
       #list

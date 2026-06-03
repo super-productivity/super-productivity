@@ -219,7 +219,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       });
     });
 
-    it('should pass through project items as-is', (done) => {
+    it('should pass through project items mapped with icons', (done) => {
       component.mentionCfg$.subscribe((config) => {
         const projectMention = config.mentions!.find((m) => m.triggerChar === '+');
         expect(projectMention).toBeTruthy();
@@ -227,6 +227,27 @@ describe('AddTaskBarComponent Mentions Integration', () => {
         const titles = projectMention!.items!.map((it: any) => it && it.title);
         expect(titles).toContain('Project1');
         expect(titles).toContain('Project2');
+
+        const firstProject = projectMention!.items![0] as any;
+        expect(firstProject.icon).toBeDefined();
+        expect(firstProject.color).toBeDefined();
+        expect(firstProject.isProject).toBeTrue();
+        done();
+      });
+    });
+
+    it('should map items with resolved icons and colors', (done) => {
+      component.mentionCfg$.subscribe((config) => {
+        const tagMention = config.mentions!.find((m) => m.triggerChar === '#');
+        const firstTag = tagMention!.items![0] as any;
+        expect(firstTag.icon).toBeDefined();
+        expect(firstTag.color).toBeDefined();
+        expect(firstTag.isEmoji).toBeDefined();
+
+        const chronoMention = config.mentions!.find((m) => m.triggerChar === '@');
+        const firstChrono = chronoMention!.items![0] as any;
+        expect(firstChrono.icon).toBe('schedule');
+
         done();
       });
     });

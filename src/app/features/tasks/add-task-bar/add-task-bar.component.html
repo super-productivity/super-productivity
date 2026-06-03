@@ -11,7 +11,6 @@
       [tabindex]="tabindex()"
       [mention]="tagMentions$ | async"
       [mentionConfig]="mentionCfg$ | async"
-      [mentionListTemplate]="mentionListTemplate"
       (listShownChange)="updateListShown($event)"
       [matAutocomplete]="taskAutoCompleteEl"
       [placeholder]="
@@ -153,45 +152,3 @@
     <mat-spinner diameter="24"></mat-spinner>
   </div>
 }
-
-<ng-template
-  #mentionListTemplate
-  let-item="item"
->
-  <div class="custom-option-layout">
-    @if (item.icon) {
-      @if (isEmojiIcon(item)) {
-        <span
-          class="menu-icon-emoji"
-          [style.color]="item.color || item.theme?.primary"
-        >
-          {{ item.icon }}
-        </span>
-      } @else {
-        <mat-icon
-          class="option-main-icon"
-          [style.color]="item.color || item.theme?.primary"
-        >
-          {{ item.icon }}
-        </mat-icon>
-      }
-    } @else {
-      @if (item.date || item.time || !item.id) {
-        <mat-icon class="option-main-icon">schedule</mat-icon>
-      } @else if (isProjectItem(item)) {
-        <mat-icon
-          class="option-main-icon"
-          [style.color]="item.color || item.theme?.primary"
-          >{{ DEFAULT_PROJECT_ICON }}</mat-icon
-        >
-      } @else {
-        <mat-icon
-          class="option-main-icon"
-          [style.color]="item.color || item.theme?.primary"
-          >label</mat-icon
-        >
-      }
-    }
-    <span class="option-title">{{ item.title || item }}</span>
-  </div>
-</ng-template>
