@@ -81,6 +81,7 @@ import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-ov
 import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checklist';
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
+import { clipboardHasText } from '../../../util/clipboard-has-text';
 import { checkKeyCombo } from '../../../util/check-key-combo';
 import { IS_MAC } from '../../../util/is-mac';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
@@ -460,11 +461,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
     // Prioritize text over images (e.g. OneNote puts both on the clipboard).
     // Otherwise a text paste would be silently turned into an image attachment.
-    const hasText =
-      !!ev.clipboardData &&
-      (ev.clipboardData.types.includes('text/plain') ||
-        ev.clipboardData.types.includes('text/html'));
-    if (hasText) {
+    if (clipboardHasText(ev.clipboardData)) {
       return;
     }
 

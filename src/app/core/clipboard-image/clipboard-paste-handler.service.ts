@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { ClipboardImageService } from './clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
+import { clipboardHasText } from '../../util/clipboard-has-text';
 
 // Paste context interface
 export interface PasteContext {
@@ -25,12 +26,10 @@ export class ClipboardPasteHandlerService {
   async handlePaste(ev: ClipboardEvent, context: PasteContext): Promise<boolean> {
     if (!ev.clipboardData) return false;
 
-    // Check for text content first - prioritize text over images (e.g., OneNote copies both)
-    const hasText =
-      ev.clipboardData.types.includes('text/plain') ||
-      ev.clipboardData.types.includes('text/html');
-    if (hasText) {
-      return false; // Let default text paste behavior handle it
+    // Prioritize text over images (e.g. OneNote copies both); let the default
+    // text paste behavior handle it instead of saving an image.
+    if (clipboardHasText(ev.clipboardData)) {
+      return false;
     }
 
     const progress = this._clipboardImageService.handlePasteWithProgress(ev);
