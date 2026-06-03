@@ -39,6 +39,14 @@ describe('buildRepeatQuickSettingOptions', () => {
       'YEARLY_CURRENT_DATE',
       'CUSTOM',
     ]);
+
+    const monthlyNthWeekdayOption = options.find(
+      (o) => o.value === 'MONTHLY_NTH_WEEKDAY',
+    );
+    expect(monthlyNthWeekdayOption).toBeTruthy();
+    // Verify it uses standard ORD_FIRST and not the NTH/dative variant
+    expect(monthlyNthWeekdayOption?.label).toContain('F.TASK_REPEAT.F.ORD_FIRST');
+    expect(monthlyNthWeekdayOption?.label).not.toContain('F.TASK_REPEAT.F.ORD_FIRST_NTH');
   });
 
   // Regression test for #7945: a Date the form's `defaultValue` left unparsed

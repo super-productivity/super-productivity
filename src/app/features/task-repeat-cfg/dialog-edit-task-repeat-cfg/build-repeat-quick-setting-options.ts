@@ -2,11 +2,11 @@ import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { RepeatQuickSetting } from '../task-repeat-cfg.model';
 
-const ORDINAL_NTH_KEYS = [
-  T.F.TASK_REPEAT.F.ORD_FIRST_NTH,
-  T.F.TASK_REPEAT.F.ORD_SECOND_NTH,
-  T.F.TASK_REPEAT.F.ORD_THIRD_NTH,
-  T.F.TASK_REPEAT.F.ORD_FOURTH_NTH,
+const ORDINAL_KEYS = [
+  T.F.TASK_REPEAT.F.ORD_FIRST,
+  T.F.TASK_REPEAT.F.ORD_SECOND,
+  T.F.TASK_REPEAT.F.ORD_THIRD,
+  T.F.TASK_REPEAT.F.ORD_FOURTH,
 ];
 
 export const buildRepeatQuickSettingOptions = (
@@ -27,7 +27,7 @@ export const buildRepeatQuickSettingOptions = (
   });
   // 1-based occurrence of refDate's weekday within its month, capped to 4.
   const weekOfMonth = Math.min(Math.floor((safeRefDate.getDate() - 1) / 7) + 1, 4);
-  const ordinalStr = translateService.instant(ORDINAL_NTH_KEYS[weekOfMonth - 1]);
+  const ordinalStr = translateService.instant(ORDINAL_KEYS[weekOfMonth - 1]);
 
   return [
     {
