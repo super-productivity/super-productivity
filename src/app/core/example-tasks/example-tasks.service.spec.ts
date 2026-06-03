@@ -51,7 +51,7 @@ describe('ExampleTasksService', () => {
         {
           provide: SyncTriggerService,
           useValue: {
-            afterInitialSyncDoneAndDataLoadedInitially$: syncReady$,
+            afterInitialSyncDoneStrict$: syncReady$,
           },
         },
         { provide: TaskService, useValue: taskService },

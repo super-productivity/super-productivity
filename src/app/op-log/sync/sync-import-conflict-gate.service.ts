@@ -13,6 +13,13 @@ import { SyncImportConflictData } from './dialog-sync-import-conflict/dialog-syn
 
 const USER_ENTITY_TYPES = new Set(['TASK', 'PROJECT', 'TAG', 'NOTE']);
 
+/**
+ * Startup example/onboarding tasks are generated locally on first run (see
+ * ExampleTasksService) and must not count as "meaningful local work" that would block
+ * an incoming SYNC_IMPORT. This only ever runs against local pending ops from
+ * getUnsynced() — never against incoming remote ops — so a remote-supplied
+ * `isExampleTask` flag cannot be used to bypass the conflict dialog.
+ */
 const isExampleTaskCreateOp = (entry: OperationLogEntry): boolean => {
   const { op } = entry;
   if (
@@ -95,6 +102,10 @@ export class SyncImportConflictGateService {
 
     const pendingOps = await this.opLogStore.getUnsynced();
     const hasMeaningfulPending = this.hasMeaningfulPendingOps(pendingOps);
+    // Example-task ops that the caller may reject when it accepts the import silently.
+    // When `hasMeaningfulPending` is true (real work pending alongside example tasks),
+    // the conflict dialog is shown instead and these are intentionally left untouched:
+    // if the user keeps local state, their example tasks ride along with the rest.
     const discardablePendingOpIds = pendingOps
       .filter(isExampleTaskCreateOp)
       .map((entry) => entry.op.id);

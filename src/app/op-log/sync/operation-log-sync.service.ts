@@ -250,11 +250,7 @@ export class OperationLogSyncService {
             rejectedOps: [],
           };
         } else {
-          if (piggybackedConflict.discardablePendingOpIds.length > 0) {
-            await this.opLogStore.markRejected(
-              piggybackedConflict.discardablePendingOpIds,
-            );
-          }
+          await this._discardExampleTaskOps(piggybackedConflict.discardablePendingOpIds);
           OpLog.normal(
             `OperationLogSyncService: Accepting piggybacked ${fullStateOp.opType} from client ` +
               `${fullStateOp.clientId} without conflict dialog; ` +
@@ -683,9 +679,7 @@ export class OperationLogSyncService {
         // the session-validation latch — wrapper reads it. (#7330)
         return { kind: 'no_new_ops' };
       } else {
-        if (incomingConflict.discardablePendingOpIds.length > 0) {
-          await this.opLogStore.markRejected(incomingConflict.discardablePendingOpIds);
-        }
+        await this._discardExampleTaskOps(incomingConflict.discardablePendingOpIds);
         OpLog.normal(
           `OperationLogSyncService: Accepting incoming ${fullStateOp.opType} from client ` +
             `${fullStateOp.clientId} without conflict dialog; ` +
@@ -772,6 +766,22 @@ export class OperationLogSyncService {
       allOpClocks: result.allOpClocks,
       snapshotVectorClock: result.snapshotVectorClock,
     };
+  }
+
+  /**
+   * Rejects the auto-generated startup example-task ops so they are NOT uploaded
+   * after a SYNC_IMPORT is accepted silently. They were already excluded from the
+   * conflict gate's "meaningful work" check (see SyncImportConflictGateService); the
+   * import replaces local state, so rejecting them keeps the op-log consistent with
+   * the just-applied remote data instead of re-uploading throwaway onboarding tasks.
+   *
+   * These ids always come from getUnsynced() (local pending ops, never remote ops),
+   * so a remote `isExampleTask` flag can never reach this path.
+   */
+  private async _discardExampleTaskOps(opIds: string[]): Promise<void> {
+    if (opIds.length > 0) {
+      await this.opLogStore.markRejected(opIds);
+    }
   }
 
   /**

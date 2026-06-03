@@ -54,7 +54,16 @@ export class ExampleTasksService {
       return;
     }
 
-    this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
+    // Wait for the STRICT initial-sync signal. For SuperSync the non-strict signal
+    // resolves immediately (before the first download completes), so example tasks
+    // would be created before an incoming SYNC_IMPORT lands and then collide with it.
+    // Waiting for the actual initial sync means any imported tasks are already in the
+    // store, so the `length === 0` guard below short-circuits and no example tasks are
+    // created on a fresh synced client (this also covers file-based providers, which
+    // the op-log conflict gate cannot). The `isExampleTask` marker on the dispatched
+    // action below stays as a safety net for the narrow case where example tasks are
+    // created on a still-empty server and an import arrives before they are uploaded.
+    this._syncTriggerService.afterInitialSyncDoneStrict$
       .pipe(
         first(),
         switchMap(() => this._store.select(selectAllTasks).pipe(first())),
