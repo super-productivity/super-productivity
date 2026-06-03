@@ -308,7 +308,10 @@ export class OperationLogSyncService {
     const downloadCallback = async (downloadOptions?: {
       forceFromSeq0?: boolean;
     }): Promise<DownloadResultForRejection> => {
-      const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
+      const outcome = await this.downloadRemoteOps(syncProvider, {
+        ...downloadOptions,
+        isNeverSynced: isNeverSyncedAtSyncStart,
+      });
       // Validation failure (if any during the nested download) is on the
       // session-validation latch — no need to thread the boolean back. (#7330)
       switch (outcome.kind) {
@@ -468,6 +471,11 @@ export class OperationLogSyncService {
       const unsyncedOps = await this.opLogStore.getUnsynced();
       const hasLocalChanges = unsyncedOps.length > 0;
 
+      // Collected here, applied AFTER hydrateFromRemoteSync succeeds so a
+      // hydration failure doesn't permanently drop the pending example-create
+      // ops while leaving the user without the remote snapshot.
+      let exampleTaskOpIdsToDiscard: string[] = [];
+
       if (hasLocalChanges) {
         // Throw LocalDataConflictError if unsynced ops contain meaningful user data
         // OR if the NgRx store has meaningful data (tasks, projects, tags, notes).
@@ -484,12 +492,13 @@ export class OperationLogSyncService {
         // while the example create ops are still pending (a never-synced file client) —
         // exactly the reachable scenario. A real (non-example) task / non-INBOX project /
         // non-system tag / note still reads as meaningful and shows the dialog.
+        const exampleTaskEntries = unsyncedOps.filter(isExampleTaskCreateOp);
         const exampleTaskIds = new Set(
-          unsyncedOps
-            .filter(isExampleTaskCreateOp)
+          exampleTaskEntries
             .map((entry) => entry.op.entityId)
             .filter((id): id is string => id !== undefined),
         );
+        const exampleTaskOpIds = exampleTaskEntries.map((entry) => entry.op.id);
         const hasMeaningfulUserData =
           this.syncImportConflictGateService.hasMeaningfulPendingOps(unsyncedOps) ||
           this.syncLocalStateService.hasMeaningfulStoreData(exampleTaskIds);
@@ -508,6 +517,9 @@ export class OperationLogSyncService {
             result.snapshotVectorClock,
           );
         } else {
+          // Defer the markRejected call until hydration has succeeded — see
+          // the declaration of exampleTaskOpIdsToDiscard above for rationale.
+          exampleTaskOpIdsToDiscard = exampleTaskOpIds;
           // Only system/config ops AND no meaningful store data - proceed with download
           OpLog.normal(
             `OperationLogSyncService: Client has ${unsyncedOps.length} unsynced ops but no meaningful user data. ` +
@@ -567,6 +579,12 @@ export class OperationLogSyncService {
         result.snapshotVectorClock,
         false, // Don't create SYNC_IMPORT for file-based bootstrap
       );
+
+      // Now that the remote snapshot is applied, it's safe to drop the
+      // example-create ops we previously decided were obsolete. Doing this
+      // after hydration ensures a hydration failure leaves the queue intact
+      // so the next attempt can retry.
+      await this._discardExampleTaskOps(exampleTaskOpIdsToDiscard);
 
       // CRITICAL FIX: Write recentOps to IndexedDB after snapshot hydration.
       // File-based providers return ALL recentOps on every download, relying on

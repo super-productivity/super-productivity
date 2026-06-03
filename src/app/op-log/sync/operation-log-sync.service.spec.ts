@@ -417,7 +417,7 @@ describe('OperationLogSyncService', () => {
             }),
           );
 
-          await service.uploadPendingOps(mockProvider);
+          await service.uploadPendingOps(mockProvider, { isNeverSynced: true });
 
           expect(rejectedOpsHandlerServiceSpy.handleRejectedOps).toHaveBeenCalledWith(
             [{ opId: 'local-op-1', error: 'Some error', errorCode: 'VALIDATION_ERROR' }],
@@ -426,8 +426,10 @@ describe('OperationLogSyncService', () => {
         });
 
         it('should pass download callback that calls downloadRemoteOps', async () => {
-          uploadServiceSpy.uploadPendingOps.and.returnValue(
-            Promise.resolve({
+          opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+          uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
+            opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+            return {
               uploadedCount: 0,
               piggybackedOps: [],
               rejectedCount: 1,
@@ -438,8 +440,8 @@ describe('OperationLogSyncService', () => {
                   errorCode: 'CONFLICT_CONCURRENT',
                 },
               ],
-            }),
-          );
+            };
+          });
 
           // Capture the callback passed to handleRejectedOps
           let capturedCallback: any;
@@ -463,11 +465,16 @@ describe('OperationLogSyncService', () => {
 
           // Call the callback and verify it delegates to downloadRemoteOps
           await capturedCallback();
-          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, undefined);
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            isNeverSynced: true,
+          });
 
           // Test with forceFromSeq0 option
           await capturedCallback({ forceFromSeq0: true });
-          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, { forceFromSeq0: true });
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            forceFromSeq0: true,
+            isNeverSynced: true,
+          });
         });
 
         it('should add mergedOpsFromRejection to localWinOpsCreated in result', async () => {
@@ -1174,6 +1181,54 @@ describe('OperationLogSyncService', () => {
 
           await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
+          expect(opLogStoreSpy.markRejected).toHaveBeenCalledWith(['ex-op-ex-task-1']);
+          // markRejected must run AFTER hydrateFromRemoteSync — otherwise a
+          // hydration failure would drop the example ops while leaving the
+          // user without the remote snapshot.
+          const hydrateOrder = (
+            syncHydrationServiceSpy.hydrateFromRemoteSync.calls.mostRecent() as unknown as {
+              invocationOrder: number;
+            }
+          ).invocationOrder;
+          const markRejectedOrder = (
+            opLogStoreSpy.markRejected.calls.mostRecent() as unknown as {
+              invocationOrder: number;
+            }
+          ).invocationOrder;
+          expect(markRejectedOrder).toBeGreaterThan(hydrateOrder);
+        });
+
+        it('does NOT call markRejected when hydrateFromRemoteSync rejects (#7985)', async () => {
+          opLogStoreSpy.getUnsynced.and.returnValue(
+            Promise.resolve([exampleCreateEntry('ex-task-1')]),
+          );
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['ex-task-1'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.rejectWith(
+            new Error('hydrate failed'),
+          );
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve(fileSnapshotDownloadResult as any),
+          );
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejected();
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
+          expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
         });
 
         it('still throws LocalDataConflictError when a real task exists alongside example tasks (#7985)', async () => {

@@ -522,8 +522,25 @@ export class SyncWrapperService {
           `SyncWrapperService: Re-uploading ${pendingLwwOps} local-win op(s) from LWW ` +
             `(attempt ${lwwRetries}/${MAX_LWW_REUPLOAD_RETRIES})...`,
         );
-        const reuploadResult =
-          await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
+        // Re-thread isNeverSyncedAtSyncStart (the snapshot captured BEFORE the
+        // initial upload ran) instead of letting uploadPendingOps re-read live
+        // state — the initial batch has already flipped hasSyncedOps() to true
+        // and a live read here would mis-classify a still-fresh client. Mirrors
+        // the orchestrator-snapshot rationale at the top of uploadPendingOps.
+        const reuploadResult = await this._opLogSyncService.uploadPendingOps(
+          syncCapableProvider,
+          { isNeverSynced: isNeverSyncedAtSyncStart },
+        );
+        if (reuploadResult.kind === 'cancelled') {
+          // Mirror the initial-upload cancel path: a cancelled LWW re-upload
+          // means downloaded localWinOpsCreated stay pending in the op-log.
+          // UNKNOWN_OR_CHANGED forces a retry on the next sync tick.
+          SyncLog.log(
+            'SyncWrapperService: LWW re-upload cancelled by user. Skipping remaining sync work.',
+          );
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return 'HANDLED_ERROR';
+        }
         pendingLwwOps =
           reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
       }
