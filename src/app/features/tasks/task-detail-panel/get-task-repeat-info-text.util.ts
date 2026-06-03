@@ -89,12 +89,10 @@ export const getTaskRepeatInfoText = (
         const enabledDayIndex = TASK_REPEAT_WEEKDAY_MAP.findIndex(
           (day) => repeatCfg[day],
         );
-        const weekDayDate = new Date();
-        weekDayDate.setDate(
-          weekDayDate.getDate() + (enabledDayIndex - weekDayDate.getDay()),
-        );
+        const weekDayDate = new Date(Date.UTC(2026, 0, 4 + enabledDayIndex));
         const weekdayStr = weekDayDate.toLocaleDateString(locale, {
           weekday: 'short',
+          timeZone: 'UTC',
         });
         return [
           timeStr
@@ -135,12 +133,10 @@ export const getTaskRepeatInfoText = (
 
     case 'MONTHLY':
       if (hasNthWeekdayAnchor(repeatCfg)) {
-        const weekDayDate = new Date();
-        weekDayDate.setDate(
-          weekDayDate.getDate() + (repeatCfg.monthlyWeekday - weekDayDate.getDay()),
-        );
+        const weekDayDate = new Date(Date.UTC(2026, 0, 4 + repeatCfg.monthlyWeekday));
         const weekdayStr = weekDayDate.toLocaleDateString(locale, {
           weekday: 'long',
+          timeZone: 'UTC',
         });
 
         let ordinalKey = '';
