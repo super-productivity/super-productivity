@@ -25,6 +25,8 @@ const CONTROL_TITLE = 'E2E-7971 Control Tomorrow';
 
 const PANEL_BTN = '.e2e-toggle-issue-provider-panel';
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 const icalDate = (d: Date): string =>
   `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(
     d.getDate(),
@@ -35,7 +37,7 @@ const icalDate = (d: Date): string =>
 const buildIcal = (): string => {
   const now = new Date();
   const today = icalDate(now);
-  const tomorrow = icalDate(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+  const tomorrow = icalDate(new Date(now.getTime() + ONE_DAY_MS));
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
