@@ -83,19 +83,23 @@ export class CalendarIntegrationService {
   /**
    * Event ids of every calendar task the user has already handled — both live tasks
    * (`selectAllCalendarTaskEventIds`) and ones moved to the archive via "Finish Day",
-   * which leave the live NgRx state. The archive is re-read whenever the active set
-   * changes (archiving a task removes it from the active set → emits here), so a
-   * completed-and-archived calendar event stays hidden from the schedule instead of
-   * re-surfacing as "not yet added" the next day (#7971).
+   * which leave the live NgRx state. The archive is re-read whenever the set of live
+   * calendar-task event ids actually changes (archiving a task removes its id from that
+   * set → emits here), so a completed-and-archived calendar event stays hidden from the
+   * schedule instead of re-surfacing as "not yet added" the next day (#7971).
    */
   private _allLinkedCalendarEventIds$: Observable<string[]> = this._store
     .select(selectAllCalendarTaskEventIds)
     .pipe(
+      // Gate the archive read on a real value change: selectAllCalendarTaskEventIds emits
+      // a new array reference on every task mutation (incl. the per-second time-tracking
+      // tick), and store.select only dedups by reference. Without this guard the
+      // full-archive load() below would run on each of those.
+      distinctUntilChanged(fastArrayCompare),
       switchMap((activeIds) =>
         from(this._taskArchiveService.load()).pipe(
           map((archive) => {
-            const ids = (archive?.ids as string[]) || [];
-            const archivedEventIds = ids
+            const archivedEventIds = archive.ids
               .map((id) => archive.entities[id])
               .filter(isCalendarIssueTask)
               .map((task) => task.issueId as string);
@@ -105,6 +109,9 @@ export class CalendarIntegrationService {
         ),
       ),
       distinctUntilChanged(fastArrayCompare),
+      // Cold field shared by the cache path and every poll/refresh cycle; share so the
+      // archive is loaded once per change instead of once per subscriber.
+      shareReplay({ bufferSize: 1, refCount: true }),
     );
 
   calendarEvents$: Observable<ScheduleCalendarMapEntry[]> = combineLatest([
