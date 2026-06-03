@@ -4,6 +4,18 @@ import {
   TaskRepeatCfg,
 } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { T } from '../../../t.const';
+import { TranslateService } from '@ngx-translate/core';
+
+const mockTranslateService = {
+  instant: (key: string) => {
+    if (key === T.F.TASK_REPEAT.F.ORD_FIRST_NTH) return 'first';
+    if (key === T.F.TASK_REPEAT.F.ORD_SECOND_NTH) return 'second';
+    if (key === T.F.TASK_REPEAT.F.ORD_THIRD_NTH) return 'third';
+    if (key === T.F.TASK_REPEAT.F.ORD_FOURTH_NTH) return 'fourth';
+    if (key === T.F.TASK_REPEAT.F.ORD_LAST_NTH) return 'last';
+    return key;
+  },
+} as unknown as TranslateService;
 
 describe('getTaskRepeatInfoText()', () => {
   (
@@ -168,7 +180,7 @@ describe('getTaskRepeatInfoText()', () => {
       ],
       [
         T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
-        { timeStr: '', ordinalStr: '', weekdayStr: 'Saturday' },
+        { timeStr: '', ordinalStr: 'first', weekdayStr: 'Saturday' },
         {
           repeatEvery: 1,
           repeatCycle: 'MONTHLY',
@@ -212,6 +224,8 @@ describe('getTaskRepeatInfoText()', () => {
             id: 'IDDD',
           },
           'en-US',
+          undefined,
+          mockTranslateService,
         ),
       ).toEqual([translationKey, translateParams]);
     });
@@ -229,6 +243,8 @@ describe('getTaskRepeatInfoText()', () => {
             startTime: 'INVALID_CLOCK_STRING',
           },
           'en-US',
+          undefined,
+          mockTranslateService,
         ),
       ).not.toThrow();
     });
@@ -243,6 +259,8 @@ describe('getTaskRepeatInfoText()', () => {
           startTime: 'INVALID_CLOCK_STRING',
         },
         'en-US',
+        undefined,
+        mockTranslateService,
       );
       expect(key).toBe(T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY);
       expect(params).toEqual({ timeStr: '' });

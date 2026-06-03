@@ -10,12 +10,13 @@ import { getWeekdaysMin } from '../../../util/get-weekdays-min';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getEffectiveRepeatStartDate } from '../../task-repeat-cfg/store/get-effective-repeat-start-date.util';
 import { TranslateService } from '@ngx-translate/core';
+import { hasNthWeekdayAnchor } from '../../task-repeat-cfg/store/get-nth-weekday-of-month.util';
 
 export const getTaskRepeatInfoText = (
   repeatCfg: TaskRepeatCfg,
   locale: string | undefined,
-  dateTimeFormatService?: DateTimeFormatService,
-  translateService?: TranslateService,
+  dateTimeFormatService: DateTimeFormatService | undefined,
+  translateService: TranslateService,
 ): [string, { [key: string]: string | number }] => {
   const timeStr =
     repeatCfg.startTime && isValidSplitTime(repeatCfg.startTime)
@@ -133,19 +134,7 @@ export const getTaskRepeatInfoText = (
       ];
 
     case 'MONTHLY':
-      if (repeatCfg.monthlyLastDay) {
-        return [
-          timeStr
-            ? T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY_AND_TIME
-            : T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY,
-          { timeStr },
-        ];
-      }
-
-      if (
-        repeatCfg.monthlyWeekOfMonth !== undefined &&
-        repeatCfg.monthlyWeekday !== undefined
-      ) {
+      if (hasNthWeekdayAnchor(repeatCfg)) {
         const weekDayDate = new Date();
         weekDayDate.setDate(
           weekDayDate.getDate() + (repeatCfg.monthlyWeekday - weekDayDate.getDay()),
@@ -167,17 +156,28 @@ export const getTaskRepeatInfoText = (
           ordinalKey = ordinalKeys[repeatCfg.monthlyWeekOfMonth - 1] || '';
         }
 
-        const ordinalStr = translateService ? translateService.instant(ordinalKey) : '';
+        if (ordinalKey) {
+          const ordinalStr = translateService.instant(ordinalKey);
 
+          return [
+            timeStr
+              ? T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY_AND_TIME
+              : T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+            {
+              ordinalStr,
+              weekdayStr,
+              timeStr,
+            },
+          ];
+        }
+      }
+
+      if (repeatCfg.monthlyLastDay) {
         return [
           timeStr
-            ? T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY_AND_TIME
-            : T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
-          {
-            ordinalStr,
-            weekdayStr,
-            timeStr,
-          },
+            ? T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY_AND_TIME
+            : T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY,
+          { timeStr },
         ];
       }
 
