@@ -33,6 +33,7 @@ import { SyncImportConflictGateService } from './sync-import-conflict-gate.servi
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { getDefaultMainModelData } from '../model/model-config';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { SyncLocalStateService } from './sync-local-state.service';
 import { SyncImportConflictCoordinatorService } from './sync-import-conflict-coordinator.service';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
@@ -226,14 +227,27 @@ export class OperationLogSyncService {
           isExampleTaskCreateOp(entry) || entry.op.entityType === 'GLOBAL_CONFIG',
       );
       if (isPristinePostBootBatch) {
-        const exampleOpIds = pendingOps
-          .filter(isExampleTaskCreateOp)
-          .map((entry) => entry.op.id);
-        if (exampleOpIds.length > 0) {
-          await this._discardExampleTaskOps(exampleOpIds);
+        const exampleCreateOps = pendingOps.filter(isExampleTaskCreateOp);
+        if (exampleCreateOps.length > 0) {
+          // Stop the example create ops from UPLOADing onto the adopted remote.
+          await this._discardExampleTaskOps(exampleCreateOps.map((entry) => entry.op.id));
+
+          // #7996: rejecting the create ops is not enough on the SuperSync (op-based) path —
+          // adoption MERGES remote ops into the store rather than replacing it, so the
+          // example *entities* linger in local NgRx state. Remove them too, otherwise a
+          // later full-state snapshot (forceUploadLocalState / enable-encryption) would
+          // re-snapshot and re-upload them, re-polluting the remote (isExampleTask lives
+          // only on the op, never the Task entity, so the snapshot can't distinguish them).
+          // Ids derive ONLY from the local pending example-create ops, never remote ops.
+          const exampleTaskIds = exampleCreateOps
+            .map((entry) => entry.op.entityId)
+            .filter((id): id is string => !!id);
+          this._removeAdoptedExampleTasksFromState(exampleTaskIds);
+
           OpLog.normal(
-            `OperationLogSyncService: Discarded ${exampleOpIds.length} untouched example-task ` +
-              'op(s) — never-synced client adopted a populated remote this sync (#7985).',
+            `OperationLogSyncService: Discarded ${exampleCreateOps.length} untouched example-task ` +
+              `op(s) and removed ${exampleTaskIds.length} example task(s) from local state — ` +
+              'never-synced client adopted a populated remote this sync (#7985/#7996).',
           );
         }
       }
@@ -874,6 +888,33 @@ export class OperationLogSyncService {
     if (opIds.length > 0) {
       await this.opLogStore.markRejected(opIds);
     }
+  }
+
+  /**
+   * #7996: removes the untouched onboarding example tasks from local NgRx state after a
+   * never-synced client first adopts a populated remote — companion to the create-op
+   * discard in uploadPendingOps. Dispatches the shared bulk delete so `project.taskIds` /
+   * backlog / tag ordering references are scrubbed in one meta-reducer pass (sync rule #3).
+   *
+   * The action carries `meta.isRemote` so it is handled like a sync-applied change: the
+   * capture meta-reducer skips op-capture (so NO Delete op is created — the upload can
+   * never send a delete for a task the server never had), and LOCAL_ACTIONS effects do not
+   * fire (no plugin TASK_DELETE / reminder cascade for throwaway onboarding scaffolding).
+   * The state reducers still run. This is the same primitive ValidateStateService and the
+   * op-replay path use; it sidesteps the capture-deferral hazard a normal dispatch+reject
+   * would carry (a deferred Delete op would never surface to be rejected).
+   *
+   * @param exampleTaskIds ids derived from the LOCAL pending example-create ops only.
+   */
+  private _removeAdoptedExampleTasksFromState(exampleTaskIds: string[]): void {
+    if (exampleTaskIds.length === 0) {
+      return;
+    }
+    const deleteAction = TaskSharedActions.deleteTasks({ taskIds: exampleTaskIds });
+    this.store.dispatch({
+      ...deleteAction,
+      meta: { ...deleteAction.meta, isRemote: true },
+    });
   }
 
   /**

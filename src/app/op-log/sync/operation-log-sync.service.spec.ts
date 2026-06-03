@@ -20,7 +20,8 @@ import { RemoteOpsProcessingService } from './remote-ops-processing.service';
 import { RejectedOpsHandlerService } from './rejected-ops-handler.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { SuperSyncStatusService } from './super-sync-status.service';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
   ActionType,
   Operation,
@@ -260,7 +261,7 @@ describe('OperationLogSyncService', () => {
         .and.returnValue(Promise.resolve(1)); // Not fresh (has seq)
     });
 
-    describe('example-task cleanup on first adoption of a populated remote (#7985)', () => {
+    describe('example-task cleanup on first adoption of a populated remote (#7985/#7996)', () => {
       const exampleCreate = (taskId: string): OperationLogEntry => ({
         seq: 1,
         op: {
@@ -358,6 +359,7 @@ describe('OperationLogSyncService', () => {
       });
 
       const mockProvider = { isReady: () => Promise.resolve(true) } as any;
+      let store: MockStore;
 
       beforeEach(() => {
         uploadServiceSpy.uploadPendingOps.and.resolveTo({
@@ -367,6 +369,7 @@ describe('OperationLogSyncService', () => {
           rejectedOps: [],
         });
         opLogStoreSpy.markRejected.and.resolveTo();
+        store = TestBed.inject(MockStore);
       });
 
       it('discards untouched example-task ops when a never-synced client adopted a populated remote', async () => {
@@ -453,6 +456,70 @@ describe('OperationLogSyncService', () => {
         await service.uploadPendingOps(mockProvider, { isNeverSynced: true });
 
         expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
+      // ─── #7996: also remove the lingering example *entities* from local NgRx state ───
+      // (op-based adoption merges remote ops, so rejecting the create ops alone leaves the
+      // example tasks in the store, where a later snapshot upload would re-pollute the remote)
+
+      it('#7996: removes the example tasks via a meta.isRemote bulk deleteTasks (no Delete op to upload)', async () => {
+        const dispatchSpy = spyOn(store, 'dispatch');
+        opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+        opLogStoreSpy.getUnsynced.and.resolveTo([
+          exampleCreate('ex-1'),
+          exampleCreate('ex-2'),
+        ]);
+
+        await service.uploadPendingOps(mockProvider, { isNeverSynced: true });
+
+        // The example task ids are removed from NgRx via the shared bulk delete meta-reducer,
+        // dispatched with meta.isRemote so NO Delete op is captured (nothing to upload) and
+        // LOCAL_ACTIONS effects (plugin TASK_DELETE etc.) do not fire.
+        expect(dispatchSpy).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: TaskSharedActions.deleteTasks.type,
+            taskIds: ['ex-1', 'ex-2'],
+            meta: jasmine.objectContaining({ isRemote: true }),
+          }),
+        );
+        // Only the create ops are rejected; there is no generated Delete op to reject.
+        expect(opLogStoreSpy.markRejected).toHaveBeenCalledOnceWith([
+          'ex-op-ex-1',
+          'ex-op-ex-2',
+        ]);
+      });
+
+      it('#7996: does NOT dispatch a delete when the cleanup gate does not fire (real task pending)', async () => {
+        const dispatchSpy = spyOn(store, 'dispatch');
+        opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+        opLogStoreSpy.getUnsynced.and.resolveTo([
+          exampleCreate('ex-1'),
+          realTaskCreate('real-1'),
+        ]);
+
+        await service.uploadPendingOps(mockProvider, { isNeverSynced: true });
+
+        expect(dispatchSpy).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ type: TaskSharedActions.deleteTasks.type }),
+        );
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
+      it('#7996: rejects only the example create ops, never the coexisting GLOBAL_CONFIG op', async () => {
+        spyOn(store, 'dispatch');
+        opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+        opLogStoreSpy.getUnsynced.and.resolveTo([
+          exampleCreate('ex-1'),
+          configOp(),
+          exampleCreate('ex-2'),
+        ]);
+
+        await service.uploadPendingOps(mockProvider, { isNeverSynced: true });
+
+        const rejectedIds = opLogStoreSpy.markRejected.calls.allArgs().flat(2);
+        expect(rejectedIds).toContain('ex-op-ex-1');
+        expect(rejectedIds).toContain('ex-op-ex-2');
+        expect(rejectedIds).not.toContain('config-op-1');
       });
     });
 

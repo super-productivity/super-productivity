@@ -138,6 +138,12 @@ describe('Example-task adoption cleanup mechanic (integration)', () => {
     expect(isPristinePostBootBatch(pending)).toBe(false);
   });
 
+  // #7996 (remove example *entities* from local NgRx) is a pure NgRx dispatch with
+  // meta.isRemote — it deliberately creates NO op-log op (the capture meta-reducer skips
+  // isRemote actions), so there is nothing op-log-level to assert here. The #7995 create-op
+  // discard above is the op-log half; the dispatch + state-cleanup half is covered by the
+  // service unit specs and the docker e2e.
+
   it('empty-server seeding: with nothing adopted, hasSyncedOps() stays false (cleanup does not fire)', async () => {
     await store.append(exampleCreate('ex-1'), 'local');
     await store.append(configOp(), 'local');
