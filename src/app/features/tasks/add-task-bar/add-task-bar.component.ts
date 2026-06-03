@@ -77,14 +77,12 @@ import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { Log } from '../../../core/log';
 import { TODAY_TAG } from '../../tag/tag.const';
-import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { BodyClass } from '../../../app.constants';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
-import { MenuTreeService } from '../../menu-tree/menu-tree.service';
-import { Tag } from '../../tag/tag.model';
+import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
 @Component({
   selector: 'add-task-bar',
@@ -109,6 +107,7 @@ import { Tag } from '../../tag/tag.model';
     TagComponent,
     AddTaskBarActionsComponent,
     TranslateModule,
+    SelectOptionRowComponent,
   ],
   providers: [AddTaskBarStateService, AddTaskBarParserService],
 })
@@ -128,7 +127,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _markdownPasteService = inject(MarkdownPasteService);
   private readonly _dateService = inject(DateService);
-  private readonly _menuTreeService = inject(MenuTreeService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -886,20 +884,5 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onScheduleDialogOpenChange(isOpen: boolean): void {
     this.isScheduleDialogOpen.set(isOpen);
-  }
-
-  getFolderContext(item: unknown): string | null {
-    if (!item || typeof item !== 'object' || !('id' in item)) return null;
-    const id = (item as { id: string }).id;
-    return (
-      this._menuTreeService.projectFolderMap().get(id) ||
-      this._menuTreeService.tagFolderMap().get(id) ||
-      null
-    );
-  }
-
-  isEmojiIcon(tag: Tag): boolean {
-    const icon = tag?.icon;
-    return icon ? isSingleEmoji(icon) : false;
   }
 }

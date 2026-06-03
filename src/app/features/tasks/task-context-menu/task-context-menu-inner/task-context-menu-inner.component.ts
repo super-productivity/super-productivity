@@ -80,6 +80,7 @@ import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
+import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -96,6 +97,7 @@ import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
     MatTooltip,
     IssueIconPipe,
     MenuTouchFixDirective,
+    SelectOptionRowComponent,
   ],
   templateUrl: './task-context-menu-inner.component.html',
   styleUrl: './task-context-menu-inner.component.scss',

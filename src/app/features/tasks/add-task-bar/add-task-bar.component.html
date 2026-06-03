@@ -152,35 +152,7 @@
   #mentionListTemplate
   let-item="item"
 >
-  <div class="custom-option-layout">
-    @if (item.icon) {
-      @if (isEmojiIcon(item)) {
-        <span
-          class="menu-icon-emoji"
-          [style.color]="item.color || item.theme?.primary"
-        >
-          {{ item.icon }}
-        </span>
-      } @else {
-        <mat-icon
-          class="option-main-icon"
-          [style.color]="item.color || item.theme?.primary"
-        >
-          {{ item.icon }}
-        </mat-icon>
-      }
-    } @else {
-      @if (item.date || item.time) {
-        <mat-icon class="option-main-icon">schedule</mat-icon>
-      } @else {
-        <mat-icon class="option-main-icon">label</mat-icon>
-      }
-    }
-    <span class="option-title">{{ item.title }}</span>
-    @if (getFolderContext(item); as folder) {
-      <span class="folder-subtitle">{{ folder }}</span>
-    }
-  </div>
+  <select-option-row [item]="item"></select-option-row>
 </ng-template>
 
 @if (isSearchLoading()) {
@@ -188,17 +160,3 @@
     <mat-spinner diameter="24"></mat-spinner>
   </div>
 }
-
-<ng-template
-  #mentionListTemplate
-  let-item="item"
->
-  <div style="display: flex; align-items: center; gap: 8px; width: 100%">
-    <span>{{ item.title }}</span>
-    @if (getFolderContext(item); as folder) {
-      <span style="opacity: 0.5; font-size: 0.85em; font-weight: normal"
-        >({{ folder }})</span
-      >
-    }
-  </div>
-</ng-template>

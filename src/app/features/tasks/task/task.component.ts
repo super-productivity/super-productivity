@@ -90,6 +90,7 @@ import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
 @Component({
   selector: 'task',
@@ -133,6 +134,7 @@ import { MenuTreeService } from '../../menu-tree/menu-tree.service';
     TagToggleMenuListComponent,
     DoneToggleComponent,
     SwipeBlockComponent,
+    SelectOptionRowComponent,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
@@ -152,7 +154,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
-  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   private readonly _timeConflictTaskIds = toSignal(
     this._store.select(selectTimeConflictTaskIds),
     { initialValue: new Set<string>() },

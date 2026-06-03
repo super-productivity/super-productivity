@@ -192,27 +192,7 @@
       mat-menu-item
       (click)="stateService.updateProjectId(project.id)"
     >
-      <div class="custom-option-layout">
-        @if (isTagEmojiIcon(project)) {
-          <span
-            class="menu-icon-emoji"
-            [style.color]="project.theme.primary"
-          >
-            {{ project.icon || DEFAULT_PROJECT_ICON }}
-          </span>
-        } @else {
-          <mat-icon
-            class="option-main-icon"
-            [style.color]="project.theme.primary"
-          >
-            {{ project.icon || DEFAULT_PROJECT_ICON }}
-          </mat-icon>
-        }
-        <span class="option-title">{{ project.title }}</span>
-        @if (projectFolderMap().get(project.id); as folder) {
-          <span class="folder-subtitle">{{ folder }}</span>
-        }
-      </div>
+      <select-option-row [item]="project"></select-option-row>
     </button>
   }
 </mat-menu>
@@ -225,30 +205,11 @@
         (click)="toggleTagWithSyntax(tag)"
         [class.selected]="hasSelectedTag(tag.id)"
       >
-        <div class="custom-option-layout has-checkbox">
-          @if (hasSelectedTag(tag.id)) {
-            <mat-icon class="check-ico">check_box</mat-icon>
-          } @else {
-            <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
-          }
-          @if (isTagEmojiIcon(tag)) {
-            <span
-              class="menu-icon-emoji"
-              [style.color]="tag.color || tag.theme.primary"
-              >{{ tag.icon || 'label' }}</span
-            >
-          } @else {
-            <mat-icon
-              class="tag-ico"
-              [style.color]="tag.color || tag.theme.primary"
-              >{{ tag.icon || 'label' }}
-            </mat-icon>
-          }
-          <span class="option-title">{{ tag.title }}</span>
-          @if (tagFolderMap().get(tag.id); as folder) {
-            <span class="folder-subtitle">{{ folder }}</span>
-          }
-        </div>
+        <select-option-row
+          [item]="tag"
+          [isSelected]="hasSelectedTag(tag.id)"
+          [showCheckbox]="true"
+        ></select-option-row>
       </button>
     }
   </div>

@@ -1,7 +1,6 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
@@ -34,17 +33,14 @@ export class MenuTreeService {
   private readonly _store = inject(Store);
 
   private readonly _projectTree = toSignal(
-    this._store.select(selectMenuTreeProjectTree) || of([]),
+    this._store.select(selectMenuTreeProjectTree),
     {
       initialValue: [] as MenuTreeTreeNode[],
     },
   );
-  private readonly _tagTree = toSignal(
-    this._store.select(selectMenuTreeTagTree) || of([]),
-    {
-      initialValue: [] as MenuTreeTreeNode[],
-    },
-  );
+  private readonly _tagTree = toSignal(this._store.select(selectMenuTreeTagTree), {
+    initialValue: [] as MenuTreeTreeNode[],
+  });
 
   private readonly _allProjects = toSignal(this._store.select(selectAllProjects), {
     initialValue: [] as Project[],
