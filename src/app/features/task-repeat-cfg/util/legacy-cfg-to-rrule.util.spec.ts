@@ -1,0 +1,184 @@
+import {
+  legacyTaskRepeatCfgToRRule,
+  rruleToLegacyTaskRepeatCfg,
+} from './legacy-cfg-to-rrule.util';
+import { TaskRepeatCfg } from '../task-repeat-cfg.model';
+import { isRRuleValid } from '../store/rrule-occurrence.util';
+
+const cfg = (over: Partial<TaskRepeatCfg>): TaskRepeatCfg =>
+  ({
+    id: 'r1',
+    repeatEvery: 1,
+    repeatCycle: 'WEEKLY',
+    startDate: '2024-06-03', // a Monday
+    ...over,
+  }) as TaskRepeatCfg;
+
+describe('legacyTaskRepeatCfgToRRule', () => {
+  it('DAILY with interval', () => {
+    expect(
+      legacyTaskRepeatCfgToRRule(cfg({ repeatCycle: 'DAILY', repeatEvery: 3 })),
+    ).toBe('FREQ=DAILY;INTERVAL=3');
+  });
+
+  it('DAILY interval 1 omits INTERVAL', () => {
+    expect(legacyTaskRepeatCfgToRRule(cfg({ repeatCycle: 'DAILY' }))).toBe('FREQ=DAILY');
+  });
+
+  it('WEEKLY with selected weekdays in Mon-first order', () => {
+    expect(
+      legacyTaskRepeatCfgToRRule(
+        cfg({
+          repeatCycle: 'WEEKLY',
+          repeatEvery: 2,
+          monday: true,
+          wednesday: true,
+          friday: true,
+        }),
+      ),
+    ).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR');
+  });
+
+  it('WEEKLY with no weekdays falls back to the start-date weekday', () => {
+    // 2024-06-03 is a Monday.
+    expect(legacyTaskRepeatCfgToRRule(cfg({ repeatCycle: 'WEEKLY' }))).toBe(
+      'FREQ=WEEKLY;BYDAY=MO',
+    );
+  });
+
+  it('MONTHLY day-of-month from the start date', () => {
+    expect(
+      legacyTaskRepeatCfgToRRule(
+        cfg({ repeatCycle: 'MONTHLY', startDate: '2024-06-15' }),
+      ),
+    ).toBe('FREQ=MONTHLY;BYMONTHDAY=15');
+  });
+
+  it('MONTHLY last day', () => {
+    expect(
+      legacyTaskRepeatCfgToRRule(cfg({ repeatCycle: 'MONTHLY', monthlyLastDay: true })),
+    ).toBe('FREQ=MONTHLY;BYMONTHDAY=-1');
+  });
+
+  it('MONTHLY nth-weekday (2nd Tuesday)', () => {
+    expect(
+      legacyTaskRepeatCfgToRRule(
+        cfg({ repeatCycle: 'MONTHLY', monthlyWeekOfMonth: 2, monthlyWeekday: 2 }),
+      ),
+    ).toBe('FREQ=MONTHLY;BYDAY=2TU');
+  });
+
+  it('MONTHLY last-weekday (last Monday)', () => {
+    expect(
+      legacyTaskRepeatCfgToRRule(
+        cfg({ repeatCycle: 'MONTHLY', monthlyWeekOfMonth: -1, monthlyWeekday: 1 }),
+      ),
+    ).toBe('FREQ=MONTHLY;BYDAY=-1MO');
+  });
+
+  it('YEARLY from the start date month/day', () => {
+    expect(
+      legacyTaskRepeatCfgToRRule(cfg({ repeatCycle: 'YEARLY', startDate: '2024-03-17' })),
+    ).toBe('FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=17');
+  });
+
+  it('every conversion produces a valid RRULE', () => {
+    const samples: Partial<TaskRepeatCfg>[] = [
+      { repeatCycle: 'DAILY', repeatEvery: 2 },
+      { repeatCycle: 'WEEKLY', tuesday: true, thursday: true },
+      { repeatCycle: 'MONTHLY', monthlyLastDay: true },
+      { repeatCycle: 'MONTHLY', monthlyWeekOfMonth: 3, monthlyWeekday: 5 },
+      { repeatCycle: 'YEARLY', startDate: '2024-12-25' },
+    ];
+    samples.forEach((s) =>
+      expect(isRRuleValid(legacyTaskRepeatCfgToRRule(cfg(s)))).toBe(true),
+    );
+  });
+
+  it('uses UTC weekday so a negative-offset timezone does not shift the day', () => {
+    // 2024-06-03 is a Monday in UTC; must map to MO regardless of host tz.
+    expect(legacyTaskRepeatCfgToRRule(cfg({ repeatCycle: 'WEEKLY' }))).toContain(
+      'BYDAY=MO',
+    );
+  });
+});
+
+describe('rruleToLegacyTaskRepeatCfg', () => {
+  it('DAILY with interval', () => {
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=DAILY;INTERVAL=3')).toEqual({
+      repeatCycle: 'DAILY',
+      repeatEvery: 3,
+    });
+  });
+
+  it('WEEKLY sets exactly the rule weekdays, clearing the rest', () => {
+    const out = rruleToLegacyTaskRepeatCfg('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR');
+    expect(out.repeatCycle).toBe('WEEKLY');
+    expect(out.repeatEvery).toBe(2);
+    expect(out.monday).toBe(true);
+    expect(out.wednesday).toBe(true);
+    expect(out.friday).toBe(true);
+    expect(out.tuesday).toBe(false);
+    expect(out.thursday).toBe(false);
+    expect(out.saturday).toBe(false);
+    expect(out.sunday).toBe(false);
+  });
+
+  it('MONTHLY nth-weekday → anchor fields (legacy 0=Sun weekday)', () => {
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=2TU')).toEqual({
+      repeatCycle: 'MONTHLY',
+      repeatEvery: 1,
+      monthlyWeekOfMonth: 2,
+      monthlyWeekday: 2, // Tuesday (Sun=0)
+    });
+  });
+
+  it('MONTHLY last weekday', () => {
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=-1MO')).toEqual({
+      repeatCycle: 'MONTHLY',
+      repeatEvery: 1,
+      monthlyWeekOfMonth: -1,
+      monthlyWeekday: 1, // Monday
+    });
+  });
+
+  it('MONTHLY last day → monthlyLastDay', () => {
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYMONTHDAY=-1')).toEqual({
+      repeatCycle: 'MONTHLY',
+      repeatEvery: 1,
+      monthlyLastDay: true,
+    });
+  });
+
+  it('YEARLY', () => {
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=17')).toEqual({
+      repeatCycle: 'YEARLY',
+      repeatEvery: 1,
+    });
+  });
+
+  it('returns {} for garbage / sub-daily', () => {
+    expect(rruleToLegacyTaskRepeatCfg('not an rrule')).toEqual({});
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=HOURLY')).toEqual({});
+  });
+
+  it('round-trips a weekly cfg (legacy → rrule → legacy)', () => {
+    const legacy = cfg({
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 2,
+      monday: true,
+      thursday: true,
+      tuesday: false,
+      wednesday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+    });
+    const back = rruleToLegacyTaskRepeatCfg(legacyTaskRepeatCfgToRRule(legacy));
+    expect(back.repeatCycle).toBe('WEEKLY');
+    expect(back.repeatEvery).toBe(2);
+    expect(back.monday).toBe(true);
+    expect(back.thursday).toBe(true);
+    expect(back.tuesday).toBe(false);
+  });
+});

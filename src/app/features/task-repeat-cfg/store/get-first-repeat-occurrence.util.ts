@@ -4,7 +4,8 @@ import {
   findMonthlyNthWeekdayOccurrence,
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
-import { getFirstCronOccurrence } from './cron-occurrence.util';
+import { getFirstRRuleOccurrence } from './rrule-occurrence.util';
+import { taskRepeatCfgToRRuleInput } from './task-repeat-cfg-to-rrule-input.util';
 
 /**
  * Returns the first valid repeat occurrence on or after `cfg.startDate`.
@@ -28,6 +29,10 @@ export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | n
 
   if (!taskRepeatCfg.startDate) {
     return null;
+  }
+
+  if (taskRepeatCfg.rrule) {
+    return getFirstRRuleOccurrence(taskRepeatCfgToRRuleInput(taskRepeatCfg));
   }
 
   // Noon avoids DST transitions
@@ -54,9 +59,6 @@ export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | n
       }
       return checkDate;
     }
-
-    case 'CRON':
-      return getFirstCronOccurrence(taskRepeatCfg);
 
     case 'DAILY':
     case 'YEARLY':

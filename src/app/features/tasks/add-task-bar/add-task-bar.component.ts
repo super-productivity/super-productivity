@@ -70,6 +70,7 @@ import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
+import { rruleToLegacyTaskRepeatCfg } from '../../task-repeat-cfg/util/legacy-cfg-to-rrule.util';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
@@ -451,9 +452,13 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         } else {
           taskData.dueDay = state.date;
         }
-      } else if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
-        // When a repeat preset is selected without an explicit date, set dueDay to today
-        // so the first task instance appears as today's occurrence instead of staying in inbox
+      } else if (
+        (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') ||
+        state.rrule
+      ) {
+        // When a repeat preset / inline @+ rule is set without an explicit date,
+        // set dueDay to today so the first instance appears as today's occurrence
+        // instead of staying in inbox
         taskData.dueDay = getDbDateStr();
       } else {
         // Explicitly set dueDay to undefined when no date is selected
@@ -480,8 +485,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       // effect already handles scheduling via scheduleTaskWithTime, so calling both
       // would cause double-scheduling.
       const isTimedRepeatTask =
-        !!state.repeatQuickSetting &&
-        state.repeatQuickSetting !== 'CUSTOM' &&
+        ((!!state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') ||
+          !!state.rrule) &&
         !!state.time;
       if (taskData.dueWithTime && !isTimedRepeatTask) {
         this._taskService
@@ -518,19 +523,18 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             remindAt: state.time ? resolvedRemindOption : undefined,
           });
         }
-      } else if (state.cronExpression) {
-        // `@+<cron>` short-syntax path: attach a CRON-cycle repeat cfg using
-        // the canonicalized expression the parser already produced. Skipped
-        // when the user also picked a quickSetting (above) so manual choice
-        // wins.
+      } else if (state.rrule) {
+        // Inline `@+<phrase>` recurrence → attach an rrule-backed repeat cfg. The
+        // legacy schedule fields are derived from the rrule for older-client
+        // fallback (cycle / interval / weekday flags / monthly anchors).
         const startDate = state.date || getDbDateStr();
         this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
           ...DEFAULT_TASK_REPEAT_CFG,
           startDate,
+          rrule: state.rrule,
+          ...rruleToLegacyTaskRepeatCfg(state.rrule),
           title,
-          quickSetting: 'CRON',
-          repeatCycle: 'CRON',
-          cronExpression: state.cronExpression,
+          quickSetting: 'RRULE',
           tagIds: taskData.tagIds ?? [],
           defaultEstimate: state.estimate || 0,
           startTime: state.time || undefined,

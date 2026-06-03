@@ -476,48 +476,6 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       });
     });
 
-    it('should compute the first occurrence for a CRON cfg via the effect path', () => {
-      const today = new Date();
-      const todayStr = getDbDateStr(today);
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      const taskCreatedYesterday: TaskWithSubTasks = {
-        ...mockTask,
-        subTasks: [],
-        dueDay: todayStr,
-        created: yesterday.getTime(),
-      };
-
-      // Daily-midnight CRON starting today → first occurrence is today.
-      const cronRepeatCfg: TaskRepeatCfgCopy = {
-        ...mockRepeatCfg,
-        repeatCycle: 'CRON',
-        quickSetting: 'CRON',
-        cronExpression: '0 0 0 * * ?',
-        repeatEvery: 1,
-        startDate: todayStr,
-      };
-
-      const firstOccurrence = getFirstRepeatOccurrence(cronRepeatCfg as any)!;
-      expect(getDbDateStr(firstOccurrence)).toBe(todayStr);
-
-      actions$ = of(
-        addTaskRepeatCfgToTask({
-          taskRepeatCfg: cronRepeatCfg,
-          taskId: 'parent-task-id',
-        }),
-      );
-      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskCreatedYesterday));
-      spyOn(effects as any, '_updateRegularTaskInstance');
-
-      effects.updateTaskAfterMakingItRepeatable$.subscribe().unsubscribe();
-
-      expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
-        created: firstOccurrence.getTime(),
-      });
-    });
-
     it('should dispatch planTaskForDay and update created for daily repeat with future start date (#6433)', (done) => {
       // Scenario: Task created today, but start date is 7 days in the future
       const today = new Date();
@@ -2136,58 +2094,6 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         taskRepeatCfg: {
           id: 'repeat-cfg-id',
           changes: { startDate: todayStr },
-        },
-      });
-
-      actions$ = of(action);
-      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
-      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
-
-      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
-        expect(result).toEqual(
-          PlannerActions.planTaskForDay({
-            task: liveTask as any,
-            day: firstOccurrenceStr,
-          }),
-        );
-        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
-          'repeat-cfg-id',
-          jasmine.objectContaining({
-            lastTaskCreationDay: firstOccurrenceStr,
-          }),
-        );
-        done();
-      });
-    });
-
-    it('should reschedule and re-anchor when only cronExpression changes', (done) => {
-      // Regression: cronExpression was missing from SCHEDULE_AFFECTING_FIELDS,
-      // so editing a CRON schedule left lastTaskCreationDay stale (often parked
-      // on a future occurrence), silently suppressing all future instances.
-      const today = new Date();
-      const todayStr = getDbDateStr(today);
-
-      const liveTask: Task = {
-        ...mockTask,
-        isDone: false,
-        dueDay: todayStr,
-        created: today.getTime(),
-      };
-
-      const updatedCfg: TaskRepeatCfgCopy = {
-        ...mockRepeatCfg,
-        repeatCycle: 'CRON',
-        cronExpression: '0 0 * * *',
-        startDate: todayStr,
-      };
-
-      const firstOccurrence = getNextRepeatOccurrence(updatedCfg as any, new Date())!;
-      const firstOccurrenceStr = getDbDateStr(firstOccurrence);
-
-      const action = updateTaskRepeatCfg({
-        taskRepeatCfg: {
-          id: 'repeat-cfg-id',
-          changes: { cronExpression: '0 0 * * *' },
         },
       });
 

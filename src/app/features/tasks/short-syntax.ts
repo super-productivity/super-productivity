@@ -6,6 +6,7 @@ import { Project } from '../project/project.model';
 import { ShortSyntaxConfig } from '../config/global-config.model';
 import { isImageUrlSimple } from '../../util/is-image-url';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
+import { naturalLanguageToRRule } from '../task-repeat-cfg/util/parse-natural-rrule.util';
 import { nanoid } from 'nanoid';
 import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
 type ProjectChanges = {
@@ -21,8 +22,6 @@ type DueChanges = {
   dueWithTime?: number;
   dueDay?: string | null;
 };
-
-import { naturalLanguageToCron } from '../task-repeat-cfg/util/parse-natural-cron.util';
 
 const CH_TSP = '/';
 // Due how this expression capture clusters of duration units, be mindful of
@@ -113,32 +112,29 @@ const SHORT_SYNTAX_MARKDOWN_LINK_REG_EX =
   /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
 /**
- * Pulls a `@+<cron-or-natural-language>` clause off the title and returns the
- * cron expression separately. The clause runs to end-of-title or until the
- * next short-syntax delimiter (`+project`, `#tag`, `@date`, `/2h`); this lets
- * users type natural-language phrases like
- *   "Mow Lawn +Maint #Out @+once a week on saturday from March through November /2h"
- * without the cron text colliding with the existing project/tag/date parsers.
- * Natural-language input is canonicalized to a 5-field cron expression.
+ * Pulls an `@+<phrase>` recurring clause off the title and returns the resolved
+ * RRULE separately. The clause runs to end-of-title or the next short-syntax
+ * delimiter (`+project`, `#tag`, `@date`, `/2h`), so a natural-language phrase
+ * like "every saturday from march to november" doesn't collide with the other
+ * parsers. Returns null when no `@+` clause is present or it can't be read.
  */
-export const extractCronFromTitle = (
+export const extractRRuleFromTitle = (
   title: string,
-): { stripped: string; cron: string } | null => {
+): { stripped: string; rrule: string } | null => {
   const m = title.match(/(?:^|\s)@\+/);
   if (!m) return null;
   const atIdx = m.index! + (m[0].length - 2);
   const afterPlus = atIdx + 2;
   const remaining = title.slice(afterPlus);
   // Boundary: next short-syntax delimiter introduced by whitespace.
-  // `\/\d` catches `/2h`, `/1.5h`, etc; `[+#@]` catches another project/tag/date.
   const boundaryMatch = remaining.match(/\s+(?:[+#@]|\/\d)/);
   const end = boundaryMatch ? afterPlus + (boundaryMatch.index as number) : title.length;
   const raw = title.slice(afterPlus, end).trim();
   if (!raw) return null;
-  const canonical = naturalLanguageToCron(raw);
-  if (!canonical) return null;
+  const rrule = naturalLanguageToRRule(raw);
+  if (!rrule) return null;
   const stripped = (title.slice(0, atIdx) + title.slice(end)).replace(/\s+/g, ' ').trim();
-  return { stripped, cron: canonical };
+  return { stripped, rrule };
 };
 
 export const shortSyntax = async (
@@ -155,7 +151,7 @@ export const shortSyntax = async (
       remindAt: number | null;
       projectId: string | undefined;
       attachments: TaskAttachment[];
-      cronExpression?: string;
+      rrule?: string;
     }
   | undefined
 > => {
@@ -166,23 +162,20 @@ export const shortSyntax = async (
     throw new Error('No str');
   }
 
+  // Pull the `@+<phrase>` recurring clause off the title first, so the bare `@`
+  // date parser below never sees it. The cleaned title is emitted at the end.
+  let rrule: string | undefined;
+  const rruleExtract = extractRRuleFromTitle(task.title);
+  if (rruleExtract) {
+    rrule = rruleExtract.rrule;
+    task = { ...task, title: rruleExtract.stripped };
+  }
+
   // TODO clean up this mess
   let taskChanges: Partial<TaskCopy> = {};
   let changesForProject: ProjectChanges = {};
   let changesForTag: TagChanges = {};
   let attachments: TaskAttachment[] = [];
-  let cronExpression: string | undefined;
-
-  // Cron parser runs first so the bare `@` date parser does not eat
-  // `@+<expr>`. Strip the matched clause from the working title so downstream
-  // parsers never see it. We do NOT set taskChanges.title here — the
-  // parseTimeSpentChanges reassignment below would wipe it; the cleaned title
-  // is emitted at the end instead.
-  const cronExtract = extractCronFromTitle(task.title);
-  if (cronExtract) {
-    cronExpression = cronExtract.cron;
-    task = { ...task, title: cronExtract.stripped };
-  }
 
   if (config.isEnableDue) {
     taskChanges = parseTimeSpentChanges(task);
@@ -245,18 +238,13 @@ export const shortSyntax = async (
   //   };
   // }
 
-  // Emit the cron-stripped title even when no other parser produced a title
-  // change (e.g. a bare "Foo @+every day" with no date/project/tag/url) —
-  // otherwise the caller falls back to the original, un-stripped input.
-  if (cronExpression && taskChanges.title == null) {
-    taskChanges.title = task.title;
+  // Emit the cleaned title when an `@+` clause was the trigger and no other
+  // parser set the title, so the caller persists the stripped version.
+  if (rrule && taskChanges.title == null) {
+    taskChanges = { ...taskChanges, title: task.title };
   }
 
-  if (
-    Object.keys(taskChanges).length === 0 &&
-    attachments.length === 0 &&
-    !cronExpression
-  ) {
+  if (Object.keys(taskChanges).length === 0 && attachments.length === 0 && !rrule) {
     return undefined;
   }
 
@@ -266,9 +254,7 @@ export const shortSyntax = async (
     remindAt: null,
     projectId: changesForProject.projectId,
     attachments,
-    // Only present when a `@+` clause was parsed — keeping the key off the
-    // result otherwise avoids breaking exact-match assertions on the return.
-    ...(cronExpression ? { cronExpression } : {}),
+    ...(rrule ? { rrule } : {}),
     // remindAt: changesForDue.remindAt
   };
 };

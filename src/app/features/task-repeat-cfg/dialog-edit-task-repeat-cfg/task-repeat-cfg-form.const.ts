@@ -6,19 +6,6 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { TaskReminderOptionId } from '../../tasks/task.model';
-import { isCronExpressionValid } from '../store/cron-occurrence.util';
-import { naturalLanguageToCron } from '../util/parse-natural-cron.util';
-
-// Accept either a raw cron expression or natural-language that
-// `naturalLanguageToCron` can resolve. Stored value is canonicalized to cron.
-// The live humanized preview is rendered by the dialog component (see
-// cron-preview.util) — Formly's mat-hint does not reliably reflect a dynamic
-// `expressionProperties.description`, so the description stays static here.
-const isCronOrNaturalValid = (val: unknown): boolean => {
-  if (typeof val !== 'string' || !val.trim()) return false;
-  if (isCronExpressionValid(val)) return true;
-  return naturalLanguageToCron(val) !== null;
-};
 
 const updateParent = (
   field: FormlyFieldConfig,
@@ -70,182 +57,11 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
     },
   },
 
-  // CRON QUICK-SETTING CFG
-  {
-    fieldGroupClassName: 'cron-config-container',
-    resetOnHide: false,
-    // CRON lives inside "Custom recurring config" only (selected via the
-    // repeatCycle dropdown) — there is no separate top-level CRON quick-setting.
-    hideExpression: (model: any) =>
-      !(model.quickSetting === 'CUSTOM' && model.repeatCycle === 'CRON'),
-    fieldGroup: [
-      {
-        key: 'cronExpression',
-        type: 'input',
-        defaultValue: '',
-        templateOptions: {
-          required: true,
-          label: T.F.TASK_REPEAT.F.CRON_EXPRESSION,
-          description: T.F.TASK_REPEAT.F.CRON_EXPRESSION_DESCRIPTION,
-          placeholder: '0 0 * 3-11 6',
-        },
-        validators: {
-          validCron: {
-            expression: (c: { value: unknown }) =>
-              !c.value || isCronOrNaturalValid(c.value),
-            message: () => T.F.TASK_REPEAT.F.CRON_INVALID,
-          },
-        },
-      },
-    ],
-  },
-
-  // REPEAT CUSTOM CFG - Wrapped in container
-  {
-    fieldGroupClassName: 'repeat-config-container',
-    resetOnHide: false,
-    hideExpression: (model: any) => model.quickSetting !== 'CUSTOM',
-    fieldGroup: [
-      {
-        fieldGroupClassName: 'repeat-cycle',
-        fieldGroup: [
-          {
-            key: 'repeatEvery',
-            type: 'input',
-            defaultValue: 1,
-            // Hidden for CRON (the expression defines the full cadence), but the
-            // repeatCycle select below stays visible so the user can switch back.
-            resetOnHide: false,
-            hideExpression: (model: any) => model.repeatCycle === 'CRON',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.REPEAT_EVERY,
-              required: true,
-              min: 1,
-              max: 1000,
-              type: 'number',
-            },
-          },
-          {
-            key: 'repeatCycle',
-            type: 'select',
-            defaultValue: 'WEEKLY',
-            templateOptions: {
-              required: true,
-              label: T.F.TASK_REPEAT.F.REPEAT_CYCLE,
-              options: [
-                { value: 'DAILY', label: T.F.TASK_REPEAT.F.C_DAY },
-                { value: 'WEEKLY', label: T.F.TASK_REPEAT.F.C_WEEK },
-                { value: 'MONTHLY', label: T.F.TASK_REPEAT.F.C_MONTH },
-                { value: 'YEARLY', label: T.F.TASK_REPEAT.F.C_YEAR },
-                { value: 'CRON', label: T.F.TASK_REPEAT.F.C_CRON },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        fieldGroupClassName: 'monthly-anchor',
-        resetOnHide: false,
-        hideExpression: (model: any) => model.repeatCycle !== 'MONTHLY',
-        fieldGroup: [
-          {
-            key: 'monthlyWeekOfMonth',
-            type: 'select',
-            // Picking the "Day of month" sentinel clears the anchor; the
-            // gatekeeper falls back to legacy day-of-month behavior.
-            defaultValue: null,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.WEEK_OF_MONTH,
-              options: [
-                { value: null, label: T.F.TASK_REPEAT.F.MONTHLY_MODE_DAY_OF_MONTH },
-                { value: 1, label: T.F.TASK_REPEAT.F.ORD_FIRST },
-                { value: 2, label: T.F.TASK_REPEAT.F.ORD_SECOND },
-                { value: 3, label: T.F.TASK_REPEAT.F.ORD_THIRD },
-                { value: 4, label: T.F.TASK_REPEAT.F.ORD_FOURTH },
-                { value: -1, label: T.F.TASK_REPEAT.F.ORD_LAST },
-              ],
-            },
-          },
-          {
-            key: 'monthlyWeekday',
-            type: 'select',
-            defaultValue: 1,
-            resetOnHide: false,
-            hideExpression: (model: any) => model.monthlyWeekOfMonth == null,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.WEEKDAY,
-              options: [
-                { value: 1, label: T.F.TASK_REPEAT.F.MONDAY },
-                { value: 2, label: T.F.TASK_REPEAT.F.TUESDAY },
-                { value: 3, label: T.F.TASK_REPEAT.F.WEDNESDAY },
-                { value: 4, label: T.F.TASK_REPEAT.F.THURSDAY },
-                { value: 5, label: T.F.TASK_REPEAT.F.FRIDAY },
-                { value: 6, label: T.F.TASK_REPEAT.F.SATURDAY },
-                { value: 0, label: T.F.TASK_REPEAT.F.SUNDAY },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        fieldGroupClassName: 'weekdays',
-        resetOnHide: false,
-        hideExpression: (model: any) => model.repeatCycle !== 'WEEKLY',
-        fieldGroup: [
-          {
-            key: 'monday',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.MONDAY,
-            },
-          },
-          {
-            key: 'tuesday',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.TUESDAY,
-            },
-          },
-          {
-            key: 'wednesday',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.WEDNESDAY,
-            },
-          },
-          {
-            key: 'thursday',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.THURSDAY,
-            },
-          },
-          {
-            key: 'friday',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.FRIDAY,
-            },
-          },
-          {
-            key: 'saturday',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.SATURDAY,
-            },
-          },
-          {
-            key: 'sunday',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.SUNDAY,
-            },
-          },
-        ],
-      },
-    ],
-  },
   // REPEAT CFG END
+  // NOTE: the legacy "Custom" recurrence container (repeat-every / cycle /
+  // weekday / monthly-anchor controls) was removed — the RRULE builder replaces
+  // it. Existing legacy cfgs are migrated to RRULE on open
+  // (legacyTaskRepeatCfgToRRule + _processQuickSettingForDate).
 ];
 
 export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
@@ -301,47 +117,6 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       rows: 4,
     },
   },
-  // Schedule type: from due date or from completion
-  {
-    key: 'repeatFromCompletionDate',
-    type: 'select',
-    defaultValue: false,
-    resetOnHide: false,
-    hideExpression: (model: any) => {
-      // Only show for custom settings with intervals > 1
-      if (model.quickSetting !== 'CUSTOM') {
-        return true;
-      }
-      return false;
-    },
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.SCHEDULE_TYPE_LABEL,
-      options: [],
-    },
-    expressionProperties: {
-      ['templateOptions.options']: (model: any) => {
-        const repeatEvery = model.repeatEvery || 1;
-        const cycleMap: Record<string, string> = {
-          DAILY: repeatEvery === 1 ? 'day' : 'days',
-          WEEKLY: repeatEvery === 1 ? 'week' : 'weeks',
-          MONTHLY: repeatEvery === 1 ? 'month' : 'months',
-          YEARLY: repeatEvery === 1 ? 'year' : 'years',
-        };
-        const cycleName = cycleMap[model.repeatCycle] || 'days';
-
-        return [
-          {
-            value: false,
-            label: `Fixed schedule (every ${repeatEvery} ${cycleName} from start date)`,
-          },
-          {
-            value: true,
-            label: `After completion (${repeatEvery} ${cycleName} after I finish)`,
-          },
-        ];
-      },
-    },
-  },
   {
     key: 'shouldInheritSubtasks',
     type: 'checkbox',
@@ -372,6 +147,9 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION_DESCRIPTION,
     },
   },
+  // NOTE: the "Schedule type" (repeatFromCompletionDate) select was removed from
+  // here along with the legacy Custom UI — the RRULE builder owns that toggle now
+  // (RruleBuilderComponent.repeatFromCompletion). #5326 / #5388.
   {
     key: 'skipOverdue',
     type: 'checkbox',

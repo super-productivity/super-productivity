@@ -1,0 +1,54 @@
+:host {
+  display: block;
+}
+
+.dd-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-quarter, 4px);
+}
+
+.dd-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s);
+}
+
+.dd-sel,
+.dd-num,
+.dd-date {
+  height: 40px;
+  padding: 0 var(--s);
+  color: var(--text-color);
+  background: var(--bg, transparent);
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--card-border-radius);
+  font-size: 14px;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: var(--c-primary);
+  }
+}
+
+.dd-num {
+  width: 64px;
+  text-align: center;
+}
+
+.dd-sel--wide {
+  min-width: 180px;
+}
+
+.dd-suffix {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.dd-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.65;
+}

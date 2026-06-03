@@ -316,13 +316,7 @@ bootstrapApplication(AppComponent, {
   // recurring-task tests. Stripped from production via the env guard.
   if (!environment.production && !environment.stage) {
     const storeRef = appRef.injector.get(Store);
-    Promise.all([
-      import('./app/op-log/apply/hydration-state.service'),
-      // Real cron occurrence utils, exposed so e2e can verify them under forced
-      // browser timezones (Playwright timezoneId). Dev/stage only, stripped from
-      // production by this guard.
-      import('./app/features/task-repeat-cfg/store/cron-occurrence.util'),
-    ]).then(([m, cron]) => {
+    Promise.all([import('./app/op-log/apply/hydration-state.service')]).then(([m]) => {
       // Dev-only manual clock fast-forward for testing recurring / day-change
       // behavior without touching the OS clock. Overrides Date.now() (the basis
       // for the app's logical "today") by a cumulative day offset, then forces a
@@ -348,11 +342,6 @@ bootstrapApplication(AppComponent, {
       (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
         store: storeRef,
         hydrationState: appRef.injector.get(m.HydrationStateService),
-        cron: {
-          getNextCronOccurrence: cron.getNextCronOccurrence,
-          getNewestPossibleCronDueDate: cron.getNewestPossibleCronDueDate,
-          getFirstCronOccurrence: cron.getFirstCronOccurrence,
-        },
         jumpDay,
         resetClock,
       };

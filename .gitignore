@@ -14,6 +14,10 @@ src/app/config/env.generated.ts
 /app-builds
 /tmp
 /logs
+# local dev-server / test-run logs at repo root
+/.ng*.log
+/.e2e*.log
+/.electron.log
 packages/plugin-api/dist/**
 docs/ai/tmp
 

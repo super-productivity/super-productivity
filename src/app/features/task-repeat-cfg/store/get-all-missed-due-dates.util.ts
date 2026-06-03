@@ -19,8 +19,8 @@ export const MAX_CREATE_FOR_EACH_MISSED = 30;
  * occurrence" option, which creates a task for every missed occurrence instead
  * of only the newest one (`getNewestPossibleDueDate`).
  *
- * Reuses `getNextRepeatOccurrence` for the forward walk so the per-cycle (and
- * CRON) occurrence logic stays single-sourced and DST-safe. The walk is bounded
+ * Reuses `getNextRepeatOccurrence` for the forward walk so the per-cycle
+ * occurrence logic stays single-sourced and DST-safe. The walk is bounded
  * twice: it stops once an occurrence passes `today`, and the returned list is
  * trimmed to the {@link MAX_CREATE_FOR_EACH_MISSED} most recent occurrences.
  */

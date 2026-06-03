@@ -1596,6 +1596,206 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('endsAfterCompletions', () => {
+    const doneInstance = (dayOffset: number): TaskWithSubTasks => {
+      const d = new Date();
+      d.setDate(d.getDate() + dayOffset);
+      return {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(mockTaskRepeatCfg.id, formatIsoDate(d)),
+        created: d.getTime(),
+        isDone: true,
+      };
+    };
+
+    it('stops creating once the completion cap is reached (live instances)', async () => {
+      const cfg: TaskRepeatCfg = { ...mockTaskRepeatCfg, endsAfterCompletions: 2 };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([doneInstance(-1), doneInstance(-2)]),
+      );
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, Date.now());
+      expect(actions).toEqual([]);
+    });
+
+    it('counts completed instances from the archive toward the cap', async () => {
+      const cfg: TaskRepeatCfg = { ...mockTaskRepeatCfg, endsAfterCompletions: 2 };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([doneInstance(-1)]),
+      );
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([doneInstance(-2)]),
+      );
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, Date.now());
+      expect(actions).toEqual([]);
+    });
+
+    it('keeps creating while below the completion cap', async () => {
+      const cfg: TaskRepeatCfg = { ...mockTaskRepeatCfg, endsAfterCompletions: 3 };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([doneInstance(-1)]),
+      );
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, Date.now());
+      expect(actions.length).toBe(2);
+    });
+
+    it('ignores the cap when not set (open-ended)', async () => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        mockTaskRepeatCfg,
+        Date.now(),
+      );
+      // No cap → normal creation; archive is not even consulted for counting.
+      expect(actions.length).toBe(2);
+    });
+  });
+
+  describe('dueType (due-date derivation)', () => {
+    const todayStr = getDbDateStr(new Date());
+    const plusDays = (n: number): string => {
+      const d = new Date();
+      d.setDate(d.getDate() + n);
+      return getDbDateStr(d);
+    };
+    const addTaskOf = (actions: { type: string }[]): any =>
+      actions.find((a) => a.type === TaskSharedActions.addTask.type);
+
+    beforeEach(() => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+      }));
+    });
+
+    it('ON_OCCURRENCE (default) keeps Due = the occurrence day', async () => {
+      const actions = await service._getActionsForTaskRepeatCfg(
+        mockTaskRepeatCfg,
+        Date.now(),
+      );
+      expect(addTaskOf(actions).task.dueDay).toBe(todayStr);
+    });
+
+    it('OFFSET: Due = occurrence + offset; id & created stay on the occurrence', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        dueType: 'OFFSET',
+        dueOffset: 2,
+      };
+      const action = addTaskOf(
+        await service._getActionsForTaskRepeatCfg(cfg, Date.now()),
+      );
+      expect(action.task.dueDay).toBe(plusDays(2));
+      expect(action.task.id).toBe(getRepeatableTaskId(cfg.id, todayStr));
+      expect(getDbDateStr(action.task.created)).toBe(todayStr);
+    });
+
+    it('NONE: the created task has no due day', async () => {
+      const cfg: TaskRepeatCfg = { ...mockTaskRepeatCfg, dueType: 'NONE' };
+      const action = addTaskOf(
+        await service._getActionsForTaskRepeatCfg(cfg, Date.now()),
+      );
+      expect(action.task.dueDay).toBeUndefined();
+    });
+
+    it('FIXED: Due = the configured fixed date', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        dueType: 'FIXED',
+        dueFixedDate: '2026-12-31',
+      };
+      const action = addTaskOf(
+        await service._getActionsForTaskRepeatCfg(cfg, Date.now()),
+      );
+      expect(action.task.dueDay).toBe('2026-12-31');
+    });
+
+    it('PERIOD_END: Due = end of the month containing the occurrence', async () => {
+      const cfg: TaskRepeatCfg = { ...mockTaskRepeatCfg, dueType: 'PERIOD_END' };
+      const now = new Date();
+      const endOfMonth = getDbDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      const action = addTaskOf(
+        await service._getActionsForTaskRepeatCfg(cfg, Date.now()),
+      );
+      expect(action.task.dueDay).toBe(endOfMonth);
+    });
+
+    it('FROM_COMPLETION: Due = occurrence + offset when not yet completed', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        dueType: 'FROM_COMPLETION',
+        dueOffset: 2,
+      };
+      const action = addTaskOf(
+        await service._getActionsForTaskRepeatCfg(cfg, Date.now()),
+      );
+      expect(action.task.dueDay).toBe(plusDays(2));
+    });
+
+    it('UNTIL_NEXT: Due = the day before the next occurrence', async () => {
+      // Every 10 days from today → next occurrence is +10, so Due = +9.
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        rrule: 'FREQ=DAILY;INTERVAL=10',
+        dueType: 'UNTIL_NEXT',
+      };
+      const action = addTaskOf(
+        await service._getActionsForTaskRepeatCfg(cfg, Date.now()),
+      );
+      expect(action.task.dueDay).toBe(plusDays(9));
+    });
+
+    it('OFFSET: the timed schedule lands on the DERIVED due day', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        dueType: 'OFFSET',
+        dueOffset: 2,
+        startTime: '09:00',
+        remindAt: TaskReminderOptionId.AtStart,
+      };
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, Date.now());
+      const scheduleAction = actions.find(
+        (a) => a.type === TaskSharedActions.scheduleTaskWithTime.type,
+      ) as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>;
+      expect(scheduleAction).toBeDefined();
+      expect(getDbDateStr(scheduleAction.dueWithTime)).toBe(plusDays(2));
+    });
+
+    it('createForEachMissed backfill derives Due per dueType on every instance', async () => {
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        createForEachMissed: true,
+        dueType: 'OFFSET',
+        dueOffset: 1,
+        startDate: getDbDateStr(threeDaysAgo),
+        lastTaskCreationDay: getDbDateStr(threeDaysAgo),
+      };
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, Date.now());
+      const addTasks = actions.filter(
+        (a) => a.type === TaskSharedActions.addTask.type,
+      ) as ReturnType<typeof TaskSharedActions.addTask>[];
+      // Several missed days were backfilled...
+      expect(addTasks.length).toBeGreaterThan(1);
+      // ...and each instance's Due is its own occurrence + 1 day.
+      for (const a of addTasks) {
+        const nextDay = getDbDateStr(new Date(a.task.created + 24 * 60 * 60 * 1000));
+        expect(a.task.dueDay).toBe(nextDay);
+      }
+    });
+  });
+
   describe('waitForCompletion', () => {
     it('should block task creation when prior instance is uncompleted', async () => {
       const today = new Date();

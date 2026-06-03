@@ -12,7 +12,7 @@ import { expect, test } from '../../fixtures/test.fixture';
  * verify the task is NOT in Today but IS scheduled for Monday.
  */
 test.describe('Issue #5594: First repeat occurrence should not always be today', () => {
-  test('weekly Mon/Wed/Fri repeat created on Saturday should schedule for Monday', async ({
+  test('weekly weekday repeat created on Saturday should schedule for Monday', async ({
     page,
     workViewPage,
     taskPage,
@@ -42,48 +42,19 @@ test.describe('Issue #5594: First repeat occurrence should not always be today',
     const repeatDialog = page.locator('mat-dialog-container');
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 5. Change quickSetting to CUSTOM
+    // 5. Pick the "Every Monday through Friday" quick setting. Saturday is not in
+    //    Mon–Fri, so a task created on Saturday first fires on Monday — the same
+    //    assertion the original Mon/Wed/Fri custom rule made (the legacy Custom
+    //    weekday-picker UI was removed in favour of the RRULE builder).
     const quickSettingSelect = repeatDialog.locator('mat-select').first();
     await quickSettingSelect.click();
-    const customOption = page.locator('mat-option').filter({ hasText: /Custom/i });
-    await customOption.click();
+    const mfOption = page
+      .locator('mat-option')
+      .filter({ hasText: /Monday through Friday/i });
+    await expect(mfOption).toBeVisible({ timeout: 5000 });
+    await mfOption.click();
 
-    // 6. Wait for the custom config section to be visible
-    const repeatCycleSelect = repeatDialog.locator('.repeat-cycle mat-select').first();
-    await expect(repeatCycleSelect).toBeVisible({ timeout: 5000 });
-
-    // Ensure repeat cycle is WEEKLY (should be default)
-    const repeatCycleText = await repeatCycleSelect.textContent();
-    if (!repeatCycleText?.includes('Week')) {
-      await repeatCycleSelect.click();
-      const weeklyOption = page.locator('mat-option').filter({ hasText: /Week/i });
-      await weeklyOption.click();
-    }
-
-    // 7. Set weekday checkboxes: enable Mon/Wed/Fri, disable Tue/Thu/Sat/Sun
-    // The default has Mon-Fri enabled. We need to uncheck Tue and Thu.
-    const weekdaysContainer = repeatDialog.locator('.weekdays');
-    await expect(weekdaysContainer).toBeVisible({ timeout: 5000 });
-
-    // Get all checkbox fields
-    const tuesdayCheckbox = weekdaysContainer
-      .locator('formly-field')
-      .nth(1)
-      .locator('input[type="checkbox"]');
-    const thursdayCheckbox = weekdaysContainer
-      .locator('formly-field')
-      .nth(3)
-      .locator('input[type="checkbox"]');
-
-    // Uncheck Tuesday and Thursday
-    if (await tuesdayCheckbox.isChecked()) {
-      await tuesdayCheckbox.click();
-    }
-    if (await thursdayCheckbox.isChecked()) {
-      await thursdayCheckbox.click();
-    }
-
-    // 8. Save the repeat config
+    // 6. Save the repeat config
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
     await expect(saveBtn).toBeEnabled({ timeout: 5000 });
     await saveBtn.click();

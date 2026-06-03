@@ -12,17 +12,27 @@ export const TASK_REPEAT_WEEKDAY_MAP: (keyof TaskRepeatCfg)[] = [
   'saturday',
 ];
 
-export type RepeatCycleOption = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CRON';
+export type RepeatCycleOption = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 export type RepeatQuickSetting =
   | 'DAILY'
+  | 'EVERY_OTHER_DAY'
   | 'WEEKLY_CURRENT_WEEKDAY'
+  | 'BIWEEKLY_CURRENT_WEEKDAY'
+  | 'WEEKENDS'
   | 'MONTHLY_CURRENT_DATE'
   | 'MONTHLY_FIRST_DAY'
   | 'MONTHLY_LAST_DAY'
   | 'MONTHLY_NTH_WEEKDAY'
+  | 'MONTHLY_LAST_WEEKDAY'
+  | 'QUARTERLY_CURRENT_DATE'
+  | 'SEMIANNUALLY_CURRENT_DATE'
   | 'MONDAY_TO_FRIDAY'
   | 'YEARLY_CURRENT_DATE'
-  | 'CRON'
+  | 'EVERY_OTHER_YEAR_CURRENT_DATE'
+  | 'RRULE'
+  // Legacy persisted value only — the "Custom" UI was removed; such cfgs are
+  // migrated to 'RRULE' on open (legacyTaskRepeatCfgToRRule). Kept in the union
+  // because existing stored data and data-repair still produce it.
   | 'CUSTOM';
 
 // MONTHLY Nth-weekday anchor (issue #6040). Both fields together form an
@@ -105,13 +115,63 @@ export interface TaskRepeatCfgCopy {
   // the newest. Mutually exclusive with skipOverdue/waitForCompletion.
   createForEachMissed?: boolean;
 
-  // CRON-cycle field: standard 5-field cron expression (minute hour day-of-month
-  // month day-of-week). Only consulted when repeatCycle === 'CRON'; all other
-  // schedule fields (repeatEvery, weekday flags, monthly anchors) are ignored.
-  // Lets users express "every Saturday from March through November" as
-  // `0 0 * 3-11 6` in one config instead of dozens of yearly configs.
-  cronExpression?: string;
+  // Advanced recurrence: an RFC 5545 RRULE body (e.g. `FREQ=WEEKLY;INTERVAL=2;BYDAY=MO`),
+  // stored WITHOUT the `RRULE:` prefix. When set it wins over the legacy schedule
+  // fields (repeatEvery, weekday flags, monthly anchors) — the occurrence engine
+  // routes on its presence. Stored as an opaque string so it never grows the
+  // `repeatCycle` enum, keeping older sync clients forward-compatible: they ignore
+  // the unknown field and fall back to `repeatCycle` (kept populated with the
+  // FREQ-derived legacy cycle as a best-effort approximation). Lets users express
+  // "every other Saturday, March–November, 10 times" in one config.
+  rrule?: string;
+
+  // "Ends after N times completed": stop materializing new instances once this
+  // many instances have been COMPLETED (done). Distinct from RRULE COUNT, which
+  // caps tasks CREATED and lives in the `rrule` string. App-level and optional:
+  // absent → open-ended; older sync clients ignore the unknown field (they keep
+  // creating, so the cap is only enforced on clients that support it — a soft,
+  // self-healing divergence, never data corruption). Enforced in
+  // TaskRepeatCfgService._getActionsForTaskRepeatCfg by counting done instances
+  // (live + archive) per repeatCfgId.
+  endsAfterCompletions?: number;
+
+  // --- Due-date derivation for generated instances ---------------------------
+  // Each instance has an "appears" day (the RRULE occurrence, = `created`) and a
+  // "due" day. By default Due = appears; these fields let Due be derived from the
+  // appears day instead. All optional & app-level (not in the rrule string), so
+  // absent → ON_OCCURRENCE (legacy behavior); old sync clients ignore them.
+  // Resolved by `getRecurringInstanceDueDate` (recompute-on-read for previews,
+  // set on the task at creation). See `util/recurring-due-date.util.ts`.
+  dueType?: RepeatDueType;
+  // OFFSET only: APPEARS (default) → Due = appears + offset; DUE → the RRULE day
+  // IS the due day and the task appears `offset` earlier (lead time).
+  dueAnchor?: RepeatDueAnchor;
+  // OFFSET / FROM_COMPLETION: explicit gap. Takes precedence over the gap
+  // inherited from the template task's own created→due distance.
+  dueOffset?: number;
+  dueOffsetUnit?: RepeatDueOffsetUnit;
+  // FIXED: every instance due on this calendar day (YYYY-MM-DD).
+  dueFixedDate?: string;
+  // PERIOD_END: which period's end the due day snaps to.
+  duePeriod?: RepeatDuePeriod;
 }
+
+/** The due-date derivation fields, grouped for the builder in/out. */
+export type RepeatDueConfig = Pick<
+  TaskRepeatCfgCopy,
+  'dueType' | 'dueAnchor' | 'dueOffset' | 'dueOffsetUnit' | 'dueFixedDate' | 'duePeriod'
+>;
+export type RepeatDueType =
+  | 'ON_OCCURRENCE' // Due = the appears day (default)
+  | 'OFFSET' // Due = appears ± offset (explicit, or inherited from template)
+  | 'UNTIL_NEXT' // Due = day before the next occurrence (rolling deadline)
+  | 'FIXED' // Due = a fixed calendar date for every instance
+  | 'PERIOD_END' // Due = end of the week/month/quarter/year containing the appears day
+  | 'FROM_COMPLETION' // Due = completion day + offset (needs repeatFromCompletionDate)
+  | 'NONE'; // no due date
+export type RepeatDueAnchor = 'APPEARS' | 'DUE';
+export type RepeatDueOffsetUnit = 'DAY' | 'BUSINESS_DAY' | 'WEEK';
+export type RepeatDuePeriod = 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
 
 export type TaskRepeatCfg = Readonly<TaskRepeatCfgCopy>;
 

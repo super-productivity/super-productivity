@@ -258,11 +258,16 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
   if (data.taskRepeatCfg && data.taskRepeatCfg.entities) {
     const quickSettingsRequiringStartDate = [
       'WEEKLY_CURRENT_WEEKDAY',
+      'BIWEEKLY_CURRENT_WEEKDAY',
       'YEARLY_CURRENT_DATE',
+      'EVERY_OTHER_YEAR_CURRENT_DATE',
       'MONTHLY_CURRENT_DATE',
       'MONTHLY_FIRST_DAY',
       'MONTHLY_LAST_DAY',
       'MONTHLY_NTH_WEEKDAY',
+      'MONTHLY_LAST_WEEKDAY',
+      'QUARTERLY_CURRENT_DATE',
+      'SEMIANNUALLY_CURRENT_DATE',
     ];
     Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
       const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;

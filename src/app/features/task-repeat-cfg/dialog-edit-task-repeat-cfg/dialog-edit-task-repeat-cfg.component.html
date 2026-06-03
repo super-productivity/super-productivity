@@ -32,22 +32,24 @@
         [model]="repeatCfg()"
       ></formly-form>
 
-      @if (cronPreview(); as p) {
-        <div class="cron-preview">
-          <div class="cron-preview__expr">&rarr; {{ p.cron }}</div>
-          <div class="cron-preview__human">{{ p.human }}</div>
-          @if (p.subDaily) {
-            <div class="cron-preview__warn">
-              ⚠ {{ T.F.TASK_REPEAT.F.CRON_WARN_SUBDAILY | translate }}
-            </div>
-          }
-          @if (p.timed) {
-            <div class="cron-preview__warn">
-              ⚠ {{ T.F.TASK_REPEAT.F.CRON_WARN_TIME_IGNORED | translate }}
-            </div>
-          }
-        </div>
+      @if (isRRuleMode()) {
+        <rrule-builder
+          [rrule]="repeatCfg().rrule ?? ''"
+          [startDate]="repeatCfg().startDate"
+          [repeatFromCompletion]="repeatCfg().repeatFromCompletionDate ?? false"
+          [completionsLimit]="repeatCfg().endsAfterCompletions"
+          (rruleChange)="onRRuleChange($event)"
+          (repeatFromCompletionChange)="onRepeatFromCompletionChange($event)"
+          (completionsLimitChange)="onCompletionsLimitChange($event)"
+        ></rrule-builder>
       }
+
+      <!-- Due-date derivation applies to EVERY recurring config (presets and
+           Custom), so it lives here, outside the rrule builder. -->
+      <due-date-config
+        [config]="repeatCfg()"
+        (configChange)="onDueConfigChange($event)"
+      ></due-date-config>
 
       <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
         <chip-list-input
@@ -68,6 +70,65 @@
       </collapsible>
     </div>
   </mat-dialog-content>
+
+  <!-- Live result/preview — pinned above the action buttons in RRULE mode. -->
+  @if (isRRuleMode() && rrulePreview(); as p) {
+    <div class="rrule-result">
+      <div class="rrule-result__human">&rarr; {{ p.human }}</div>
+      @if (repeatCfg().repeatFromCompletionDate) {
+        @if (p.completionExample; as ex) {
+          <div class="rrule-result__next">
+            {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
+            {{ ex.done | date: 'mediumDate' }} &rarr; {{ ex.next | date: 'mediumDate' }}
+          </div>
+        }
+      } @else if (p.upcoming.length) {
+        <div class="rrule-result__next">
+          {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
+          @for (d of p.upcoming; track d.getTime(); let last = $last) {
+            <span>{{ d | date: 'mediumDate' }}</span>
+            @if (!last) {
+              <span class="rrule-result__sep">&middot;</span>
+            }
+          }
+        </div>
+      }
+      <div class="rrule-result__expr">{{ p.rrule }}</div>
+      <button
+        type="button"
+        class="rrule-result__cal-toggle"
+        (click)="toggleResultHeatmap()"
+      >
+        <mat-icon>{{ showResultHeatmap() ? 'expand_less' : 'calendar_month' }}</mat-icon>
+        <span>{{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW | translate }}</span>
+      </button>
+      @if (resultHeatmapData(); as hd) {
+        <heatmap
+          class="rrule-result__cal"
+          [data]="hd"
+          [showLegend]="false"
+          (dayClick)="onPreviewDayClick($event)"
+        />
+        @if (simulatedCompletion(); as sim) {
+          <div class="rrule-result__sim">
+            {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }}
+            {{ sim }}
+            <button
+              type="button"
+              class="rrule-result__sim-reset"
+              (click)="clearSimulation()"
+            >
+              {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
+            </button>
+          </div>
+        } @else {
+          <div class="rrule-result__sim-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
+          </div>
+        }
+      }
+    </div>
+  }
 
   <mat-dialog-actions align="end">
     <button

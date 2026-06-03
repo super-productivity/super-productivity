@@ -119,43 +119,7 @@ describe('getAllMissedDueDates()', () => {
     });
   });
 
-  describe('CRON', () => {
-    it('returns every missed day for a daily cron', () => {
-      const result = getAllMissedDueDates(
-        cfg({
-          repeatCycle: 'CRON',
-          cronExpression: '0 0 * * *',
-          startDate: '2024-01-01',
-          lastTaskCreationDay: '2024-01-01',
-        }),
-        new Date(2024, 0, 4),
-      );
-
-      expect(result).toEqual([
-        noon(new Date(2024, 0, 2)),
-        noon(new Date(2024, 0, 3)),
-        noon(new Date(2024, 0, 4)),
-      ]);
-    });
-  });
-
   describe('edge cases', () => {
-    it('returns [] for a month-limited cron when today is outside the active months', () => {
-      // "every day from Jan to April" = cron months 1-4. In June there are no
-      // occurrences, so a jumpDay catch-up legitimately backfills nothing.
-      const result = getAllMissedDueDates(
-        cfg({
-          repeatCycle: 'CRON',
-          cronExpression: '0 0 * 1-4 *',
-          startDate: '2026-06-02',
-          lastTaskCreationDay: '2026-06-02',
-        }),
-        new Date(2026, 5, 9), // 2026-06-09 (after jumpDay(7) from Jun 2)
-      );
-
-      expect(result).toEqual([]);
-    });
-
     it('returns [] when start date is in the future', () => {
       const result = getAllMissedDueDates(
         cfg({

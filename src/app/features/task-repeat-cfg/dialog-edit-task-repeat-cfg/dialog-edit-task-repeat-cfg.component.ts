@@ -18,6 +18,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import {
   DEFAULT_TASK_REPEAT_CFG,
+  RepeatDueConfig,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
@@ -39,13 +40,27 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
-import { isCronExpressionValid } from '../store/cron-occurrence.util';
-import {
-  initEnglishToCron,
-  naturalLanguageToCron,
-} from '../util/parse-natural-cron.util';
 import { SnackService } from '../../../core/snack/snack.service';
-import { CronPreview, getCronPreview } from '../util/cron-preview.util';
+import { getRRuleOccurrencesInRange, isRRuleValid } from '../store/rrule-occurrence.util';
+import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
+import {
+  legacyTaskRepeatCfgToRRule,
+  rruleToLegacyTaskRepeatCfg,
+} from '../util/legacy-cfg-to-rrule.util';
+import {
+  DayData,
+  HeatmapComponent,
+  HeatmapData,
+} from '../../../ui/heatmap/heatmap.component';
+import {
+  buildHeatmapWeeks,
+  buildProjectionDayMap,
+} from '../../../ui/heatmap/build-heatmap-data.util';
+import { DateAdapter } from '@angular/material/core';
+import { RruleBuilderComponent } from './rrule-builder/rrule-builder.component';
+import { DueDateConfigComponent } from './due-date-config/due-date-config.component';
+import { buildRRuleHumanizeOpts, getRRulePreview } from '../util/rrule-preview.util';
+import { DatePipe } from '@angular/common';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { MatButton } from '@angular/material/button';
@@ -71,6 +86,11 @@ const RELEVANT_KEYS_FOR_UPDATE_ALL_TASKS: (keyof TaskRepeatCfgCopy)[] = [
   'tagIds',
 ];
 
+// The RRULE builder is a dedicated child component (rrule-builder) that owns its
+// own form state and emits the assembled `rrule` string; the dialog only stores
+// that string on the working cfg.
+type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
+
 // TASK_REPEAT_CFG_FORM_CFG
 @Component({
   selector: 'dialog-edit-task-repeat-cfg',
@@ -88,6 +108,10 @@ const RELEVANT_KEYS_FOR_UPDATE_ALL_TASKS: (keyof TaskRepeatCfgCopy)[] = [
     MatIcon,
     RepeatTaskHeatmapComponent,
     CollapsibleComponent,
+    RruleBuilderComponent,
+    DueDateConfigComponent,
+    DatePipe,
+    HeatmapComponent,
   ],
 })
 export class DialogEditTaskRepeatCfgComponent {
@@ -100,6 +124,7 @@ export class DialogEditTaskRepeatCfgComponent {
   private _translateService = inject(TranslateService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _snackService = inject(SnackService);
+  private _dateAdapter = inject(DateAdapter);
   private _data = inject<{
     task?: Task;
     repeatCfg?: TaskRepeatCfg;
@@ -111,9 +136,7 @@ export class DialogEditTaskRepeatCfgComponent {
   isHeatmapExpanded = false;
 
   repeatCfgInitial = signal<TaskRepeatCfgCopy | undefined>(undefined);
-  repeatCfg = signal<Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg>(
-    this._initializeRepeatCfg(),
-  );
+  repeatCfg = signal<RepeatCfgWorking>(this._initializeRepeatCfg());
   isLoading = signal<boolean>(false);
   isEdit = computed(() => {
     if (this._data.repeatCfg) return true;
@@ -136,25 +159,123 @@ export class DialogEditTaskRepeatCfgComponent {
   formGroup2 = signal(new UntypedFormGroup({}));
   tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
 
-  // Live cron preview, rendered below the cron field in the template. Driven off
-  // the essential form's valueChanges so it updates on every keystroke (Formly's
-  // mat-hint does not reliably reflect a dynamic description).
-  private _cronFormValue = toSignal(this.formGroup1().valueChanges, {
-    initialValue: null as {
-      quickSetting?: string;
-      repeatCycle?: string;
-      cronExpression?: string;
-    } | null,
+  // The RRULE builder (shown when quickSetting === 'RRULE') is a child component
+  // with its own live preview; the dialog only needs to know when to render it.
+  private _formValue = toSignal(this.formGroup1().valueChanges, {
+    initialValue: null as { quickSetting?: string } | null,
   });
-  cronPreview = computed<CronPreview | null>(() => {
-    const v = this._cronFormValue();
+  isRRuleMode = computed(
+    () => (this._formValue()?.quickSetting ?? this.repeatCfg().quickSetting) === 'RRULE',
+  );
+  // Live result/preview shown at the dialog bottom in RRULE mode. The builder
+  // keeps `repeatCfg().rrule` up to date via onRRuleChange, so this stays live.
+  private _humanize = buildRRuleHumanizeOpts(
+    (k) => this._translateService.instant(k) as string,
+  );
+  rrulePreview = computed(() =>
+    this.isRRuleMode()
+      ? getRRulePreview(
+          this.repeatCfg().rrule,
+          this.repeatCfg().startDate,
+          this._humanize,
+        )
+      : null,
+  );
+
+  // Togglable calendar (heatmap) preview of the next year's occurrences for the
+  // live rule — built from the in-progress rrule, no saved cfg required.
+  private readonly _PREVIEW_HEATMAP_DAYS = 365;
+  showResultHeatmap = signal(false);
+  // A clicked projected day (YYYY-MM-DD): "simulate completing here" → the rule
+  // re-anchors from that day (the After-completion behavior, made interactive).
+  simulatedCompletion = signal<string | null>(null);
+  toggleResultHeatmap(): void {
+    this.showResultHeatmap.update((v) => !v);
+    if (!this.showResultHeatmap()) this.simulatedCompletion.set(null);
+  }
+  clearSimulation(): void {
+    this.simulatedCompletion.set(null);
+  }
+  onPreviewDayClick(day: DayData): void {
+    if (!day?.dateStr) return;
+    // Tap the already-simulated day again to clear it. Otherwise simulate
+    // completing on the clicked day — ANY day, not only scheduled occurrences:
+    // re-anchoring to an on-schedule day is a no-op (next = same grid), so the
+    // series only visibly rebuilds when you complete off-schedule (early/late),
+    // which is exactly the "repeat from completion" what-if.
+    if (day.dateStr === this.simulatedCompletion()) {
+      this.simulatedCompletion.set(null);
+    } else {
+      this.simulatedCompletion.set(day.dateStr);
+    }
+  }
+  resultHeatmapData = computed<HeatmapData | null>(() => {
+    if (!this.isRRuleMode() || !this.showResultHeatmap()) return null;
     const cfg = this.repeatCfg();
-    const quickSetting = v?.quickSetting ?? cfg.quickSetting;
-    const repeatCycle = v?.repeatCycle ?? cfg.repeatCycle;
-    const expr = v?.cronExpression ?? cfg.cronExpression;
-    const isCron =
-      quickSetting === 'CRON' || (quickSetting === 'CUSTOM' && repeatCycle === 'CRON');
-    return isCron ? getCronPreview(expr) : null;
+    if (!isRRuleValid(cfg.rrule)) return null;
+    const rrule = cfg.rrule as string;
+    const exdates = (cfg as TaskRepeatCfg).deletedInstanceDates;
+    const from = new Date();
+    from.setHours(12, 0, 0, 0);
+    const to = new Date(from);
+    to.setDate(to.getDate() + this._PREVIEW_HEATMAP_DAYS);
+    const baseStart = getEffectiveRepeatStartDate(cfg as TaskRepeatCfg);
+    const sim = this.simulatedCompletion();
+    // Only a "repeat from completion" schedule re-anchors when you finish a task
+    // (the completion effect rewrites startDate/lastTaskCreationDay to the
+    // completion day). A fixed-calendar schedule — even with "only create next
+    // after completion" (waitForCompletion only gates creation, it never moves
+    // due dates) — keeps its dates, so completing a day must NOT shift the rest.
+    const reAnchors = !!(cfg as TaskRepeatCfg).repeatFromCompletionDate;
+
+    let occ: Date[];
+    if (sim && reAnchors) {
+      // Keep the original occurrences up to the completion day, then re-anchor
+      // the rest of the series to that day (next fires from the completion).
+      const [y, m, d] = sim.split('-').map(Number);
+      const simDay = new Date(y, m - 1, d, 12, 0, 0);
+      const beforeEnd = new Date(simDay);
+      beforeEnd.setDate(beforeEnd.getDate() - 1);
+      const afterFrom = new Date(simDay);
+      afterFrom.setDate(afterFrom.getDate() + 1);
+      const before = getRRuleOccurrencesInRange(
+        { rrule, startDate: baseStart, exdates },
+        from,
+        beforeEnd,
+      );
+      const after = getRRuleOccurrencesInRange(
+        { rrule, startDate: sim, exdates },
+        afterFrom,
+        to,
+      );
+      occ = [...before, ...after];
+    } else {
+      // No re-anchor: calendar stays fixed. (No simulation, or a non
+      // from-completion schedule where finishing a task never shifts dates.)
+      occ = getRRuleOccurrencesInRange(
+        { rrule, startDate: baseStart, exdates },
+        from,
+        to,
+      );
+    }
+    if (!occ.length && !sim) return null;
+
+    const dayMap = buildProjectionDayMap(occ, from, to);
+    if (sim) {
+      const day = dayMap.get(sim);
+      if (day) {
+        day.isProjected = false;
+        day.isCompleted = true;
+        day.level = 4;
+      }
+    }
+    return buildHeatmapWeeks(
+      dayMap,
+      from,
+      to,
+      this._dateAdapter.getFirstDayOfWeek(),
+      this._dateAdapter.getMonthNames('short'),
+    );
   });
   canRemoveInstance = signal<boolean>(false);
   skipInstanceButtonText = computed(() => {
@@ -181,10 +302,6 @@ export class DialogEditTaskRepeatCfgComponent {
     // Initialize form config
     this._initializeFormConfig();
 
-    // Warm up the English→cron WASM translator so the CRON field's live
-    // preview and validation are ready by the time the user types.
-    void initEnglishToCron();
-
     // Set up effect to load task repeat config if editing
     effect(() => {
       if (this.isEdit() && this._data.task?.repeatCfgId) {
@@ -202,7 +319,7 @@ export class DialogEditTaskRepeatCfgComponent {
     });
   }
 
-  private _initializeRepeatCfg(): Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg {
+  private _initializeRepeatCfg(): RepeatCfgWorking {
     if (this._data.repeatCfg) {
       // Process the repeat config to determine if quickSetting needs to be changed to CUSTOM
       const processedCfg = this._processQuickSettingForDate(this._data.repeatCfg);
@@ -234,6 +351,36 @@ export class DialogEditTaskRepeatCfgComponent {
     } else {
       throw new Error('Invalid params given for repeat dialog!');
     }
+  }
+
+  /** The RRULE builder emits a new rule string; store it + keep repeatCycle in sync. */
+  onRRuleChange(rrule: string): void {
+    this.repeatCfg.update((cfg) => ({
+      ...cfg,
+      rrule,
+      // Keep the legacy schedule fields (cycle / interval / weekday flags /
+      // monthly anchors) in sync so older sync clients — which ignore `rrule` —
+      // fall back to a faithful recurrence (P1.3 reverse converter).
+      ...rruleToLegacyTaskRepeatCfg(rrule),
+    }));
+  }
+
+  // Schedule-type toggle lives in the rrule-builder (RRULE mode). It's separate
+  // from the rrule string — re-anchors the interval to the completion day.
+  onRepeatFromCompletionChange(repeatFromCompletionDate: boolean): void {
+    this.repeatCfg.update((cfg) => ({ ...cfg, repeatFromCompletionDate }));
+  }
+
+  // "Ends after N completions" — app-level cap, not part of the rrule string.
+  // undefined clears it (any other end type active).
+  onCompletionsLimitChange(endsAfterCompletions: number | undefined): void {
+    this.repeatCfg.update((cfg) => ({ ...cfg, endsAfterCompletions }));
+  }
+
+  // Due-date derivation fields — app-level, not part of the rrule string. The
+  // builder emits the full group each change (stale params already cleared).
+  onDueConfigChange(due: RepeatDueConfig): void {
+    this.repeatCfg.update((cfg) => ({ ...cfg, ...due }));
   }
 
   private _initializeFormConfig(): void {
@@ -313,23 +460,6 @@ export class DialogEditTaskRepeatCfgComponent {
     const formGroup1 = this.formGroup1();
     const formGroup2 = this.formGroup2();
 
-    // CRON guard: a cron cycle must resolve to a valid expression (raw cron or
-    // a recognized natural-language phrase). Notify + block save otherwise so
-    // the user isn't left with a silently broken schedule.
-    const cronCfg = this.repeatCfg();
-    if (cronCfg.repeatCycle === 'CRON') {
-      const raw = (cronCfg.cronExpression || '').trim();
-      const canonical = isCronExpressionValid(raw) ? raw : naturalLanguageToCron(raw);
-      if (!canonical) {
-        this._snackService.open({
-          type: 'ERROR',
-          msg: T.F.TASK_REPEAT.F.CRON_INVALID,
-        });
-        formGroup1.markAllAsTouched();
-        return;
-      }
-    }
-
     // Check if both forms are valid
     if (!formGroup1.valid || !formGroup2.valid) {
       // Mark all fields as touched to show validation errors
@@ -345,7 +475,7 @@ export class DialogEditTaskRepeatCfgComponent {
     const currentRepeatCfg = this.repeatCfg();
 
     // workaround for formly not always updating hidden fields correctly (in time??)
-    if (currentRepeatCfg.quickSetting !== 'CUSTOM') {
+    if (currentRepeatCfg.quickSetting !== 'RRULE') {
       // Pass startDate to use correct weekday for WEEKLY_CURRENT_WEEKDAY (fixes #5806)
       const referenceDate = currentRepeatCfg.startDate
         ? dateStrToUtcDate(currentRepeatCfg.startDate)
@@ -359,21 +489,23 @@ export class DialogEditTaskRepeatCfgComponent {
       }
     }
 
+    // RRULE mode: the rrule string is already on the cfg (kept live by the
+    // rrule-builder child via onRRuleChange). Just guard it before persisting.
+    const working = this.repeatCfg();
+    if (working.quickSetting === 'RRULE') {
+      if (!isRRuleValid(working.rrule)) {
+        this._snackService.open({ type: 'ERROR', msg: T.F.TASK_REPEAT.F.RRULE_INVALID });
+        formGroup1.markAllAsTouched();
+        return;
+      }
+    } else if (working.rrule) {
+      // Switched away from RRULE — drop the stale string so the legacy path runs.
+      this.repeatCfg.update((cfg) => ({ ...cfg, rrule: undefined }));
+    }
+
     // Normalize the monthly anchor fields at the boundary: convert the form's
     // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
-    let finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
-
-    // Canonicalize the cron expression at the boundary: if the user typed a
-    // natural-language form, persist its cron equivalent so the recurrence
-    // engine never re-parses English.
-    if (finalRepeatCfg.repeatCycle === 'CRON' && finalRepeatCfg.cronExpression) {
-      if (!isCronExpressionValid(finalRepeatCfg.cronExpression)) {
-        const canonical = naturalLanguageToCron(finalRepeatCfg.cronExpression);
-        if (canonical) {
-          finalRepeatCfg = { ...finalRepeatCfg, cronExpression: canonical };
-        }
-      }
-    }
+    const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
 
     if (this.isEdit()) {
       const initial = this.repeatCfgInitial();
@@ -512,20 +644,50 @@ export class DialogEditTaskRepeatCfgComponent {
     return new Date();
   }
 
-  private _processQuickSettingForDate<
-    TCfg extends { quickSetting?: string; startDate?: string; repeatCycle?: string },
-  >(cfg: TCfg): TCfg {
-    // CRON is reachable only inside "Custom recurring config" now (no top-level
-    // CRON quick-setting), so surface any cron config — including legacy ones
-    // saved with quickSetting 'CRON' — as CUSTOM so the dropdown matches.
-    if (cfg.repeatCycle === 'CRON' || cfg.quickSetting === 'CRON') {
-      return { ...cfg, quickSetting: 'CUSTOM' };
+  private _processQuickSettingForDate<TCfg extends RepeatCfgWorking>(cfg: TCfg): TCfg {
+    // Presets now carry an rrule too (rrule presets), so an rrule alone no longer
+    // means "builder mode". Keep the friendly preset label only while its rrule
+    // still matches what that preset produces; a builder- / @+- / migration-built
+    // or otherwise diverged rule opens the dedicated 'RRULE' builder.
+    const KNOWN_PRESETS = new Set([
+      'DAILY',
+      'EVERY_OTHER_DAY',
+      'MONDAY_TO_FRIDAY',
+      'WEEKENDS',
+      'WEEKLY_CURRENT_WEEKDAY',
+      'BIWEEKLY_CURRENT_WEEKDAY',
+      'MONTHLY_CURRENT_DATE',
+      'MONTHLY_FIRST_DAY',
+      'MONTHLY_LAST_DAY',
+      'MONTHLY_NTH_WEEKDAY',
+      'MONTHLY_LAST_WEEKDAY',
+      'QUARTERLY_CURRENT_DATE',
+      'SEMIANNUALLY_CURRENT_DATE',
+      'YEARLY_CURRENT_DATE',
+      'EVERY_OTHER_YEAR_CURRENT_DATE',
+    ]);
+    if (cfg.rrule) {
+      const isFaithfulPreset =
+        KNOWN_PRESETS.has(cfg.quickSetting ?? '') &&
+        legacyTaskRepeatCfgToRRule(cfg as TaskRepeatCfg) === cfg.rrule;
+      return isFaithfulPreset ? cfg : { ...cfg, quickSetting: 'RRULE' };
     }
-    const SETTINGS_WITHOUT_START_DATE = new Set(['DAILY', 'MONDAY_TO_FRIDAY', 'CUSTOM']);
-    if (cfg.quickSetting && !SETTINGS_WITHOUT_START_DATE.has(cfg.quickSetting)) {
-      if (!cfg.startDate) {
-        return { ...cfg, quickSetting: 'CUSTOM' };
-      }
+    // The legacy "Custom" recurrence UI has been removed. Migrate such cfgs (and
+    // any cfg that no longer maps to a kept preset) to an equivalent RRULE so they
+    // open in the builder. This is lazy: the occurrence engine still fires
+    // un-opened legacy cfgs via their repeatCycle path, so the conversion only
+    // persists if the user saves.
+    const PRESETS_WITHOUT_START_DATE = new Set(['DAILY', 'MONDAY_TO_FRIDAY']);
+    const needsMigration =
+      cfg.quickSetting === 'CUSTOM' ||
+      !cfg.quickSetting ||
+      (!PRESETS_WITHOUT_START_DATE.has(cfg.quickSetting) && !cfg.startDate);
+    if (needsMigration) {
+      return {
+        ...cfg,
+        rrule: legacyTaskRepeatCfgToRRule(cfg as TaskRepeatCfg),
+        quickSetting: 'RRULE',
+      };
     }
     return cfg;
   }

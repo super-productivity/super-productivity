@@ -30,6 +30,8 @@ import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
 import { getAllMissedDueDates } from './store/get-all-missed-due-dates.util';
+import { getNextRepeatOccurrence } from './store/get-next-repeat-occurrence.util';
+import { getRecurringInstanceDueDate } from './util/recurring-due-date.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
@@ -189,6 +191,28 @@ export class TaskRepeatCfgService {
       throw new Error('No taskRepeatCfg.id');
     }
 
+    // "Ends after N times completed" cap. Applies to EVERY creation path below
+    // (single, missed-backfill, completion-probe). Counts COMPLETED (done)
+    // instances across live + archive by repeatCfgId — deterministic once sync
+    // converges, mirroring the waitForCompletion gate. Unlike RRULE COUNT (caps
+    // tasks CREATED, lives in the rrule string), this caps tasks COMPLETED and is
+    // app-level; clients without the field simply don't enforce it.
+    if (
+      typeof taskRepeatCfg.endsAfterCompletions === 'number' &&
+      taskRepeatCfg.endsAfterCompletions > 0
+    ) {
+      const archivedInstances = await this._taskService.getArchiveTasksForRepeatCfgId(
+        taskRepeatCfg.id,
+      );
+      const completedCount = [...existingTaskInstances, ...archivedInstances].filter(
+        (t) => t.isDone,
+      ).length;
+      if (completedCount >= taskRepeatCfg.endsAfterCompletions) {
+        // Series complete — create nothing further.
+        return [];
+      }
+    }
+
     // "Create a task for each missed occurrence" backfill: create a task for
     // EVERY missed occurrence (capped) instead of only the newest. Only applies
     // to the catch-up path (target day is today or earlier). Future pre-creation
@@ -282,9 +306,16 @@ export class TaskRepeatCfgService {
       ];
     }
 
+    // Derive the due day from the occurrence per `dueType` (default = occurrence).
+    const dueDayStr = this._resolveInstanceDueDay(
+      taskRepeatCfg,
+      targetDateStr,
+      targetCreated,
+    );
     const { task, isAddToBottom } = this._getTaskRepeatTemplate(
       taskRepeatCfg,
       targetDateStr,
+      dueDayStr,
     );
     const taskWithTargetDates: Task = {
       ...task,
@@ -330,12 +361,16 @@ export class TaskRepeatCfgService {
       }),
     ];
 
-    // Schedule if given
-    if (isValidSplitTime(taskRepeatCfg.startTime) && taskRepeatCfg.remindAt) {
-      // NOTE: schedule tasks against the computed repeat day to avoid mismatched due dates.
+    // Schedule if given — pin the time to the DERIVED due day (= occurrence for
+    // the default ON_OCCURRENCE). NONE (no due day) gets no timed schedule.
+    if (
+      dueDayStr &&
+      isValidSplitTime(taskRepeatCfg.startTime) &&
+      taskRepeatCfg.remindAt
+    ) {
       const dateTime = getDateTimeFromClockString(
         taskRepeatCfg.startTime as string,
-        targetCreated.getTime(),
+        this._localNoonTs(dueDayStr),
       );
       createNewActions.push(
         TaskSharedActions.scheduleTaskWithTime({
@@ -380,12 +415,17 @@ export class TaskRepeatCfgService {
 
   private _getTaskRepeatTemplate(
     taskRepeatCfg: TaskRepeatCfg,
-    dueDay: string,
+    // The occurrence/appears day — seeds the deterministic id (and the caller's
+    // immutable `created`), so duplicate detection stays anchored to it.
+    occurrenceDay: string,
+    // The derived due day (see `dueType`); `undefined` → no due day (NONE). For
+    // the default ON_OCCURRENCE this equals `occurrenceDay`.
+    dueDay: string | undefined,
   ): {
     task: Task;
     isAddToBottom: boolean;
   } {
-    const taskId = getRepeatableTaskId(taskRepeatCfg.id, dueDay);
+    const taskId = getRepeatableTaskId(taskRepeatCfg.id, occurrenceDay);
     return {
       task: this._taskService.createNewTaskWithDefaults({
         title: taskRepeatCfg.title,
@@ -395,12 +435,52 @@ export class TaskRepeatCfgService {
           timeEstimate: taskRepeatCfg.defaultEstimate || 0,
           projectId: taskRepeatCfg.projectId || undefined,
           notes: taskRepeatCfg.notes || '',
-          dueDay,
+          ...(dueDay ? { dueDay } : {}),
           tagIds: taskRepeatCfg.tagIds.filter((tagId) => tagId !== TODAY_TAG.id),
         },
       }),
       isAddToBottom: taskRepeatCfg.order > 0,
     };
+  }
+
+  /**
+   * Resolve a generated instance's DUE day from its occurrence (appears) day via
+   * the configured `dueType`. Returns the occurrence day unchanged for the
+   * default ON_OCCURRENCE (zero behavior change for existing configs), or
+   * `undefined` for the NONE type. The instance's id and `created` stay anchored
+   * to the occurrence day regardless. See `util/recurring-due-date.util`.
+   */
+  private _resolveInstanceDueDay(
+    taskRepeatCfg: TaskRepeatCfg,
+    occurrenceDay: string,
+    occurrenceDate: Date,
+  ): string | undefined {
+    const type = taskRepeatCfg.dueType;
+    if (!type || type === 'ON_OCCURRENCE') return occurrenceDay;
+
+    // UNTIL_NEXT needs the following occurrence — compute it as the next firing
+    // strictly after this one (pin lastTaskCreationDay to this day).
+    let nextAppearsDate: string | undefined;
+    if (type === 'UNTIL_NEXT') {
+      const next = getNextRepeatOccurrence(
+        { ...taskRepeatCfg, lastTaskCreationDay: occurrenceDay },
+        occurrenceDate,
+      );
+      nextAppearsDate = next ? getDbDateStr(next) : undefined;
+    }
+
+    return (
+      getRecurringInstanceDueDate(taskRepeatCfg, {
+        appearsDate: occurrenceDay,
+        nextAppearsDate,
+      }) ?? undefined
+    );
+  }
+
+  /** Local-noon timestamp of a `YYYY-MM-DD` day (matches the occurrence convention). */
+  private _localNoonTs(dateStr: string): number {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0).getTime();
   }
 
   /**
@@ -489,9 +569,15 @@ export class TaskRepeatCfgService {
     | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
     | ReturnType<typeof addSubTask>
   )[] {
+    const dueDayStr = this._resolveInstanceDueDay(
+      taskRepeatCfg,
+      targetDateStr,
+      targetCreated,
+    );
     const { task, isAddToBottom } = this._getTaskRepeatTemplate(
       taskRepeatCfg,
       targetDateStr,
+      dueDayStr,
     );
     const taskWithTargetDates: Task = {
       ...task,
@@ -521,10 +607,14 @@ export class TaskRepeatCfgService {
       }),
     ];
 
-    if (isValidSplitTime(taskRepeatCfg.startTime) && taskRepeatCfg.remindAt) {
+    if (
+      dueDayStr &&
+      isValidSplitTime(taskRepeatCfg.startTime) &&
+      taskRepeatCfg.remindAt
+    ) {
       const dateTime = getDateTimeFromClockString(
         taskRepeatCfg.startTime as string,
-        targetCreated.getTime(),
+        this._localNoonTs(dueDayStr),
       );
       actions.push(
         TaskSharedActions.scheduleTaskWithTime({

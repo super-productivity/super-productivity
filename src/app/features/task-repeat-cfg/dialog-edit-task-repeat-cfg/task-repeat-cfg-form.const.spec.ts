@@ -65,4 +65,8 @@ describe('TaskRepeatCfgFormConfig', () => {
       expect(remindAtField?.templateOptions?.required).toBe(true);
     });
   });
+
+  // NOTE: the 'repeatFromCompletionDate' Formly select was removed along with the
+  // legacy Custom UI — the RRULE builder owns that toggle now (covered by
+  // rrule-builder.component.spec).
 });

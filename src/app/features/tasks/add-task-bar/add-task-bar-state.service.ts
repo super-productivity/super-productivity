@@ -134,8 +134,8 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, repeatQuickSetting: null }));
   }
 
-  updateCronExpression(cronExpression: string | null): void {
-    this._taskInputState.update((state) => ({ ...state, cronExpression }));
+  updateRRule(rrule: string | null): void {
+    this._taskInputState.update((state) => ({ ...state, rrule }));
   }
 
   resetAfterAdd(): void {
@@ -148,7 +148,7 @@ export class AddTaskBarStateService {
       cleanText: null,
       attachments: [],
       repeatQuickSetting: null,
-      cronExpression: null,
+      rrule: null,
     }));
     this.inputTxt.set('');
     // Keep isAutoDetected as is to preserve project selection

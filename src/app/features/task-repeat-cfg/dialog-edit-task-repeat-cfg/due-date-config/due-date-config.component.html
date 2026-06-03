@@ -1,0 +1,79 @@
+<!-- Due date: how each generated instance's deadline is derived from its
+     occurrence (appears) day. Applies to every recurring config. -->
+<collapsible [title]="dueCollapsibleTitle()">
+  <div class="dd-field">
+    <select
+      #dueSel
+      class="dd-sel dd-sel--wide"
+      (change)="setDueType(dueSel.value)"
+    >
+      @for (o of dueTypeOpts; track o.value) {
+        <option
+          [value]="o.value"
+          [selected]="o.value === dueType()"
+        >
+          {{ o.label | translate }}
+        </option>
+      }
+    </select>
+
+    @if (dueType() === 'OFFSET' || dueType() === 'FROM_COMPLETION') {
+      <div class="dd-row">
+        <input
+          #dueOff
+          class="dd-num"
+          type="number"
+          [value]="due().dueOffset ?? 1"
+          (input)="setDueOffset(dueOff.value)"
+        />
+        <select
+          #dueUnit
+          class="dd-sel"
+          (change)="setDueOffsetUnit(dueUnit.value)"
+        >
+          @for (o of dueUnitOpts; track o.value) {
+            <option
+              [value]="o.value"
+              [selected]="o.value === (due().dueOffsetUnit ?? 'DAY')"
+            >
+              {{ o.label | translate }}
+            </option>
+          }
+        </select>
+        <span class="dd-suffix">{{
+          T.F.TASK_REPEAT.F.RRULE_DUE_ANCHOR_APPEARS | translate
+        }}</span>
+      </div>
+    }
+
+    @if (dueType() === 'PERIOD_END') {
+      <select
+        #duePer
+        class="dd-sel dd-sel--wide"
+        (change)="setDuePeriod(duePer.value)"
+      >
+        @for (o of duePeriodOpts; track o.value) {
+          <option
+            [value]="o.value"
+            [selected]="o.value === (due().duePeriod ?? 'MONTH')"
+          >
+            {{ o.label | translate }}
+          </option>
+        }
+      </select>
+    }
+
+    @if (dueType() === 'FIXED') {
+      <input
+        class="dd-date"
+        type="date"
+        [value]="due().dueFixedDate ?? ''"
+        (input)="setDueFixedDate($any($event.target).value)"
+      />
+    }
+
+    <div class="dd-hint">
+      {{ T.F.TASK_REPEAT.F.RRULE_DUE_DESCRIPTION | translate }}
+    </div>
+  </div>
+</collapsible>

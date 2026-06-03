@@ -2,6 +2,23 @@ h1 mat-icon {
   transform: rotate(45deg);
 }
 
+// Bound the whole dialog to the viewport and lay it out as a flex column so
+// the scrollable form and the pinned result band share the available height
+// instead of overflowing past the action buttons.
+.dialog-help-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+
+mat-dialog-content {
+  flex: 1 1 auto;
+  // Let the flex parent govern height instead of Material's fixed 65vh so the
+  // form region shrinks to make room for the result band.
+  min-height: 0;
+  max-height: none;
+}
+
 h1,
 mat-dialog-actions {
   :host-context([dir='rtl']) & {
@@ -41,26 +58,94 @@ mat-dialog-actions {
   max-width: 620px;
 }
 
-.cron-preview {
-  margin: calc(-1 * var(--s2)) 0 var(--s2);
+// Live RRULE result/preview, pinned above the dialog action buttons.
+.rrule-result {
+  flex: 0 0 auto;
+  // Cap the band (heatmap can be tall) and let it scroll internally so it never
+  // pushes the action buttons out of the viewport.
+  max-height: 42vh;
+  overflow-y: auto;
+  margin: var(--s) 0;
   padding: var(--s) var(--s2);
   border-radius: var(--card-border-radius);
   background: var(--extra-border-color);
   font-size: 13px;
   line-height: 1.4;
 
-  &__expr {
-    font-family: monospace;
+  &__human {
     font-weight: bold;
   }
 
-  &__human {
+  &__next {
+    margin-top: var(--s-quarter, 2px);
     opacity: 0.85;
   }
 
-  &__warn {
+  &__sep {
+    margin: 0 var(--s-quarter, 4px);
+    opacity: 0.5;
+  }
+
+  &__expr {
     margin-top: var(--s-quarter, 2px);
-    opacity: 0.75;
+    font-family: monospace;
+    opacity: 0.7;
+    word-break: break-all;
+  }
+
+  &__cal-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-quarter, 4px);
+    margin-top: var(--s);
+    padding: 2px var(--s);
+    color: var(--c-primary);
+    background: transparent;
+    border: none;
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+    font-size: 12px;
+
+    .mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      background: var(--c-primary-10, rgba(0, 0, 0, 0.06));
+    }
+  }
+
+  &__cal {
+    display: block;
+    margin-top: var(--s);
+  }
+
+  &__sim-hint {
+    margin-top: var(--s-quarter, 4px);
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  &__sim {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+    margin-top: var(--s-quarter, 4px);
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--c-primary);
+  }
+
+  &__sim-reset {
+    padding: 2px var(--s);
+    color: var(--text-color);
+    background: transparent;
+    border: 1px solid var(--extra-border-color);
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+    font-size: 11px;
   }
 }
 

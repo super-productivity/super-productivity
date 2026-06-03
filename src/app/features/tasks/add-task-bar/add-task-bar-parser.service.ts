@@ -18,7 +18,7 @@ interface PreviousParseResult {
   dueDate: string | null;
   dueTime: string | null;
   attachments: TaskAttachment[];
-  cronExpression: string | null;
+  rrule: string | null;
 }
 
 @Injectable()
@@ -88,7 +88,7 @@ export class AddTaskBarParserService {
         dueDate: currentState.date || (defaultDate ? defaultDate : null),
         dueTime: currentState.time || defaultTime || null,
         attachments: [],
-        cronExpression: null,
+        rrule: null,
       };
     } else {
       // Extract parsed values
@@ -126,7 +126,7 @@ export class AddTaskBarParserService {
         dueDate: dueDate,
         dueTime: dueTime,
         attachments: parseResult.attachments || [],
-        cronExpression: parseResult.cronExpression ?? null,
+        rrule: parseResult.rrule || null,
       };
     }
 
@@ -216,9 +216,9 @@ export class AddTaskBarParserService {
 
     if (
       !this._previousParseResult ||
-      this._previousParseResult.cronExpression !== currentResult.cronExpression
+      this._previousParseResult.rrule !== currentResult.rrule
     ) {
-      this._stateService.updateCronExpression(currentResult.cronExpression);
+      this._stateService.updateRRule(currentResult.rrule);
     }
 
     // Store current result as previous for next comparison

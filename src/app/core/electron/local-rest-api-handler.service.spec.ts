@@ -7,6 +7,7 @@ import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
+import { TaskRepeatCfgService } from '../../features/task-repeat-cfg/task-repeat-cfg.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
 import {
   LocalRestApiRequestPayload,
@@ -20,6 +21,7 @@ describe('LocalRestApiHandlerService', () => {
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
   let tagServiceMock: jasmine.SpyObj<TagService>;
   let dateServiceMock: jasmine.SpyObj<DateService>;
+  let taskRepeatCfgServiceMock: jasmine.SpyObj<TaskRepeatCfgService>;
   let requestHandler: ((payload: LocalRestApiRequestPayload) => void) | null = null;
   let responsePromiseResolve: ((response: LocalRestApiResponsePayload) => void) | null =
     null;
@@ -159,6 +161,11 @@ describe('LocalRestApiHandlerService', () => {
     dateServiceMock.todayStr.and.returnValue('2026-05-12');
     dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
 
+    taskRepeatCfgServiceMock = jasmine.createSpyObj<TaskRepeatCfgService>(
+      'TaskRepeatCfgService',
+      ['addTaskRepeatCfgToTask'],
+    );
+
     TestBed.configureTestingModule({
       providers: [
         LocalRestApiHandlerService,
@@ -167,6 +174,7 @@ describe('LocalRestApiHandlerService', () => {
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: TagService, useValue: tagServiceMock },
         { provide: DateService, useValue: dateServiceMock },
+        { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceMock },
       ],
     });
 
@@ -808,6 +816,109 @@ describe('LocalRestApiHandlerService', () => {
 
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(404);
+      });
+    });
+
+    describe('POST /tasks with rrule (recurring, #7239)', () => {
+      const stubCreatedTask = (): void => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+      };
+
+      it('creates the task and attaches an RRULE repeat cfg', async () => {
+        stubCreatedTask();
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Water plants',
+              rrule: 'FREQ=DAILY;INTERVAL=3',
+              repeatFromCompletionDate: true,
+              projectId: 'p1',
+            },
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalledWith(
+          'Water plants',
+          false,
+          jasmine.any(Object),
+        );
+        expect(taskRepeatCfgServiceMock.addTaskRepeatCfgToTask).toHaveBeenCalledTimes(1);
+        const [taskId, projectId, cfg] =
+          taskRepeatCfgServiceMock.addTaskRepeatCfgToTask.calls.mostRecent().args;
+        expect(taskId).toBe('new-task-id');
+        expect(projectId).toBe('p1');
+        expect(cfg.rrule).toBe('FREQ=DAILY;INTERVAL=3');
+        expect(cfg.quickSetting).toBe('RRULE');
+        expect(cfg.repeatCycle).toBe('DAILY');
+        expect(cfg.repeatFromCompletionDate).toBe(true);
+        expect(cfg.title).toBe('Water plants');
+      });
+
+      it('rejects an invalid rrule with 400 and creates nothing', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'Bad', rrule: 'NOT_AN_RRULE' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+        expect(taskRepeatCfgServiceMock.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+      });
+
+      it('rejects a recurring subtask (rrule + parentId) with 400', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'Child', rrule: 'FREQ=WEEKLY;BYDAY=MO', parentId: 'p1' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(taskRepeatCfgServiceMock.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+      });
+
+      it('rejects a malformed startDate with 400', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'X', rrule: 'FREQ=DAILY', startDate: '06/10/2026' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect(taskRepeatCfgServiceMock.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+      });
+
+      it('uses a provided startDate when valid', async () => {
+        stubCreatedTask();
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'X', rrule: 'FREQ=DAILY', startDate: '2026-06-10' },
+          }),
+        );
+
+        const cfg =
+          taskRepeatCfgServiceMock.addTaskRepeatCfgToTask.calls.mostRecent().args[2];
+        expect(cfg.startDate).toBe('2026-06-10');
+      });
+
+      it('does not attach a cfg for a plain task (no rrule)', async () => {
+        stubCreatedTask();
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', { body: { title: 'Plain' } }),
+        );
+
+        expect(taskRepeatCfgServiceMock.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
       });
     });
 

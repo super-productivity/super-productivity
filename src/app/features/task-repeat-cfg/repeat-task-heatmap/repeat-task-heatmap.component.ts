@@ -14,15 +14,23 @@ import { Task } from '../../tasks/task.model';
 import { DateAdapter } from '@angular/material/core';
 import {
   DayData,
-  WeekData,
   HeatmapData,
   HeatmapComponent,
 } from '../../../ui/heatmap/heatmap.component';
+import { buildHeatmapWeeks } from '../../../ui/heatmap/build-heatmap-data.util';
 import { T } from '../../../t.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslateModule } from '@ngx-translate/core';
 import { calcRepeatTaskSeriesTimeSpent } from '../calc-repeat-task-series-time-spent.util';
 import { msToString } from '../../../ui/duration/ms-to-string.pipe';
+import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
+import { TaskRepeatCfg } from '../task-repeat-cfg.model';
+import { getRRuleOccurrencesInRange } from '../store/rrule-occurrence.util';
+import { legacyTaskRepeatCfgToRRule } from '../util/legacy-cfg-to-rrule.util';
+import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
+
+// How far ahead the heatmap projects upcoming occurrences.
+const PROJECTION_DAYS = 92;
 @Component({
   selector: 'repeat-task-heatmap',
   templateUrl: './repeat-task-heatmap.component.html',
@@ -36,6 +44,7 @@ export class RepeatTaskHeatmapComponent {
   private readonly _taskService = inject(TaskService);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateAdapter = inject(DateAdapter);
+  private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
 
   readonly repeatCfgId = input.required<string>();
 
@@ -47,9 +56,20 @@ export class RepeatTaskHeatmapComponent {
     { initialValue: null },
   );
 
+  // The cfg itself — drives the projected future occurrences (P4.2).
+  private readonly _loadedCfg = toSignal(
+    toObservable(this.repeatCfgId).pipe(
+      filter((id): id is string => !!id),
+      switchMap((repeatCfgId) =>
+        this._taskRepeatCfgService.getTaskRepeatCfgById$(repeatCfgId).pipe(first()),
+      ),
+    ),
+    { initialValue: null },
+  );
+
   private readonly _rawHeatmapData = computed(() => {
     const tasks = this._loadedTasks();
-    return tasks ? this._buildHeatmapData(tasks) : null;
+    return tasks ? this._buildHeatmapData(tasks, this._loadedCfg()) : null;
   });
 
   readonly formattedTimeSummary = computed(() => {
@@ -78,11 +98,12 @@ export class RepeatTaskHeatmapComponent {
       return null;
     }
 
-    return this._buildWeeksGrid(
+    return buildHeatmapWeeks(
       rawData.dayMap,
       rawData.startDate,
       rawData.endDate,
       firstDay,
+      this._dateAdapter.getMonthNames('short'),
     );
   });
 
@@ -116,7 +137,10 @@ export class RepeatTaskHeatmapComponent {
     return matchingTasks;
   }
 
-  private _buildHeatmapData(tasks: Task[]): {
+  private _buildHeatmapData(
+    tasks: Task[],
+    cfg: TaskRepeatCfg | null | undefined,
+  ): {
     dayMap: Map<string, DayData>;
     startDate: Date;
     endDate: Date;
@@ -126,10 +150,13 @@ export class RepeatTaskHeatmapComponent {
     const now = new Date();
     const oneYearAgo = new Date(now);
     oneYearAgo.setFullYear(now.getFullYear() - 1);
+    // Project a few months ahead so the upcoming cadence is visible.
+    const horizon = new Date(now);
+    horizon.setDate(horizon.getDate() + PROJECTION_DAYS);
 
-    // Initialize all days in the past year
+    // Initialize all days from a year ago through the projection horizon.
     const currentDate = new Date(oneYearAgo);
-    while (currentDate <= now) {
+    while (currentDate <= horizon) {
       const dateStr = getDbDateStr(currentDate);
       dayMap.set(dateStr, {
         date: new Date(currentDate),
@@ -194,68 +221,37 @@ export class RepeatTaskHeatmapComponent {
       }
     }
 
-    return {
-      dayMap,
-      startDate: oneYearAgo,
-      endDate: now,
-      hasData,
-    };
-  }
-
-  private _buildWeeksGrid(
-    dayMap: Map<string, DayData>,
-    startDate: Date,
-    endDate: Date,
-    firstDayOfWeek: number = 0,
-  ): HeatmapData {
-    const weeks: WeekData[] = [];
-    const monthLabels: string[] = [];
-    const monthNames = this._dateAdapter.getMonthNames('short');
-    let currentMonth = -1;
-
-    // Find the first day (based on firstDayOfWeek setting) before or on the start date
-    const firstDay = new Date(startDate);
-    const dayOfWeek = firstDay.getDay();
-    const daysToGoBack = (dayOfWeek - firstDayOfWeek + 7) % 7;
-    firstDay.setDate(firstDay.getDate() - daysToGoBack);
-
-    // Build weeks
-    const currentDate = new Date(firstDay);
-    let weekCount = 0;
-
-    while (currentDate <= endDate || weeks.length === 0) {
-      const week: WeekData = { days: [] };
-
-      for (let i = 0; i < 7; i++) {
-        const dateStr = getDbDateStr(currentDate);
-        const dayData = dayMap.get(dateStr);
-
-        if (currentDate >= startDate && currentDate <= endDate) {
-          week.days.push(dayData || null);
-
-          const month = currentDate.getMonth();
-          if (month !== currentMonth && currentDate.getDate() <= 7 && weekCount > 0) {
-            monthLabels.push(monthNames[month]);
-            currentMonth = month;
-          } else if (monthLabels.length === 0 && weekCount === 0) {
-            monthLabels.push(monthNames[month]);
-            currentMonth = month;
-          }
-        } else {
-          week.days.push(null);
+    // Overlay projected future occurrences (P4.2). For legacy cfgs (no rrule)
+    // derive an equivalent rule so the projection still works.
+    if (cfg) {
+      const rrule = cfg.rrule || legacyTaskRepeatCfgToRRule(cfg);
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const occurrences = getRRuleOccurrencesInRange(
+        {
+          rrule,
+          startDate: getEffectiveRepeatStartDate(cfg),
+          exdates: cfg.deletedInstanceDates,
+        },
+        tomorrow,
+        horizon,
+      );
+      for (const occ of occurrences) {
+        const dayData = dayMap.get(getDbDateStr(occ));
+        // Don't override a day that already has real tracked activity.
+        if (dayData && dayData.timeSpent === 0) {
+          dayData.isProjected = true;
+          dayData.level = 1;
+          hasData = true;
         }
-
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      weeks.push(week);
-      weekCount++;
-
-      if (weeks.length > 54) {
-        break;
       }
     }
 
-    return { weeks, monthLabels };
+    return {
+      dayMap,
+      startDate: oneYearAgo,
+      endDate: horizon,
+      hasData,
+    };
   }
 }

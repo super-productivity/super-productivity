@@ -135,6 +135,21 @@
     background: var(--c-primary);
   }
 
+  // Projected future occurrence: hollow cell with a dashed primary outline so
+  // it reads as "upcoming", distinct from filled past-activity cells.
+  &.projected {
+    background: transparent;
+    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline-offset: -1px;
+  }
+
+  // Simulated "completed here" day: solid primary with a ring.
+  &.completed {
+    background: var(--c-primary);
+    outline: 2px solid var(--c-primary);
+    outline-offset: 1px;
+  }
+
   &:not(.empty):hover {
     transform: scale(1.3);
     outline: 1px solid var(--c-dark-20);

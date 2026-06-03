@@ -11,14 +11,15 @@ import {
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
 import { Log } from '../../../core/log';
-import { getNextCronOccurrence } from './cron-occurrence.util';
+import { getNextRRuleOccurrence } from './rrule-occurrence.util';
+import { taskRepeatCfgToRRuleInput } from './task-repeat-cfg-to-rrule-input.util';
 
 export const getNextRepeatOccurrence = (
   taskRepeatCfg: TaskRepeatCfg,
   fromDate: Date = new Date(),
 ): Date | null => {
-  if (taskRepeatCfg.repeatCycle === 'CRON') {
-    return getNextCronOccurrence(taskRepeatCfg, fromDate);
+  if (taskRepeatCfg.rrule) {
+    return getNextRRuleOccurrence(taskRepeatCfgToRRuleInput(taskRepeatCfg), fromDate);
   }
 
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
