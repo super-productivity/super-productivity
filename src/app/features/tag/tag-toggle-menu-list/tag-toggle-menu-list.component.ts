@@ -42,6 +42,7 @@ export class TagToggleMenuListComponent {
   private _menuTreeService = inject(MenuTreeService);
 
   task = input.required<TaskCopy>();
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
   toggleTag = output<string>();
   afterClose = output<void>();

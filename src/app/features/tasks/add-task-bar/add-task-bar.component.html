@@ -11,6 +11,7 @@
       [tabindex]="tabindex()"
       [mention]="tagMentions$ | async"
       [mentionConfig]="mentionCfg$ | async"
+      [mentionListTemplate]="mentionListTemplate"
       (listShownChange)="updateListShown($event)"
       [matAutocomplete]="taskAutoCompleteEl"
       [placeholder]="
@@ -136,16 +137,51 @@
       } @else if (!item.ctx) {
         <mat-icon>library_books</mat-icon>
       }
+      <span [innerHTML]="item?.titleHighlighted || item?.title"></span>
       @if (item.ctx) {
         <tag
           [tag]="item.ctx"
           [isHideTitle]="isHideTagTitles()"
         ></tag>
       }
-      <span [innerHTML]="item?.titleHighlighted || item?.title"></span>
     </mat-option>
   }
 </mat-autocomplete>
+
+<ng-template
+  #mentionListTemplate
+  let-item="item"
+>
+  <div class="custom-option-layout">
+    @if (item.icon) {
+      @if (isEmojiIcon(item)) {
+        <span
+          class="menu-icon-emoji"
+          [style.color]="item.color || item.theme?.primary"
+        >
+          {{ item.icon }}
+        </span>
+      } @else {
+        <mat-icon
+          class="option-main-icon"
+          [style.color]="item.color || item.theme?.primary"
+        >
+          {{ item.icon }}
+        </mat-icon>
+      }
+    } @else {
+      @if (item.date || item.time) {
+        <mat-icon class="option-main-icon">schedule</mat-icon>
+      } @else {
+        <mat-icon class="option-main-icon">label</mat-icon>
+      }
+    }
+    <span class="option-title">{{ item.title }}</span>
+    @if (getFolderContext(item); as folder) {
+      <span class="folder-subtitle">{{ folder }}</span>
+    }
+  </div>
+</ng-template>
 
 @if (isSearchLoading()) {
   <div class="spinner">

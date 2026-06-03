@@ -1,6 +1,7 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
@@ -31,21 +32,58 @@ export class MenuTreeService {
   private readonly _store = inject(Store);
 
   private readonly _projectTree = toSignal(
-    this._store.select(selectMenuTreeProjectTree),
+    this._store.select(selectMenuTreeProjectTree) || of([]),
     {
       initialValue: [] as MenuTreeTreeNode[],
     },
   );
-  private readonly _tagTree = toSignal(this._store.select(selectMenuTreeTagTree), {
-    initialValue: [] as MenuTreeTreeNode[],
-  });
+  private readonly _tagTree = toSignal(
+    this._store.select(selectMenuTreeTagTree) || of([]),
+    {
+      initialValue: [] as MenuTreeTreeNode[],
+    },
+  );
 
   readonly projectTree = computed(() => this._projectTree());
   readonly tagTree = computed(() => this._tagTree());
 
-  readonly projectFolders$ = this._store
-    .select(selectMenuTreeProjectTree)
-    .pipe(map((tree) => this._collectFolders(tree)));
+  readonly projectFolderMap = computed(() => {
+    const folderMap = new Map<string, string>();
+    const walk = (nodes: MenuTreeTreeNode[], path: string[] = []): void => {
+      for (const node of nodes) {
+        if (node.k === MenuTreeKind.PROJECT) {
+          if (path.length > 0) {
+            folderMap.set(node.id, path.join(' › '));
+          }
+        } else if (node.k === MenuTreeKind.FOLDER) {
+          walk(node.children, [...path, node.name]);
+        }
+      }
+    };
+    walk(this.projectTree());
+    return folderMap;
+  });
+
+  readonly tagFolderMap = computed(() => {
+    const folderMap = new Map<string, string>();
+    const walk = (nodes: MenuTreeTreeNode[], path: string[] = []): void => {
+      for (const node of nodes) {
+        if (node.k === MenuTreeKind.TAG) {
+          if (path.length > 0) {
+            folderMap.set(node.id, path.join(' › '));
+          }
+        } else if (node.k === MenuTreeKind.FOLDER) {
+          walk(node.children, [...path, node.name]);
+        }
+      }
+    };
+    walk(this.tagTree());
+    return folderMap;
+  });
+
+  readonly projectFolders$ = (
+    this._store.select(selectMenuTreeProjectTree) || of([])
+  ).pipe(map((tree) => this._collectFolders(tree)));
 
   hasProjectTree(): boolean {
     return this.projectTree().length > 0;

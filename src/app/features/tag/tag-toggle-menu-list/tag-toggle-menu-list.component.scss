@@ -16,3 +16,14 @@
   overflow: hidden;
   flex-shrink: 0;
 }
+
+::ng-deep .mat-mdc-menu-panel {
+  .mat-mdc-menu-item {
+    height: auto !important;
+    min-height: 48px;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+}

@@ -77,11 +77,13 @@ import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { Log } from '../../../core/log';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { BodyClass } from '../../../app.constants';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 
 @Component({
   selector: 'add-task-bar',
@@ -125,6 +127,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _markdownPasteService = inject(MarkdownPasteService);
   private readonly _dateService = inject(DateService);
+  private readonly _menuTreeService = inject(MenuTreeService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -882,5 +885,21 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onScheduleDialogOpenChange(isOpen: boolean): void {
     this.isScheduleDialogOpen.set(isOpen);
+  }
+
+  getFolderContext(item: any): string | null {
+    if (!item || !item.id) return null;
+    if ('backlogTaskIds' in item) {
+      return this._menuTreeService.projectFolderMap().get(item.id) || null;
+    }
+    if ('taskIds' in item && !('backlogTaskIds' in item)) {
+      return this._menuTreeService.tagFolderMap().get(item.id) || null;
+    }
+    return null;
+  }
+
+  isEmojiIcon(tag: any): boolean {
+    const icon = tag?.icon;
+    return icon ? isSingleEmoji(icon) : false;
   }
 }

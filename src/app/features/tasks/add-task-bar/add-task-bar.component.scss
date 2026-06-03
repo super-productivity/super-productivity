@@ -186,6 +186,8 @@
     display: flex;
     align-items: center;
     gap: var(--s);
+    justify-content: space-between;
+    width: 100%;
 
     .project-icon {
       font-size: 16px;
@@ -205,6 +207,15 @@
     mat-icon:first-child {
       margin-right: 0;
       flex-shrink: 0;
+    }
+
+    tag {
+      margin-left: auto;
+
+      ::ng-deep .tag-ico,
+      ::ng-deep .circle {
+        display: none !important;
+      }
     }
   }
 
@@ -239,5 +250,15 @@
         opacity: 0.7;
       }
     }
+  }
+}
+
+::ng-deep .mention-menu {
+  .mention-item {
+    height: auto !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+    display: flex !important;
+    align-items: center !important;
   }
 }

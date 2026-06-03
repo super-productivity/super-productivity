@@ -89,6 +89,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 
 @Component({
   selector: 'task',
@@ -146,10 +147,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _menuTreeService = inject(MenuTreeService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   private readonly _timeConflictTaskIds = toSignal(
     this._store.select(selectTimeConflictTaskIds),
     { initialValue: new Set<string>() },

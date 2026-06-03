@@ -35,6 +35,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.model';
 import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
 import { DateService } from '../../../../core/date/date.service';
+import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 
 type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
 
@@ -63,9 +64,13 @@ export class AddTaskBarActionsComponent {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
   private _dateService = inject(DateService);
+  private _menuTreeService = inject(MenuTreeService);
   stateService = inject(AddTaskBarStateService);
 
   T = T;
+
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
   // Inputs
   isHideDueBtn = input<boolean>(false);
