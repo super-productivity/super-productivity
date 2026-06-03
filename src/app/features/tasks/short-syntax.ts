@@ -6,7 +6,6 @@ import { Project } from '../project/project.model';
 import { ShortSyntaxConfig } from '../config/global-config.model';
 import { isImageUrlSimple } from '../../util/is-image-url';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
-import { naturalLanguageToRRule } from '../task-repeat-cfg/util/parse-natural-rrule.util';
 import { nanoid } from 'nanoid';
 import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
 type ProjectChanges = {
@@ -111,32 +110,6 @@ const SHORT_SYNTAX_URL_REG_EX = new RegExp(
 const SHORT_SYNTAX_MARKDOWN_LINK_REG_EX =
   /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
-/**
- * Pulls an `@+<phrase>` recurring clause off the title and returns the resolved
- * RRULE separately. The clause runs to end-of-title or the next short-syntax
- * delimiter (`+project`, `#tag`, `@date`, `/2h`), so a natural-language phrase
- * like "every saturday from march to november" doesn't collide with the other
- * parsers. Returns null when no `@+` clause is present or it can't be read.
- */
-export const extractRRuleFromTitle = (
-  title: string,
-): { stripped: string; rrule: string } | null => {
-  const m = title.match(/(?:^|\s)@\+/);
-  if (!m) return null;
-  const atIdx = m.index! + (m[0].length - 2);
-  const afterPlus = atIdx + 2;
-  const remaining = title.slice(afterPlus);
-  // Boundary: next short-syntax delimiter introduced by whitespace.
-  const boundaryMatch = remaining.match(/\s+(?:[+#@]|\/\d)/);
-  const end = boundaryMatch ? afterPlus + (boundaryMatch.index as number) : title.length;
-  const raw = title.slice(afterPlus, end).trim();
-  if (!raw) return null;
-  const rrule = naturalLanguageToRRule(raw);
-  if (!rrule) return null;
-  const stripped = (title.slice(0, atIdx) + title.slice(end)).replace(/\s+/g, ' ').trim();
-  return { stripped, rrule };
-};
-
 export const shortSyntax = async (
   task: Task | Partial<Task>,
   config: ShortSyntaxConfig,
@@ -151,7 +124,6 @@ export const shortSyntax = async (
       remindAt: number | null;
       projectId: string | undefined;
       attachments: TaskAttachment[];
-      rrule?: string;
     }
   | undefined
 > => {
@@ -160,15 +132,6 @@ export const shortSyntax = async (
   }
   if (typeof task.title !== 'string') {
     throw new Error('No str');
-  }
-
-  // Pull the `@+<phrase>` recurring clause off the title first, so the bare `@`
-  // date parser below never sees it. The cleaned title is emitted at the end.
-  let rrule: string | undefined;
-  const rruleExtract = extractRRuleFromTitle(task.title);
-  if (rruleExtract) {
-    rrule = rruleExtract.rrule;
-    task = { ...task, title: rruleExtract.stripped };
   }
 
   // TODO clean up this mess
@@ -238,13 +201,7 @@ export const shortSyntax = async (
   //   };
   // }
 
-  // Emit the cleaned title when an `@+` clause was the trigger and no other
-  // parser set the title, so the caller persists the stripped version.
-  if (rrule && taskChanges.title == null) {
-    taskChanges = { ...taskChanges, title: task.title };
-  }
-
-  if (Object.keys(taskChanges).length === 0 && attachments.length === 0 && !rrule) {
+  if (Object.keys(taskChanges).length === 0 && attachments.length === 0) {
     return undefined;
   }
 
@@ -254,7 +211,6 @@ export const shortSyntax = async (
     remindAt: null,
     projectId: changesForProject.projectId,
     attachments,
-    ...(rrule ? { rrule } : {}),
     // remindAt: changesForDue.remindAt
   };
 };

@@ -20,7 +20,6 @@ describe('AddTaskBarParserService', () => {
       'updateEstimate',
       'updateDate',
       'updateAttachments',
-      'updateRRule',
       'isAutoDetected',
       'state',
     ]);
@@ -138,7 +137,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          rrule: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -177,7 +175,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          rrule: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -213,7 +210,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          rrule: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -635,7 +631,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -671,7 +666,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -709,7 +703,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -745,7 +738,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -780,7 +772,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -899,7 +890,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -934,7 +924,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -969,7 +958,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1002,7 +990,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1036,7 +1023,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1080,7 +1066,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1109,7 +1094,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1158,7 +1142,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1201,7 +1184,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        rrule: null,
       };
       mockStateService.state.and.returnValue(mockState);
 

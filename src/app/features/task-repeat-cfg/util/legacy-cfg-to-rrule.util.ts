@@ -6,6 +6,7 @@ import {
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
+import { normalizeWeekdays, toNumArray } from './rrule-weekday.util';
 
 /**
  * Converts a legacy (pre-RRULE) TaskRepeatCfg — `repeatCycle` + `repeatEvery` +
@@ -107,28 +108,6 @@ const RRULE_IDX_TO_FIELD: (keyof TaskRepeatCfg)[] = [
   'sunday',
 ];
 
-/** Normalize rrule's `byweekday` option to `{ weekday, n }` records. */
-const _normalizeWeekdays = (v: unknown): { weekday: number; n?: number }[] => {
-  if (v == null) return [];
-  const arr = Array.isArray(v) ? v : [v];
-  return arr
-    .map((w) => {
-      if (typeof w === 'number') return { weekday: w };
-      if (w && typeof w === 'object' && 'weekday' in w) {
-        const wd = w as { weekday: number; n?: number };
-        return { weekday: wd.weekday, n: wd.n ?? undefined };
-      }
-      return null;
-    })
-    .filter((x): x is { weekday: number; n?: number } => x !== null);
-};
-
-const _toNumArray = (v: unknown): number[] => {
-  if (v == null) return [];
-  if (Array.isArray(v)) return v.filter((x): x is number => typeof x === 'number');
-  return typeof v === 'number' ? [v] : [];
-};
-
 /**
  * Best-effort inverse of `legacyTaskRepeatCfgToRRule`: derives the legacy schedule
  * fields (`repeatCycle`, `repeatEvery`, weekday flags, monthly anchors) from an
@@ -140,7 +119,10 @@ const _toNumArray = (v: unknown): number[] => {
  * Day-of-month is intentionally not emitted: legacy MONTHLY day recurrence reads
  * the day from `startDate`, so the caller keeps `startDate` aligned instead.
  */
-export const rruleToLegacyTaskRepeatCfg = (rrule: string): Partial<TaskRepeatCfg> => {
+export const rruleToLegacyTaskRepeatCfg = (
+  rrule: string,
+  startDate?: string,
+): Partial<TaskRepeatCfg> => {
   let opts: Partial<ReturnType<typeof RRule.parseString>>;
   try {
     opts = RRule.parseString(rrule);
@@ -157,23 +139,32 @@ export const rruleToLegacyTaskRepeatCfg = (rrule: string): Partial<TaskRepeatCfg
     repeatEvery: opts.interval && opts.interval > 0 ? opts.interval : 1,
   };
 
-  const weekdays = _normalizeWeekdays(opts.byweekday);
+  const weekdays = normalizeWeekdays(opts.byweekday);
 
   if (cycle === 'WEEKLY') {
     // Reset all flags, then enable the rule's weekdays (Mon-indexed).
     RRULE_IDX_TO_FIELD.forEach((field) => {
       (out as Record<string, unknown>)[field] = false;
     });
-    weekdays.forEach((w) => {
-      const field = RRULE_IDX_TO_FIELD[w.weekday];
+    if (weekdays.length) {
+      weekdays.forEach((w) => {
+        const field = RRULE_IDX_TO_FIELD[w.weekday];
+        if (field) (out as Record<string, unknown>)[field] = true;
+      });
+    } else if (startDate) {
+      // A BYDAY-less FREQ=WEEKLY means "weekly on the start weekday" — set that
+      // flag (mirroring the forward converter), so the legacy WEEKLY engine
+      // still fires on older clients instead of having every flag false.
+      const idx = (_parseStart(startDate).dow + 6) % 7; // UTC 0=Sun → RRULE 0=Mon
+      const field = RRULE_IDX_TO_FIELD[idx];
       if (field) (out as Record<string, unknown>)[field] = true;
-    });
+    }
   } else if (cycle === 'MONTHLY') {
     if (weekdays.length && weekdays[0].n != null) {
       // "2nd Tuesday" → BYDAY=2TU. legacy monthlyWeekday is 0=Sun…6=Sat.
       out.monthlyWeekOfMonth = weekdays[0].n as MonthlyWeekOfMonth;
       out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
-    } else if (_toNumArray(opts.bymonthday).includes(-1)) {
+    } else if (toNumArray(opts.bymonthday).includes(-1)) {
       out.monthlyLastDay = true;
     }
   }

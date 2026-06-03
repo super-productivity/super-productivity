@@ -73,11 +73,8 @@ export class RruleBuilderComponent implements OnInit {
   rrule = input<string>('');
   startDate = input<string | undefined>(undefined);
   repeatFromCompletion = input<boolean>(false);
-  // App-level "ends after N completions" cap (not part of the rrule string).
-  completionsLimit = input<number | undefined>(undefined);
   rruleChange = output<string>();
   repeatFromCompletionChange = output<boolean>();
-  completionsLimitChange = output<number | undefined>();
 
   private _model = signal<RRuleFormModel>(defaultRRuleFormModel());
   model = this._model.asReadonly();
@@ -139,7 +136,6 @@ export class RruleBuilderComponent implements OnInit {
     { value: 'NEVER', label: T.F.TASK_REPEAT.F.RRULE_END_NEVER },
     { value: 'UNTIL', label: T.F.TASK_REPEAT.F.RRULE_END_UNTIL },
     { value: 'COUNT', label: T.F.TASK_REPEAT.F.RRULE_END_COUNT },
-    { value: 'COMPLETED_COUNT', label: T.F.TASK_REPEAT.F.RRULE_END_COMPLETED },
   ];
   weekdaySelectOpts: SelectOpt<RRuleWeekday>[] = this.weekdays.map((w) => ({
     value: w.value,
@@ -157,27 +153,8 @@ export class RruleBuilderComponent implements OnInit {
     const ref = this.startDate()
       ? dateStrToUtcDate(this.startDate() as string)
       : new Date();
-    const model = rruleToFormModel(this.rrule(), ref);
-    // "Ends after N completions" lives on the cfg, not in the rrule — layer it
-    // back on top of the parsed (open-ended) model. It wins over a NEVER end;
-    // a rule that actually carries COUNT/UNTIL keeps that end instead.
-    const limit = this.completionsLimit();
-    if (typeof limit === 'number' && limit > 0 && model.endType === 'NEVER') {
-      model.endType = 'COMPLETED_COUNT';
-      model.completedCount = limit;
-    }
-    this._model.set(model);
+    this._model.set(rruleToFormModel(this.rrule(), ref));
     this._fromCompletion.set(this.repeatFromCompletion());
-  }
-
-  /** Emit the completion cap (or undefined when another end type is active). */
-  private _emitCompletionsLimit(): void {
-    const m = this._model();
-    this.completionsLimitChange.emit(
-      m.endType === 'COMPLETED_COUNT' && m.completedCount > 0
-        ? m.completedCount
-        : undefined,
-    );
   }
 
   private _patch(patch: Partial<RRuleFormModel>): void {
@@ -254,15 +231,9 @@ export class RruleBuilderComponent implements OnInit {
   }
   setEndType(v: string): void {
     this._patch({ endType: v as RRuleFormModel['endType'] });
-    // Switching to/away from COMPLETED_COUNT toggles the app-level cap.
-    this._emitCompletionsLimit();
   }
   setCount(v: string): void {
     this._patch({ count: Math.max(1, Math.floor(+v) || 1) });
-  }
-  setCompletedCount(v: string): void {
-    this._patch({ completedCount: Math.max(1, Math.floor(+v) || 1) });
-    this._emitCompletionsLimit();
   }
   setUntil(v: string): void {
     this._patch({ until: v });

@@ -4,7 +4,7 @@ import {
   findMonthlyNthWeekdayOccurrence,
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
-import { getFirstRRuleOccurrence } from './rrule-occurrence.util';
+import { getFirstRRuleOccurrence, isRRuleValid } from './rrule-occurrence.util';
 import { taskRepeatCfgToRRuleInput } from './task-repeat-cfg-to-rrule-input.util';
 
 /**
@@ -31,7 +31,9 @@ export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | n
     return null;
   }
 
-  if (taskRepeatCfg.rrule) {
+  // Only defer to the engine for a parseable rule; a malformed raw-override
+  // falls through to the legacy weekday/cycle calc below.
+  if (taskRepeatCfg.rrule && isRRuleValid(taskRepeatCfg.rrule)) {
     return getFirstRRuleOccurrence(taskRepeatCfgToRRuleInput(taskRepeatCfg));
   }
 

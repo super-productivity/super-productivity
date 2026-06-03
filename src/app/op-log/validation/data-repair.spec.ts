@@ -2114,6 +2114,28 @@ describe('dataRepair()', () => {
   });
 
   describe('should fix repeat configs with invalid quickSetting (issue #5802)', () => {
+    it('downgrades an out-of-released-union quickSetting to CUSTOM (forward-compat)', () => {
+      const taskRepeatCfgState = {
+        ...mock.taskRepeatCfg,
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'TEST',
+            title: 'TEST',
+            quickSetting: 'WEEKENDS' as any, // a value an old client can't validate
+            startDate: '2024-06-01',
+          },
+        ]),
+      } as any;
+
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: taskRepeatCfgState,
+      } as any);
+
+      expect(result.data.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
+    });
+
     it('should change quickSetting to CUSTOM when WEEKLY_CURRENT_WEEKDAY has no startDate', () => {
       const taskRepeatCfgState = {
         ...mock.taskRepeatCfg,

@@ -6,7 +6,6 @@ import {
   ElementRef,
   inject,
   input,
-  output,
   viewChild,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
@@ -18,8 +17,6 @@ export interface DayData {
   taskCount: number;
   timeSpent: number;
   level: number; // 0-4 for color intensity
-  isProjected?: boolean; // a future, not-yet-created occurrence (outlined cell)
-  isCompleted?: boolean; // a simulated "completed here" day (solid, ringed)
 }
 
 export interface WeekData {
@@ -46,8 +43,6 @@ export class HeatmapComponent {
   readonly label = input<string>('');
   readonly showLegend = input<boolean>(true);
   readonly scrollToEnd = input<boolean>(false);
-  /** Emits the clicked day (non-empty cells only). Consumers decide what to do. */
-  readonly dayClick = output<DayData>();
 
   private readonly _scrollableContent =
     viewChild<ElementRef<HTMLElement>>('scrollableContent');
@@ -75,20 +70,12 @@ export class HeatmapComponent {
     if (!day) {
       return 'day empty';
     }
-    return `day level-${day.level}${day.isProjected ? ' projected' : ''}${
-      day.isCompleted ? ' completed' : ''
-    }`;
+    return `day level-${day.level}`;
   }
 
   getDayTitle(day: DayData | null): string {
     if (!day) {
       return '';
-    }
-    if (day.isCompleted) {
-      return `${day.dateStr}: completed (simulated)`;
-    }
-    if (day.isProjected) {
-      return `${day.dateStr}: projected occurrence`;
     }
     return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
   }

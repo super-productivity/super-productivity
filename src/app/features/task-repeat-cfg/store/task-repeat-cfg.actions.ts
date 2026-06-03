@@ -1,6 +1,6 @@
 import { createAction, props } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
-import { RepeatInstanceOverride, TaskRepeatCfg } from '../task-repeat-cfg.model';
+import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { OpType } from '../../../op-log/core/operation.types';
 
@@ -94,25 +94,6 @@ export const deleteTaskRepeatCfgInstance = createAction(
       entityType: 'TASK_REPEAT_CFG',
       entityId: cfgProps.repeatCfgId,
       opType: OpType.Update, // Deleting an instance updates the cfg's excluded dates
-    } satisfies PersistentActionMeta,
-  }),
-);
-
-// RFC 5545 RECURRENCE-ID: override a single occurrence (move / re-time / re-title).
-// `override: null` (or empty) clears the override for `dateStr`.
-export const updateTaskRepeatCfgInstance = createAction(
-  '[TaskRepeatCfg] Override Single Instance',
-  (cfgProps: {
-    repeatCfgId: string;
-    dateStr: string;
-    override: RepeatInstanceOverride | null;
-  }) => ({
-    ...cfgProps,
-    meta: {
-      isPersistent: true,
-      entityType: 'TASK_REPEAT_CFG',
-      entityId: cfgProps.repeatCfgId,
-      opType: OpType.Update, // overriding an instance updates the cfg
     } satisfies PersistentActionMeta,
   }),
 );

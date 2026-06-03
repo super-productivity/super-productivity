@@ -927,4 +927,21 @@ describe('getNextRepeatOccurrence()', () => {
       expect(result!.getTime()).toBeGreaterThanOrEqual(today.getTime());
     });
   });
+
+  describe('malformed rrule falls back to the legacy fields', () => {
+    it('uses the legacy weekly schedule when the rrule is unparseable', () => {
+      const cfg = dummyRepeatable('ID1', {
+        rrule: 'this is not a valid rrule',
+        repeatCycle: 'WEEKLY',
+        monday: true,
+        startDate: getDbDateStr(FAKE_MONDAY_THE_10TH),
+        lastTaskCreationDay: getDbDateStr(FAKE_MONDAY_THE_10TH),
+      });
+      // From Mon Jan 10 2022 the next Monday is Jan 17 — NOT null (it would be
+      // null if the bad rrule silently stopped the task instead of falling back).
+      const next = getNextRepeatOccurrence(cfg, new Date(2022, 0, 10, 12));
+      expect(next).not.toBeNull();
+      expect(getDbDateStr(next!)).toBe('2022-01-17');
+    });
+  });
 });

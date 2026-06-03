@@ -60,11 +60,6 @@ mat-dialog-actions {
 
 // Live RRULE result/preview, pinned above the dialog action buttons.
 .rrule-result {
-  flex: 0 0 auto;
-  // Cap the band (heatmap can be tall) and let it scroll internally so it never
-  // pushes the action buttons out of the viewport.
-  max-height: 42vh;
-  overflow-y: auto;
   margin: var(--s) 0;
   padding: var(--s) var(--s2);
   border-radius: var(--card-border-radius);
@@ -91,61 +86,6 @@ mat-dialog-actions {
     font-family: monospace;
     opacity: 0.7;
     word-break: break-all;
-  }
-
-  &__cal-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s-quarter, 4px);
-    margin-top: var(--s);
-    padding: 2px var(--s);
-    color: var(--c-primary);
-    background: transparent;
-    border: none;
-    border-radius: var(--card-border-radius);
-    cursor: pointer;
-    font-size: 12px;
-
-    .mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    &:hover {
-      background: var(--c-primary-10, rgba(0, 0, 0, 0.06));
-    }
-  }
-
-  &__cal {
-    display: block;
-    margin-top: var(--s);
-  }
-
-  &__sim-hint {
-    margin-top: var(--s-quarter, 4px);
-    font-size: 11px;
-    opacity: 0.6;
-  }
-
-  &__sim {
-    display: flex;
-    align-items: center;
-    gap: var(--s);
-    margin-top: var(--s-quarter, 4px);
-    font-size: 12px;
-    font-weight: bold;
-    color: var(--c-primary);
-  }
-
-  &__sim-reset {
-    padding: 2px var(--s);
-    color: var(--text-color);
-    background: transparent;
-    border: 1px solid var(--extra-border-color);
-    border-radius: var(--card-border-radius);
-    cursor: pointer;
-    font-size: 11px;
   }
 }
 
@@ -190,45 +130,5 @@ mat-dialog-actions {
       margin-left: 0;
       width: auto;
     }
-  }
-}
-
-// Per-occurrence (RECURRENCE-ID) editor, shown when the dialog opens for one
-// specific occurrence.
-.instance-override {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s);
-  margin-bottom: var(--s2);
-  padding: var(--s) var(--s2);
-  border: 1px solid var(--extra-border-color);
-  border-radius: var(--card-border-radius);
-  background: var(--extra-border-color);
-
-  &__label {
-    font-weight: bold;
-    font-size: 13px;
-  }
-
-  &__row {
-    display: flex;
-    align-items: center;
-    gap: var(--s);
-  }
-
-  input[type='date'],
-  input[type='text'] {
-    height: 36px;
-    padding: 0 var(--s);
-    color: var(--text-color);
-    background: var(--bg, transparent);
-    border: 1px solid var(--extra-border-color);
-    border-radius: var(--card-border-radius);
-    font-size: 14px;
-    font-family: inherit;
-  }
-
-  input[type='text'] {
-    width: 100%;
   }
 }

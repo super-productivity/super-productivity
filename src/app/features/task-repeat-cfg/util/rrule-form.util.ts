@@ -1,4 +1,5 @@
 import { Frequency, RRule } from 'rrule';
+import { normalizeWeekdays, toNumArray } from './rrule-weekday.util';
 
 /**
  * Bidirectional bridge between the structured RRULE builder form (a dropdown per
@@ -31,13 +32,7 @@ export type RRuleMonthlyMode = 'DAY_OF_MONTH' | 'NTH_WEEKDAY' | 'WEEKDAYS';
 /** YEARLY: a date (BYMONTHDAY), a weekday set within months (BYDAY[+BYSETPOS]),
  *  or per-weekday ordinals (BYDAY=3MO,4SU). */
 export type RRuleYearlyMode = 'DAY_OF_MONTH' | 'NTH_WEEKDAY' | 'WEEKDAYS';
-/**
- * COMPLETED_COUNT ("after N times completed") is app-level, NOT an RFC 5545 part:
- * it produces an open-ended rrule (no COUNT/UNTIL) and is carried alongside the
- * rule on `TaskRepeatCfg.endsAfterCompletions`. The builder layers it on top of
- * the parsed model from its `completionsLimit` input; this util never emits it.
- */
-export type RRuleEndType = 'NEVER' | 'COUNT' | 'UNTIL' | 'COMPLETED_COUNT';
+export type RRuleEndType = 'NEVER' | 'COUNT' | 'UNTIL';
 /** 1..4 = 1st–4th occurrence in the month; -1 = last. */
 export type RRuleSetPos = 1 | 2 | 3 | 4 | -1;
 /** One nth-weekday row, e.g. `{ pos: 3, day: 'MO' }` = the 3rd Monday. */
@@ -57,8 +52,7 @@ export interface RRuleFormModel {
   byMonth: number[]; // YEARLY months (1..12)
   yearlyMode: RRuleYearlyMode; // YEARLY: date vs weekdays-within-months
   endType: RRuleEndType;
-  count: number; // COUNT (tasks created)
-  completedCount: number; // COMPLETED_COUNT (tasks completed) — app-level, not in rrule
+  count: number; // COUNT
   until: string; // UNTIL, 'YYYY-MM-DD'
   // --- advanced (collapsed section) ---
   wkst: RRuleWeekday | ''; // week start; '' = library default (Monday)
@@ -94,28 +88,6 @@ const untilToRRule = (dateStr: string): string => {
 const utcDateToDbStr = (d: Date): string =>
   `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 
-const toNumArray = (v: unknown): number[] => {
-  if (v == null) return [];
-  if (Array.isArray(v)) return v.filter((x): x is number => typeof x === 'number');
-  return typeof v === 'number' ? [v] : [];
-};
-
-/** Normalize rrule's `byweekday` option to `{ weekday, n }` records. */
-const normalizeWeekdays = (v: unknown): { weekday: number; n?: number }[] => {
-  if (v == null) return [];
-  const arr = Array.isArray(v) ? v : [v];
-  return arr
-    .map((w) => {
-      if (typeof w === 'number') return { weekday: w };
-      if (w && typeof w === 'object' && 'weekday' in w) {
-        const wd = w as { weekday: number; n?: number };
-        return { weekday: wd.weekday, n: wd.n ?? undefined };
-      }
-      return null;
-    })
-    .filter((x): x is { weekday: number; n?: number } => x !== null);
-};
-
 /** Defaults for a fresh RRULE builder, seeded from `refDate` (the start date). */
 export const defaultRRuleFormModel = (refDate: Date = new Date()): RRuleFormModel => {
   const rruleWeekday = RRULE_WEEKDAYS[jsDayToRRuleIdx(refDate.getDay())];
@@ -135,7 +107,6 @@ export const defaultRRuleFormModel = (refDate: Date = new Date()): RRuleFormMode
     yearlyMode: 'DAY_OF_MONTH',
     endType: 'NEVER',
     count: 10,
-    completedCount: 10,
     until: '',
     wkst: '',
     bySetPos: '',

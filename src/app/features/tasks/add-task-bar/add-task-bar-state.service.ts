@@ -134,10 +134,6 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, repeatQuickSetting: null }));
   }
 
-  updateRRule(rrule: string | null): void {
-    this._taskInputState.update((state) => ({ ...state, rrule }));
-  }
-
   resetAfterAdd(): void {
     // Only clear input text and tags, preserve project, date, and estimate
     this._taskInputState.update((state) => ({
@@ -148,7 +144,6 @@ export class AddTaskBarStateService {
       cleanText: null,
       attachments: [],
       repeatQuickSetting: null,
-      rrule: null,
     }));
     this.inputTxt.set('');
     // Keep isAutoDetected as is to preserve project selection

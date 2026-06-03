@@ -10,7 +10,6 @@ import { ReactiveFormsModule } from '@angular/forms';
 // FormlyConfigModule (not FormlyModule) is needed here to register custom
 // field types and validation within the TestBed injector.
 import { FormlyConfigModule } from '../../../ui/formly-config.module';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { CustomDateAdapter } from '../../../core/date-time-format/custom-date-adapter';
 
 import { DialogEditTaskRepeatCfgComponent } from './dialog-edit-task-repeat-cfg.component';
@@ -23,7 +22,6 @@ import { TaskCopy } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { SnackService } from '../../../core/snack/snack.service';
-import { DayData } from '../../../ui/heatmap/heatmap.component';
 
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
@@ -655,171 +653,6 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       );
       expect(component.rrulePreview()?.human.toLowerCase()).toContain('week');
       expect(component.rrulePreview()?.rrule).toBe('FREQ=WEEKLY;BYDAY=MO');
-    });
-
-    it('builds a togglable calendar preview heatmap from the live rrule', async () => {
-      const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-      // The app's DateAdapter reads global config; stub the two calendar lookups.
-      const adapter = (component as any)._dateAdapter;
-      spyOn(adapter, 'getFirstDayOfWeek').and.returnValue(0);
-      spyOn(adapter, 'getMonthNames').and.returnValue([
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ]);
-      component.repeatCfg.update(
-        (c) =>
-          ({
-            ...c,
-            quickSetting: 'RRULE',
-            rrule: 'FREQ=WEEKLY;BYDAY=MO',
-            startDate: '2024-06-03',
-          }) as any,
-      );
-      expect(component.resultHeatmapData()).toBeNull(); // hidden by default
-      component.toggleResultHeatmap();
-      const hd = component.resultHeatmapData();
-      expect(hd).not.toBeNull();
-      expect(hd!.weeks.length).toBeGreaterThan(0);
-    });
-
-    it('simulates completion on a clicked projected day, then clears', async () => {
-      const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-      const adapter = (component as any)._dateAdapter;
-      spyOn(adapter, 'getFirstDayOfWeek').and.returnValue(0);
-      spyOn(adapter, 'getMonthNames').and.returnValue([
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ]);
-      component.repeatCfg.update(
-        (c) =>
-          ({
-            ...c,
-            quickSetting: 'RRULE',
-            rrule: 'FREQ=DAILY;INTERVAL=3',
-            startDate: '2024-06-03',
-          }) as any,
-      );
-      component.toggleResultHeatmap();
-
-      // A projected day ~30 days out (within the 365-day preview window).
-      const soon = new Date();
-      soon.setHours(12, 0, 0, 0);
-      soon.setDate(soon.getDate() + 30);
-      const simStr = getDbDateStr(soon);
-
-      component.onPreviewDayClick({ dateStr: simStr, isProjected: true } as any);
-      expect(component.simulatedCompletion()).toBe(simStr);
-      expect(component.resultHeatmapData()).not.toBeNull();
-
-      // Re-tapping the marked (completed) day clears the simulation.
-      component.onPreviewDayClick({ dateStr: simStr, isCompleted: true } as any);
-      expect(component.simulatedCompletion()).toBeNull();
-    });
-
-    it('simulates completion on ANY clicked day, not only projected occurrences', async () => {
-      const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-      const adapter = TestBed.inject(DateAdapter);
-      spyOn(adapter, 'getFirstDayOfWeek').and.returnValue(1);
-      spyOn(adapter, 'getMonthNames').and.returnValue(['Jan']);
-      component.repeatCfg.update(
-        (c) =>
-          ({
-            ...c,
-            quickSetting: 'RRULE',
-            rrule: 'FREQ=DAILY;INTERVAL=8',
-            startDate: '2024-06-03',
-          }) as any,
-      );
-      component.toggleResultHeatmap();
-
-      // An OFF-schedule day (level 0, not an occurrence) must still simulate —
-      // completing off-schedule is what actually re-anchors the series.
-      const offSchedule = new Date();
-      offSchedule.setHours(12, 0, 0, 0);
-      offSchedule.setDate(offSchedule.getDate() + 5);
-      const offStr = getDbDateStr(offSchedule);
-
-      component.onPreviewDayClick({ dateStr: offStr, level: 0 } as any);
-      expect(component.simulatedCompletion()).toBe(offStr);
-      expect(component.resultHeatmapData()).not.toBeNull();
-
-      // Tapping the same day again clears it.
-      component.onPreviewDayClick({ dateStr: offStr, isCompleted: true } as any);
-      expect(component.simulatedCompletion()).toBeNull();
-    });
-
-    it('re-anchors the simulated series only for "repeat from completion" schedules', async () => {
-      const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-      const adapter = TestBed.inject(DateAdapter);
-      spyOn(adapter, 'getFirstDayOfWeek').and.returnValue(1);
-      spyOn(adapter, 'getMonthNames').and.returnValue(['Jan']);
-
-      const projectedDates = (): string[] => {
-        const hd = component.resultHeatmapData();
-        if (!hd) return [];
-        return hd.weeks
-          .flatMap((w) => w.days)
-          .filter((d): d is DayData => !!d && !!d.isProjected)
-          .map((d) => d.dateStr);
-      };
-
-      // Off-grid completion day (today + 3; the grid steps by 8).
-      const off = new Date();
-      off.setHours(12, 0, 0, 0);
-      off.setDate(off.getDate() + 3);
-      const offStr = getDbDateStr(off);
-      const plus8 = new Date(off);
-      plus8.setDate(plus8.getDate() + 8);
-      const plus8Str = getDbDateStr(plus8);
-
-      // Fixed-calendar schedule: completing must NOT move future occurrences.
-      component.repeatCfg.update(
-        (c) =>
-          ({
-            ...c,
-            quickSetting: 'RRULE',
-            rrule: 'FREQ=DAILY;INTERVAL=8',
-            startDate: '2024-06-03',
-            repeatFromCompletionDate: false,
-          }) as any,
-      );
-      component.toggleResultHeatmap();
-      const fixedBefore = projectedDates();
-      component.onPreviewDayClick({ dateStr: offStr, level: 0 } as any);
-      expect(projectedDates()).toEqual(fixedBefore.filter((d) => d !== offStr));
-
-      // Repeat-from-completion: the same click re-anchors — next fires 8 days
-      // after the completion day, so offStr+8 becomes a projected occurrence.
-      component.simulatedCompletion.set(null);
-      component.repeatCfg.update(
-        (c) => ({ ...c, repeatFromCompletionDate: true }) as any,
-      );
-      component.onPreviewDayClick({ dateStr: offStr, level: 0 } as any);
-      expect(projectedDates()).toContain(plus8Str);
     });
 
     it('save() persists the rrule the builder produced', async () => {

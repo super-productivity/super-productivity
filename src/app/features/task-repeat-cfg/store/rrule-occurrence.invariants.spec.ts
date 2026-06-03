@@ -345,36 +345,4 @@ describe('rrule-occurrence invariants', () => {
       });
     });
   });
-
-  describe('RDATE / EXDATE — per-instance moves (RECURRENCE-ID)', () => {
-    const _d = (s: string): Date => {
-      const [y, m, day] = s.split('-').map(Number);
-      return new Date(y, m - 1, day, 12, 0, 0);
-    };
-    const range = (i: RRuleOccurrenceInput, from: string, to: string): string[] =>
-      getRRuleOccurrencesInRange(i, _d(from), _d(to)).map(getDbDateStr);
-
-    it('RDATE adds an occurrence off the rule', () => {
-      // Weekly Mondays in June 2024 (10, 17, 24); add Wed 2024-06-12 via RDATE.
-      const i = inp('FREQ=WEEKLY;BYDAY=MO', {
-        startDate: '2024-06-01',
-        rdates: ['2024-06-12'],
-      });
-      const got = range(i, '2024-06-01', '2024-06-30');
-      expect(got).toContain('2024-06-12'); // the RDATE
-      expect(got).toContain('2024-06-10'); // a natural Monday
-    });
-
-    it('EXDATE(original) + RDATE(target) relocates a single occurrence', () => {
-      const i = inp('FREQ=WEEKLY;BYDAY=MO', {
-        startDate: '2024-06-01',
-        exdates: ['2024-06-10'],
-        rdates: ['2024-06-12'],
-      });
-      const got = range(i, '2024-06-01', '2024-06-30');
-      expect(got).not.toContain('2024-06-10'); // moved away
-      expect(got).toContain('2024-06-12'); // moved to
-      expect(got).toContain('2024-06-17'); // others untouched
-    });
-  });
 });

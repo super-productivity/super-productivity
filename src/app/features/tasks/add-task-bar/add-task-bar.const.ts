@@ -16,9 +16,6 @@ export interface AddTaskBarState {
   remindOption: TaskReminderOptionId | null;
   attachments: TaskAttachment[];
   repeatQuickSetting: RepeatQuickSetting | null;
-  // RRULE string from an inline `@+<phrase>` clause; mutually exclusive with
-  // repeatQuickSetting. When set, submit attaches an rrule-backed repeat cfg.
-  rrule: string | null;
 }
 const M = 60 * 1000;
 const H = 60 * M;
@@ -47,7 +44,6 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   remindOption: null,
   attachments: [],
   repeatQuickSetting: null,
-  rrule: null,
 };
 
 export const CHRONO_SUGGESTIONS: string[] = [

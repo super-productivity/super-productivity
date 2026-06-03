@@ -11,7 +11,6 @@ describe('RruleBuilderComponent', () => {
     rrule = '',
     startDate = '2024-06-03',
     repeatFromCompletion = false,
-    completionsLimit: number | undefined = undefined,
   ): Promise<void> => {
     await TestBed.configureTestingModule({
       imports: [RruleBuilderComponent, TranslateModule.forRoot(), NoopAnimationsModule],
@@ -21,7 +20,6 @@ describe('RruleBuilderComponent', () => {
     fixture.componentRef.setInput('rrule', rrule);
     fixture.componentRef.setInput('startDate', startDate);
     fixture.componentRef.setInput('repeatFromCompletion', repeatFromCompletion);
-    fixture.componentRef.setInput('completionsLimit', completionsLimit);
     fixture.detectChanges();
   };
 
@@ -112,43 +110,6 @@ describe('RruleBuilderComponent', () => {
   it('initializes the schedule-type toggle from the repeatFromCompletion input', async () => {
     await setup('FREQ=DAILY;INTERVAL=3', '2024-06-03', true);
     expect(component.fromCompletion()).toBe(true);
-  });
-
-  it('COMPLETED_COUNT end emits the cap and leaves the rrule open-ended', async () => {
-    await setup('FREQ=WEEKLY;BYDAY=MO');
-    const rules: string[] = [];
-    const limits: (number | undefined)[] = [];
-    component.rruleChange.subscribe((r) => rules.push(r));
-    component.completionsLimitChange.subscribe((n) => limits.push(n));
-    component.setEndType('COMPLETED_COUNT');
-    component.setCompletedCount('5');
-    // The cap is app-level — it must NOT add COUNT/UNTIL to the rrule string.
-    expect(rules[rules.length - 1]).toBe('FREQ=WEEKLY;BYDAY=MO');
-    expect(limits[limits.length - 1]).toBe(5);
-  });
-
-  it('switching the end type away from COMPLETED_COUNT clears the cap', async () => {
-    await setup('FREQ=WEEKLY;BYDAY=MO');
-    const limits: (number | undefined)[] = [];
-    component.completionsLimitChange.subscribe((n) => limits.push(n));
-    component.setEndType('COMPLETED_COUNT');
-    component.setCompletedCount('3');
-    expect(limits[limits.length - 1]).toBe(3);
-    component.setEndType('NEVER');
-    expect(limits[limits.length - 1]).toBeUndefined();
-  });
-
-  it('restores the COMPLETED_COUNT end from the completionsLimit input', async () => {
-    await setup('FREQ=DAILY', '2024-06-03', false, 7);
-    expect(component.model().endType).toBe('COMPLETED_COUNT');
-    expect(component.model().completedCount).toBe(7);
-  });
-
-  it('a COUNT rrule keeps its end even when a completionsLimit is also present', async () => {
-    // A real rrule end (COUNT/UNTIL) wins; the cap only fills an open-ended rule.
-    await setup('FREQ=DAILY;COUNT=4', '2024-06-03', false, 7);
-    expect(component.model().endType).toBe('COUNT');
-    expect(component.model().count).toBe(4);
   });
 
   it('emits repeatFromCompletionChange when the schedule type is toggled', async () => {

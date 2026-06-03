@@ -18,10 +18,9 @@ import { MatDialog } from '@angular/material/dialog';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import {
   DEFAULT_TASK_REPEAT_CFG,
-  RepeatDueConfig,
-  RepeatInstanceOverride,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
+  toSyncSafeQuickSetting,
 } from '../task-repeat-cfg.model';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { UntypedFormGroup } from '@angular/forms';
@@ -42,25 +41,12 @@ import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { SnackService } from '../../../core/snack/snack.service';
-import { getRRuleOccurrencesInRange, isRRuleValid } from '../store/rrule-occurrence.util';
-import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
-import { getRepeatInstanceExceptions } from '../store/get-repeat-instance-exceptions.util';
+import { isRRuleValid } from '../store/rrule-occurrence.util';
 import {
   legacyTaskRepeatCfgToRRule,
   rruleToLegacyTaskRepeatCfg,
 } from '../util/legacy-cfg-to-rrule.util';
-import {
-  DayData,
-  HeatmapComponent,
-  HeatmapData,
-} from '../../../ui/heatmap/heatmap.component';
-import {
-  buildHeatmapWeeks,
-  buildProjectionDayMap,
-} from '../../../ui/heatmap/build-heatmap-data.util';
-import { DateAdapter } from '@angular/material/core';
 import { RruleBuilderComponent } from './rrule-builder/rrule-builder.component';
-import { DueDateConfigComponent } from './due-date-config/due-date-config.component';
 import { buildRRuleHumanizeOpts, getRRulePreview } from '../util/rrule-preview.util';
 import { DatePipe } from '@angular/common';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
@@ -111,9 +97,7 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     RepeatTaskHeatmapComponent,
     CollapsibleComponent,
     RruleBuilderComponent,
-    DueDateConfigComponent,
     DatePipe,
-    HeatmapComponent,
   ],
 })
 export class DialogEditTaskRepeatCfgComponent {
@@ -126,7 +110,6 @@ export class DialogEditTaskRepeatCfgComponent {
   private _translateService = inject(TranslateService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _snackService = inject(SnackService);
-  private _dateAdapter = inject(DateAdapter);
   private _data = inject<{
     task?: Task;
     repeatCfg?: TaskRepeatCfg;
@@ -184,108 +167,7 @@ export class DialogEditTaskRepeatCfgComponent {
       : null,
   );
 
-  // Togglable calendar (heatmap) preview of the next year's occurrences for the
-  // live rule — built from the in-progress rrule, no saved cfg required.
-  private readonly _PREVIEW_HEATMAP_DAYS = 365;
-  showResultHeatmap = signal(false);
-  // A clicked projected day (YYYY-MM-DD): "simulate completing here" → the rule
-  // re-anchors from that day (the After-completion behavior, made interactive).
-  simulatedCompletion = signal<string | null>(null);
-  toggleResultHeatmap(): void {
-    this.showResultHeatmap.update((v) => !v);
-    if (!this.showResultHeatmap()) this.simulatedCompletion.set(null);
-  }
-  clearSimulation(): void {
-    this.simulatedCompletion.set(null);
-  }
-  onPreviewDayClick(day: DayData): void {
-    if (!day?.dateStr) return;
-    // Tap the already-simulated day again to clear it. Otherwise simulate
-    // completing on the clicked day — ANY day, not only scheduled occurrences:
-    // re-anchoring to an on-schedule day is a no-op (next = same grid), so the
-    // series only visibly rebuilds when you complete off-schedule (early/late),
-    // which is exactly the "repeat from completion" what-if.
-    if (day.dateStr === this.simulatedCompletion()) {
-      this.simulatedCompletion.set(null);
-    } else {
-      this.simulatedCompletion.set(day.dateStr);
-    }
-  }
-  resultHeatmapData = computed<HeatmapData | null>(() => {
-    if (!this.isRRuleMode() || !this.showResultHeatmap()) return null;
-    const cfg = this.repeatCfg();
-    if (!isRRuleValid(cfg.rrule)) return null;
-    const rrule = cfg.rrule as string;
-    const { exdates, rdates } = getRepeatInstanceExceptions(cfg as TaskRepeatCfg);
-    const from = new Date();
-    from.setHours(12, 0, 0, 0);
-    const to = new Date(from);
-    to.setDate(to.getDate() + this._PREVIEW_HEATMAP_DAYS);
-    const baseStart = getEffectiveRepeatStartDate(cfg as TaskRepeatCfg);
-    const sim = this.simulatedCompletion();
-    // Only a "repeat from completion" schedule re-anchors when you finish a task
-    // (the completion effect rewrites startDate/lastTaskCreationDay to the
-    // completion day). A fixed-calendar schedule — even with "only create next
-    // after completion" (waitForCompletion only gates creation, it never moves
-    // due dates) — keeps its dates, so completing a day must NOT shift the rest.
-    const reAnchors = !!(cfg as TaskRepeatCfg).repeatFromCompletionDate;
-
-    let occ: Date[];
-    if (sim && reAnchors) {
-      // Keep the original occurrences up to the completion day, then re-anchor
-      // the rest of the series to that day (next fires from the completion).
-      const [y, m, d] = sim.split('-').map(Number);
-      const simDay = new Date(y, m - 1, d, 12, 0, 0);
-      const beforeEnd = new Date(simDay);
-      beforeEnd.setDate(beforeEnd.getDate() - 1);
-      const afterFrom = new Date(simDay);
-      afterFrom.setDate(afterFrom.getDate() + 1);
-      const before = getRRuleOccurrencesInRange(
-        { rrule, startDate: baseStart, exdates, rdates },
-        from,
-        beforeEnd,
-      );
-      const after = getRRuleOccurrencesInRange(
-        { rrule, startDate: sim, exdates, rdates },
-        afterFrom,
-        to,
-      );
-      occ = [...before, ...after];
-    } else {
-      // No re-anchor: calendar stays fixed. (No simulation, or a non
-      // from-completion schedule where finishing a task never shifts dates.)
-      occ = getRRuleOccurrencesInRange(
-        { rrule, startDate: baseStart, exdates, rdates },
-        from,
-        to,
-      );
-    }
-    if (!occ.length && !sim) return null;
-
-    const dayMap = buildProjectionDayMap(occ, from, to);
-    if (sim) {
-      const day = dayMap.get(sim);
-      if (day) {
-        day.isProjected = false;
-        day.isCompleted = true;
-        day.level = 4;
-      }
-    }
-    return buildHeatmapWeeks(
-      dayMap,
-      from,
-      to,
-      this._dateAdapter.getFirstDayOfWeek(),
-      this._dateAdapter.getMonthNames('short'),
-    );
-  });
   canRemoveInstance = signal<boolean>(false);
-  // Per-occurrence edit (RFC 5545 RECURRENCE-ID), only when the dialog is opened
-  // for a specific occurrence (`targetDate`). Move it to another day and/or
-  // retitle it without touching the rest of the series.
-  instanceDate: string | null = this._data.targetDate ?? null;
-  instanceMoveTo = signal<string>(this._data.targetDate ?? '');
-  instanceTitle = signal<string>('');
   skipInstanceButtonText = computed(() => {
     if (!this._data.targetDate) {
       return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_INSTANCE);
@@ -368,8 +250,9 @@ export class DialogEditTaskRepeatCfgComponent {
       rrule,
       // Keep the legacy schedule fields (cycle / interval / weekday flags /
       // monthly anchors) in sync so older sync clients — which ignore `rrule` —
-      // fall back to a faithful recurrence (P1.3 reverse converter).
-      ...rruleToLegacyTaskRepeatCfg(rrule),
+      // fall back to a faithful recurrence. Pass startDate so a BYDAY-less
+      // weekly rule maps onto the start weekday (else old clients never fire).
+      ...rruleToLegacyTaskRepeatCfg(rrule, cfg.startDate),
     }));
   }
 
@@ -377,18 +260,6 @@ export class DialogEditTaskRepeatCfgComponent {
   // from the rrule string — re-anchors the interval to the completion day.
   onRepeatFromCompletionChange(repeatFromCompletionDate: boolean): void {
     this.repeatCfg.update((cfg) => ({ ...cfg, repeatFromCompletionDate }));
-  }
-
-  // "Ends after N completions" — app-level cap, not part of the rrule string.
-  // undefined clears it (any other end type active).
-  onCompletionsLimitChange(endsAfterCompletions: number | undefined): void {
-    this.repeatCfg.update((cfg) => ({ ...cfg, endsAfterCompletions }));
-  }
-
-  // Due-date derivation fields — app-level, not part of the rrule string. The
-  // builder emits the full group each change (stale params already cleared).
-  onDueConfigChange(due: RepeatDueConfig): void {
-    this.repeatCfg.update((cfg) => ({ ...cfg, ...due }));
   }
 
   private _initializeFormConfig(): void {
@@ -513,7 +384,15 @@ export class DialogEditTaskRepeatCfgComponent {
 
     // Normalize the monthly anchor fields at the boundary: convert the form's
     // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
-    const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
+    // Also map the quickSetting to a sync-safe value: the newer preset literals
+    // and 'RRULE' are NOT in the released union, so persisting them would fail
+    // typia validation on older/mobile clients. They drive the dialog UI only;
+    // the stored cfg uses 'CUSTOM' and the builder reconstructs from `rrule`.
+    const normalizedCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
+    const finalRepeatCfg = {
+      ...normalizedCfg,
+      quickSetting: toSyncSafeQuickSetting(normalizedCfg.quickSetting),
+    };
 
     if (this.isEdit()) {
       const initial = this.repeatCfgInitial();
@@ -608,28 +487,6 @@ export class DialogEditTaskRepeatCfgComponent {
           this.close();
         }
       });
-  }
-
-  /** Apply a per-occurrence override (RECURRENCE-ID): move and/or retitle this one. */
-  applyInstanceOverride(): void {
-    const cfg = this.repeatCfg() as TaskRepeatCfg;
-    const orig = this._data.targetDate;
-    if (!cfg.id || !orig) {
-      return;
-    }
-    const override: RepeatInstanceOverride = {};
-    const moveTo = this.instanceMoveTo();
-    const title = this.instanceTitle().trim();
-    if (moveTo && moveTo !== orig) {
-      override.movedToDay = moveTo;
-    }
-    if (title) {
-      override.title = title;
-    }
-    if (Object.keys(override).length) {
-      this._taskRepeatCfgService.updateTaskRepeatCfgInstance(cfg.id, orig, override);
-    }
-    this.close();
   }
 
   close(): void {

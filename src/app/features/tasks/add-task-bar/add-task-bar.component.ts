@@ -21,7 +21,7 @@ import { MatInput } from '@angular/material/input';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { AsyncPipe, DatePipe } from '@angular/common';
+import { AsyncPipe } from '@angular/common';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
@@ -68,13 +68,11 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
-import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
-import { rruleToLegacyTaskRepeatCfg } from '../../task-repeat-cfg/util/legacy-cfg-to-rrule.util';
 import {
-  buildRRuleHumanizeOpts,
-  getRRulePreview,
-} from '../../task-repeat-cfg/util/rrule-preview.util';
+  DEFAULT_TASK_REPEAT_CFG,
+  toSyncSafeQuickSetting,
+} from '../../task-repeat-cfg/task-repeat-cfg.model';
+import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
@@ -100,7 +98,6 @@ import { PlannerActions } from '../../planner/store/planner.actions';
     MatTooltip,
     AsyncPipe,
     MentionModule,
-    DatePipe,
     MatAutocomplete,
     MatAutocompleteTrigger,
     MatOption,
@@ -171,22 +168,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),
   );
-  private _humanize = buildRRuleHumanizeOpts(
-    (k) => this._translateService.instant(k) as string,
-  );
-  /**
-   * Live reading of an inline `@+` recurrence: humanized rule + the NEXT concrete
-   * occurrence date. The next date is the key anti-trap signal — a far-off date
-   * (e.g. a yearly "in March" rule entered in June → next year) is visible before
-   * the user submits, instead of the task silently never appearing.
-   */
-  recurrencePreview = computed<{ human: string; next: Date | null } | null>(() => {
-    const rrule = this.stateService.state().rrule;
-    if (!rrule) return null;
-    const startDate = this.stateService.state().date || getDbDateStr();
-    const p = getRRulePreview(rrule, startDate, this._humanize);
-    return p ? { human: p.human, next: p.upcoming[0] ?? null } : null;
-  });
   nrOfRightBtns = computed(() => {
     let count = 2;
     if (this.stateService.inputTxt().length > 0) {
@@ -473,11 +454,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         } else {
           taskData.dueDay = state.date;
         }
-      } else if (
-        (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') ||
-        state.rrule
-      ) {
-        // When a repeat preset / inline @+ rule is set without an explicit date,
+      } else if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
+        // When a repeat preset is set without an explicit date,
         // set dueDay to today so the first instance appears as today's occurrence
         // instead of staying in inbox
         taskData.dueDay = getDbDateStr();
@@ -506,8 +484,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       // effect already handles scheduling via scheduleTaskWithTime, so calling both
       // would cause double-scheduling.
       const isTimedRepeatTask =
-        ((!!state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') ||
-          !!state.rrule) &&
+        !!state.repeatQuickSetting &&
+        state.repeatQuickSetting !== 'CUSTOM' &&
         !!state.time;
       if (taskData.dueWithTime && !isTimedRepeatTask) {
         this._taskService
@@ -537,30 +515,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             startDate,
             ...quickSettingUpdates,
             title,
-            quickSetting: state.repeatQuickSetting,
+            // Persist only a sync-safe quickSetting (newer presets → 'CUSTOM').
+            quickSetting: toSyncSafeQuickSetting(state.repeatQuickSetting),
             tagIds: taskData.tagIds ?? [],
             defaultEstimate: state.estimate || 0,
             startTime: state.time || undefined,
             remindAt: state.time ? resolvedRemindOption : undefined,
           });
         }
-      } else if (state.rrule) {
-        // Inline `@+<phrase>` recurrence → attach an rrule-backed repeat cfg. The
-        // legacy schedule fields are derived from the rrule for older-client
-        // fallback (cycle / interval / weekday flags / monthly anchors).
-        const startDate = state.date || getDbDateStr();
-        this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
-          ...DEFAULT_TASK_REPEAT_CFG,
-          startDate,
-          rrule: state.rrule,
-          ...rruleToLegacyTaskRepeatCfg(state.rrule),
-          title,
-          quickSetting: 'RRULE',
-          tagIds: taskData.tagIds ?? [],
-          defaultEstimate: state.estimate || 0,
-          startTime: state.time || undefined,
-          remindAt: state.time ? resolvedRemindOption : undefined,
-        });
       }
 
       this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });

@@ -34,9 +34,6 @@ export interface RRuleOccurrenceInput {
   lastTaskCreationDay?: string;
   /** Skipped dates (`YYYY-MM-DD`), RFC 5545 EXDATE. Removed from the occurrence set. */
   exdates?: string[];
-  /** Extra dates (`YYYY-MM-DD`), RFC 5545 RDATE. Added to the occurrence set —
-   *  used to surface a rescheduled (moved) instance at its new day. */
-  rdates?: string[];
 }
 
 const DAY_MS = 86_400_000;
@@ -71,12 +68,11 @@ const _buildRuleSet = (input: RRuleOccurrenceInput): RRuleSet | null => {
     for (const ex of input.exdates ?? []) {
       set.exdate(_noonUtc(ex));
     }
-    for (const rd of input.rdates ?? []) {
-      set.rdate(_noonUtc(rd));
-    }
     return set;
   } catch (e) {
-    Log.warn(`Invalid RRULE "${input.rrule}"`, e);
+    // Never log the rule body — the raw-override field makes it free-text user
+    // input, and the log history is exportable.
+    Log.warn('Invalid RRULE', e);
     return null;
   }
 };
@@ -129,7 +125,7 @@ export const getNextRRuleOccurrence = (
     const occ = set.after(new Date(lowerBound.getTime() - 1), false);
     return occ ? _toLocalNoon(occ) : null;
   } catch (e) {
-    Log.warn(`RRULE next() failed for "${input.rrule}"`, e);
+    Log.warn(`RRULE next() failed`, e);
     return null;
   }
 };
@@ -166,7 +162,7 @@ export const getNewestPossibleRRuleDueDate = (
     if (occDay <= lastCreation) return null;
     return _toLocalNoon(occ);
   } catch (e) {
-    Log.warn(`RRULE before() failed for "${input.rrule}"`, e);
+    Log.warn(`RRULE before() failed`, e);
     return null;
   }
 };
@@ -186,7 +182,7 @@ export const getFirstRRuleOccurrence = (input: RRuleOccurrenceInput): Date | nul
     const occ = set.after(new Date(startDay.getTime() - 1), false);
     return occ ? _toLocalNoon(occ) : null;
   } catch (e) {
-    Log.warn(`RRULE first() failed for "${input.rrule}"`, e);
+    Log.warn(`RRULE first() failed`, e);
     return null;
   }
 };
@@ -210,7 +206,7 @@ export const getRRuleOccurrencesInRange = (
   try {
     return set.between(lower, upper, true).map(_toLocalNoon);
   } catch (e) {
-    Log.warn(`RRULE between() failed for "${input.rrule}"`, e);
+    Log.warn(`RRULE between() failed`, e);
     return [];
   }
 };

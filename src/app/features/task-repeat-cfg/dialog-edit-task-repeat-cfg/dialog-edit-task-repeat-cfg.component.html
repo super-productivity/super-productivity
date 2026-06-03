@@ -12,41 +12,6 @@
   </h1>
 
   <mat-dialog-content>
-    <!-- Per-occurrence edit (RFC 5545 RECURRENCE-ID): only when the dialog was
-         opened for one specific occurrence. Moves / retitles just that one. -->
-    @if (instanceDate) {
-      <div class="instance-override">
-        <label class="instance-override__label">
-          {{ T.F.TASK_REPEAT.D_EDIT.INSTANCE_EDIT | translate }}
-          ({{ instanceDate | date: 'mediumDate' }})
-        </label>
-        <div class="instance-override__row">
-          <span>{{ T.F.TASK_REPEAT.D_EDIT.INSTANCE_MOVE_TO | translate }}</span>
-          <input
-            #moveToIn
-            type="date"
-            [value]="instanceMoveTo()"
-            (input)="instanceMoveTo.set(moveToIn.value)"
-          />
-        </div>
-        <input
-          #titleIn
-          type="text"
-          [placeholder]="T.F.TASK_REPEAT.D_EDIT.INSTANCE_TITLE | translate"
-          [value]="instanceTitle()"
-          (input)="instanceTitle.set(titleIn.value)"
-        />
-        <button
-          type="button"
-          mat-stroked-button
-          color="primary"
-          (click)="applyInstanceOverride()"
-        >
-          {{ T.F.TASK_REPEAT.D_EDIT.INSTANCE_APPLY | translate }}
-        </button>
-      </div>
-    }
-
     @if (repeatCfgId(); as cfgId) {
       <collapsible
         [title]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"
@@ -72,19 +37,10 @@
           [rrule]="repeatCfg().rrule ?? ''"
           [startDate]="repeatCfg().startDate"
           [repeatFromCompletion]="repeatCfg().repeatFromCompletionDate ?? false"
-          [completionsLimit]="repeatCfg().endsAfterCompletions"
           (rruleChange)="onRRuleChange($event)"
           (repeatFromCompletionChange)="onRepeatFromCompletionChange($event)"
-          (completionsLimitChange)="onCompletionsLimitChange($event)"
         ></rrule-builder>
       }
-
-      <!-- Due-date derivation applies to EVERY recurring config (presets and
-           Custom), so it lives here, outside the rrule builder. -->
-      <due-date-config
-        [config]="repeatCfg()"
-        (configChange)="onDueConfigChange($event)"
-      ></due-date-config>
 
       <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
         <chip-list-input
@@ -129,39 +85,6 @@
         </div>
       }
       <div class="rrule-result__expr">{{ p.rrule }}</div>
-      <button
-        type="button"
-        class="rrule-result__cal-toggle"
-        (click)="toggleResultHeatmap()"
-      >
-        <mat-icon>{{ showResultHeatmap() ? 'expand_less' : 'calendar_month' }}</mat-icon>
-        <span>{{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW | translate }}</span>
-      </button>
-      @if (resultHeatmapData(); as hd) {
-        <heatmap
-          class="rrule-result__cal"
-          [data]="hd"
-          [showLegend]="false"
-          (dayClick)="onPreviewDayClick($event)"
-        />
-        @if (simulatedCompletion(); as sim) {
-          <div class="rrule-result__sim">
-            {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }}
-            {{ sim }}
-            <button
-              type="button"
-              class="rrule-result__sim-reset"
-              (click)="clearSimulation()"
-            >
-              {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
-            </button>
-          </div>
-        } @else {
-          <div class="rrule-result__sim-hint">
-            {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
-          </div>
-        }
-      }
     </div>
   }
 

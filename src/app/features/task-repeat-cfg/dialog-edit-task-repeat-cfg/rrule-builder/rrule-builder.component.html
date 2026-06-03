@@ -341,17 +341,6 @@
         (input)="setCount(countIn.value)"
       />
     }
-    @if (model().endType === 'COMPLETED_COUNT') {
-      <input
-        #completedIn
-        class="rb-num"
-        type="number"
-        min="1"
-        max="1000"
-        [value]="model().completedCount"
-        (input)="setCompletedCount(completedIn.value)"
-      />
-    }
     @if (model().endType === 'UNTIL') {
       <input
         #untilIn

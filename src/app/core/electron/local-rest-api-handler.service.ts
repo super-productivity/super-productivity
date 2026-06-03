@@ -8,14 +8,6 @@ import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
-import { TaskRepeatCfgService } from '../../features/task-repeat-cfg/task-repeat-cfg.service';
-import { isRRuleValid } from '../../features/task-repeat-cfg/store/rrule-occurrence.util';
-import {
-  DEFAULT_TASK_REPEAT_CFG,
-  TaskRepeatCfgCopy,
-} from '../../features/task-repeat-cfg/task-repeat-cfg.model';
-import { rruleToLegacyTaskRepeatCfg } from '../../features/task-repeat-cfg/util/legacy-cfg-to-rrule.util';
-import { getDbDateStr } from '../../util/get-db-date-str';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -143,7 +135,6 @@ export class LocalRestApiHandlerService {
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
   private readonly _dateService = inject(DateService);
-  private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _isInitialized = false;
 
   init(): void {
@@ -357,44 +348,6 @@ export class LocalRestApiHandlerService {
       );
     }
 
-    // Optional recurrence: when `rrule` is present the created task becomes the
-    // first instance of a recurring series (issue #7239).
-    const hasRRule =
-      'rrule' in body &&
-      body.rrule !== undefined &&
-      body.rrule !== null &&
-      body.rrule !== '';
-    if (hasRRule) {
-      if (typeof body.rrule !== 'string' || !isRRuleValid(body.rrule)) {
-        return createErrorResponse(
-          requestId,
-          400,
-          'INVALID_INPUT',
-          'rrule must be a valid RFC 5545 RRULE body, e.g. FREQ=WEEKLY;BYDAY=MO',
-        );
-      }
-      if ('parentId' in body) {
-        return createErrorResponse(
-          requestId,
-          400,
-          'UNSUPPORTED_FIELD',
-          'A subtask cannot be recurring — omit parentId to create a recurring task',
-        );
-      }
-      if (
-        'startDate' in body &&
-        (typeof body.startDate !== 'string' ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(body.startDate))
-      ) {
-        return createErrorResponse(
-          requestId,
-          400,
-          'INVALID_INPUT',
-          'startDate must be a YYYY-MM-DD string',
-        );
-      }
-    }
-
     const title = body.title.trim();
     const additionalFields = pickAllowedFields(body);
 
@@ -447,47 +400,9 @@ export class LocalRestApiHandlerService {
 
     const taskId = this._taskService.add(title, false, additionalFields);
 
-    if (hasRRule) {
-      const projectId = typeof body.projectId === 'string' ? body.projectId : null;
-      this._taskRepeatCfgService.addTaskRepeatCfgToTask(
-        taskId,
-        projectId,
-        this._buildRRuleRepeatCfg(title, body.rrule as string, body),
-      );
-    }
-
     const createdTask = await this._getTaskById(taskId);
 
     return createSuccessResponse(requestId, 201, createdTask);
-  }
-
-  /** Build a TaskRepeatCfg (RRULE mode) from a `POST /tasks` body carrying `rrule`. */
-  private _buildRRuleRepeatCfg(
-    title: string,
-    rrule: string,
-    body: Record<string, unknown>,
-  ): Omit<TaskRepeatCfgCopy, 'id'> {
-    const startDate =
-      typeof body.startDate === 'string' && body.startDate.trim()
-        ? body.startDate.trim()
-        : getDbDateStr();
-    return {
-      ...DEFAULT_TASK_REPEAT_CFG,
-      title,
-      rrule,
-      quickSetting: 'RRULE',
-      // Keep the legacy schedule fields populated (derived from the rrule) so
-      // older sync clients have a faithful fallback.
-      ...rruleToLegacyTaskRepeatCfg(rrule),
-      startDate,
-      lastTaskCreationDay: getDbDateStr(),
-      tagIds: Array.isArray(body.tagIds)
-        ? body.tagIds.filter((t): t is string => typeof t === 'string')
-        : [],
-      defaultEstimate:
-        typeof body.timeEstimate === 'number' ? body.timeEstimate : undefined,
-      repeatFromCompletionDate: body.repeatFromCompletionDate === true,
-    };
   }
 
   private async _handleTaskRoutes(

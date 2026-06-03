@@ -9,7 +9,10 @@ import { Task, TaskArchive, TaskCopy, TaskState } from '../../features/tasks/tas
 import { unique } from '../../util/unique';
 import { isDBDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../../features/tag/tag.const';
-import { TaskRepeatCfgCopy } from '../../features/task-repeat-cfg/task-repeat-cfg.model';
+import {
+  MASTER_SAFE_QUICK_SETTINGS,
+  TaskRepeatCfgCopy,
+} from '../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { IssueProvider } from '../../features/issue/issue.model';
 import { AppDataComplete } from '../model/model-config';
 import { INBOX_PROJECT } from '../../features/project/project.const';
@@ -258,19 +261,25 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
   if (data.taskRepeatCfg && data.taskRepeatCfg.entities) {
     const quickSettingsRequiringStartDate = [
       'WEEKLY_CURRENT_WEEKDAY',
-      'BIWEEKLY_CURRENT_WEEKDAY',
       'YEARLY_CURRENT_DATE',
-      'EVERY_OTHER_YEAR_CURRENT_DATE',
       'MONTHLY_CURRENT_DATE',
       'MONTHLY_FIRST_DAY',
       'MONTHLY_LAST_DAY',
       'MONTHLY_NTH_WEEKDAY',
-      'MONTHLY_LAST_WEEKDAY',
-      'QUARTERLY_CURRENT_DATE',
-      'SEMIANNUALLY_CURRENT_DATE',
     ];
     Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
       const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
+      // Downgrade any quickSetting outside the released (sync-safe) union to
+      // 'CUSTOM', so a value an older/mobile client can't typia-validate never
+      // survives in stored data.
+      if (cfg.quickSetting && !MASTER_SAFE_QUICK_SETTINGS.has(cfg.quickSetting)) {
+        OpLog.log(
+          `Fixing repeat config ${cfg.id}: unsupported quickSetting ${cfg.quickSetting} -> CUSTOM`,
+        );
+        cfg.quickSetting = 'CUSTOM';
+        summary.entityStateFixed++;
+        return;
+      }
       if (
         cfg.quickSetting &&
         quickSettingsRequiringStartDate.includes(cfg.quickSetting) &&

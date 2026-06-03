@@ -162,6 +162,25 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
     expect(rruleToLegacyTaskRepeatCfg('FREQ=HOURLY')).toEqual({});
   });
 
+  // A BYDAY-less FREQ=WEEKLY would otherwise leave all weekday flags false, and
+  // the legacy WEEKLY engine needs one set — so old clients would never fire.
+  it('maps a BYDAY-less weekly rule onto the start weekday', () => {
+    // 2024-06-12 is a Wednesday.
+    const out = rruleToLegacyTaskRepeatCfg('FREQ=WEEKLY', '2024-06-12');
+    expect(out.repeatCycle).toBe('WEEKLY');
+    expect(out.wednesday).toBe(true);
+    expect(out.monday).toBe(false);
+    expect(out.tuesday).toBe(false);
+    expect(out.thursday).toBe(false);
+  });
+
+  it('leaves weekday flags untouched-false when no startDate is given', () => {
+    const out = rruleToLegacyTaskRepeatCfg('FREQ=WEEKLY');
+    expect(out.repeatCycle).toBe('WEEKLY');
+    expect(out.monday).toBe(false);
+    expect(out.sunday).toBe(false);
+  });
+
   it('round-trips a weekly cfg (legacy → rrule → legacy)', () => {
     const legacy = cfg({
       repeatCycle: 'WEEKLY',

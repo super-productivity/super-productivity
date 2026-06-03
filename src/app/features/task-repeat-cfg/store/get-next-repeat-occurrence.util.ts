@@ -11,14 +11,17 @@ import {
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
 import { Log } from '../../../core/log';
-import { getNextRRuleOccurrence } from './rrule-occurrence.util';
+import { getNextRRuleOccurrence, isRRuleValid } from './rrule-occurrence.util';
 import { taskRepeatCfgToRRuleInput } from './task-repeat-cfg-to-rrule-input.util';
 
 export const getNextRepeatOccurrence = (
   taskRepeatCfg: TaskRepeatCfg,
   fromDate: Date = new Date(),
 ): Date | null => {
-  if (taskRepeatCfg.rrule) {
+  // Only defer to the RRULE engine when the rule actually parses — a malformed
+  // raw-override rule must fall through to the (kept) legacy schedule fields
+  // rather than silently stopping the task.
+  if (taskRepeatCfg.rrule && isRRuleValid(taskRepeatCfg.rrule)) {
     return getNextRRuleOccurrence(taskRepeatCfgToRRuleInput(taskRepeatCfg), fromDate);
   }
 
