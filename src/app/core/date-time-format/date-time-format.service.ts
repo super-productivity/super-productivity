@@ -1,4 +1,4 @@
-import { computed, effect, inject, Injectable } from '@angular/core';
+import { computed, effect, inject, Injectable, signal } from '@angular/core';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
@@ -9,10 +9,11 @@ import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
 export class DateTimeFormatService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private _dateAdapter = inject(DateAdapter);
+  private readonly _localeSig = signal<DateTimeLocale>(DEFAULT_LOCALE);
 
   // Signal for the locale to use
   readonly currentLocale = computed<DateTimeLocale>(() => {
-    return this._globalConfigService.localization()?.dateTimeLocale || DEFAULT_LOCALE;
+    return this._globalConfigService.localization()?.dateTimeLocale || this._localeSig();
   });
 
   /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
@@ -62,6 +63,7 @@ export class DateTimeFormatService {
   /** Set the locale for the date adapter formatting */
   setDateAdapterLocale(locale: DateTimeLocale): void {
     this._dateAdapter.setLocale(locale);
+    this._localeSig.set(locale);
   }
 
   /**
