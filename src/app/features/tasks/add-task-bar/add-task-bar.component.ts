@@ -82,7 +82,6 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
-import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
 
 @Component({
   selector: 'add-task-bar',
@@ -129,7 +128,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
-  readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   // Inputs
   tabindex = input<number>(0);
