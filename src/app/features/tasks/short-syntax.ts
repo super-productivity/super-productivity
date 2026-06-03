@@ -142,17 +142,15 @@ export const shortSyntax = async (
 
   if (config.isEnableDue) {
     taskChanges = parseTimeSpentChanges(task);
-    taskChanges = {
-      ...taskChanges,
-      ...(await parseScheduledDate(
-        { ...task, title: taskChanges.title || task.title },
-        now,
-      )),
-      ...(await parseDeadlineDate(
-        { ...task, title: taskChanges.title || task.title },
-        now,
-      )),
-    };
+    const dueChanges = await parseScheduledDate(
+      { ...task, title: taskChanges.title || task.title },
+      now,
+    );
+    const deadlineChanges = await parseDeadlineDate(
+      { ...task, title: dueChanges.title ?? (taskChanges.title || task.title) },
+      now,
+    );
+    taskChanges = { ...taskChanges, ...dueChanges, ...deadlineChanges };
   }
 
   if (config.isEnableProject) {

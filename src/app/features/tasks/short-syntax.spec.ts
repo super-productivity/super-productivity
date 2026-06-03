@@ -380,6 +380,25 @@ describe('shortSyntax', () => {
       expect(scheduledDate.getDate()).toBe(6); // Tomorrow
       expect(scheduledDate.getHours()).toBe(14);
     });
+
+    it('should correctly parse combined schedule and deadline together without corrupting title', async () => {
+      const t = {
+        ...TASK,
+        title: 'Pay rent @monday !friday',
+      };
+      const now = new Date('2026-06-01T10:00:00'); // Mon Jun 1 2026
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+
+      expect(r?.taskChanges.title).toBe('Pay rent');
+      expect(r?.taskChanges.dueWithTime).toBeDefined();
+      expect(r?.taskChanges.deadlineWithTime).toBeDefined();
+
+      const dueDate = new Date(r?.taskChanges.dueWithTime as number);
+      const deadlineDate = new Date(r?.taskChanges.deadlineWithTime as number);
+
+      expect(dueDate.getDay()).toBe(1); // Monday
+      expect(deadlineDate.getDay()).toBe(5); // Friday
+    });
   });
 
   describe('tags', () => {
