@@ -211,6 +211,8 @@ export class ShortSyntaxEffects {
             }
 
             // Use compound action for atomic state update
+            delete finalTaskChanges.hasDeadlineTime;
+
             actions.push(
               TaskSharedActions.applyShortSyntax({
                 task,
