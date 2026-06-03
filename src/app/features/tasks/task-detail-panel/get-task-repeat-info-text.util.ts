@@ -9,11 +9,13 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getWeekdaysMin } from '../../../util/get-weekdays-min';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getEffectiveRepeatStartDate } from '../../task-repeat-cfg/store/get-effective-repeat-start-date.util';
+import { TranslateService } from '@ngx-translate/core';
 
 export const getTaskRepeatInfoText = (
   repeatCfg: TaskRepeatCfg,
   locale: string | undefined,
   dateTimeFormatService?: DateTimeFormatService,
+  translateService?: TranslateService,
 ): [string, { [key: string]: string | number }] => {
   const timeStr =
     repeatCfg.startTime && isValidSplitTime(repeatCfg.startTime)
@@ -131,6 +133,54 @@ export const getTaskRepeatInfoText = (
       ];
 
     case 'MONTHLY':
+      if (repeatCfg.monthlyLastDay) {
+        return [
+          timeStr
+            ? T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY_AND_TIME
+            : T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY,
+          { timeStr },
+        ];
+      }
+
+      if (
+        repeatCfg.monthlyWeekOfMonth !== undefined &&
+        repeatCfg.monthlyWeekday !== undefined
+      ) {
+        const weekDayDate = new Date();
+        weekDayDate.setDate(
+          weekDayDate.getDate() + (repeatCfg.monthlyWeekday - weekDayDate.getDay()),
+        );
+        const weekdayStr = weekDayDate.toLocaleDateString(locale, {
+          weekday: 'long',
+        });
+
+        let ordinalKey = '';
+        if (repeatCfg.monthlyWeekOfMonth === -1) {
+          ordinalKey = T.F.TASK_REPEAT.F.ORD_LAST_NTH;
+        } else {
+          const ordinalKeys = [
+            T.F.TASK_REPEAT.F.ORD_FIRST_NTH,
+            T.F.TASK_REPEAT.F.ORD_SECOND_NTH,
+            T.F.TASK_REPEAT.F.ORD_THIRD_NTH,
+            T.F.TASK_REPEAT.F.ORD_FOURTH_NTH,
+          ];
+          ordinalKey = ordinalKeys[repeatCfg.monthlyWeekOfMonth - 1] || '';
+        }
+
+        const ordinalStr = translateService ? translateService.instant(ordinalKey) : '';
+
+        return [
+          timeStr
+            ? T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY_AND_TIME
+            : T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+          {
+            ordinalStr,
+            weekdayStr,
+            timeStr,
+          },
+        ];
+      }
+
       const dateDayStr = dateStrToUtcDate(
         getEffectiveRepeatStartDate(repeatCfg),
       ).toLocaleDateString(locale, {

@@ -156,6 +156,27 @@ describe('getTaskRepeatInfoText()', () => {
           quickSetting: 'CUSTOM',
         },
       ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY,
+        { timeStr: '' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyLastDay: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+        { timeStr: '', ordinalStr: '', weekdayStr: 'Saturday' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyWeekOfMonth: 1,
+          monthlyWeekday: 6,
+        },
+      ],
 
       [
         T.F.TASK_REPEAT.ADD_INFO_PANEL.CUSTOM_WEEKLY,
