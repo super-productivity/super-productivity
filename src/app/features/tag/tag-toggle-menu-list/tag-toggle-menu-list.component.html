@@ -1,13 +1,13 @@
 <div
   #tagMenuTriggerEl
   [matMenuTriggerFor]="menuEl"
+  (menuOpened)="onTagsMenuOpened()"
   style="visibility: hidden"
 ></div>
 
 <mat-menu
   #menuEl="matMenu"
   (closed)="onMenuClosed()"
-  (menuOpened)="onTagsMenuOpened()"
 >
   <ng-template matMenuContent>
     <div
@@ -21,22 +21,19 @@
         [placeholder]="T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_PLACEHOLDER | translate"
         [ngModel]="tagSearch.searchQuery()"
         (ngModelChange)="tagSearch.searchQuery.set($event)"
-        (keydown.arrowdown)="focusFirstTagItem()"
-        (keydown.arrowup)="focusLastTagItem($event)"
-        (keydown.enter)="selectFirstTag($event)"
+        (keydown.arrowdown)="tagsNav.adjustActiveIndex('down', $event)"
+        (keydown.arrowup)="tagsNav.adjustActiveIndex('up', $event)"
+        (keydown.enter)="tagsNav.selectActive($event)"
       />
     </div>
     <div (click)="$event.stopPropagation()">
-      @for (
-        tag of tagSearch.filteredItems();
-        track tag.id;
-        let isFirst = $first;
-        let isLast = $last
-      ) {
+      @for (tag of tagSearch.filteredItems(); track tag.id; let i = $index) {
         <button
           #tagItem
+          [class.cdk-program-focused]="tagsNav.activeIndex() === i"
           (click)="toggleTag.emit(tag.id)"
-          (keydown)="onTagMenuKeydown($event, tag.id, isFirst, isLast)"
+          (mouseenter)="tagsNav.setActiveIndex(i)"
+          (keydown)="onTagMenuKeydown($event, tag.id)"
           mat-menu-item
         >
           @if (task().tagIds.includes(tag.id)) {

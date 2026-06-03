@@ -83,6 +83,7 @@ import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
 import { FormsModule } from '@angular/forms';
 import { createSearchFilter } from '../../../../util/create-search-filter';
+import { createDropdownNavigation } from '../../../../util/create-dropdown-navigation';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -192,6 +193,20 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   projectMenuItems = viewChildren('projectItem', { read: ElementRef });
   tagMenuItems = viewChildren('tagItem', { read: ElementRef });
+
+  projectNav = createDropdownNavigation(
+    this.projectSearch.filteredItems,
+    (project) => this.moveTaskToProject(project.id),
+    () => this.contextMenuTrigger(),
+    () => this.projectMenuItems(),
+  );
+
+  tagsNav = createDropdownNavigation(
+    this.tagSearch.filteredItems,
+    (tag) => this.toggleTag(tag.id),
+    () => this.contextMenuTrigger(),
+    () => this.tagMenuItems(),
+  );
 
   isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
     this._workContextService.activeWorkContext$.pipe(
@@ -337,6 +352,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   onProjectMenuOpened(): void {
     this.projectSearch.searchQuery.set('');
+    const filtered = this.projectSearch.filteredItems();
+    this.projectNav.resetActive(filtered, 0);
     setTimeout(() => {
       this.projectSearchInput()?.nativeElement.focus();
     });
@@ -344,79 +361,14 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   onTagsMenuOpened(): void {
     this.tagSearch.searchQuery.set('');
+    const filtered = this.tagSearch.filteredItems();
+    const firstSelectedIdx = filtered.findIndex((tag) =>
+      this.task.tagIds.includes(tag.id),
+    );
+    this.tagsNav.resetActive(filtered, firstSelectedIdx >= 0 ? firstSelectedIdx : 0);
     setTimeout(() => {
       this.tagsSearchInput()?.nativeElement.focus();
     });
-  }
-
-  focusFirstProjectItem(): void {
-    this.projectMenuItems()[0]?.nativeElement.focus();
-  }
-
-  focusLastProjectItem(event: KeyboardEvent): void {
-    const items = this.projectMenuItems();
-    const lastItem = items[items.length - 1];
-    if (lastItem) {
-      event.preventDefault();
-      event.stopPropagation();
-      lastItem.nativeElement.focus();
-    }
-  }
-
-  focusFirstTagItem(): void {
-    this.tagMenuItems()[0]?.nativeElement.focus();
-  }
-
-  focusLastTagItem(event: KeyboardEvent): void {
-    const items = this.tagMenuItems();
-    const lastItem = items[items.length - 1];
-    if (lastItem) {
-      event.preventDefault();
-      event.stopPropagation();
-      lastItem.nativeElement.focus();
-    }
-  }
-
-  selectFirstProject(event: Event): void {
-    const firstProject = this.projectSearch.filteredItems()[0];
-    if (firstProject) {
-      event.preventDefault();
-      this.moveTaskToProject(firstProject.id);
-      this.contextMenuTrigger()?.closeMenu();
-    }
-  }
-
-  selectFirstTag(event: Event): void {
-    const firstTag = this.tagSearch.filteredItems()[0];
-    if (firstTag) {
-      event.preventDefault();
-      this.toggleTag(firstTag.id);
-      this.contextMenuTrigger()?.closeMenu();
-    }
-  }
-
-  onProjectItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
-    if (event.key === 'ArrowUp' && isFirst) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.projectSearchInput()?.nativeElement.focus();
-    } else if (event.key === 'ArrowDown' && isLast) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.projectSearchInput()?.nativeElement.focus();
-    }
-  }
-
-  onTagItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
-    if (event.key === 'ArrowUp' && isFirst) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.tagsSearchInput()?.nativeElement.focus();
-    } else if (event.key === 'ArrowDown' && isLast) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.tagsSearchInput()?.nativeElement.focus();
-    }
   }
 
   get kb(): KeyboardConfig {

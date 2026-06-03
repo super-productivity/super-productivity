@@ -165,122 +165,118 @@
 
 <!-------------- Menus ------------------->
 <mat-menu #projectMenu="matMenu">
-  <div
-    class="search-container"
-    (click)="$event.stopPropagation()"
-    (keydown)="$event.stopPropagation()"
-  >
-    <input
-      #projectSearchInput
-      class="search-input"
-      [placeholder]="T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_PLACEHOLDER | translate"
-      [ngModel]="projectSearch.searchQuery()"
-      (ngModelChange)="projectSearch.searchQuery.set($event)"
-      (keydown.arrowdown)="focusFirstProjectItem()"
-      (keydown.arrowup)="focusLastProjectItem($event)"
-      (keydown.enter)="selectFirstProject($event)"
-    />
-  </div>
-  @for (
-    project of projectSearch.filteredItems();
-    track project.id;
-    let isFirst = $first;
-    let isLast = $last
-  ) {
-    <button
-      #projectItem
-      mat-menu-item
-      (click)="stateService.updateProjectId(project.id)"
-      (keydown)="onProjectItemKeydown($event, isFirst, isLast)"
+  <ng-template matMenuContent>
+    <div
+      class="search-container"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
     >
-      @if (isTagEmojiIcon(project)) {
-        <span
-          matMenuItemIcon
-          class="menu-icon-emoji"
-          [style.color]="project.theme.primary"
-        >
-          {{ project.icon || DEFAULT_PROJECT_ICON }}
-        </span>
-      } @else {
-        <mat-icon [style.color]="project.theme.primary">
-          {{ project.icon || DEFAULT_PROJECT_ICON }}
-        </mat-icon>
-      }
-      {{ project.title }}
-    </button>
-  }
-  @if (!projectSearch.filteredItems().length) {
-    <button
-      mat-menu-item
-      disabled
-    >
-      {{ T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_NO_RESULTS | translate }}
-    </button>
-  }
-</mat-menu>
-
-<mat-menu #tagsMenu="matMenu">
-  <div
-    class="search-container"
-    (click)="$event.stopPropagation()"
-    (keydown)="$event.stopPropagation()"
-  >
-    <input
-      #tagsSearchInput
-      class="search-input"
-      [placeholder]="T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_PLACEHOLDER | translate"
-      [ngModel]="tagSearch.searchQuery()"
-      (ngModelChange)="tagSearch.searchQuery.set($event)"
-      (keydown.arrowdown)="focusFirstTagItem()"
-      (keydown.arrowup)="focusLastTagItem($event)"
-      (keydown.enter)="selectFirstTag($event)"
-    />
-  </div>
-  <div (click)="$event.stopPropagation()">
-    @for (
-      tag of tagSearch.filteredItems();
-      track tag.id;
-      let isFirst = $first;
-      let isLast = $last
-    ) {
+      <input
+        #projectSearchInput
+        class="search-input"
+        [placeholder]="T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_PLACEHOLDER | translate"
+        [ngModel]="projectSearch.searchQuery()"
+        (ngModelChange)="projectSearch.searchQuery.set($event)"
+        (keydown.arrowdown)="projectNav.adjustActiveIndex('down', $event)"
+        (keydown.arrowup)="projectNav.adjustActiveIndex('up', $event)"
+        (keydown.enter)="projectNav.selectActive($event)"
+      />
+    </div>
+    @for (project of projectSearch.filteredItems(); track project.id; let i = $index) {
       <button
-        #tagItem
+        #projectItem
         mat-menu-item
-        (click)="toggleTagWithSyntax(tag)"
-        [class.selected]="hasSelectedTag(tag.id)"
-        (keydown)="onTagItemKeydown($event, isFirst, isLast)"
+        [class.cdk-program-focused]="projectNav.activeIndex() === i"
+        (click)="stateService.updateProjectId(project.id)"
+        (mouseenter)="projectNav.setActiveIndex(i)"
       >
-        @if (hasSelectedTag(tag.id)) {
-          <mat-icon class="check-ico">check_box</mat-icon>
-        } @else {
-          <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
-        }
-        @if (isTagEmojiIcon(tag)) {
+        @if (isTagEmojiIcon(project)) {
           <span
             matMenuItemIcon
-            [style.color]="tag.color || tag.theme.primary"
-            class="tag-ico tag-ico-emoji"
-            >{{ tag.icon || 'label' }}</span
+            class="menu-icon-emoji"
+            [style.color]="project.theme.primary"
           >
+            {{ project.icon || DEFAULT_PROJECT_ICON }}
+          </span>
         } @else {
-          <mat-icon
-            [style.color]="tag.color || tag.theme.primary"
-            class="tag-ico"
-            >{{ tag.icon || 'label' }}
+          <mat-icon [style.color]="project.theme.primary">
+            {{ project.icon || DEFAULT_PROJECT_ICON }}
           </mat-icon>
         }
-        {{ tag.title }}
+        {{ project.title }}
       </button>
     }
-    @if (!tagSearch.filteredItems().length) {
+    @if (!projectSearch.filteredItems().length) {
       <button
         mat-menu-item
         disabled
       >
-        {{ T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_NO_RESULTS | translate }}
+        {{ T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_NO_RESULTS | translate }}
       </button>
     }
-  </div>
+  </ng-template>
+</mat-menu>
+
+<mat-menu #tagsMenu="matMenu">
+  <ng-template matMenuContent>
+    <div
+      class="search-container"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+    >
+      <input
+        #tagsSearchInput
+        class="search-input"
+        [placeholder]="T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_PLACEHOLDER | translate"
+        [ngModel]="tagSearch.searchQuery()"
+        (ngModelChange)="tagSearch.searchQuery.set($event)"
+        (keydown.arrowdown)="tagsNav.adjustActiveIndex('down', $event)"
+        (keydown.arrowup)="tagsNav.adjustActiveIndex('up', $event)"
+        (keydown.enter)="tagsNav.selectActive($event)"
+      />
+    </div>
+    <div (click)="$event.stopPropagation()">
+      @for (tag of tagSearch.filteredItems(); track tag.id; let i = $index) {
+        <button
+          #tagItem
+          mat-menu-item
+          [class.cdk-program-focused]="tagsNav.activeIndex() === i"
+          [class.selected]="hasSelectedTag(tag.id)"
+          (click)="toggleTagWithSyntax(tag)"
+          (mouseenter)="tagsNav.setActiveIndex(i)"
+        >
+          @if (hasSelectedTag(tag.id)) {
+            <mat-icon class="check-ico">check_box</mat-icon>
+          } @else {
+            <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
+          }
+          @if (isTagEmojiIcon(tag)) {
+            <span
+              matMenuItemIcon
+              [style.color]="tag.color || tag.theme.primary"
+              class="tag-ico tag-ico-emoji"
+              >{{ tag.icon || 'label' }}</span
+            >
+          } @else {
+            <mat-icon
+              [style.color]="tag.color || tag.theme.primary"
+              class="tag-ico"
+              >{{ tag.icon || 'label' }}
+            </mat-icon>
+          }
+          {{ tag.title }}
+        </button>
+      }
+      @if (!tagSearch.filteredItems().length) {
+        <button
+          mat-menu-item
+          disabled
+        >
+          {{ T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_NO_RESULTS | translate }}
+        </button>
+      }
+    </div>
+  </ng-template>
 </mat-menu>
 
 <mat-menu #estimateMenu="matMenu">

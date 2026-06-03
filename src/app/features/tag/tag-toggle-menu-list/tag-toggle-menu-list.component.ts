@@ -31,6 +31,7 @@ import { MenuTreeKind, MenuTreeViewNode } from '../../menu-tree/store/menu-tree.
 import { Tag } from '../tag.model';
 import { FormsModule } from '@angular/forms';
 import { createSearchFilter } from '../../../util/create-search-filter';
+import { createDropdownNavigation } from '../../../util/create-dropdown-navigation';
 
 @Component({
   selector: 'tag-toggle-menu-list',
@@ -112,24 +113,18 @@ export class TagToggleMenuListComponent {
     read: MatMenuTrigger,
   });
 
-  onTagMenuKeydown(
-    ev: KeyboardEvent,
-    tagId: string,
-    isFirst?: boolean,
-    isLast?: boolean,
-  ): void {
+  tagsNav = createDropdownNavigation(
+    this.tagSearch.filteredItems,
+    (tag) => this.toggleTag.emit(tag.id),
+    () => this.tagMenuTriggerEl(),
+    () => this.tagMenuItems(),
+  );
+
+  onTagMenuKeydown(ev: KeyboardEvent, tagId: string): void {
     if (ev.code === 'Space') {
       ev.preventDefault();
       ev.stopPropagation();
       this.toggleTag.emit(tagId);
-    } else if (ev.key === 'ArrowUp' && isFirst) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      this.tagsSearchInput()?.nativeElement.focus();
-    } else if (ev.key === 'ArrowDown' && isLast) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      this.tagsSearchInput()?.nativeElement.focus();
     }
   }
 
@@ -144,31 +139,12 @@ export class TagToggleMenuListComponent {
   onTagsMenuOpened(): void {
     this.tagSearch.searchQuery.set('');
     setTimeout(() => {
+      const filtered = this.tagSearch.filteredItems();
+      const task = this.task();
+      const firstSelectedIdx = filtered.findIndex((tag) => task.tagIds.includes(tag.id));
+      this.tagsNav.resetActive(filtered, firstSelectedIdx >= 0 ? firstSelectedIdx : 0);
       this.tagsSearchInput()?.nativeElement.focus();
     });
-  }
-
-  focusFirstTagItem(): void {
-    this.tagMenuItems()[0]?.nativeElement.focus();
-  }
-
-  focusLastTagItem(event: KeyboardEvent): void {
-    const items = this.tagMenuItems();
-    const lastItem = items[items.length - 1];
-    if (lastItem) {
-      event.preventDefault();
-      event.stopPropagation();
-      lastItem.nativeElement.focus();
-    }
-  }
-
-  selectFirstTag(event: Event): void {
-    const firstTag = this.tagSearch.filteredItems()[0];
-    if (firstTag) {
-      event.preventDefault();
-      this.toggleTag.emit(firstTag.id);
-      this.tagMenuTriggerEl()?.closeMenu();
-    }
   }
 
   openAddNewTag(): void {

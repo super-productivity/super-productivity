@@ -379,22 +379,22 @@
         [placeholder]="T.F.TASK.ADD_TASK_BAR.PROJECT_SEARCH_PLACEHOLDER | translate"
         [ngModel]="projectSearch.searchQuery()"
         (ngModelChange)="projectSearch.searchQuery.set($event)"
-        (keydown.arrowdown)="focusFirstProjectItem()"
-        (keydown.arrowup)="focusLastProjectItem($event)"
-        (keydown.enter)="selectFirstProject($event)"
+        (keydown.arrowdown)="projectNav.adjustActiveIndex('down', $event)"
+        (keydown.arrowup)="projectNav.adjustActiveIndex('up', $event)"
+        (keydown.enter)="projectNav.selectActive($event)"
       />
     </div>
     @if (projectSearch.filteredItems()) {
       @for (
         project of projectSearch.filteredItems();
         track trackByProjectId($index, project);
-        let isFirst = $first;
-        let isLast = $last
+        let i = $index
       ) {
         <button
           #projectItem
+          [class.cdk-program-focused]="projectNav.activeIndex() === i"
           (click)="moveTaskToProject(project.id)"
-          (keydown)="onProjectItemKeydown($event, isFirst, isLast)"
+          (mouseenter)="projectNav.setActiveIndex(i)"
           mat-menu-item
           menuTouchFix
         >
@@ -435,22 +435,18 @@
         [placeholder]="T.F.TASK.ADD_TASK_BAR.TAG_SEARCH_PLACEHOLDER | translate"
         [ngModel]="tagSearch.searchQuery()"
         (ngModelChange)="tagSearch.searchQuery.set($event)"
-        (keydown.arrowdown)="focusFirstTagItem()"
-        (keydown.arrowup)="focusLastTagItem($event)"
-        (keydown.enter)="selectFirstTag($event)"
+        (keydown.arrowdown)="tagsNav.adjustActiveIndex('down', $event)"
+        (keydown.arrowup)="tagsNav.adjustActiveIndex('up', $event)"
+        (keydown.enter)="tagsNav.selectActive($event)"
       />
     </div>
     <div (click)="$event.stopPropagation()">
-      @for (
-        tag of tagSearch.filteredItems();
-        track tag.id;
-        let isFirst = $first;
-        let isLast = $last
-      ) {
+      @for (tag of tagSearch.filteredItems(); track tag.id; let i = $index) {
         <button
           #tagItem
+          [class.cdk-program-focused]="tagsNav.activeIndex() === i"
           (click)="toggleTag(tag.id)"
-          (keydown)="onTagItemKeydown($event, isFirst, isLast)"
+          (mouseenter)="tagsNav.setActiveIndex(i)"
           mat-menu-item
           menuTouchFix
         >

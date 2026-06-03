@@ -16,7 +16,12 @@ import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import {
+  MatMenu,
+  MatMenuContent,
+  MatMenuItem,
+  MatMenuTrigger,
+} from '@angular/material/menu';
 import { first } from 'rxjs/operators';
 import { ProjectService } from '../../../project/project.service';
 import { TagService } from '../../../tag/tag.service';
@@ -39,6 +44,7 @@ import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.mod
 import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
 import { DateService } from '../../../../core/date/date.service';
 import { createSearchFilter } from '../../../../util/create-search-filter';
+import { createDropdownNavigation } from '../../../../util/create-dropdown-navigation';
 
 type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
 
@@ -54,6 +60,7 @@ type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
     MatIcon,
     MatTooltip,
     MatMenu,
+    MatMenuContent,
     MatMenuTrigger,
     MatMenuItem,
     TranslateModule,
@@ -133,6 +140,20 @@ export class AddTaskBarActionsComponent {
   tagsSearchInput = viewChild<ElementRef<HTMLInputElement>>('tagsSearchInput');
   projectMenuItems = viewChildren('projectItem', { read: ElementRef });
   tagMenuItems = viewChildren('tagItem', { read: ElementRef });
+
+  projectNav = createDropdownNavigation(
+    this.projectSearch.filteredItems,
+    (project) => this.stateService.updateProjectId(project.id),
+    () => this.projectMenuTrigger(),
+    () => this.projectMenuItems(),
+  );
+
+  tagsNav = createDropdownNavigation(
+    this.tagSearch.filteredItems,
+    (tag) => this.toggleTagWithSyntax(tag),
+    () => this.tagsMenuTrigger(),
+    () => this.tagMenuItems(),
+  );
 
   // Computed values
   dateDisplay = computed(() => {
@@ -258,6 +279,10 @@ export class AddTaskBarActionsComponent {
 
   onProjectMenuOpened(): void {
     this.projectSearch.searchQuery.set('');
+    const selected = this.selectedProject();
+    const filtered = this.projectSearch.filteredItems();
+    const initialIndex = selected ? filtered.findIndex((p) => p.id === selected.id) : 0;
+    this.projectNav.resetActive(filtered, initialIndex >= 0 ? initialIndex : 0);
     setTimeout(() => {
       this.projectSearchInput()?.nativeElement.focus();
     });
@@ -265,79 +290,12 @@ export class AddTaskBarActionsComponent {
 
   onTagsMenuOpened(): void {
     this.tagSearch.searchQuery.set('');
+    const filtered = this.tagSearch.filteredItems();
+    const firstSelectedIdx = filtered.findIndex((tag) => this.hasSelectedTag(tag.id));
+    this.tagsNav.resetActive(filtered, firstSelectedIdx >= 0 ? firstSelectedIdx : 0);
     setTimeout(() => {
       this.tagsSearchInput()?.nativeElement.focus();
     });
-  }
-
-  focusFirstProjectItem(): void {
-    this.projectMenuItems()[0]?.nativeElement.focus();
-  }
-
-  focusLastProjectItem(event: KeyboardEvent): void {
-    const items = this.projectMenuItems();
-    const lastItem = items[items.length - 1];
-    if (lastItem) {
-      event.preventDefault();
-      event.stopPropagation();
-      lastItem.nativeElement.focus();
-    }
-  }
-
-  focusFirstTagItem(): void {
-    this.tagMenuItems()[0]?.nativeElement.focus();
-  }
-
-  focusLastTagItem(event: KeyboardEvent): void {
-    const items = this.tagMenuItems();
-    const lastItem = items[items.length - 1];
-    if (lastItem) {
-      event.preventDefault();
-      event.stopPropagation();
-      lastItem.nativeElement.focus();
-    }
-  }
-
-  selectFirstProject(event: Event): void {
-    const firstProject = this.projectSearch.filteredItems()[0];
-    if (firstProject) {
-      event.preventDefault();
-      this.stateService.updateProjectId(firstProject.id);
-      this.projectMenuTrigger()?.closeMenu();
-    }
-  }
-
-  selectFirstTag(event: Event): void {
-    const firstTag = this.tagSearch.filteredItems()[0];
-    if (firstTag) {
-      event.preventDefault();
-      this.toggleTagWithSyntax(firstTag);
-      this.tagsMenuTrigger()?.closeMenu();
-    }
-  }
-
-  onProjectItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
-    if (event.key === 'ArrowUp' && isFirst) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.projectSearchInput()?.nativeElement.focus();
-    } else if (event.key === 'ArrowDown' && isLast) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.projectSearchInput()?.nativeElement.focus();
-    }
-  }
-
-  onTagItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
-    if (event.key === 'ArrowUp' && isFirst) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.tagsSearchInput()?.nativeElement.focus();
-    } else if (event.key === 'ArrowDown' && isLast) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.tagsSearchInput()?.nativeElement.focus();
-    }
   }
 
   // Public methods to open menus programmatically

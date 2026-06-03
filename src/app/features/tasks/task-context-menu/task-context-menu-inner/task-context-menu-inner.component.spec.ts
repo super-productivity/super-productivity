@@ -1,5 +1,6 @@
 import { TaskContextMenuInnerComponent } from './task-context-menu-inner.component';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { TaskService } from '../../task.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
@@ -66,7 +67,7 @@ describe('TaskContextMenuInnerComponent', () => {
             cfg: () => ({ reminder: {}, tasks: {} }),
           },
         },
-        { provide: TagService, useValue: { tagsNoMyDayAndNoListSorted: of([]) } },
+        { provide: TagService, useValue: { tagsNoMyDayAndNoListSorted: signal([]) } },
         { provide: WorkContextService, useValue: { activeWorkContext$: of({}) } },
         {
           provide: TaskFocusService,

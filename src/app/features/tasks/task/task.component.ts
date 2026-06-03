@@ -82,6 +82,7 @@ import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { TagToggleMenuListComponent } from '../../tag/tag-toggle-menu-list/tag-toggle-menu-list.component';
 import { FormsModule } from '@angular/forms';
 import { createSearchFilter } from '../../../util/create-search-filter';
+import { createDropdownNavigation } from '../../../util/create-dropdown-navigation';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { environment } from '../../../../environments/environment';
@@ -309,6 +310,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   projectSearch = createSearchFilter(this.moveToProjectList);
   projectSearchInput = viewChild<ElementRef<HTMLInputElement>>('projectSearchInput');
   projectMenuItems = viewChildren('projectItem', { read: ElementRef });
+
+  projectNav = createDropdownNavigation(
+    this.projectSearch.filteredItems,
+    (project) => this.moveTaskToProject(project.id),
+    () => this.projectMenuTrigger(),
+    () => this.projectMenuItems(),
+  );
+
   private _loadedProjectListForProjectId: string | null | undefined;
   private _moveToProjectListSub?: Subscription;
 
@@ -700,44 +709,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   onProjectMenuOpened(): void {
     this.projectSearch.searchQuery.set('');
     this._loadProjectListIfNeeded();
+    const filtered = this.projectSearch.filteredItems();
+    this.projectNav.resetActive(filtered, 0);
     setTimeout(() => {
       this.projectSearchInput()?.nativeElement.focus();
     });
-  }
-
-  focusFirstProjectItem(): void {
-    this.projectMenuItems()[0]?.nativeElement.focus();
-  }
-
-  focusLastProjectItem(event: KeyboardEvent): void {
-    const items = this.projectMenuItems();
-    const lastItem = items[items.length - 1];
-    if (lastItem) {
-      event.preventDefault();
-      event.stopPropagation();
-      lastItem.nativeElement.focus();
-    }
-  }
-
-  selectFirstProject(event: Event): void {
-    const firstProject = this.projectSearch.filteredItems()[0];
-    if (firstProject) {
-      event.preventDefault();
-      this.moveTaskToProject(firstProject.id);
-      this.projectMenuTrigger()?.closeMenu();
-    }
-  }
-
-  onProjectItemKeydown(event: KeyboardEvent, isFirst: boolean, isLast: boolean): void {
-    if (event.key === 'ArrowUp' && isFirst) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.projectSearchInput()?.nativeElement.focus();
-    } else if (event.key === 'ArrowDown' && isLast) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.projectSearchInput()?.nativeElement.focus();
-    }
   }
 
   _loadProjectListIfNeeded(): void {
