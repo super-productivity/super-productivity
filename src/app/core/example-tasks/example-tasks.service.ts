@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
-import { filter, first, switchMap } from 'rxjs/operators';
+import { filter, first, switchMap, tap } from 'rxjs/operators';
 import { selectAllTasks } from '../../features/tasks/store/task.selectors';
 import { TaskService } from '../../features/tasks/task.service';
 import { T } from '../../t.const';
@@ -67,6 +67,13 @@ export class ExampleTasksService {
       .pipe(
         first(),
         switchMap(() => this._store.select(selectAllTasks).pipe(first())),
+        // Tasks already exist (e.g. synced from another device): mark onboarding done
+        // so a future empty-task startup does not recreate example tasks. (#7976)
+        tap((tasks) => {
+          if (tasks.length > 0) {
+            localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
+          }
+        }),
         filter((tasks) => tasks.length === 0),
         switchMap(() => {
           const keys = EXAMPLE_TASK_DEFS.flatMap((def) => [def.titleKey, def.notesKey]);
