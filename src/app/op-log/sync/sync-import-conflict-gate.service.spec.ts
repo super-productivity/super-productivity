@@ -143,6 +143,54 @@ describe('SyncImportConflictGateService', () => {
     expect(result.dialogData).toBeUndefined();
   });
 
+  it('reports example-task ids as discardable but still shows the dialog when real work is also pending', async () => {
+    const incomingSyncImport = createOperation();
+    const pendingRealTaskEntry = createEntry(
+      createOperation({
+        id: 'local-task-update',
+        actionType: 'test' as ActionType,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'Local title' },
+        clientId: 'client-A',
+        vectorClock: { clientA: 1 },
+      }),
+    );
+    const pendingExampleTaskEntry = createEntry(
+      createOperation({
+        id: 'local-example-task-create',
+        actionType: ActionType.TASK_SHARED_ADD,
+        opType: OpType.Create,
+        entityType: 'TASK',
+        entityId: 'example-task-1',
+        payload: {
+          actionPayload: {
+            task: { id: 'example-task-1' },
+            isExampleTask: true,
+          },
+          entityChanges: [],
+        },
+        clientId: 'client-A',
+        vectorClock: { clientA: 2 },
+      }),
+      { seq: 2 },
+    );
+    opLogStoreSpy.getUnsynced.and.resolveTo([
+      pendingRealTaskEntry,
+      pendingExampleTaskEntry,
+    ]);
+
+    const result = await service.checkIncomingFullStateConflict([incomingSyncImport]);
+
+    // Real pending work blocks silent acceptance -> the conflict dialog is shown...
+    expect(result.hasMeaningfulPending).toBeTrue();
+    expect(result.dialogData).toBeDefined();
+    // ...but the example-task id is still reported. The caller intentionally leaves
+    // these untouched in the dialog path, so they ride along if the user keeps local.
+    expect(result.discardablePendingOpIds).toEqual(['local-example-task-create']);
+  });
+
   it('should treat pending full-state ops as meaningful', async () => {
     const incomingSyncImport = createOperation({
       id: 'incoming-sync-import',

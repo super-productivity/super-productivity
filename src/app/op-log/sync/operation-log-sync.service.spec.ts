@@ -2522,6 +2522,8 @@ describe('OperationLogSyncService', () => {
       expect(
         syncImportConflictDialogServiceSpy.showConflictDialog,
       ).not.toHaveBeenCalled();
+      // No example-task ops pending -> nothing is rejected (empty-array guard).
+      expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
         incomingSyncImport,
       ]);
