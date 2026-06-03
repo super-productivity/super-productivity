@@ -97,8 +97,6 @@ test.describe('Habit chart popout jitter (#7957)', () => {
 
     const dialogTail = summarizeTail(probe.dialog, 80);
     const canvasTail = summarizeTail(probe.canvas, 80);
-    // eslint-disable-next-line no-console
-    console.log('JITTER_TAIL', JSON.stringify({ dialogTail, canvasTail }));
 
     expect(canvasTail.transitions, 'canvas height should be stable').toBe(0);
     expect(canvasTail.range).toBeLessThan(0.05);

@@ -154,6 +154,25 @@ describe('OperationLogUploadService', () => {
         });
       });
 
+      it('should reject upload when provider encryption is enabled but key is missing', async () => {
+        mockOpLogStore.getUnsynced.and.returnValue(
+          Promise.resolve([createMockEntry(1, 'op-1', 'client-1')]),
+        );
+        (mockApiProvider as any).isEncryptionEnabled = jasmine
+          .createSpy('isEncryptionEnabled')
+          .and.resolveTo(true);
+        (mockApiProvider as any).getEncryptKey = jasmine
+          .createSpy('getEncryptKey')
+          .and.resolveTo(undefined);
+
+        await expectAsync(
+          service.uploadPendingOps(mockApiProvider),
+        ).toBeRejectedWithError(
+          /Encryption is enabled but no encryption key is available/,
+        );
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+      });
+
       it('should upload pending operations', async () => {
         const pendingOps = [
           createMockEntry(1, 'op-1', 'client-1'),

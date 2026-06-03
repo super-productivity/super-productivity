@@ -365,6 +365,22 @@ describe('AddTaskBarComponent', () => {
       expect(repeatCfg.startDate).toBe('2024-05-19');
     });
 
+    it('should fall back to dueDay when due time is malformed', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      component.stateService.updateDate('2026-06-15', 'abc');
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.dueDay).toBe('2026-06-15');
+      expect(taskData.dueWithTime).toBeUndefined();
+      expect(taskData.hasPlannedTime).toBeUndefined();
+    });
+
     it('should pass deadlineDay when a deadline date is set without a time', async () => {
       mockTaskService.add.and.returnValue('task-1');
 

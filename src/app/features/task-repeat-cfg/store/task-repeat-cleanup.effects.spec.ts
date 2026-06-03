@@ -461,6 +461,105 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    it('keeps an overdue instance with changed template fields', fakeAsync(() => {
+      repeatCfgs$.next([
+        {
+          ...skipOverdueCfg('cfg-fields'),
+          title: 'Water plants',
+          tagIds: ['tag-template'],
+          defaultEstimate: 15,
+        },
+      ]);
+      const yesterdayEdited: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'fields-yesterday',
+        title: 'Water plants - balcony first',
+        repeatCfgId: 'cfg-fields',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+        tagIds: ['tag-template', 'tag-extra'],
+        timeEstimate: 30,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'fields-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-fields',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+        tagIds: ['tag-template'],
+        timeEstimate: 15,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayEdited),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('changed visible task fields must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance with an added unfinished subtask', fakeAsync(() => {
+      repeatCfgs$.next([skipOverdueCfg('cfg-subtask')]);
+      const yesterdayEdited: TaskWithSubTasks = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtask-yesterday',
+        repeatCfgId: 'cfg-subtask',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+        subTaskIds: ['sub-1'],
+        subTasks: [
+          {
+            ...DEFAULT_TASK,
+            id: 'sub-1',
+            parentId: 'subtask-yesterday',
+            projectId: 'p1',
+            title: 'Buy fertilizer',
+            created: yesterdayMs,
+            isDone: false,
+            timeSpent: 0,
+          },
+        ],
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtask-today',
+        repeatCfgId: 'cfg-subtask',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([yesterdayEdited, wrapWithSubTasks(todayInstance)]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an added unfinished subtask must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
     it('does not touch instances of configs WITHOUT skipOverdue (#7718 still holds)', fakeAsync(() => {
       // cfg present but skipOverdue is false -> default behavior, keep overdue
       repeatCfgs$.next([

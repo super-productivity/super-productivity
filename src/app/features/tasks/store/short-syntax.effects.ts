@@ -213,6 +213,16 @@ export class ShortSyntaxEffects {
               ];
             }
 
+            if (
+              finalTaskChanges.hasDeadlineTime === false &&
+              typeof finalTaskChanges.deadlineWithTime === 'number'
+            ) {
+              finalTaskChanges.deadlineDay = getDbDateStr(
+                new Date(finalTaskChanges.deadlineWithTime),
+              );
+              finalTaskChanges.deadlineWithTime = undefined;
+            }
+
             // Use compound action for atomic state update
             const autoPlanFields = getDeadlineAutoPlanFields(
               this._dateService,

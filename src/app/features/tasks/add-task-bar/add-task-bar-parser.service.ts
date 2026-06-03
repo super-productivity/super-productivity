@@ -18,11 +18,25 @@ interface PreviousParseResult {
   timeEstimate: number | null;
   dueDate: string | null;
   dueTime: string | null;
+  isParsedDueDate: boolean;
   attachments: TaskAttachment[];
   deadlineDate: string | null;
   deadlineTime: string | null;
+  isParsedDeadline: boolean;
   deadlineRemindOption: TaskReminderOptionId | null;
 }
+
+const _extractDateAndTime = (
+  timestamp: number,
+  hasTime: boolean,
+): readonly [string, string | null] => {
+  const dateObj = new Date(timestamp);
+  const timeStr = [dateObj.getHours(), dateObj.getMinutes()]
+    .map((v) => v.toString().padStart(2, '0'))
+    .join(':');
+
+  return [getDbDateStr(dateObj), hasTime && timeStr !== '00:00' ? timeStr : null];
+};
 
 @Injectable()
 export class AddTaskBarParserService {
@@ -73,6 +87,24 @@ export class AddTaskBarParserService {
 
     // Create current parse result data structure
     let currentResult: PreviousParseResult;
+    const previousHadParsedDate = this._previousParseResult?.isParsedDueDate ?? false;
+    const previousHadParsedDeadline =
+      this._previousParseResult?.isParsedDeadline ?? false;
+    const dueDateFallback = previousHadParsedDate
+      ? defaultDate || null
+      : currentState.date || defaultDate || null;
+    const dueTimeFallback = previousHadParsedDate
+      ? defaultTime || null
+      : currentState.time || defaultTime || null;
+    const deadlineDateFallback = previousHadParsedDeadline
+      ? null
+      : currentState.deadlineDate || null;
+    const deadlineTimeFallback = previousHadParsedDeadline
+      ? null
+      : currentState.deadlineTime || null;
+    const deadlineRemindFallback = previousHadParsedDeadline
+      ? null
+      : currentState.deadlineRemindOption || null;
 
     if (!parseResult) {
       // No parse result means no short syntax found
@@ -88,56 +120,46 @@ export class AddTaskBarParserService {
         timeSpentOnDay: null,
         timeEstimate: null,
         // Preserve current date/time if user has selected them, otherwise use defaults
-        dueDate: currentState.date || (defaultDate ? defaultDate : null),
-        dueTime: currentState.time || defaultTime || null,
+        dueDate: dueDateFallback,
+        dueTime: dueTimeFallback,
+        isParsedDueDate: false,
         attachments: [],
-        deadlineDate: currentState.deadlineDate || null,
-        deadlineTime: currentState.deadlineTime || null,
-        deadlineRemindOption: currentState.deadlineRemindOption || null,
+        deadlineDate: deadlineDateFallback,
+        deadlineTime: deadlineTimeFallback,
+        isParsedDeadline: false,
+        deadlineRemindOption: deadlineRemindFallback,
       };
     } else {
       // Extract parsed values
       const tagIds = parseResult.taskChanges.tagIds || currentState.tagIdsFromTxt;
       const newTagTitles = parseResult.newTagTitles || currentState.newTagTitles;
 
-      let dueDate: string | null = null;
-      let dueTime: string | null = null;
+      let dueDate: string | null = dueDateFallback;
+      let dueTime: string | null = dueTimeFallback;
+      const isParsedDueDate = !!parseResult.taskChanges.dueWithTime;
 
       if (parseResult.taskChanges.dueWithTime) {
-        const dueDateObj = new Date(parseResult.taskChanges.dueWithTime);
-        dueDate = getDbDateStr(dueDateObj);
-
-        if (parseResult.taskChanges.hasPlannedTime !== false) {
-          const hours = dueDateObj.getHours().toString().padStart(2, '0');
-          const minutes = dueDateObj.getMinutes().toString().padStart(2, '0');
-          const timeStr = `${hours}:${minutes}`;
-
-          if (timeStr !== '00:00') {
-            dueTime = timeStr;
-          }
-        }
-      } else if (defaultDate) {
+        [dueDate, dueTime] = _extractDateAndTime(
+          parseResult.taskChanges.dueWithTime,
+          parseResult.taskChanges.hasPlannedTime !== false,
+        );
+      } else if (!dueDate && defaultDate) {
         dueDate = defaultDate;
         dueTime = defaultTime || null;
       }
 
-      let deadlineDate: string | null = null;
-      let deadlineTime: string | null = null;
-      let deadlineRemindOption: TaskReminderOptionId | null = null;
+      let deadlineDate: string | null = deadlineDateFallback;
+      let deadlineTime: string | null = deadlineTimeFallback;
+      let deadlineRemindOption: TaskReminderOptionId | null = deadlineRemindFallback;
+      const isParsedDeadline = !!(
+        parseResult.taskChanges.deadlineWithTime || parseResult.taskChanges.deadlineDay
+      );
 
       if (parseResult.taskChanges.deadlineWithTime) {
-        const deadlineDateObj = new Date(parseResult.taskChanges.deadlineWithTime);
-        deadlineDate = getDbDateStr(deadlineDateObj);
-
-        if (parseResult.taskChanges.hasDeadlineTime !== false) {
-          const hours = deadlineDateObj.getHours().toString().padStart(2, '0');
-          const minutes = deadlineDateObj.getMinutes().toString().padStart(2, '0');
-          const timeStr = `${hours}:${minutes}`;
-
-          if (timeStr !== '00:00') {
-            deadlineTime = timeStr;
-          }
-        }
+        [deadlineDate, deadlineTime] = _extractDateAndTime(
+          parseResult.taskChanges.deadlineWithTime,
+          parseResult.taskChanges.hasDeadlineTime !== false,
+        );
 
         if (parseResult.taskChanges.deadlineRemindAt) {
           deadlineRemindOption = millisecondsDiffToRemindOption(
@@ -158,9 +180,11 @@ export class AddTaskBarParserService {
         timeEstimate: parseResult.taskChanges.timeEstimate || null,
         dueDate: dueDate,
         dueTime: dueTime,
+        isParsedDueDate,
         attachments: parseResult.attachments || [],
         deadlineDate: deadlineDate,
         deadlineTime: deadlineTime,
+        isParsedDeadline,
         deadlineRemindOption: deadlineRemindOption,
       };
     }

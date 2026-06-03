@@ -11,5 +11,11 @@
  * and still fails isValidSplitTime — normalization only recovers a stray
  * seconds component, it never invents a valid time.
  */
-export const normalizeClockStr = (v: string): string =>
-  v.trim().split(':').slice(0, 2).join(':');
+export const normalizeClockStr = (v: string): string => {
+  const trimmed = v.trim();
+  const parts = trimmed.split(':');
+  const hasValidSeconds =
+    parts.length === 3 && /^\d+$/.test(parts[2]) && +parts[2] >= 0 && +parts[2] <= 59;
+
+  return hasValidSeconds ? parts.slice(0, 2).join(':') : trimmed;
+};

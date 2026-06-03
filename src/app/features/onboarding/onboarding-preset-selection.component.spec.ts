@@ -5,23 +5,34 @@ import {
   signal,
   WritableSignal,
 } from '@angular/core';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import { OnboardingPresetSelectionComponent } from './onboarding-preset-selection.component';
 import { ONBOARDING_PRESETS } from './onboarding-presets.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { ProjectService } from '../project/project.service';
+import { TaskService } from '../tasks/task.service';
+import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 
 describe('OnboardingPresetSelectionComponent', () => {
   let component: OnboardingPresetSelectionComponent;
   let mockDialog: jasmine.SpyObj<MatDialog>;
   let cfgSignal: WritableSignal<{ sync: { isEnabled: boolean } }>;
   let afterClosed$: Subject<void>;
+  let projectList$: BehaviorSubject<unknown[]>;
+  let taskList$: BehaviorSubject<unknown[]>;
+
+  const flushAsync = async (): Promise<void> => {
+    await new Promise((resolve) => setTimeout(resolve));
+  };
 
   const setup = (): void => {
     cfgSignal = signal({ sync: { isEnabled: false } });
     afterClosed$ = new Subject<void>();
+    projectList$ = new BehaviorSubject<unknown[]>([{ id: 'inbox' }, { id: 'today' }]);
+    taskList$ = new BehaviorSubject<unknown[]>([]);
 
     mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockDialog.open.and.returnValue({
@@ -36,6 +47,12 @@ describe('OnboardingPresetSelectionComponent', () => {
       providers: [
         { provide: MatDialog, useValue: mockDialog },
         { provide: GlobalConfigService, useValue: mockGlobalConfig },
+        { provide: ProjectService, useValue: { list$: projectList$.asObservable() } },
+        { provide: TaskService, useValue: { allTasks$: taskList$.asObservable() } },
+        {
+          provide: SyncWrapperService,
+          useValue: { afterCurrentSyncDoneOrSyncDisabled$: of(true) },
+        },
       ],
     });
 
@@ -67,7 +84,7 @@ describe('OnboardingPresetSelectionComponent', () => {
       expect(mockDialog.open).not.toHaveBeenCalled();
     });
 
-    it('dismisses onboarding when sync was enabled in the dialog', async () => {
+    it('keeps onboarding open when sync was enabled without restored data', async () => {
       let dismissedCount = 0;
       component.dismissed.subscribe(() => dismissedCount++);
 
@@ -77,6 +94,22 @@ describe('OnboardingPresetSelectionComponent', () => {
 
       cfgSignal.set({ sync: { isEnabled: true } });
       afterClosed$.next();
+      await flushAsync();
+
+      expect(dismissedCount).toBe(0);
+      expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBeNull();
+    });
+
+    it('dismisses onboarding when sync restored user data', async () => {
+      let dismissedCount = 0;
+      component.dismissed.subscribe(() => dismissedCount++);
+
+      await component.setupSync();
+      cfgSignal.set({ sync: { isEnabled: true } });
+      projectList$.next([{ id: 'inbox' }, { id: 'today' }, { id: 'project-1' }]);
+      afterClosed$.next();
+      await flushAsync();
 
       expect(dismissedCount).toBe(1);
       expect(localStorage.getItem(LS.ONBOARDING_PRESET_DONE)).toBe('true');

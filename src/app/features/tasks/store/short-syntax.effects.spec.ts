@@ -1,7 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, of, Subject } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, of, Subject } from 'rxjs';
 import { ShortSyntaxEffects } from './short-syntax.effects';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { addNewTagsFromShortSyntax } from './task.actions';
@@ -154,7 +154,7 @@ describe('ShortSyntaxEffects', () => {
         }),
       );
 
-      tick(100);
+      tick(1000);
       expect(emitted).toBe(false);
     }));
 
@@ -177,12 +177,36 @@ describe('ShortSyntaxEffects', () => {
         }),
       );
 
-      tick(100);
+      tick(1000);
 
       // The effect should emit an applyShortSyntax action
       expect(emittedAction).toBeDefined();
       expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
     }));
+
+    it('should keep date-only deadline syntax as deadlineDay', async () => {
+      const task = createTask('task-1', { title: 'Pay rent @monday !friday' });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+
+      const emittedActionPromise = firstValueFrom(effects.shortSyntax$);
+
+      actions$.next(
+        TaskSharedActions.addTask({
+          task,
+          workContextId: 'project-1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+        }),
+      );
+
+      const emittedAction: any = await emittedActionPromise;
+      expect(emittedAction).toBeDefined();
+      expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
+      expect(emittedAction.taskChanges.deadlineDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(emittedAction.taskChanges.deadlineWithTime).toBeUndefined();
+      expect(emittedAction.taskChanges.hasDeadlineTime).toBeUndefined();
+    });
 
     it('should NOT process update actions that do not change title', fakeAsync(() => {
       const task = createTask('task-1', { title: 'some task' });

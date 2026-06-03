@@ -45,12 +45,29 @@ class FocusModeForegroundService : Service() {
         var isStartPending: Boolean = false
             private set
 
+        @Volatile
+        private var isStopPendingAfterStart: Boolean = false
+
         fun markStartPending() {
             isStartPending = true
         }
 
         fun clearStartPending() {
             isStartPending = false
+        }
+
+        fun markStopPendingAfterStart() {
+            isStopPendingAfterStart = true
+        }
+
+        fun clearStopPendingAfterStart() {
+            isStopPendingAfterStart = false
+        }
+
+        fun consumeStopPendingAfterStart(): Boolean {
+            val shouldStop = isStopPendingAfterStart
+            isStopPendingAfterStart = false
+            return shouldStop
         }
 
         // Live timer state mirrored into the companion so JavaScriptInterface
@@ -148,11 +165,17 @@ class FocusModeForegroundService : Service() {
         // newly started services satisfy that contract.
         if (!ensureForegroundNotification()) {
             clearStartPending()
+            clearStopPendingAfterStart()
             reportForegroundFailure()
             stopAfterForegroundFailure(startId)
             return START_NOT_STICKY
         }
         clearStartPending()
+        if (consumeStopPendingAfterStart()) {
+            Log.d(TAG, "Consuming pending stop after foreground promotion")
+            stopFocusMode()
+            return START_NOT_STICKY
+        }
 
         when (intent?.action) {
             ACTION_START -> {
@@ -286,6 +309,7 @@ class FocusModeForegroundService : Service() {
         isPaused = false
         lastUpdateTimestamp = 0
         hasNotifiedCompletion = false
+        clearStopPendingAfterStart()
         stopSelf(startId)
     }
 
@@ -376,6 +400,7 @@ class FocusModeForegroundService : Service() {
         // before onStartCommand cleared it, drop the stale flag so the next cold
         // stop uses stopService() rather than needlessly re-spawning the service.
         clearStartPending()
+        clearStopPendingAfterStart()
         handler.removeCallbacks(updateRunnable)
     }
 

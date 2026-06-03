@@ -308,7 +308,10 @@ export class OperationLogSyncService {
     const downloadCallback = async (downloadOptions?: {
       forceFromSeq0?: boolean;
     }): Promise<DownloadResultForRejection> => {
-      const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
+      const outcome = await this.downloadRemoteOps(syncProvider, {
+        ...downloadOptions,
+        isNeverSynced: isNeverSyncedAtSyncStart,
+      });
       // Validation failure (if any during the nested download) is on the
       // session-validation latch — no need to thread the boolean back. (#7330)
       switch (outcome.kind) {

@@ -468,8 +468,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         const [year, month, day] = state.date.split('-').map(Number);
         const date = new Date(year, month - 1, day);
 
-        if (state.time) {
-          // TODO we need to add unit tests to confirm this works
+        if (state.time && isValidSplitTime(state.time)) {
           const [hours, minutes] = state.time.split(':').map(Number);
           date.setHours(hours, minutes, 0, 0);
           taskData.dueWithTime = date.getTime();

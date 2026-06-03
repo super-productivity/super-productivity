@@ -25,7 +25,16 @@ describe('normalizeClockStr', () => {
   it('does NOT invent a valid time from genuine garbage', () => {
     // out-of-range / non-numeric / incomplete values stay invalid after
     // normalization — recovery only strips a stray seconds component
-    ['abc', '25:00', '13:60', '12'].forEach((bad) => {
+    ['abc', '25:00', '13:60', '12', '13:30:abc', '13:30:60', '13:30:00:00'].forEach(
+      (bad) => {
+        expect(isValidSplitTime(normalizeClockStr(bad))).toBe(false);
+      },
+    );
+  });
+
+  it('leaves malformed third segments untouched', () => {
+    ['13:30:abc', '13:30:60', '13:30:00:00'].forEach((bad) => {
+      expect(normalizeClockStr(bad)).toBe(bad);
       expect(isValidSplitTime(normalizeClockStr(bad))).toBe(false);
     });
   });

@@ -580,6 +580,7 @@ describe('SyncWrapperService', () => {
     });
 
     it('should re-upload when localWinOpsCreated > 0 from download', async () => {
+      mockSyncService.hasSyncedOps.and.resolveTo(false);
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
           kind: 'ops_processed' as const,
@@ -603,6 +604,10 @@ describe('SyncWrapperService', () => {
 
       // Upload should be called twice: initial + re-upload for LWW ops
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(mockSyncService.uploadPendingOps.calls.allArgs()).toEqual([
+        [mockSyncCapableProvider, { isNeverSynced: true }],
+        [mockSyncCapableProvider, { isNeverSynced: true }],
+      ]);
     });
 
     it('should re-upload when localWinOpsCreated > 0 from upload', async () => {

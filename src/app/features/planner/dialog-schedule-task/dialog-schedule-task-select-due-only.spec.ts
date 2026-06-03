@@ -148,6 +148,36 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       });
     });
 
+    it('should return normalized time when seconds are present', async () => {
+      const testDate = new Date('2024-01-15T00:00:00.000Z');
+
+      component.selectedDate = testDate;
+      component.selectedTime = '13:30:00';
+
+      await component.submit();
+
+      expect(dialogRefSpy.close).toHaveBeenCalledWith({
+        date: testDate,
+        time: '13:30',
+        remindOption: TaskReminderOptionId.AtStart,
+      });
+    });
+
+    it('should return null time for malformed selected time', async () => {
+      const testDate = new Date('2024-01-15T00:00:00.000Z');
+
+      component.selectedDate = testDate;
+      component.selectedTime = 'abc';
+
+      await component.submit();
+
+      expect(dialogRefSpy.close).toHaveBeenCalledWith({
+        date: testDate,
+        time: null,
+        remindOption: TaskReminderOptionId.AtStart,
+      });
+    });
+
     it('should not submit if no date is selected', async () => {
       component.selectedDate = null;
       component.selectedTime = '14:30';

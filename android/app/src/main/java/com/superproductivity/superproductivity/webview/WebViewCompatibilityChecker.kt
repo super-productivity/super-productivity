@@ -474,13 +474,14 @@ object WebViewCompatibilityChecker {
      * provider data dir / variations seed — the most common cause of an init
      * failure on a device whose WebView version is otherwise current (the version
      * picker and Play Store that [openWebViewSettingsPage] targets do not fix
-     * this). Defaults to the standard system WebView package when the active
-     * provider could not be resolved (the norm for an init failure, where
-     * getCurrentWebViewPackage() threw).
+     * this). If the active provider could not be resolved (the norm for an init
+     * failure, where getCurrentWebViewPackage() threw), prefer the system WebView
+     * settings picker over a guessed package's App Info page.
      */
     fun openWebViewAppInfoPage(context: Context, providerPackage: String?) {
-        val pkg = providerPackageOrDefault(providerPackage)
-        if (startActivitySafely(context, webViewProviderDetailsIntent(pkg))) {
+        if (!providerPackage.isNullOrBlank() &&
+            startActivitySafely(context, webViewProviderDetailsIntent(providerPackage))
+        ) {
             return
         }
 
@@ -491,7 +492,7 @@ object WebViewCompatibilityChecker {
         }
 
         Log.w(TAG, "No activity available to open WebView app info; falling back to Play Store")
-        openWebViewUpdatePage(context, pkg)
+        openWebViewUpdatePage(context, providerPackage)
     }
 
     @VisibleForTesting

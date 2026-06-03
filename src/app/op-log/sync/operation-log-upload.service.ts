@@ -98,6 +98,10 @@ export class OperationLogUploadService {
         return;
       }
 
+      const isProviderEncryptionEnabled = syncProvider.isEncryptionEnabled
+        ? await syncProvider.isEncryptionEnabled()
+        : false;
+
       // Get the clientId from the first operation
       const clientId = pendingOps[0].op.clientId;
       // Use let so we can update between chunks to avoid duplicate piggybacked ops
@@ -109,6 +113,11 @@ export class OperationLogUploadService {
       const encryptKey = syncProvider.getEncryptKey
         ? await syncProvider.getEncryptKey()
         : undefined;
+      if (isProviderEncryptionEnabled && !encryptKey) {
+        throw new Error(
+          'OperationLogUploadService: Encryption is enabled but no encryption key is available.',
+        );
+      }
       const isEncryptionEnabled = !!encryptKey;
 
       // Separate full-state operations (backup imports, repairs) from regular ops

@@ -522,8 +522,10 @@ export class SyncWrapperService {
           `SyncWrapperService: Re-uploading ${pendingLwwOps} local-win op(s) from LWW ` +
             `(attempt ${lwwRetries}/${MAX_LWW_REUPLOAD_RETRIES})...`,
         );
-        const reuploadResult =
-          await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
+        const reuploadResult = await this._opLogSyncService.uploadPendingOps(
+          syncCapableProvider,
+          { isNeverSynced: isNeverSyncedAtSyncStart },
+        );
         pendingLwwOps =
           reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
       }

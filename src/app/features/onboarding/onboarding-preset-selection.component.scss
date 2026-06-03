@@ -224,6 +224,11 @@ h1 {
     text-decoration: underline;
   }
 
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
   &:disabled {
     cursor: default;
     opacity: 0.5;

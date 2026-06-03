@@ -176,11 +176,13 @@ class JavaScriptInterface(
                     // App is in the background: startService() is disallowed here.
                     // Only fall back to stopService() if no start is still pending
                     // — stopping a not-yet-promoted service would re-trigger the
-                    // same crash. If a start IS pending, leave it: the pending
-                    // start promotes and a later foreground sync stops it cleanly.
+                    // same crash. If a start IS pending, queue the stop so the
+                    // service can consume it immediately after promotion.
                     Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
                     if (!TrackingForegroundService.isStartPending) {
                         activity.stopService(Intent(activity, TrackingForegroundService::class.java))
+                    } else {
+                        TrackingForegroundService.markStopPendingAfterStart()
                     }
                 }
             } else {
@@ -265,11 +267,13 @@ class JavaScriptInterface(
                     // App is in the background: startService() is disallowed here.
                     // Only fall back to stopService() if no start is still pending
                     // — stopping a not-yet-promoted service would re-trigger the
-                    // same crash. If a start IS pending, leave it: the pending
-                    // start promotes and a later foreground sync stops it cleanly.
+                    // same crash. If a start IS pending, queue the stop so the
+                    // service can consume it immediately after promotion.
                     Log.d(TAG, "stopFocusModeService: app backgrounded, falling back to stopService()", e)
                     if (!FocusModeForegroundService.isStartPending) {
                         activity.stopService(Intent(activity, FocusModeForegroundService::class.java))
+                    } else {
+                        FocusModeForegroundService.markStopPendingAfterStart()
                     }
                 }
             } else {

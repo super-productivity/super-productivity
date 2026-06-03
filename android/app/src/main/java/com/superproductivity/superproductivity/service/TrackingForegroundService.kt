@@ -52,12 +52,29 @@ class TrackingForegroundService : Service() {
         var isStartPending: Boolean = false
             private set
 
+        @Volatile
+        private var isStopPendingAfterStart: Boolean = false
+
         fun markStartPending() {
             isStartPending = true
         }
 
         fun clearStartPending() {
             isStartPending = false
+        }
+
+        fun markStopPendingAfterStart() {
+            isStopPendingAfterStart = true
+        }
+
+        fun clearStopPendingAfterStart() {
+            isStopPendingAfterStart = false
+        }
+
+        fun consumeStopPendingAfterStart(): Boolean {
+            val shouldStop = isStopPendingAfterStart
+            isStopPendingAfterStart = false
+            return shouldStop
         }
 
         fun getElapsedMs(): Long {
@@ -95,11 +112,17 @@ class TrackingForegroundService : Service() {
         // newly started services satisfy that contract.
         if (!ensureForegroundNotification()) {
             clearStartPending()
+            clearStopPendingAfterStart()
             reportForegroundFailure()
             stopAfterForegroundFailure(startId)
             return START_NOT_STICKY
         }
         clearStartPending()
+        if (consumeStopPendingAfterStart()) {
+            Log.d(TAG, "Consuming pending stop after foreground promotion")
+            stopTracking()
+            return START_NOT_STICKY
+        }
 
         when (intent?.action) {
             ACTION_START -> {
@@ -192,6 +215,7 @@ class TrackingForegroundService : Service() {
         startTimestamp = 0
         accumulatedMs = 0
         taskTitle = ""
+        clearStopPendingAfterStart()
         stopSelf(startId)
     }
 
@@ -285,6 +309,7 @@ class TrackingForegroundService : Service() {
         // before onStartCommand cleared it, drop the stale flag so the next cold
         // stop uses stopService() rather than needlessly re-spawning the service.
         clearStartPending()
+        clearStopPendingAfterStart()
         handler.removeCallbacks(updateRunnable)
     }
 

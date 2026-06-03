@@ -4,6 +4,7 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
+import { TaskReminderOptionId } from '../task.model';
 
 describe('AddTaskBarParserService', () => {
   let service: AddTaskBarParserService;
@@ -200,6 +201,38 @@ describe('AddTaskBarParserService', () => {
         expect(time).toBe(currentTime);
       });
 
+      it('should preserve current date/time when parsing unrelated short syntax', async () => {
+        mockStateService.state.and.returnValue({
+          projectId: mockDefaultProject.id,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: '2024-02-20',
+          time: '14:30',
+          spent: null,
+          estimate: null,
+          cleanText: null,
+          remindOption: null,
+          attachments: [],
+          repeatQuickSetting: null,
+          deadlineDate: null,
+          deadlineTime: null,
+          deadlineRemindOption: null,
+        });
+
+        await service.parseAndUpdateText(
+          'Task #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+          '2024-02-21',
+          '08:00',
+        );
+
+        expect(mockStateService.updateDate).toHaveBeenCalledWith('2024-02-20', '14:30');
+      });
+
       it('should preserve current date but use default time when no current time', async () => {
         const currentDate = '2024-02-20';
         const defaultTime = '09:00';
@@ -334,6 +367,42 @@ describe('AddTaskBarParserService', () => {
           mockStateService.updateDeadline.calls.mostRecent().args;
         expect(typeof deadlineDate).toBe('string');
         expect(deadlineTime).toBe('12:00');
+      });
+
+      it('should preserve current deadline when parsing unrelated short syntax', async () => {
+        mockStateService.state.and.returnValue({
+          projectId: mockDefaultProject.id,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          spent: null,
+          estimate: null,
+          cleanText: null,
+          remindOption: null,
+          attachments: [],
+          repeatQuickSetting: null,
+          deadlineDate: '2024-03-10',
+          deadlineTime: '16:30',
+          deadlineRemindOption: TaskReminderOptionId.m15,
+        });
+
+        await service.parseAndUpdateText(
+          'Task #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(
+          '2024-03-10',
+          '16:30',
+        );
+        expect(mockStateService.updateDeadlineRemindOption).toHaveBeenCalledWith(
+          TaskReminderOptionId.m15,
+        );
       });
     });
 

@@ -18,6 +18,68 @@ import { DateService } from '../../../core/date/date.service';
 import { Log } from '../../../core/log';
 import { DeletedTaskIssueSidecarService } from '../../issue/two-way-sync/deleted-task-issue-sidecar.service';
 
+const _normalizeText = (v: string | null | undefined): string => (v ?? '').trim();
+
+const _sameStringSet = (
+  a: readonly string[] | null | undefined,
+  b: readonly string[] | null | undefined,
+): boolean => {
+  const normalizedA = [...(a ?? [])].sort();
+  const normalizedB = [...(b ?? [])].sort();
+  return (
+    normalizedA.length === normalizedB.length &&
+    normalizedA.every((value, index) => value === normalizedB[index])
+  );
+};
+
+const _hasSubtaskTemplateEdits = (
+  task: TaskWithSubTasks,
+  cfg: TaskRepeatCfg,
+): boolean => {
+  const templates = cfg.subTaskTemplates ?? [];
+
+  if (!templates.length) {
+    return task.subTasks.length > 0 || task.subTaskIds.length > 0;
+  }
+
+  if (
+    task.subTasks.length !== templates.length ||
+    task.subTaskIds.length !== templates.length
+  ) {
+    return true;
+  }
+
+  return task.subTasks.some((subTask, index) => {
+    const template = templates[index];
+    return (
+      subTask.title !== template.title ||
+      (subTask.timeEstimate ?? 0) !== (template.timeEstimate ?? 0) ||
+      _normalizeText(subTask.notes) !== _normalizeText(template.notes)
+    );
+  });
+};
+
+const _hasUserVisibleRepeatInstanceEdits = (
+  task: TaskWithSubTasks,
+  cfg: TaskRepeatCfg | undefined,
+): boolean => {
+  if (!cfg) {
+    return true;
+  }
+
+  return (
+    !!task.attachments?.length ||
+    _normalizeText(task.notes) !== _normalizeText(cfg.notes) ||
+    (cfg.title != null && task.title !== cfg.title) ||
+    !_sameStringSet(task.tagIds, cfg.tagIds) ||
+    (task.timeEstimate ?? 0) !== (cfg.defaultEstimate ?? 0) ||
+    !!(cfg.projectId && task.projectId !== cfg.projectId) ||
+    !!(task.deadlineDay || task.deadlineWithTime || task.deadlineRemindAt) ||
+    !!(task.remindAt && !cfg.remindAt) ||
+    _hasSubtaskTemplateEdits(task, cfg)
+  );
+};
+
 @Injectable()
 export class TaskRepeatCleanupEffects {
   private _store = inject(Store);
@@ -141,8 +203,7 @@ export class TaskRepeatCleanupEffects {
                   // creation time than today's, so only remove instances that
                   // are genuinely OVERDUE (due before today) — never today's or
                   // a future instance. And never discard a prior-day instance
-                  // the user actually edited (attachments or notes that differ
-                  // from the template).
+                  // the user actually edited.
                   if (isSkipOverdueGroup) {
                     const dueStr = task.dueWithTime
                       ? getDbDateStr(task.dueWithTime)
@@ -150,10 +211,7 @@ export class TaskRepeatCleanupEffects {
                     if (!dueStr || dueStr >= todayStr) {
                       continue;
                     }
-                    if (task.attachments?.length) {
-                      continue;
-                    }
-                    if ((task.notes ?? '').trim() !== (cfg?.notes ?? '').trim()) {
+                    if (_hasUserVisibleRepeatInstanceEdits(task, cfg)) {
                       continue;
                     }
                   }

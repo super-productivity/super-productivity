@@ -463,11 +463,57 @@ describe('OperationLogSyncService', () => {
 
           // Call the callback and verify it delegates to downloadRemoteOps
           await capturedCallback();
-          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, undefined);
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            isNeverSynced: false,
+          });
 
           // Test with forceFromSeq0 option
           await capturedCallback({ forceFromSeq0: true });
-          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, { forceFromSeq0: true });
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            forceFromSeq0: true,
+            isNeverSynced: false,
+          });
+        });
+
+        it('should preserve the pre-upload never-synced snapshot for rejected-op downloads', async () => {
+          opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+          uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
+            opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+            return {
+              uploadedCount: 0,
+              piggybackedOps: [],
+              rejectedCount: 1,
+              rejectedOps: [
+                {
+                  opId: 'local-op-1',
+                  error: 'Concurrent',
+                  errorCode: 'CONFLICT_CONCURRENT',
+                },
+              ],
+            };
+          });
+
+          let capturedCallback: any;
+          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
+            async (_ops, callback) => {
+              capturedCallback = callback;
+              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+            },
+          );
+
+          const downloadSpy = spyOn(service, 'downloadRemoteOps').and.returnValue(
+            Promise.resolve({
+              kind: 'no_new_ops' as const,
+            }),
+          );
+
+          await service.uploadPendingOps(mockProvider);
+          await capturedCallback({ forceFromSeq0: true });
+
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            forceFromSeq0: true,
+            isNeverSynced: true,
+          });
         });
 
         it('should add mergedOpsFromRejection to localWinOpsCreated in result', async () => {
