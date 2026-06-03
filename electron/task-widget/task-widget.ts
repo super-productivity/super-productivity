@@ -10,6 +10,14 @@ import { IS_MAC } from '../common.const';
 let taskWidgetWin: BrowserWindow | null = null;
 let isTaskWidgetEnabled = false;
 let isAlwaysShow = false;
+// Set when the user explicitly reveals the widget via the global shortcut
+// (`globalToggleTaskWidget`) while the main window is visible. Like
+// `isAlwaysShow`, it suppresses the automatic "hide the widget when the main
+// window is shown/focused" behavior — but only until the user hides the widget
+// again (toggles off) or opens the app from the widget. This gives the shortcut
+// a sticky "user-forced visible" effect instead of being immediately undone by
+// the next focus event.
+let isUserForcedVisible = false;
 let currentTask: TaskCopy | null = null;
 let isPomodoroEnabled = false;
 let currentPomodoroSessionTime = 0;
@@ -26,6 +34,14 @@ let boundsDebounceTimer: NodeJS.Timeout | null = null;
 
 export const updateTaskWidgetEnabled = (isEnabled: boolean): void => {
   isTaskWidgetEnabled = isEnabled;
+
+  if (!isEnabled) {
+    // Clear regardless of whether the window currently exists: disabling can
+    // happen while taskWidgetWin is null (closed by the OS, or mid async
+    // re-create), in which case the destroyTaskWidget() reset below is skipped
+    // and a stale flag would leak into the next enable.
+    isUserForcedVisible = false;
+  }
 
   if (isEnabled && !taskWidgetWin && !isCreatingWindow) {
     initListeners();
@@ -65,6 +81,7 @@ export const destroyTaskWidget = (): void => {
   // Disable task widget to prevent close event prevention
   isTaskWidgetEnabled = false;
   isCreatingWindow = false;
+  isUserForcedVisible = false;
 
   // Remove IPC listeners
   ipcMain.removeAllListeners('task-widget-show-main-window');
@@ -190,6 +207,10 @@ const createTaskWidgetWindow = async (): Promise<void> => {
 
   taskWidgetWin.on('closed', () => {
     taskWidgetWin = null;
+    // Tie "user-forced visible" to the window's lifetime: once the window is
+    // gone the sticky flag has no widget to keep visible, so don't let it
+    // linger into a future re-create.
+    isUserForcedVisible = false;
   });
 
   taskWidgetWin.on('ready-to-show', () => {
@@ -284,6 +305,27 @@ export const hideTaskWidget = (): void => {
   }
 };
 
+/**
+ * Toggles the task widget's visibility. Intended for the global shortcut
+ * (`globalToggleTaskWidget`): it only acts when the task widget feature is
+ * enabled in settings and never changes that persisted enabled/disabled
+ * preference — it just shows or hides the existing widget.
+ */
+export const toggleTaskWidgetVisibility = (): void => {
+  if (!isTaskWidgetEnabled) {
+    return;
+  }
+
+  if (taskWidgetWin && !taskWidgetWin.isDestroyed() && taskWidgetWin.isVisible()) {
+    isUserForcedVisible = false;
+    hideTaskWidget();
+    return;
+  }
+
+  isUserForcedVisible = true;
+  showTaskWidget();
+};
+
 const initListeners = (): void => {
   if (listenersRegistered) {
     return;
@@ -299,6 +341,10 @@ const initListeners = (): void => {
       // event.preventDefault() on 'minimize' has no effect).
       mainWindow.restore();
       mainWindow.show();
+      // Opening the app from the widget is an explicit "I'm going to the app"
+      // gesture, so clear any sticky user-forced visibility and let the widget
+      // follow the normal companion behavior again.
+      isUserForcedVisible = false;
       if (!isAlwaysShow) {
         hideTaskWidget();
       }
@@ -373,6 +419,8 @@ export const updateTaskWidgetAlwaysShow = (alwaysShow: boolean): void => {
 };
 
 export const getIsTaskWidgetAlwaysShow = (): boolean => isAlwaysShow;
+
+export const getIsTaskWidgetUserForcedVisible = (): boolean => isUserForcedVisible;
 
 export const updateTaskWidgetOpacity = (opacity: number): void => {
   currentOpacity = opacity;

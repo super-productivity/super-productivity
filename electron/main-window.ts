@@ -19,6 +19,7 @@ import { IS_MAC, IS_GNOME_DESKTOP } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
+  getIsTaskWidgetUserForcedVisible,
   hideTaskWidget,
   showTaskWidget,
 } from './task-widget/task-widget';
@@ -452,21 +453,27 @@ function initWinEventListeners(app: Electron.App): void {
   appCloseHandler(app);
   appMinimizeHandler(app);
 
-  // Handle restore and show events to hide task widget
+  // Handle restore and show events to hide task widget. `getIsTaskWidgetUserForcedVisible()`
+  // keeps the widget up when the user explicitly revealed it via the global shortcut.
   mainWin.on('restore', () => {
-    if (!getIsTaskWidgetAlwaysShow()) {
+    if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
       hideTaskWidget();
     }
   });
 
   mainWin.on('show', () => {
-    if (!getIsTaskWidgetAlwaysShow()) {
+    if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
       hideTaskWidget();
     }
   });
 
   mainWin.on('focus', () => {
-    if (mainWin.isVisible() && !mainWin.isMinimized() && !getIsTaskWidgetAlwaysShow()) {
+    if (
+      mainWin.isVisible() &&
+      !mainWin.isMinimized() &&
+      !getIsTaskWidgetAlwaysShow() &&
+      !getIsTaskWidgetUserForcedVisible()
+    ) {
       hideTaskWidget();
     }
   });
