@@ -148,7 +148,13 @@ class JavaScriptInterface(
                 putExtra(TrackingForegroundService.EXTRA_TASK_TITLE, taskTitle)
                 putExtra(TrackingForegroundService.EXTRA_TIME_SPENT, timeSpentMs)
             }
-            ContextCompat.startForegroundService(activity, intent)
+            TrackingForegroundService.markStartPending()
+            try {
+                ContextCompat.startForegroundService(activity, intent)
+            } catch (e: Exception) {
+                TrackingForegroundService.clearStartPending()
+                throw e
+            }
         }
     }
 
@@ -157,7 +163,29 @@ class JavaScriptInterface(
     fun stopTrackingService() {
         safeCall("Failed to stop tracking service") {
             val intent = Intent(activity, TrackingForegroundService::class.java)
-            activity.stopService(intent)
+            if (TrackingForegroundService.isStartPending || TrackingForegroundService.isTracking) {
+                // A startForegroundService() may still be promoting: stopping via
+                // stopService() now could tear it down before startForeground()
+                // runs and crash with ForegroundServiceDidNotStartInTimeException.
+                // Routing as ACTION_STOP through onStartCommand lets it promote
+                // first, then stop cleanly.
+                intent.action = TrackingForegroundService.ACTION_STOP
+                try {
+                    activity.startService(intent)
+                } catch (e: IllegalStateException) {
+                    // App is in the background: startService() is disallowed here.
+                    // Only fall back to stopService() if no start is still pending
+                    // — stopping a not-yet-promoted service would re-trigger the
+                    // same crash. If a start IS pending, leave it: the pending
+                    // start promotes and a later foreground sync stops it cleanly.
+                    Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
+                    if (!TrackingForegroundService.isStartPending) {
+                        activity.stopService(Intent(activity, TrackingForegroundService::class.java))
+                    }
+                }
+            } else {
+                activity.stopService(intent)
+            }
         }
     }
 
@@ -209,7 +237,13 @@ class JavaScriptInterface(
                 putExtra(FocusModeForegroundService.EXTRA_IS_BREAK, isBreak)
                 putExtra(FocusModeForegroundService.EXTRA_IS_PAUSED, isPaused)
             }
-            ContextCompat.startForegroundService(activity, intent)
+            FocusModeForegroundService.markStartPending()
+            try {
+                ContextCompat.startForegroundService(activity, intent)
+            } catch (e: Exception) {
+                FocusModeForegroundService.clearStartPending()
+                throw e
+            }
         }
     }
 
@@ -218,7 +252,29 @@ class JavaScriptInterface(
     fun stopFocusModeService() {
         safeCall("Failed to stop focus mode service") {
             val intent = Intent(activity, FocusModeForegroundService::class.java)
-            activity.stopService(intent)
+            if (FocusModeForegroundService.isStartPending || FocusModeForegroundService.isRunning) {
+                // A startForegroundService() may still be promoting: stopping via
+                // stopService() now could tear it down before startForeground()
+                // runs and crash with ForegroundServiceDidNotStartInTimeException.
+                // Routing as ACTION_STOP through onStartCommand lets it promote
+                // first, then stop cleanly.
+                intent.action = FocusModeForegroundService.ACTION_STOP
+                try {
+                    activity.startService(intent)
+                } catch (e: IllegalStateException) {
+                    // App is in the background: startService() is disallowed here.
+                    // Only fall back to stopService() if no start is still pending
+                    // — stopping a not-yet-promoted service would re-trigger the
+                    // same crash. If a start IS pending, leave it: the pending
+                    // start promotes and a later foreground sync stops it cleanly.
+                    Log.d(TAG, "stopFocusModeService: app backgrounded, falling back to stopService()", e)
+                    if (!FocusModeForegroundService.isStartPending) {
+                        activity.stopService(Intent(activity, FocusModeForegroundService::class.java))
+                    }
+                }
+            } else {
+                activity.stopService(intent)
+            }
         }
     }
 
