@@ -250,6 +250,11 @@ export class OperationLogSyncService {
             rejectedOps: [],
           };
         } else {
+          if (piggybackedConflict.discardablePendingOpIds.length > 0) {
+            await this.opLogStore.markRejected(
+              piggybackedConflict.discardablePendingOpIds,
+            );
+          }
           OpLog.normal(
             `OperationLogSyncService: Accepting piggybacked ${fullStateOp.opType} from client ` +
               `${fullStateOp.clientId} without conflict dialog; ` +
@@ -678,6 +683,9 @@ export class OperationLogSyncService {
         // the session-validation latch — wrapper reads it. (#7330)
         return { kind: 'no_new_ops' };
       } else {
+        if (incomingConflict.discardablePendingOpIds.length > 0) {
+          await this.opLogStore.markRejected(incomingConflict.discardablePendingOpIds);
+        }
         OpLog.normal(
           `OperationLogSyncService: Accepting incoming ${fullStateOp.opType} from client ` +
             `${fullStateOp.clientId} without conflict dialog; ` +

@@ -112,6 +112,37 @@ describe('SyncImportConflictGateService', () => {
     expect(result.dialogData).toBeUndefined();
   });
 
+  it('should not produce dialog data when pending task creates are startup example tasks', async () => {
+    const incomingSyncImport = createOperation();
+    const pendingExampleTaskEntry = createEntry(
+      createOperation({
+        id: 'local-example-task-create',
+        actionType: ActionType.TASK_SHARED_ADD,
+        opType: OpType.Create,
+        entityType: 'TASK',
+        entityId: 'example-task-1',
+        payload: {
+          actionPayload: {
+            task: { id: 'example-task-1' },
+            isExampleTask: true,
+          },
+          entityChanges: [],
+        },
+        clientId: 'client-A',
+        vectorClock: { clientA: 1 },
+      }),
+    );
+    opLogStoreSpy.getUnsynced.and.resolveTo([pendingExampleTaskEntry]);
+
+    const result = await service.checkIncomingFullStateConflict([incomingSyncImport]);
+
+    expect(result.fullStateOp).toBe(incomingSyncImport);
+    expect(result.pendingOps).toEqual([pendingExampleTaskEntry]);
+    expect(result.hasMeaningfulPending).toBeFalse();
+    expect(result.discardablePendingOpIds).toEqual(['local-example-task-create']);
+    expect(result.dialogData).toBeUndefined();
+  });
+
   it('should treat pending full-state ops as meaningful', async () => {
     const incomingSyncImport = createOperation({
       id: 'incoming-sync-import',

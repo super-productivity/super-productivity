@@ -77,7 +77,13 @@ export class ExampleTasksService {
             additional: { notes: translations[def.notesKey] },
             ...TASK_CONTEXT,
           });
-          this._store.dispatch(TaskSharedActions.addTask({ task, ...TASK_CONTEXT }));
+          this._store.dispatch(
+            TaskSharedActions.addTask({
+              task,
+              ...TASK_CONTEXT,
+              isExampleTask: true,
+            }),
+          );
         }
         localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
       });

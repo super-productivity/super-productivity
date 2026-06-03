@@ -1,6 +1,8 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
+  ActionType,
+  extractActionPayload,
   FULL_STATE_OP_TYPES,
   Operation,
   OperationLogEntry,
@@ -11,10 +13,25 @@ import { SyncImportConflictData } from './dialog-sync-import-conflict/dialog-syn
 
 const USER_ENTITY_TYPES = new Set(['TASK', 'PROJECT', 'TAG', 'NOTE']);
 
+const isExampleTaskCreateOp = (entry: OperationLogEntry): boolean => {
+  const { op } = entry;
+  if (
+    op.actionType !== ActionType.TASK_SHARED_ADD ||
+    op.opType !== OpType.Create ||
+    op.entityType !== 'TASK'
+  ) {
+    return false;
+  }
+
+  const actionPayload = extractActionPayload(op.payload);
+  return actionPayload['isExampleTask'] === true;
+};
+
 export interface IncomingFullStateConflictGateResult {
   fullStateOp?: Operation;
   pendingOps: OperationLogEntry[];
   hasMeaningfulPending: boolean;
+  discardablePendingOpIds: string[];
   dialogData?: SyncImportConflictData;
 }
 
@@ -43,6 +60,9 @@ export class SyncImportConflictGateService {
       if (FULL_STATE_OP_TYPES.has(entry.op.opType as OpType)) {
         return true;
       }
+      if (isExampleTaskCreateOp(entry)) {
+        return false;
+      }
       return (
         USER_ENTITY_TYPES.has(entry.op.entityType) &&
         (entry.op.opType === OpType.Create ||
@@ -62,6 +82,7 @@ export class SyncImportConflictGateService {
       return {
         pendingOps: [],
         hasMeaningfulPending: false,
+        discardablePendingOpIds: [],
       };
     }
 
@@ -74,11 +95,15 @@ export class SyncImportConflictGateService {
 
     const pendingOps = await this.opLogStore.getUnsynced();
     const hasMeaningfulPending = this.hasMeaningfulPendingOps(pendingOps);
+    const discardablePendingOpIds = pendingOps
+      .filter(isExampleTaskCreateOp)
+      .map((entry) => entry.op.id);
 
     const result = {
       fullStateOp,
       pendingOps,
       hasMeaningfulPending,
+      discardablePendingOpIds,
     };
 
     if (!hasMeaningfulPending) {

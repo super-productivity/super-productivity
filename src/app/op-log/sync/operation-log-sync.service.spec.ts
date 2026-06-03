@@ -2528,6 +2528,87 @@ describe('OperationLogSyncService', () => {
       expect(mockProvider.setLastServerSeq).toHaveBeenCalledWith(42);
       expect(result.kind).toBe('ops_processed');
     });
+
+    it('should process incoming SYNC_IMPORT when pending ops are only config and startup example tasks', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+
+      const pendingConfigEntry: OperationLogEntry = {
+        seq: 1,
+        op: {
+          id: 'local-config-op-1',
+          clientId: 'client-A',
+          actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+          opType: OpType.Update,
+          entityType: 'GLOBAL_CONFIG',
+          entityId: 'sync',
+          payload: { sectionKey: 'sync' },
+          vectorClock: { clientA: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        appliedAt: Date.now(),
+        source: 'local',
+      };
+      const pendingExampleTaskEntries: OperationLogEntry[] = [1, 2, 3, 4].map(
+        (counter) => ({
+          seq: counter + 1,
+          op: {
+            id: `local-example-task-op-${counter}`,
+            clientId: 'client-A',
+            actionType: ActionType.TASK_SHARED_ADD,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: `example-task-${counter}`,
+            payload: {
+              actionPayload: {
+                task: { id: `example-task-${counter}` },
+                isExampleTask: true,
+              },
+              entityChanges: [],
+            },
+            vectorClock: { clientA: counter + 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        }),
+      );
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        pendingConfigEntry,
+        ...pendingExampleTaskEntries,
+      ]);
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.downloadRemoteOps(mockProvider);
+
+      expect(
+        syncImportConflictDialogServiceSpy.showConflictDialog,
+      ).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.markRejected).toHaveBeenCalledWith([
+        'local-example-task-op-1',
+        'local-example-task-op-2',
+        'local-example-task-op-3',
+        'local-example-task-op-4',
+      ]);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+        incomingSyncImport,
+      ]);
+      expect(mockProvider.setLastServerSeq).toHaveBeenCalledWith(42);
+      expect(result.kind).toBe('ops_processed');
+    });
   });
 
   describe('piggybacked SYNC_IMPORT conflict dialog', () => {

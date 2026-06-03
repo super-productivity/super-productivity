@@ -93,6 +93,7 @@ describe('ExampleTasksService', () => {
       expect(action.workContextType).toBe(WorkContextType.PROJECT);
       expect(action.isAddToBacklog).toBe(false);
       expect(action.isAddToBottom).toBe(true);
+      expect(action.isExampleTask).toBe(true);
     }
     expect(localStorage.getItem(LS.EXAMPLE_TASKS_CREATED)).toBe('true');
   });
