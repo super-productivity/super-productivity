@@ -423,6 +423,8 @@ export const TaskSharedActions = createActionGroup({
         remindAt?: number | null;
         isMoveToBacklog?: boolean;
       };
+      autoPlanToday?: string;
+      autoPlanStartOfNextDayDiffMs?: number;
     }) => ({
       ...props,
       meta: {
