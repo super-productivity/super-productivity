@@ -235,11 +235,21 @@ describe('TaskRepeatCleanupEffects', () => {
   });
 
   describe('skipOverdue cross-day cleanup (#7977)', () => {
-    const skipOverdueCfg = (id: string, notes = ''): TaskRepeatCfg =>
-      ({ ...DEFAULT_TASK_REPEAT_CFG, id, skipOverdue: true, notes }) as TaskRepeatCfg;
+    const skipOverdueCfg = (
+      id: string,
+      notes = '',
+      overrides: Partial<TaskRepeatCfg> = {},
+    ): TaskRepeatCfg =>
+      ({
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id,
+        skipOverdue: true,
+        notes,
+        ...overrides,
+      }) as TaskRepeatCfg;
 
     it("deletes yesterday's EMPTY overdue instance once today's instance exists", fakeAsync(() => {
-      repeatCfgs$.next([skipOverdueCfg('cfg-so')]);
+      repeatCfgs$.next([skipOverdueCfg('cfg-so', '', { title: 'Water plants' })]);
       const yesterdayInstance: Task = {
         ...DEFAULT_TASK,
         projectId: 'p1',
@@ -274,6 +284,198 @@ describe('TaskRepeatCleanupEffects', () => {
       expect(getDispatchedDeleteIds())
         .withContext('the empty stale overdue instance is removed, today survives')
         .toEqual(['so-yesterday']);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance whose title differs from the template', fakeAsync(() => {
+      repeatCfgs$.next([skipOverdueCfg('cfg-title', '', { title: 'Water plants' })]);
+      const yesterdayEdited: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'title-yesterday',
+        title: 'Water plants - balcony',
+        repeatCfgId: 'cfg-title',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'title-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-title',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayEdited),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an instance with a user-edited title must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance whose estimate differs from the template', fakeAsync(() => {
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-estimate', '', {
+          title: 'Water plants',
+          defaultEstimate: 15 * 60 * 1000,
+        }),
+      ]);
+      const yesterdayEdited: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'estimate-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-estimate',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+        timeEstimate: 30 * 60 * 1000,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'estimate-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-estimate',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+        timeEstimate: 15 * 60 * 1000,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayEdited),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an instance with a user-edited estimate must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance whose tags differ from the template', fakeAsync(() => {
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-tags', '', { title: 'Water plants', tagIds: ['tag-a'] }),
+      ]);
+      const yesterdayEdited: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'tags-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-tags',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+        tagIds: ['tag-a', 'tag-user-added'],
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'tags-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-tags',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+        tagIds: ['tag-a'],
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayEdited),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an instance with user-edited tags must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance whose subtask template was edited', fakeAsync(() => {
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-subtasks', '', {
+          title: 'Water plants',
+          shouldInheritSubtasks: true,
+          subTaskTemplates: [{ title: 'Check soil', timeEstimate: 0, notes: '' }],
+        }),
+      ]);
+      const yesterdayEdited = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtasks-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-subtasks',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+      yesterdayEdited.subTasks.push({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'edited-subtask',
+        title: 'Check dry soil',
+        parentId: 'subtasks-yesterday',
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+      const todayInstance = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtasks-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-subtasks',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+      todayInstance.subTasks.push({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'template-subtask',
+        title: 'Check soil',
+        parentId: 'subtasks-today',
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+
+      repeatableTasks$.next([yesterdayEdited, todayInstance]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an instance with user-edited subtasks must be preserved')
+        .toEqual([]);
 
       sub.unsubscribe();
     }));
@@ -456,6 +658,113 @@ describe('TaskRepeatCleanupEffects', () => {
 
       expect(getDispatchedDeleteIds())
         .withContext('an instance with an attachment must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance whose subtask was completed by the user', fakeAsync(() => {
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-sub-done', '', {
+          title: 'Water plants',
+          shouldInheritSubtasks: true,
+          subTaskTemplates: [{ title: 'Check soil', timeEstimate: 0, notes: '' }],
+        }),
+      ]);
+      const yesterdayWithDoneSub = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'sub-done-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-sub-done',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+      // Title/notes/estimate match the template — only difference is the user
+      // marked the subtask done. hasSubtaskProgress upstream of the unmodified
+      // gate must keep the parent alive.
+      yesterdayWithDoneSub.subTasks.push({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'done-subtask',
+        title: 'Check soil',
+        parentId: 'sub-done-yesterday',
+        isDone: true,
+        timeSpent: 0,
+      } as Task);
+      const todayInstance = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'sub-done-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-sub-done',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+      todayInstance.subTasks.push({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'today-subtask',
+        title: 'Check soil',
+        parentId: 'sub-done-today',
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+
+      repeatableTasks$.next([yesterdayWithDoneSub, todayInstance]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('a parent with a completed subtask must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance the user moved to a different project', fakeAsync(() => {
+      // cfg has no projectId → the "did the user move it?" check falls back
+      // to comparing against the newest instance's projectId. Moving the older
+      // instance must look like a user edit and be preserved.
+      repeatCfgs$.next([skipOverdueCfg('cfg-moved', '', { title: 'Water plants' })]);
+      const yesterdayMoved: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p2',
+        id: 'moved-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-moved',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'moved-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-moved',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayMoved),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an instance moved to a different project must be preserved')
         .toEqual([]);
 
       sub.unsubscribe();
