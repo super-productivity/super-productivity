@@ -300,6 +300,7 @@
       </ng-container>
       <ng-container input-value></ng-container>
     </task-detail-item>
+    <span class="paste-hint">{{ pasteImageHintKey | translate }}</span>
   }
   @if (!task().parentId && !task().issueId) {
     <task-detail-item
