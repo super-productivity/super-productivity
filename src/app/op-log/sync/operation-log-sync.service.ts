@@ -250,6 +250,13 @@ export class OperationLogSyncService {
             rejectedOps: [],
           };
         } else {
+          // Known limitation (upload→piggyback path): example-task ops accepted earlier in
+          // THIS same upload round were already marked synced, so they have left
+          // getUnsynced() and are absent from discardablePendingOpIds here — they remain on
+          // the server. State stays correct because receivers drop them as CONCURRENT
+          // against the import (SyncImportFilterService). Only reachable in the narrow window
+          // where example tasks are created on a still-empty server and uploaded just as a
+          // remote import arrives; afterInitialSyncDoneStrict$ shrinks it further.
           await this._discardExampleTaskOps(piggybackedConflict.discardablePendingOpIds);
           OpLog.normal(
             `OperationLogSyncService: Accepting piggybacked ${fullStateOp.opType} from client ` +
@@ -442,6 +449,12 @@ export class OperationLogSyncService {
         // The store check catches provider-switch scenarios: user switches from
         // SuperSync→Dropbox, only has a config-change op (not "meaningful"), but the
         // store is full of real data that would be overwritten by old Dropbox state.
+        //
+        // Known limitation: hasMeaningfulStoreData() counts ANY task, including onboarding
+        // example tasks (they carry the isExampleTask marker only on their op-log ops, not
+        // in NgRx state). So a fresh file-based client (Dropbox/WebDAV) that created example
+        // tasks while sync was disabled — or before a slow first sync completed — can still
+        // hit this dialog. afterInitialSyncDoneStrict$ shrinks but does not close that window.
         const hasMeaningfulUserData =
           this.syncImportConflictGateService.hasMeaningfulPendingOps(unsyncedOps) ||
           this.syncLocalStateService.hasMeaningfulStoreData();
