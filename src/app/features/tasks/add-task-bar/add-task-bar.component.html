@@ -152,7 +152,11 @@
   #mentionListTemplate
   let-item="item"
 >
-  <select-option-row [item]="item"></select-option-row>
+  @if (item.id) {
+    <select-option-row [item]="item"></select-option-row>
+  } @else {
+    {{ item.title }}
+  }
 </ng-template>
 
 @if (isSearchLoading()) {
