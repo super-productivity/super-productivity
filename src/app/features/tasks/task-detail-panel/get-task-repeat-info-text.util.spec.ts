@@ -189,6 +189,53 @@ describe('getTaskRepeatInfoText()', () => {
           monthlyWeekday: 6,
         },
       ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+        { timeStr: '', ordinalStr: 'last', weekdayStr: 'Monday' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyWeekOfMonth: -1,
+          monthlyWeekday: 1,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+        { timeStr: '', ordinalStr: 'second', weekdayStr: 'Wednesday' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyWeekOfMonth: 2,
+          monthlyWeekday: 3,
+          monthlyLastDay: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_CURRENT_DATE,
+        { timeStr: '', dateDayStr: '24' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          startDate: '2022-02-24',
+          monthlyWeekOfMonth: 5,
+          monthlyWeekday: 6,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_CURRENT_DATE,
+        { timeStr: '', dateDayStr: '24' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          startDate: '2022-02-24',
+          monthlyWeekOfMonth: 1,
+          monthlyWeekday: undefined,
+        },
+      ],
 
       [
         T.F.TASK_REPEAT.ADD_INFO_PANEL.CUSTOM_WEEKLY,
