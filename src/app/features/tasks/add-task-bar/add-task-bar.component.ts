@@ -84,6 +84,7 @@ import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { Tag } from '../../tag/tag.model';
 
 @Component({
   selector: 'add-task-bar',
@@ -887,18 +888,17 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this.isScheduleDialogOpen.set(isOpen);
   }
 
-  getFolderContext(item: any): string | null {
-    if (!item || !item.id) return null;
-    if ('backlogTaskIds' in item) {
-      return this._menuTreeService.projectFolderMap().get(item.id) || null;
-    }
-    if ('taskIds' in item && !('backlogTaskIds' in item)) {
-      return this._menuTreeService.tagFolderMap().get(item.id) || null;
-    }
-    return null;
+  getFolderContext(item: unknown): string | null {
+    if (!item || typeof item !== 'object' || !('id' in item)) return null;
+    const id = (item as { id: string }).id;
+    return (
+      this._menuTreeService.projectFolderMap().get(id) ||
+      this._menuTreeService.tagFolderMap().get(id) ||
+      null
+    );
   }
 
-  isEmojiIcon(tag: any): boolean {
+  isEmojiIcon(tag: Tag): boolean {
     const icon = tag?.icon;
     return icon ? isSingleEmoji(icon) : false;
   }

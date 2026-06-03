@@ -79,6 +79,7 @@ import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
+import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -118,6 +119,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
+  private readonly _menuTreeService = inject(MenuTreeService);
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
@@ -164,6 +166,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     switchMap((pid) => this._projectService.getProjectsWithoutIdSorted$(pid || null)),
   );
   toggleTagList = this._tagService.tagsNoMyDayAndNoListSorted;
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
   isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
     this._workContextService.activeWorkContext$.pipe(

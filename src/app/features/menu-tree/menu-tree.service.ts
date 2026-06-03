@@ -20,6 +20,8 @@ import {
   selectMenuTreeProjectTree,
   selectMenuTreeTagTree,
 } from './store/menu-tree.selectors';
+import { selectAllProjects } from '../project/store/project.selectors';
+import { selectAllTags } from '../tag/store/tag.reducer';
 import {
   updateProjectTree,
   updateTagTree,
@@ -44,16 +46,39 @@ export class MenuTreeService {
     },
   );
 
+  private readonly _allProjects = toSignal(this._store.select(selectAllProjects), {
+    initialValue: [] as Project[],
+  });
+  private readonly _allTags = toSignal(this._store.select(selectAllTags), {
+    initialValue: [] as Tag[],
+  });
+
   readonly projectTree = computed(() => this._projectTree());
   readonly tagTree = computed(() => this._tagTree());
 
   readonly projectFolderMap = computed(() => {
+    const projects = this._allProjects();
+    const projectMap = new Map<string, Project>();
+    const titleCounts = new Map<string, number>();
+
+    for (const p of projects) {
+      projectMap.set(p.id, p);
+      const title = p.title.trim().toLowerCase();
+      titleCounts.set(title, (titleCounts.get(title) || 0) + 1);
+    }
+
     const folderMap = new Map<string, string>();
     const walk = (nodes: MenuTreeTreeNode[], path: string[] = []): void => {
       for (const node of nodes) {
         if (node.k === MenuTreeKind.PROJECT) {
           if (path.length > 0) {
-            folderMap.set(node.id, path.join(' › '));
+            const project = projectMap.get(node.id);
+            if (project) {
+              const titleKey = project.title.trim().toLowerCase();
+              if ((titleCounts.get(titleKey) || 0) > 1) {
+                folderMap.set(node.id, path.join(' › '));
+              }
+            }
           }
         } else if (node.k === MenuTreeKind.FOLDER) {
           walk(node.children, [...path, node.name]);
@@ -65,12 +90,28 @@ export class MenuTreeService {
   });
 
   readonly tagFolderMap = computed(() => {
+    const tags = this._allTags();
+    const tagMap = new Map<string, Tag>();
+    const titleCounts = new Map<string, number>();
+
+    for (const t of tags) {
+      tagMap.set(t.id, t);
+      const title = t.title.trim().toLowerCase();
+      titleCounts.set(title, (titleCounts.get(title) || 0) + 1);
+    }
+
     const folderMap = new Map<string, string>();
     const walk = (nodes: MenuTreeTreeNode[], path: string[] = []): void => {
       for (const node of nodes) {
         if (node.k === MenuTreeKind.TAG) {
           if (path.length > 0) {
-            folderMap.set(node.id, path.join(' › '));
+            const tag = tagMap.get(node.id);
+            if (tag) {
+              const titleKey = tag.title.trim().toLowerCase();
+              if ((titleCounts.get(titleKey) || 0) > 1) {
+                folderMap.set(node.id, path.join(' › '));
+              }
+            }
           }
         } else if (node.k === MenuTreeKind.FOLDER) {
           walk(node.children, [...path, node.name]);
@@ -81,9 +122,9 @@ export class MenuTreeService {
     return folderMap;
   });
 
-  readonly projectFolders$ = (
-    this._store.select(selectMenuTreeProjectTree) || of([])
-  ).pipe(map((tree) => this._collectFolders(tree)));
+  readonly projectFolders$ = this._store
+    .select(selectMenuTreeProjectTree)
+    .pipe(map((tree) => this._collectFolders(tree)));
 
   hasProjectTree(): boolean {
     return this.projectTree().length > 0;

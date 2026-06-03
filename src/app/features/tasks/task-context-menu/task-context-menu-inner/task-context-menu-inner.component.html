@@ -382,6 +382,12 @@
           >{{ project.icon || 'list' }}</mat-icon
         >
         {{ project.title }}
+        @if (projectFolderMap().get(project.id); as folder) {
+          <span
+            style="opacity: 0.5; font-size: 0.85em; margin-left: 8px; font-weight: normal"
+            >({{ folder }})</span
+          >
+        }
       </button>
     }
   </ng-template>
@@ -410,6 +416,17 @@
             >{{ tag.icon || 'label' }}</mat-icon
           >
           {{ tag.title }}
+          @if (tagFolderMap().get(tag.id); as folder) {
+            <span
+              style="
+                opacity: 0.5;
+                font-size: 0.85em;
+                margin-left: 8px;
+                font-weight: normal;
+              "
+              >({{ folder }})</span
+            >
+          }
         </button>
       }
     </div>

@@ -188,3 +188,17 @@
     <mat-spinner diameter="24"></mat-spinner>
   </div>
 }
+
+<ng-template
+  #mentionListTemplate
+  let-item="item"
+>
+  <div style="display: flex; align-items: center; gap: 8px; width: 100%">
+    <span>{{ item.title }}</span>
+    @if (getFolderContext(item); as folder) {
+      <span style="opacity: 0.5; font-size: 0.85em; font-weight: normal"
+        >({{ folder }})</span
+      >
+    }
+  </div>
+</ng-template>

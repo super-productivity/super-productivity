@@ -7,6 +7,8 @@ import {
   selectMenuTreeProjectTree,
   selectMenuTreeTagTree,
 } from './store/menu-tree.selectors';
+import { selectAllProjects } from '../project/store/project.selectors';
+import { selectAllTags } from '../tag/store/tag.reducer';
 
 describe('MenuTreeService', () => {
   let service: MenuTreeService;
@@ -27,8 +29,10 @@ describe('MenuTreeService', () => {
       ],
     });
 
-    service = TestBed.inject(MenuTreeService);
     store = TestBed.inject(MockStore);
+    store.overrideSelector(selectAllProjects, []);
+    store.overrideSelector(selectAllTags, []);
+    service = TestBed.inject(MenuTreeService);
   });
 
   afterEach(() => {
@@ -40,7 +44,7 @@ describe('MenuTreeService', () => {
   });
 
   describe('projectFolderMap', () => {
-    it('should map projects to their parent paths with chevrons', () => {
+    it('should map projects with duplicate names to their parent paths with chevrons', () => {
       const mockProjectTree: MenuTreeTreeNode[] = [
         {
           id: 'folder-1',
@@ -70,6 +74,11 @@ describe('MenuTreeService', () => {
         },
       ];
 
+      store.overrideSelector(selectAllProjects, [
+        { id: 'project-1', title: 'Marketing' },
+        { id: 'project-2', title: 'Marketing' },
+        { id: 'project-3', title: 'Unique' },
+      ] as any);
       store.overrideSelector(selectMenuTreeProjectTree, mockProjectTree);
       store.refreshState();
 
@@ -81,7 +90,7 @@ describe('MenuTreeService', () => {
   });
 
   describe('tagFolderMap', () => {
-    it('should map tags to their parent paths with chevrons', () => {
+    it('should map tags with duplicate names to their parent paths with chevrons', () => {
       const mockTagTree: MenuTreeTreeNode[] = [
         {
           id: 'folder-2',
@@ -96,6 +105,10 @@ describe('MenuTreeService', () => {
         },
       ];
 
+      store.overrideSelector(selectAllTags, [
+        { id: 'tag-1', title: 'DuplicateTag' },
+        { id: 'tag-2', title: 'DuplicateTag' },
+      ] as any);
       store.overrideSelector(selectMenuTreeTagTree, mockTagTree);
       store.refreshState();
 

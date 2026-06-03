@@ -69,6 +69,7 @@ describe('AddTaskBarActionsComponent', () => {
   };
 
   const mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+  mockStore.select.and.returnValue(of([]));
   const mockConfigService = (locale: DateTimeLocale): GlobalConfigService => {
     return jasmine.createSpyObj('GlobalConfigService', [], {
       localization: () => ({ timeLocale: locale }),
