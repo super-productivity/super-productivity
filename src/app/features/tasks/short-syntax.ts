@@ -401,12 +401,14 @@ const parseShortSyntaxDate = async (
   const rr = task.title.match(regEx);
 
   if (rr && rr[0]) {
-    // Check if the character before trigger is a space or start of string
-    const indexBeforeTrigger = task.title.indexOf(rr[0]) - 1;
-    const charBeforeTrigger =
-      indexBeforeTrigger >= 0 ? task.title.charAt(indexBeforeTrigger) : '';
-    if (charBeforeTrigger && charBeforeTrigger !== ' ') {
-      return {};
+    if (isDeadline) {
+      // Check if the character before trigger is a space or start of string
+      const indexBeforeTrigger = task.title.indexOf(rr[0]) - 1;
+      const charBeforeTrigger =
+        indexBeforeTrigger >= 0 ? task.title.charAt(indexBeforeTrigger) : '';
+      if (charBeforeTrigger && charBeforeTrigger !== ' ') {
+        return {};
+      }
     }
 
     const dateParser = await loadCustomDateParser();
