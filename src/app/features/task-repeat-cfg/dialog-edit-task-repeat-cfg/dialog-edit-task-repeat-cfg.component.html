@@ -12,6 +12,41 @@
   </h1>
 
   <mat-dialog-content>
+    <!-- Per-occurrence edit (RFC 5545 RECURRENCE-ID): only when the dialog was
+         opened for one specific occurrence. Moves / retitles just that one. -->
+    @if (instanceDate) {
+      <div class="instance-override">
+        <label class="instance-override__label">
+          {{ T.F.TASK_REPEAT.D_EDIT.INSTANCE_EDIT | translate }}
+          ({{ instanceDate | date: 'mediumDate' }})
+        </label>
+        <div class="instance-override__row">
+          <span>{{ T.F.TASK_REPEAT.D_EDIT.INSTANCE_MOVE_TO | translate }}</span>
+          <input
+            #moveToIn
+            type="date"
+            [value]="instanceMoveTo()"
+            (input)="instanceMoveTo.set(moveToIn.value)"
+          />
+        </div>
+        <input
+          #titleIn
+          type="text"
+          [placeholder]="T.F.TASK_REPEAT.D_EDIT.INSTANCE_TITLE | translate"
+          [value]="instanceTitle()"
+          (input)="instanceTitle.set(titleIn.value)"
+        />
+        <button
+          type="button"
+          mat-stroked-button
+          color="primary"
+          (click)="applyInstanceOverride()"
+        >
+          {{ T.F.TASK_REPEAT.D_EDIT.INSTANCE_APPLY | translate }}
+        </button>
+      </div>
+    }
+
     @if (repeatCfgId(); as cfgId) {
       <collapsible
         [title]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"

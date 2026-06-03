@@ -154,6 +154,25 @@ export interface TaskRepeatCfgCopy {
   dueFixedDate?: string;
   // PERIOD_END: which period's end the due day snaps to.
   duePeriod?: RepeatDuePeriod;
+
+  // --- Per-occurrence overrides (RFC 5545 RECURRENCE-ID) ---------------------
+  // Keyed by the ORIGINAL occurrence day (YYYY-MM-DD) = the RECURRENCE-ID. Each
+  // entry overrides that one instance — move it to another day, or change its
+  // time / title / notes / estimate — without touching the rest of the series.
+  // `deletedInstanceDates` (EXDATE) still handles a pure skip. A move stays
+  // consistent across every projection because it is surfaced to the occurrence
+  // engine as EXDATE(original) + RDATE(movedToDay). App-level & optional; older
+  // sync clients ignore the field. See `get-repeat-instance-exceptions.util.ts`.
+  instanceOverrides?: { [occurrenceDateStr: string]: RepeatInstanceOverride };
+}
+
+/** A single RECURRENCE-ID override (see `instanceOverrides`). */
+export interface RepeatInstanceOverride {
+  movedToDay?: string; // YYYY-MM-DD — reschedule this occurrence (RFC DTSTART override)
+  startTime?: string | null; // 'HH:MM', or null to clear the time for this one
+  title?: string;
+  notes?: string;
+  timeEstimate?: number;
 }
 
 /** The due-date derivation fields, grouped for the builder in/out. */

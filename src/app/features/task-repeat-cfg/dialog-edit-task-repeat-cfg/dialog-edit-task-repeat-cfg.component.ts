@@ -19,6 +19,7 @@ import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import {
   DEFAULT_TASK_REPEAT_CFG,
   RepeatDueConfig,
+  RepeatInstanceOverride,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
@@ -43,6 +44,7 @@ import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { SnackService } from '../../../core/snack/snack.service';
 import { getRRuleOccurrencesInRange, isRRuleValid } from '../store/rrule-occurrence.util';
 import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
+import { getRepeatInstanceExceptions } from '../store/get-repeat-instance-exceptions.util';
 import {
   legacyTaskRepeatCfgToRRule,
   rruleToLegacyTaskRepeatCfg,
@@ -214,7 +216,7 @@ export class DialogEditTaskRepeatCfgComponent {
     const cfg = this.repeatCfg();
     if (!isRRuleValid(cfg.rrule)) return null;
     const rrule = cfg.rrule as string;
-    const exdates = (cfg as TaskRepeatCfg).deletedInstanceDates;
+    const { exdates, rdates } = getRepeatInstanceExceptions(cfg as TaskRepeatCfg);
     const from = new Date();
     from.setHours(12, 0, 0, 0);
     const to = new Date(from);
@@ -239,12 +241,12 @@ export class DialogEditTaskRepeatCfgComponent {
       const afterFrom = new Date(simDay);
       afterFrom.setDate(afterFrom.getDate() + 1);
       const before = getRRuleOccurrencesInRange(
-        { rrule, startDate: baseStart, exdates },
+        { rrule, startDate: baseStart, exdates, rdates },
         from,
         beforeEnd,
       );
       const after = getRRuleOccurrencesInRange(
-        { rrule, startDate: sim, exdates },
+        { rrule, startDate: sim, exdates, rdates },
         afterFrom,
         to,
       );
@@ -253,7 +255,7 @@ export class DialogEditTaskRepeatCfgComponent {
       // No re-anchor: calendar stays fixed. (No simulation, or a non
       // from-completion schedule where finishing a task never shifts dates.)
       occ = getRRuleOccurrencesInRange(
-        { rrule, startDate: baseStart, exdates },
+        { rrule, startDate: baseStart, exdates, rdates },
         from,
         to,
       );
@@ -278,6 +280,12 @@ export class DialogEditTaskRepeatCfgComponent {
     );
   });
   canRemoveInstance = signal<boolean>(false);
+  // Per-occurrence edit (RFC 5545 RECURRENCE-ID), only when the dialog is opened
+  // for a specific occurrence (`targetDate`). Move it to another day and/or
+  // retitle it without touching the rest of the series.
+  instanceDate: string | null = this._data.targetDate ?? null;
+  instanceMoveTo = signal<string>(this._data.targetDate ?? '');
+  instanceTitle = signal<string>('');
   skipInstanceButtonText = computed(() => {
     if (!this._data.targetDate) {
       return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_INSTANCE);
@@ -600,6 +608,28 @@ export class DialogEditTaskRepeatCfgComponent {
           this.close();
         }
       });
+  }
+
+  /** Apply a per-occurrence override (RECURRENCE-ID): move and/or retitle this one. */
+  applyInstanceOverride(): void {
+    const cfg = this.repeatCfg() as TaskRepeatCfg;
+    const orig = this._data.targetDate;
+    if (!cfg.id || !orig) {
+      return;
+    }
+    const override: RepeatInstanceOverride = {};
+    const moveTo = this.instanceMoveTo();
+    const title = this.instanceTitle().trim();
+    if (moveTo && moveTo !== orig) {
+      override.movedToDay = moveTo;
+    }
+    if (title) {
+      override.title = title;
+    }
+    if (Object.keys(override).length) {
+      this._taskRepeatCfgService.updateTaskRepeatCfgInstance(cfg.id, orig, override);
+    }
+    this.close();
   }
 
   close(): void {

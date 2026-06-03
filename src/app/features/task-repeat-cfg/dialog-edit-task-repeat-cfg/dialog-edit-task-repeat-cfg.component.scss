@@ -192,3 +192,43 @@ mat-dialog-actions {
     }
   }
 }
+
+// Per-occurrence (RECURRENCE-ID) editor, shown when the dialog opens for one
+// specific occurrence.
+.instance-override {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+  margin-bottom: var(--s2);
+  padding: var(--s) var(--s2);
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--card-border-radius);
+  background: var(--extra-border-color);
+
+  &__label {
+    font-weight: bold;
+    font-size: 13px;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+  }
+
+  input[type='date'],
+  input[type='text'] {
+    height: 36px;
+    padding: 0 var(--s);
+    color: var(--text-color);
+    background: var(--bg, transparent);
+    border: 1px solid var(--extra-border-color);
+    border-radius: var(--card-border-radius);
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  input[type='text'] {
+    width: 100%;
+  }
+}

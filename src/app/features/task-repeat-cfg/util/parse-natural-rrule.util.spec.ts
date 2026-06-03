@@ -38,11 +38,22 @@ describe('naturalLanguageToRRule', () => {
     ['yearly', 'FREQ=YEARLY'],
     ['annually', 'FREQ=YEARLY'],
     ['every year', 'FREQ=YEARLY'],
-    // yearly seasonal weekdays — the original cron example
+    // yearly seasonal weekdays — the original cron example (interval 1 → YEARLY)
     [
       'every saturday from march to november',
       'FREQ=YEARLY;BYMONTH=3,4,5,6,7,8,9,10,11;BYDAY=SA',
     ],
+    // "every other <weekday>" with a season stays a WEEKLY biweekly cadence —
+    // the interval must NOT collapse to "every 2 years". (regression)
+    [
+      'every other sunday march through april',
+      'FREQ=WEEKLY;INTERVAL=2;BYDAY=SU;BYMONTH=3,4',
+    ],
+    [
+      'every other saturday from march to november',
+      'FREQ=WEEKLY;INTERVAL=2;BYDAY=SA;BYMONTH=3,4,5,6,7,8,9,10,11',
+    ],
+    ['every 2 weeks on monday in june', 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;BYMONTH=6'],
     // end conditions
     ['every day for 10 times', 'FREQ=DAILY;COUNT=10'],
     ['every monday until 2024-12-31', 'FREQ=WEEKLY;BYDAY=MO;UNTIL=20241231T120000Z'],

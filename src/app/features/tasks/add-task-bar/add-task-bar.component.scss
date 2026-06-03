@@ -241,3 +241,31 @@
     }
   }
 }
+
+// Live reading of an inline `@+` recurrence — humanized rule + next occurrence.
+// The next date makes a far-off rule (e.g. yearly "in March") obvious before submit.
+.recurrence-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-quarter, 4px);
+  margin-top: var(--s-quarter, 4px);
+  padding: 2px var(--s, 8px);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--c-primary);
+
+  &__icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &__text {
+    font-weight: bold;
+  }
+
+  &__next {
+    opacity: 0.85;
+  }
+}

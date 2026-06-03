@@ -1596,6 +1596,55 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('instanceOverrides (RECURRENCE-ID)', () => {
+    const todayStr = getDbDateStr(new Date());
+    const addTaskOf = (actions: { type: string }[]): any =>
+      actions.find((a) => a.type === TaskSharedActions.addTask.type);
+
+    beforeEach(() => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+        title: args.title,
+      }));
+    });
+
+    it('applies a field-only override (title/notes/estimate) to that occurrence', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        instanceOverrides: {
+          [todayStr]: { title: 'Special edition', notes: 'one-off', timeEstimate: 1234 },
+        },
+      };
+      const action = addTaskOf(
+        await service._getActionsForTaskRepeatCfg(cfg, Date.now()),
+      );
+      expect(action.task.title).toBe('Special edition');
+      expect(action.task.notes).toBe('one-off');
+      expect(action.task.timeEstimate).toBe(1234);
+      // id & created stay anchored to the occurrence day (RECURRENCE-ID dedup).
+      expect(getDbDateStr(action.task.created)).toBe(todayStr);
+    });
+
+    it('a per-occurrence startTime override drives the timed schedule', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...mockTaskRepeatCfg,
+        remindAt: TaskReminderOptionId.AtStart,
+        instanceOverrides: { [todayStr]: { startTime: '08:00' } },
+      };
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, Date.now());
+      const sched = actions.find(
+        (a) => a.type === TaskSharedActions.scheduleTaskWithTime.type,
+      ) as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>;
+      expect(sched).toBeDefined();
+      expect(getDbDateStr(sched.dueWithTime)).toBe(todayStr);
+      expect(new Date(sched.dueWithTime).getHours()).toBe(8);
+    });
+  });
+
   describe('endsAfterCompletions', () => {
     const doneInstance = (dayOffset: number): TaskWithSubTasks => {
       const d = new Date();

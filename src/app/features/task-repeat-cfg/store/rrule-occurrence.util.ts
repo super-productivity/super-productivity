@@ -34,6 +34,9 @@ export interface RRuleOccurrenceInput {
   lastTaskCreationDay?: string;
   /** Skipped dates (`YYYY-MM-DD`), RFC 5545 EXDATE. Removed from the occurrence set. */
   exdates?: string[];
+  /** Extra dates (`YYYY-MM-DD`), RFC 5545 RDATE. Added to the occurrence set —
+   *  used to surface a rescheduled (moved) instance at its new day. */
+  rdates?: string[];
 }
 
 const DAY_MS = 86_400_000;
@@ -67,6 +70,9 @@ const _buildRuleSet = (input: RRuleOccurrenceInput): RRuleSet | null => {
     set.rrule(new RRule(options));
     for (const ex of input.exdates ?? []) {
       set.exdate(_noonUtc(ex));
+    }
+    for (const rd of input.rdates ?? []) {
+      set.rdate(_noonUtc(rd));
     }
     return set;
   } catch (e) {

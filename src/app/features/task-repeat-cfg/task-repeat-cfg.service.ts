@@ -7,9 +7,11 @@ import {
   updateTaskRepeatCfgs,
   upsertTaskRepeatCfg,
   deleteTaskRepeatCfgInstance,
+  updateTaskRepeatCfgInstance,
 } from './store/task-repeat-cfg.actions';
 import { Observable } from 'rxjs';
 import {
+  RepeatInstanceOverride,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
   TaskRepeatCfgState,
@@ -31,6 +33,7 @@ import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milli
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
 import { getAllMissedDueDates } from './store/get-all-missed-due-dates.util';
 import { getNextRepeatOccurrence } from './store/get-next-repeat-occurrence.util';
+import { findRepeatInstanceOverride } from './store/get-repeat-instance-exceptions.util';
 import { getRecurringInstanceDueDate } from './util/recurring-due-date.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
@@ -135,6 +138,18 @@ export class TaskRepeatCfgService {
 
   deleteTaskRepeatCfgInstance(repeatCfgId: string, dateStr: string): void {
     this._store$.dispatch(deleteTaskRepeatCfgInstance({ repeatCfgId, dateStr }));
+  }
+
+  // RFC 5545 RECURRENCE-ID: override one occurrence (move / re-time / re-title).
+  // `override: null` clears it. `dateStr` is the ORIGINAL occurrence day.
+  updateTaskRepeatCfgInstance(
+    repeatCfgId: string,
+    dateStr: string,
+    override: RepeatInstanceOverride | null,
+  ): void {
+    this._store$.dispatch(
+      updateTaskRepeatCfgInstance({ repeatCfgId, dateStr, override }),
+    );
   }
 
   async createRepeatableTask(
@@ -306,23 +321,33 @@ export class TaskRepeatCfgService {
       ];
     }
 
-    // Derive the due day from the occurrence per `dueType` (default = occurrence).
-    const dueDayStr = this._resolveInstanceDueDay(
-      taskRepeatCfg,
-      targetDateStr,
-      targetCreated,
-    );
+    // Per-occurrence override (RECURRENCE-ID): a move lands the task on its new
+    // day (already reflected as the occurrence via RDATE), so Due = that day; a
+    // field-only override keeps the normal due derivation.
+    const ov = findRepeatInstanceOverride(taskRepeatCfg, targetDateStr);
+    const isMoved = !!ov?.movedToDay && ov.movedToDay === targetDateStr;
+    const dueDayStr = isMoved
+      ? targetDateStr
+      : this._resolveInstanceDueDay(taskRepeatCfg, targetDateStr, targetCreated);
     const { task, isAddToBottom } = this._getTaskRepeatTemplate(
       taskRepeatCfg,
       targetDateStr,
       dueDayStr,
     );
-    const taskWithTargetDates: Task = {
-      ...task,
-      // NOTE if moving this to top isCreateNew check above would not work as intended
-      // we use created also for the repeat day label for past tasks
-      created: targetCreated.getTime(),
-    };
+    const taskWithTargetDates: Task = this._applyInstanceOverride(
+      {
+        ...task,
+        // NOTE if moving this to top isCreateNew check above would not work as intended
+        // we use created also for the repeat day label for past tasks
+        created: targetCreated.getTime(),
+      },
+      ov,
+    );
+    // Per-occurrence time override (null clears it) wins over the cfg's startTime.
+    const effStartTime =
+      ov && ov.startTime !== undefined
+        ? (ov.startTime ?? undefined)
+        : taskRepeatCfg.startTime;
 
     const createNewActions: (
       | ReturnType<typeof TaskSharedActions.addTask>
@@ -363,13 +388,9 @@ export class TaskRepeatCfgService {
 
     // Schedule if given — pin the time to the DERIVED due day (= occurrence for
     // the default ON_OCCURRENCE). NONE (no due day) gets no timed schedule.
-    if (
-      dueDayStr &&
-      isValidSplitTime(taskRepeatCfg.startTime) &&
-      taskRepeatCfg.remindAt
-    ) {
+    if (dueDayStr && isValidSplitTime(effStartTime) && taskRepeatCfg.remindAt) {
       const dateTime = getDateTimeFromClockString(
-        taskRepeatCfg.startTime as string,
+        effStartTime as string,
         this._localNoonTs(dueDayStr),
       );
       createNewActions.push(
@@ -483,6 +504,20 @@ export class TaskRepeatCfgService {
     return new Date(y, m - 1, d, 12, 0, 0).getTime();
   }
 
+  /** Apply a per-occurrence override's field edits (title/notes/estimate) to a task. */
+  private _applyInstanceOverride(
+    task: Task,
+    ov: RepeatInstanceOverride | undefined,
+  ): Task {
+    if (!ov) return task;
+    return {
+      ...task,
+      ...(ov.title !== undefined ? { title: ov.title } : {}),
+      ...(ov.notes !== undefined ? { notes: ov.notes } : {}),
+      ...(ov.timeEstimate !== undefined ? { timeEstimate: ov.timeEstimate } : {}),
+    };
+  }
+
   /**
    * "Create a task for each missed occurrence" path: create a task for every missed occurrence since the
    * last creation up to (and including) the target day, oldest first. Skips
@@ -569,20 +604,27 @@ export class TaskRepeatCfgService {
     | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
     | ReturnType<typeof addSubTask>
   )[] {
-    const dueDayStr = this._resolveInstanceDueDay(
-      taskRepeatCfg,
-      targetDateStr,
-      targetCreated,
-    );
+    const ov = findRepeatInstanceOverride(taskRepeatCfg, targetDateStr);
+    const isMoved = !!ov?.movedToDay && ov.movedToDay === targetDateStr;
+    const dueDayStr = isMoved
+      ? targetDateStr
+      : this._resolveInstanceDueDay(taskRepeatCfg, targetDateStr, targetCreated);
     const { task, isAddToBottom } = this._getTaskRepeatTemplate(
       taskRepeatCfg,
       targetDateStr,
       dueDayStr,
     );
-    const taskWithTargetDates: Task = {
-      ...task,
-      created: targetCreated.getTime(),
-    };
+    const taskWithTargetDates: Task = this._applyInstanceOverride(
+      {
+        ...task,
+        created: targetCreated.getTime(),
+      },
+      ov,
+    );
+    const effStartTime =
+      ov && ov.startTime !== undefined
+        ? (ov.startTime ?? undefined)
+        : taskRepeatCfg.startTime;
 
     const actions: (
       | ReturnType<typeof TaskSharedActions.addTask>
@@ -607,13 +649,9 @@ export class TaskRepeatCfgService {
       }),
     ];
 
-    if (
-      dueDayStr &&
-      isValidSplitTime(taskRepeatCfg.startTime) &&
-      taskRepeatCfg.remindAt
-    ) {
+    if (dueDayStr && isValidSplitTime(effStartTime) && taskRepeatCfg.remindAt) {
       const dateTime = getDateTimeFromClockString(
-        taskRepeatCfg.startTime as string,
+        effStartTime as string,
         this._localNoonTs(dueDayStr),
       );
       actions.push(

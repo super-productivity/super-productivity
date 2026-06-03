@@ -90,6 +90,22 @@
     </div>
   </div>
 
+  @if (recurrencePreview(); as rp) {
+    <div
+      class="recurrence-preview"
+      @fade
+    >
+      <mat-icon class="recurrence-preview__icon">repeat</mat-icon>
+      <span class="recurrence-preview__text">{{ rp.human }}</span>
+      @if (rp.next) {
+        <span class="recurrence-preview__next">
+          &middot; {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
+          {{ rp.next | date: 'mediumDate' }}
+        </span>
+      }
+    </div>
+  }
+
   @if (isSearchMode()) {
     @if (activatedIssueTask() && activatedIssueTask()!.issueType === undefined) {
       <div class="add-issue-info-text bold">

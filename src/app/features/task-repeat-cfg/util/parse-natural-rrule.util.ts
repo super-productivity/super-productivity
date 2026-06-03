@@ -164,6 +164,15 @@ export const naturalLanguageToRRule = (input: string): string | null => {
   if (/\bevery other\b/.test(s) || /\b(biweekly|fortnightly)\b/.test(s)) interval = 2;
   const everyN = s.match(/\bevery (\d+)\b/);
   if (everyN) interval = parseInt(everyN[1], 10);
+  // A >1 interval that came from a WEEKLY-style modifier ("every other tuesday",
+  // "biweekly", "every 2 weeks"). Used so "every other sunday in march" stays a
+  // weekly biweekly cadence instead of collapsing to a yearly rule (which would
+  // make INTERVAL=2 mean "every 2 years").
+  const hasWeeklyInterval =
+    interval > 1 &&
+    (/\bevery other\b/.test(s) ||
+      /\b(biweekly|fortnightly)\b/.test(s) ||
+      /\bevery \d+ weeks?\b/.test(s));
 
   const weekdays = extractWeekdays(s);
   const months = extractMonths(s);
@@ -186,6 +195,13 @@ export const naturalLanguageToRRule = (input: string): string | null => {
     // Daily, optionally bounded to months: "every day from January to April"
     // → daily within those months (FREQ=DAILY;BYMONTH=1,2,3,4).
     freq = 'DAILY';
+    if (months.length) by.push(`BYMONTH=${months.join(',')}`);
+  } else if (weekdays.length && hasWeeklyInterval) {
+    // "every other <weekday>" → weekly biweekly cadence; any months are a
+    // seasonal filter (FREQ=WEEKLY;INTERVAL=2;BYDAY=SU;BYMONTH=3,4), NOT a yearly
+    // rule — otherwise the interval would wrongly read as "every 2 years".
+    freq = 'WEEKLY';
+    by.push(`BYDAY=${weekdays.join(',')}`);
     if (months.length) by.push(`BYMONTH=${months.join(',')}`);
   } else if (months.length && weekdays.length) {
     freq = 'YEARLY';

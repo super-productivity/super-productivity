@@ -28,6 +28,7 @@ import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getRRuleOccurrencesInRange } from '../store/rrule-occurrence.util';
 import { legacyTaskRepeatCfgToRRule } from '../util/legacy-cfg-to-rrule.util';
 import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
+import { getRepeatInstanceExceptions } from '../store/get-repeat-instance-exceptions.util';
 
 // How far ahead the heatmap projects upcoming occurrences.
 const PROJECTION_DAYS = 92;
@@ -227,11 +228,13 @@ export class RepeatTaskHeatmapComponent {
       const rrule = cfg.rrule || legacyTaskRepeatCfgToRRule(cfg);
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
+      const { exdates, rdates } = getRepeatInstanceExceptions(cfg);
       const occurrences = getRRuleOccurrencesInRange(
         {
           rrule,
           startDate: getEffectiveRepeatStartDate(cfg),
-          exdates: cfg.deletedInstanceDates,
+          exdates,
+          rdates,
         },
         tomorrow,
         horizon,

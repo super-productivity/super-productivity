@@ -21,7 +21,7 @@ import { MatInput } from '@angular/material/input';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, DatePipe } from '@angular/common';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
@@ -71,6 +71,10 @@ import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.serv
 import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
 import { rruleToLegacyTaskRepeatCfg } from '../../task-repeat-cfg/util/legacy-cfg-to-rrule.util';
+import {
+  buildRRuleHumanizeOpts,
+  getRRulePreview,
+} from '../../task-repeat-cfg/util/rrule-preview.util';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
@@ -96,6 +100,7 @@ import { PlannerActions } from '../../planner/store/planner.actions';
     MatTooltip,
     AsyncPipe,
     MentionModule,
+    DatePipe,
     MatAutocomplete,
     MatAutocompleteTrigger,
     MatOption,
@@ -166,6 +171,22 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),
   );
+  private _humanize = buildRRuleHumanizeOpts(
+    (k) => this._translateService.instant(k) as string,
+  );
+  /**
+   * Live reading of an inline `@+` recurrence: humanized rule + the NEXT concrete
+   * occurrence date. The next date is the key anti-trap signal — a far-off date
+   * (e.g. a yearly "in March" rule entered in June → next year) is visible before
+   * the user submits, instead of the task silently never appearing.
+   */
+  recurrencePreview = computed<{ human: string; next: Date | null } | null>(() => {
+    const rrule = this.stateService.state().rrule;
+    if (!rrule) return null;
+    const startDate = this.stateService.state().date || getDbDateStr();
+    const p = getRRulePreview(rrule, startDate, this._humanize);
+    return p ? { human: p.human, next: p.upcoming[0] ?? null } : null;
+  });
   nrOfRightBtns = computed(() => {
     let count = 2;
     if (this.stateService.inputTxt().length > 0) {
