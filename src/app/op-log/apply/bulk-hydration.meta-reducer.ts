@@ -7,6 +7,7 @@ import {
   stripBatchArchivedTaskIdsFromLwwPayload,
 } from './bulk-archive-filter.util';
 import { OpLog } from '../../core/log';
+import { runWithBulkReplayLoggingSuppressed } from '../../util/bulk-replay-log-guard';
 
 /**
  * Meta-reducer that applies multiple operations in a single reducer pass.
@@ -55,30 +56,37 @@ export const bulkOperationsMetaReducer = <T>(
         state,
       );
 
-      let currentState = state;
       const hasArchives = archivingOrDeletingEntityIds.size > 0;
-      for (const op of operations) {
-        const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
-        // Skip LWW Updates whose entityId itself is archived/deleted in this batch
-        // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
-        if (isLww && op.entityId && archivingOrDeletingEntityIds.has(op.entityId)) {
-          OpLog.normal(
-            `bulkOperationsMetaReducer: Skipping LWW Update for ` +
-              `${op.entityType}:${op.entityId} — entity archived/deleted in same batch`,
-          );
-          continue;
+      // Apply every op in one synchronous reducer pass. Suppress the action
+      // logger's per-op console line for the duration (see bulk-replay-log-guard):
+      // this is a single dispatch, and the caller (hydrator / applier) already
+      // logs an "applying N ops" summary, so per-op `[a]` lines are just noise.
+      const finalState = runWithBulkReplayLoggingSuppressed(() => {
+        let currentState = state;
+        for (const op of operations) {
+          const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
+          // Skip LWW Updates whose entityId itself is archived/deleted in this batch
+          // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
+          if (isLww && op.entityId && archivingOrDeletingEntityIds.has(op.entityId)) {
+            OpLog.normal(
+              `bulkOperationsMetaReducer: Skipping LWW Update for ` +
+                `${op.entityType}:${op.entityId} — entity archived/deleted in same batch`,
+            );
+            continue;
+          }
+          const opForApply = hasArchives
+            ? stripBatchArchivedTaskIdsFromLwwPayload(
+                op,
+                isLww,
+                archivingOrDeletingEntityIds,
+              )
+            : op;
+          const opAction = convertOpToAction(opForApply);
+          currentState = reducer(currentState, opAction);
         }
-        const opForApply = hasArchives
-          ? stripBatchArchivedTaskIdsFromLwwPayload(
-              op,
-              isLww,
-              archivingOrDeletingEntityIds,
-            )
-          : op;
-        const opAction = convertOpToAction(opForApply);
-        currentState = reducer(currentState, opAction);
-      }
-      return currentState as T;
+        return currentState;
+      });
+      return finalState as T;
     }
     return reducer(state, action);
   };
