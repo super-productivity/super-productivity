@@ -53,7 +53,9 @@ export class MenuTreeService {
   readonly tagTree = computed(() => this._tagTree());
 
   readonly projectFolderMap = computed(() => {
-    const projects = this._allProjects();
+    const projects = this._allProjects().filter(
+      (p) => !p.isArchived && !p.isHiddenFromMenu,
+    );
     const projectMap = new Map<string, Project>();
     const titleCounts = new Map<string, number>();
 
@@ -86,7 +88,7 @@ export class MenuTreeService {
   });
 
   readonly tagFolderMap = computed(() => {
-    const tags = this._allTags();
+    const tags = this._allTags().filter((t) => t.id !== 'TODAY');
     const tagMap = new Map<string, Tag>();
     const titleCounts = new Map<string, number>();
 
