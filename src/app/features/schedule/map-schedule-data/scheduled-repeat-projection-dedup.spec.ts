@@ -5,7 +5,6 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { SVEType } from '../schedule.const';
 
 const H = 60 * 60 * 1000;
-const DAY = 24 * H;
 
 const fakeTask = (id: string, add?: Partial<TaskCopy>): TaskCopy =>
   ({
@@ -55,19 +54,17 @@ const fakeCfg = (id: string, add?: Partial<TaskRepeatCfg>): TaskRepeatCfg =>
  * `lastTaskCreationDay` anchor happens to sit.
  */
 describe('scheduled repeat projection dedup (#7853)', () => {
-  const todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
-  const now = todayMidnight.getTime();
-
-  const addDays = (ts: number, days: number): number => {
-    const offset = days * DAY;
-    return ts + offset;
-  };
-  const futureDayTs = addDays(now, 3);
-  const futureDayStr = getDbDateStr(futureDayTs);
-  const tenHours = 10 * H;
-  const futureAt10 = futureDayTs + tenHours;
-  const dayDates = Array.from({ length: 5 }, (_, i) => getDbDateStr(addDays(now, i)));
+  // Fixed calendar dates (Wed Jun 3 2026 → Sun Jun 7 2026) so day strings are
+  // deterministic regardless of when CI runs. Build days via the (y, m, d+i)
+  // constructor — NOT fixed-millisecond arithmetic — so a DST boundary on the
+  // run day can never collapse or skip a day in the sequence.
+  const dayTs = (offset: number, hour = 0): number =>
+    new Date(2026, 5, 3 + offset, hour, 0, 0, 0).getTime();
+  const now = dayTs(0);
+  const futureOffset = 3;
+  const futureDayStr = getDbDateStr(dayTs(futureOffset));
+  const futureAt10 = dayTs(futureOffset, 10);
+  const dayDates = Array.from({ length: 5 }, (_, i) => getDbDateStr(dayTs(i)));
 
   const entryCountForFutureDay = (lastTaskCreationDay: string): number => {
     const task = fakePlanned('T1', futureAt10, { repeatCfgId: 'R1', timeEstimate: H });
@@ -100,7 +97,7 @@ describe('scheduled repeat projection dedup (#7853)', () => {
   });
 
   it('does not duplicate when the anchor lags behind by one day', () => {
-    expect(entryCountForFutureDay(getDbDateStr(addDays(futureDayTs, -1)))).toBe(1);
+    expect(entryCountForFutureDay(getDbDateStr(dayTs(futureOffset - 1)))).toBe(1);
   });
 
   // Mirrors the exact repro from discussion #7853 (Exhibit 1 video): on a
@@ -156,8 +153,7 @@ describe('scheduled repeat projection dedup (#7853)', () => {
       const day = days.find((d) => d.dayDate === sunStr);
       return (day?.entries ?? []).map((e) => ({
         type: e.type,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        id: (e.data as any)?.id,
+        id: (e.data as TaskCopy)?.id,
       }));
     };
 
@@ -166,6 +162,56 @@ describe('scheduled repeat projection dedup (#7853)', () => {
       expect(entries.length).toBe(1);
       expect(entries[0].type).toBe(SVEType.ScheduledTask);
       expect(entries[0].id).toBe('GYM');
+    });
+  });
+
+  // The untimed projection path (create-schedule-days.ts) is structurally
+  // identical to the timed one and duplicates the same way when the anchor lags.
+  // It is not reachable via the reporter's flow (the Planner workaround keeps the
+  // anchor aligned), but the render-layer guard is symmetric defense-in-depth.
+  describe('untimed (all-day) repeat projection dedup', () => {
+    const wed = new Date(2026, 5, 3, 0, 0, 0, 0).getTime();
+    const futureStr = getDbDateStr(new Date(2026, 5, 6, 0, 0, 0, 0).getTime());
+    const week = Array.from({ length: 5 }, (_, i) =>
+      getDbDateStr(new Date(2026, 5, 3 + i, 0, 0, 0, 0).getTime()),
+    );
+
+    const futureEntries = (): { type: SVEType; id: string }[] => {
+      // Concrete untimed instance carries dueDay (no dueWithTime) + repeatCfgId.
+      const task = fakeTask('U1', { dueDay: futureStr, repeatCfgId: 'UCFG' });
+      // Untimed cfg: no startTime → unScheduledTaskRepeatCfgs; anchor lags to today.
+      const cfg = fakeCfg('UCFG', {
+        startTime: undefined,
+        startDate: futureStr,
+        lastTaskCreationDay: getDbDateStr(wed),
+      });
+
+      const days = mapToScheduleDays(
+        wed,
+        week,
+        [task],
+        [],
+        [],
+        [cfg],
+        [],
+        null,
+        {},
+        undefined,
+        undefined,
+        wed,
+      );
+      const day = days.find((d) => d.dayDate === futureStr);
+      return (day?.entries ?? []).map((e) => ({
+        type: e.type,
+        id: (e.data as TaskCopy)?.id,
+      }));
+    };
+
+    it('shows only the concrete instance, not the projection', () => {
+      const entries = futureEntries();
+      expect(entries.length).toBe(1);
+      expect(entries.some((e) => e.type === SVEType.RepeatProjection)).toBe(false);
+      expect(entries[0].id).toBe('U1');
     });
   });
 });
