@@ -1,7 +1,9 @@
 import { Injectable, inject } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
 import { ClipboardImageService } from './clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { clipboardHasText } from '../../util/clipboard-has-text';
+import { T } from '../../t.const';
 
 // Paste context interface
 export interface PasteContext {
@@ -22,6 +24,7 @@ export interface PasteContext {
 export class ClipboardPasteHandlerService {
   private _clipboardImageService = inject(ClipboardImageService);
   private _taskAttachmentService = inject(TaskAttachmentService);
+  private _translateService = inject(TranslateService);
 
   async handlePaste(ev: ClipboardEvent, context: PasteContext): Promise<boolean> {
     if (!ev.clipboardData) return false;
@@ -75,7 +78,9 @@ export class ClipboardPasteHandlerService {
             id: null,
             type: 'IMG',
             path: result.imageUrl,
-            title: 'Pasted image',
+            title: this._translateService.instant(
+              T.F.TASK.ADDITIONAL_INFO.PASTED_IMAGE_TITLE,
+            ),
           });
         }
 
