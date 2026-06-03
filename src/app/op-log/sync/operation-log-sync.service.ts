@@ -250,7 +250,7 @@ export class OperationLogSyncService {
             rejectedOps: [],
           };
         } else {
-          // Known limitation (upload→piggyback path): example-task ops accepted earlier in
+          // Known limitation (#7985, upload→piggyback path): example-task ops accepted earlier in
           // THIS same upload round were already marked synced, so they have left
           // getUnsynced() and are absent from discardablePendingOpIds here — they remain on
           // the server. State stays correct because receivers drop them as CONCURRENT
@@ -450,7 +450,7 @@ export class OperationLogSyncService {
         // SuperSync→Dropbox, only has a config-change op (not "meaningful"), but the
         // store is full of real data that would be overwritten by old Dropbox state.
         //
-        // Known limitation: hasMeaningfulStoreData() counts ANY task, including onboarding
+        // Known limitation (#7985): hasMeaningfulStoreData() counts ANY task, including onboarding
         // example tasks (they carry the isExampleTask marker only on their op-log ops, not
         // in NgRx state). So a fresh file-based client (Dropbox/WebDAV) that created example
         // tasks while sync was disabled — or before a slow first sync completed — can still
