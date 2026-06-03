@@ -27,7 +27,10 @@ import { getStartOfDayTimestamp } from '../../util/get-start-of-day-timestamp';
 import { getEndOfDayTimestamp } from '../../util/get-end-of-day-timestamp';
 import { CalendarIntegrationEvent } from './calendar-integration.model';
 import { fastArrayCompare } from '../../util/fast-array-compare';
-import { selectAllCalendarTaskEventIds } from '../tasks/store/task.selectors';
+import {
+  isCalendarIssueTask,
+  selectAllCalendarTaskEventIds,
+} from '../tasks/store/task.selectors';
 import { loadFromRealLs, saveToRealLs } from '../../core/persistence/local-storage';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { Store } from '@ngrx/store';
@@ -56,6 +59,7 @@ import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.serv
 import { selectEnabledIssueProviders } from '../issue/store/issue-provider.selectors';
 import { PluginSearchResult } from '../../plugins/issue-provider/plugin-issue-provider.model';
 import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { passesCalendarEventRegexFilter } from './calendar-event-regex-filter';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 
@@ -73,7 +77,35 @@ export class CalendarIntegrationService {
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _pluginHttp = inject(PluginHttpService);
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
+  private _taskArchiveService = inject(TaskArchiveService);
   private _refreshTrigger$ = new Subject<void>();
+
+  /**
+   * Event ids of every calendar task the user has already handled — both live tasks
+   * (`selectAllCalendarTaskEventIds`) and ones moved to the archive via "Finish Day",
+   * which leave the live NgRx state. The archive is re-read whenever the active set
+   * changes (archiving a task removes it from the active set → emits here), so a
+   * completed-and-archived calendar event stays hidden from the schedule instead of
+   * re-surfacing as "not yet added" the next day (#7971).
+   */
+  private _allLinkedCalendarEventIds$: Observable<string[]> = this._store
+    .select(selectAllCalendarTaskEventIds)
+    .pipe(
+      switchMap((activeIds) =>
+        from(this._taskArchiveService.load()).pipe(
+          map((archive) => {
+            const ids = (archive?.ids as string[]) || [];
+            const archivedEventIds = ids
+              .map((id) => archive.entities[id])
+              .filter(isCalendarIssueTask)
+              .map((task) => task.issueId as string);
+            return [...activeIds, ...archivedEventIds];
+          }),
+          catchError(() => of(activeIds)),
+        ),
+      ),
+      distinctUntilChanged(fastArrayCompare),
+    );
 
   calendarEvents$: Observable<ScheduleCalendarMapEntry[]> = combineLatest([
     this._store
@@ -219,9 +251,7 @@ export class CalendarIntegrationService {
     ]);
 
     return combineLatest([
-      this._store
-        .select(selectAllCalendarTaskEventIds)
-        .pipe(distinctUntilChanged(fastArrayCompare)),
+      this._allLinkedCalendarEventIds$,
       this.skippedEventIds$.pipe(distinctUntilChanged(fastArrayCompare)),
       this._hiddenEventsService.hiddenEventIds$.pipe(
         distinctUntilChanged(fastArrayCompare),

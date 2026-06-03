@@ -38,6 +38,7 @@ import { loadIcalModule } from '../schedule/ical/ical-lazy-loader';
 import { CalendarIntegrationEvent } from './calendar-integration.model';
 import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
 import { ScheduleCalendarMapEntry } from '../schedule/schedule.model';
+import { TaskArchiveService } from '../archive/task-archive.service';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -48,6 +49,14 @@ describe('CalendarIntegrationService', () => {
   const mockSnackService = {
     open: jasmine.createSpy('open'),
   };
+
+  // Default: no calendar tasks in the archive. The #7971 repro overrides `load` to
+  // return an archived calendar task. Reset in beforeEach to avoid cross-test pollution.
+  const mockTaskArchiveService = {
+    load: jasmine.createSpy('load'),
+  };
+  const emptyArchive = (): Promise<{ ids: string[]; entities: object }> =>
+    Promise.resolve({ ids: [], entities: {} });
 
   const createMockProvider = (
     overrides: Partial<IssueProviderCalendar> = {},
@@ -90,6 +99,7 @@ END:VCALENDAR`;
     // Clear localStorage before each test
     localStorage.clear();
     subscriptions = [];
+    mockTaskArchiveService.load.and.callFake(emptyArchive);
 
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -103,6 +113,7 @@ END:VCALENDAR`;
           ],
         }),
         { provide: SnackService, useValue: mockSnackService },
+        { provide: TaskArchiveService, useValue: mockTaskArchiveService },
       ],
     });
 
@@ -297,6 +308,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -378,6 +390,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -446,6 +459,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -523,6 +537,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -795,6 +810,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -1264,6 +1280,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1295,6 +1312,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1322,6 +1340,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1346,6 +1365,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1450,6 +1470,160 @@ END:VCALENDAR`;
     }));
   });
 
+  // Repro for https://github.com/super-productivity/super-productivity/issues/7971
+  //
+  // Flow: a calendar event is imported as a task, completed before its due day, then
+  // moved to the archive by "Finish Day". The archived task leaves the live NgRx task
+  // state, so `selectAllCalendarTaskEventIds` (built from `selectAllTasks`, active tasks
+  // only) no longer lists its event id. The schedule/planner view filter relied solely on
+  // that selector, so the event re-surfaced as a "not yet added" entry the next day.
+  //
+  // The fix also feeds archived calendar task event ids (read from the synced archive via
+  // `TaskArchiveService.load()`) into the same view filter, so the event stays hidden.
+  describe('BUG #7971: archived calendar task must stay hidden from the schedule', () => {
+    // Builds a TaskArchiveService.load() result from a list of archived tasks.
+    const archiveOf = (
+      tasks: Array<{ id: string; issueId: string; issueType: string }>,
+    ): Promise<{ ids: string[]; entities: Record<string, unknown> }> =>
+      Promise.resolve({
+        ids: tasks.map((t) => t.id),
+        entities: Object.fromEntries(tasks.map((t) => [t.id, { ...t, isDone: true }])),
+      });
+
+    // Subscribes to calendarEvents$ for one provider, flushes a single iCal fetch and
+    // returns the event ids that survive the view filter. Must run inside fakeAsync.
+    const fetchVisibleEventIds = (activeIds: string[], icalData: string): string[] => {
+      TestBed.resetTestingModule();
+      localStorage.clear();
+      TestBed.configureTestingModule({
+        imports: [HttpClientTestingModule],
+        providers: [
+          CalendarIntegrationService,
+          provideMockStore({
+            selectors: [
+              { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
+              { selector: selectAllCalendarTaskEventIds, value: activeIds },
+            ],
+          }),
+          { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
+        ],
+      });
+
+      const freshService = TestBed.inject(CalendarIntegrationService);
+      const freshStore = TestBed.inject(MockStore);
+      const freshHttpMock = TestBed.inject(HttpTestingController);
+
+      const mockProvider = createMockProvider();
+      freshStore.overrideSelector(selectCalendarProviders, [mockProvider]);
+      freshStore.refreshState();
+
+      let lastValue: ScheduleCalendarMapEntry[] = [];
+      const sub = freshService.calendarEvents$.subscribe((val) => (lastValue = val));
+
+      tick(0);
+      freshHttpMock.expectOne(mockProvider.icalUrl).flush(icalData);
+      tick(100);
+      flushMicrotasks();
+      freshStore.refreshState();
+      tick(100);
+      flushMicrotasks();
+
+      sub.unsubscribe();
+      discardPeriodicTasks();
+      return lastValue.flatMap((entry) => entry.items.map((item) => item.id));
+    };
+
+    it('hides an event whose only linked task lives in the archive', fakeAsync(() => {
+      // 'test-event-1' is the UID of MOCK_ICAL_DATA's event; the archived calendar task
+      // points back to it. No active task — it was moved to the archive by "Finish Day".
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'archivedTask1', issueId: 'test-event-1', issueType: 'ICAL' }]),
+      );
+
+      expect(fetchVisibleEventIds([], MOCK_ICAL_DATA)).not.toContain('test-event-1');
+    }));
+
+    it('still shows an event whose matching archived task is NOT a calendar task', fakeAsync(() => {
+      // A non-calendar archived task (e.g. a GitHub issue) sharing the id must not
+      // suppress the calendar event — isCalendarIssueTask gates the contribution.
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'ghTask1', issueId: 'test-event-1', issueType: 'GITHUB' }]),
+      );
+
+      expect(fetchVisibleEventIds([], MOCK_ICAL_DATA)).toContain('test-event-1');
+    }));
+
+    it('still shows an event whose id matches no archived calendar task', fakeAsync(() => {
+      // The archive holds a different event id (e.g. a past occurrence); today's event
+      // must remain visible — guards against over-filtering recurring/independent events.
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'archivedTask1', issueId: 'test-event-1', issueType: 'ICAL' }]),
+      );
+
+      expect(fetchVisibleEventIds([], MOCK_ICAL_DATA_2)).toContain('test-event-2');
+    }));
+
+    it('keeps the event hidden across the active → archived transition (no flash)', fakeAsync(() => {
+      TestBed.resetTestingModule();
+      localStorage.clear();
+      // Phase 1: the task is still live (active selector lists its id), archive empty.
+      mockTaskArchiveService.load.and.callFake(emptyArchive);
+
+      TestBed.configureTestingModule({
+        imports: [HttpClientTestingModule],
+        providers: [
+          CalendarIntegrationService,
+          provideMockStore({
+            selectors: [
+              { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
+              { selector: selectAllCalendarTaskEventIds, value: ['test-event-1'] },
+            ],
+          }),
+          { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
+        ],
+      });
+
+      const freshService = TestBed.inject(CalendarIntegrationService);
+      const freshStore = TestBed.inject(MockStore);
+      const freshHttpMock = TestBed.inject(HttpTestingController);
+
+      const mockProvider = createMockProvider();
+      freshStore.overrideSelector(selectCalendarProviders, [mockProvider]);
+      freshStore.refreshState();
+
+      const emittedIdLists: string[][] = [];
+      const sub = freshService.calendarEvents$.subscribe((val) =>
+        emittedIdLists.push(val.flatMap((e) => e.items.map((i) => i.id))),
+      );
+
+      tick(0);
+      freshHttpMock.expectOne(mockProvider.icalUrl).flush(MOCK_ICAL_DATA);
+      tick(100);
+      flushMicrotasks();
+
+      // Phase 2: "Finish Day" archives the task → it leaves the active set and lands in
+      // the archive in the same beat.
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'archivedTask1', issueId: 'test-event-1', issueType: 'ICAL' }]),
+      );
+      freshStore.overrideSelector(selectAllCalendarTaskEventIds, []);
+      freshStore.refreshState();
+      tick(100);
+      flushMicrotasks();
+
+      // The event must never surface in ANY emission across the transition.
+      expect(emittedIdLists.length).toBeGreaterThan(0);
+      emittedIdLists.forEach((ids) => expect(ids).not.toContain('test-event-1'));
+
+      sub.unsubscribe();
+      discardPeriodicTasks();
+    }));
+  });
+
   describe('multiple providers', () => {
     it('should fetch from multiple providers in parallel', fakeAsync(() => {
       const provider1 = createMockProvider({
@@ -1511,6 +1685,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1706,6 +1881,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1729,6 +1905,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1761,6 +1938,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1917,6 +2095,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -2059,6 +2238,7 @@ END:VCALENDAR`;
           { provide: SnackService, useValue: mockSnackService },
           { provide: PluginIssueProviderRegistryService, useValue: mockRegistry },
           { provide: PluginHttpService, useValue: mockPluginHttp },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 

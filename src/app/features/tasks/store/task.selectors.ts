@@ -25,7 +25,7 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
 
-const isCalendarIssueTask = (task: Task | undefined): task is Task =>
+export const isCalendarIssueTask = (task: Task | undefined): task is Task =>
   !!task &&
   !!task.issueType &&
   (task.issueType === 'ICAL' || isPluginIssueProvider(task.issueType));
