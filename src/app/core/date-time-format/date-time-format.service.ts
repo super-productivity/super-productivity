@@ -2,6 +2,7 @@ import { computed, effect, inject, Injectable, signal } from '@angular/core';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
+import { TranslateService } from '@ngx-translate/core';
 
 @Injectable({
   providedIn: 'root',
@@ -9,6 +10,7 @@ import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
 export class DateTimeFormatService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private _dateAdapter = inject(DateAdapter);
+  private readonly _translateService = inject(TranslateService);
   private readonly _localeSig = signal<DateTimeLocale>(DEFAULT_LOCALE);
 
   // Signal for the locale to use
@@ -56,7 +58,15 @@ export class DateTimeFormatService {
     // Use effect to reactively update date adapter locale when config changes
     effect(() => {
       const cfgValue = this._globalConfigService.localization()?.dateTimeLocale;
-      if (cfgValue) this.setDateAdapterLocale(cfgValue);
+      if (cfgValue) {
+        this.setDateAdapterLocale(cfgValue);
+      } else {
+        const uiLang =
+          this._translateService.currentLang ||
+          this._translateService.defaultLang ||
+          DEFAULT_LOCALE;
+        this.setDateAdapterLocale(uiLang as DateTimeLocale);
+      }
     });
   }
 
