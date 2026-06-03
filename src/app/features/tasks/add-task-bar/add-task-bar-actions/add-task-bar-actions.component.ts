@@ -52,7 +52,6 @@ type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
     MatMenuTrigger,
     MatMenuItem,
     TranslateModule,
-    DialogDeadlineComponent,
   ],
 })
 export class AddTaskBarActionsComponent {
