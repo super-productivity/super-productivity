@@ -43,7 +43,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { ProjectService } from '../../../project/project.service';
-import { _MISSING_PROJECT_ } from '../../../project/project.const';
+import { _MISSING_PROJECT_, DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { KeyboardConfig } from '../../../config/keyboard-config.model';
@@ -122,6 +122,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
   readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
+  readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   isAdvancedControls = input<boolean>(false);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });

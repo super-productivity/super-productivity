@@ -38,6 +38,7 @@ import { findAdjacentFocusable } from '../../../util/find-adjacent-focusable';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { ProjectService } from '../../project/project.service';
+import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
 import { Project } from '../../project/project.model';
 import { _MISSING_PROJECT_ } from '../../project/project.const';
 import { T } from '../../../t.const';
@@ -279,6 +280,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   });
 
   T: typeof T = T;
+  readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
   isTouchActive = isTouchActive;
   isDragOver: boolean = false;
   isDragReady = signal(false);
