@@ -19,6 +19,7 @@ import { Store } from '@ngrx/store';
 import { GlobalConfigService } from 'src/app/features/config/global-config.service';
 import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
 import { DateService } from '../../../../core/date/date.service';
+import { TaskReminderOptionId } from '../../task.model';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -98,7 +99,10 @@ describe('AddTaskBarActionsComponent', () => {
       'updateDate',
       'updateEstimate',
       'updateRemindOption',
+      'updateDeadline',
+      'updateDeadlineRemindOption',
       'clearDate',
+      'clearDeadline',
       'clearTags',
       'clearEstimate',
       'toggleTag',
@@ -1024,6 +1028,28 @@ describe('AddTaskBarActionsComponent', () => {
   });
 
   describe('Schedule Dialog Timezone Handling', () => {
+    it('should pass the existing deadline reminder option when opening deadline dialog', () => {
+      const stateWithDeadline = {
+        ...mockState,
+        deadlineDate: '2025-07-20',
+        deadlineTime: '09:15',
+        deadlineRemindOption: TaskReminderOptionId.m30,
+      };
+      (mockStateService as any)._mockStateSignal.set(stateWithDeadline);
+      fixture.detectChanges();
+
+      component.openDeadlineDialog();
+
+      expect(mockMatDialog.open).toHaveBeenCalledWith(jasmine.any(Function), {
+        data: {
+          targetDeadlineDay: '2025-07-20',
+          targetDeadlineTime: '09:15',
+          targetDeadlineRemindOption: TaskReminderOptionId.m30,
+          isSelectDeadlineOnly: true,
+        },
+      });
+    });
+
     it('should handle dialog results with dates from different timezones', () => {
       // Simulate a dialog result with a Date object that might come from a date picker
       const selectedDate = new Date(2025, 2, 15, 10, 30, 0); // March 15, 2025 at 10:30 AM

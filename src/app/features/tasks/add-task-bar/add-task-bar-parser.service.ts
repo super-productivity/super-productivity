@@ -22,6 +22,7 @@ interface PreviousParseResult {
   deadlineDate: string | null;
   deadlineTime: string | null;
   deadlineRemindOption: TaskReminderOptionId | null;
+  isDeadlineFromSyntax: boolean;
 }
 
 @Injectable()
@@ -74,6 +75,12 @@ export class AddTaskBarParserService {
     // Create current parse result data structure
     let currentResult: PreviousParseResult;
 
+    // On the first run _previousParseResult is null. Treat "no previous run"
+    // as "user owns the deadline" so an existing user-set deadline isn't
+    // wiped on first parse.
+    const wasDeadlineFromSyntax =
+      this._previousParseResult?.isDeadlineFromSyntax ?? false;
+
     if (!parseResult) {
       // No parse result means no short syntax found
       // Preserve current user-selected values instead of falling back to defaults
@@ -91,9 +98,12 @@ export class AddTaskBarParserService {
         dueDate: currentState.date || (defaultDate ? defaultDate : null),
         dueTime: currentState.time || defaultTime || null,
         attachments: [],
-        deadlineDate: currentState.deadlineDate || null,
-        deadlineTime: currentState.deadlineTime || null,
-        deadlineRemindOption: currentState.deadlineRemindOption || null,
+        deadlineDate: wasDeadlineFromSyntax ? null : currentState.deadlineDate || null,
+        deadlineTime: wasDeadlineFromSyntax ? null : currentState.deadlineTime || null,
+        deadlineRemindOption: wasDeadlineFromSyntax
+          ? null
+          : currentState.deadlineRemindOption || null,
+        isDeadlineFromSyntax: false,
       };
     } else {
       // Extract parsed values
@@ -124,6 +134,9 @@ export class AddTaskBarParserService {
       let deadlineDate: string | null = null;
       let deadlineTime: string | null = null;
       let deadlineRemindOption: TaskReminderOptionId | null = null;
+      const hasParsedDeadline =
+        parseResult.taskChanges.deadlineWithTime !== undefined ||
+        parseResult.taskChanges.deadlineDay !== undefined;
 
       if (parseResult.taskChanges.deadlineWithTime) {
         const deadlineDateObj = new Date(parseResult.taskChanges.deadlineWithTime);
@@ -147,6 +160,10 @@ export class AddTaskBarParserService {
         }
       } else if (parseResult.taskChanges.deadlineDay) {
         deadlineDate = parseResult.taskChanges.deadlineDay;
+      } else if (!wasDeadlineFromSyntax) {
+        deadlineDate = currentState.deadlineDate || null;
+        deadlineTime = currentState.deadlineTime || null;
+        deadlineRemindOption = currentState.deadlineRemindOption || null;
       }
 
       currentResult = {
@@ -162,6 +179,7 @@ export class AddTaskBarParserService {
         deadlineDate: deadlineDate,
         deadlineTime: deadlineTime,
         deadlineRemindOption: deadlineRemindOption,
+        isDeadlineFromSyntax: hasParsedDeadline,
       };
     }
 

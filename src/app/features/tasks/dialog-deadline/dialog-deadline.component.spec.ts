@@ -4,7 +4,7 @@ import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { DateAdapter } from '@angular/material/core';
-import { DEFAULT_TASK, Task } from '../task.model';
+import { DEFAULT_TASK, Task, TaskReminderOptionId } from '../task.model';
 import { DialogDeadlineComponent } from './dialog-deadline.component';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
@@ -46,6 +46,15 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { task } });
     // Inject the store after the override is in place — TestBed locks
     // overrides on the first inject/createComponent call.
+    store = TestBed.inject(MockStore);
+    dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+    return TestBed.createComponent(DialogDeadlineComponent).componentInstance;
+  };
+
+  const createSelectOnlyComponent = (): DialogDeadlineComponent => {
+    TestBed.overrideProvider(MAT_DIALOG_DATA, {
+      useValue: { isSelectDeadlineOnly: true },
+    });
     store = TestBed.inject(MockStore);
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
     return TestBed.createComponent(DialogDeadlineComponent).componentInstance;
@@ -117,6 +126,26 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     expect(calls[0].deadlineDay).toBe('2026-05-06');
     expect(calls[0].deadlineWithTime).toBeUndefined();
     expect(calls[0].autoPlanToday).toBe('2026-05-06');
+  });
+
+  // Mirrors the non-select-only parameterized test below — same garbage
+  // inputs must round-trip to `time: null` instead of throwing or persisting
+  // a malformed string back to the caller.
+  ['abc', '13:60', '25:00'].forEach((badTime) => {
+    it(`returns null time for malformed select-only deadline time "${badTime}"`, () => {
+      const component = createSelectOnlyComponent();
+      component.selectedDate = new Date(2026, 4, 6);
+      component.selectedTime = badTime;
+
+      expect(() => component.submit()).not.toThrow();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(matDialogRefSpy.close).toHaveBeenCalledWith({
+        date: component.selectedDate,
+        time: null,
+        remindOption: TaskReminderOptionId.DoNotRemind,
+      });
+    });
   });
 
   // Proves issue #7490. submit() must not throw on a malformed selectedTime and

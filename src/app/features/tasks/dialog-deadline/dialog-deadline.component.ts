@@ -85,6 +85,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
     task?: Task;
     targetDeadlineDay?: string;
     targetDeadlineTime?: string;
+    targetDeadlineRemindOption?: TaskReminderOptionId;
     isSelectDeadlineOnly?: boolean;
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogDeadlineComponent>>(MatDialogRef);
@@ -149,7 +150,11 @@ export class DialogDeadlineComponent implements AfterViewInit {
       }
     } else {
       this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
-      if (this.data.targetDeadlineDay || this.data.targetDeadlineTime) {
+      if (
+        this.data.targetDeadlineDay ||
+        this.data.targetDeadlineTime ||
+        this.data.targetDeadlineRemindOption
+      ) {
         this.hasExistingDeadline = true;
       }
     }
@@ -159,6 +164,12 @@ export class DialogDeadlineComponent implements AfterViewInit {
     }
     if (this.data.targetDeadlineTime) {
       this.selectedTime = this.data.targetDeadlineTime;
+    }
+    if (
+      this.data.isSelectDeadlineOnly &&
+      this.data.targetDeadlineRemindOption !== undefined
+    ) {
+      this.selectedReminderCfgId = this.data.targetDeadlineRemindOption;
     }
 
     this.calendar().activeDate = new Date(this.selectedDate || new Date());
@@ -264,9 +275,10 @@ export class DialogDeadlineComponent implements AfterViewInit {
     const time = this.selectedTime ? normalizeClockStr(this.selectedTime) : null;
 
     if (this.data.isSelectDeadlineOnly) {
+      const validTime = time && isValidSplitTime(time) ? time : null;
       this._matDialogRef.close({
         date: this.selectedDate,
-        time,
+        time: validTime,
         remindOption: this.selectedReminderCfgId,
       });
       return;

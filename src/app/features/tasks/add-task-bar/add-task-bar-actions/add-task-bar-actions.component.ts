@@ -247,6 +247,7 @@ export class AddTaskBarActionsComponent {
         data: {
           targetDeadlineDay: state.deadlineDate || undefined,
           targetDeadlineTime: state.deadlineTime || undefined,
+          targetDeadlineRemindOption: state.deadlineRemindOption ?? undefined,
           isSelectDeadlineOnly: true,
         },
       });
