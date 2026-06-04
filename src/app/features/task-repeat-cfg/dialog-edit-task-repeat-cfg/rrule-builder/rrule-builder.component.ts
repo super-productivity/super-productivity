@@ -202,13 +202,33 @@ export class RruleBuilderComponent implements OnInit {
   setNthDayPos(i: number, v: string): void {
     this._patchNthDay(i, { pos: +v as RRuleSetPos });
   }
-  setNthDayWeekday(i: number, v: string): void {
-    this._patchNthDay(i, { day: v as RRuleWeekday });
+  /** Multi-select a weekday within an ordinal row; keep it Mon-first. */
+  toggleNthDayWeekday(i: number, d: RRuleWeekday): void {
+    const cur = this._model().nthDays[i]?.days ?? [];
+    const next = cur.includes(d)
+      ? cur.filter((x) => x !== d)
+      : RRULE_WEEKDAYS.filter((w) => cur.includes(w) || w === d);
+    this._patchNthDay(i, { days: next });
+  }
+  /** Ordinal options for a row = all minus the positions used by OTHER rows, so
+   *  each ordinal ("first", "last", …) anchors at most one row. */
+  availableOrdinalOpts(i: number): SelectOpt<RRuleSetPos>[] {
+    const usedElsewhere = new Set(
+      this._model()
+        .nthDays.filter((_, idx) => idx !== i)
+        .map((d) => d.pos),
+    );
+    return this.ordinalOpts.filter((o) => !usedElsewhere.has(o.value));
+  }
+  /** A new row can be added while an unused ordinal position remains. */
+  canAddNthDay(): boolean {
+    return this._model().nthDays.length < this.ordinalOpts.length;
   }
   addNthDay(): void {
-    const cur = this._model().nthDays;
-    const last = cur[cur.length - 1];
-    this._patch({ nthDays: [...cur, { pos: last?.pos ?? 1, day: last?.day ?? 'MO' }] });
+    const used = new Set(this._model().nthDays.map((d) => d.pos));
+    const next = this.ordinalOpts.map((o) => o.value).find((p) => !used.has(p));
+    if (next == null) return; // every ordinal already anchors a row
+    this._patch({ nthDays: [...this._model().nthDays, { pos: next, days: [] }] });
   }
   removeNthDay(i: number): void {
     const cur = this._model().nthDays;

@@ -32,7 +32,7 @@ describe('rrule-form.util', () => {
           base({
             freq: 'MONTHLY',
             monthlyMode: 'NTH_WEEKDAY',
-            nthDays: [{ pos: 2, day: 'TU' }],
+            nthDays: [{ pos: 2, days: ['TU'] }],
           }),
         ),
       ).toBe('FREQ=MONTHLY;BYDAY=2TU');
@@ -44,7 +44,7 @@ describe('rrule-form.util', () => {
           base({
             freq: 'MONTHLY',
             monthlyMode: 'NTH_WEEKDAY',
-            nthDays: [{ pos: -1, day: 'FR' }],
+            nthDays: [{ pos: -1, days: ['FR'] }],
           }),
         ),
       ).toBe('FREQ=MONTHLY;BYDAY=-1FR');
@@ -57,8 +57,8 @@ describe('rrule-form.util', () => {
             freq: 'MONTHLY',
             monthlyMode: 'NTH_WEEKDAY',
             nthDays: [
-              { pos: 3, day: 'MO' },
-              { pos: 4, day: 'SU' },
+              { pos: 3, days: ['MO'] },
+              { pos: 4, days: ['SU'] },
             ],
           }),
         ),
@@ -74,8 +74,8 @@ describe('rrule-form.util', () => {
             yearlyMode: 'NTH_WEEKDAY',
             byMonth: [6],
             nthDays: [
-              { pos: 3, day: 'MO' },
-              { pos: 4, day: 'SU' },
+              { pos: 3, days: ['MO'] },
+              { pos: 4, days: ['SU'] },
             ],
           }),
         ),
@@ -185,15 +185,15 @@ describe('rrule-form.util', () => {
       const m = rruleToFormModel('FREQ=MONTHLY;BYDAY=3SA');
       expect(m.freq).toBe('MONTHLY');
       expect(m.monthlyMode).toBe('NTH_WEEKDAY');
-      expect(m.nthDays).toEqual([{ pos: 3, day: 'SA' }]);
+      expect(m.nthDays).toEqual([{ pos: 3, days: ['SA'] }]);
     });
 
     it('maps multiple nth-weekdays back to rows (3MO,4SU)', () => {
       const m = rruleToFormModel('FREQ=MONTHLY;BYDAY=3MO,4SU');
       expect(m.monthlyMode).toBe('NTH_WEEKDAY');
       expect(m.nthDays).toEqual([
-        { pos: 3, day: 'MO' },
-        { pos: 4, day: 'SU' },
+        { pos: 3, days: ['MO'] },
+        { pos: 4, days: ['SU'] },
       ]);
     });
 

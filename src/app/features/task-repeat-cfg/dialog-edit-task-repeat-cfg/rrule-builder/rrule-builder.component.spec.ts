@@ -27,19 +27,40 @@ describe('RruleBuilderComponent', () => {
     await setup('FREQ=MONTHLY;BYDAY=2TU');
     expect(component.model().freq).toBe('MONTHLY');
     expect(component.model().monthlyMode).toBe('NTH_WEEKDAY');
-    expect(component.model().nthDays).toEqual([{ pos: 2, day: 'TU' }]);
+    expect(component.model().nthDays).toEqual([{ pos: 2, days: ['TU'] }]);
   });
 
   it('adds a second nth-weekday row and emits combined BYDAY (3MO,4SU)', async () => {
     await setup('FREQ=MONTHLY;BYDAY=3MO');
     const emitted: string[] = [];
     component.rruleChange.subscribe((r) => emitted.push(r));
-    component.addNthDay();
+    component.addNthDay(); // new row defaults to the first unused ordinal, no weekdays yet
     component.setNthDayPos(1, '4');
-    component.setNthDayWeekday(1, 'SU');
+    component.toggleNthDayWeekday(1, 'SU');
     expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=3MO,4SU');
     component.removeNthDay(1);
     expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=3MO');
+  });
+
+  it('selects multiple weekdays on one ordinal row (first Mon + first Tue → 1MO,1TU)', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=1MO');
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.toggleNthDayWeekday(0, 'TU');
+    expect(component.model().nthDays).toEqual([{ pos: 1, days: ['MO', 'TU'] }]);
+    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=1MO,1TU');
+    // toggling it off again removes just that weekday
+    component.toggleNthDayWeekday(0, 'MO');
+    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=1TU');
+  });
+
+  it('the ordinal dropdown for a new row omits positions already used', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=1MO');
+    component.addNthDay(); // row 1
+    // row 0 uses pos 1, so row 1's options must exclude "first" (1)…
+    expect(component.availableOrdinalOpts(1).map((o) => o.value)).not.toContain(1);
+    // …while row 0's own options still include its current pos.
+    expect(component.availableOrdinalOpts(0).map((o) => o.value)).toContain(1);
   });
 
   it('clicking a weekday button patches the correct nth row (nested @for $index)', async () => {
@@ -58,8 +79,9 @@ describe('RruleBuilderComponent', () => {
     (buttons[2] as HTMLButtonElement).click(); // Wednesday (3rd weekday)
     fixture.detectChanges();
 
-    expect(component.model().nthDays).toEqual([{ pos: 3, day: 'WE' }]);
-    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=3WE');
+    // Multi-select: Wednesday is added to the row's existing Monday (Mon-first).
+    expect(component.model().nthDays).toEqual([{ pos: 3, days: ['MO', 'WE'] }]);
+    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=3MO,3WE');
   });
 
   it('emits an assembled rrule when a weekday is toggled', async () => {

@@ -245,7 +245,7 @@
             class="rb-sel"
             (change)="setNthDayPos(rowIdx, pos.value)"
           >
-            @for (o of ordinalOpts; track o.value) {
+            @for (o of availableOrdinalOpts(rowIdx); track o.value) {
               <option
                 [value]="o.value"
                 [selected]="o.value === nd.pos"
@@ -259,9 +259,9 @@
               <button
                 type="button"
                 class="rb-tgl"
-                [class.active]="nd.day === w.value"
+                [class.active]="nd.days.includes(w.value)"
                 [title]="w.full"
-                (click)="setNthDayWeekday(rowIdx, w.value)"
+                (click)="toggleNthDayWeekday(rowIdx, w.value)"
               >
                 {{ w.short }}
               </button>
@@ -279,13 +279,15 @@
           }
         </div>
       }
-      <button
-        type="button"
-        class="rb-tgl rb-tgl--wide"
-        (click)="addNthDay()"
-      >
-        + {{ T.F.TASK_REPEAT.F.RRULE_ADD_NTH | translate }}
-      </button>
+      @if (canAddNthDay()) {
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide"
+          (click)="addNthDay()"
+        >
+          + {{ T.F.TASK_REPEAT.F.RRULE_ADD_NTH | translate }}
+        </button>
+      }
       <div class="rb-hint">
         {{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY_DESCRIPTION | translate }}
       </div>

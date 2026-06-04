@@ -35,10 +35,11 @@ export type RRuleYearlyMode = 'DAY_OF_MONTH' | 'NTH_WEEKDAY' | 'WEEKDAYS';
 export type RRuleEndType = 'NEVER' | 'COUNT' | 'UNTIL';
 /** 1..4 = 1st–4th occurrence in the month; -1 = last. */
 export type RRuleSetPos = 1 | 2 | 3 | 4 | -1;
-/** One nth-weekday row, e.g. `{ pos: 3, day: 'MO' }` = the 3rd Monday. */
+/** One ordinal row applied to a set of weekdays, e.g. `{ pos: 3, days: ['MO',
+ *  'TU'] }` = the 3rd Monday and 3rd Tuesday → BYDAY=3MO,3TU. */
 export interface RRuleNthDay {
   pos: RRuleSetPos;
-  day: RRuleWeekday;
+  days: RRuleWeekday[];
 }
 
 export interface RRuleFormModel {
@@ -100,7 +101,7 @@ export const defaultRRuleFormModel = (refDate: Date = new Date()): RRuleFormMode
     nthDays: [
       {
         pos: Math.min(Math.floor((refDate.getDate() - 1) / 7) + 1, 4) as RRuleSetPos,
-        day: rruleWeekday,
+        days: [rruleWeekday],
       },
     ],
     byMonth: [],
@@ -117,11 +118,13 @@ export const defaultRRuleFormModel = (refDate: Date = new Date()): RRuleFormMode
   };
 };
 
-/** "3MO,4SU" from per-weekday-ordinal rows. */
-const nthDaysToByDay = (days: RRuleNthDay[]): string =>
-  (days ?? [])
-    .filter((d) => RRULE_WEEKDAYS.includes(d.day))
-    .map((d) => `${d.pos}${d.day}`)
+/** "3MO,4SU" / "1MO,1TU" — each row's ordinal applied to each of its weekdays
+ *  (Mon-first within a row). */
+const nthDaysToByDay = (rows: RRuleNthDay[]): string =>
+  (rows ?? [])
+    .flatMap((r) =>
+      RRULE_WEEKDAYS.filter((d) => (r.days ?? []).includes(d)).map((d) => `${r.pos}${d}`),
+    )
     .join(',');
 
 /** Build the RFC 5545 RRULE body (no `RRULE:` prefix) from the dropdown model. */
@@ -244,8 +247,21 @@ export const rruleToFormModel = (
 
   // When every weekday carries an ordinal (e.g. 3MO,4SU) it's the nth-weekday
   // mode; a plain set (MO,TU) or one with BYSETPOS stays the weekday-set mode.
-  const toNthDays = (): RRuleNthDay[] =>
-    weekdays.map((w) => ({ pos: w.n as RRuleSetPos, day: RRULE_WEEKDAYS[w.weekday] }));
+  // Weekdays that share an ordinal collapse into one row: 1MO,1TU,3WE →
+  // [{pos:1,days:[MO,TU]},{pos:3,days:[WE]}] (Mon-first within each row).
+  const toNthDays = (): RRuleNthDay[] => {
+    const byPos = new Map<number, RRuleWeekday[]>();
+    for (const wd of weekdays) {
+      const day = RRULE_WEEKDAYS[wd.weekday];
+      const list = byPos.get(wd.n as number) ?? [];
+      if (!list.includes(day)) list.push(day);
+      byPos.set(wd.n as number, list);
+    }
+    return [...byPos.entries()].map(([pos, days]) => ({
+      pos: pos as RRuleSetPos,
+      days: RRULE_WEEKDAYS.filter((d) => days.includes(d)),
+    }));
+  };
 
   if (model.freq === 'MONTHLY') {
     if (weekdays.length && weekdays.every((w) => w.n != null)) {
