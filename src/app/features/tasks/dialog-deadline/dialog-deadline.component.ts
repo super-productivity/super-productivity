@@ -6,7 +6,6 @@ import {
   computed,
   ElementRef,
   inject,
-  viewChild,
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -16,40 +15,25 @@ import {
 } from '@angular/material/dialog';
 import { Task, TaskReminderOption, TaskReminderOptionId } from '../task.model';
 import { T } from 'src/app/t.const';
-import { MatCalendar } from '@angular/material/datepicker';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DEADLINE_REMINDER_OPTIONS } from './deadline-reminder-options.const';
 import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
-import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
-import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { getClockStringFromHours } from '../../../util/get-clock-string-from-hours';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
-import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getDbDateStr } from '../../../util/get-db-date-str';
-import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateService } from '../../../core/date/date.service';
-import { DateAdapter, MatOption } from '@angular/material/core';
-import { MatTooltip } from '@angular/material/tooltip';
-import { MatButton, MatIconButton } from '@angular/material/button';
+import { DateAdapter } from '@angular/material/core';
+import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import {
-  MatFormField,
-  MatLabel,
-  MatPrefix,
-  MatSuffix,
-} from '@angular/material/form-field';
-import { MatSelect } from '@angular/material/select';
 import { TranslatePipe } from '@ngx-translate/core';
-import { MatInput } from '@angular/material/input';
-import { TimeStepDirective } from '../../../ui/time-step/time-step.directive';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
-
-const DEFAULT_TIME = '09:00';
+import { DateTimePickerComponent } from '../../../ui/datetime-picker/datetime-picker.component';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 
 type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
 
@@ -57,27 +41,16 @@ type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
   selector: 'dialog-deadline',
   imports: [
     FormsModule,
-    MatTooltip,
-    MatIconButton,
     MatIcon,
-    MatFormField,
-    MatSelect,
-    MatOption,
     TranslatePipe,
     MatButton,
     MatDialogActions,
     MatDialogContent,
-    MatCalendar,
-    MatInput,
-    MatLabel,
-    MatSuffix,
-    MatPrefix,
-    TimeStepDirective,
+    DateTimePickerComponent,
   ],
   templateUrl: './dialog-deadline.component.html',
   styleUrl: './dialog-deadline.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [expandFadeAnimation, fadeAnimation],
 })
 export class DialogDeadlineComponent implements AfterViewInit {
   data = inject<{
@@ -105,8 +78,6 @@ export class DialogDeadlineComponent implements AfterViewInit {
   );
 
   T: typeof T = T;
-  readonly calendar = viewChild.required(MatCalendar);
-
   reminderOptions: TaskReminderOption[] = DEADLINE_REMINDER_OPTIONS;
   task: Task | undefined = this.data.task;
 
@@ -115,9 +86,6 @@ export class DialogDeadlineComponent implements AfterViewInit {
   selectedReminderCfgId: TaskReminderOptionId = TaskReminderOptionId.DoNotRemind;
 
   hasExistingDeadline = false;
-  isInitValOnTimeFocus = true;
-  isShowEnterMsg = false;
-  private _timeCheckVal: string | null = null;
 
   ngAfterViewInit(): void {
     if (this.task) {
@@ -160,47 +128,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
       this.selectedTime = this.data.targetDeadlineTime;
     }
 
-    this.calendar().activeDate = new Date(this.selectedDate || new Date());
     this._cd.detectChanges();
-
-    setTimeout(() => this._focusInitially());
-    setTimeout(() => this._focusInitially(), 300);
-  }
-
-  private _focusInitially(): void {
-    const host = this._elRef.nativeElement as HTMLElement;
-    const selector = this.selectedDate
-      ? '.mat-calendar-body-selected'
-      : '.mat-calendar-body-today';
-    (host.querySelector(selector) as HTMLElement)?.parentElement?.focus();
-  }
-
-  onKeyDownOnCalendar(ev: KeyboardEvent): void {
-    this._timeCheckVal = null;
-    if (ev.code === 'Enter' || ev.code === 'Space') {
-      this.isShowEnterMsg = true;
-      if (
-        this.selectedDate &&
-        new Date(this.selectedDate).getTime() ===
-          new Date(this.calendar().activeDate).getTime()
-      ) {
-        this.submit();
-      }
-    } else {
-      this.isShowEnterMsg = false;
-    }
-  }
-
-  onTimeKeyDown(ev: KeyboardEvent): void {
-    if (ev.key === 'Enter') {
-      this.isShowEnterMsg = true;
-      if (this._timeCheckVal === this.selectedTime) {
-        this.submit();
-      }
-      this._timeCheckVal = this.selectedTime;
-    } else {
-      this.isShowEnterMsg = false;
-    }
   }
 
   close(): void {
@@ -208,33 +136,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
   }
 
   dateSelected(newDate: Date): void {
-    setTimeout(() => {
-      this.selectedDate = new Date(newDate);
-      this.calendar().activeDate = this.selectedDate;
-    });
-  }
-
-  onTimeClear(ev: MouseEvent): void {
-    ev.stopPropagation();
-    this.selectedTime = null;
-    this.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
-    this.isInitValOnTimeFocus = true;
-  }
-
-  onTimeFocus(): void {
-    if (!this.selectedTime && this.isInitValOnTimeFocus) {
-      this.isInitValOnTimeFocus = false;
-      if (this.selectedDate) {
-        if (this._dateService.isToday(this.selectedDate!)) {
-          this.selectedTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
-        } else {
-          this.selectedTime = DEFAULT_TIME;
-        }
-      } else {
-        this.selectedTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
-        this.selectedDate = new Date();
-      }
-    }
+    this.selectedDate = new Date(newDate);
   }
 
   remove(): void {
@@ -302,8 +204,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
     this._matDialogRef.close();
   }
 
-  quickAccessBtnClick(ev: MouseEvent, option: QuickDeadline): void {
-    ev.stopPropagation();
+  onQuickAccessClick(option: QuickDeadline): void {
     this.selectedDate = this._getQuickDate(option);
     this.submit();
   }

@@ -1,0 +1,95 @@
+@use '../../../styles/_globals.scss' as *;
+
+:host {
+  display: block;
+  user-select: none;
+  width: 100%;
+
+  ::ng-deep {
+    mat-calendar {
+      height: 400px;
+    }
+
+    .mat-calendar-header {
+      padding-top: 0;
+    }
+
+    .mat-calendar-body-cell-content {
+      background: transparent !important;
+    }
+
+    .mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
+      outline: 2px solid var(--c-accent);
+    }
+
+    .mat-calendar-body-selected {
+      background: var(--c-primary) !important;
+    }
+
+    .mat-calendar-controls {
+      margin-top: var(--s);
+      margin-bottom: var(--s);
+    }
+  }
+}
+
+.quick-access {
+  display: flex;
+  justify-content: space-evenly;
+  @include extraBorder('-bottom');
+  height: 48px;
+
+  > button {
+    height: 48px;
+    flex-grow: 1;
+    border-radius: var(--card-border-radius) !important;
+
+    ::ng-deep .mat-mdc-button-persistent-ripple {
+      border-radius: var(--card-border-radius) !important;
+    }
+  }
+
+  button + button {
+    @include extraBorder('-left');
+  }
+}
+
+:host ::ng-deep mat-month-view .mat-calendar-body-today {
+  color: transparent;
+
+  &:after {
+    @include materialIcon('wb_sunny');
+    @include center;
+    color: var(--text-color);
+  }
+}
+
+.press-enter-msg {
+  text-align: center;
+  font-weight: bold;
+  padding: var(--s-half) 12px;
+  position: absolute;
+  left: 50%;
+  z-index: 11;
+  box-shadow: var(--whiteframe-shadow-1dp);
+  border-radius: 8px;
+  margin-top: -12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  background: var(--bg-lighter);
+}
+
+.form-ctrl-wrapper {
+  margin: var(--s2) var(--s2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+
+  mat-form-field {
+    width: 100%;
+  }
+
+  .time-clear-btn {
+    cursor: pointer;
+  }
+}

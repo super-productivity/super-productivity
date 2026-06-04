@@ -240,52 +240,15 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       const initialDate = new Date();
       initialDate.setMinutes(0, 0, 0);
 
-      // Test "Today" button (item 1)
-      component.quickAccessBtnClick(1);
+      // Test "Today" button
+      component.onQuickAccessClick('today');
       expect(component.selectedDate).toEqual(initialDate);
 
-      // Test "Tomorrow" button (item 2)
+      // Test "Tomorrow" button
       const tomorrow = new Date(initialDate);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      component.quickAccessBtnClick(2);
+      component.onQuickAccessClick('tomorrow');
       expect(component.selectedDate).toEqual(tomorrow);
-    });
-  });
-
-  describe('Time handling in select-due-only mode', () => {
-    beforeEach(() => {
-      TestBed.overrideProvider(MAT_DIALOG_DATA, {
-        useValue: {
-          isSelectDueOnly: true,
-        },
-      });
-
-      fixture = TestBed.createComponent(DialogScheduleTaskComponent);
-      component = fixture.componentInstance;
-      fixture.detectChanges();
-    });
-
-    it('should clear time when onTimeClear is called', () => {
-      component.selectedTime = '10:30';
-      const mockEvent = new MouseEvent('click');
-
-      component.onTimeClear(mockEvent);
-
-      expect(component.selectedTime).toBeNull();
-      expect(component.isInitValOnTimeFocus).toBe(true);
-    });
-
-    it('should set default time on focus when no time selected', () => {
-      component.selectedTime = null;
-      component.isInitValOnTimeFocus = true;
-      const testDate = new Date();
-      testDate.setDate(testDate.getDate() + 1); // Tomorrow
-      component.selectedDate = testDate;
-
-      component.onTimeFocus();
-
-      expect(component.selectedTime).toBeTruthy();
-      expect(component.isInitValOnTimeFocus).toBe(false);
     });
   });
 });
