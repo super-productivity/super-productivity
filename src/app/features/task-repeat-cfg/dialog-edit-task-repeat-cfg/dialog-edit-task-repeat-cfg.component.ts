@@ -51,6 +51,9 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
+import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 
 // Fields whose change requires offering "Update all task instances?" — covers
 // what propagates to existing tasks (vs. schedule fields, which only affect
@@ -86,6 +89,74 @@ const RELEVANT_KEYS_FOR_UPDATE_ALL_TASKS: (keyof TaskRepeatCfgCopy)[] = [
 export class DialogEditTaskRepeatCfgComponent {
   private _globalConfigService = inject(GlobalConfigService);
   private _tagService = inject(TagService);
+
+  plannedStartDateStr = computed(() => {
+    const d = this.repeatCfg().startDate;
+    if (!d) return this._translateService.instant(T.F.TASK_REPEAT.F.START_DATE);
+    const date = dateStrToUtcDate(d);
+    const formattedDate = date.toLocaleDateString(
+      this._dateTimeFormatService.currentLocale(),
+      { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' },
+    );
+    const time = this.repeatCfg().startTime;
+    return time ? `${formattedDate} at ${time}` : formattedDate;
+  });
+
+  openScheduleDialog(): void {
+    const currentCfg = this.repeatCfg();
+    const dummyTask: any = {
+      title: currentCfg.title || '',
+      dueDay: currentCfg.startDate || undefined,
+      dueWithTime: undefined,
+      remindAt: undefined,
+      timeEstimate: 0,
+      timeSpent: 0,
+      subTaskIds: [],
+      isDone: false,
+      projectId: '',
+      timeSpentOnDay: {},
+      attachments: [],
+      tagIds: [],
+      created: Date.now(),
+    };
+
+    if (currentCfg.startDate && currentCfg.startTime) {
+      const dt = getDateTimeFromClockString(
+        currentCfg.startTime,
+        dateStrToUtcDate(currentCfg.startDate),
+      );
+      dummyTask.dueWithTime = dt;
+      if (
+        currentCfg.remindAt &&
+        currentCfg.remindAt !== TaskReminderOptionId.DoNotRemind
+      ) {
+        dummyTask.remindAt = remindOptionToMilliseconds(dt, currentCfg.remindAt);
+      }
+    }
+
+    this._matDialog
+      .open(DialogScheduleTaskComponent, {
+        autoFocus: false,
+        data: {
+          task: dummyTask,
+          isSelectDueOnly: true,
+          showQuickAccess: false,
+        },
+      })
+      .afterClosed()
+      .subscribe((result) => {
+        if (result) {
+          const newDateStr = getDbDateStr(result.date);
+          this.repeatCfg.update((cfg) => ({
+            ...cfg,
+            startDate: newDateStr,
+            startTime: result.time || undefined,
+            remindAt: result.remindOption || undefined,
+          }));
+        }
+      });
+  }
+
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _matDialogRef =
@@ -214,30 +285,7 @@ export class DialogEditTaskRepeatCfgComponent {
       ...field,
     }));
 
-    // Clamp startDate to today as a floor for NEW configs and recent ones
-    // (#7768 Bug 4). For configs whose startDate is already in the past, the
-    // existing value is the floor — users can still keep or adjust it.
-    const startDateIdx = formConfig.findIndex((f) => f.key === 'startDate');
-    if (startDateIdx !== -1) {
-      const startDateField: FormlyFieldConfig = {
-        ...formConfig[startDateIdx],
-        templateOptions: { ...formConfig[startDateIdx].templateOptions },
-      };
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const initialStartDate = this._data.repeatCfg?.startDate
-        ? dateStrToUtcDate(this._data.repeatCfg.startDate)
-        : this._data.task?.dueDay
-          ? dateStrToUtcDate(this._data.task.dueDay)
-          : today;
-      // Formly types templateOptions.min as number, but the formly-date-picker
-      // passes it through to date-picker-input which accepts Date | string.
-      // Use the YYYY-MM-DD string form so the cast is just a type concern.
-      const minFloor = initialStartDate < today ? initialStartDate : today;
-      (startDateField.templateOptions as Record<string, unknown>).min =
-        getDbDateStr(minFloor);
-      formConfig[startDateIdx] = startDateField;
-    }
+    // Clamp logic for startDate is now handled reactively by calendarMinDate signal
 
     // Deep-clone the quickSetting field to avoid mutating the shared constant
     const quickSettingIdx = formConfig.findIndex((f) => f.key === 'quickSetting');

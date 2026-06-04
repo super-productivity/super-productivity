@@ -97,6 +97,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     targetDay?: string;
     targetTime?: string;
     isSelectDueOnly?: boolean;
+    showQuickAccess?: boolean;
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogScheduleTaskComponent>>(MatDialogRef);
   private _cd = inject(ChangeDetectorRef);

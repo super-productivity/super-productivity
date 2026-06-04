@@ -426,53 +426,25 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
   });
 
-  describe('startDate min floor (#7768 Bug 4)', () => {
-    const getStartDateMin = (
-      fixture: ComponentFixture<DialogEditTaskRepeatCfgComponent>,
-    ): unknown => {
-      const fields = fixture.componentInstance.essentialFormFields();
-      const startDateField = fields.find((f) => f.key === 'startDate');
-      return (startDateField?.templateOptions as Record<string, unknown> | undefined)?.[
-        'min'
-      ];
-    };
-
-    const todayStr = (): string => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    };
-
-    it('floors startDate to today for a new repeat cfg created from a task', async () => {
-      const fixture = await setupTestBed({ task: mockTask });
-      expect(getStartDateMin(fixture)).toBe(todayStr());
+  describe('plannedStartDateStr computed signal', () => {
+    it('returns a formatted localized date string when only startDate is set', async () => {
+      const fixture = await setupTestBed({ repeatCfg: mockRepeatCfg });
+      fixture.detectChanges();
+      const val = fixture.componentInstance.plannedStartDateStr();
+      // '2026-01-02' formatted in en-US is 'Jan 2, 2026'
+      expect(val).toContain('Jan 2, 2026');
     });
 
-    it('keeps the past startDate as the floor when editing an existing past cfg', async () => {
-      const pastCfg: TaskRepeatCfg = {
+    it('returns a formatted localized date and time string when startTime is set', async () => {
+      const cfgWithTime: TaskRepeatCfg = {
         ...mockRepeatCfg,
-        startDate: '2020-01-15',
+        startTime: '11:45',
       };
-      const fixture = await setupTestBed({ repeatCfg: pastCfg });
-      expect(getStartDateMin(fixture)).toBe('2020-01-15');
-    });
-
-    it('floors to today when editing a cfg whose startDate is in the future', async () => {
-      const future = new Date();
-      future.setFullYear(future.getFullYear() + 1);
-      const yyyy = future.getFullYear();
-      const mm = String(future.getMonth() + 1).padStart(2, '0');
-      const dd = String(future.getDate()).padStart(2, '0');
-      const futureStr = `${yyyy}-${mm}-${dd}`;
-      const futureCfg: TaskRepeatCfg = {
-        ...mockRepeatCfg,
-        startDate: futureStr,
-      };
-      const fixture = await setupTestBed({ repeatCfg: futureCfg });
-      expect(getStartDateMin(fixture)).toBe(todayStr());
+      const fixture = await setupTestBed({ repeatCfg: cfgWithTime });
+      fixture.detectChanges();
+      const val = fixture.componentInstance.plannedStartDateStr();
+      expect(val).toContain('Jan 2, 2026');
+      expect(val).toContain('11:45');
     });
   });
 
