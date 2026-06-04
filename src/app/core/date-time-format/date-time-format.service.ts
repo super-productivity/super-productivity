@@ -9,7 +9,7 @@ import { TranslateService } from '@ngx-translate/core';
 })
 export class DateTimeFormatService {
   private readonly _globalConfigService = inject(GlobalConfigService);
-  private _dateAdapter = inject(DateAdapter);
+  private _dateAdapter = inject(DateAdapter, { optional: true });
   private readonly _translateService = inject(TranslateService);
   private readonly _localeSig = signal<DateTimeLocale>(DEFAULT_LOCALE);
 
@@ -72,7 +72,9 @@ export class DateTimeFormatService {
 
   /** Set the locale for the date adapter formatting */
   setDateAdapterLocale(locale: DateTimeLocale): void {
-    this._dateAdapter.setLocale(locale);
+    if (this._dateAdapter && typeof this._dateAdapter.setLocale === 'function') {
+      this._dateAdapter.setLocale(locale);
+    }
     this._localeSig.set(locale);
   }
 
