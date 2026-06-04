@@ -20,6 +20,7 @@
             [item]="tag"
             [isSelected]="task().tagIds.includes(tag.id)"
             [showCheckbox]="true"
+            [allOptions]="toggleTagList()"
           ></select-option-row>
         </button>
       }

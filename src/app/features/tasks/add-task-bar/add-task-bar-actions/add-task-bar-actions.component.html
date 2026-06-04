@@ -192,7 +192,10 @@
       mat-menu-item
       (click)="stateService.updateProjectId(project.id)"
     >
-      <select-option-row [item]="project"></select-option-row>
+      <select-option-row
+        [item]="project"
+        [allOptions]="allProjects()"
+      ></select-option-row>
     </button>
   }
 </mat-menu>
@@ -209,6 +212,7 @@
           [item]="tag"
           [isSelected]="hasSelectedTag(tag.id)"
           [showCheckbox]="true"
+          [allOptions]="allTags()"
         ></select-option-row>
       </button>
     }

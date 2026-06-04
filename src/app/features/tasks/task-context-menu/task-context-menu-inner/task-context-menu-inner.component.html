@@ -367,17 +367,19 @@
   (closed)="focusRelatedTaskOrNext()"
 >
   <ng-template matMenuContent>
-    @for (
-      project of moveToProjectList$ | async;
-      track trackByProjectId($index, project)
-    ) {
-      <button
-        (click)="moveTaskToProject(project.id)"
-        mat-menu-item
-        menuTouchFix
-      >
-        <select-option-row [item]="project"></select-option-row>
-      </button>
+    @if (moveToProjectList$ | async; as list) {
+      @for (project of list; track trackByProjectId($index, project)) {
+        <button
+          (click)="moveTaskToProject(project.id)"
+          mat-menu-item
+          menuTouchFix
+        >
+          <select-option-row
+            [item]="project"
+            [allOptions]="list"
+          ></select-option-row>
+        </button>
+      }
     }
   </ng-template>
 </mat-menu>
@@ -388,18 +390,20 @@
 >
   <ng-template matMenuContent>
     <div (click)="$event.stopPropagation()">
-      @for (tag of toggleTagList(); track $index) {
-        <button
-          (click)="toggleTag(tag.id)"
-          mat-menu-item
-          menuTouchFix
-        >
-          <select-option-row
-            [item]="tag"
-            [isSelected]="task.tagIds.includes(tag.id)"
-            [showCheckbox]="true"
-          ></select-option-row>
-        </button>
+      @if (tags$ | async; as tags) {
+        @for (tag of tags; track tag.id) {
+          <button
+            (click)="toggleTag(tag.id)"
+            mat-menu-item
+          >
+            <select-option-row
+              [item]="tag"
+              [isSelected]="task().tagIds.includes(tag.id)"
+              [showCheckbox]="true"
+              [allOptions]="tags"
+            ></select-option-row>
+          </button>
+        }
       }
     </div>
     <button

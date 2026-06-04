@@ -32,6 +32,7 @@ export class SelectOptionRowComponent {
   private readonly _menuTreeService = inject(MenuTreeService);
 
   item = input.required<Project | Tag | SelectOptionRowItem>();
+  allOptions = input<(Project | Tag | SelectOptionRowItem)[]>();
   isSelected = input<boolean>(false);
   showCheckbox = input<boolean>(false);
 
@@ -53,10 +54,23 @@ export class SelectOptionRowComponent {
   });
 
   folder = computed(() => {
-    const id = this.item().id;
+    const item = this.item();
+    const id = item.id;
     if (!id) {
       return null;
     }
+
+    const all = this.allOptions();
+    if (all) {
+      const title = item.title.trim().toLowerCase();
+      const hasCollision = all.some(
+        (other) => other.id !== id && other.title.trim().toLowerCase() === title,
+      );
+      if (!hasCollision) {
+        return null;
+      }
+    }
+
     return (
       this._menuTreeService.projectFolderMap().get(id) ||
       this._menuTreeService.tagFolderMap().get(id) ||

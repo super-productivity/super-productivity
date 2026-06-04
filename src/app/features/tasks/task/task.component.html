@@ -320,7 +320,10 @@
             (click)="moveTaskToProject(project.id)"
             mat-menu-item
           >
-            <select-option-row [item]="project"></select-option-row>
+            <select-option-row
+              [item]="project"
+              [allOptions]="moveToProjectList()"
+            ></select-option-row>
           </button>
         }
       }
