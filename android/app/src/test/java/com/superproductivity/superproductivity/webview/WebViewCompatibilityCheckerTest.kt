@@ -233,7 +233,7 @@ class WebViewCompatibilityCheckerTest {
     }
 
     @Test
-    fun `blockScreenConfig uses init-failure copy and gated settings action when provider details exist`() {
+    fun `blockScreenConfig uses init-failure copy and gated app-info action when provider details exist`() {
         val config = WebViewCompatibilityChecker.blockScreenConfig(
             source = VersionSource.INIT_FAILURE,
             hasProviderDetails = true,
@@ -241,7 +241,7 @@ class WebViewCompatibilityCheckerTest {
 
         assertEquals(R.string.webview_init_failure_message, config.titleResId)
         assertEquals(R.string.webview_init_failure_details_with_provider, config.detailsIntroResId)
-        assertEquals(BlockScreenAction.OPEN_WEBVIEW_SETTINGS_WITH_WARNING, config.action)
+        assertEquals(BlockScreenAction.OPEN_WEBVIEW_APP_INFO_WITH_WARNING, config.action)
         assertFalse(config.showTryAnyway)
         assertTrue(config.showSource)
         assertTrue(config.showRetry)
@@ -301,6 +301,24 @@ class WebViewCompatibilityCheckerTest {
         assertEquals(
             "package:com.android.chrome",
             WebViewCompatibilityChecker.webViewProviderDetailsUri("com.android.chrome"),
+        )
+    }
+
+    @Test
+    fun `providerPackageOrDefault keeps a resolved provider but falls back when blank`() {
+        assertEquals(
+            "com.android.chrome",
+            WebViewCompatibilityChecker.providerPackageOrDefault("com.android.chrome"),
+        )
+        // Init failures usually have no resolvable provider, so App Info must still
+        // target the standard system WebView package rather than "package:null".
+        assertEquals(
+            "com.google.android.webview",
+            WebViewCompatibilityChecker.providerPackageOrDefault(null),
+        )
+        assertEquals(
+            "com.google.android.webview",
+            WebViewCompatibilityChecker.providerPackageOrDefault("  "),
         )
     }
 

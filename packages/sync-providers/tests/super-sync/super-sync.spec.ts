@@ -295,6 +295,53 @@ describe('SuperSyncProvider', () => {
       } as SuperSyncPrivateCfg);
       expect(await provider.isReady()).toBe(false);
     });
+
+    it('returns false when encryption is enabled but the key is missing (half-configured)', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: true,
+        encryptKey: '',
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isReady()).toBe(false);
+    });
+
+    it('returns true when encryption is enabled and the key is present', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: true,
+        encryptKey: 'secret',
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isReady()).toBe(true);
+    });
+  });
+
+  describe('isEncryptionEnabled', () => {
+    it('reflects the config flag even when no key is present (half-configured)', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: true,
+        encryptKey: '',
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isEncryptionEnabled()).toBe(true);
+    });
+
+    it('returns false when encryption is disabled', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: false,
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isEncryptionEnabled()).toBe(false);
+    });
+
+    it('returns false when config is null', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue(null);
+      expect(await provider.isEncryptionEnabled()).toBe(false);
+    });
   });
 
   describe('setPrivateCfg', () => {

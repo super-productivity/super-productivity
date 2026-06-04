@@ -34,6 +34,25 @@ class FocusModeForegroundService : Service() {
         var isRunning: Boolean = false
             private set
 
+        // Marks the window between startForegroundService() and the first
+        // startForeground() inside onStartCommand(). A stop arriving in that
+        // window must NOT use stopService() — tearing down a start-foreground
+        // service before it promotes crashes the process with
+        // ForegroundServiceDidNotStartInTimeException (AOSP bringDownServiceLocked,
+        // fired while fgRequired is still true). JavaScriptInterface reads this to
+        // route such stops through onStartCommand (ACTION_STOP) instead.
+        @Volatile
+        var isStartPending: Boolean = false
+            private set
+
+        fun markStartPending() {
+            isStartPending = true
+        }
+
+        fun clearStartPending() {
+            isStartPending = false
+        }
+
         // Live timer state mirrored into the companion so JavaScriptInterface
         // can read it back after the WebView is recreated (app reopened from
         // recents). Mirrors TrackingForegroundService's static-state pattern so
@@ -128,10 +147,12 @@ class FocusModeForegroundService : Service() {
         // after startForegroundService(). Promote before handling actions so
         // newly started services satisfy that contract.
         if (!ensureForegroundNotification()) {
+            clearStartPending()
             reportForegroundFailure()
             stopAfterForegroundFailure(startId)
             return START_NOT_STICKY
         }
+        clearStartPending()
 
         when (intent?.action) {
             ACTION_START -> {
@@ -351,6 +372,10 @@ class FocusModeForegroundService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
         isRunning = false
+        // Heal a never-promoted start: if the service was created but torn down
+        // before onStartCommand cleared it, drop the stale flag so the next cold
+        // stop uses stopService() rather than needlessly re-spawning the service.
+        clearStartPending()
         handler.removeCallbacks(updateRunnable)
     }
 

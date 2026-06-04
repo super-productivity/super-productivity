@@ -21,6 +21,14 @@ import { DEADLINE_REMINDER_OPTIONS } from './deadline-reminder-options.const';
 import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
+import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
+import { fadeAnimation } from '../../../ui/animations/fade.ani';
+import { getClockStringFromHours } from '../../../util/get-clock-string-from-hours';
+import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { normalizeClockStr } from '../../../util/normalize-clock-str';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateService } from '../../../core/date/date.service';
 import { DateAdapter } from '@angular/material/core';
 import { MatButton } from '@angular/material/button';
@@ -57,6 +65,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
     task?: Task;
     targetDeadlineDay?: string;
     targetDeadlineTime?: string;
+    targetDeadlineRemindOption?: TaskReminderOptionId;
     isSelectDeadlineOnly?: boolean;
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogDeadlineComponent>>(MatDialogRef);
@@ -116,7 +125,11 @@ export class DialogDeadlineComponent implements AfterViewInit {
       }
     } else {
       this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
-      if (this.data.targetDeadlineDay || this.data.targetDeadlineTime) {
+      if (
+        this.data.targetDeadlineDay ||
+        this.data.targetDeadlineTime ||
+        this.data.targetDeadlineRemindOption
+      ) {
         this.hasExistingDeadline = true;
       }
     }
@@ -126,6 +139,12 @@ export class DialogDeadlineComponent implements AfterViewInit {
     }
     if (this.data.targetDeadlineTime) {
       this.selectedTime = this.data.targetDeadlineTime;
+    }
+    if (
+      this.data.isSelectDeadlineOnly &&
+      this.data.targetDeadlineRemindOption !== undefined
+    ) {
+      this.selectedReminderCfgId = this.data.targetDeadlineRemindOption;
     }
 
     this._cd.detectChanges();
@@ -159,21 +178,24 @@ export class DialogDeadlineComponent implements AfterViewInit {
       return;
     }
 
+    // Recover a stray seconds component (e.g. a pasted `13:30:00`) so the time
+    // the user set actually persists instead of silently dropping to a
+    // date-only deadline (#7802). Genuine garbage still fails the guard below.
+    const time = this.selectedTime ? normalizeClockStr(this.selectedTime) : null;
+
     if (this.data.isSelectDeadlineOnly) {
+      const validTime = time && isValidSplitTime(time) ? time : null;
       this._matDialogRef.close({
         date: this.selectedDate,
-        time: this.selectedTime,
+        time: validTime,
         remindOption: this.selectedReminderCfgId,
       });
       return;
     }
 
     if (this.task) {
-      if (this.selectedTime && isValidSplitTime(this.selectedTime)) {
-        const deadlineTimestamp = getDateTimeFromClockString(
-          this.selectedTime,
-          this.selectedDate!,
-        );
+      if (time && isValidSplitTime(time)) {
+        const deadlineTimestamp = getDateTimeFromClockString(time, this.selectedDate!);
         const deadlineRemindAt =
           this.selectedReminderCfgId !== TaskReminderOptionId.DoNotRemind
             ? remindOptionToMilliseconds(deadlineTimestamp, this.selectedReminderCfgId)

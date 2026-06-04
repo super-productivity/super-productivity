@@ -19,6 +19,7 @@ import { Store } from '@ngrx/store';
 import { GlobalConfigService } from 'src/app/features/config/global-config.service';
 import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
 import { DateService } from '../../../../core/date/date.service';
+import { TaskReminderOptionId } from '../../task.model';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -98,7 +99,10 @@ describe('AddTaskBarActionsComponent', () => {
       'updateDate',
       'updateEstimate',
       'updateRemindOption',
+      'updateDeadline',
+      'updateDeadlineRemindOption',
       'clearDate',
+      'clearDeadline',
       'clearTags',
       'clearEstimate',
       'toggleTag',
@@ -358,6 +362,44 @@ describe('AddTaskBarActionsComponent', () => {
 
       const result = component.dateDisplay();
       expect(result).toContain(expectedLocaleTime('10:00', 'en-US'));
+    });
+
+    // Repro for #7802 — a malformed time string in state crashed change
+    // detection via the "Invalid clock string" guard in _formatTimeForDisplay.
+    it('does NOT throw and shows the normalized time for a "13:30:00" state.time', () => {
+      const today = mockDateService.todayStr();
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        date: today,
+        time: '13:30:00',
+      });
+
+      expect(() => component.dateDisplay()).not.toThrow();
+      expect(component.dateDisplay()).toBe(expectedLocaleTime('13:30', 'en-US'));
+    });
+
+    it('does NOT throw for genuinely invalid state.time', () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 4);
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        date: getDbDateStr(futureDate),
+        time: 'abc',
+      });
+
+      expect(() => component.dateDisplay()).not.toThrow();
+    });
+
+    it('does NOT throw and shows the normalized time for a "13:30:00" deadlineTime', () => {
+      const today = mockDateService.todayStr();
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        deadlineDate: today,
+        deadlineTime: '13:30:00',
+      });
+
+      expect(() => component.deadlineDateDisplay()).not.toThrow();
+      expect(component.deadlineDateDisplay()).toBe(expectedLocaleTime('13:30', 'en-US'));
     });
 
     it('should handle auto-detected state correctly', () => {
@@ -986,6 +1028,28 @@ describe('AddTaskBarActionsComponent', () => {
   });
 
   describe('Schedule Dialog Timezone Handling', () => {
+    it('should pass the existing deadline reminder option when opening deadline dialog', () => {
+      const stateWithDeadline = {
+        ...mockState,
+        deadlineDate: '2025-07-20',
+        deadlineTime: '09:15',
+        deadlineRemindOption: TaskReminderOptionId.m30,
+      };
+      (mockStateService as any)._mockStateSignal.set(stateWithDeadline);
+      fixture.detectChanges();
+
+      component.openDeadlineDialog();
+
+      expect(mockMatDialog.open).toHaveBeenCalledWith(jasmine.any(Function), {
+        data: {
+          targetDeadlineDay: '2025-07-20',
+          targetDeadlineTime: '09:15',
+          targetDeadlineRemindOption: TaskReminderOptionId.m30,
+          isSelectDeadlineOnly: true,
+        },
+      });
+    });
+
     it('should handle dialog results with dates from different timezones', () => {
       // Simulate a dialog result with a Date object that might come from a date picker
       const selectedDate = new Date(2025, 2, 15, 10, 30, 0); // March 15, 2025 at 10:30 AM

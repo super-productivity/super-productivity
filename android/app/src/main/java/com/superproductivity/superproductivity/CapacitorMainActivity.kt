@@ -12,7 +12,6 @@ import android.util.Log
 import android.view.View
 import android.webkit.WebView
 import android.widget.Toast
-import androidx.activity.addCallback
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
@@ -174,17 +173,6 @@ class CapacitorMainActivity : BridgeActivity() {
         // can't lock the user out, and clear any prior user override if healthy.
         WebViewCompatibilityChecker.recordSuccessfulLoad(this, webViewCompatibility?.majorVersion)
 
-
-        // Register OnBackPressedCallback to handle back button press
-        onBackPressedDispatcher.addCallback(this) {
-            Log.v("TW", "onBackPressed ${webView.canGoBack()}")
-            if (webView.canGoBack()) {
-                webView.goBack()
-            } else {
-                isEnabled = false
-                onBackPressedDispatcher.onBackPressed()
-            }
-        }
 
         // Handle keyboard visibility changes
         val rootView = findViewById<View>(android.R.id.content)

@@ -2,11 +2,25 @@ import { inject, Injectable } from '@angular/core';
 import { combineLatest, Observable } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 import { MentionConfig, Mentions } from '../../ui/mentions/mention-config';
-import { MentionItem } from '../../ui/mentions/mention-types';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TagService } from '../tag/tag.service';
 import { ProjectService } from '../project/project.service';
 import { CHRONO_SUGGESTIONS } from './add-task-bar/add-task-bar.const';
+import { DEFAULT_PROJECT_ICON } from '../project/project.const';
+import {
+  DEFAULT_PROJECT_COLOR,
+  DEFAULT_TAG_COLOR,
+} from '../work-context/work-context.const';
+import { isSingleEmoji } from '../../util/extract-first-emoji';
+import { MentionItem } from '../../ui/mentions/mention-types';
+
+interface MentionListItem extends MentionItem {
+  title: string;
+  id?: string;
+  icon?: string;
+  color?: string;
+  isEmoji?: boolean;
+}
 
 /**
  * Single source of truth for the task short-syntax (#tag, @due, +project)
@@ -30,26 +44,48 @@ export class MentionConfigService {
       const mentions: Mentions[] = [];
       if (cfg.isEnableTag) {
         mentions.push({
-          items: (tagSuggestions as unknown as MentionItem[]) || [],
+          items: tagSuggestions.map(
+            (tag): MentionListItem => ({
+              title: tag.title,
+              id: tag.id,
+              icon: tag.icon || 'label',
+              color: tag.color || tag.theme?.primary || DEFAULT_TAG_COLOR,
+              isEmoji: !!tag.icon && isSingleEmoji(tag.icon),
+            }),
+          ),
           labelKey: 'title',
           triggerChar: '#',
         });
       }
       if (cfg.isEnableDue) {
+        const chronoItems = CHRONO_SUGGESTIONS.map(
+          (title): MentionListItem => ({
+            title,
+            icon: 'schedule',
+          }),
+        );
         mentions.push({
-          items: CHRONO_SUGGESTIONS,
+          items: chronoItems,
           labelKey: 'title',
           triggerChar: '@',
         });
         mentions.push({
-          items: CHRONO_SUGGESTIONS,
+          items: chronoItems,
           labelKey: 'title',
           triggerChar: '!',
         });
       }
       if (cfg.isEnableProject) {
         mentions.push({
-          items: (projectSuggestions as unknown as MentionItem[]) || [],
+          items: projectSuggestions.map(
+            (project): MentionListItem => ({
+              title: project.title,
+              id: project.id,
+              icon: project.icon || DEFAULT_PROJECT_ICON,
+              color: project.theme?.primary || DEFAULT_PROJECT_COLOR,
+              isEmoji: !!project.icon && isSingleEmoji(project.icon),
+            }),
+          ),
           labelKey: 'title',
           triggerChar: '+',
         });

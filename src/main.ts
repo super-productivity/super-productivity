@@ -454,7 +454,7 @@ if (IS_ANDROID_WEB_VIEW) {
     // to the start destination / exits per Android guidelines (issue #7972).
     const backButtonService = appInjector?.get(AndroidBackButtonService);
     if (backButtonService) {
-      backButtonService.handleBackButton();
+      backButtonService.handleBackButton(canGoBack);
     } else if (!canGoBack) {
       // Pre-bootstrap fallback (back pressed before Angular is ready).
       CapacitorApp.minimizeApp();

@@ -25,6 +25,7 @@ export const TaskSharedActions = createActionGroup({
       isIgnoreShortSyntax?: boolean;
       autoPlanToday?: string;
       autoPlanStartOfNextDayDiffMs?: number;
+      isExampleTask?: boolean;
     }) => ({
       ...taskProps,
       meta: {

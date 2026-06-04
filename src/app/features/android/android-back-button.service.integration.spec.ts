@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideLocationMocks } from '@angular/common/testing';
 import { provideRouter, Router } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 
 import { AndroidBackButtonService } from './android-back-button.service';
@@ -29,6 +30,15 @@ describe('AndroidBackButtonService integration with real Router (#7972)', () => 
   let historyBack: jasmine.Spy;
 
   beforeEach(() => {
+    // The service reads the REAL window.history.state to detect history-backed
+    // overlays. Karma shares one browser context across the whole suite, so a
+    // prior spec rendering an overlay (notes, task-detail-panel, side-nav, …)
+    // can leave a HISTORY_STATE key set there, which would make
+    // handleBackButton take the early _historyBack() branch. Reset it so these
+    // tests are independent of suite run order. (provideLocationMocks gives the
+    // Router its own in-memory history, so this doesn't affect routing.)
+    window.history.replaceState(null, '');
+
     TestBed.configureTestingModule({
       providers: [
         AndroidBackButtonService,
@@ -55,6 +65,7 @@ describe('AndroidBackButtonService integration with real Router (#7972)', () => 
             }),
           },
         },
+        { provide: MatDialog, useValue: { openDialogs: [] } },
       ],
     });
 
@@ -114,7 +125,7 @@ describe('AndroidBackButtonService integration with real Router (#7972)', () => 
     expect(router.url).toBe(TODAY_URL);
   }));
 
-  it('navigates up via history on a context sub-page', fakeAsync(() => {
+  it('navigates up via history on a non-top-level page (real serialized URL)', fakeAsync(() => {
     router.navigateByUrl('/project/p1/worklog');
     tick();
     expect(router.url).toBe('/project/p1/worklog');
@@ -126,16 +137,5 @@ describe('AndroidBackButtonService integration with real Router (#7972)', () => 
     expect(minimizeApp).not.toHaveBeenCalled();
     // history.back() is stubbed, so the route stays put
     expect(router.url).toBe('/project/p1/worklog');
-  }));
-
-  it('navigates up via history on a utility page (config)', fakeAsync(() => {
-    router.navigateByUrl('/config');
-    tick();
-
-    service.handleBackButton();
-    tick();
-
-    expect(historyBack).toHaveBeenCalled();
-    expect(minimizeApp).not.toHaveBeenCalled();
   }));
 });

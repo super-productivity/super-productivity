@@ -4,6 +4,7 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
+import { TaskReminderOptionId } from '../task.model';
 
 describe('AddTaskBarParserService', () => {
   let service: AddTaskBarParserService;
@@ -334,6 +335,209 @@ describe('AddTaskBarParserService', () => {
           mockStateService.updateDeadline.calls.mostRecent().args;
         expect(typeof deadlineDate).toBe('string');
         expect(deadlineTime).toBe('12:00');
+      });
+
+      it('should preserve a manually selected deadline when unrelated syntax is parsed', async () => {
+        mockStateService.state.and.returnValue({
+          projectId: null,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          estimate: null,
+          cleanText: null,
+          deadlineDate: '2026-06-10',
+          deadlineTime: '10:30',
+          deadlineRemindOption: TaskReminderOptionId.m15,
+        } as any);
+
+        await service.parseAndUpdateText(
+          'Prepare report #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(
+          '2026-06-10',
+          '10:30',
+        );
+        expect(mockStateService.updateDeadlineRemindOption).toHaveBeenCalledWith(
+          TaskReminderOptionId.m15,
+        );
+      });
+
+      it('should preserve a user deadline added after a parsed deadline was already cleared', async () => {
+        // Run 1: parsed deadline syntax populates the deadline.
+        await service.parseAndUpdateText(
+          'Do taxes !friday',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        // Run 2: user removes the syntax — previousParseResult flips
+        // isDeadlineFromSyntax to false, so a manually-set deadline that
+        // appears in state on the NEXT run must be preserved.
+        mockStateService.updateDeadline.calls.reset();
+        mockStateService.updateDeadlineRemindOption.calls.reset();
+        mockStateService.state.and.returnValue({
+          projectId: null,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          estimate: null,
+          cleanText: null,
+          deadlineDate: null,
+          deadlineTime: null,
+          deadlineRemindOption: null,
+        } as any);
+        await service.parseAndUpdateText(
+          'Do taxes',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        // Run 3: user has now manually set a deadline via the dialog and
+        // adds more text WITHOUT introducing any deadline syntax.
+        mockStateService.updateDeadline.calls.reset();
+        mockStateService.updateDeadlineRemindOption.calls.reset();
+        mockStateService.state.and.returnValue({
+          projectId: null,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          estimate: null,
+          cleanText: null,
+          deadlineDate: '2026-07-01',
+          deadlineTime: '09:00',
+          deadlineRemindOption: TaskReminderOptionId.m15,
+        } as any);
+        await service.parseAndUpdateText(
+          'Do taxes #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(
+          '2026-07-01',
+          '09:00',
+        );
+        expect(mockStateService.updateDeadlineRemindOption).toHaveBeenCalledWith(
+          TaskReminderOptionId.m15,
+        );
+      });
+
+      it('should clear a previously parsed deadline when deadline syntax is removed', async () => {
+        await service.parseAndUpdateText(
+          'Do taxes !friday',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+        const [parsedDeadlineDate, parsedDeadlineTime] =
+          mockStateService.updateDeadline.calls.mostRecent().args;
+
+        mockStateService.updateDeadline.calls.reset();
+        mockStateService.updateDeadlineRemindOption.calls.reset();
+        mockStateService.state.and.returnValue({
+          projectId: null,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          estimate: null,
+          cleanText: null,
+          deadlineDate: parsedDeadlineDate,
+          deadlineTime: parsedDeadlineTime,
+          deadlineRemindOption: null,
+        } as any);
+
+        await service.parseAndUpdateText(
+          'Do taxes #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
+      });
+
+      it('should clear a syntax-owned deadline when the input is cleared', async () => {
+        await service.parseAndUpdateText(
+          'Do taxes !friday',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        mockStateService.updateDeadline.calls.reset();
+        mockStateService.updateDeadlineRemindOption.calls.reset();
+
+        await service.parseAndUpdateText(
+          '',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
+        expect(mockStateService.updateDeadlineRemindOption).toHaveBeenCalledWith(null);
+      });
+
+      it('should clear a stale reminder option when deadline syntax is removed', async () => {
+        await service.parseAndUpdateText(
+          'Do taxes !friday',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+        const [parsedDeadlineDate, parsedDeadlineTime] =
+          mockStateService.updateDeadline.calls.mostRecent().args;
+
+        mockStateService.updateDeadline.calls.reset();
+        mockStateService.updateDeadlineRemindOption.calls.reset();
+        mockStateService.state.and.returnValue({
+          projectId: null,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          estimate: null,
+          cleanText: null,
+          deadlineDate: parsedDeadlineDate,
+          deadlineTime: parsedDeadlineTime,
+          deadlineRemindOption: TaskReminderOptionId.m15,
+        } as any);
+
+        await service.parseAndUpdateText(
+          'Do taxes #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
+        expect(mockStateService.updateDeadlineRemindOption).toHaveBeenCalledWith(null);
       });
     });
 

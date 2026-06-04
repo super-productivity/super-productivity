@@ -4,7 +4,7 @@ import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { DateAdapter } from '@angular/material/core';
-import { DEFAULT_TASK, Task } from '../task.model';
+import { DEFAULT_TASK, Task, TaskReminderOptionId } from '../task.model';
 import { DialogDeadlineComponent } from './dialog-deadline.component';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
@@ -46,6 +46,15 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { task } });
     // Inject the store after the override is in place — TestBed locks
     // overrides on the first inject/createComponent call.
+    store = TestBed.inject(MockStore);
+    dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+    return TestBed.createComponent(DialogDeadlineComponent).componentInstance;
+  };
+
+  const createSelectOnlyComponent = (): DialogDeadlineComponent => {
+    TestBed.overrideProvider(MAT_DIALOG_DATA, {
+      useValue: { isSelectDeadlineOnly: true },
+    });
     store = TestBed.inject(MockStore);
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
     return TestBed.createComponent(DialogDeadlineComponent).componentInstance;
@@ -119,12 +128,34 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     expect(calls[0].autoPlanToday).toBe('2026-05-06');
   });
 
-  // Currently FAILS — proves issue #7490. After the fix, submit() must not
-  // throw on a malformed selectedTime and must fall back to a date-only deadline.
+  // Mirrors the non-select-only parameterized test below — same garbage
+  // inputs must round-trip to `time: null` instead of throwing or persisting
+  // a malformed string back to the caller.
+  ['abc', '13:60', '25:00'].forEach((badTime) => {
+    it(`returns null time for malformed select-only deadline time "${badTime}"`, () => {
+      const component = createSelectOnlyComponent();
+      component.selectedDate = new Date(2026, 4, 6);
+      component.selectedTime = badTime;
+
+      expect(() => component.submit()).not.toThrow();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(matDialogRefSpy.close).toHaveBeenCalledWith({
+        date: component.selectedDate,
+        time: null,
+        remindOption: TaskReminderOptionId.DoNotRemind,
+      });
+    });
+  });
+
+  // Proves issue #7490. submit() must not throw on a malformed selectedTime and
+  // must fall back to a date-only deadline for genuinely invalid values.
   // Note: '1:' is intentionally NOT in this list — isValidSplitTime parses it
   // as 1:00 (split[1] is '', +'' === 0), so it never throws. That's arguably a
   // separate UX issue but not the crash this test pins.
-  ['13:30:00', 'abc', '13:60', '25:00'].forEach((badTime) => {
+  // '13:30:00' is also NOT here — a stray seconds component is recoverable and
+  // must persist (see the test below); only true garbage drops the time.
+  ['abc', '13:60', '25:00'].forEach((badTime) => {
     it(`does NOT throw and falls back to deadlineDay for malformed selectedTime "${badTime}"`, () => {
       const component = createComponent();
       component.selectedDate = new Date(2026, 4, 6);
@@ -137,6 +168,25 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
       expect(calls[0].deadlineDay).toBe('2026-05-06');
       expect(calls[0].deadlineWithTime).toBeUndefined();
     });
+  });
+
+  // Repro for #7802 — a user-set time was silently dropped instead of saved.
+  // A stray seconds component (e.g. `13:30:00` pasted into the time input) must
+  // be normalized to `13:30` and persisted as deadlineWithTime, not discarded.
+  it('persists a normalized deadlineWithTime for a "13:30:00" selectedTime', () => {
+    const component = createComponent();
+    component.selectedDate = new Date(2026, 4, 6);
+    component.selectedTime = '13:30:00';
+
+    expect(() => component.submit()).not.toThrow();
+
+    const calls = setDeadlineCalls();
+    expect(calls.length).toBe(1);
+    expect(calls[0].deadlineDay).toBeUndefined();
+    expect(calls[0].deadlineWithTime).toBeDefined();
+    const d = new Date(calls[0].deadlineWithTime as number);
+    expect(d.getHours()).toBe(13);
+    expect(d.getMinutes()).toBe(30);
   });
 
   it('does nothing (no dispatch) when no date is selected', () => {

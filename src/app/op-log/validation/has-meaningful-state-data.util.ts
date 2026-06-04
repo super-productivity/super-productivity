@@ -27,15 +27,29 @@ const isEntityState = (obj: unknown): obj is { ids: string[] } =>
  *
  * Accepts an arbitrary object so callers can pass an NgRx snapshot, a loaded
  * state cache, or a remote payload without type juggling.
+ *
+ * `ignoreTaskIds` (optional) lets a caller exclude specific task ids from the "has a
+ * task?" check — used by the file-based sync conflict gate to treat a store containing
+ * only onboarding example tasks as non-meaningful (#7985). It only ever NARROWS the
+ * result; omitting it preserves the original behavior for every other caller (the
+ * #7892 empty-overwrite guard, snapshot/compaction, first-time-sync detection).
  */
-export const hasMeaningfulStateData = (state: unknown): boolean => {
+export const hasMeaningfulStateData = (
+  state: unknown,
+  ignoreTaskIds?: ReadonlySet<string>,
+): boolean => {
   if (!state || typeof state !== 'object') {
     return false;
   }
   const s = state as Record<string, unknown>;
 
-  if (isEntityState(s.task) && s.task.ids.length > 0) {
-    return true;
+  if (isEntityState(s.task)) {
+    const meaningfulTaskIds = ignoreTaskIds
+      ? s.task.ids.filter((id) => !ignoreTaskIds.has(id))
+      : s.task.ids;
+    if (meaningfulTaskIds.length > 0) {
+      return true;
+    }
   }
 
   if (isEntityState(s.project) && s.project.ids.some((id) => id !== INBOX_PROJECT.id)) {

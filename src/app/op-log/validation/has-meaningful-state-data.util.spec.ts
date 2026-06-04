@@ -66,4 +66,35 @@ describe('hasMeaningfulStateData', () => {
       false,
     );
   });
+
+  describe('with ignoreTaskIds (#7985)', () => {
+    it('returns false when the only tasks are in the ignore set (example-only store)', () => {
+      const s = initialState();
+      s.task = { ids: ['ex1', 'ex2'], entities: {} };
+      expect(hasMeaningfulStateData(s, new Set(['ex1', 'ex2']))).toBe(false);
+    });
+
+    it('returns true when an unignored real task remains', () => {
+      const s = initialState();
+      s.task = { ids: ['ex1', 'real1'], entities: {} };
+      expect(hasMeaningfulStateData(s, new Set(['ex1']))).toBe(true);
+    });
+
+    it('still returns true for a non-INBOX project even if all tasks are ignored', () => {
+      const s = initialState();
+      s.task = { ids: ['ex1'], entities: {} };
+      s.project = { ids: [INBOX_PROJECT.id, 'p1'], entities: {} };
+      expect(hasMeaningfulStateData(s, new Set(['ex1']))).toBe(true);
+    });
+
+    // Locks the #7892 empty-overwrite guard / snapshot / compaction callers: passing no
+    // ignore set (or an empty one) must behave exactly as before.
+    it('behaves identically to the no-arg call when ignoreTaskIds is undefined or empty', () => {
+      const s = initialState();
+      s.task = { ids: ['t1'], entities: {} };
+      expect(hasMeaningfulStateData(s)).toBe(true);
+      expect(hasMeaningfulStateData(s, undefined)).toBe(true);
+      expect(hasMeaningfulStateData(s, new Set())).toBe(true);
+    });
+  });
 });
