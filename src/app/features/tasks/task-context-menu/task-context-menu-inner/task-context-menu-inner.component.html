@@ -390,20 +390,18 @@
 >
   <ng-template matMenuContent>
     <div (click)="$event.stopPropagation()">
-      @if (tags$ | async; as tags) {
-        @for (tag of tags; track tag.id) {
-          <button
-            (click)="toggleTag(tag.id)"
-            mat-menu-item
-          >
-            <select-option-row
-              [item]="tag"
-              [isSelected]="task().tagIds.includes(tag.id)"
-              [showCheckbox]="true"
-              [allOptions]="tags"
-            ></select-option-row>
-          </button>
-        }
+      @for (tag of toggleTagList(); track tag.id) {
+        <button
+          (click)="toggleTag(tag.id)"
+          mat-menu-item
+        >
+          <select-option-row
+            [item]="tag"
+            [isSelected]="task.tagIds.includes(tag.id)"
+            [showCheckbox]="true"
+            [allOptions]="toggleTagList()"
+          ></select-option-row>
+        </button>
       }
     </div>
     <button
