@@ -24,6 +24,7 @@
 
     .mat-calendar-body-selected {
       background: var(--c-primary) !important;
+      color: var(--c-contrast) !important;
     }
 
     .mat-calendar-controls {
@@ -61,6 +62,10 @@
     @include materialIcon('wb_sunny');
     @include center;
     color: var(--text-color);
+  }
+
+  &.mat-calendar-body-selected:after {
+    color: var(--c-contrast) !important;
   }
 }
 

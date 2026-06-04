@@ -33,6 +33,7 @@
         <button
           color="primary"
           mat-stroked-button
+          [disabled]="!selectedDate"
           (click)="submit()"
           type="button"
         >
