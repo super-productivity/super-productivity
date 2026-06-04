@@ -104,15 +104,6 @@ export class RruleBuilderComponent implements OnInit {
     { value: 'NTH_WEEKDAY', label: T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY },
     { value: 'WEEKDAYS', label: T.F.TASK_REPEAT.F.RRULE_MODE_WEEKDAYS },
   ];
-  // "Which occurrence" for the weekday-set mode → BYSETPOS (single value).
-  whichOpts: SelectOpt<string>[] = [
-    { value: '', label: T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY },
-    { value: '1', label: T.F.TASK_REPEAT.F.ORD_FIRST },
-    { value: '2', label: T.F.TASK_REPEAT.F.ORD_SECOND },
-    { value: '3', label: T.F.TASK_REPEAT.F.ORD_THIRD },
-    { value: '4', label: T.F.TASK_REPEAT.F.ORD_FOURTH },
-    { value: '-1', label: T.F.TASK_REPEAT.F.ORD_LAST },
-  ];
   // Day-of-month grid (1..31) plus "from the end" toggles.
   dayGrid = Array.from({ length: 31 }, (_, i) => i + 1);
   negativeDays: SelectOpt<number>[] = [
@@ -297,24 +288,50 @@ export class RruleBuilderComponent implements OnInit {
   setWkst(v: string): void {
     this._patch({ wkst: v as RRuleFormModel['wkst'] });
   }
-  // The weekday-set "which occurrence" select switched to its custom input.
-  // Values with no predefined option (e.g. a parsed "5" or "2,-1") are custom
-  // implicitly.
+  // --- weekday-set "which occurrence" (BYSETPOS, multi-select toggles) ---
+  // The custom input was explicitly opened. Values with no predefined toggle
+  // (e.g. a parsed "5") keep it visible implicitly — see isSetPosCustom().
   private _customSetPos = signal(false);
 
-  isSetPosCustom(): boolean {
-    if (this._customSetPos()) return true;
-    const v = this._model().bySetPos.trim();
-    return !!v && !this.whichOpts.some((o) => o.value === v);
+  /** The current BYSETPOS values (parsed from the comma-separated model field). */
+  setPosValues(): number[] {
+    return this._model()
+      .bySetPos.split(',')
+      .map((s) => Math.trunc(+s.trim()))
+      .filter((n) => Number.isInteger(n) && n !== 0);
   }
-  setBySetPos(v: string): void {
-    if (v === this.ORD_CUSTOM) {
-      // Switch to the free-form input; keep the current value as its start.
-      this._customSetPos.set(true);
-      return;
-    }
+  isSetPosActive(v: number): boolean {
+    return this.setPosValues().includes(v);
+  }
+  /** "Every" = no BYSETPOS narrowing at all. */
+  isSetPosEvery(): boolean {
+    return !this.setPosValues().length && !this._customSetPos();
+  }
+  isSetPosCustom(): boolean {
+    return (
+      this._customSetPos() ||
+      this.setPosValues().some((v) => !this.ordinalOpts.some((o) => o.value === v))
+    );
+  }
+  /** Keep toggles tidy: predefined positions in dropdown order, then customs. */
+  private _normalizeSetPos(vals: number[]): number[] {
+    const pre = this.ordinalOpts
+      .map((o) => o.value as number)
+      .filter((v) => vals.includes(v));
+    const rest = vals.filter((v) => !pre.includes(v)).sort((a, b) => a - b);
+    return [...pre, ...rest];
+  }
+  toggleSetPos(v: number): void {
+    const cur = this.setPosValues();
+    const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+    this._patch({ bySetPos: this._normalizeSetPos(next).join(',') });
+  }
+  clearSetPos(): void {
     this._customSetPos.set(false);
-    this._patch({ bySetPos: v });
+    this._patch({ bySetPos: '' });
+  }
+  toggleSetPosCustomMode(): void {
+    this._customSetPos.update((v) => !v);
   }
   /** Free-form BYSETPOS (custom input): comma-separated non-zero integers,
    *  each clamped to ±366 (RFC 5545). Invalid tokens are dropped. */

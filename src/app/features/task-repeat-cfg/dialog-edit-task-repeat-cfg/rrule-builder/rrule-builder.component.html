@@ -107,26 +107,34 @@
     <!-- nth-weekday rows render in the shared block below (monthly + yearly). -->
     @if (model().monthlyMode === 'WEEKDAYS') {
       <div class="rb-row">
-        <select
-          #which
-          class="rb-sel"
-          (change)="setBySetPos(which.value)"
-        >
-          @for (o of whichOpts; track o.value) {
-            <option
-              [value]="o.value"
-              [selected]="!isSetPosCustom() && o.value === model().bySetPos"
+        <div class="rb-toggles">
+          <button
+            type="button"
+            class="rb-tgl rb-tgl--wide"
+            [class.active]="isSetPosEvery()"
+            (click)="clearSetPos()"
+          >
+            {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
+          </button>
+          @for (o of ordinalOpts; track o.value) {
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide"
+              [class.active]="isSetPosActive(o.value)"
+              (click)="toggleSetPos(o.value)"
             >
               {{ o.label | translate }}
-            </option>
+            </button>
           }
-          <option
-            [value]="ORD_CUSTOM"
-            [selected]="isSetPosCustom()"
+          <button
+            type="button"
+            class="rb-tgl rb-tgl--wide"
+            [class.active]="isSetPosCustom()"
+            (click)="toggleSetPosCustomMode()"
           >
             {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-          </option>
-        </select>
+          </button>
+        </div>
         @if (isSetPosCustom()) {
           <input
             #customWhich
@@ -215,26 +223,34 @@
     }
     @if (model().yearlyMode === 'WEEKDAYS') {
       <div class="rb-row">
-        <select
-          #yWhich
-          class="rb-sel"
-          (change)="setBySetPos(yWhich.value)"
-        >
-          @for (o of whichOpts; track o.value) {
-            <option
-              [value]="o.value"
-              [selected]="!isSetPosCustom() && o.value === model().bySetPos"
+        <div class="rb-toggles">
+          <button
+            type="button"
+            class="rb-tgl rb-tgl--wide"
+            [class.active]="isSetPosEvery()"
+            (click)="clearSetPos()"
+          >
+            {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
+          </button>
+          @for (o of ordinalOpts; track o.value) {
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide"
+              [class.active]="isSetPosActive(o.value)"
+              (click)="toggleSetPos(o.value)"
             >
               {{ o.label | translate }}
-            </option>
+            </button>
           }
-          <option
-            [value]="ORD_CUSTOM"
-            [selected]="isSetPosCustom()"
+          <button
+            type="button"
+            class="rb-tgl rb-tgl--wide"
+            [class.active]="isSetPosCustom()"
+            (click)="toggleSetPosCustomMode()"
           >
             {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-          </option>
-        </select>
+          </button>
+        </div>
         @if (isSetPosCustom()) {
           <input
             #yCustomWhich

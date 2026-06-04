@@ -159,27 +159,41 @@ describe('RruleBuilderComponent', () => {
     expect(emitted[emitted.length - 1]).toBe('FREQ=DAILY');
   });
 
-  it('builds "last weekday of month" (weekday-set mode + set position)', async () => {
+  it('builds "last weekday of month" (weekday-set mode + set-position toggle)', async () => {
     await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR');
     expect(component.model().monthlyMode).toBe('WEEKDAYS');
     const emitted: string[] = [];
     component.rruleChange.subscribe((r) => emitted.push(r));
-    component.setBySetPos('-1'); // applies even though the section is collapsed
+    component.toggleSetPos(-1);
     expect(emitted[emitted.length - 1]).toBe(
       'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1',
     );
   });
 
-  it('switching the "which occurrence" select to custom keeps the value', async () => {
+  it('set-position toggles multi-select (first + last) and toggle off again', async () => {
     await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1');
-    expect(component.isSetPosCustom()).toBe(false);
-    component.setBySetPos(component.ORD_CUSTOM);
-    expect(component.isSetPosCustom()).toBe(true);
-    expect(component.model().bySetPos).toBe('-1'); // unchanged until typed
-    // switching back to a predefined option clears the custom state
-    component.setBySetPos('2');
-    expect(component.isSetPosCustom()).toBe(false);
-    expect(component.model().bySetPos).toBe('2');
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.toggleSetPos(1); // add "first" → kept in dropdown order (1,-1)
+    expect(emitted[emitted.length - 1]).toBe(
+      'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1,-1',
+    );
+    expect(component.isSetPosActive(1)).toBe(true);
+    expect(component.isSetPosActive(-1)).toBe(true);
+    component.toggleSetPos(-1); // toggle "last" off
+    expect(emitted[emitted.length - 1]).toBe(
+      'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1',
+    );
+  });
+
+  it('"Every" clears all set positions and the custom mode', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1,-1');
+    expect(component.isSetPosEvery()).toBe(false);
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.clearSetPos();
+    expect(component.isSetPosEvery()).toBe(true);
+    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR');
   });
 
   it('custom "which occurrence" input emits arbitrary BYSETPOS lists', async () => {
@@ -195,11 +209,17 @@ describe('RruleBuilderComponent', () => {
     expect(component.model().bySetPos).toBe('5,-366');
   });
 
-  it('a parsed BYSETPOS outside the dropdown options renders as custom', async () => {
-    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=2,-1');
+  it('a parsed BYSETPOS with no predefined toggle renders as custom', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=5');
     expect(component.model().monthlyMode).toBe('WEEKDAYS');
-    expect(component.model().bySetPos).toBe('2,-1');
+    expect(component.model().bySetPos).toBe('5');
     expect(component.isSetPosCustom()).toBe(true);
+    // editing down to a toggle-representable list leaves custom mode (the
+    // input was only open implicitly) and lights up the matching toggles
+    component.setCustomBySetPos('2,-1');
+    expect(component.isSetPosCustom()).toBe(false);
+    expect(component.isSetPosActive(2)).toBe(true);
+    expect(component.isSetPosActive(-1)).toBe(true);
   });
 
   it('custom day input accepts arbitrary values like -5', async () => {

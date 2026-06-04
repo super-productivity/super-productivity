@@ -1916,7 +1916,7 @@
         "RRULE_BYMONTHDAY_LIST": "Days of month (list)",
         "RRULE_BYMONTHDAY_LIST_DESCRIPTION": "Repeat on several days of the month, or count from the end. Comma-separated; negatives count back from month-end. E.g. 1,15,-1 = the 1st, 15th and last day. Overrides the single 'Day of month' above.",
         "RRULE_BYSETPOS": "Set position (BYSETPOS)",
-        "RRULE_BYSETPOS_DESCRIPTION": "From all the matches in each period, keep only the nth. Use with a weekday set (Monthly → 'On selected weekdays'). E.g. choose Mon–Fri then enter -1 = the last weekday of the month; 1 = the first. Comma-separated; negatives count from the end.",
+        "RRULE_BYSETPOS_DESCRIPTION": "From all the matches in each period, keep only the selected occurrences. E.g. choose Mon–Fri + 'last' = the last weekday of the month; add 'first' to get both. Custom accepts comma-separated numbers; negatives count from the end (-2 = 2nd-to-last).",
         "RRULE_BYWEEKNO": "Week numbers (BYWEEKNO)",
         "RRULE_BYWEEKNO_DESCRIPTION": "For Yearly only: limit to these ISO week numbers, 1–53. Comma-separated; negatives count from year-end. E.g. 20,21 = weeks 20 and 21 each year.",
         "RRULE_BYYEARDAY": "Days of year (BYYEARDAY)",
