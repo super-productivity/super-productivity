@@ -50,6 +50,36 @@ describe('rrule-form.util', () => {
       ).toBe('FREQ=MONTHLY;BYDAY=-1FR');
     });
 
+    it('monthly custom ordinals (5th Friday, 2nd-to-last Monday)', () => {
+      expect(
+        formModelToRRule(
+          base({
+            freq: 'MONTHLY',
+            monthlyMode: 'NTH_WEEKDAY',
+            nthDays: [
+              { pos: 5, days: ['FR'] },
+              { pos: -2, days: ['MO'] },
+            ],
+          }),
+        ),
+      ).toBe('FREQ=MONTHLY;BYDAY=5FR,-2MO');
+    });
+
+    it('dedupes identical ordinal+weekday tokens across rows', () => {
+      expect(
+        formModelToRRule(
+          base({
+            freq: 'MONTHLY',
+            monthlyMode: 'NTH_WEEKDAY',
+            nthDays: [
+              { pos: 3, days: ['MO', 'TU'] },
+              { pos: 3, days: ['TU'] },
+            ],
+          }),
+        ),
+      ).toBe('FREQ=MONTHLY;BYDAY=3MO,3TU');
+    });
+
     it('monthly nth-weekday multiple rows (3rd Monday and 4th Sunday)', () => {
       expect(
         formModelToRRule(
@@ -197,6 +227,16 @@ describe('rrule-form.util', () => {
       ]);
     });
 
+    it('maps custom ordinals (outside the dropdown set) back to rows, no raw fallback', () => {
+      const m = rruleToFormModel('FREQ=MONTHLY;BYDAY=-2MO,5FR');
+      expect(m.monthlyMode).toBe('NTH_WEEKDAY');
+      expect(m.nthDays).toEqual([
+        { pos: -2, days: ['MO'] },
+        { pos: 5, days: ['FR'] },
+      ]);
+      expect(m.rawOverride).toBe('');
+    });
+
     it('maps yearly weekdays-within-months back to dropdown fields', () => {
       const m = rruleToFormModel('FREQ=YEARLY;BYMONTH=3,11;BYDAY=SA');
       expect(m.freq).toBe('YEARLY');
@@ -211,6 +251,13 @@ describe('rrule-form.util', () => {
       expect(m.monthlyMode).toBe('WEEKDAYS');
       expect(m.byDay).toEqual(['MO', 'TU', 'WE', 'TH', 'FR']);
       expect(m.bySetPos).toBe('-1');
+    });
+
+    it('maps a multi-value BYSETPOS back without a raw fallback', () => {
+      const m = rruleToFormModel('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=2,-1');
+      expect(m.monthlyMode).toBe('WEEKDAYS');
+      expect(m.bySetPos).toBe('2,-1');
+      expect(m.rawOverride).toBe('');
     });
 
     it('maps COUNT to end condition', () => {

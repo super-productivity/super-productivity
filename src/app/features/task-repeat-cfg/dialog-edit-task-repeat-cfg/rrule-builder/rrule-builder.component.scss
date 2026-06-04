@@ -67,6 +67,11 @@
   &--mono {
     font-family: monospace;
   }
+
+  // Sits inline next to a select within a row (e.g. the custom BYSETPOS input).
+  &--inline {
+    width: 110px;
+  }
 }
 
 // Toggle buttons for weekdays / months.

@@ -54,6 +54,55 @@ describe('RruleBuilderComponent', () => {
     expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=1TU');
   });
 
+  it('switching a row to a custom ordinal keeps the pos and shows the input', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=3MO');
+    expect(component.isNthRowCustom(0)).toBe(false);
+    component.setNthDayPos(0, component.ORD_CUSTOM);
+    expect(component.isNthRowCustom(0)).toBe(true);
+    // pos unchanged until the user types a number
+    expect(component.model().nthDays).toEqual([{ pos: 3, days: ['MO'] }]);
+    // switching back to a predefined ordinal clears the custom state
+    component.setNthDayPos(0, '2');
+    expect(component.isNthRowCustom(0)).toBe(false);
+    expect(component.model().nthDays).toEqual([{ pos: 2, days: ['MO'] }]);
+  });
+
+  it('custom ordinal input emits any non-zero value, clamped to ±53', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=3MO');
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.setNthDayCustomPos(0, '-2');
+    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=-2MO');
+    component.setNthDayCustomPos(0, '5');
+    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYDAY=5MO');
+    // zero and garbage are ignored
+    component.setNthDayCustomPos(0, '0');
+    component.setNthDayCustomPos(0, 'abc');
+    expect(component.model().nthDays).toEqual([{ pos: 5, days: ['MO'] }]);
+    // out-of-range clamps to the RFC 5545 bound
+    component.setNthDayCustomPos(0, '99');
+    expect(component.model().nthDays).toEqual([{ pos: 53, days: ['MO'] }]);
+    component.setNthDayCustomPos(0, '-99');
+    expect(component.model().nthDays).toEqual([{ pos: -53, days: ['MO'] }]);
+  });
+
+  it('a parsed ordinal outside the dropdown set renders as custom', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=-2MO');
+    expect(component.model().monthlyMode).toBe('NTH_WEEKDAY');
+    expect(component.model().nthDays).toEqual([{ pos: -2, days: ['MO'] }]);
+    expect(component.isNthRowCustom(0)).toBe(true);
+  });
+
+  it('removing a row remaps the custom flags of the rows after it', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=3MO');
+    component.addNthDay(); // row 1
+    component.toggleNthDayWeekday(1, 'SU');
+    component.setNthDayPos(1, component.ORD_CUSTOM); // row 1 = custom
+    expect(component.isNthRowCustom(1)).toBe(true);
+    component.removeNthDay(0); // row 1 becomes row 0
+    expect(component.isNthRowCustom(0)).toBe(true);
+  });
+
   it('the ordinal dropdown for a new row omits positions already used', async () => {
     await setup('FREQ=MONTHLY;BYDAY=1MO');
     component.addNthDay(); // row 1
@@ -119,6 +168,38 @@ describe('RruleBuilderComponent', () => {
     expect(emitted[emitted.length - 1]).toBe(
       'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1',
     );
+  });
+
+  it('switching the "which occurrence" select to custom keeps the value', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1');
+    expect(component.isSetPosCustom()).toBe(false);
+    component.setBySetPos(component.ORD_CUSTOM);
+    expect(component.isSetPosCustom()).toBe(true);
+    expect(component.model().bySetPos).toBe('-1'); // unchanged until typed
+    // switching back to a predefined option clears the custom state
+    component.setBySetPos('2');
+    expect(component.isSetPosCustom()).toBe(false);
+    expect(component.model().bySetPos).toBe('2');
+  });
+
+  it('custom "which occurrence" input emits arbitrary BYSETPOS lists', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR');
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.setCustomBySetPos('2,-1');
+    expect(emitted[emitted.length - 1]).toBe(
+      'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=2,-1',
+    );
+    // invalid tokens and zeros are dropped, values clamped to ±366
+    component.setCustomBySetPos('abc, 0, 5, -999');
+    expect(component.model().bySetPos).toBe('5,-366');
+  });
+
+  it('a parsed BYSETPOS outside the dropdown options renders as custom', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=2,-1');
+    expect(component.model().monthlyMode).toBe('WEEKDAYS');
+    expect(component.model().bySetPos).toBe('2,-1');
+    expect(component.isSetPosCustom()).toBe(true);
   });
 
   it('custom day input accepts arbitrary values like -5', async () => {

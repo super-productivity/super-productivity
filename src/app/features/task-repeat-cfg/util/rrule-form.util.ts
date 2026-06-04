@@ -33,12 +33,14 @@ export type RRuleMonthlyMode = 'DAY_OF_MONTH' | 'NTH_WEEKDAY' | 'WEEKDAYS';
  *  or per-weekday ordinals (BYDAY=3MO,4SU). */
 export type RRuleYearlyMode = 'DAY_OF_MONTH' | 'NTH_WEEKDAY' | 'WEEKDAYS';
 export type RRuleEndType = 'NEVER' | 'COUNT' | 'UNTIL';
-/** 1..4 = 1st–4th occurrence in the month; -1 = last. */
+/** The predefined ordinal dropdown values: 1..4 = 1st–4th occurrence; -1 = last. */
 export type RRuleSetPos = 1 | 2 | 3 | 4 | -1;
 /** One ordinal row applied to a set of weekdays, e.g. `{ pos: 3, days: ['MO',
- *  'TU'] }` = the 3rd Monday and 3rd Tuesday → BYDAY=3MO,3TU. */
+ *  'TU'] }` = the 3rd Monday and 3rd Tuesday → BYDAY=3MO,3TU. `pos` is usually
+ *  one of the predefined `RRuleSetPos` values, but the custom ordinal input
+ *  allows any non-zero RFC 5545 ordinal (±1..±53), e.g. -2 = 2nd-to-last. */
 export interface RRuleNthDay {
-  pos: RRuleSetPos;
+  pos: number;
   days: RRuleWeekday[];
 }
 
@@ -100,7 +102,7 @@ export const defaultRRuleFormModel = (refDate: Date = new Date()): RRuleFormMode
     monthDays: [refDate.getDate()],
     nthDays: [
       {
-        pos: Math.min(Math.floor((refDate.getDate() - 1) / 7) + 1, 4) as RRuleSetPos,
+        pos: Math.min(Math.floor((refDate.getDate() - 1) / 7) + 1, 4),
         days: [rruleWeekday],
       },
     ],
@@ -119,13 +121,18 @@ export const defaultRRuleFormModel = (refDate: Date = new Date()): RRuleFormMode
 };
 
 /** "3MO,4SU" / "1MO,1TU" — each row's ordinal applied to each of its weekdays
- *  (Mon-first within a row). */
+ *  (Mon-first within a row). Deduped: two rows with the same (custom) ordinal
+ *  and overlapping weekdays must not emit the same token twice. */
 const nthDaysToByDay = (rows: RRuleNthDay[]): string =>
-  (rows ?? [])
-    .flatMap((r) =>
-      RRULE_WEEKDAYS.filter((d) => (r.days ?? []).includes(d)).map((d) => `${r.pos}${d}`),
-    )
-    .join(',');
+  [
+    ...new Set(
+      (rows ?? []).flatMap((r) =>
+        RRULE_WEEKDAYS.filter((d) => (r.days ?? []).includes(d)).map(
+          (d) => `${r.pos}${d}`,
+        ),
+      ),
+    ),
+  ].join(',');
 
 /** Build the RFC 5545 RRULE body (no `RRULE:` prefix) from the dropdown model. */
 export const formModelToRRule = (m: RRuleFormModel): string => {
@@ -258,7 +265,7 @@ export const rruleToFormModel = (
       byPos.set(wd.n as number, list);
     }
     return [...byPos.entries()].map(([pos, days]) => ({
-      pos: pos as RRuleSetPos,
+      pos,
       days: RRULE_WEEKDAYS.filter((d) => days.includes(d)),
     }));
   };
@@ -304,11 +311,11 @@ export const rruleToFormModel = (
     model.wkst = RRULE_WEEKDAYS[wkstNum];
     model.showAdvanced = true;
   }
-  // A single BYSETPOS drives the weekday-set "which occurrence" dropdown (a main
-  // control, not advanced). Multiple values can't be shown there → left for the
-  // round-trip guard to preserve via the raw override.
+  // BYSETPOS drives the weekday-set "which occurrence" dropdown (a main control,
+  // not advanced). Values outside the predefined options — including multi-value
+  // lists like "2,-1" — render via the dropdown's custom input.
   const setPosArr = toNumArray(opts.bysetpos);
-  if (setPosArr.length === 1) model.bySetPos = String(setPosArr[0]);
+  if (setPosArr.length) model.bySetPos = setPosArr.join(',');
   const weekNo = toNumArray(opts.byweekno).join(',');
   const yearDay = toNumArray(opts.byyearday).join(',');
   if (weekNo) {

@@ -1876,6 +1876,8 @@
         "MONDAY": "Monday",
         "MONTHLY_MODE_DAY_OF_MONTH": "Day of month",
         "NOTES": "Default notes",
+        "ORD_CUSTOM": "custom…",
+        "ORD_CUSTOM_DESCRIPTION": "Any occurrence number (1–53); negatives count from the end, e.g. -2 = 2nd-to-last",
         "ORD_FIRST": "first",
         "ORD_FOURTH": "fourth",
         "ORD_LAST": "last",

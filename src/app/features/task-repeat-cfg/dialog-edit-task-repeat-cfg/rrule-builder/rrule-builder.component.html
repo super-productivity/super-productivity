@@ -115,12 +115,28 @@
           @for (o of whichOpts; track o.value) {
             <option
               [value]="o.value"
-              [selected]="o.value === model().bySetPos"
+              [selected]="!isSetPosCustom() && o.value === model().bySetPos"
             >
               {{ o.label | translate }}
             </option>
           }
+          <option
+            [value]="ORD_CUSTOM"
+            [selected]="isSetPosCustom()"
+          >
+            {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+          </option>
         </select>
+        @if (isSetPosCustom()) {
+          <input
+            #customWhich
+            class="rb-text rb-text--inline"
+            type="text"
+            placeholder="1,-1"
+            [value]="model().bySetPos"
+            (change)="setCustomBySetPos(customWhich.value)"
+          />
+        }
         <div class="rb-toggles">
           @for (w of weekdays; track w.value) {
             <button
@@ -207,12 +223,28 @@
           @for (o of whichOpts; track o.value) {
             <option
               [value]="o.value"
-              [selected]="o.value === model().bySetPos"
+              [selected]="!isSetPosCustom() && o.value === model().bySetPos"
             >
               {{ o.label | translate }}
             </option>
           }
+          <option
+            [value]="ORD_CUSTOM"
+            [selected]="isSetPosCustom()"
+          >
+            {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+          </option>
         </select>
+        @if (isSetPosCustom()) {
+          <input
+            #yCustomWhich
+            class="rb-text rb-text--inline"
+            type="text"
+            placeholder="1,-1"
+            [value]="model().bySetPos"
+            (change)="setCustomBySetPos(yCustomWhich.value)"
+          />
+        }
         <div class="rb-toggles">
           @for (w of weekdays; track w.value) {
             <button
@@ -248,12 +280,30 @@
             @for (o of availableOrdinalOpts(rowIdx); track o.value) {
               <option
                 [value]="o.value"
-                [selected]="o.value === nd.pos"
+                [selected]="!isNthRowCustom(rowIdx) && o.value === nd.pos"
               >
                 {{ o.label | translate }}
               </option>
             }
+            <option
+              [value]="ORD_CUSTOM"
+              [selected]="isNthRowCustom(rowIdx)"
+            >
+              {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+            </option>
           </select>
+          @if (isNthRowCustom(rowIdx)) {
+            <input
+              #customPos
+              class="rb-num"
+              type="number"
+              min="-53"
+              max="53"
+              [value]="nd.pos"
+              [title]="T.F.TASK_REPEAT.F.ORD_CUSTOM_DESCRIPTION | translate"
+              (change)="setNthDayCustomPos(rowIdx, customPos.value)"
+            />
+          }
           <div class="rb-toggles">
             @for (w of weekdays; track w.value) {
               <button

@@ -132,6 +132,8 @@ export class RruleBuilderComponent implements OnInit {
     { value: 4, label: T.F.TASK_REPEAT.F.ORD_FOURTH },
     { value: -1, label: T.F.TASK_REPEAT.F.ORD_LAST },
   ];
+  /** Sentinel select value for the per-row custom ordinal input. */
+  readonly ORD_CUSTOM = 'CUSTOM';
   endOpts: SelectOpt<RRuleFormModel['endType']>[] = [
     { value: 'NEVER', label: T.F.TASK_REPEAT.F.RRULE_END_NEVER },
     { value: 'UNTIL', label: T.F.TASK_REPEAT.F.RRULE_END_UNTIL },
@@ -192,6 +194,11 @@ export class RruleBuilderComponent implements OnInit {
       (m.freq === 'YEARLY' && m.yearlyMode === 'NTH_WEEKDAY')
     );
   }
+  // Rows explicitly switched to the custom ordinal input (kept out of the form
+  // model — pure view state). Rows whose pos has no predefined option are
+  // custom implicitly (e.g. a parsed `BYDAY=-2MO`).
+  private _customNthRows = signal<ReadonlySet<number>>(new Set());
+
   private _patchNthDay(i: number, patch: Partial<RRuleNthDay>): void {
     this._patch({
       nthDays: this._model().nthDays.map((d, idx) =>
@@ -199,8 +206,30 @@ export class RruleBuilderComponent implements OnInit {
       ),
     });
   }
+  isNthRowCustom(i: number): boolean {
+    if (this._customNthRows().has(i)) return true;
+    const pos = this._model().nthDays[i]?.pos;
+    return pos != null && !this.ordinalOpts.some((o) => o.value === pos);
+  }
   setNthDayPos(i: number, v: string): void {
-    this._patchNthDay(i, { pos: +v as RRuleSetPos });
+    if (v === this.ORD_CUSTOM) {
+      // Switch the row to the free-form ordinal input; keep the current pos as
+      // its starting value.
+      this._customNthRows.update((s) => new Set(s).add(i));
+      return;
+    }
+    this._customNthRows.update((s) => {
+      const next = new Set(s);
+      next.delete(i);
+      return next;
+    });
+    this._patchNthDay(i, { pos: +v });
+  }
+  /** Free-form ordinal (custom input): any non-zero integer, ±1..±53 (RFC 5545). */
+  setNthDayCustomPos(i: number, v: string): void {
+    const n = Math.trunc(+v);
+    if (!Number.isInteger(n) || n === 0) return; // ignore invalid/zero input
+    this._patchNthDay(i, { pos: Math.max(-53, Math.min(53, n)) });
   }
   /** Multi-select a weekday within an ordinal row; keep it Mon-first. */
   toggleNthDayWeekday(i: number, d: RRuleWeekday): void {
@@ -233,6 +262,10 @@ export class RruleBuilderComponent implements OnInit {
   removeNthDay(i: number): void {
     const cur = this._model().nthDays;
     if (cur.length <= 1) return; // keep at least one row
+    // Row indices shift down past the removed row — remap the custom-row set.
+    this._customNthRows.update(
+      (s) => new Set([...s].filter((x) => x !== i).map((x) => (x > i ? x - 1 : x))),
+    );
     this._patch({ nthDays: cur.filter((_, idx) => idx !== i) });
   }
   toggleMonthDay(n: number): void {
@@ -264,8 +297,34 @@ export class RruleBuilderComponent implements OnInit {
   setWkst(v: string): void {
     this._patch({ wkst: v as RRuleFormModel['wkst'] });
   }
+  // The weekday-set "which occurrence" select switched to its custom input.
+  // Values with no predefined option (e.g. a parsed "5" or "2,-1") are custom
+  // implicitly.
+  private _customSetPos = signal(false);
+
+  isSetPosCustom(): boolean {
+    if (this._customSetPos()) return true;
+    const v = this._model().bySetPos.trim();
+    return !!v && !this.whichOpts.some((o) => o.value === v);
+  }
   setBySetPos(v: string): void {
+    if (v === this.ORD_CUSTOM) {
+      // Switch to the free-form input; keep the current value as its start.
+      this._customSetPos.set(true);
+      return;
+    }
+    this._customSetPos.set(false);
     this._patch({ bySetPos: v });
+  }
+  /** Free-form BYSETPOS (custom input): comma-separated non-zero integers,
+   *  each clamped to ±366 (RFC 5545). Invalid tokens are dropped. */
+  setCustomBySetPos(v: string): void {
+    const nums = v
+      .split(',')
+      .map((s) => Math.trunc(+s.trim()))
+      .filter((n) => Number.isInteger(n) && n !== 0)
+      .map((n) => Math.max(-366, Math.min(366, n)));
+    this._patch({ bySetPos: nums.join(',') });
   }
   setByWeekNo(v: string): void {
     this._patch({ byWeekNo: v });
