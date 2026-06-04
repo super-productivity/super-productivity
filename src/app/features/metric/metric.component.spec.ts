@@ -10,6 +10,7 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { SimpleMetrics } from './metric.model';
 import { signal } from '@angular/core';
 import { T } from '../../t.const';
+import { INBOX_PROJECT } from '../project/project.const';
 
 describe('MetricComponent', () => {
   let component: MetricComponent;
@@ -199,6 +200,32 @@ describe('MetricComponent', () => {
       activeWorkContext$.next(null);
 
       expect(component.metricsTitle()).toBe(T.PM.TITLE);
+    });
+  });
+
+  describe('showGlobalMetrics computed', () => {
+    it('should return true when viewing TODAY_TAG', () => {
+      activeWorkContext$.next(
+        createMockWorkContext(TODAY_TAG.id, WorkContextType.TAG, 'Today'),
+      );
+
+      expect(component.showGlobalMetrics()).toBe(true);
+    });
+
+    it('should return false when viewing a regular project', () => {
+      activeWorkContext$.next(
+        createMockWorkContext('project-1', WorkContextType.PROJECT, 'Project 1'),
+      );
+
+      expect(component.showGlobalMetrics()).toBe(false);
+    });
+
+    it('should return false when viewing the Inbox project', () => {
+      activeWorkContext$.next(
+        createMockWorkContext(INBOX_PROJECT.id, WorkContextType.PROJECT, 'Inbox'),
+      );
+
+      expect(component.showGlobalMetrics()).toBe(false);
     });
   });
 

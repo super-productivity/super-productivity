@@ -57,6 +57,8 @@ export class MetricComponent {
     return context?.type === WorkContextType.TAG && context.id === TODAY_TAG.id;
   });
 
+  showGlobalMetrics = computed(() => this._isShowingAllTasks());
+
   /**
    * Dynamic title that changes based on context
    */
