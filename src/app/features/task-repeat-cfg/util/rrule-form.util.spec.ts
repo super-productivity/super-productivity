@@ -260,6 +260,33 @@ describe('rrule-form.util', () => {
       expect(m.rawOverride).toBe('');
     });
 
+    it('YEARLY date mode without BYMONTH omits BYMONTHDAY (bare yearly = anniversary)', () => {
+      // Per RFC 5545 a bare FREQ=YEARLY;BYMONTHDAY=n expands across every
+      // month — i.e. fires monthly. With no months selected, emit a plain
+      // FREQ=YEARLY (anchors to the start date) instead.
+      expect(
+        formModelToRRule({
+          ...defaultRRuleFormModel(new Date(2024, 5, 3)),
+          freq: 'YEARLY',
+          yearlyMode: 'DAY_OF_MONTH',
+          byMonth: [],
+          monthDays: [15],
+        }),
+      ).toBe('FREQ=YEARLY');
+    });
+
+    it('a parsed bare yearly BYMONTHDAY rule falls back to the raw override', () => {
+      // Can't round-trip structurally without changing semantics (it fires
+      // monthly) — preserve it verbatim instead.
+      const m = rruleToFormModel('FREQ=YEARLY;BYMONTHDAY=15');
+      expect(m.rawOverride).toBe('FREQ=YEARLY;BYMONTHDAY=15');
+    });
+
+    it('drops BYSETPOS=0 on parse (re-emitting it would create a dead rule)', () => {
+      const m = rruleToFormModel('FREQ=MONTHLY;BYDAY=MO,TU;BYSETPOS=0');
+      expect(m.bySetPos).not.toContain('0');
+    });
+
     it('round-trips the migration clamp idiom structurally (no raw fallback)', () => {
       // BYMONTHDAY=31,-1;BYSETPOS=1 = "the 31st, or the last day of shorter
       // months" — emitted by the legacy-CUSTOM migration for day > 28 anchors.

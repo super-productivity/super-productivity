@@ -102,9 +102,11 @@ export interface TaskRepeatCfgCopy {
   // MONTHLY-only: when both fields are set and in range, the recurrence
   // anchors to the Nth weekday of each month instead of the numeric day.
   // Anchor presence is the discriminator — there is no separate mode field.
-  // Issue #6040.
-  monthlyWeekOfMonth?: MonthlyWeekOfMonth;
-  monthlyWeekday?: MonthlyWeekday;
+  // `null` is an explicit "anchor cleared" that survives the op-log's JSON
+  // wire format (JSON.stringify drops `undefined` keys, so an undefined reset
+  // never reaches remote clients on the update path). Issue #6040.
+  monthlyWeekOfMonth?: MonthlyWeekOfMonth | null;
+  monthlyWeekday?: MonthlyWeekday | null;
 
   // MONTHLY-only: when true, the recurrence anchors to the last calendar day
   // of every month (28/29/30/31) regardless of `startDate`'s day-of-month.

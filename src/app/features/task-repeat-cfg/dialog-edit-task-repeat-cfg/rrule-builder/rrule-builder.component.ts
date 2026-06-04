@@ -2,12 +2,14 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
   OnInit,
   output,
   signal,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { CollapsibleComponent } from '../../../../ui/collapsible/collapsible.component';
 import { T } from '../../../../t.const';
@@ -27,6 +29,17 @@ interface SelectOpt<V> {
   value: V;
   label: string;
 }
+
+/** Parse a comma-separated integer list: trims and truncs each token, drops
+ *  invalid/zero ones, clamps the rest to ±bound. Shared by every RFC 5545
+ *  int-list input (BYMONTHDAY, BYSETPOS, nth ordinals) so token handling and
+ *  clamping can't drift between fields. */
+const parseIntList = (v: string, bound: number): number[] =>
+  v
+    .split(',')
+    .map((s) => Math.trunc(+s.trim()))
+    .filter((n) => Number.isInteger(n) && n !== 0)
+    .map((n) => Math.max(-bound, Math.min(bound, n)));
 
 // Translation keys ordered to match RRULE_WEEKDAYS (MO..SU) and months 1..12.
 const WEEKDAY_T_KEYS = [
@@ -64,7 +77,7 @@ const MONTH_T_KEYS = [
   templateUrl: './rrule-builder.component.html',
   styleUrls: ['./rrule-builder.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, CollapsibleComponent],
+  imports: [TranslatePipe, CollapsibleComponent, NgTemplateOutlet],
 })
 export class RruleBuilderComponent implements OnInit {
   private _translateService = inject(TranslateService);
@@ -159,18 +172,55 @@ export class RruleBuilderComponent implements OnInit {
     this.rruleChange.emit(formModelToRRule(this._model()));
   }
 
+  // Month auto-seeded by the last switch to YEARLY — cleared once the user
+  // touches the month toggles (they own byMonth from then on).
+  private _seededMonth: number | null = null;
+
+  /** The CURRENT start month — read fresh so an in-dialog startDate edit is
+   *  honored (ngOnInit's `_refMonth` would be stale). */
+  private _currentStartMonth(): number {
+    const sd = this.startDate();
+    return sd ? dateStrToUtcDate(sd).getMonth() + 1 : this._refMonth;
+  }
+
   // --- field setters (kept out of the template for type-safety) ---
   setFreq(v: string): void {
     const freq = v as RRuleFormModel['freq'];
-    // YEARLY date/weekday modes need BYMONTH: per RFC 5545, FREQ=YEARLY with a
-    // bare BYMONTHDAY (or ordinal BYDAY) expands across every month of the
-    // year — i.e. fires monthly. Seed the start month so a fresh yearly rule
-    // means "once a year" until the user picks other months.
+    const prev = this._model().freq;
+    if (freq === prev) return;
+    // Frequency switch starts the occurrence narrowing clean — a BYSETPOS left
+    // over from another frequency's weekday-set mode would silently narrow the
+    // new rule with no UI to see or clear it.
+    this._customSetPos.set(false);
+    const patch: Partial<RRuleFormModel> = { freq, bySetPos: '' };
     if (freq === 'YEARLY' && !this._model().byMonth.length) {
-      this._patch({ freq, byMonth: [this._refMonth] });
-      return;
+      // YEARLY date/weekday modes need BYMONTH: per RFC 5545, FREQ=YEARLY with
+      // a bare BYMONTHDAY expands across every month — i.e. fires monthly.
+      // Seed the start month so a fresh yearly rule means "once a year" (the
+      // serializer also refuses to emit a bare yearly BYMONTHDAY).
+      patch.byMonth = [this._currentStartMonth()];
+      this._seededMonth = patch.byMonth[0];
+    } else if (prev === 'YEARLY') {
+      // Leaving YEARLY: drop a byMonth WE auto-seeded — it would silently
+      // constrain the new rule to that one month. User-picked months stay.
+      const cur = this._model().byMonth;
+      if (this._seededMonth != null && cur.length === 1 && cur[0] === this._seededMonth) {
+        patch.byMonth = [];
+      }
+      this._seededMonth = null;
     }
-    this._patch({ freq });
+    if (freq === 'MONTHLY') {
+      // Monthly nth ordinals only reach ±5 — clamp custom poses set in YEARLY.
+      const cur = this._model().nthDays;
+      const clamped = cur.map((d) => ({
+        ...d,
+        pos: Math.max(-5, Math.min(5, d.pos)),
+      }));
+      if (clamped.some((d, idx) => d.pos !== cur[idx].pos)) {
+        patch.nthDays = clamped;
+      }
+    }
+    this._patch(patch);
   }
   setInterval(v: string): void {
     this._patch({ interval: Math.max(1, Math.floor(+v) || 1) });
@@ -180,14 +230,20 @@ export class RruleBuilderComponent implements OnInit {
     this._patch({ byDay: cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d] });
   }
   toggleMonth(m: number): void {
+    this._seededMonth = null; // user owns byMonth from now on
     const cur = this._model().byMonth;
     this._patch({ byMonth: cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m] });
   }
+  // Mode switches start the occurrence narrowing clean: a BYSETPOS left over
+  // from the weekday-set mode would silently narrow a day-of-month rule (e.g.
+  // BYMONTHDAY=15;BYSETPOS=2 = never fires) with no UI to see or clear it.
   setMonthlyMode(v: string): void {
-    this._patch({ monthlyMode: v as RRuleFormModel['monthlyMode'] });
+    this._customSetPos.set(false);
+    this._patch({ monthlyMode: v as RRuleFormModel['monthlyMode'], bySetPos: '' });
   }
   setYearlyMode(v: string): void {
-    this._patch({ yearlyMode: v as RRuleFormModel['yearlyMode'] });
+    this._customSetPos.set(false);
+    this._patch({ yearlyMode: v as RRuleFormModel['yearlyMode'], bySetPos: '' });
   }
   // --- nth-weekday rows (per-weekday ordinals → BYDAY=3MO,4SU) ---
   /** True while either the monthly or yearly nth-weekday mode is active. */
@@ -229,11 +285,22 @@ export class RruleBuilderComponent implements OnInit {
     });
     this._patchNthDay(i, { pos: +v });
   }
-  /** Free-form ordinal (custom input): any non-zero integer, ±1..±53 (RFC 5545). */
+  /** Max meaningful nth ordinal for the current frequency: a month has at most
+   *  5 of any weekday; a year at most 53 (RFC 5545). Values past the bound are
+   *  structurally valid but match nothing → silently dead rules. */
+  nthPosBound(): number {
+    return this._model().freq === 'MONTHLY' ? 5 : 53;
+  }
+  /** Free-form ordinal (custom input): any non-zero integer within ±nthPosBound. */
   setNthDayCustomPos(i: number, v: string): void {
     const n = Math.trunc(+v);
     if (!Number.isInteger(n) || n === 0) return; // ignore invalid/zero input
-    this._patchNthDay(i, { pos: Math.max(-53, Math.min(53, n)) });
+    const bound = this.nthPosBound();
+    const pos = Math.max(-bound, Math.min(bound, n));
+    // Reject a pos another row already anchors — two rows with the same
+    // ordinal collapse into one on reload (BYDAY can't represent them apart).
+    if (this._model().nthDays.some((d, idx) => idx !== i && d.pos === pos)) return;
+    this._patchNthDay(i, { pos });
   }
   /** Multi-select a weekday within an ordinal row; keep it Mon-first. */
   toggleNthDayWeekday(i: number, d: RRuleWeekday): void {
@@ -280,11 +347,7 @@ export class RruleBuilderComponent implements OnInit {
   }
   /** Custom override for the day list — accepts any valid day, e.g. "1,15,-5". */
   setMonthDays(v: string): void {
-    const nums = v
-      .split(',')
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => Number.isInteger(n) && n !== 0 && n >= -31 && n <= 31);
-    this._patch({ monthDays: nums });
+    this._patch({ monthDays: parseIntList(v, 31) });
   }
   setEndType(v: string): void {
     this._patch({ endType: v as RRuleFormModel['endType'] });
@@ -306,12 +369,13 @@ export class RruleBuilderComponent implements OnInit {
   // (e.g. a parsed "5") keep it visible implicitly — see isSetPosCustom().
   private _customSetPos = signal(false);
 
+  // Parsed once per model change (computed) — the template reads this several
+  // times per change-detection cycle via the toggle bindings.
+  private _setPosValues = computed(() => parseIntList(this._model().bySetPos, 366));
+
   /** The current BYSETPOS values (parsed from the comma-separated model field). */
   setPosValues(): number[] {
-    return this._model()
-      .bySetPos.split(',')
-      .map((s) => Math.trunc(+s.trim()))
-      .filter((n) => Number.isInteger(n) && n !== 0);
+    return this._setPosValues();
   }
   isSetPosActive(v: number): boolean {
     return this.setPosValues().includes(v);
@@ -335,6 +399,10 @@ export class RruleBuilderComponent implements OnInit {
     return [...pre, ...rest];
   }
   toggleSetPos(v: number): void {
+    // A predefined toggle closes the explicitly-opened custom input — else both
+    // would render active with contradictory state. (The input stays visible
+    // implicitly while a non-predefined value is present.)
+    this._customSetPos.set(false);
     const cur = this.setPosValues();
     const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
     this._patch({ bySetPos: this._normalizeSetPos(next).join(',') });
@@ -349,12 +417,7 @@ export class RruleBuilderComponent implements OnInit {
   /** Free-form BYSETPOS (custom input): comma-separated non-zero integers,
    *  each clamped to ±366 (RFC 5545). Invalid tokens are dropped. */
   setCustomBySetPos(v: string): void {
-    const nums = v
-      .split(',')
-      .map((s) => Math.trunc(+s.trim()))
-      .filter((n) => Number.isInteger(n) && n !== 0)
-      .map((n) => Math.max(-366, Math.min(366, n)));
-    this._patch({ bySetPos: nums.join(',') });
+    this._patch({ bySetPos: parseIntList(v, 366).join(',') });
   }
   setByWeekNo(v: string): void {
     this._patch({ byWeekNo: v });

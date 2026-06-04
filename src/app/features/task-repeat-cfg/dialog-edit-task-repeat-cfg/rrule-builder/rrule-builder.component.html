@@ -106,62 +106,7 @@
     }
     <!-- nth-weekday rows render in the shared block below (monthly + yearly). -->
     @if (model().monthlyMode === 'WEEKDAYS') {
-      <div class="rb-row">
-        <div class="rb-toggles">
-          <button
-            type="button"
-            class="rb-tgl rb-tgl--wide"
-            [class.active]="isSetPosEvery()"
-            (click)="clearSetPos()"
-          >
-            {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
-          </button>
-          @for (o of ordinalOpts; track o.value) {
-            <button
-              type="button"
-              class="rb-tgl rb-tgl--wide"
-              [class.active]="isSetPosActive(o.value)"
-              (click)="toggleSetPos(o.value)"
-            >
-              {{ o.label | translate }}
-            </button>
-          }
-          <button
-            type="button"
-            class="rb-tgl rb-tgl--wide"
-            [class.active]="isSetPosCustom()"
-            (click)="toggleSetPosCustomMode()"
-          >
-            {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-          </button>
-        </div>
-        @if (isSetPosCustom()) {
-          <input
-            #customWhich
-            class="rb-text rb-text--inline"
-            type="text"
-            placeholder="1,-1"
-            [value]="model().bySetPos"
-            (change)="setCustomBySetPos(customWhich.value)"
-          />
-        }
-        <div class="rb-toggles">
-          @for (w of weekdays; track w.value) {
-            <button
-              type="button"
-              class="rb-tgl"
-              [class.active]="model().byDay.includes(w.value)"
-              [title]="w.full"
-              (click)="toggleDay(w.value)"
-            >
-              {{ w.short }}
-            </button>
-          }
-        </div>
-      </div>
-      <div class="rb-hint">
-        {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
-      </div>
+      <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
     }
   }
 
@@ -222,64 +167,70 @@
       </div>
     }
     @if (model().yearlyMode === 'WEEKDAYS') {
-      <div class="rb-row">
-        <div class="rb-toggles">
-          <button
-            type="button"
-            class="rb-tgl rb-tgl--wide"
-            [class.active]="isSetPosEvery()"
-            (click)="clearSetPos()"
-          >
-            {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
-          </button>
-          @for (o of ordinalOpts; track o.value) {
-            <button
-              type="button"
-              class="rb-tgl rb-tgl--wide"
-              [class.active]="isSetPosActive(o.value)"
-              (click)="toggleSetPos(o.value)"
-            >
-              {{ o.label | translate }}
-            </button>
-          }
-          <button
-            type="button"
-            class="rb-tgl rb-tgl--wide"
-            [class.active]="isSetPosCustom()"
-            (click)="toggleSetPosCustomMode()"
-          >
-            {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-          </button>
-        </div>
-        @if (isSetPosCustom()) {
-          <input
-            #yCustomWhich
-            class="rb-text rb-text--inline"
-            type="text"
-            placeholder="1,-1"
-            [value]="model().bySetPos"
-            (change)="setCustomBySetPos(yCustomWhich.value)"
-          />
-        }
-        <div class="rb-toggles">
-          @for (w of weekdays; track w.value) {
-            <button
-              type="button"
-              class="rb-tgl"
-              [class.active]="model().byDay.includes(w.value)"
-              [title]="w.full"
-              (click)="toggleDay(w.value)"
-            >
-              {{ w.short }}
-            </button>
-          }
-        </div>
-      </div>
-      <div class="rb-hint">
-        {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
-      </div>
+      <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
     }
   }
+
+  <!-- Weekday set + "which occurrence" (BYSETPOS) toggles — shared by the
+       monthly and yearly WEEKDAYS modes (all bindings are frequency-agnostic). -->
+  <ng-template #weekdaySetBlock>
+    <div class="rb-row">
+      <div class="rb-toggles">
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide"
+          [class.active]="isSetPosEvery()"
+          (click)="clearSetPos()"
+        >
+          {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
+        </button>
+        @for (o of ordinalOpts; track o.value) {
+          <button
+            type="button"
+            class="rb-tgl rb-tgl--wide"
+            [class.active]="isSetPosActive(o.value)"
+            (click)="toggleSetPos(o.value)"
+          >
+            {{ o.label | translate }}
+          </button>
+        }
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide"
+          [class.active]="isSetPosCustom()"
+          (click)="toggleSetPosCustomMode()"
+        >
+          {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+        </button>
+      </div>
+      @if (isSetPosCustom()) {
+        <input
+          #customWhich
+          class="rb-text rb-text--inline"
+          type="text"
+          placeholder="1,-1"
+          [value]="model().bySetPos"
+          (change)="setCustomBySetPos(customWhich.value)"
+        />
+      }
+      <div class="rb-toggles">
+        @for (w of weekdays; track w.value) {
+          <button
+            type="button"
+            class="rb-tgl"
+            [class.active]="model().byDay.includes(w.value)"
+            [title]="w.full"
+            (click)="toggleDay(w.value)"
+          >
+            {{ w.short }}
+          </button>
+        }
+      </div>
+    </div>
+    <div class="rb-hint">
+      {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
+    </div>
+  </ng-template>
 
   <!-- nth-weekday rows (monthly + yearly): per-weekday ordinals, e.g. the 3rd
        Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line, + adds more. -->
@@ -313,8 +264,8 @@
               #customPos
               class="rb-num"
               type="number"
-              min="-53"
-              max="53"
+              [min]="-nthPosBound()"
+              [max]="nthPosBound()"
               [value]="nd.pos"
               [title]="T.F.TASK_REPEAT.F.ORD_CUSTOM_DESCRIPTION | translate"
               (change)="setNthDayCustomPos(rowIdx, customPos.value)"

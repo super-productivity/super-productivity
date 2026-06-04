@@ -242,42 +242,43 @@ describe('getQuickSettingUpdates', () => {
     });
   });
 
+  // Anchor resets are null/false (NOT undefined) so they survive
+  // JSON.stringify on the op-log wire and clear stale anchors on remote
+  // clients too.
   describe('day-of-month presets clear NTH_WEEKDAY anchors', () => {
     it('MONTHLY_CURRENT_DATE explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_CURRENT_DATE');
-      expect(result!.monthlyWeekOfMonth).toBeUndefined();
-      expect(result!.monthlyWeekday).toBeUndefined();
+      expect(result!.monthlyWeekOfMonth).toBeNull();
+      expect(result!.monthlyWeekday).toBeNull();
     });
 
     it('MONTHLY_FIRST_DAY explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
-      expect(result!.monthlyWeekOfMonth).toBeUndefined();
-      expect(result!.monthlyWeekday).toBeUndefined();
+      expect(result!.monthlyWeekOfMonth).toBeNull();
+      expect(result!.monthlyWeekday).toBeNull();
     });
 
     it('MONTHLY_LAST_DAY explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
-      expect(result!.monthlyWeekOfMonth).toBeUndefined();
-      expect(result!.monthlyWeekday).toBeUndefined();
+      expect(result!.monthlyWeekOfMonth).toBeNull();
+      expect(result!.monthlyWeekday).toBeNull();
     });
   });
 
   describe('monthlyLastDay anchor is mutually exclusive with other presets', () => {
     it('MONTHLY_CURRENT_DATE clears monthlyLastDay', () => {
-      expect(
-        getQuickSettingUpdates('MONTHLY_CURRENT_DATE')!.monthlyLastDay,
-      ).toBeUndefined();
+      expect(getQuickSettingUpdates('MONTHLY_CURRENT_DATE')!.monthlyLastDay).toBe(false);
     });
 
     it('MONTHLY_FIRST_DAY clears monthlyLastDay', () => {
-      expect(getQuickSettingUpdates('MONTHLY_FIRST_DAY')!.monthlyLastDay).toBeUndefined();
+      expect(getQuickSettingUpdates('MONTHLY_FIRST_DAY')!.monthlyLastDay).toBe(false);
     });
 
     it('MONTHLY_NTH_WEEKDAY clears monthlyLastDay', () => {
       const ref = new Date(2026, 0, 12);
-      expect(
-        getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref)!.monthlyLastDay,
-      ).toBeUndefined();
+      expect(getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref)!.monthlyLastDay).toBe(
+        false,
+      );
     });
   });
 

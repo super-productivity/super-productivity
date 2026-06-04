@@ -42,6 +42,7 @@ import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { SnackService } from '../../../core/snack/snack.service';
 import { isRRuleValid } from '../store/rrule-occurrence.util';
 import {
+  getAlignedStartDate,
   legacyTaskRepeatCfgToRRule,
   rruleToLegacyTaskRepeatCfg,
 } from '../util/legacy-cfg-to-rrule.util';
@@ -251,6 +252,9 @@ export class DialogEditTaskRepeatCfgComponent {
       // monthly anchors) in sync so older sync clients — which ignore `rrule` —
       // fall back to a faithful recurrence. Pass startDate so a BYDAY-less
       // weekly rule maps onto the start weekday (else old clients never fire).
+      // startDate alignment intentionally happens at SAVE only (see save()) —
+      // doing it here would silently rewrite the visible start-date field on
+      // every builder interaction.
       ...rruleToLegacyTaskRepeatCfg(rrule, cfg.startDate),
     }));
   }
@@ -376,14 +380,31 @@ export class DialogEditTaskRepeatCfgComponent {
         formGroup1.markAllAsTouched();
         return;
       }
-      // Re-derive the legacy fallback fields once more at save time: startDate
-      // may have been edited after the last builder change, and the fallback
-      // (incl. the aligned startDate for date-anchored rules) must reflect the
-      // final value.
-      this.repeatCfg.update((cfg) => ({
-        ...cfg,
-        ...rruleToLegacyTaskRepeatCfg(cfg.rrule as string, cfg.startDate),
-      }));
+      // Align startDate for date-anchored rules: old clients read the monthly
+      // day (and yearly month+day) from startDate, so it must sit on the
+      // rule's day. Done once at save — and ONLY when the schedule actually
+      // changed in this dialog session: realigning an untouched stored cfg
+      // would put startDate into the change diff, and startDate is a
+      // SCHEDULE_AFFECTING_FIELD that makes rescheduleTaskOnRepeatCfgUpdate$
+      // move today's live instance on an unrelated title/notes edit (#7373).
+      const initialForAlign = this.repeatCfgInitial();
+      const scheduleTouched =
+        !this.isEdit() ||
+        !initialForAlign ||
+        initialForAlign.rrule !== working.rrule ||
+        initialForAlign.startDate !== working.startDate;
+      if (scheduleTouched && working.startDate) {
+        const aligned = getAlignedStartDate(working.rrule as string, working.startDate);
+        if (aligned) {
+          this.repeatCfg.update((cfg) => ({
+            ...cfg,
+            startDate: aligned,
+            // Legacy fields were derived from the pre-alignment startDate
+            // (weekly fallback weekday) — re-derive against the final one.
+            ...rruleToLegacyTaskRepeatCfg(cfg.rrule as string, aligned),
+          }));
+        }
+      }
     } else if (working.rrule) {
       // Switched away from RRULE — drop the stale string so the legacy path runs.
       this.repeatCfg.update((cfg) => ({ ...cfg, rrule: undefined }));
@@ -438,8 +459,12 @@ export class DialogEditTaskRepeatCfgComponent {
     // The form uses `null` as the "(Day of month)" sentinel on the
     // monthlyWeekOfMonth select. Persisted cfgs use `undefined` for absent
     // optional fields (project convention). Normalizing here keeps existing
-    // day-of-month cfgs from producing spurious change diffs.
-    if (result.monthlyWeekOfMonth === null) {
+    // day-of-month cfgs from producing spurious change diffs. EXCEPT for
+    // RRULE cfgs: there `null` is the deliberate anchor RESET emitted by
+    // rruleToLegacyTaskRepeatCfg — it must survive to the op-log wire format
+    // (JSON.stringify drops `undefined`, so an undefined reset never clears
+    // the stale anchor on remote clients).
+    if (result.monthlyWeekOfMonth === null && result.quickSetting !== 'RRULE') {
       result = { ...result, monthlyWeekOfMonth: undefined };
     }
     // `monthlyLastDay` has no CUSTOM-mode form control, so a flag left over

@@ -1910,7 +1910,7 @@
         "RRULE_BYMONTH": "In months",
         "RRULE_BYMONTH_DESCRIPTION": "Limit to these months — works with any frequency; leave empty for every month. E.g. daily in Jan–Apr, Mondays only in June, or yearly 'every Saturday, March–November'. For Yearly this also sets which month(s) the date/weekday falls in.",
         "RRULE_BYMONTHDAY": "Day of month",
-        "RRULE_BYMONTHDAY_DESCRIPTION": "Tap the day(s) of the month (1–31, e.g. 15), or Last / 2nd-last / 3rd-last to count from the end. Need others? Type a custom list like 1,15,-5. Months shorter than a chosen day fall on their last day.",
+        "RRULE_BYMONTHDAY_DESCRIPTION": "Tap the day(s) of the month (1–31, e.g. 15), or Last / 2nd-last / 3rd-last to count from the end. Need others? Type a custom list like 1,15,-5. Note: months without a chosen day are skipped (e.g. 31 never fires in February) — also select 'Last day' to cover shorter months.",
         "RRULE_BYMONTHDAY_LIST": "Days of month (list)",
         "RRULE_BYMONTHDAY_LIST_DESCRIPTION": "Repeat on several days of the month, or count from the end. Comma-separated; negatives count back from month-end. E.g. 1,15,-1 = the 1st, 15th and last day. Overrides the single 'Day of month' above.",
         "RRULE_BYSETPOS": "Set position (BYSETPOS)",

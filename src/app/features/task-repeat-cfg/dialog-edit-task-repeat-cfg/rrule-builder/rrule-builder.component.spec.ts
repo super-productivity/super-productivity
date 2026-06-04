@@ -67,7 +67,7 @@ describe('RruleBuilderComponent', () => {
     expect(component.model().nthDays).toEqual([{ pos: 2, days: ['MO'] }]);
   });
 
-  it('custom ordinal input emits any non-zero value, clamped to ±53', async () => {
+  it('custom ordinal input emits any non-zero value, clamped per frequency', async () => {
     await setup('FREQ=MONTHLY;BYDAY=3MO');
     const emitted: string[] = [];
     component.rruleChange.subscribe((r) => emitted.push(r));
@@ -79,11 +79,29 @@ describe('RruleBuilderComponent', () => {
     component.setNthDayCustomPos(0, '0');
     component.setNthDayCustomPos(0, 'abc');
     expect(component.model().nthDays).toEqual([{ pos: 5, days: ['MO'] }]);
-    // out-of-range clamps to the RFC 5545 bound
+    // MONTHLY clamps to ±5 — a month has at most 5 of any weekday; values past
+    // that emit valid-but-dead rules (BYDAY=10MO matches nothing, ever).
+    component.setNthDayCustomPos(0, '99');
+    expect(component.model().nthDays).toEqual([{ pos: 5, days: ['MO'] }]);
+    component.setNthDayCustomPos(0, '-99');
+    expect(component.model().nthDays).toEqual([{ pos: -5, days: ['MO'] }]);
+  });
+
+  it('custom ordinal input clamps to ±53 for YEARLY', async () => {
+    await setup('FREQ=YEARLY;BYMONTH=6;BYDAY=3MO');
     component.setNthDayCustomPos(0, '99');
     expect(component.model().nthDays).toEqual([{ pos: 53, days: ['MO'] }]);
-    component.setNthDayCustomPos(0, '-99');
-    expect(component.model().nthDays).toEqual([{ pos: -53, days: ['MO'] }]);
+  });
+
+  it('custom ordinal input rejects a pos another row already anchors', async () => {
+    // Two rows resolving to the same ordinal collapse into one on reload —
+    // BYDAY cannot represent them separately.
+    await setup('FREQ=MONTHLY;BYDAY=2MO,4SU');
+    component.setNthDayCustomPos(1, '2');
+    expect(component.model().nthDays).toEqual([
+      { pos: 2, days: ['MO'] },
+      { pos: 4, days: ['SU'] },
+    ]);
   });
 
   it('a parsed ordinal outside the dropdown set renders as custom', async () => {
@@ -173,6 +191,48 @@ describe('RruleBuilderComponent', () => {
     await setup('FREQ=DAILY;BYMONTH=1,2');
     component.setFreq('YEARLY');
     expect(component.model().byMonth).toEqual([1, 2]);
+  });
+
+  it('leaving YEARLY drops the auto-seeded month but keeps user-picked months', async () => {
+    await setup('', '2024-06-03');
+    component.setFreq('YEARLY'); // seeds byMonth=[6]
+    component.setFreq('MONTHLY');
+    // The seed would otherwise constrain the monthly rule to June only.
+    expect(component.model().byMonth).toEqual([]);
+
+    component.setFreq('YEARLY'); // seeds [6] again
+    component.toggleMonth(7); // user takes ownership → [6, 7]
+    component.setFreq('WEEKLY');
+    expect(component.model().byMonth).toEqual([6, 7]);
+  });
+
+  it('mode and frequency switches clear a leftover BYSETPOS', async () => {
+    // A bySetPos set in WEEKDAYS mode would silently narrow a day-of-month
+    // rule (BYMONTHDAY=15;BYSETPOS=2 = never fires) with no UI to clear it.
+    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=2');
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.setMonthlyMode('DAY_OF_MONTH');
+    expect(component.model().bySetPos).toBe('');
+    expect(emitted[emitted.length - 1]).not.toContain('BYSETPOS');
+
+    // Same on a frequency switch.
+    component.setMonthlyMode('WEEKDAYS');
+    component.toggleSetPos(2);
+    expect(component.model().bySetPos).toBe('2');
+    component.setFreq('YEARLY');
+    expect(component.model().bySetPos).toBe('');
+  });
+
+  it('a predefined set-position toggle closes the explicitly opened custom input', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR');
+    component.toggleSetPosCustomMode(); // open custom input (empty value)
+    expect(component.isSetPosCustom()).toBe(true);
+    component.toggleSetPos(1);
+    // Without this, the custom input and the 'first' toggle would both render
+    // active with contradictory state.
+    expect(component.isSetPosCustom()).toBe(false);
+    expect(component.isSetPosActive(1)).toBe(true);
   });
 
   it('builds "last weekday of month" (weekday-set mode + set-position toggle)', async () => {

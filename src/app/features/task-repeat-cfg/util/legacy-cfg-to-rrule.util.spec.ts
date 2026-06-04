@@ -1,4 +1,5 @@
 import {
+  getAlignedStartDate,
   legacyTaskRepeatCfgToRRule,
   rruleToLegacyTaskRepeatCfg,
 } from './legacy-cfg-to-rrule.util';
@@ -120,12 +121,13 @@ describe('legacyTaskRepeatCfgToRRule', () => {
 });
 
 describe('rruleToLegacyTaskRepeatCfg', () => {
-  // Every result carries explicit monthly-anchor resets (undefined) so a
-  // spread-merge clears stale values from a previous preset/rule.
+  // Every result carries explicit monthly-anchor resets so a spread-merge
+  // clears stale values from a previous preset/rule. null/false (NOT
+  // undefined) so the reset also survives JSON.stringify on the op-log wire.
   const ANCHOR_RESETS = {
-    monthlyWeekOfMonth: undefined,
-    monthlyWeekday: undefined,
-    monthlyLastDay: undefined,
+    monthlyWeekOfMonth: null,
+    monthlyWeekday: null,
+    monthlyLastDay: false,
   };
 
   it('DAILY with interval', () => {
@@ -213,14 +215,14 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
   it('always resets the monthly anchors so stale values cannot survive a merge', () => {
     // A cfg that previously carried nth-weekday anchors gets a day-of-month
     // rule: the spread-merge in onRRuleChange must clear the old anchors, else
-    // old clients keep firing on the nth weekday.
+    // old clients keep firing on the nth weekday. The resets are null/false —
+    // NOT undefined — so they survive JSON.stringify on the op-log wire and
+    // actually clear the anchor on remote clients.
     const out = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYMONTHDAY=15');
-    expect('monthlyWeekOfMonth' in out).toBe(true);
-    expect(out.monthlyWeekOfMonth).toBeUndefined();
-    expect('monthlyWeekday' in out).toBe(true);
-    expect(out.monthlyWeekday).toBeUndefined();
-    expect('monthlyLastDay' in out).toBe(true);
-    expect(out.monthlyLastDay).toBeUndefined();
+    expect(out.monthlyWeekOfMonth).toBeNull();
+    expect(out.monthlyWeekday).toBeNull();
+    expect(out.monthlyLastDay).toBe(false);
+    expect(JSON.parse(JSON.stringify(out)).monthlyWeekOfMonth).toBeNull();
   });
 
   it('does NOT set monthlyLastDay for the clamp idiom (BYMONTHDAY=31,-1;BYSETPOS=1)', () => {
@@ -228,35 +230,8 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
       'FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1',
       '2024-01-31',
     );
-    expect(out.monthlyLastDay).toBeUndefined();
-    // startDate already sits on an occurrence — no realignment emitted.
-    expect(out.startDate).toBeUndefined();
-  });
-
-  it('aligns startDate to the first occurrence for a monthly day rule', () => {
-    // Old clients read the day from startDate: BYMONTHDAY=15 anchored on the
-    // 3rd must move the start to the 15th, else they fire on the 3rd.
-    const out = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYMONTHDAY=15', '2024-06-03');
-    expect(out.startDate).toBe('2024-06-15');
-  });
-
-  it('keeps startDate untouched when it already sits on an occurrence', () => {
-    const out = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYMONTHDAY=15', '2024-06-15');
-    expect('startDate' in out).toBe(false);
-  });
-
-  it('aligns startDate for a yearly rule (month + day)', () => {
-    // Legacy YEARLY reads month AND day from startDate.
-    const out = rruleToLegacyTaskRepeatCfg(
-      'FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=10',
-      '2024-06-03',
-    );
-    expect(out.startDate).toBe('2025-03-10');
-  });
-
-  it('does not align startDate for weekday-based monthly rules', () => {
-    // Legacy nth-weekday recurrence uses the anchor fields, not startDate.
-    const out = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=2TU', '2024-06-03');
+    expect(out.monthlyLastDay).toBe(false);
+    // The converter never emits startDate — alignment is getAlignedStartDate.
     expect('startDate' in out).toBe(false);
   });
 
@@ -278,5 +253,76 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
     expect(back.monday).toBe(true);
     expect(back.thursday).toBe(true);
     expect(back.tuesday).toBe(false);
+  });
+});
+
+describe('getAlignedStartDate', () => {
+  it('aligns to the rule day for a monthly day rule (old clients read it from startDate)', () => {
+    expect(getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=15', '2024-06-03')).toBe(
+      '2024-06-15',
+    );
+    // Start day past the rule day → next month.
+    expect(getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=15', '2024-06-20')).toBe(
+      '2024-07-15',
+    );
+  });
+
+  it('returns undefined when the start already sits on the rule day', () => {
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=15', '2024-06-15'),
+    ).toBeUndefined();
+  });
+
+  it('keeps the TARGET day for the clamp idiom (not the clamped month-end day)', () => {
+    // An occurrence search would land on Feb 29 and old clients would fire on
+    // the 29th of every month forever. The arithmetic alignment keeps day 31
+    // (first month that has it), which the legacy engine clamps natively.
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1', '2024-02-10'),
+    ).toBe('2024-03-31');
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1', '2024-01-31'),
+    ).toBeUndefined();
+  });
+
+  it('aligns yearly date rules to month + day (year rolls forward when passed)', () => {
+    expect(getAlignedStartDate('FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=10', '2024-06-03')).toBe(
+      '2025-03-10',
+    );
+    expect(getAlignedStartDate('FREQ=YEARLY;BYMONTH=9;BYMONTHDAY=10', '2024-06-03')).toBe(
+      '2024-09-10',
+    );
+  });
+
+  it('walks to the next leap year for a Feb-29 yearly clamp rule', () => {
+    expect(
+      getAlignedStartDate(
+        'FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29,-1;BYSETPOS=1',
+        '2026-03-01',
+      ),
+    ).toBe('2028-02-29');
+  });
+
+  it('returns undefined for weekday-anchored, multi-day, and pure last-day rules', () => {
+    // Weekday rules use the anchor fields (monthly) / stay approximate (yearly)
+    // — moving the user's visible start date for them is worse.
+    expect(getAlignedStartDate('FREQ=MONTHLY;BYDAY=2TU', '2024-06-03')).toBeUndefined();
+    expect(
+      getAlignedStartDate('FREQ=YEARLY;BYMONTH=6;BYDAY=2SA', '2026-09-01'),
+    ).toBeUndefined();
+    // Multi-day lists have no single-day legacy equivalent.
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=1,15,-1', '2024-06-20'),
+    ).toBeUndefined();
+    // Pure last-day rules use the monthlyLastDay flag, not the startDate day.
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=-1', '2024-06-03'),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined for weekly/daily rules and garbage', () => {
+    expect(getAlignedStartDate('FREQ=WEEKLY;BYDAY=MO', '2024-06-03')).toBeUndefined();
+    expect(getAlignedStartDate('FREQ=DAILY', '2024-06-03')).toBeUndefined();
+    expect(getAlignedStartDate('not an rrule', '2024-06-03')).toBeUndefined();
   });
 });

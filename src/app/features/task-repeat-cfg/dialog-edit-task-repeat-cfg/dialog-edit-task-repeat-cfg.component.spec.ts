@@ -677,17 +677,33 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       );
       component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
       const cfg = component.repeatCfg() as any;
-      expect(cfg.monthlyWeekOfMonth).toBeUndefined();
-      expect(cfg.monthlyWeekday).toBeUndefined();
+      // null (not undefined) so the reset survives the op-log JSON wire format.
+      expect(cfg.monthlyWeekOfMonth).toBeNull();
+      expect(cfg.monthlyWeekday).toBeNull();
     });
 
-    it('onRRuleChange aligns startDate for a date-anchored monthly rule', async () => {
+    it('onRRuleChange does NOT touch startDate (alignment happens at save only)', async () => {
       const fixture = await setupTestBed({ task: mockTask });
       const component = fixture.componentInstance;
       component.repeatCfg.update((c) => ({ ...c, startDate: '2024-06-03' }) as any);
       component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      // Aligning live would silently rewrite the visible start-date field on
+      // every builder interaction.
+      expect(component.repeatCfg().startDate).toBe('2024-06-03');
+    });
+
+    it('save() aligns startDate onto the rule day for a new date-anchored cfg', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-03' }) as any,
+      );
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
       // Old clients read the monthly day from startDate — must sit on the 15th.
-      expect(component.repeatCfg().startDate).toBe('2024-06-15');
+      expect(savedCfg.startDate).toBe('2024-06-15');
     });
 
     it('save() keeps monthlyLastDay as the old-client fallback for BYMONTHDAY=-1', async () => {
@@ -715,6 +731,31 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
         .args[2] as any;
       expect(savedCfg.startDate).toBe('2024-07-15');
+    });
+
+    it('save() does NOT realign startDate on an edit when the schedule was not touched', async () => {
+      // Regression (#7373 class): a stored cfg whose startDate is off-occurrence
+      // (imported / pre-alignment) must not get a startDate change — a
+      // SCHEDULE_AFFECTING_FIELD — injected by save() when the user only edited
+      // the title; that would reschedule today's live instance.
+      const storedCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-unaligned',
+        title: 'Unaligned',
+        startDate: '2024-06-03',
+        repeatCycle: 'MONTHLY',
+        quickSetting: 'RRULE' as any,
+        rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
+      };
+      const fixture = await setupTestBed({ repeatCfg: storedCfg });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, title: 'Renamed' }) as any);
+      component.save();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalled();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.title).toBe('Renamed');
+      expect('startDate' in changes).toBe(false);
     });
 
     it('save() blocks when the rrule is missing/invalid in RRULE mode', async () => {

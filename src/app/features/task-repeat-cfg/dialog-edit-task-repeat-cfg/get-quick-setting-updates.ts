@@ -26,11 +26,13 @@ const _buildWeeklyForDay = (date: Date): Partial<TaskRepeatCfg> => {
 
 // Switching between monthly presets must clear every monthly anchor —
 // anchor presence is the discriminator, so a stale Nth-weekday or last-day
-// field would silently take effect.
+// field would silently take effect. `null`/`false` (NOT undefined) so the
+// reset survives the op-log's JSON wire format and clears the anchor on
+// remote clients too (JSON.stringify drops undefined keys).
 const MONTHLY_ANCHOR_RESET: Partial<TaskRepeatCfg> = {
-  monthlyWeekOfMonth: undefined,
-  monthlyWeekday: undefined,
-  monthlyLastDay: undefined,
+  monthlyWeekOfMonth: null,
+  monthlyWeekday: null,
+  monthlyLastDay: false,
 };
 
 /**
@@ -187,7 +189,7 @@ export const getQuickSettingUpdates = (
         startDate: getDbDateStr(ref),
         monthlyWeekOfMonth: weekOfMonth,
         monthlyWeekday: weekday,
-        monthlyLastDay: undefined,
+        monthlyLastDay: false,
       });
     }
 
@@ -201,7 +203,7 @@ export const getQuickSettingUpdates = (
         startDate: getDbDateStr(ref),
         monthlyWeekOfMonth: -1,
         monthlyWeekday: ref.getDay() as MonthlyWeekday,
-        monthlyLastDay: undefined,
+        monthlyLastDay: false,
       });
     }
 

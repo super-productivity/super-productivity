@@ -143,15 +143,26 @@ export const formModelToRRule = (m: RRuleFormModel): string => {
   const parts: string[] = [`FREQ=${m.freq}`];
   if (m.interval && m.interval > 1) parts.push(`INTERVAL=${m.interval}`);
 
+  const pushByDaySet = (): void => {
+    if (m.byDay?.length) {
+      const ordered = RRULE_WEEKDAYS.filter((d) => m.byDay.includes(d));
+      parts.push(`BYDAY=${ordered.join(',')}`);
+    }
+  };
+  const pushBySetPos = (): void => {
+    if (m.bySetPos && m.bySetPos.trim()) {
+      parts.push(`BYSETPOS=${m.bySetPos.replace(/\s+/g, '')}`);
+    }
+  };
+
   // BYMONTH is a seasonal constraint valid for ANY frequency — e.g. daily in
   // Jan–Apr, weekly Mondays in June, or yearly within the chosen months.
   if (m.byMonth?.length) {
     parts.push(`BYMONTH=${[...m.byMonth].sort((a, b) => a - b).join(',')}`);
   }
 
-  if (m.freq === 'WEEKLY' && m.byDay?.length) {
-    const ordered = RRULE_WEEKDAYS.filter((d) => m.byDay.includes(d));
-    parts.push(`BYDAY=${ordered.join(',')}`);
+  if (m.freq === 'WEEKLY') {
+    pushByDaySet();
   }
 
   if (m.freq === 'MONTHLY') {
@@ -161,23 +172,16 @@ export const formModelToRRule = (m: RRuleFormModel): string => {
       if (byDay) parts.push(`BYDAY=${byDay}`);
     } else if (m.monthlyMode === 'WEEKDAYS') {
       // A weekday set (e.g. Mon–Fri), optionally narrowed to one occurrence via
-      // the "which occurrence" dropdown (BYSETPOS) → "last weekday of month".
-      if (m.byDay?.length) {
-        const ordered = RRULE_WEEKDAYS.filter((d) => m.byDay.includes(d));
-        parts.push(`BYDAY=${ordered.join(',')}`);
-      }
-      if (m.bySetPos && m.bySetPos.trim()) {
-        parts.push(`BYSETPOS=${m.bySetPos.replace(/\s+/g, '')}`);
-      }
+      // the "which occurrence" toggles (BYSETPOS) → "last weekday of month".
+      pushByDaySet();
+      pushBySetPos();
     } else if (m.monthDays?.length) {
       // Day(s) of the month (-1 = last day); selected via the day grid.
       parts.push(`BYMONTHDAY=${m.monthDays.join(',')}`);
       // BYSETPOS narrows the day set too — used by the migration clamp idiom
       // (BYMONTHDAY=31,-1;BYSETPOS=1 = "31st or last day of shorter months").
       // Emitting it keeps such rules round-tripping structurally.
-      if (m.bySetPos && m.bySetPos.trim()) {
-        parts.push(`BYSETPOS=${m.bySetPos.replace(/\s+/g, '')}`);
-      }
+      pushBySetPos();
     }
   }
 
@@ -189,19 +193,18 @@ export const formModelToRRule = (m: RRuleFormModel): string => {
     } else if (m.yearlyMode === 'WEEKDAYS') {
       // A weekday set within the chosen month(s), optionally narrowed to one
       // occurrence via "which" (BYSETPOS) → e.g. the 2nd Saturday of June.
-      if (m.byDay?.length) {
-        const ordered = RRULE_WEEKDAYS.filter((d) => m.byDay.includes(d));
-        parts.push(`BYDAY=${ordered.join(',')}`);
-      }
-      if (m.bySetPos && m.bySetPos.trim()) {
-        parts.push(`BYSETPOS=${m.bySetPos.replace(/\s+/g, '')}`);
-      }
-    } else if (m.monthDays?.length) {
+      pushByDaySet();
+      pushBySetPos();
+    } else if (m.monthDays?.length && m.byMonth?.length) {
+      // Date mode REQUIRES BYMONTH: per RFC 5545, FREQ=YEARLY with a bare
+      // BYMONTHDAY expands across every month — i.e. fires monthly. With no
+      // months selected, omit BYMONTHDAY too: a plain FREQ=YEARLY anchors to
+      // the start date's month+day, which is truly yearly. Parsed bare yearly
+      // rules can't round-trip through this and fall back to the raw override,
+      // preserving their (monthly-firing) semantics verbatim.
       parts.push(`BYMONTHDAY=${m.monthDays.join(',')}`);
       // Same as MONTHLY: keep the clamp idiom (e.g. Feb-29 yearly) round-tripping.
-      if (m.bySetPos && m.bySetPos.trim()) {
-        parts.push(`BYSETPOS=${m.bySetPos.replace(/\s+/g, '')}`);
-      }
+      pushBySetPos();
     }
   }
 
@@ -321,10 +324,12 @@ export const rruleToFormModel = (
     model.wkst = RRULE_WEEKDAYS[wkstNum];
     model.showAdvanced = true;
   }
-  // BYSETPOS drives the weekday-set "which occurrence" dropdown (a main control,
+  // BYSETPOS drives the weekday-set "which occurrence" toggles (a main control,
   // not advanced). Values outside the predefined options — including multi-value
-  // lists like "2,-1" — render via the dropdown's custom input.
-  const setPosArr = toNumArray(opts.bysetpos);
+  // lists like "2,-1" — render via the custom input. Zeros are dropped:
+  // RRule.parseString accepts BYSETPOS=0 but re-emitting it produces an
+  // RFC-invalid rule the occurrence engine silently treats as dead.
+  const setPosArr = toNumArray(opts.bysetpos).filter((n) => n !== 0);
   if (setPosArr.length) model.bySetPos = setPosArr.join(',');
   const weekNo = toNumArray(opts.byweekno).join(',');
   const yearDay = toNumArray(opts.byyearday).join(',');
