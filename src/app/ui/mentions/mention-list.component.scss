@@ -62,6 +62,12 @@
   background-color: var(--c-primary);
   outline: 0;
 }
+.mention-active {
+  .option-main-icon,
+  .tag-ico-emoji {
+    color: var(--c-contrast) !important;
+  }
+}
 .scrollable-menu {
   display: block;
   height: auto;
