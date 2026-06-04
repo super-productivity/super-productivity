@@ -16,20 +16,67 @@
 
     .mat-calendar-body-cell-content {
       background: transparent !important;
+      border: none !important;
     }
 
-    .mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
-      outline: 2px solid var(--c-accent);
+    // Hover circle over date cells
+    .mat-calendar-body-cell-content:not(.mat-calendar-body-selected):hover {
+      background-color: color-mix(in srgb, var(--c-primary) 15%, transparent) !important;
+      border-radius: 50% !important;
+    }
+
+    // Remove focus outline on selected date and active dates
+    .mat-calendar-body-cell-content:focus,
+    .mat-calendar-body-cell-content:focus-visible,
+    .mat-calendar-body-cell:focus .mat-calendar-body-cell-content,
+    .mat-calendar-body-active {
+      outline: none !important;
+      border: none !important;
+      box-shadow: none !important;
     }
 
     .mat-calendar-body-selected {
       background: var(--c-primary) !important;
       color: var(--c-contrast) !important;
+      outline: none !important;
+      border: none !important;
+      box-shadow: none !important;
     }
 
     .mat-calendar-controls {
       margin-top: var(--s);
       margin-bottom: var(--s);
+    }
+
+    // Hide extra month name inside the calendar body
+    .mat-calendar-body-label {
+      display: none !important;
+    }
+
+    // Hide period button arrow and style period button hover
+    .mat-calendar-arrow {
+      display: none !important;
+    }
+
+    .mat-calendar-period-button {
+      cursor: pointer !important;
+      transition: background-color var(--transition-duration-s) ease;
+
+      &:hover {
+        background-color: color-mix(
+          in srgb,
+          var(--c-primary) 15%,
+          transparent
+        ) !important;
+        border-radius: var(--card-border-radius) !important;
+      }
+    }
+
+    // Style previous/next buttons hover circles
+    .mat-calendar-previous-button:hover,
+    .mat-calendar-next-button:hover {
+      background-color: color-mix(in srgb, var(--c-primary) 15%, transparent) !important;
+      border-radius: 50% !important;
     }
   }
 }
@@ -56,7 +103,11 @@
 }
 
 :host ::ng-deep mat-month-view .mat-calendar-body-today {
-  color: transparent;
+  color: transparent !important;
+  border: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
 
   &:after {
     @include materialIcon('wb_sunny');
