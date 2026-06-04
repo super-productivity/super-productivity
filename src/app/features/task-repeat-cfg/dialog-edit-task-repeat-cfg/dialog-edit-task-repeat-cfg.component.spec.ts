@@ -668,6 +668,55 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(savedCfg.repeatCycle).toBe('WEEKLY');
     });
 
+    it('onRRuleChange clears stale monthly anchors from a previous rule', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      // Simulate a leftover nth-weekday anchor (e.g. from MONTHLY_NTH_WEEKDAY).
+      component.repeatCfg.update(
+        (c) => ({ ...c, monthlyWeekOfMonth: 2, monthlyWeekday: 2 }) as any,
+      );
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      const cfg = component.repeatCfg() as any;
+      expect(cfg.monthlyWeekOfMonth).toBeUndefined();
+      expect(cfg.monthlyWeekday).toBeUndefined();
+    });
+
+    it('onRRuleChange aligns startDate for a date-anchored monthly rule', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2024-06-03' }) as any);
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      // Old clients read the monthly day from startDate — must sit on the 15th.
+      expect(component.repeatCfg().startDate).toBe('2024-06-15');
+    });
+
+    it('save() keeps monthlyLastDay as the old-client fallback for BYMONTHDAY=-1', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'RRULE' }) as any);
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=-1');
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.rrule).toBe('FREQ=MONTHLY;BYMONTHDAY=-1');
+      // Regression: _normalizeMonthlyAnchor used to strip this for RRULE saves,
+      // losing month-end semantics on old clients.
+      expect(savedCfg.monthlyLastDay).toBe(true);
+    });
+
+    it('save() realigns startDate edited after the last builder change', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'RRULE' }) as any);
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      // User edits the start date afterwards — off-occurrence again.
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2024-07-03' }) as any);
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.startDate).toBe('2024-07-15');
+    });
+
     it('save() blocks when the rrule is missing/invalid in RRULE mode', async () => {
       const fixture = await setupTestBed({ task: mockTask });
       const component = fixture.componentInstance;

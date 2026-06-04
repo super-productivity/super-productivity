@@ -159,6 +159,22 @@ describe('RruleBuilderComponent', () => {
     expect(emitted[emitted.length - 1]).toBe('FREQ=DAILY');
   });
 
+  it('switching to YEARLY seeds BYMONTH from the start month (else the rule fires monthly)', async () => {
+    await setup('', '2024-06-03'); // fresh builder, June start
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.setFreq('YEARLY');
+    expect(component.model().byMonth).toEqual([6]);
+    // default yearly mode = on date → must carry BYMONTH to mean "once a year"
+    expect(emitted[emitted.length - 1]).toBe('FREQ=YEARLY;BYMONTH=6;BYMONTHDAY=3');
+  });
+
+  it('switching to YEARLY keeps an existing month selection', async () => {
+    await setup('FREQ=DAILY;BYMONTH=1,2');
+    component.setFreq('YEARLY');
+    expect(component.model().byMonth).toEqual([1, 2]);
+  });
+
   it('builds "last weekday of month" (weekday-set mode + set-position toggle)', async () => {
     await setup('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR');
     expect(component.model().monthlyMode).toBe('WEEKDAYS');

@@ -376,6 +376,14 @@ export class DialogEditTaskRepeatCfgComponent {
         formGroup1.markAllAsTouched();
         return;
       }
+      // Re-derive the legacy fallback fields once more at save time: startDate
+      // may have been edited after the last builder change, and the fallback
+      // (incl. the aligned startDate for date-anchored rules) must reflect the
+      // final value.
+      this.repeatCfg.update((cfg) => ({
+        ...cfg,
+        ...rruleToLegacyTaskRepeatCfg(cfg.rrule as string, cfg.startDate),
+      }));
     } else if (working.rrule) {
       // Switched away from RRULE — drop the stale string so the legacy path runs.
       this.repeatCfg.update((cfg) => ({ ...cfg, rrule: undefined }));
@@ -436,9 +444,16 @@ export class DialogEditTaskRepeatCfgComponent {
     }
     // `monthlyLastDay` has no CUSTOM-mode form control, so a flag left over
     // from the MONTHLY_LAST_DAY preset would silently override the
-    // day-of-month a CUSTOM cfg shows. It is only ever valid for that
-    // preset — strip it for any other quick setting (#7726).
-    if (result.monthlyLastDay && result.quickSetting !== 'MONTHLY_LAST_DAY') {
+    // day-of-month a CUSTOM cfg shows. Strip it for other quick settings
+    // (#7726) — EXCEPT 'RRULE', where it is derived from the rule itself
+    // (rruleToLegacyTaskRepeatCfg, BYMONTHDAY=-1) as the old-client fallback
+    // for month-end semantics; stripping it would make old clients fall back
+    // to the startDate's numeric day.
+    if (
+      result.monthlyLastDay &&
+      result.quickSetting !== 'MONTHLY_LAST_DAY' &&
+      result.quickSetting !== 'RRULE'
+    ) {
       result = { ...result, monthlyLastDay: undefined };
     }
     return result;

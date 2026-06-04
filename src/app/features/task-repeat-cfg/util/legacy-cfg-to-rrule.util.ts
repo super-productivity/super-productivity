@@ -7,6 +7,8 @@ import {
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
 import { normalizeWeekdays, toNumArray } from './rrule-weekday.util';
+import { getFirstRRuleOccurrence } from '../store/rrule-occurrence.util';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 /**
  * Converts a legacy (pre-RRULE) TaskRepeatCfg — `repeatCycle` + `repeatEvery` +
@@ -78,10 +80,23 @@ export const legacyTaskRepeatCfgToRRule = (cfg: TaskRepeatCfg): string => {
       if (cfg.monthlyLastDay) {
         return `FREQ=MONTHLY${intervalPart};BYMONTHDAY=-1`;
       }
+      // Clamp semantics: the legacy engine clamps a day past month-end to the
+      // month's last day (31 → Feb 28), while a plain BYMONTHDAY=31 would SKIP
+      // those months. For day > 28 emit the RFC clamp idiom instead:
+      // BYMONTHDAY=<d>,-1;BYSETPOS=1 = "the day, or the last day of a shorter
+      // month" — behavior-identical to the legacy clamp.
+      if (day > 28) {
+        return `FREQ=MONTHLY${intervalPart};BYMONTHDAY=${day},-1;BYSETPOS=1`;
+      }
       return `FREQ=MONTHLY${intervalPart};BYMONTHDAY=${day}`;
     }
 
     case 'YEARLY':
+      // Same clamp consideration as MONTHLY: legacy clamps Feb 29 → Feb 28 in
+      // non-leap years (and day 29/30/31 in shorter months generally).
+      if (day > 28) {
+        return `FREQ=YEARLY${intervalPart};BYMONTH=${month};BYMONTHDAY=${day},-1;BYSETPOS=1`;
+      }
       return `FREQ=YEARLY${intervalPart};BYMONTH=${month};BYMONTHDAY=${day}`;
 
     default:
@@ -116,8 +131,9 @@ const RRULE_IDX_TO_FIELD: (keyof TaskRepeatCfg)[] = [
  * recurrence to fall back on (plan P1.3 reverse direction).
  *
  * Returns `{}` for an unparseable or sub-daily rule (legacy fields left untouched).
- * Day-of-month is intentionally not emitted: legacy MONTHLY day recurrence reads
- * the day from `startDate`, so the caller keeps `startDate` aligned instead.
+ * Day-of-month has no legacy field: legacy MONTHLY day recurrence (and YEARLY)
+ * reads the day/month from `startDate`, so for date-anchored rules an aligned
+ * `startDate` (first occurrence on/after the current one) is emitted instead.
  */
 export const rruleToLegacyTaskRepeatCfg = (
   rrule: string,
@@ -137,9 +153,17 @@ export const rruleToLegacyTaskRepeatCfg = (
   const out: Partial<TaskRepeatCfgCopy> = {
     repeatCycle: cycle,
     repeatEvery: opts.interval && opts.interval > 0 ? opts.interval : 1,
+    // Monthly anchors discriminate the legacy MONTHLY paths — always reset so a
+    // stale nth-weekday/last-day anchor from a previous preset or rule can't
+    // override the new rule's semantics on old clients. They are re-set below
+    // only when this rule actually encodes them.
+    monthlyWeekOfMonth: undefined,
+    monthlyWeekday: undefined,
+    monthlyLastDay: undefined,
   };
 
   const weekdays = normalizeWeekdays(opts.byweekday);
+  const monthDays = toNumArray(opts.bymonthday);
 
   if (cycle === 'WEEKLY') {
     // Reset all flags, then enable the rule's weekdays (Mon-indexed).
@@ -164,8 +188,28 @@ export const rruleToLegacyTaskRepeatCfg = (
       // "2nd Tuesday" → BYDAY=2TU. legacy monthlyWeekday is 0=Sun…6=Sat.
       out.monthlyWeekOfMonth = weekdays[0].n as MonthlyWeekOfMonth;
       out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
-    } else if (toNumArray(opts.bymonthday).includes(-1)) {
+    } else if (monthDays.length === 1 && monthDays[0] === -1) {
+      // Pure "last day of month". NOT set for the clamp idiom
+      // (BYMONTHDAY=<d>,-1;BYSETPOS=1) — there the legacy day comes from the
+      // aligned startDate below, and the legacy engine clamps it natively.
       out.monthlyLastDay = true;
+    }
+  }
+
+  // Legacy MONTHLY day-of-month and YEARLY recurrence read the day (and month)
+  // from `startDate`, so it must sit on an occurrence of the rule. Align it to
+  // the first occurrence on/after the current start — e.g. BYMONTHDAY=15 with a
+  // startDate on the 3rd must move the start to the 15th, else old clients fire
+  // on the 3rd.
+  const isDateAnchored = monthDays.length > 0 && !weekdays.length;
+  if (
+    startDate &&
+    ((cycle === 'MONTHLY' && isDateAnchored && !out.monthlyLastDay) || cycle === 'YEARLY')
+  ) {
+    const first = getFirstRRuleOccurrence({ rrule, startDate });
+    if (first) {
+      const aligned = getDbDateStr(first);
+      if (aligned !== startDate) out.startDate = aligned;
     }
   }
 

@@ -260,6 +260,17 @@ describe('rrule-form.util', () => {
       expect(m.rawOverride).toBe('');
     });
 
+    it('round-trips the migration clamp idiom structurally (no raw fallback)', () => {
+      // BYMONTHDAY=31,-1;BYSETPOS=1 = "the 31st, or the last day of shorter
+      // months" — emitted by the legacy-CUSTOM migration for day > 28 anchors.
+      const m = rruleToFormModel('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1');
+      expect(m.monthlyMode).toBe('DAY_OF_MONTH');
+      expect(m.monthDays).toEqual([31, -1]);
+      expect(m.bySetPos).toBe('1');
+      expect(m.rawOverride).toBe('');
+      expect(formModelToRRule(m)).toBe('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1');
+    });
+
     it('maps COUNT to end condition', () => {
       const m = rruleToFormModel('FREQ=WEEKLY;BYDAY=MO;COUNT=12');
       expect(m.endType).toBe('COUNT');

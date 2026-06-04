@@ -1865,8 +1865,6 @@
         "C_MONTH": "Month",
         "C_WEEK": "Week",
         "C_YEAR": "Year",
-        "CREATE_FOR_EACH_MISSED": "Create a task for each missed occurrence",
-        "CREATE_FOR_EACH_MISSED_DESCRIPTION": "By default, opening the app after several scheduled occurrences were missed (e.g. you were away for a week) creates only a single instance for the most recent occurrence. When enabled, a separate overdue task is created for every missed occurrence instead, so nothing slips through. To avoid flooding your list, at most the 30 most recent missed occurrences are created. Cannot be combined with \"Skip overdue instances\"",
         "DEFAULT_ESTIMATE": "Default Estimate",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Disable auto-updating subtasks",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Do not update inherited subtasks automatically when the newest instance changes",

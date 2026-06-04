@@ -3,6 +3,7 @@ import { T } from '../../../t.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { TaskReminderOptionId } from '../../tasks/task.model';
@@ -46,8 +47,16 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
       // NOTE replaced in component to allow for dynamic translation
       options: [],
       change: (field, event) => {
+        // Pass the selected start date as the reference, else date-writing
+        // presets (MONTHLY_CURRENT_DATE etc.) stamp *today* into the model and
+        // silently overwrite a user-picked future anchor (save-time recompute
+        // then reads the overwritten value).
+        const sd = (field.model as { startDate?: string | Date } | undefined)?.startDate;
+        const referenceDate =
+          sd instanceof Date ? sd : sd ? dateStrToUtcDate(sd) : undefined;
         const updatesForQuickSetting = getQuickSettingUpdates(
           event.value as RepeatQuickSetting,
+          referenceDate,
         );
         if (updatesForQuickSetting) {
           // NOTE: for some reason this doesn't update the model value, just the view value :(
@@ -154,22 +163,13 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
     key: 'skipOverdue',
     type: 'checkbox',
     defaultValue: false,
-    // Mutually exclusive with createForEachMissed (skip-all vs create-all).
-    hideExpression: (model: any) => !!model.createForEachMissed,
     templateOptions: {
       label: T.F.TASK_REPEAT.F.SKIP_OVERDUE,
       description: T.F.TASK_REPEAT.F.SKIP_OVERDUE_DESCRIPTION,
     },
   },
-  {
-    key: 'createForEachMissed',
-    type: 'checkbox',
-    defaultValue: false,
-    // Mutually exclusive with skipOverdue (create-all vs skip-all).
-    hideExpression: (model: any) => !!model.skipOverdue,
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.CREATE_FOR_EACH_MISSED,
-      description: T.F.TASK_REPEAT.F.CREATE_FOR_EACH_MISSED_DESCRIPTION,
-    },
-  },
+  // NOTE: a 'createForEachMissed' (backfill one task per missed occurrence)
+  // checkbox was removed from this slice — the scheduling engine has no support
+  // for it yet (occurrence engine creates the newest missed only). Re-add the
+  // field together with the engine behavior.
 ];

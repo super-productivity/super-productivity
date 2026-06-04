@@ -172,6 +172,12 @@ export const formModelToRRule = (m: RRuleFormModel): string => {
     } else if (m.monthDays?.length) {
       // Day(s) of the month (-1 = last day); selected via the day grid.
       parts.push(`BYMONTHDAY=${m.monthDays.join(',')}`);
+      // BYSETPOS narrows the day set too — used by the migration clamp idiom
+      // (BYMONTHDAY=31,-1;BYSETPOS=1 = "31st or last day of shorter months").
+      // Emitting it keeps such rules round-tripping structurally.
+      if (m.bySetPos && m.bySetPos.trim()) {
+        parts.push(`BYSETPOS=${m.bySetPos.replace(/\s+/g, '')}`);
+      }
     }
   }
 
@@ -192,6 +198,10 @@ export const formModelToRRule = (m: RRuleFormModel): string => {
       }
     } else if (m.monthDays?.length) {
       parts.push(`BYMONTHDAY=${m.monthDays.join(',')}`);
+      // Same as MONTHLY: keep the clamp idiom (e.g. Feb-29 yearly) round-tripping.
+      if (m.bySetPos && m.bySetPos.trim()) {
+        parts.push(`BYSETPOS=${m.bySetPos.replace(/\s+/g, '')}`);
+      }
     }
   }
 

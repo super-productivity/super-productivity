@@ -142,10 +142,14 @@ export class RruleBuilderComponent implements OnInit {
     afterNextRender(() => this.rruleChange.emit(formModelToRRule(this._model())));
   }
 
+  // Start month (1..12) — seeds BYMONTH when switching to YEARLY (see setFreq).
+  private _refMonth = new Date().getMonth() + 1;
+
   ngOnInit(): void {
     const ref = this.startDate()
       ? dateStrToUtcDate(this.startDate() as string)
       : new Date();
+    this._refMonth = ref.getMonth() + 1;
     this._model.set(rruleToFormModel(this.rrule(), ref));
     this._fromCompletion.set(this.repeatFromCompletion());
   }
@@ -157,7 +161,16 @@ export class RruleBuilderComponent implements OnInit {
 
   // --- field setters (kept out of the template for type-safety) ---
   setFreq(v: string): void {
-    this._patch({ freq: v as RRuleFormModel['freq'] });
+    const freq = v as RRuleFormModel['freq'];
+    // YEARLY date/weekday modes need BYMONTH: per RFC 5545, FREQ=YEARLY with a
+    // bare BYMONTHDAY (or ordinal BYDAY) expands across every month of the
+    // year — i.e. fires monthly. Seed the start month so a fresh yearly rule
+    // means "once a year" until the user picks other months.
+    if (freq === 'YEARLY' && !this._model().byMonth.length) {
+      this._patch({ freq, byMonth: [this._refMonth] });
+      return;
+    }
+    this._patch({ freq });
   }
   setInterval(v: string): void {
     this._patch({ interval: Math.max(1, Math.floor(+v) || 1) });
