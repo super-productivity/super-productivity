@@ -3,10 +3,10 @@ import { T } from '../../../t.const';
 import { RepeatQuickSetting } from '../task-repeat-cfg.model';
 
 const ORDINAL_KEYS = [
-  T.F.TASK_REPEAT.F.ORD_FIRST,
-  T.F.TASK_REPEAT.F.ORD_SECOND,
-  T.F.TASK_REPEAT.F.ORD_THIRD,
-  T.F.TASK_REPEAT.F.ORD_FOURTH,
+  T.F.TASK_REPEAT.F.ORD_FIRST_NTH,
+  T.F.TASK_REPEAT.F.ORD_SECOND_NTH,
+  T.F.TASK_REPEAT.F.ORD_THIRD_NTH,
+  T.F.TASK_REPEAT.F.ORD_FOURTH_NTH,
 ];
 
 export const buildRepeatQuickSettingOptions = (
