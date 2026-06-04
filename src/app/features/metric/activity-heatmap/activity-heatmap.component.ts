@@ -96,8 +96,8 @@ export class ActivityHeatmapComponent {
         this.availableYears.set(yearsWithData);
         // No selectedYear mutation here!
       }),
-      map(([worklog, selectedYear]) => {
-        return this._buildHeatmapDataFromWorklog(worklog, selectedYear);
+      map(([worklog]) => {
+        return this._buildHeatmapDataFromWorklog(worklog, this.selectedYear());
       }),
     ),
     { initialValue: null },

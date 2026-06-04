@@ -16,13 +16,15 @@ describe('ActivityHeatmapComponent', () => {
 
   const dayStr = '2026-06-03';
   const year = 2026;
-  const month = 6;
-  const dayOfMonth = 3;
   const workedMs = 60 * 60 * 1000;
 
-  const createTask = (id: string, overrides: Partial<Task> = {}): Task => ({
+  const createTask = (
+    id: string,
+    overrides: Partial<Task> = {},
+    taskDateStr = dayStr,
+  ): Task => ({
     attachments: [],
-    created: new Date(dayStr).getTime(),
+    created: new Date(taskDateStr).getTime(),
     id,
     isDone: false,
     projectId: 'project',
@@ -45,29 +47,40 @@ describe('ActivityHeatmapComponent', () => {
     ...overrides,
   });
 
-  const createWorklogWithParentAndSubtask = (): Worklog => {
-    const parentTask = createTask('parent', {
-      subTaskIds: ['subtask'],
-      timeSpent: workedMs,
-      timeSpentOnDay: { [dayStr]: workedMs },
-    });
-    const subTask = createTask('subtask', {
-      parentId: parentTask.id,
-      timeSpent: workedMs,
-      timeSpentOnDay: { [dayStr]: workedMs },
-    });
+  const createWorklogWithParentAndSubtask = (worklogDayStr = dayStr): Worklog => {
+    const [worklogYear, worklogMonth, worklogDayOfMonth] = worklogDayStr
+      .split('-')
+      .map(Number);
+    const parentTask = createTask(
+      'parent',
+      {
+        subTaskIds: ['subtask'],
+        timeSpent: workedMs,
+        timeSpentOnDay: { [worklogDayStr]: workedMs },
+      },
+      worklogDayStr,
+    );
+    const subTask = createTask(
+      'subtask',
+      {
+        parentId: parentTask.id,
+        timeSpent: workedMs,
+        timeSpentOnDay: { [worklogDayStr]: workedMs },
+      },
+      worklogDayStr,
+    );
 
     return {
-      [year]: {
+      [worklogYear]: {
         daysWorked: 1,
         monthWorked: 1,
         timeSpent: workedMs,
         ent: {
-          [month]: {
+          [worklogMonth]: {
             daysWorked: 1,
             ent: {
-              [dayOfMonth]: {
-                dateStr: dayStr,
+              [worklogDayOfMonth]: {
+                dateStr: worklogDayStr,
                 dayStr: 'Wed 3.',
                 logEntries: [
                   createWorklogEntry(parentTask),
@@ -140,5 +153,25 @@ describe('ActivityHeatmapComponent', () => {
     expect(dayData?.timeSpent).toBe(workedMs);
     expect(dayData?.taskCount).toBe(2);
     expect(fixture.componentInstance.availableYears()).toEqual([year]);
+  }));
+
+  it('uses recalculated selected year for the first worklog emission', fakeAsync(() => {
+    const previousYear = year - 1;
+    const previousYearDayStr = `${previousYear}-06-03`;
+
+    fixture.detectChanges();
+
+    worklog$.next(createWorklogWithParentAndSubtask(previousYearDayStr));
+
+    const dayData = fixture.componentInstance
+      .heatmapData()
+      ?.weeks.flatMap((week) => week.days)
+      .find((day) => day?.dateStr === previousYearDayStr);
+
+    expect(fixture.componentInstance.selectedYear()).toBe(previousYear);
+    expect(dayData?.timeSpent).toBe(workedMs);
+    expect(fixture.componentInstance.availableYears()).toEqual([previousYear]);
+
+    flush();
   }));
 });
