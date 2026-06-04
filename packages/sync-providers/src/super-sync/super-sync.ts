@@ -147,7 +147,40 @@ export class SuperSyncProvider
 
   async isReady(): Promise<boolean> {
     const cfg = await this.privateCfg.load();
-    return !!(cfg && cfg.accessToken);
+    if (!cfg || !cfg.accessToken) {
+      return false;
+    }
+    // A self-inconsistent encrypted config — encryption flagged on but no key — is
+    // NOT ready. Auto-syncing in this state downloads ops we cannot decrypt and could
+    // push unencrypted ops into an encrypted dataset. This is the dropped-credential
+    // signature documented in SyncCredentialStore.load(); staying not-ready keeps the
+    // client out of destructive auto-recovery until the password is re-entered.
+    if (this._isEncryptionHalfConfigured(cfg)) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Whether the host has flagged encryption as enabled for this provider,
+   * regardless of whether a usable key is present. Used by the op-log download
+   * service to keep the "encrypted ops, no key" log loud (it is the
+   * dropped-credential signature) even for a client whose local op store was
+   * wiped — distinct from a genuinely-fresh client that never had encryption.
+   */
+  async isEncryptionEnabled(): Promise<boolean> {
+    const cfg = await this.privateCfg.load();
+    return !!cfg?.isEncryptionEnabled;
+  }
+
+  /**
+   * A "half-configured" encrypted config: encryption is flagged on but no key is
+   * present. The client can neither decrypt remote ops nor safely encrypt its own
+   * uploads in this state. Shared by `isReady()` (gate auto-sync) and
+   * `getEncryptKey()` (no usable key).
+   */
+  private _isEncryptionHalfConfigured(cfg: SuperSyncPrivateCfg): boolean {
+    return !!cfg.isEncryptionEnabled && !cfg.encryptKey;
   }
 
   async setPrivateCfg(cfg: SuperSyncPrivateCfg): Promise<void> {
@@ -450,10 +483,11 @@ export class SuperSyncProvider
    */
   async getEncryptKey(): Promise<string | undefined> {
     const cfg = await this.privateCfg.load();
-    if (cfg?.isEncryptionEnabled && cfg.encryptKey) {
-      return cfg.encryptKey;
+    // No usable key when encryption is off, or half-configured (flagged on, key missing).
+    if (!cfg?.isEncryptionEnabled || this._isEncryptionHalfConfigured(cfg)) {
+      return undefined;
     }
-    return undefined;
+    return cfg.encryptKey;
   }
 
   // === Private Helper Methods ===

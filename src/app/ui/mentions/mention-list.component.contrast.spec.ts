@@ -33,43 +33,101 @@ describe('MentionListComponent contrast (regression #6123)', () => {
     component.hidden = false;
     component.styleOff = false;
     component.labelKey = 'title';
-    component.items = [{ title: 'Noite' }, { title: 'Dia' }] as any;
-    component.activeIndex = 0;
-
-    fixture.detectChanges();
-    fixture.detectChanges();
+    component.items = [
+      { title: 'Noite', icon: 'star', color: 'rgb(255, 0, 0)' },
+      { title: 'Dia', icon: 'sun', color: 'rgb(0, 0, 255)' },
+      { title: 'Emoji', icon: '⭐', isEmoji: true, color: 'rgb(0, 255, 0)' },
+    ] as any;
   });
 
-  it('should use --c-contrast for active row text when primary is light', () => {
-    const activeLink = fixture.nativeElement.querySelector(
-      '.mention-active > a',
-    ) as HTMLElement | null;
+  describe('when activeIndex is 0', () => {
+    beforeEach(() => {
+      component.activeIndex = 0;
+      fixture.detectChanges();
+      fixture.detectChanges();
+    });
 
-    expect(activeLink).not.toBeNull();
+    it('should use --c-contrast for active row text when primary is light', () => {
+      const activeLink = fixture.nativeElement.querySelector(
+        '.mention-active > a',
+      ) as HTMLElement | null;
 
-    const computed = getComputedStyle(activeLink!);
-    expect(computed.color).toBe('rgb(10, 10, 10)');
-    expect(computed.backgroundColor).toBe('rgb(255, 255, 255)');
+      expect(activeLink).not.toBeNull();
+
+      const computed = getComputedStyle(activeLink!);
+      expect(computed.color).toBe('rgb(10, 10, 10)');
+      expect(computed.backgroundColor).toBe('rgb(255, 255, 255)');
+    });
+
+    it('should not use --text-color-most-intense for active row (would match light primary)', () => {
+      const activeLink = fixture.nativeElement.querySelector(
+        '.mention-active > a',
+      ) as HTMLElement | null;
+
+      expect(activeLink).not.toBeNull();
+
+      const computed = getComputedStyle(activeLink!);
+      expect(computed.color).not.toBe('rgb(255, 255, 255)');
+    });
+
+    it('should keep inactive rows on --text-color', () => {
+      const inactiveLink = fixture.nativeElement.querySelector(
+        'li:not(.mention-active) a.mention-item',
+      ) as HTMLElement | null;
+
+      expect(inactiveLink).not.toBeNull();
+
+      expect(getComputedStyle(inactiveLink!).color).toBe('rgb(200, 200, 200)');
+    });
+
+    it('should use --c-contrast for active row icon color even if item has a custom color', () => {
+      const activeIcon = fixture.nativeElement.querySelector(
+        '.mention-active .option-main-icon',
+      ) as HTMLElement | null;
+
+      expect(activeIcon).not.toBeNull();
+
+      const computed = getComputedStyle(activeIcon!);
+      expect(computed.color).toBe('rgb(10, 10, 10)');
+    });
+
+    it('should keep inactive row icon colors on custom item color', () => {
+      const inactiveIcon = fixture.nativeElement.querySelector(
+        'li:not(.mention-active) .option-main-icon',
+      ) as HTMLElement | null;
+
+      expect(inactiveIcon).not.toBeNull();
+
+      expect(getComputedStyle(inactiveIcon!).color).toBe('rgb(0, 0, 255)');
+    });
+
+    it('should keep inactive row emoji colors on custom item color', () => {
+      const inactiveEmoji = fixture.nativeElement.querySelector(
+        'li:not(.mention-active) .tag-ico-emoji',
+      ) as HTMLElement | null;
+
+      expect(inactiveEmoji).not.toBeNull();
+
+      expect(getComputedStyle(inactiveEmoji!).color).toBe('rgb(0, 255, 0)');
+    });
   });
 
-  it('should not use --text-color-most-intense for active row (would match light primary)', () => {
-    const activeLink = fixture.nativeElement.querySelector(
-      '.mention-active > a',
-    ) as HTMLElement | null;
+  describe('when activeIndex is 2', () => {
+    beforeEach(() => {
+      component.activeIndex = 2;
+      fixture.detectChanges();
+      fixture.detectChanges();
+    });
 
-    expect(activeLink).not.toBeNull();
+    it('should use --c-contrast for active row emoji color even if item has a custom color', () => {
+      const activeEmoji = fixture.nativeElement.querySelector(
+        '.mention-active .tag-ico-emoji',
+      ) as HTMLElement | null;
 
-    const computed = getComputedStyle(activeLink!);
-    expect(computed.color).not.toBe('rgb(255, 255, 255)');
-  });
+      expect(activeEmoji).not.toBeNull();
 
-  it('should keep inactive rows on --text-color', () => {
-    const inactiveLink = fixture.nativeElement.querySelector(
-      'li:not(.mention-active) a.mention-item',
-    ) as HTMLElement | null;
-
-    expect(inactiveLink).not.toBeNull();
-
-    expect(getComputedStyle(inactiveLink!).color).toBe('rgb(200, 200, 200)');
+      const computed = getComputedStyle(activeEmoji!);
+      expect(computed.color).toBe('rgb(10, 10, 10)');
+    });
   });
 });

@@ -79,6 +79,9 @@ import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-prov
 import { isSuperSyncWebSocketAccess } from '@sp/sync-providers/super-sync';
 import { isTransientNetworkError } from '@sp/sync-providers/http';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
+import type { UploadOutcome } from '../../op-log/core/types/sync-results.types';
+
+type CompletedUploadOutcome = Extract<UploadOutcome, { kind: 'completed' }>;
 
 /**
  * Identifies which error or UI path triggered a destructive forceUpload.
@@ -456,10 +459,20 @@ export class SyncWrapperService {
         );
       }
 
+      // Capture sync history BEFORE download. The SYNC_IMPORT conflict gate (both the
+      // download and piggyback-upload paths) uses this to decide whether a USE_LOCAL
+      // choice would overwrite a populated remote with throwaway pre-first-sync state.
+      // It MUST be read here, before this sync persists any synced ops, or the
+      // never-synced guard reads its own just-written state and disarms itself.
+      const isNeverSyncedAtSyncStart = !(await this._opLogSyncService.hasSyncedOps());
+
       // 1. Download remote ops first (important for fresh clients to receive data)
       const downloadResult = await this._opLogSyncService.downloadRemoteOps(
         syncCapableProvider,
-        isProviderSwitch ? { forceFromSeq0: true } : undefined,
+        {
+          forceFromSeq0: isProviderSwitch || undefined,
+          isNeverSynced: isNeverSyncedAtSyncStart,
+        },
       );
       // Auth is confirmed working if download didn't throw AuthFailSPError.
       // Reset here rather than only at InSync so early returns (cancelled,
@@ -480,8 +493,12 @@ export class SyncWrapperService {
       this._providerManager.setLastSyncedProviderId(providerId);
 
       // 2. Upload pending local ops
-      const uploadResult =
-        await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
+      const uploadResult = await this._opLogSyncService.uploadPendingOps(
+        syncCapableProvider,
+        { isNeverSynced: isNeverSyncedAtSyncStart },
+      );
+      const completedUploadResults: CompletedUploadOutcome[] =
+        uploadResult.kind === 'completed' ? [uploadResult] : [];
       if (uploadResult.kind === 'completed') {
         SyncLog.log(
           `SyncWrapperService: Upload complete. uploaded=${uploadResult.uploadedCount}, piggybacked=${uploadResult.piggybackedOpsCount}`,
@@ -510,8 +527,28 @@ export class SyncWrapperService {
           `SyncWrapperService: Re-uploading ${pendingLwwOps} local-win op(s) from LWW ` +
             `(attempt ${lwwRetries}/${MAX_LWW_REUPLOAD_RETRIES})...`,
         );
-        const reuploadResult =
-          await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
+        // Re-thread isNeverSyncedAtSyncStart (the snapshot captured BEFORE the
+        // initial upload ran) instead of letting uploadPendingOps re-read live
+        // state — the initial batch has already flipped hasSyncedOps() to true
+        // and a live read here would mis-classify a still-fresh client. Mirrors
+        // the orchestrator-snapshot rationale at the top of uploadPendingOps.
+        const reuploadResult = await this._opLogSyncService.uploadPendingOps(
+          syncCapableProvider,
+          { isNeverSynced: isNeverSyncedAtSyncStart },
+        );
+        if (reuploadResult.kind === 'cancelled') {
+          // Mirror the initial-upload cancel path: a cancelled LWW re-upload
+          // means downloaded localWinOpsCreated stay pending in the op-log.
+          // UNKNOWN_OR_CHANGED forces a retry on the next sync tick.
+          SyncLog.log(
+            'SyncWrapperService: LWW re-upload cancelled by user. Skipping remaining sync work.',
+          );
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return 'HANDLED_ERROR';
+        }
+        if (reuploadResult.kind === 'completed') {
+          completedUploadResults.push(reuploadResult);
+        }
         pendingLwwOps =
           reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
       }
@@ -528,6 +565,9 @@ export class SyncWrapperService {
             'SyncWrapperService: Validation failed during sync (retry exhaustion path); reporting ERROR',
           );
           this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
+        if (this._handlePermanentUploadRejections(completedUploadResults)) {
           return 'HANDLED_ERROR';
         }
         // Don't claim IN_SYNC — there are known unuploaded ops.
@@ -547,28 +587,7 @@ export class SyncWrapperService {
       }
 
       // 4. Check for permanent rejection failures
-      if (uploadResult.kind === 'completed' && uploadResult.permanentRejectionCount > 0) {
-        const hasPayloadError = uploadResult.rejectedOps.some(
-          (r) =>
-            r.error?.includes('Payload too complex') ||
-            r.error?.includes('Payload too large'),
-        );
-
-        if (hasPayloadError) {
-          SyncLog.err(
-            'SyncWrapperService: Upload rejected - payload too large/complex',
-            uploadResult.rejectedOps,
-          );
-          this._providerManager.setSyncStatus('ERROR');
-          alertDialog(this._translateService.instant(T.F.SYNC.S.ERROR_PAYLOAD_TOO_LARGE));
-          return 'HANDLED_ERROR';
-        }
-
-        SyncLog.err(
-          `SyncWrapperService: Upload had ${uploadResult.permanentRejectionCount} permanent rejection(s), not marking as IN_SYNC`,
-          uploadResult.rejectedOps,
-        );
-        this._providerManager.setSyncStatus('ERROR');
+      if (this._handlePermanentUploadRejections(completedUploadResults)) {
         return 'HANDLED_ERROR';
       }
 
@@ -605,7 +624,14 @@ export class SyncWrapperService {
 
       return didChange ? SyncStatus.UpdateRemote : SyncStatus.InSync;
     } catch (error) {
-      SyncLog.err(error);
+      // DecryptNoPasswordError is expected control flow, not a failure: it signals the
+      // app to prompt for the encryption password (handled below). The download/upload
+      // service already logged it at the right severity — quiet for a fresh-client
+      // onboarding prompt, loud for the dropped-credential signature. Re-logging it here
+      // at error level would re-raise the very noise that scoping was meant to remove.
+      if (!(error instanceof DecryptNoPasswordError)) {
+        SyncLog.err(error);
+      }
 
       // Reset consecutive SuperSync auth failure counter for non-auth errors.
       // Only AuthFailSPError for SuperSync should accumulate the counter.
@@ -874,6 +900,38 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       }
     }
+  }
+
+  private _handlePermanentUploadRejections(
+    uploadResults: readonly CompletedUploadOutcome[],
+  ): boolean {
+    const rejectedResult = uploadResults.find((r) => r.permanentRejectionCount > 0);
+    if (!rejectedResult) {
+      return false;
+    }
+
+    const hasPayloadError = rejectedResult.rejectedOps.some(
+      (r) =>
+        r.error?.includes('Payload too complex') ||
+        r.error?.includes('Payload too large'),
+    );
+
+    if (hasPayloadError) {
+      SyncLog.err(
+        'SyncWrapperService: Upload rejected - payload too large/complex',
+        rejectedResult.rejectedOps,
+      );
+      this._providerManager.setSyncStatus('ERROR');
+      alertDialog(this._translateService.instant(T.F.SYNC.S.ERROR_PAYLOAD_TOO_LARGE));
+      return true;
+    }
+
+    SyncLog.err(
+      `SyncWrapperService: Upload had ${rejectedResult.permanentRejectionCount} permanent rejection(s), not marking as IN_SYNC`,
+      rejectedResult.rejectedOps,
+    );
+    this._providerManager.setSyncStatus('ERROR');
+    return true;
   }
 
   async forceUpload(triggerSource: ForceUploadTriggerSource = 'unknown'): Promise<void> {

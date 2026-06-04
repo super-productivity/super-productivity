@@ -11,6 +11,7 @@ import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
 import { isSingleEmoji } from '../../util/extract-first-emoji';
 import { MatIcon } from '@angular/material/icon';
 import { CommonModule } from '@angular/common';
+import { DEFAULT_PROJECT_ICON } from '../../features/project/project.const';
 
 export interface SelectOptionRowItem {
   id?: string;
@@ -44,13 +45,15 @@ export class SelectOptionRowComponent {
     return 'color' in item ? item.color || item.theme?.primary : item.theme?.primary;
   });
 
-  isEmoji = computed(() => {
-    const icon = this.icon();
-    return !!icon && isSingleEmoji(icon);
+  defaultIcon = computed(() => {
+    return 'backlogTaskIds' in this.item() ? DEFAULT_PROJECT_ICON : 'label';
   });
 
-  defaultIcon = computed(() => {
-    return 'backlogTaskIds' in this.item() ? 'list' : 'label';
+  effectiveIcon = computed(() => this.icon() || this.defaultIcon());
+
+  isEmoji = computed(() => {
+    const icon = this.effectiveIcon();
+    return !!icon && isSingleEmoji(icon);
   });
 
   folder = computed(() => {

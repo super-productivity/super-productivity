@@ -107,7 +107,11 @@ describe('SyncWrapperService', () => {
     mockSyncService = jasmine.createSpyObj('OperationLogSyncService', [
       'downloadRemoteOps',
       'uploadPendingOps',
+      'hasSyncedOps',
     ]);
+    // Steady-state default: this client has synced before. Tests that exercise the
+    // never-synced path override this.
+    mockSyncService.hasSyncedOps.and.resolveTo(true);
     mockSyncService.downloadRemoteOps.and.returnValue(
       Promise.resolve({
         kind: 'no_new_ops' as const,
@@ -498,7 +502,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true },
+        { forceFromSeq0: true, isNeverSynced: false },
       );
     });
 
@@ -512,7 +516,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        undefined,
+        { forceFromSeq0: undefined, isNeverSynced: false },
       );
     });
 
@@ -523,7 +527,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        undefined,
+        { forceFromSeq0: undefined, isNeverSynced: false },
       );
     });
 
@@ -2199,6 +2203,153 @@ describe('SyncWrapperService', () => {
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
       // ops were uploaded → data changed this sync (discussion #7196)
       expect(result).toBe(SyncStatus.UpdateRemote);
+    });
+
+    it('should pass the pre-sync never-synced snapshot into LWW re-upload retries', async () => {
+      mockSyncService.hasSyncedOps.and.resolveTo(false);
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        return {
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: uploadCallCount === 1 ? 1 : 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        };
+      });
+
+      await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(mockSyncService.uploadPendingOps.calls.argsFor(0)[1]).toEqual({
+        isNeverSynced: true,
+      });
+      expect(mockSyncService.uploadPendingOps.calls.argsFor(1)[1]).toEqual({
+        isNeverSynced: true,
+      });
+    });
+
+    it('should stop sync when an LWW re-upload is cancelled', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 1,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        return { kind: 'cancelled' as const };
+      });
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should stop sync when an LWW re-upload has permanent rejections', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 1,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        return {
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'lww-op', error: 'Validation failed' }],
+        };
+      });
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should stop sync when LWW re-upload is cancelled and the pending ops came from download', async () => {
+      // downloadResult.localWinOpsCreated > 0 means LWW work originated from
+      // the download path. The initial upload produces no LWW ops, so the
+      // very first retry is what cancels — guard against a regression where
+      // the cancel-path only triggers on upload-originated LWW work.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'ops_processed' as const,
+          newOpsCount: 5,
+          localWinOpsCreated: 2,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 0,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        return { kind: 'cancelled' as const };
+      });
+
+      const result = await service.sync();
+
+      // initial upload + 1 retry that cancels = 2 calls, no further retries
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
     it('should treat blocked_fresh_client reupload result as 0 localWinOpsCreated and exit loop', async () => {

@@ -89,15 +89,16 @@ class WebViewBlockActivity : AppCompatActivity() {
         }
 
         val updateButton = findViewById<Button>(R.id.webview_block_update)
-        if (config.action == WebViewCompatibilityChecker.BlockScreenAction.OPEN_WEBVIEW_SETTINGS_WITH_WARNING) {
-            updateButton.setText(R.string.webview_block_open_settings)
-            // This branch is only reached for init failures, where Retry is the
-            // primary recovery, so render the settings action as secondary to
-            // keep a single clear primary action.
+        if (config.action == WebViewCompatibilityChecker.BlockScreenAction.OPEN_WEBVIEW_APP_INFO_WITH_WARNING) {
+            // For init failures, send the user to WebView's App Info page, where
+            // Storage → Clear storage resets a corrupted provider data dir — the
+            // fix that actually resolves these failures (the provider picker does
+            // not). Retry remains the primary recovery, so keep this secondary.
+            updateButton.setText(R.string.webview_block_open_app_settings)
             updateButton.backgroundTintList =
                 ColorStateList.valueOf(ContextCompat.getColor(this, R.color.webview_block_secondary))
             updateButton.setOnClickListener {
-                showOpenWebViewConfirmation(provider, useUpdatePage = false)
+                showOpenWebViewAppInfoConfirmation(provider)
             }
         } else {
             if (!providerPackageIsCurrent) {
@@ -136,6 +137,19 @@ class WebViewBlockActivity : AppCompatActivity() {
                 } else {
                     WebViewCompatibilityChecker.openWebViewSettingsPage(this, provider)
                 }
+            }
+            .setNegativeButton(R.string.webview_override_warning_cancel, null)
+            .setCancelable(true)
+            .show()
+        dialog.window?.decorView?.filterTouchesWhenObscured = true
+    }
+
+    private fun showOpenWebViewAppInfoConfirmation(provider: String?) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.webview_clear_storage_warning_title)
+            .setMessage(R.string.webview_clear_storage_warning_message)
+            .setPositiveButton(R.string.webview_manage_warning_continue) { _, _ ->
+                WebViewCompatibilityChecker.openWebViewAppInfoPage(this, provider)
             }
             .setNegativeButton(R.string.webview_override_warning_cancel, null)
             .setCancelable(true)

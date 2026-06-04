@@ -14,6 +14,7 @@ import {
 } from '../schedule.model';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { isSameDay } from '../../../util/is-same-day';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 const PROJECTION_DAYS: number = 30;
 
 export const createSortedBlockerBlocks = (
@@ -36,6 +37,7 @@ export const createSortedBlockerBlocks = (
       now,
       nrOfDays,
       scheduledTaskRepeatCfgs,
+      scheduledTasks,
       realNow,
     ),
     ...createBlockerBlocksForWorkStartEnd(now, nrOfDays, workStartEndCfg),
@@ -61,9 +63,23 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   now: number,
   nrOfDays: number,
   scheduledTaskRepeatCfgs: TaskRepeatCfg[],
+  scheduledTasks: TaskWithDueTime[],
   realNow?: number,
 ): BlockedBlock[] => {
   const blockedBlocks: BlockedBlock[] = [];
+  // Days that already have a concrete (timed) instance of a repeat cfg, keyed
+  // by `${repeatCfgId}|${dayStr}`. Such days must not also render a projection
+  // for the same cfg, or the schedule shows the real task AND its projection
+  // (#7853). The today-skip below (i starts at 1) only ever covered today;
+  // future-dated instances slipped through whenever the cfg's
+  // lastTaskCreationDay lagged behind the instance's day.
+  const concreteInstanceDays = new Set<string>();
+  scheduledTasks.forEach((task) => {
+    if (task.repeatCfgId) {
+      concreteInstanceDays.add(`${task.repeatCfgId}|${getDbDateStr(task.dueWithTime)}`);
+    }
+  });
+
   const isViewingCurrentDay = realNow === undefined || isSameDay(realNow, now);
   let i: number = isViewingCurrentDay ? 1 : 0;
   while (i < nrOfDays) {
@@ -73,6 +89,7 @@ const createBlockerBlocksForScheduledRepeatProjections = (
     targetDate.setDate(nowDate.getDate() + i);
     targetDate.setHours(0, 0, 0, 0);
     const currentDayTimestamp = targetDate.getTime();
+    const currentDayStr = getDbDateStr(currentDayTimestamp);
 
     const allRepeatableTasksForDay = selectTaskRepeatCfgsForExactDay.projector(
       scheduledTaskRepeatCfgs,
@@ -83,6 +100,9 @@ const createBlockerBlocksForScheduledRepeatProjections = (
     i++;
 
     allRepeatableTasksForDay.forEach((repeatCfg) => {
+      if (concreteInstanceDays.has(`${repeatCfg.id}|${currentDayStr}`)) {
+        return;
+      }
       if (!repeatCfg.startTime || !isValidSplitTime(repeatCfg.startTime)) {
         devError('Timeline: Invalid or missing startTime for repeat projection');
         return;

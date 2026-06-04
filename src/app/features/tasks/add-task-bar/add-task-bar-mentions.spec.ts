@@ -18,6 +18,11 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { DEFAULT_FIRST_DAY_OF_WEEK, DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateAdapter } from '@angular/material/core';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
+import {
+  DEFAULT_PROJECT_COLOR,
+  DEFAULT_TAG_COLOR,
+} from '../../work-context/work-context.const';
 
 @Component({
   template: `<add-task-bar></add-task-bar>`,
@@ -41,6 +46,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       theme: { primary: '#00ff00' },
     } as Tag,
     { id: '3', title: 'Testing', color: '#0000ff', theme: { primary: '#0000ff' } } as Tag,
+    { id: 't4', title: 'EmojiTag', icon: '🎨' } as Tag,
   ];
 
   const invalidTags = [
@@ -61,6 +67,11 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       title: 'Project2',
       isHiddenFromMenu: false,
       theme: { primary: '#007bff' },
+    } as Project,
+    {
+      id: 'p3',
+      title: 'Project3NoTheme',
+      isHiddenFromMenu: false,
     } as Project,
   ];
 
@@ -219,14 +230,48 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       });
     });
 
-    it('should pass through project items as-is', (done) => {
+    it('should pass through project items mapped with icons', (done) => {
       component.mentionCfg$.subscribe((config) => {
         const projectMention = config.mentions!.find((m) => m.triggerChar === '+');
         expect(projectMention).toBeTruthy();
-        expect(projectMention!.items!.length).toBe(2);
+        expect(projectMention!.items!.length).toBe(3);
         const titles = projectMention!.items!.map((it: any) => it && it.title);
         expect(titles).toContain('Project1');
         expect(titles).toContain('Project2');
+        expect(titles).toContain('Project3NoTheme');
+
+        const firstProject = projectMention!.items![0] as any;
+        expect(firstProject.icon).toBe(DEFAULT_PROJECT_ICON);
+        expect(firstProject.color).toBe('#007bff');
+
+        const noThemeProject = projectMention!.items!.find(
+          (it: any) => it.title === 'Project3NoTheme',
+        ) as any;
+        expect(noThemeProject.icon).toBe(DEFAULT_PROJECT_ICON);
+        expect(noThemeProject.color).toBe(DEFAULT_PROJECT_COLOR);
+        done();
+      });
+    });
+
+    it('should map items with resolved icons and colors', (done) => {
+      component.mentionCfg$.subscribe((config) => {
+        const tagMention = config.mentions!.find((m) => m.triggerChar === '#');
+        const firstTag = tagMention!.items![0] as any;
+        expect(firstTag.icon).toBe('label');
+        expect(firstTag.color).toBe('#ff0000');
+        expect(firstTag.isEmoji).toBeFalse();
+
+        const emojiTag = tagMention!.items!.find(
+          (it: any) => it.title === 'EmojiTag',
+        ) as any;
+        expect(emojiTag.icon).toBe('🎨');
+        expect(emojiTag.color).toBe(DEFAULT_TAG_COLOR);
+        expect(emojiTag.isEmoji).toBeTrue();
+
+        const chronoMention = config.mentions!.find((m) => m.triggerChar === '@');
+        const firstChrono = chronoMention!.items![0] as any;
+        expect(firstChrono.icon).toBe('schedule');
+
         done();
       });
     });

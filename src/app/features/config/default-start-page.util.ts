@@ -23,8 +23,11 @@ export const getStartPageUrlPath = (
   const todayUrl = `/tag/${TODAY_TAG.id}/tasks`;
 
   if (typeof defaultStartPage === 'string' && defaultStartPage.length > 0) {
+    // Build the path from the validated project's own id (not the raw config
+    // string) so the helper is self-validating and never echoes an unvetted
+    // value into the route.
     return startProject && !startProject.isArchived && !startProject.isHiddenFromMenu
-      ? `/project/${defaultStartPage}/tasks`
+      ? `/project/${startProject.id}/tasks`
       : todayUrl;
   }
 

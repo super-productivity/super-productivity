@@ -82,6 +82,16 @@ describe('AddTaskBarStateService', () => {
       expect(service.state().time).toBe('09:00');
     });
 
+    // #7802 — a stray seconds component must be normalized on entry so the time
+    // survives validation at task creation instead of being dropped.
+    it('should normalize a "13:30:00" time to "13:30"', () => {
+      const testDate = new Date('2024-01-15');
+
+      service.updateDate(getDbDateStr(testDate), '13:30:00');
+
+      expect(service.state().time).toBe('13:30');
+    });
+
     it('should clear time when explicitly set to null', () => {
       service.updateTime('09:00');
       const testDate = new Date('2024-01-15');
@@ -117,6 +127,27 @@ describe('AddTaskBarStateService', () => {
       service.updateTime(null);
 
       expect(service.state().time).toBe(null);
+    });
+
+    it('should normalize a "13:30:00" time to "13:30" (#7802)', () => {
+      service.updateTime('13:30:00');
+
+      expect(service.state().time).toBe('13:30');
+    });
+  });
+
+  describe('updateDeadline', () => {
+    it('should update deadline date and time when both provided', () => {
+      service.updateDeadline('2024-01-15', '10:30');
+
+      expect(service.state().deadlineDate).toBe('2024-01-15');
+      expect(service.state().deadlineTime).toBe('10:30');
+    });
+
+    it('should normalize a "13:30:00" deadline time to "13:30" (#7802)', () => {
+      service.updateDeadline('2024-01-15', '13:30:00');
+
+      expect(service.state().deadlineTime).toBe('13:30');
     });
   });
 

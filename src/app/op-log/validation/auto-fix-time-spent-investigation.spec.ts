@@ -56,7 +56,6 @@ describe('auto-fix data-loss for timeSpentOnDay nulls', () => {
     ]);
 
     const v = result.task.entities.t1.timeSpentOnDay['2026-05-21'];
-    // eslint-disable-next-line no-console
     console.log('auto-fix result:', v);
     expect(v).toBe(0);
     // the good day survives
@@ -132,7 +131,6 @@ describe('auto-fix data-loss for timeSpentOnDay nulls', () => {
       ),
     ];
     const result: any = autoFixTypiaErrors(data, errors);
-    // eslint-disable-next-line no-console
     console.log('4-error result:', JSON.stringify(result, null, 2));
     expect(result.task.entities.t1.timeSpentOnDay['2026-05-20']).toBe(0);
     expect(result.task.entities.t1.timeSpentOnDay['2026-05-21']).toBe(0);

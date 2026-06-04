@@ -376,15 +376,29 @@ describe('TaskRepeatCfgService', () => {
       );
     });
 
-    it('should not create task if already exists for the day', async () => {
+    it('should not create a duplicate task but still advance lastTaskCreationDay when task already exists for the day', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
+      const expectedDueDay = getDbDateStr(targetDayDate);
       const existingTask = { ...mockTaskWithSubTasks, created: targetDayDate };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([existingTask]));
 
       await service.createRepeatableTask(mockTaskRepeatCfg, targetDayDate);
 
-      expect(dispatchSpy).not.toHaveBeenCalled();
+      // No addTask — task already exists.
+      const addTaskCall = dispatchSpy.calls
+        .all()
+        .find((c) => c.args[0].type?.includes('addTask'));
+      expect(addTaskCall).toBeUndefined();
+      // But lastTaskCreationDay is advanced to suppress the transparent projection (#7923).
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: updateTaskRepeatCfg.type,
+          taskRepeatCfg: jasmine.objectContaining({
+            changes: jasmine.objectContaining({ lastTaskCreationDay: expectedDueDay }),
+          }),
+        }),
+      );
     });
 
     it('should add task to bottom if order > 0', async () => {
@@ -442,13 +456,12 @@ describe('TaskRepeatCfgService', () => {
       );
     });
 
-    it('should not create task if task with deterministic ID already exists', async () => {
+    it('should not create duplicate but advance lastTaskCreationDay when deterministic ID already exists', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
       const expectedDueDay = getDbDateStr(targetDayDate);
       const expectedId = getRepeatableTaskId(mockTaskRepeatCfg.id, expectedDueDay);
 
-      // Existing task has the deterministic ID (simulating sync from another device)
       const existingTaskWithDeterministicId = {
         ...mockTaskWithSubTasks,
         id: expectedId,
@@ -460,18 +473,28 @@ describe('TaskRepeatCfgService', () => {
 
       await service.createRepeatableTask(mockTaskRepeatCfg, targetDayDate);
 
-      expect(dispatchSpy).not.toHaveBeenCalled();
+      const addTaskCall = dispatchSpy.calls
+        .all()
+        .find((c) => c.args[0].type?.includes('addTask'));
+      expect(addTaskCall).toBeUndefined();
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: updateTaskRepeatCfg.type,
+          taskRepeatCfg: jasmine.objectContaining({
+            changes: jasmine.objectContaining({ lastTaskCreationDay: expectedDueDay }),
+          }),
+        }),
+      );
     });
 
-    it('should not create task if task with matching created date already exists (legacy check)', async () => {
+    it('should not create duplicate but advance lastTaskCreationDay for legacy task with matching created date', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
+      const expectedDueDay = getDbDateStr(targetDayDate);
 
-      // Compute the expected creation timestamp (noon on target day, same as service does)
       const targetCreatedDate = new Date(targetDayDate);
       targetCreatedDate.setHours(12, 0, 0, 0);
 
-      // Existing task has a different ID but same created date (legacy task without deterministic ID)
       const existingLegacyTask = {
         ...mockTaskWithSubTasks,
         id: 'legacy-random-id-12345',
@@ -483,7 +506,18 @@ describe('TaskRepeatCfgService', () => {
 
       await service.createRepeatableTask(mockTaskRepeatCfg, targetDayDate);
 
-      expect(dispatchSpy).not.toHaveBeenCalled();
+      const addTaskCall = dispatchSpy.calls
+        .all()
+        .find((c) => c.args[0].type?.includes('addTask'));
+      expect(addTaskCall).toBeUndefined();
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: updateTaskRepeatCfg.type,
+          taskRepeatCfg: jasmine.objectContaining({
+            changes: jasmine.objectContaining({ lastTaskCreationDay: expectedDueDay }),
+          }),
+        }),
+      );
     });
 
     it('should create task even if existing task has matching dueDay but different created date (#6192)', async () => {
@@ -545,9 +579,10 @@ describe('TaskRepeatCfgService', () => {
   });
 
   describe('getActionsForTaskRepeatCfg', () => {
-    it('should return empty array if task already exists for day', async () => {
+    it('should return updateTaskRepeatCfg (not addTask) when task already exists for day (#7923)', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
+      const expectedDueDay = getDbDateStr(targetDayDate);
       const existingTask = { ...mockTaskWithSubTasks, created: targetDayDate };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([existingTask]));
 
@@ -556,17 +591,19 @@ describe('TaskRepeatCfgService', () => {
         targetDayDate,
       );
 
-      expect(actions).toEqual([]);
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      expect((actions[0] as any).taskRepeatCfg.changes.lastTaskCreationDay).toBe(
+        expectedDueDay,
+      );
     });
 
-    it('should return empty array if task with deterministic ID already exists', async () => {
-      // Use today's date since mockTaskRepeatCfg has startDate=today
+    it('should return updateTaskRepeatCfg (not addTask) when deterministic ID already exists (#7923)', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
       const expectedDueDay = getDbDateStr(targetDayDate);
       const deterministicId = getRepeatableTaskId(mockTaskRepeatCfg.id, expectedDueDay);
 
-      // Task exists with deterministic ID (simulating sync from another device)
       const existingTaskFromSync = {
         ...mockTaskWithSubTasks,
         id: deterministicId,
@@ -581,19 +618,21 @@ describe('TaskRepeatCfgService', () => {
         targetDayDate,
       );
 
-      expect(actions).toEqual([]);
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      expect((actions[0] as any).taskRepeatCfg.changes.lastTaskCreationDay).toBe(
+        expectedDueDay,
+      );
     });
 
-    it('should return empty array if legacy task with same created date exists', async () => {
-      // Use today's date since mockTaskRepeatCfg has startDate=today
+    it('should return updateTaskRepeatCfg (not addTask) when legacy task with same created date exists (#7923)', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
+      const expectedDueDay = getDbDateStr(targetDayDate);
 
-      // Compute the expected creation timestamp (noon on target day, same as service does)
       const targetCreatedDate = new Date(targetDayDate);
       targetCreatedDate.setHours(12, 0, 0, 0);
 
-      // Legacy task with random ID but matching created date
       const legacyTask = {
         ...mockTaskWithSubTasks,
         id: 'old-random-nanoid-xyz',
@@ -606,7 +645,11 @@ describe('TaskRepeatCfgService', () => {
         targetDayDate,
       );
 
-      expect(actions).toEqual([]);
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      expect((actions[0] as any).taskRepeatCfg.changes.lastTaskCreationDay).toBe(
+        expectedDueDay,
+      );
     });
 
     it('should create task if no task with matching ID or created date exists', async () => {
@@ -644,9 +687,10 @@ describe('TaskRepeatCfgService', () => {
       expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
     });
 
-    it('should skip creation if computed target date already has an instance', async () => {
+    it('should advance lastTaskCreationDay without duplicate when computed target date already has an instance (#7923)', async () => {
       const targetDayDate = new Date(2020, 0, 4).getTime();
       const targetDate = new Date(2020, 0, 3);
+      const expectedDueDay = formatIsoDate(targetDate);
       const cfgNeedingCatchUp: TaskRepeatCfg = {
         ...mockTaskRepeatCfg,
         startDate: formatIsoDate(new Date(2020, 0, 1)),
@@ -656,7 +700,7 @@ describe('TaskRepeatCfgService', () => {
       const existingTask: TaskWithSubTasks = {
         ...mockTaskWithSubTasks,
         created: targetDate.getTime(),
-        dueDay: formatIsoDate(targetDate),
+        dueDay: expectedDueDay,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([existingTask]));
 
@@ -665,7 +709,11 @@ describe('TaskRepeatCfgService', () => {
         targetDayDate,
       );
 
-      expect(actions).toEqual([]);
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      expect((actions[0] as any).taskRepeatCfg.changes.lastTaskCreationDay).toBe(
+        expectedDueDay,
+      );
     });
 
     it('should respect deleted instances based on computed target date', async () => {
@@ -1964,6 +2012,115 @@ describe('TaskRepeatCfgService', () => {
 
       expect(dispatchedAction.type).toBe(addTaskRepeatCfgToTask.type);
       expect(dispatchedAction.taskId).toBe(taskId);
+    });
+  });
+
+  describe('Regression #7923 — taskAlreadyExists still advances lastTaskCreationDay', () => {
+    it('should dispatch updateTaskRepeatCfg to advance lastTaskCreationDay even when task already exists', async () => {
+      const today = new Date();
+      today.setHours(10, 0, 0, 0);
+      const todayStr = formatIsoDate(today);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+      const expectedId = getRepeatableTaskId('cfg-7923-dup', todayStr);
+
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'cfg-7923-dup',
+        title: '#7923 Duplicate',
+        projectId: 'test-project',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: yesterdayStr,
+        tagIds: [],
+      };
+
+      // Simulate task already existing (created by a concurrent addAllDueToday call)
+      const existingTask = {
+        ...mockTask,
+        id: expectedId,
+        created: today.setHours(12, 0, 0, 0),
+        repeatCfgId: 'cfg-7923-dup',
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([existingTask as any]),
+      );
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, today.getTime());
+
+      // Must still dispatch updateTaskRepeatCfg to advance lastTaskCreationDay
+      // so the transparent projection disappears (#7923)
+      expect(actions.length).toBe(1);
+      expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
+      expect((actions[0] as any).taskRepeatCfg.changes.lastTaskCreationDay).toBe(
+        todayStr,
+      );
+    });
+  });
+
+  describe('Regression #7923 — delete instance then move startDate to today', () => {
+    // Reproduction of issue #7923:
+    // 1. Recurring task created with startDate = future (e.g. June 10), DAILY
+    // 2. The task instance for that future date is plain-deleted
+    // 3. User clicks the transparent projection for the next day and changes
+    //    startDate to today via the dialog
+    // 4. rescheduleTaskOnRepeatCfgUpdate$ re-anchors lastTaskCreationDay to
+    //    yesterday and calls addAllDueToday() (#7768 Bug 2 fix)
+    // 5. addAllDueToday() calls createRepeatableTask() with the re-anchored config
+    //
+    // The test exercises step 5 — the "real creation path" that the effect tests
+    // skip by mocking addAllDueToday.
+
+    it('should create task for today when startDate = today and lastTaskCreationDay = yesterday (post-re-anchor state)', async () => {
+      const today = new Date();
+      today.setHours(10, 0, 0, 0);
+      const todayStr = formatIsoDate(today);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const expectedId = getRepeatableTaskId('cfg-7923', todayStr);
+
+      // Config in the state produced by the re-anchor:
+      //   startDate was changed to today, lastTaskCreationDay set to yesterday
+      const cfgPostReAnchor: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'cfg-7923',
+        title: '#7923 Regression',
+        projectId: 'test-project',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: yesterdayStr,
+        tagIds: [],
+      };
+
+      // No live instances — the future-dated task was plain-deleted in step 2
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.returnValue({
+        ...mockTask,
+        id: expectedId,
+        dueDay: todayStr,
+      });
+
+      await service.createRepeatableTask(cfgPostReAnchor, today.getTime());
+
+      const dispatched = dispatchSpy.calls.all().map((c) => c.args[0] as any);
+      const addTaskAction = dispatched.find(
+        (a) => a.type === TaskSharedActions.addTask.type,
+      );
+      expect(addTaskAction)
+        .withContext('addTask action must be dispatched for today')
+        .toBeDefined();
+      expect(addTaskAction?.task?.dueDay)
+        .withContext('task dueDay must be today')
+        .toBe(todayStr);
+      expect(addTaskAction?.task?.id)
+        .withContext('task must use deterministic id')
+        .toBe(expectedId);
     });
   });
 });

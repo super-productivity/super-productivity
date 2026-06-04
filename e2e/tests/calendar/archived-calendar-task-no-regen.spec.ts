@@ -24,6 +24,8 @@ const EVENT_TITLE = 'E2E-7971 Dentist Appointment';
 const CONTROL_TITLE = 'E2E-7971 Control Tomorrow';
 
 const PANEL_BTN = '.e2e-toggle-issue-provider-panel';
+const SAVE_AND_GO_HOME_BTN =
+  'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -107,9 +109,10 @@ test.describe('Calendar #7971', () => {
 
     await page.locator('.e2e-finish-day').click();
     await page.waitForSelector('daily-summary', { state: 'visible', timeout: 10000 });
-    await page
-      .locator('daily-summary button[mat-flat-button][color="primary"]:last-of-type')
-      .click();
+    await page.locator(SAVE_AND_GO_HOME_BTN).click();
+    await page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary))/, {
+      timeout: 10000,
+    });
 
     // Simulate "the next day": importing an event skips it for the rest of the current
     // day (addTaskFromIssue → skipCalendarEvent), which is why the bug only appears the

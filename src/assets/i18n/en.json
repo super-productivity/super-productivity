@@ -1252,6 +1252,8 @@
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Affected changes",
+        "FIRST_SYNC_USE_LOCAL_CONFIRM": "This device has never synced before. \"Use My Data\" will permanently replace the data on the server with this device's local data. This cannot be undone. Continue?",
+        "FIRST_SYNC_WARNING": "This device hasn't synced before, so \"Use My Data\" would overwrite the server's existing data with this device's data.",
         "IMPORT_DATE": "Import date",
         "MSG_INCOMING": "Your data was fully replaced on another device. You have {{filteredOpCount}} local changes that may not carry over.",
         "MSG_INCOMING_NO_OPS": "Your data was fully replaced on another device. This device will sync to the new state.",
@@ -1625,6 +1627,9 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",
+        "PASTE_IMAGE_HINT": "Ctrl+V to paste image",
+        "PASTE_IMAGE_HINT_MAC": "Cmd+V to paste image",
+        "PASTED_IMAGE_TITLE": "Pasted image",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Links & Files ({{nr}})",
         "COMPLETED_ON": "Completed on",
@@ -1901,8 +1906,8 @@
         "REPEAT_EVERY": "Recur every",
         "SATURDAY": "Saturday",
         "SCHEDULE_TYPE_LABEL": "Schedule type",
-        "SKIP_OVERDUE": "Skip overdue instances",
-        "SKIP_OVERDUE_DESCRIPTION": "When enabled, if the app is opened after missing a scheduled occurrence (e.g. a weekly task where today is not a scheduled day), the missed instance will be silently skipped instead of being created as an overdue task",
+        "SKIP_OVERDUE": "Don't let overdue instances pile up",
+        "SKIP_OVERDUE_DESCRIPTION": "Stops unfinished recurring tasks from piling up as overdue duplicates. An empty missed instance is removed once a newer one exists; instances where you tracked time or completed subtasks are kept.",
         "START_DATE": "Start date",
         "START_TIME": "Scheduled start time",
         "START_TIME_DESCRIPTION": "E.g. 15:00. Leave blank for an all day task",
@@ -2636,7 +2641,9 @@
   "ONBOARDING": {
     "TITLE": "How do you want to use Super Productivity?",
     "SUBTITLE": "Pick a setup that matches your workflow. You can always change this later in Settings.",
-    "PRIVACY_HINT": "Your data stays securely on your device. Nothing is sent to a server.",
+    "PRIVACY_HINT": "Your data stays securely on your device unless you choose to set up sync.",
+    "SYNC_CTA": "Already using Super Productivity on another device?",
+    "SYNC_CTA_LINK": "Set up sync",
     "PRESETS": {
       "SIMPLE_TODO": {
         "TITLE": "Simple Todo List",

@@ -22,7 +22,13 @@ export class SyncLocalStateService {
     return !snapshot && lastSeq === 0;
   }
 
-  hasMeaningfulStoreData(): boolean {
+  /**
+   * @param ignoreTaskIds Optional task ids to exclude from the "has a task?" check.
+   *   The file-based conflict gate passes the ids of pending onboarding example tasks so
+   *   an example-only store is not treated as meaningful (#7985). Omitting it preserves
+   *   the original behavior for every other caller.
+   */
+  hasMeaningfulStoreData(ignoreTaskIds?: ReadonlySet<string>): boolean {
     const snapshot = this.stateSnapshotService.getStateSnapshot();
 
     if (!snapshot) {
@@ -32,7 +38,7 @@ export class SyncLocalStateService {
       return false;
     }
 
-    return hasMeaningfulStateData(snapshot);
+    return hasMeaningfulStateData(snapshot, ignoreTaskIds);
   }
 
   confirmFreshClientSync(opCount: number): boolean {

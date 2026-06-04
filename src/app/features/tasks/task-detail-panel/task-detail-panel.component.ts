@@ -81,7 +81,11 @@ import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-ov
 import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checklist';
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
+import { clipboardHasText } from '../../../util/clipboard-has-text';
 import { checkKeyCombo } from '../../../util/check-key-combo';
+import { IS_MAC } from '../../../util/is-mac';
+import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
+import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
 
 @Component({
   selector: 'task-detail-panel',
@@ -117,6 +121,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   taskService = inject(TaskService);
   layoutService = inject(LayoutService);
 
+  private _clipboardImageService = inject(ClipboardImageService);
   private _globalConfigService = inject(GlobalConfigService);
   private _issueService = inject(IssueService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
@@ -141,6 +146,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   ShowSubTasksMode = HideSubTasksMode;
   T = T;
   ICAL_TYPE = ICAL_TYPE;
+  pasteImageHintKey = IS_MAC
+    ? T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT_MAC
+    : T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT;
 
   // Panel state signals grouped together
   panelState = {
@@ -442,6 +450,41 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     this.attachmentService.createFromDrop(ev, this.task().id);
     ev.stopPropagation();
     this.panelState.isDragOver.set(false);
+  }
+
+  @HostListener('paste', ['$event']) async onPaste(ev: ClipboardEvent): Promise<void> {
+    // Let existing textarea/input/contenteditable paste handlers work normally
+    const target = ev.target as HTMLElement;
+    if (isInputElement(target)) {
+      return;
+    }
+
+    // Prioritize text over images (e.g. OneNote puts both on the clipboard).
+    // Otherwise a text paste would be silently turned into an image attachment.
+    if (clipboardHasText(ev.clipboardData)) {
+      return;
+    }
+
+    const progress = this._clipboardImageService.handlePasteWithProgress(ev);
+    if (!progress) return;
+
+    ev.preventDefault();
+    try {
+      const result = await progress.resultPromise;
+      if (result.success && result.imageUrl) {
+        this.attachmentService.addAttachment(this.task().id, {
+          id: null,
+          type: 'IMG',
+          path: result.imageUrl,
+          title: this._translateService.instant(
+            T.F.TASK.ADDITIONAL_INFO.PASTED_IMAGE_TITLE,
+          ),
+          icon: DropPasteIcons.IMG,
+        });
+      }
+    } catch (err) {
+      Log.err('[CLIPBOARD] Paste attachment failed:', err);
+    }
   }
 
   @HostListener('window:popstate') onBack(): void {

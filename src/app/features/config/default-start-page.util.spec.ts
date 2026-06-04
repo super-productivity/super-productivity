@@ -95,6 +95,12 @@ describe('getStartPageUrlPath', () => {
       );
     });
 
+    it('builds the path from the validated project id, not the raw config string', () => {
+      expect(getStartPageUrlPath('anything', features(), project({ id: 'p2' }))).toBe(
+        '/project/p2/tasks',
+      );
+    });
+
     it('falls back to Today when the project is missing', () => {
       expect(getStartPageUrlPath('p1', features(), undefined)).toBe(TODAY_URL);
     });

@@ -61,7 +61,11 @@ test.describe('Habit chart popout jitter (#7957)', () => {
     }
 
     // --- open the chart popout (right-click -> openEditDialog) ---
-    await cells.first().click({ button: 'right' });
+    // New habits are weekday-only by default; pick an enabled cell so the test
+    // does not depend on which weekday is first in the rolling 7-day grid.
+    const enabledCells = row.locator('.day-cell:not(.is-disabled)');
+    await expect(enabledCells.first()).toBeVisible();
+    await enabledCells.first().click({ button: 'right' });
     const editDialog = page.locator('dialog-simple-counter-edit');
     await editDialog.waitFor({ state: 'visible', timeout: 10000 });
     await editDialog.locator('canvas').waitFor({ state: 'visible', timeout: 10000 });
@@ -93,7 +97,6 @@ test.describe('Habit chart popout jitter (#7957)', () => {
 
     const dialogTail = summarizeTail(probe.dialog, 80);
     const canvasTail = summarizeTail(probe.canvas, 80);
-    // eslint-disable-next-line no-console
     console.log('JITTER_TAIL', JSON.stringify({ dialogTail, canvasTail }));
 
     expect(canvasTail.transitions, 'canvas height should be stable').toBe(0);

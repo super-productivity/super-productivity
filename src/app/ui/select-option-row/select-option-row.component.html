@@ -8,28 +8,19 @@
     }}</mat-icon>
   }
 
-  @if (icon()) {
-    @if (isEmoji()) {
-      <span
-        class="menu-icon-emoji"
-        [style.color]="color()"
-      >
-        {{ icon() }}
-      </span>
-    } @else {
-      <mat-icon
-        class="option-main-icon"
-        [style.color]="color()"
-      >
-        {{ icon() }}
-      </mat-icon>
-    }
+  @if (isEmoji()) {
+    <span
+      class="menu-icon-emoji"
+      [style.color]="color()"
+    >
+      {{ effectiveIcon() }}
+    </span>
   } @else {
     <mat-icon
       class="option-main-icon"
       [style.color]="color()"
     >
-      {{ defaultIcon() }}
+      {{ effectiveIcon() }}
     </mat-icon>
   }
 
