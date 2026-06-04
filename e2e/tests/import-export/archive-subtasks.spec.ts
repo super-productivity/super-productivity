@@ -100,9 +100,42 @@ const markAllTasksDone = async (page: Page): Promise<void> => {
 };
 
 /**
+ * Dismiss the global add-task-bar backdrop if it is open.
+ *
+ * The app-level add-task-bar (`app.component` `@fade .backdrop`) can be left
+ * open during the mark-all-done force-clicks, and its full-screen backdrop then
+ * intercepts pointer events on the finish-day button — the click retries until
+ * the 15s actionTimeout and the test times out (the source of this spec's CI
+ * flakiness). Clicking the backdrop invokes `hideAddTaskBar()` just like a user.
+ * Note `.backdrop` is our custom class and does not match the CDK overlay
+ * backdrop (`.cdk-overlay-backdrop`), so this is scoped to the add-task-bar.
+ */
+const dismissAddTaskBarBackdrop = async (page: Page): Promise<void> => {
+  const backdrop = page.locator('.backdrop');
+  await expect
+    .poll(
+      async () => {
+        if ((await backdrop.count()) === 0) {
+          return 0;
+        }
+        await backdrop
+          .first()
+          .click({ force: true })
+          .catch(() => {});
+        return backdrop.count();
+      },
+      { timeout: 5000, intervals: [200] },
+    )
+    .toBe(0);
+};
+
+/**
  * Helper to complete finish day flow
  */
 const finishDay = async (page: Page): Promise<void> => {
+  // Ensure no add-task-bar backdrop is intercepting the finish-day click.
+  await dismissAddTaskBarBackdrop(page);
+
   // Click Finish Day button
   await page.waitForSelector(FINISH_DAY_BTN, { state: 'visible', timeout: 10000 });
   await page.click(FINISH_DAY_BTN);
