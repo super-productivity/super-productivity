@@ -476,6 +476,69 @@ describe('AddTaskBarParserService', () => {
 
         expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
       });
+
+      it('should clear a syntax-owned deadline when the input is cleared', async () => {
+        await service.parseAndUpdateText(
+          'Do taxes !friday',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        mockStateService.updateDeadline.calls.reset();
+        mockStateService.updateDeadlineRemindOption.calls.reset();
+
+        await service.parseAndUpdateText(
+          '',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
+        expect(mockStateService.updateDeadlineRemindOption).toHaveBeenCalledWith(null);
+      });
+
+      it('should clear a stale reminder option when deadline syntax is removed', async () => {
+        await service.parseAndUpdateText(
+          'Do taxes !friday',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+        const [parsedDeadlineDate, parsedDeadlineTime] =
+          mockStateService.updateDeadline.calls.mostRecent().args;
+
+        mockStateService.updateDeadline.calls.reset();
+        mockStateService.updateDeadlineRemindOption.calls.reset();
+        mockStateService.state.and.returnValue({
+          projectId: null,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          estimate: null,
+          cleanText: null,
+          deadlineDate: parsedDeadlineDate,
+          deadlineTime: parsedDeadlineTime,
+          deadlineRemindOption: TaskReminderOptionId.m15,
+        } as any);
+
+        await service.parseAndUpdateText(
+          'Do taxes #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+        expect(mockStateService.updateDeadline).toHaveBeenCalledWith(null, null);
+        expect(mockStateService.updateDeadlineRemindOption).toHaveBeenCalledWith(null);
+      });
     });
 
     describe('Parsing Integration', () => {

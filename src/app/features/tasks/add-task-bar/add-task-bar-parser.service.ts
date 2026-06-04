@@ -52,7 +52,16 @@ export class AddTaskBarParserService {
   ): Promise<void> {
     const parseRunId = ++this._parseRunId;
 
-    if (!text || !config) {
+    if (!text) {
+      if (this._previousParseResult?.isDeadlineFromSyntax) {
+        this._stateService.updateDeadline(null, null);
+        this._stateService.updateDeadlineRemindOption(null);
+      }
+      this._previousParseResult = null;
+      return;
+    }
+
+    if (!config) {
       this._previousParseResult = null;
       return;
     }
@@ -285,7 +294,8 @@ export class AddTaskBarParserService {
     if (
       !this._previousParseResult ||
       this._previousParseResult.deadlineRemindOption !==
-        currentResult.deadlineRemindOption
+        currentResult.deadlineRemindOption ||
+      currentState.deadlineRemindOption !== currentResult.deadlineRemindOption
     ) {
       this._stateService.updateDeadlineRemindOption(currentResult.deadlineRemindOption);
     }

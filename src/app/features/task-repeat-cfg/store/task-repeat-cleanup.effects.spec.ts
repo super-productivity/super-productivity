@@ -8,11 +8,19 @@ import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DeletedTaskIssueSidecarService } from '../../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../tasks/task.model';
+import {
+  DEFAULT_TASK,
+  Task,
+  TaskReminderOptionId,
+  TaskWithSubTasks,
+} from '../../tasks/task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectAllTaskRepeatCfgs } from './task-repeat-cfg.selectors';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { DateService } from '../../../core/date/date.service';
+import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
+import { TODAY_TAG } from '../../tag/tag.const';
 
 describe('TaskRepeatCleanupEffects', () => {
   let effects: TaskRepeatCleanupEffects;
@@ -288,6 +296,188 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    it("deletes yesterday's EMPTY timed overdue instance when schedule matches the template", fakeAsync(() => {
+      const dueWithTime = getDateTimeFromClockString('09:00', yesterdayMs);
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-timed-template', '', {
+          title: 'Water plants',
+          startTime: '09:00',
+          remindAt: TaskReminderOptionId.m15,
+        }),
+      ]);
+      const yesterdayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'timed-template-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-timed-template',
+        created: yesterdayMs,
+        dueDay: undefined,
+        dueWithTime,
+        remindAt: remindOptionToMilliseconds(dueWithTime, TaskReminderOptionId.m15),
+        isDone: false,
+        timeSpent: 0,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'timed-template-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-timed-template',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayInstance),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds()).toEqual(['timed-template-yesterday']);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance whose schedule differs from the template', fakeAsync(() => {
+      const editedDueWithTime = getDateTimeFromClockString('10:00', yesterdayMs);
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-schedule', '', {
+          title: 'Water plants',
+          startTime: '09:00',
+          remindAt: TaskReminderOptionId.m15,
+        }),
+      ]);
+      const yesterdayEdited: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'schedule-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-schedule',
+        created: yesterdayMs,
+        dueDay: undefined,
+        dueWithTime: editedDueWithTime,
+        remindAt: remindOptionToMilliseconds(editedDueWithTime, TaskReminderOptionId.m15),
+        isDone: false,
+        timeSpent: 0,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'schedule-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-schedule',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayEdited),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an instance with a user-edited schedule must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance with deadline metadata', fakeAsync(() => {
+      repeatCfgs$.next([skipOverdueCfg('cfg-deadline', '', { title: 'Water plants' })]);
+      const yesterdayEdited: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'deadline-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-deadline',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        deadlineDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'deadline-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-deadline',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayEdited),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('an instance with user-added deadline metadata must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('ignores TODAY_TAG when checking whether tags match the template', fakeAsync(() => {
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-today-tag', '', {
+          title: 'Water plants',
+          tagIds: [TODAY_TAG.id, 'tag-a'],
+        }),
+      ]);
+      const yesterdayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'today-tag-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-today-tag',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+        tagIds: ['tag-a'],
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'today-tag-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-today-tag',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+        tagIds: ['tag-a'],
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayInstance),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds()).toEqual(['today-tag-yesterday']);
+
+      sub.unsubscribe();
+    }));
+
     it('keeps an overdue instance whose title differs from the template', fakeAsync(() => {
       repeatCfgs$.next([skipOverdueCfg('cfg-title', '', { title: 'Water plants' })]);
       const yesterdayEdited: Task = {
@@ -475,6 +665,68 @@ describe('TaskRepeatCleanupEffects', () => {
 
       expect(getDispatchedDeleteIds())
         .withContext('an instance with user-edited subtasks must be preserved')
+        .toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps an overdue instance whose subtask has user metadata', fakeAsync(() => {
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-subtask-meta', '', {
+          title: 'Water plants',
+          shouldInheritSubtasks: true,
+          subTaskTemplates: [{ title: 'Check soil', timeEstimate: 0, notes: '' }],
+        }),
+      ]);
+      const yesterdayEdited = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtask-meta-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-subtask-meta',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+      yesterdayEdited.subTasks.push({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtask-with-attachment',
+        title: 'Check soil',
+        parentId: 'subtask-meta-yesterday',
+        isDone: false,
+        timeSpent: 0,
+        attachments: [{ id: 'sub-a1', type: 'LINK', path: 'https://x', title: 'x' }],
+      } as Task);
+      const todayInstance = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtask-meta-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-subtask-meta',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+      todayInstance.subTasks.push({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'subtask-template',
+        title: 'Check soil',
+        parentId: 'subtask-meta-today',
+        isDone: false,
+        timeSpent: 0,
+      } as Task);
+
+      repeatableTasks$.next([yesterdayEdited, todayInstance]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('a parent with subtask user metadata must be preserved')
         .toEqual([]);
 
       sub.unsubscribe();

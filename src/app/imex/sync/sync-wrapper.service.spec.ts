@@ -2271,6 +2271,46 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
+    it('should stop sync when an LWW re-upload has permanent rejections', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 1,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        return {
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'lww-op', error: 'Validation failed' }],
+        };
+      });
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
     it('should stop sync when LWW re-upload is cancelled and the pending ops came from download', async () => {
       // downloadResult.localWinOpsCreated > 0 means LWW work originated from
       // the download path. The initial upload produces no LWW ops, so the

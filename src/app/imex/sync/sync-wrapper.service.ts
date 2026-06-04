@@ -79,6 +79,9 @@ import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-prov
 import { isSuperSyncWebSocketAccess } from '@sp/sync-providers/super-sync';
 import { isTransientNetworkError } from '@sp/sync-providers/http';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
+import type { UploadOutcome } from '../../op-log/core/types/sync-results.types';
+
+type CompletedUploadOutcome = Extract<UploadOutcome, { kind: 'completed' }>;
 
 /**
  * Identifies which error or UI path triggered a destructive forceUpload.
@@ -494,6 +497,8 @@ export class SyncWrapperService {
         syncCapableProvider,
         { isNeverSynced: isNeverSyncedAtSyncStart },
       );
+      const completedUploadResults: CompletedUploadOutcome[] =
+        uploadResult.kind === 'completed' ? [uploadResult] : [];
       if (uploadResult.kind === 'completed') {
         SyncLog.log(
           `SyncWrapperService: Upload complete. uploaded=${uploadResult.uploadedCount}, piggybacked=${uploadResult.piggybackedOpsCount}`,
@@ -541,6 +546,9 @@ export class SyncWrapperService {
           this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
           return 'HANDLED_ERROR';
         }
+        if (reuploadResult.kind === 'completed') {
+          completedUploadResults.push(reuploadResult);
+        }
         pendingLwwOps =
           reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
       }
@@ -557,6 +565,9 @@ export class SyncWrapperService {
             'SyncWrapperService: Validation failed during sync (retry exhaustion path); reporting ERROR',
           );
           this._providerManager.setSyncStatus('ERROR');
+          return 'HANDLED_ERROR';
+        }
+        if (this._handlePermanentUploadRejections(completedUploadResults)) {
           return 'HANDLED_ERROR';
         }
         // Don't claim IN_SYNC — there are known unuploaded ops.
@@ -576,28 +587,7 @@ export class SyncWrapperService {
       }
 
       // 4. Check for permanent rejection failures
-      if (uploadResult.kind === 'completed' && uploadResult.permanentRejectionCount > 0) {
-        const hasPayloadError = uploadResult.rejectedOps.some(
-          (r) =>
-            r.error?.includes('Payload too complex') ||
-            r.error?.includes('Payload too large'),
-        );
-
-        if (hasPayloadError) {
-          SyncLog.err(
-            'SyncWrapperService: Upload rejected - payload too large/complex',
-            uploadResult.rejectedOps,
-          );
-          this._providerManager.setSyncStatus('ERROR');
-          alertDialog(this._translateService.instant(T.F.SYNC.S.ERROR_PAYLOAD_TOO_LARGE));
-          return 'HANDLED_ERROR';
-        }
-
-        SyncLog.err(
-          `SyncWrapperService: Upload had ${uploadResult.permanentRejectionCount} permanent rejection(s), not marking as IN_SYNC`,
-          uploadResult.rejectedOps,
-        );
-        this._providerManager.setSyncStatus('ERROR');
+      if (this._handlePermanentUploadRejections(completedUploadResults)) {
         return 'HANDLED_ERROR';
       }
 
@@ -910,6 +900,38 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       }
     }
+  }
+
+  private _handlePermanentUploadRejections(
+    uploadResults: readonly CompletedUploadOutcome[],
+  ): boolean {
+    const rejectedResult = uploadResults.find((r) => r.permanentRejectionCount > 0);
+    if (!rejectedResult) {
+      return false;
+    }
+
+    const hasPayloadError = rejectedResult.rejectedOps.some(
+      (r) =>
+        r.error?.includes('Payload too complex') ||
+        r.error?.includes('Payload too large'),
+    );
+
+    if (hasPayloadError) {
+      SyncLog.err(
+        'SyncWrapperService: Upload rejected - payload too large/complex',
+        rejectedResult.rejectedOps,
+      );
+      this._providerManager.setSyncStatus('ERROR');
+      alertDialog(this._translateService.instant(T.F.SYNC.S.ERROR_PAYLOAD_TOO_LARGE));
+      return true;
+    }
+
+    SyncLog.err(
+      `SyncWrapperService: Upload had ${rejectedResult.permanentRejectionCount} permanent rejection(s), not marking as IN_SYNC`,
+      rejectedResult.rejectedOps,
+    );
+    this._providerManager.setSyncStatus('ERROR');
+    return true;
   }
 
   async forceUpload(triggerSource: ForceUploadTriggerSource = 'unknown'): Promise<void> {
