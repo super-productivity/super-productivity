@@ -47,49 +47,11 @@ const getRepeatCfgForTask = async (
     };
   }, titlePart);
 
-const addTaskRaw = async (page: Page, rawInput: string): Promise<void> => {
-  const input = page.locator('add-task-bar.global input').first();
-  const visible = await input.isVisible().catch(() => false);
-  if (!visible) await page.locator('.tour-addBtn').click();
-  await input.waitFor({ state: 'visible', timeout: 10000 });
-  await input.click();
-  await input.clear();
-  await input.fill(rawInput);
-  // The add bar parses input asynchronously (shortSyntax microtask), so the
-  // cleanText / rrule land a tick after fill. A DOM round-trip plus a short
-  // settle lets that complete before submit.
-  await page.locator('task').count();
-  await page.waitForTimeout(500);
-  await page.locator('.e2e-add-task-submit').click();
-};
+// NOTE: the `@+` natural-language short syntax is deferred to a later phase
+// (see the EPIC on #7948); its e2e coverage will return with that phase. This
+// file now only exercises the Phase-1 dialog builder flow.
 
 test.describe('RRULE recurring tasks', () => {
-  test('attaches an rrule repeat cfg via the @+ short syntax', async ({
-    page,
-    workViewPage,
-    testPrefix,
-  }) => {
-    await workViewPage.waitForTaskList();
-
-    const title = `${testPrefix}-Mow Lawn`;
-    await addTaskRaw(page, `${title} @+every monday`);
-
-    // Verify via the store, not the Today view: "every monday" first instance
-    // can be a future day, so the task legitimately may not appear in Today.
-    await expect
-      .poll(async () => (await getRepeatCfgForTask(page, title))?.rrule ?? null, {
-        timeout: 10000,
-      })
-      .toBe('FREQ=WEEKLY;BYDAY=MO');
-
-    const snap = await getRepeatCfgForTask(page, title);
-    expect(snap).not.toBeNull();
-    expect(snap!.taskTitle).not.toContain('@+');
-    expect(snap!.repeatCfgId).not.toBeNull();
-    // Legacy repeatCycle kept populated (FREQ-derived) for older-client fallback.
-    expect(snap!.repeatCycle).toBe('WEEKLY');
-  });
-
   test('full dialog flow: Custom recurring config builder → live preview → save', async ({
     page,
     workViewPage,
@@ -122,8 +84,9 @@ test.describe('RRULE recurring tasks', () => {
       .first()
       .click();
 
-    // The live preview shows the humanized reading of the assembled rule.
-    const preview = dialog.locator('.rb-preview');
+    // The live result band (pinned above the actions in RRULE mode) shows the
+    // humanized reading of the assembled rule.
+    const preview = dialog.locator('.rrule-result');
     await expect(preview).toBeVisible({ timeout: 5000 });
     await expect(preview).toContainText(/week/i);
 
