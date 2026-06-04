@@ -35,19 +35,33 @@ test('should not crash when a repeat config has an invalid startTime in the stor
     .locator('task-detail-item')
     .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) })
     .click();
-
+  // 3. Wait for the repeat dialog to appear
   const repeatDialog = page.locator('mat-dialog-container');
   await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-  // Set a valid startTime so the config has startTime + remindAt in the store
-  await repeatDialog.locator('collapsible .collapsible-header').last().click();
-  const startTimeField = repeatDialog.getByLabel(/Scheduled start time/i);
+  // Open the schedule dialog
+  const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+  await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+  await scheduleBtn.click();
+
+  // Wait for the schedule dialog to appear
+  const scheduleDialog = page.locator('mat-dialog-container').last();
+  await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+  // Set a valid startTime
+  const startTimeField = scheduleDialog.locator('input[type="time"]');
   await expect(startTimeField).toBeVisible({ timeout: 5000 });
   await startTimeField.fill('10:30');
   await startTimeField.blur();
   await page.waitForTimeout(300);
 
+  // Click Schedule button
+  const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+  await scheduleSubmitBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+
   const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
+
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
   await saveBtn.click();
   await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });

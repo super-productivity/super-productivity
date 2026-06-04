@@ -57,25 +57,25 @@ const openRecurDialogFromProjection = async (
   return dialog;
 };
 
-// Set the Start date by typing into the matInput directly (en-GB → "DD/MM/YYYY").
-const setStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
-  const startDateInput = dialog
-    .locator('mat-form-field')
-    .filter({ hasText: /Start date/i })
-    .locator('input')
-    .first();
-  await expect(startDateInput).toBeVisible({ timeout: 5000 });
-  // The Material datepicker input occasionally drops the first fill while the
-  // dialog is still binding/animating (the field is left empty + ng-invalid).
-  // Retry the fill until the value sticks before committing it with Tab.
-  await expect(async () => {
-    await startDateInput.fill('');
-    await startDateInput.fill(ddmmyyyy);
-    await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 1000 });
-  }).toPass({ timeout: 10000 });
-  await startDateInput.press('Tab');
-  await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 3000 });
+// Set the Start date by clicking in the calendar.
+const setStartDate = async (page: Page, dayOfMonth: string): Promise<void> => {
+  const repeatDialog = page.locator('mat-dialog-container').first();
+  const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+  await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+  await scheduleBtn.click();
+
+  const scheduleDialog = page.locator('mat-dialog-container').last();
+  await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+  const dayCell = scheduleDialog.locator('.mat-calendar-body-cell', {
+    hasText: new RegExp(`^\\s*${dayOfMonth}\\s*$`),
+  });
+  await expect(dayCell).toBeVisible({ timeout: 5000 });
+  await dayCell.click();
+
+  const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+  await scheduleSubmitBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 };
 
 /**
@@ -108,7 +108,7 @@ const gotoHashRoute = async (
 };
 
 const saveDialog = async (page: Page): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
+  const dialog = page.locator('mat-dialog-container').first();
   const saveBtn = dialog.getByRole('button', { name: /Save/i });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
   await saveBtn.click();
@@ -135,7 +135,7 @@ test.describe('Recurring Task - Move Start Date Earlier With No Live Instance (#
     await expect(task).toBeVisible({ timeout: 10000 });
     await taskPage.openTaskDetail(task);
     await openRecurDialog(page);
-    await setStartDate(page, '04/05/2026');
+    await setStartDate(page, '4');
     await saveDialog(page);
 
     // 2. Delete the live (non-transparent) instance. After the first save the
@@ -167,7 +167,7 @@ test.describe('Recurring Task - Move Start Date Earlier With No Live Instance (#
       page.locator('planner-repeat-projection').filter({ hasText: taskTitle }).first(),
     );
     await openRecurDialogFromProjection(page, taskTitle);
-    await setStartDate(page, '02/05/2026');
+    await setStartDate(page, '2');
     await saveDialog(page);
 
     // 4. Verify: the task now projects onto May 2, 3 and 4 — the days the stale

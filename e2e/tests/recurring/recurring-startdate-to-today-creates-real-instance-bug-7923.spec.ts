@@ -28,9 +28,9 @@ import { expect, test } from '../../fixtures/test.fixture';
 // the same month, keeping the date-picker entry simple. The repeat is DAILY, so
 // the weekday is irrelevant.
 const FIXED_TODAY = new Date('2026-05-01T10:00:00');
-const FIXED_TODAY_DDMMYYYY = '01/05/2026';
+const FIXED_TODAY_DAY_OF_MONTH = '1';
 const FIXED_TODAY_DATA_DAY = '2026-05-01'; // planner-day[data-day] form of FIXED_TODAY
-const FUTURE_START_DDMMYYYY = '10/05/2026'; // today + 9 days
+const FUTURE_START_DAY_OF_MONTH = '10'; // today + 9 days
 
 const openRecurDialogFromProjection = async (
   page: Page,
@@ -47,21 +47,25 @@ const openRecurDialogFromProjection = async (
   return dialog;
 };
 
-const setStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
-  const startDateInput = dialog
-    .locator('mat-form-field')
-    .filter({ hasText: /Start date/i })
-    .locator('input')
-    .first();
-  await expect(startDateInput).toBeVisible({ timeout: 5000 });
-  await expect(async () => {
-    await startDateInput.fill('');
-    await startDateInput.fill(ddmmyyyy);
-    await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 1000 });
-  }).toPass({ timeout: 10000 });
-  await startDateInput.press('Tab');
-  await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 3000 });
+// Set the Start date by clicking in the calendar.
+const setStartDate = async (page: Page, dayOfMonth: string): Promise<void> => {
+  const repeatDialog = page.locator('mat-dialog-container').first();
+  const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+  await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+  await scheduleBtn.click();
+
+  const scheduleDialog = page.locator('mat-dialog-container').last();
+  await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+  const dayCell = scheduleDialog.locator('.mat-calendar-body-cell', {
+    hasText: new RegExp(`^\\s*${dayOfMonth}\\s*$`),
+  });
+  await expect(dayCell).toBeVisible({ timeout: 5000 });
+  await dayCell.click();
+
+  const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+  await scheduleSubmitBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 };
 
 const gotoHashRoute = async (
@@ -84,7 +88,7 @@ const gotoHashRoute = async (
 };
 
 const saveDialog = async (page: Page): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
+  const dialog = page.locator('mat-dialog-container').first();
   const saveBtn = dialog.getByRole('button', { name: /Save/i });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
   await saveBtn.click();
@@ -122,7 +126,7 @@ test.describe('Recurring Task - Move startDate to Today Creates Real Instance (#
     await expect(task).toBeVisible({ timeout: 10000 });
     await taskPage.openTaskDetail(task);
     await openRecurDialogFromTaskDetail(page);
-    await setStartDate(page, FUTURE_START_DDMMYYYY);
+    await setStartDate(page, FUTURE_START_DAY_OF_MONTH);
     await saveDialog(page);
 
     // 2. Delete the live (non-transparent) May 10 instance. The delete is a
@@ -151,7 +155,7 @@ test.describe('Recurring Task - Move startDate to Today Creates Real Instance (#
       page.locator('planner-repeat-projection').filter({ hasText: taskTitle }).first(),
     );
     await openRecurDialogFromProjection(page, taskTitle);
-    await setStartDate(page, FIXED_TODAY_DDMMYYYY); // Move startDate → today
+    await setStartDate(page, FIXED_TODAY_DAY_OF_MONTH); // Move startDate → today
     await saveDialog(page);
 
     // 4. Navigate to the Today work-view and verify a REAL task was created.

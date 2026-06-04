@@ -49,13 +49,26 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
     const repeatDialog = page.locator('mat-dialog-container');
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 4. Make it a TIMED daily repeat: expand Advanced, set a start time (13:00).
+    // 4. Make it a TIMED daily repeat: Open schedule dialog and set a start time (13:00).
     //    remindAt defaults to AtStart once startTime is set, so the config is timed.
-    await repeatDialog.locator('collapsible .collapsible-header').last().click();
-    const startTimeField = repeatDialog.getByLabel(/Scheduled start time/i);
+    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+    await scheduleBtn.click();
+
+    // Wait for the schedule dialog to appear
+    const scheduleDialog = page.locator('mat-dialog-container').last();
+    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Set a valid startTime
+    const startTimeField = scheduleDialog.locator('input[type="time"]');
     await expect(startTimeField).toBeVisible({ timeout: 5000 });
     await startTimeField.fill('13:00');
     await startTimeField.blur();
+
+    // Click Schedule button
+    const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+    await scheduleSubmitBtn.click();
+    await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
     // 5. Save the (default DAILY) repeat config.
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });

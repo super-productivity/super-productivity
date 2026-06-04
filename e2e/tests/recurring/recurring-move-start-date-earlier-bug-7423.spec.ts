@@ -34,25 +34,29 @@ const openRecurDialog = async (page: Page): Promise<Locator> => {
   return dialog;
 };
 
-// Set the Start date by typing into the matInput directly. The input parses
-// the locale's display format (en-GB → "DD/MM/YYYY") on blur/Enter. This is
-// far more robust than driving the calendar overlay across Material versions.
-const setStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
-  const startDateInput = dialog
-    .locator('mat-form-field')
-    .filter({ hasText: /Start date/i })
-    .locator('input')
-    .first();
-  await expect(startDateInput).toBeVisible({ timeout: 5000 });
-  await startDateInput.fill('');
-  await startDateInput.fill(ddmmyyyy);
-  await startDateInput.press('Tab');
-  await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 3000 });
+// Set the Start date by clicking in the calendar.
+const setStartDate = async (page: Page, dayOfMonth: string): Promise<void> => {
+  const repeatDialog = page.locator('mat-dialog-container').first();
+  const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+  await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+  await scheduleBtn.click();
+
+  const scheduleDialog = page.locator('mat-dialog-container').last();
+  await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+  const dayCell = scheduleDialog.locator('.mat-calendar-body-cell', {
+    hasText: new RegExp(`^\\s*${dayOfMonth}\\s*$`),
+  });
+  await expect(dayCell).toBeVisible({ timeout: 5000 });
+  await dayCell.click();
+
+  const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+  await scheduleSubmitBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 };
 
 const saveDialog = async (page: Page): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
+  const dialog = page.locator('mat-dialog-container').first();
   const saveBtn = dialog.getByRole('button', { name: /Save/i });
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
   await saveBtn.click();
@@ -81,7 +85,7 @@ test.describe('Recurring Task - Move Start Date Earlier (#7423)', () => {
 
     // 2. First save: startDate = May 4, 2026 (3 days from today; daily by default).
     await openRecurDialog(page);
-    await setStartDate(page, '04/05/2026');
+    await setStartDate(page, '4');
     await saveDialog(page);
 
     // After the first save the task moves out of TODAY (dueDay = May 4) and the
@@ -101,7 +105,7 @@ test.describe('Recurring Task - Move Start Date Earlier (#7423)', () => {
     // 3. Second save: change startDate to May 2, 2026 (1 day from today,
     //    still earlier than the previous value).
     await openRecurDialog(page);
-    await setStartDate(page, '02/05/2026');
+    await setStartDate(page, '2');
     await saveDialog(page);
 
     // 4. Verify in planner: task lands on May 2 ("2/5"), NOT on May 5 ("5/5").

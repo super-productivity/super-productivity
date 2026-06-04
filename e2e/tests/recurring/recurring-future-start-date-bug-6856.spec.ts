@@ -44,26 +44,33 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     const repeatDialog = page.locator('mat-dialog-container');
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // Open the calendar popup
-    const calendarToggle = repeatDialog.locator('mat-datepicker-toggle button');
-    await calendarToggle.click();
+    // Open the schedule dialog
+    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+    await scheduleBtn.click();
 
-    const calendar = page.locator('.mat-calendar');
+    // Wait for the schedule dialog to appear
+    const scheduleDialog = page.locator('mat-dialog-container').last();
+    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    const calendar = scheduleDialog.locator('mat-calendar');
     await expect(calendar).toBeVisible({ timeout: 5000 });
 
     // Navigate to next month to ensure the date is in the future
-    const nextMonthBtn = page.getByRole('button', { name: /next month/i });
+    const nextMonthBtn = scheduleDialog.getByRole('button', { name: /next month/i });
     await nextMonthBtn.click();
 
     // Select the first available day in next month
-    const firstDay = page
+    const firstDay = scheduleDialog
       .locator('.mat-calendar-body-cell:not(.mat-calendar-body-disabled)')
       .first();
     await expect(firstDay).toBeVisible({ timeout: 5000 });
     await firstDay.click();
 
-    // Wait for calendar to close
-    await expect(calendar).not.toBeVisible({ timeout: 5000 });
+    // Click Schedule button
+    const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+    await scheduleSubmitBtn.click();
+    await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
     // Save the repeat config — wait for the button to be enabled first
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
