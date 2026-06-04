@@ -68,10 +68,7 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
-import {
-  DEFAULT_TASK_REPEAT_CFG,
-  toSyncSafeQuickSetting,
-} from '../../task-repeat-cfg/task-repeat-cfg.model';
+import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
@@ -515,8 +512,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             startDate,
             ...quickSettingUpdates,
             title,
-            // Persist only a sync-safe quickSetting (newer presets → 'CUSTOM').
-            quickSetting: toSyncSafeQuickSetting(state.repeatQuickSetting),
+            // The addTaskRepeatCfgToTask action creator clamps quickSetting to a
+            // sync-safe value at the persist boundary (newer presets → 'CUSTOM').
+            quickSetting: state.repeatQuickSetting,
             tagIds: taskData.tagIds ?? [],
             defaultEstimate: state.estimate || 0,
             startTime: state.time || undefined,

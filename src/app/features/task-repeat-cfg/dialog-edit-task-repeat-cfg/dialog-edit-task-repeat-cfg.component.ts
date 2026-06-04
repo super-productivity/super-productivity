@@ -20,7 +20,6 @@ import {
   DEFAULT_TASK_REPEAT_CFG,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
-  toSyncSafeQuickSetting,
 } from '../task-repeat-cfg.model';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { UntypedFormGroup } from '@angular/forms';
@@ -384,15 +383,11 @@ export class DialogEditTaskRepeatCfgComponent {
 
     // Normalize the monthly anchor fields at the boundary: convert the form's
     // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
-    // Also map the quickSetting to a sync-safe value: the newer preset literals
-    // and 'RRULE' are NOT in the released union, so persisting them would fail
-    // typia validation on older/mobile clients. They drive the dialog UI only;
-    // the stored cfg uses 'CUSTOM' and the builder reconstructs from `rrule`.
-    const normalizedCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
-    const finalRepeatCfg = {
-      ...normalizedCfg,
-      quickSetting: toSyncSafeQuickSetting(normalizedCfg.quickSetting),
-    };
+    // The in-memory quickSetting (incl. 'RRULE' / newer presets) is left as-is;
+    // the addTaskRepeatCfgToTask / updateTaskRepeatCfg action creators clamp it
+    // to a sync-safe value at the persist boundary, so the op payload that
+    // old/mobile clients replay never carries an out-of-union value.
+    const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
 
     if (this.isEdit()) {
       const initial = this.repeatCfgInitial();
