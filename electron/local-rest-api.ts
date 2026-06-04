@@ -56,23 +56,32 @@ export const buildAllInterfacesAllowedHosts = (): Set<string> => {
   return hosts;
 };
 
-export const resolveHost = (cfg: GlobalConfigState): string => {
+// Resolves the bind host from the SP_LOCAL_REST_API_HOST env var only.
+// Returns LOCAL_REST_API_HOST if the var is unset, not a valid IP, or IPv6.
+export const resolveHostFromEnv = (): string => {
   const envHost = process.env['SP_LOCAL_REST_API_HOST'];
-  if (envHost) {
-    const ipVersion = isIP(envHost);
-    if (ipVersion === 0) {
-      warn(
-        `[local-rest-api] SP_LOCAL_REST_API_HOST="${envHost}" is not a valid IP address — ignoring, falling back to ${LOCAL_REST_API_HOST}`,
-      );
-      return LOCAL_REST_API_HOST;
-    }
-    if (ipVersion === 6) {
-      warn(
-        `[local-rest-api] SP_LOCAL_REST_API_HOST="${envHost}" is an IPv6 address — IPv6 is not supported, falling back to ${LOCAL_REST_API_HOST}`,
-      );
-      return LOCAL_REST_API_HOST;
-    }
-    return envHost;
+  if (!envHost) {
+    return LOCAL_REST_API_HOST;
+  }
+  const ipVersion = isIP(envHost);
+  if (ipVersion === 0) {
+    warn(
+      `[local-rest-api] SP_LOCAL_REST_API_HOST="${envHost}" is not a valid IP address — ignoring, falling back to ${LOCAL_REST_API_HOST}`,
+    );
+    return LOCAL_REST_API_HOST;
+  }
+  if (ipVersion === 6) {
+    warn(
+      `[local-rest-api] SP_LOCAL_REST_API_HOST="${envHost}" is an IPv6 address — IPv6 is not supported, falling back to ${LOCAL_REST_API_HOST}`,
+    );
+    return LOCAL_REST_API_HOST;
+  }
+  return envHost;
+};
+
+export const resolveHost = (cfg: GlobalConfigState): string => {
+  if (process.env['SP_LOCAL_REST_API_HOST']) {
+    return resolveHostFromEnv();
   }
   return cfg.misc.isLocalRestApiEnabled && cfg.misc.isLocalRestApiExternalAccessEnabled
     ? '0.0.0.0'
@@ -105,11 +114,13 @@ let allInterfacesCachedAt = 0;
 // Listen-failure backoff state.
 const MAX_LISTEN_RETRIES = 5;
 let listenRetryCount = 0;
+let isStarting = false;
 
 const pendingRequests = new Map<
   string,
   {
     resolve: (response: LocalRestApiResponsePayload) => void;
+    reject: (reason: Error) => void;
     timeout: NodeJS.Timeout;
   }
 >();
@@ -176,6 +187,7 @@ const forwardRequestToRenderer = async (
 
     pendingRequests.set(payload.requestId, {
       resolve,
+      reject,
       timeout,
     });
 
@@ -335,7 +347,12 @@ const reconcile = (): void => {
     return;
   }
 
-  if (desiredEnabled && !isListening && listenRetryCount <= MAX_LISTEN_RETRIES) {
+  if (
+    desiredEnabled &&
+    !isListening &&
+    !isStarting &&
+    listenRetryCount <= MAX_LISTEN_RETRIES
+  ) {
     currentHost = desiredHost;
     localhostAllowedHosts = buildLocalhostAllowedHosts(currentHost);
     allInterfacesHostsCache = null;
@@ -361,20 +378,36 @@ export const initLocalRestApi = (): void => {
     void handleHttpRequest(req, res);
   });
 
+  // Persistent safety net: catches post-listen server errors (e.g. EMFILE) that
+  // would otherwise become uncaught exceptions and crash the app.
+  server.on('error', (serverError: Error) => {
+    if (isListening) {
+      isListening = false;
+      warn('[local-rest-api] Server error while listening', serverError);
+      reconcile();
+    }
+    // Errors during listen are handled by the one-shot listener in startServer;
+    // by that point isListening is already false, so this guard is a no-op.
+  });
+
   if (isForceEnabledForDev()) {
     warn('[local-rest-api] Enabled by SP_FORCE_LOCAL_REST_API=1 for DEV runtime');
     desiredEnabled = true;
+    desiredHost = resolveHostFromEnv();
     reconcile();
   }
 };
 
 const startServer = (): void => {
-  if (!server || isListening || isStopping) {
+  if (!server || isListening || isStopping || isStarting) {
     return;
   }
 
+  isStarting = true;
+
   // One-shot error listener for this particular listen attempt.
   const onListenError = (listenError: Error): void => {
+    isStarting = false;
     isListening = false;
     listenRetryCount++;
     if (listenRetryCount > MAX_LISTEN_RETRIES) {
@@ -396,6 +429,7 @@ const startServer = (): void => {
 
   server.listen(LOCAL_REST_API_PORT, currentHost, () => {
     server?.removeListener('error', onListenError);
+    isStarting = false;
     isListening = true;
     listenRetryCount = 0;
     if (isAllInterfaces(currentHost)) {
@@ -413,10 +447,11 @@ const stopServer = (): void => {
 
   isStopping = true;
 
-  // Cancel all in-flight renderer round-trips so their timeouts don't fire after the
-  // sockets are gone.
-  for (const { timeout } of pendingRequests.values()) {
+  // Cancel all in-flight renderer round-trips: clear their timeouts and reject
+  // their promises so the handleHttpRequest coroutines don't stay suspended.
+  for (const { timeout, reject: rejectPending } of pendingRequests.values()) {
     clearTimeout(timeout);
+    rejectPending(new Error('Server stopped'));
   }
   pendingRequests.clear();
 
