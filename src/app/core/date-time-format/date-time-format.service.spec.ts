@@ -68,6 +68,56 @@ describe('DateTimeFormatService', () => {
     expect(formatted.length).toBeGreaterThan(0);
   });
 
+  describe('System default locale follows navigator.language', () => {
+    const stubNavigatorLanguage = (lang: string): void => {
+      Object.defineProperty(navigator, 'language', {
+        configurable: true,
+        get: () => lang,
+      });
+    };
+
+    // Re-construct the service after stubbing so the computed picks up the
+    // stubbed navigator.language.
+    const createServiceForSystemLocale = (lang: string): DateTimeFormatService => {
+      stubNavigatorLanguage(lang);
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          provideMockStore({ initialState: { globalConfig: DEFAULT_GLOBAL_CONFIG } }),
+        ],
+      });
+      return TestBed.inject(DateTimeFormatService);
+    };
+
+    afterEach(() => {
+      // Remove the own property so navigator.language resolves back to the
+      // inherited prototype getter — restoring the platform default for any
+      // spec scheduled later in the (randomized) Karma run.
+      delete (navigator as { language?: string }).language;
+    });
+
+    (
+      [
+        { lang: 'en-AU', locale: 'en-au', is24Hour: false },
+        { lang: 'de-DE', locale: 'de-de', is24Hour: true },
+        // Region-less 'en' is pinned to the en-GB default so the Intl- and
+        // DatePipe-based formatting paths stay consistent.
+        { lang: 'en', locale: 'en-gb', is24Hour: true },
+        // Malformed tags fall back to the default locale instead of throwing.
+        { lang: 'C', locale: 'en-gb', is24Hour: true },
+      ] as const
+    ).forEach(({ lang, locale, is24Hour }) => {
+      it(`resolves "${lang}" to ${locale} (24h=${is24Hour})`, () => {
+        const svc = createServiceForSystemLocale(lang);
+        expect(svc.currentLocale()).toBe(locale);
+        expect(svc.is24HourFormat()).toBe(is24Hour);
+      });
+    });
+  });
+
   it('should detect 24-hour format for appropriate locales', () => {
     const is24Hour = service.is24HourFormat();
     expect(typeof is24Hour).toBe('boolean');

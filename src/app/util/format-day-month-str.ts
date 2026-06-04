@@ -1,4 +1,3 @@
-import { DateTimeLocale } from '../core/locale.constants';
 import { dateTimeFormatter } from './datetime-formatter';
 
 /**
@@ -7,7 +6,7 @@ import { dateTimeFormatter } from './datetime-formatter';
  * @param locale - The locale string (e.g., 'en-US', 'de-DE')
  * @returns The formatted day and date string in the specified locale
  */
-export const formatDayMonthStr = (dateStr: string, locale: DateTimeLocale): string => {
+export const formatDayMonthStr = (dateStr: string, locale: string): string => {
   // Parse the date string as local date parts to avoid timezone issues
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
