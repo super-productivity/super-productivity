@@ -48,12 +48,15 @@ describe('metric.util timezone test', () => {
       // The start should be the local date when the task was created
       // In LA (UTC-8): 2025-01-16 at 10 PM local -> '2025-01-16'
       // In Berlin (UTC+1): 2025-01-17 at 7 AM local -> '2025-01-17'
-      const tzOffset = new Date().getTimezoneOffset();
-      if (tzOffset > 0) {
-        // LA
+      // Use the offset AT the test instant (January) — `new Date()` breaks
+      // every summer in DST zones. 06:00 UTC is the previous local day only
+      // west of UTC-6.
+      const tzOffset = new Date(taskCreatedTime).getTimezoneOffset();
+      if (tzOffset > 360) {
+        // west of UTC-6 (e.g. LA)
         expect(result.start).toBe('2025-01-16');
       } else {
-        // Berlin
+        // east of UTC-6 (e.g. New York, Berlin)
         expect(result.start).toBe('2025-01-17');
       }
     });

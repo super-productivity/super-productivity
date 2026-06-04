@@ -44,11 +44,14 @@ describe('mapArchiveToWorklogWeeks timezone test', () => {
       // The task should be placed on the local date when it was created
       // In LA (UTC-8): 2025-01-16 at 10 PM local -> worklog for Jan 16
       // In Berlin (UTC+1): 2025-01-17 at 7 AM local -> worklog for Jan 17
-      const tzOffset = new Date().getTimezoneOffset();
+      // Use the offset AT the test instant (January) — `new Date()` breaks
+      // every summer in DST zones. 06:00 UTC is the previous local day only
+      // west of UTC-6.
+      const tzOffset = new Date(taskCreatedTime).getTimezoneOffset();
       const year2025 = result['2025'];
 
-      if (tzOffset > 0) {
-        // LA
+      if (tzOffset > 360) {
+        // west of UTC-6 (e.g. LA)
         // Should have entry for Jan 16
         const foundEntry = year2025?.some(
           (week) =>
@@ -58,7 +61,7 @@ describe('mapArchiveToWorklogWeeks timezone test', () => {
         );
         expect(foundEntry).toBe(true);
       } else {
-        // Berlin
+        // east of UTC-6 (e.g. New York, Berlin)
         // Should have entry for Jan 17
         const foundEntry = year2025?.some(
           (week) =>
