@@ -35,7 +35,7 @@ const openRecurDialog = async (page: Page): Promise<Locator> => {
     .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
   await expect(recurItem).toBeVisible({ timeout: 5000 });
   await recurItem.click();
-  const dialog = page.locator('mat-dialog-container');
+  const dialog = page.locator('mat-dialog-container').first();
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   return dialog;
 };
@@ -52,30 +52,32 @@ const openRecurDialogFromProjection = async (
     .first();
   await expect(projection).toBeVisible({ timeout: 15000 });
   await projection.click();
-  const dialog = page.locator('mat-dialog-container');
+  const dialog = page.locator('mat-dialog-container').first();
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   return dialog;
 };
 
-// Set the Start date by clicking in the calendar.
+// Set the Start date by clicking the day in the mat-calendar.
 const setStartDate = async (page: Page, dayOfMonth: string): Promise<void> => {
   const repeatDialog = page.locator('mat-dialog-container').first();
-  const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
-  await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
-  await scheduleBtn.click();
+  await repeatDialog.locator('.planned-start-date-btn').click();
+  const scheduleDialog = page
+    .locator('mat-dialog-container')
+    .filter({ has: page.locator('datetime-picker') });
+  await scheduleDialog.waitFor({ state: 'visible' });
 
-  const scheduleDialog = page.locator('mat-dialog-container').last();
-  await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+  await scheduleDialog
+    .locator('.mat-calendar-body-cell', {
+      hasText: new RegExp(`^\\s*${dayOfMonth}\\s*$`),
+    })
+    .click();
 
-  const dayCell = scheduleDialog.locator('.mat-calendar-body-cell', {
-    hasText: new RegExp(`^\\s*${dayOfMonth}\\s*$`),
+  const scheduleBtn = scheduleDialog.getByRole('button', {
+    name: 'Schedule',
+    exact: true,
   });
-  await expect(dayCell).toBeVisible({ timeout: 5000 });
-  await dayCell.click();
-
-  const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
-  await scheduleSubmitBtn.click();
-  await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+  await scheduleBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden' });
 };
 
 /**

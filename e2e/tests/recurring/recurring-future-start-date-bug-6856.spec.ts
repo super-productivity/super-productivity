@@ -41,7 +41,7 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     await recurItem.click();
 
     // 3. Wait for the repeat dialog and set a future start date via calendar
-    const repeatDialog = page.locator('mat-dialog-container');
+    const repeatDialog = page.locator('mat-dialog-container').first();
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
     // Open the schedule dialog
@@ -50,7 +50,9 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     await scheduleBtn.click();
 
     // Wait for the schedule dialog to appear
-    const scheduleDialog = page.locator('mat-dialog-container').last();
+    const scheduleDialog = page
+      .locator('mat-dialog-container')
+      .filter({ has: page.locator('datetime-picker') });
     await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
 
     const calendar = scheduleDialog.locator('mat-calendar');
@@ -68,7 +70,10 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     await firstDay.click();
 
     // Click Schedule button
-    const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+    const scheduleSubmitBtn = scheduleDialog.getByRole('button', {
+      name: 'Schedule',
+      exact: true,
+    });
     await scheduleSubmitBtn.click();
     await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 

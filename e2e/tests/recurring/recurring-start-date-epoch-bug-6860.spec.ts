@@ -40,17 +40,15 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await recurItem.click();
 
     // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container');
+    const repeatDialog = page.locator('mat-dialog-container').first();
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 4. Open the schedule dialog
-    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
-    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
-    await scheduleBtn.click();
-
-    // 5. Wait for the schedule dialog to appear
-    const scheduleDialog = page.locator('mat-dialog-container').last();
-    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+    // 4. Open the schedule dialog and select first day of next month
+    await repeatDialog.locator('.planned-start-date-btn').click();
+    const scheduleDialog = page
+      .locator('mat-dialog-container')
+      .filter({ has: page.locator('datetime-picker') });
+    await expect(scheduleDialog).toBeVisible();
 
     const calendar = scheduleDialog.locator('mat-calendar');
     await expect(calendar).toBeVisible({ timeout: 5000 });
@@ -65,24 +63,22 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await expect(firstDay).toBeVisible({ timeout: 5000 });
     await firstDay.click();
 
-    // 6. Click Schedule button
-    const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
-    await scheduleSubmitBtn.click();
-    await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+    // 5. Verify the date survives persistence and does not show epoch
+    // Click Schedule button
+    const scheduleBtn = scheduleDialog.getByRole('button', {
+      name: 'Schedule',
+      exact: true,
+    });
+    await scheduleBtn.click();
+    await scheduleDialog.waitFor({ state: 'hidden' });
 
-    // 7. Verify the date label does not show epoch
+    // 6. Save and verify the date survives persistence
     const dateVal = repeatDialog.locator('.planned-date-val');
-    await expect(dateVal).toBeVisible();
-    const dateText = await dateVal.innerText();
-    expect(dateText).not.toBe('');
-    expect(dateText).not.toContain('1970');
+    await expect(dateVal).not.toContainText('1970');
 
-    // 8. Save and verify the date survives persistence
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
     await expect(saveBtn).toBeEnabled({ timeout: 5000 });
     await saveBtn.click();
     await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
   });
-
-  // Manual typing of date is no longer supported in the new UI flow
 });

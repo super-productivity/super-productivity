@@ -42,7 +42,7 @@ const openRecurDialogFromProjection = async (
     .first();
   await expect(projection).toBeVisible({ timeout: 15000 });
   await projection.click();
-  const dialog = page.locator('mat-dialog-container');
+  const dialog = page.locator('mat-dialog-container').first();
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   return dialog;
 };
@@ -54,7 +54,9 @@ const setStartDate = async (page: Page, dayOfMonth: string): Promise<void> => {
   await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
   await scheduleBtn.click();
 
-  const scheduleDialog = page.locator('mat-dialog-container').last();
+  const scheduleDialog = page
+    .locator('mat-dialog-container')
+    .filter({ has: page.locator('datetime-picker') });
   await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
 
   const dayCell = scheduleDialog.locator('.mat-calendar-body-cell', {
@@ -63,7 +65,10 @@ const setStartDate = async (page: Page, dayOfMonth: string): Promise<void> => {
   await expect(dayCell).toBeVisible({ timeout: 5000 });
   await dayCell.click();
 
-  const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+  const scheduleSubmitBtn = scheduleDialog.getByRole('button', {
+    name: 'Schedule',
+    exact: true,
+  });
   await scheduleSubmitBtn.click();
   await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 };
@@ -101,7 +106,7 @@ const openRecurDialogFromTaskDetail = async (page: Page): Promise<void> => {
     .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
   await expect(recurItem).toBeVisible({ timeout: 5000 });
   await recurItem.click();
-  const dialog = page.locator('mat-dialog-container');
+  const dialog = page.locator('mat-dialog-container').first();
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
 };
 

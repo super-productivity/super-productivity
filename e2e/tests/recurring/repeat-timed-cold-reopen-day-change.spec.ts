@@ -46,7 +46,7 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
     await expect(recurItem).toBeVisible({ timeout: 5000 });
     await recurItem.click();
 
-    const repeatDialog = page.locator('mat-dialog-container');
+    const repeatDialog = page.locator('mat-dialog-container').first();
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
     // 4. Make it a TIMED daily repeat: Open schedule dialog and set a start time (13:00).
@@ -56,17 +56,22 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
     await scheduleBtn.click();
 
     // Wait for the schedule dialog to appear
-    const scheduleDialog = page.locator('mat-dialog-container').last();
+    const scheduleDialog = page
+      .locator('mat-dialog-container')
+      .filter({ has: page.locator('datetime-picker') });
     await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
 
     // Set a valid startTime
-    const startTimeField = scheduleDialog.locator('input[type="time"]');
+    const startTimeField = scheduleDialog.getByLabel('Time');
     await expect(startTimeField).toBeVisible({ timeout: 5000 });
     await startTimeField.fill('13:00');
     await startTimeField.blur();
 
     // Click Schedule button
-    const scheduleSubmitBtn = scheduleDialog.getByRole('button', { name: /Schedule/i });
+    const scheduleSubmitBtn = scheduleDialog.getByRole('button', {
+      name: 'Schedule',
+      exact: true,
+    });
     await scheduleSubmitBtn.click();
     await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
