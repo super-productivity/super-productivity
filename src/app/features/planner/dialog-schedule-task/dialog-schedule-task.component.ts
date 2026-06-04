@@ -35,11 +35,7 @@ import { TaskService } from '../../tasks/task.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
-<<<<<<< update_recurrent_task_calendar_and-general_calendar_design
-=======
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
-import { fadeAnimation } from '../../../ui/animations/fade.ani';
->>>>>>> master
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateAdapter } from '@angular/material/core';
 import { MatButton } from '@angular/material/button';

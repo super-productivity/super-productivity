@@ -21,9 +21,6 @@ import { DEADLINE_REMINDER_OPTIONS } from './deadline-reminder-options.const';
 import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
-import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
-import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { getClockStringFromHours } from '../../../util/get-clock-string-from-hours';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
@@ -38,10 +35,6 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 import { DateTimePickerComponent } from '../../../ui/datetime-picker/datetime-picker.component';
-import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { getDbDateStr } from '../../../util/get-db-date-str';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
-import { isValidSplitTime } from '../../../util/is-valid-split-time';
 
 type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
 
