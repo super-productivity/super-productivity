@@ -9,6 +9,7 @@ import {
 } from 'src/app/core/locale.constants';
 import { GlobalConfigState } from '../../features/config/global-config.model';
 import { CustomDateAdapter } from './custom-date-adapter';
+import { TranslateService } from '@ngx-translate/core';
 
 describe('DateTimeFormatService', () => {
   let service: DateTimeFormatService;
@@ -31,6 +32,13 @@ describe('DateTimeFormatService', () => {
       providers: [
         DateTimeFormatService,
         { provide: DateAdapter, useClass: CustomDateAdapter },
+        {
+          provide: TranslateService,
+          useValue: {
+            currentLang: 'en-US',
+            instant: (key: string) => key,
+          },
+        },
         provideMockStore({
           initialState: {
             globalConfig: config,
@@ -49,6 +57,13 @@ describe('DateTimeFormatService', () => {
       providers: [
         DateTimeFormatService,
         { provide: DateAdapter, useClass: CustomDateAdapter },
+        {
+          provide: TranslateService,
+          useValue: {
+            currentLang: 'en-US',
+            instant: (key: string) => key,
+          },
+        },
         provideMockStore({
           initialState: {
             globalConfig: DEFAULT_GLOBAL_CONFIG,
