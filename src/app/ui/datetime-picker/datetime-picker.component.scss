@@ -28,11 +28,14 @@
     // Remove focus outline on selected date and active dates
     .mat-calendar-body-cell-content:focus,
     .mat-calendar-body-cell-content:focus-visible,
-    .mat-calendar-body-cell:focus .mat-calendar-body-cell-content,
     .mat-calendar-body-active {
       outline: none !important;
       border: none !important;
       box-shadow: none !important;
+    }
+
+    .mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
+      outline: 2px solid var(--c-accent) !important;
     }
 
     .mat-calendar-body-selected {
@@ -172,38 +175,6 @@
 
   mat-form-field {
     width: 100%;
-    margin-bottom: 0 !important;
-    background: var(--task-detail-bg);
-    box-shadow: var(--task-detail-shadow);
-    border-radius: var(--card-border-radius);
-    border: 1px solid transparent;
-    transition: var(--transition-standard);
-
-    &.mat-focused {
-      border-color: var(--palette-primary-400) !important;
-    }
-
-    @include mq(xs, max) {
-      box-shadow: none;
-      border: 1px solid var(--extra-border-color) !important;
-    }
-
-    ::ng-deep {
-      .mat-mdc-text-field-wrapper {
-        background-color: transparent !important;
-      }
-      .mdc-line-ripple {
-        display: none !important;
-      }
-      .mdc-notched-outline__leading,
-      .mdc-notched-outline__notch,
-      .mdc-notched-outline__trailing {
-        border-color: transparent !important;
-      }
-      .mat-mdc-form-field-focus-indicator {
-        display: none !important;
-      }
-    }
   }
 
   .time-clear-btn {

@@ -55,6 +55,23 @@ mat-dialog-content {
   flex: 1 1 0;
   min-width: 0;
   max-width: 100%;
+  height: auto;
+  min-height: 38px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+
+  &[color='primary']:not([disabled]) {
+    color: var(--palette-primary-900) !important;
+
+    :host-context(body.isDarkTheme) & {
+      color: var(--brand) !important;
+    }
+  }
+}
+
+.mat-stroked-button {
+  height: auto;
 }
 
 .schedule-actions button:not(:last-child) {
@@ -71,49 +88,6 @@ mat-dialog-content {
   white-space: normal;
   overflow-wrap: anywhere;
   text-align: center;
-  height: auto !important;
-  min-height: 40px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-
-  background: var(--task-detail-bg) !important;
-  box-shadow: var(--task-detail-shadow) !important;
-  border-radius: var(--card-border-radius) !important;
-  border: 1px solid transparent !important;
-  transition: var(--transition-standard) !important;
-  color: var(--text-color) !important;
-  font-weight: 500 !important;
-
-  &:hover:not([disabled]) {
-    background: var(--task-detail-bg-hover) !important;
-    box-shadow: var(--whiteframe-shadow-3dp) !important;
-  }
-
-  &[disabled] {
-    opacity: 0.5;
-    box-shadow: none !important;
-    background: transparent !important;
-    border-color: var(--extra-border-color) !important;
-    color: var(--text-color-muted) !important;
-  }
-
-  @include mq(xs, max) {
-    box-shadow: none !important;
-    border: 1px solid var(--extra-border-color) !important;
-  }
-
-  &[color='primary']:not([disabled]) {
-    color: var(--palette-primary-900) !important;
-
-    :host-context(body.isDarkTheme) & {
-      color: var(--brand) !important;
-    }
-  }
-
-  &[color='warn']:not([disabled]) {
-    color: var(--color-danger, #f44336) !important;
-  }
 }
 
 .schedule-info {
