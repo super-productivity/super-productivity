@@ -34,12 +34,23 @@ describe('WorkContextMenuComponent', () => {
     mockProjectService = jasmine.createSpyObj('ProjectService', [
       'archive',
       'unarchive',
+      'complete',
+      'reopen',
+      'getCompletionInfo',
+      'moveTasksToInbox',
+      'markTasksDone',
       'getByIdOnce$',
       'getByIdLive$',
     ]);
     mockProjectService.getByIdOnce$.and.returnValue(
       of({ id: 'project-123', title: 'Demo project' } as any),
     );
+    // Default: nothing unfinished → completion skips the resolve prompt.
+    mockProjectService.getCompletionInfo.and.returnValue(
+      Promise.resolve({ topLevelTasks: [], allTasks: [], undoneTopLevelTasks: [] }),
+    );
+    mockProjectService.moveTasksToInbox.and.returnValue(Promise.resolve());
+    mockProjectService.markTasksDone.and.returnValue(Promise.resolve());
     mockProjectService.getByIdLive$.and.returnValue(
       of({ id: 'project-123', title: 'Demo project' } as any),
     );
@@ -80,31 +91,43 @@ describe('WorkContextMenuComponent', () => {
     spyOn(router, 'navigateByUrl').and.returnValue(Promise.resolve(true));
   });
 
-  describe('archiveProject()', () => {
-    it('archives after confirmation', async () => {
-      await component.archiveProject();
-      expect(mockMatDialog.open).toHaveBeenCalled();
-      expect(mockProjectService.archive).toHaveBeenCalledWith('project-123');
-    });
+  describe('completeProject()', () => {
+    const undoneInfo = {
+      topLevelTasks: [{ id: 't1', isDone: false } as any],
+      allTasks: [{ id: 't1', isDone: false } as any],
+      undoneTopLevelTasks: [{ id: 't1', isDone: false } as any],
+    };
 
-    it('navigates away when archiving the currently active project', async () => {
+    it('completes the project and navigates away when it is active', async () => {
       mockWorkContextService.activeWorkContextId = 'project-123';
-      await component.archiveProject();
+      await component.completeProject();
+      expect(mockProjectService.complete).toHaveBeenCalledWith(
+        'project-123',
+        jasmine.any(Number),
+      );
       expect(router.navigateByUrl).toHaveBeenCalledWith('/');
     });
 
-    it('does not navigate when archiving a non-active project', async () => {
+    it('does not navigate when completing a non-active project', async () => {
       mockWorkContextService.activeWorkContextId = 'other-project';
-      await component.archiveProject();
+      await component.completeProject();
+      expect(mockProjectService.complete).toHaveBeenCalled();
       expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
 
-    it('does nothing when the confirmation is cancelled', async () => {
-      confirmResult$ = of(false);
-      mockWorkContextService.activeWorkContextId = 'project-123';
-      await component.archiveProject();
-      expect(mockProjectService.archive).not.toHaveBeenCalled();
-      expect(router.navigateByUrl).not.toHaveBeenCalled();
+    it('moves unfinished tasks to the Inbox when chosen, then completes', async () => {
+      mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
+      confirmResult$ = of('inbox');
+      await component.completeProject();
+      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalled();
+      expect(mockProjectService.complete).toHaveBeenCalled();
+    });
+
+    it('aborts without completing when the unfinished-task prompt is cancelled', async () => {
+      mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
+      confirmResult$ = of(undefined);
+      await component.completeProject();
+      expect(mockProjectService.complete).not.toHaveBeenCalled();
     });
   });
 
@@ -158,14 +181,16 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.unarchive).toHaveBeenCalledWith('project-123');
     });
 
-    it('renders Archive for a non-archived project', () => {
+    it('renders Complete (not Archive) for a non-archived project', () => {
       mockProjectService.getByIdLive$.and.returnValue(
         of({ id: 'project-123', isArchived: false } as any),
       );
       fixture.detectChanges();
 
       expect(menuButtonByIcon('unarchive')).toBeNull();
-      expect(menuButtonByIcon('archive')).toBeTruthy();
+      // Archive was removed from the menu — Complete is the single retire path.
+      expect(menuButtonByIcon('archive')).toBeNull();
+      expect(menuButtonByIcon('check_circle')).toBeTruthy();
     });
   });
 });

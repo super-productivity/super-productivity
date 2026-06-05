@@ -134,35 +134,6 @@ export class WorkContextMenuComponent implements OnInit {
     }
   }
 
-  async archiveProject(): Promise<void> {
-    const project = await firstValueFrom(
-      this._projectService.getByIdOnce$(this.contextId),
-    );
-    if (!project) {
-      return;
-    }
-    const isConfirmed = await firstValueFrom(
-      this._matDialog
-        .open(DialogConfirmComponent, {
-          restoreFocus: true,
-          data: {
-            message: T.F.PROJECT.D_CONFIRM_ARCHIVE.MSG,
-            okTxt: T.F.PROJECT.D_CONFIRM_ARCHIVE.OK,
-            translateParams: { title: project.title },
-          },
-        })
-        .afterClosed(),
-    );
-    if (!isConfirmed) {
-      return;
-    }
-    const activeId = this._workContextService.activeWorkContextId;
-    this._projectService.archive(this.contextId);
-    if (activeId === this.contextId) {
-      await this._router.navigateByUrl('/');
-    }
-  }
-
   async completeProject(): Promise<void> {
     const project = await firstValueFrom(
       this._projectService.getByIdOnce$(this.contextId),
