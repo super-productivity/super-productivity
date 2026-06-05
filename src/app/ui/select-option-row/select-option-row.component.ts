@@ -15,7 +15,7 @@ export class SelectOptionRowComponent {
   icon = input<string | undefined>();
   defaultIcon = input<string | undefined>();
   color = input<string | undefined>();
-  folderPath = input<string | null>(null);
+  folderPath = input<string | null | undefined>(null);
   isSelected = input<boolean>(false);
   showCheckbox = input<boolean>(false);
 

@@ -87,6 +87,51 @@ describe('MenuTreeService', () => {
       expect(folderMap.get('project-2')).toBe('Folder 1 › Subfolder A');
       expect(folderMap.get('project-3')).toBeUndefined();
     });
+
+    it('should still provide a folder path for a duplicate project even if the other duplicate project is excluded from a candidate list', () => {
+      const mockProjectTree: MenuTreeTreeNode[] = [
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 1',
+          children: [
+            {
+              id: 'project-1',
+              k: MenuTreeKind.PROJECT,
+            },
+          ],
+        },
+        {
+          id: 'folder-2',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 2',
+          children: [
+            {
+              id: 'project-2',
+              k: MenuTreeKind.PROJECT,
+            },
+          ],
+        },
+      ];
+
+      store.overrideSelector(selectAllProjects, [
+        { id: 'project-1', title: 'Marketing' },
+        { id: 'project-2', title: 'Marketing' },
+      ] as any);
+      store.overrideSelector(selectMenuTreeProjectTree, mockProjectTree);
+      store.refreshState();
+
+      // Simulate move menu candidates by filtering out the current project (project-1)
+      const moveMenuCandidates = [{ id: 'project-2', title: 'Marketing' }];
+
+      const folderMap = service.projectFolderMap();
+
+      // The excluded project (project-1) still contributes to duplicate counting globally,
+      // so the visible candidate (project-2) in the move menu still receives its folder path disambiguation.
+      const candidate = moveMenuCandidates[0];
+      const folderPath = folderMap.get(candidate.id);
+      expect(folderPath).toBe('Folder 2');
+    });
   });
 
   describe('tagFolderMap', () => {
