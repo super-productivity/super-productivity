@@ -140,11 +140,25 @@
   &:after {
     @include materialIcon('wb_sunny');
     @include center;
-    color: var(--text-color);
+    color: var(--c-accent) !important;
   }
 
   &.mat-calendar-body-selected:after {
     color: var(--c-contrast) !important;
+  }
+}
+
+:host ::ng-deep {
+  mat-year-view .mat-calendar-body-today,
+  mat-multi-year-view .mat-calendar-body-today {
+    border: none !important;
+    border-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+
+    &:not(.mat-calendar-body-selected) {
+      color: var(--c-accent) !important;
+    }
   }
 }
 
