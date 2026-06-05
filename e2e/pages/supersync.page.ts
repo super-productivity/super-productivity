@@ -1922,6 +1922,36 @@ export class SuperSyncPage extends BasePage {
           await this._waitForSyncCompletion({ timeout: 10000, useLocal });
         }
       }
+
+      // Flush trailing ops created *by* the just-completed sync. A sync can reach
+      // IN_SYNC and then its completion effects (e.g. TaskDueEffects.addAllDueToday,
+      // which re-plans the TODAY tag) dispatch an action captured as a NEW operation
+      // *after* the upload phase. In production a debounced auto-sync pushes it
+      // moments later; in e2e it can linger past the wait budget, so a single
+      // syncAndWait() leaves unsyncedCount > 0 even though the engine has nothing
+      // left to upload. Run a bounded set of extra cycles so callers observe a truly
+      // quiescent state. (supersync-cross-entity "Task with subtasks" flake)
+      for (let flush = 0; flush < 3; flush++) {
+        const pending = await this._getUnsyncedOperationCount();
+        if (pending === null || pending === 0) {
+          break;
+        }
+        // Don't paper over a genuine error state by re-syncing.
+        const hasError = await this.syncErrorIcon.isVisible().catch(() => false);
+        if (hasError) {
+          break;
+        }
+        console.log(
+          `[syncAndWait] ${pending} trailing op(s) remained after sync settled — ` +
+            `flushing (attempt ${flush + 1}/3).`,
+        );
+        await this._handleSyncDialogs(useLocal);
+        await this.syncBtn.click();
+        await this.syncSpinner
+          .waitFor({ state: 'visible', timeout: 2000 })
+          .catch(() => {});
+        await this._waitForSyncCompletion({ timeout: 10000, useLocal });
+      }
     } finally {
       // Clean up the dialog handler
       dialogHandlerActive = false;
