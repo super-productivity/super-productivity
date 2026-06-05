@@ -1,13 +1,13 @@
-import { Frequency, RRule } from 'rrule';
 import {
   MonthlyWeekOfMonth,
   MonthlyWeekday,
-  RepeatCycleOption,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
 import { normalizeWeekdays, toNumArray } from './rrule-weekday.util';
+import { FREQ_TO_CYCLE, safeParseRRuleOptions } from './rrule-parse.util';
 import { getFirstRRuleOccurrence } from '../store/rrule-occurrence.util';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 /**
  * Converts a legacy (pre-RRULE) TaskRepeatCfg — `repeatCycle` + `repeatEvery` +
@@ -103,13 +103,6 @@ export const legacyTaskRepeatCfgToRRule = (cfg: TaskRepeatCfg): string => {
   }
 };
 
-const FREQ_TO_CYCLE: Partial<Record<number, RepeatCycleOption>> = {
-  [Frequency.DAILY]: 'DAILY',
-  [Frequency.WEEKLY]: 'WEEKLY',
-  [Frequency.MONTHLY]: 'MONTHLY',
-  [Frequency.YEARLY]: 'YEARLY',
-};
-
 /** RRULE weekday index (0=Mon … 6=Sun) → legacy weekday boolean field name. */
 const RRULE_IDX_TO_FIELD: (keyof TaskRepeatCfg)[] = [
   'monday',
@@ -138,13 +131,8 @@ export const rruleToLegacyTaskRepeatCfg = (
   rrule: string,
   startDate?: string,
 ): Partial<TaskRepeatCfg> => {
-  let opts: Partial<ReturnType<typeof RRule.parseString>>;
-  try {
-    opts = RRule.parseString(rrule);
-  } catch {
-    return {};
-  }
-  if (opts.freq == null) return {};
+  const opts = safeParseRRuleOptions(rrule);
+  if (!opts) return {};
   const cycle = FREQ_TO_CYCLE[opts.freq];
   if (!cycle) return {}; // sub-daily — no legacy equivalent
 
@@ -190,9 +178,23 @@ export const rruleToLegacyTaskRepeatCfg = (
       if (field) (out as Record<string, unknown>)[field] = true;
     }
   } else if (cycle === 'MONTHLY') {
+    const setPos = toNumArray(opts.bysetpos);
     if (weekdays.length && weekdays[0].n != null) {
       // "2nd Tuesday" → BYDAY=2TU. legacy monthlyWeekday is 0=Sun…6=Sat.
       out.monthlyWeekOfMonth = weekdays[0].n as MonthlyWeekOfMonth;
+      out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
+    } else if (
+      weekdays.length === 1 &&
+      monthDays.length === 0 &&
+      setPos.length === 1 &&
+      (setPos[0] === -1 || (setPos[0] >= 1 && setPos[0] <= 4))
+    ) {
+      // The builder's weekday-set form of the same anchor: BYDAY=FR;BYSETPOS=-1
+      // ("last Friday") is losslessly equivalent to BYDAY=-1FR. Without this
+      // mapping old clients would fall back to startDate's day-of-month — a
+      // wrong recurrence rather than an approximation. Multi-weekday sets and
+      // out-of-range ordinals have no single legacy anchor and stay unmapped.
+      out.monthlyWeekOfMonth = setPos[0] as MonthlyWeekOfMonth;
       out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
     } else if (monthDays.length === 1 && monthDays[0] === -1) {
       // Pure "last day of month". NOT set for the clamp idiom
@@ -239,13 +241,8 @@ export const getAlignedStartDate = (
   rrule: string,
   startDate: string,
 ): string | undefined => {
-  let opts: Partial<ReturnType<typeof RRule.parseString>>;
-  try {
-    opts = RRule.parseString(rrule);
-  } catch {
-    return undefined;
-  }
-  if (opts.freq == null) return undefined;
+  const opts = safeParseRRuleOptions(rrule);
+  if (!opts) return undefined;
   const cycle = FREQ_TO_CYCLE[opts.freq];
   if (cycle !== 'MONTHLY' && cycle !== 'YEARLY') return undefined;
   if (normalizeWeekdays(opts.byweekday).length) return undefined;
@@ -282,6 +279,6 @@ export const getAlignedStartDate = (
   // aligning would skip it or corrupt the legacy day. Leave the start alone.
   if (first.getDate() !== day) return undefined;
 
-  const aligned = `${first.getFullYear()}-${_pad2(first.getMonth() + 1)}-${_pad2(day)}`;
+  const aligned = getDbDateStr(first);
   return aligned === startDate ? undefined : aligned;
 };

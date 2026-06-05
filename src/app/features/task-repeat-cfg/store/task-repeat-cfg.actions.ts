@@ -27,15 +27,10 @@ const _stripNullAnchors = <T extends Partial<TaskRepeatCfg>>(cfg: T): T => {
   };
 };
 
-const _toPersistedCfg = (cfg: TaskRepeatCfg): TaskRepeatCfg => {
+// One persist-boundary transform for full cfgs and partial Update changes —
+// two copies of this body would inevitably drift.
+const _toPersisted = <T extends Partial<TaskRepeatCfg>>(cfg: T): T => {
   const out = _stripNullAnchors(cfg);
-  if (!out.quickSetting) return out;
-  const safe = toSyncSafeQuickSetting(out.quickSetting);
-  return safe === out.quickSetting ? out : { ...out, quickSetting: safe };
-};
-
-const _toPersistedChanges = (changes: Partial<TaskRepeatCfg>): Partial<TaskRepeatCfg> => {
-  const out = _stripNullAnchors(changes);
   if (!out.quickSetting) return out;
   const safe = toSyncSafeQuickSetting(out.quickSetting);
   return safe === out.quickSetting ? out : { ...out, quickSetting: safe };
@@ -50,7 +45,7 @@ export const addTaskRepeatCfgToTask = createAction(
     remindAt?: string;
   }) => ({
     ...cfgProps,
-    taskRepeatCfg: _toPersistedCfg(cfgProps.taskRepeatCfg),
+    taskRepeatCfg: _toPersisted(cfgProps.taskRepeatCfg),
     meta: {
       isPersistent: true,
       entityType: 'TASK_REPEAT_CFG',
@@ -69,7 +64,7 @@ export const updateTaskRepeatCfg = createAction(
     ...cfgProps,
     taskRepeatCfg: {
       ...cfgProps.taskRepeatCfg,
-      changes: _toPersistedChanges(cfgProps.taskRepeatCfg.changes),
+      changes: _toPersisted(cfgProps.taskRepeatCfg.changes),
     },
     meta: {
       isPersistent: true,
@@ -84,7 +79,7 @@ export const updateTaskRepeatCfgs = createAction(
   '[TaskRepeatCfg] Update multiple TaskRepeatCfgs',
   (cfgProps: { ids: string[]; changes: Partial<TaskRepeatCfg> }) => ({
     ...cfgProps,
-    changes: _toPersistedChanges(cfgProps.changes),
+    changes: _toPersisted(cfgProps.changes),
     meta: {
       isPersistent: true,
       entityType: 'TASK_REPEAT_CFG',

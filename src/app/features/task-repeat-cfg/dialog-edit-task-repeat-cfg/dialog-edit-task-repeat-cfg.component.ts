@@ -18,8 +18,10 @@ import { MatDialog } from '@angular/material/dialog';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import {
   DEFAULT_TASK_REPEAT_CFG,
+  QUICK_SETTING_PRESETS,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
+  toSyncSafeQuickSetting,
 } from '../task-repeat-cfg.model';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { UntypedFormGroup } from '@angular/forms';
@@ -40,7 +42,8 @@ import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { SnackService } from '../../../core/snack/snack.service';
-import { isRRuleValid } from '../store/rrule-occurrence.util';
+import { getFirstRRuleOccurrence, isRRuleValid } from '../store/rrule-occurrence.util';
+import { safeParseRRuleOptions } from '../util/rrule-parse.util';
 import {
   getAlignedStartDate,
   legacyTaskRepeatCfgToRRule,
@@ -386,6 +389,21 @@ export class DialogEditTaskRepeatCfgComponent {
         formGroup1.markAllAsTouched();
         return;
       }
+      // COUNT has no stable origin together with "repeat from completion":
+      // completing an instance re-anchors startDate AND lastTaskCreationDay to
+      // the completion day (task-repeat-cfg.effects), which restarts the COUNT
+      // window — the series would never terminate. Reject the combination.
+      if (
+        working.repeatFromCompletionDate &&
+        safeParseRRuleOptions(working.rrule)?.count != null
+      ) {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.TASK_REPEAT.F.RRULE_COUNT_WITH_COMPLETION,
+        });
+        formGroup1.markAllAsTouched();
+        return;
+      }
       // Align startDate for date-anchored rules: old clients read the monthly
       // day (and yearly month+day) from startDate, so it must sit on the
       // rule's day. Done once at save — and ONLY when the schedule actually
@@ -402,6 +420,24 @@ export class DialogEditTaskRepeatCfgComponent {
       if (scheduleTouched && working.startDate) {
         const aligned = getAlignedStartDate(working.rrule as string, working.startDate);
         const finalStartDate = aligned ?? working.startDate;
+        // A rule can parse fine yet match no real date (e.g. raw override
+        // FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30) — persisting it would create a
+        // recurrence that silently never fires, with the legacy fallback
+        // bypassed because the rule IS valid. Probe the first occurrence
+        // against the startDate actually being persisted.
+        if (
+          !getFirstRRuleOccurrence({
+            rrule: working.rrule as string,
+            startDate: finalStartDate,
+          })
+        ) {
+          this._snackService.open({
+            type: 'ERROR',
+            msg: T.F.TASK_REPEAT.F.RRULE_NO_OCCURRENCE,
+          });
+          formGroup1.markAllAsTouched();
+          return;
+        }
         // ALWAYS re-derive the legacy fallback fields against the final
         // startDate — not only when alignment moved it. The builder emits on
         // rule edits only, so a startDate change made after the last builder
@@ -578,28 +614,35 @@ export class DialogEditTaskRepeatCfgComponent {
     // means "builder mode". Keep the friendly preset label only while its rrule
     // still matches what that preset produces; a builder- / @+- / migration-built
     // or otherwise diverged rule opens the dedicated 'RRULE' builder.
-    const KNOWN_PRESETS = new Set([
-      'DAILY',
-      'EVERY_OTHER_DAY',
-      'MONDAY_TO_FRIDAY',
-      'WEEKENDS',
-      'WEEKLY_CURRENT_WEEKDAY',
-      'BIWEEKLY_CURRENT_WEEKDAY',
-      'MONTHLY_CURRENT_DATE',
-      'MONTHLY_FIRST_DAY',
-      'MONTHLY_LAST_DAY',
-      'MONTHLY_NTH_WEEKDAY',
-      'MONTHLY_LAST_WEEKDAY',
-      'QUARTERLY_CURRENT_DATE',
-      'SEMIANNUALLY_CURRENT_DATE',
-      'YEARLY_CURRENT_DATE',
-      'EVERY_OTHER_YEAR_CURRENT_DATE',
-    ]);
     if (cfg.rrule) {
+      const qs = cfg.quickSetting;
       const isFaithfulPreset =
-        KNOWN_PRESETS.has(cfg.quickSetting ?? '') &&
+        !!qs &&
+        qs !== 'RRULE' &&
+        qs !== 'CUSTOM' &&
         legacyTaskRepeatCfgToRRule(cfg as TaskRepeatCfg) === cfg.rrule;
-      return isFaithfulPreset ? cfg : { ...cfg, quickSetting: 'RRULE' };
+      if (isFaithfulPreset) {
+        return cfg;
+      }
+      // The persist boundary clamps non-master presets (Weekends, Every other
+      // day, …) to 'CUSTOM' for old-client sync safety — only the rrule
+      // identifies them on reopen. Infer the preset back by matching the
+      // stored rule against what each clamped preset would produce for this
+      // start date (each yields a distinct rule per date), so the friendly
+      // label survives a save/reopen round-trip instead of degrading to the
+      // generic builder.
+      if (qs === 'CUSTOM') {
+        const refDate = cfg.startDate
+          ? dateStrToUtcDate(cfg.startDate)
+          : this._getReferenceDate();
+        const inferred = QUICK_SETTING_PRESETS.filter(
+          (p) => toSyncSafeQuickSetting(p) === 'CUSTOM',
+        ).find((p) => getQuickSettingUpdates(p, refDate)?.rrule === cfg.rrule);
+        if (inferred) {
+          return { ...cfg, quickSetting: inferred };
+        }
+      }
+      return { ...cfg, quickSetting: 'RRULE' };
     }
     // The legacy "Custom" recurrence UI has been removed. Migrate such cfgs (and
     // any cfg that no longer maps to a kept preset) to an equivalent RRULE so they

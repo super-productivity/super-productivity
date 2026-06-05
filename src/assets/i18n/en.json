@@ -1984,6 +1984,8 @@
         "RRULE_NLP_TH": "th",
         "RRULE_NLP_TO": "to",
         "RRULE_INVALID": "This recurrence rule is invalid. Please adjust the options.",
+        "RRULE_NO_OCCURRENCE": "This recurrence never produces an occurrence. Please check the rule and start date.",
+        "RRULE_COUNT_WITH_COMPLETION": "\"After N times\" cannot be combined with \"from completion\" — completing re-anchors the schedule, so the count would never finish. Use an until date instead.",
         "RRULE_RAW": "Raw RRULE override",
         "RRULE_RAW_DESCRIPTION": "Type a complete RFC 5545 RRULE to express anything the options above can't. When filled it replaces all of them. E.g. FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1 = the last weekday of every month. Leave empty to use the options above.",
         "RRULE_WKST": "Week starts on",

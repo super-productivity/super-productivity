@@ -1,5 +1,8 @@
 import { RRule } from 'rrule';
 import { T } from '../../../t.const';
+import { noonUtc, toLocalNoon } from '../store/rrule-occurrence.util';
+import { toNumArray } from './rrule-weekday.util';
+import { safeParseRRuleOptions } from './rrule-parse.util';
 
 export interface RRulePreview {
   /** Canonical RRULE body the form produced. */
@@ -131,19 +134,9 @@ const MONTH_NAMES = [
   'December',
 ];
 
-const toMonthArray = (v: unknown): number[] => {
-  if (v == null) return [];
-  const arr = Array.isArray(v) ? v : [v];
-  return [...new Set(arr.filter((x): x is number => typeof x === 'number'))].sort(
-    (a, b) => a - b,
-  );
-};
-
-const _noonUtc = (dateStr: string): Date => new Date(`${dateStr}T12:00:00Z`);
-
-/** A rrule UTC occurrence → that same calendar day at LOCAL noon (drops tz drift). */
-const _toLocalNoon = (utcOcc: Date): Date =>
-  new Date(utcOcc.getUTCFullYear(), utcOcc.getUTCMonth(), utcOcc.getUTCDate(), 12, 0, 0);
+/** Deduped, ascending BYMONTH list (engine-shared toNumArray + order for range compression). */
+const toMonthArray = (v: unknown): number[] =>
+  [...new Set(toNumArray(v))].sort((a, b) => a - b);
 
 /**
  * rrule.toText() spells out every month ("March, April … and November"). Collapse
@@ -175,11 +168,10 @@ const compressMonthRanges = (
 
 /** Parse a rrule body and anchor it at `dtstart`, or null if unparseable. */
 const _ruleAnchoredAt = (rrule: string, dtstart: Date): RRule | null => {
+  const opts = safeParseRRuleOptions(rrule);
+  if (!opts) return null;
   try {
-    const opts = RRule.parseString(rrule);
-    if (opts.freq == null) return null;
-    opts.dtstart = dtstart;
-    return new RRule(opts);
+    return new RRule({ ...opts, dtstart });
   } catch {
     return null;
   }
@@ -191,7 +183,7 @@ const _getUpcoming = (
   startDate: string | undefined,
   count: number,
 ): Date[] => {
-  const anchor = startDate ? _noonUtc(startDate) : new Date();
+  const anchor = startDate ? noonUtc(startDate) : new Date();
   const rule = _ruleAnchoredAt(rrule, anchor);
   if (!rule) return [];
   const out: Date[] = [];
@@ -206,7 +198,7 @@ const _getUpcoming = (
       break;
     }
     if (!occ) break;
-    out.push(_toLocalNoon(occ));
+    out.push(toLocalNoon(occ));
     seed = occ;
   }
   return out;
@@ -221,7 +213,7 @@ const _getCompletionNext = (rrule: string, done: Date): Date | null => {
   if (!rule) return null;
   try {
     const occ = rule.after(start, false);
-    return occ ? _toLocalNoon(occ) : null;
+    return occ ? toLocalNoon(occ) : null;
   } catch {
     return null;
   }

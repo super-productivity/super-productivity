@@ -1,5 +1,6 @@
-import { Frequency, RRule } from 'rrule';
+import { RRule } from 'rrule';
 import { normalizeWeekdays, toNumArray } from './rrule-weekday.util';
+import { FREQ_TO_CYCLE, safeParseRRuleOptions } from './rrule-parse.util';
 
 /**
  * Bidirectional bridge between the structured RRULE builder form (a dropdown per
@@ -68,12 +69,9 @@ export interface RRuleFormModel {
   rawOverride: string; // raw RRULE body that overrides the builder when set
 }
 
-const FREQ_TO_STR: Record<number, RRuleFreq> = {
-  [Frequency.DAILY]: 'DAILY',
-  [Frequency.WEEKLY]: 'WEEKLY',
-  [Frequency.MONTHLY]: 'MONTHLY',
-  [Frequency.YEARLY]: 'YEARLY',
-};
+// RepeatCycleOption and RRuleFreq are the same four literals — reuse the
+// shared Frequency map instead of maintaining a second copy.
+const FREQ_TO_STR: Partial<Record<number, RRuleFreq>> = FREQ_TO_CYCLE;
 
 /** JS `Date.getDay()` (0=Sun) → RRULE weekday index (0=Mon). */
 const jsDayToRRuleIdx = (jsDay: number): number => (jsDay + 6) % 7;
@@ -235,14 +233,10 @@ export const rruleToFormModel = (
   const model = defaultRRuleFormModel(refDate);
   if (!rrule || !rrule.trim()) return model;
 
-  let opts: Partial<ReturnType<typeof RRule.parseString>>;
-  try {
-    opts = RRule.parseString(rrule);
-  } catch {
-    return model;
-  }
-  if (opts.freq == null) return model;
-  if (FREQ_TO_STR[opts.freq] == null) {
+  const opts = safeParseRRuleOptions(rrule);
+  if (!opts) return model;
+  const freqStr = FREQ_TO_STR[opts.freq];
+  if (freqStr == null) {
     // Sub-daily / unsupported FREQ (the day-granular engine has no UI for it) →
     // preserve the rule verbatim via the raw override.
     model.showAdvanced = true;
@@ -250,7 +244,7 @@ export const rruleToFormModel = (
     return model;
   }
 
-  model.freq = FREQ_TO_STR[opts.freq];
+  model.freq = freqStr;
   model.interval = opts.interval && opts.interval > 0 ? opts.interval : 1;
 
   const weekdays = normalizeWeekdays(opts.byweekday);

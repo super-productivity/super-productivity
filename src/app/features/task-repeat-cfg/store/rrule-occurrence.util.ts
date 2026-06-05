@@ -1,5 +1,6 @@
 import { RRule, RRuleSet } from 'rrule';
 import { Log } from '../../../core/log';
+import { safeParseRRuleOptions } from '../util/rrule-parse.util';
 
 /**
  * Day-granular, DST-safe occurrence engine for RFC 5545 RRULE strings.
@@ -12,7 +13,7 @@ import { Log } from '../../../core/log';
  *
  *  1. DST-safety. All recurrence math runs in pure UTC, which has no DST. The
  *     resolved calendar day is only re-expressed at LOCAL noon at the very end
- *     (`_toLocalNoon`). Local noon is invariant under DST (transitions happen
+ *     (`toLocalNoon`). Local noon is invariant under DST (transitions happen
  *     ~02:00–03:00), so `getDbDateStr()` of the result is timezone-stable. The
  *     cron engine had to avoid `prev()` because it skipped the spring-forward
  *     midnight; in UTC space `.before()` is safe, so we can use it directly.
@@ -40,7 +41,7 @@ const DAY_MS = 86_400_000;
 const FALLBACK_LAST_CREATION = '1970-01-01';
 
 /** Noon UTC instant for a `YYYY-MM-DD` string — the canonical occurrence time. */
-const _noonUtc = (dateStr: string): Date => new Date(`${dateStr}T12:00:00Z`);
+export const noonUtc = (dateStr: string): Date => new Date(`${dateStr}T12:00:00Z`);
 
 /** UTC-midnight instant for a `YYYY-MM-DD` string. */
 const _midnightUtc = (dateStr: string): Date => new Date(`${dateStr}T00:00:00Z`);
@@ -52,21 +53,21 @@ const _localDayAsUtc = (d: Date): Date =>
 /**
  * Re-express a UTC occurrence (noon UTC of the intended day) as that same
  * calendar day at LOCAL noon, matching the cron engine's day-granular output.
+ * Exported (with `noonUtc`) so the preview util anchors occurrences on the
+ * exact same instants as the engine — they must never diverge.
  */
-const _toLocalNoon = (utcOcc: Date): Date =>
+export const toLocalNoon = (utcOcc: Date): Date =>
   new Date(utcOcc.getUTCFullYear(), utcOcc.getUTCMonth(), utcOcc.getUTCDate(), 12, 0, 0);
 
 /** Parse + anchor an RRULE into a set (with EXDATEs), or null if malformed. */
 const _buildRuleSet = (input: RRuleOccurrenceInput): RRuleSet | null => {
+  const options = safeParseRRuleOptions(input.rrule);
+  if (!options) return null;
   try {
-    const options = RRule.parseString(input.rrule);
-    if (options.freq === undefined || options.freq === null) return null;
-    options.dtstart = _noonUtc(input.startDate);
-
     const set = new RRuleSet();
-    set.rrule(new RRule(options));
+    set.rrule(new RRule({ ...options, dtstart: noonUtc(input.startDate) }));
     for (const ex of input.exdates ?? []) {
-      set.exdate(_noonUtc(ex));
+      set.exdate(noonUtc(ex));
     }
     return set;
   } catch (e) {
@@ -77,24 +78,37 @@ const _buildRuleSet = (input: RRuleOccurrenceInput): RRuleSet | null => {
   }
 };
 
+// isRRuleValid is called as a routing guard for EVERY repeat cfg on every
+// overdue/day-change scan; the construct + probe below is the expensive part.
+// Rule strings are few and immutable, so a tiny memo makes repeat calls free.
+const _validityCache = new Map<string, boolean>();
+
 /**
  * True when `rrule` is a parseable RFC 5545 recurrence with a FREQ. Cheap,
  * throws nothing, used as a guard everywhere.
  */
 export const isRRuleValid = (rrule: string | undefined): rrule is string => {
   if (!rrule || !rrule.trim()) return false;
-  try {
-    const options = RRule.parseString(rrule);
-    if (options.freq === undefined || options.freq === null) return false;
-    // Construct + probe once so deeper invalids (bad BYDAY etc.) surface here.
-    new RRule({ ...options, dtstart: _noonUtc('2020-01-01') }).after(
-      _midnightUtc('2019-01-01'),
-      false,
-    );
-    return true;
-  } catch {
-    return false;
+  const cached = _validityCache.get(rrule);
+  if (cached !== undefined) return cached;
+
+  let valid = false;
+  const options = safeParseRRuleOptions(rrule);
+  if (options) {
+    try {
+      // Construct + probe once so deeper invalids (bad BYDAY etc.) surface here.
+      new RRule({ ...options, dtstart: noonUtc('2020-01-01') }).after(
+        _midnightUtc('2019-01-01'),
+        false,
+      );
+      valid = true;
+    } catch {
+      // construct/probe failed → invalid
+    }
   }
+  if (_validityCache.size > 200) _validityCache.clear();
+  _validityCache.set(rrule, valid);
+  return valid;
 };
 
 /**
@@ -134,7 +148,7 @@ export const getNextRRuleOccurrence = (
     // noon ON the lower-bound day stays eligible (parity with the cron engine's
     // midnight-boundary seeding).
     const occ = set.after(new Date(lowerBound.getTime() - 1), false);
-    return occ ? _toLocalNoon(occ) : null;
+    return occ ? toLocalNoon(occ) : null;
   } catch (e) {
     Log.warn(`RRULE next() failed`, e);
     return null;
@@ -171,7 +185,7 @@ export const getNewestPossibleRRuleDueDate = (
     if (occDay < startDay) return null;
     // Strictly after the last created day — otherwise it was already created.
     if (occDay <= lastCreation) return null;
-    return _toLocalNoon(occ);
+    return toLocalNoon(occ);
   } catch (e) {
     Log.warn(`RRULE before() failed`, e);
     return null;
@@ -191,7 +205,7 @@ export const getFirstRRuleOccurrence = (input: RRuleOccurrenceInput): Date | nul
   try {
     // Seed 1 ms before the start-day midnight so a fire at start-day noon counts.
     const occ = set.after(new Date(startDay.getTime() - 1), false);
-    return occ ? _toLocalNoon(occ) : null;
+    return occ ? toLocalNoon(occ) : null;
   } catch (e) {
     Log.warn(`RRULE first() failed`, e);
     return null;
@@ -200,8 +214,9 @@ export const getFirstRRuleOccurrence = (input: RRuleOccurrenceInput): Date | nul
 
 /**
  * All occurrences whose calendar day falls within `[from, to]` (inclusive),
- * returned at local noon. Used to project a recurring series onto a calendar/
- * heatmap. EXDATEs are honored. Empty for a malformed rule.
+ * returned at local noon. EXDATEs are honored. Empty for a malformed rule.
+ * No production caller yet — exercised by the engine invariant/day-march specs
+ * and intended for a future calendar/heatmap projection of recurring series.
  */
 export const getRRuleOccurrencesInRange = (
   input: RRuleOccurrenceInput,
@@ -215,7 +230,7 @@ export const getRRuleOccurrencesInRange = (
   const lower = _localDayAsUtc(from);
   const upper = new Date(_localDayAsUtc(to).getTime() + DAY_MS);
   try {
-    return set.between(lower, upper, true).map(_toLocalNoon);
+    return set.between(lower, upper, true).map(toLocalNoon);
   } catch (e) {
     Log.warn(`RRULE between() failed`, e);
     return [];

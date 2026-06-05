@@ -173,6 +173,36 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
     });
   });
 
+  it('maps single-weekday BYSETPOS monthly rules onto the nth-weekday anchor', () => {
+    // The builder's weekday-set form (BYDAY=FR;BYSETPOS=-1 = "last Friday") is
+    // losslessly equivalent to BYDAY=-1FR — without the mapping old clients
+    // would fall back to startDate's day-of-month, a WRONG recurrence.
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1')).toEqual({
+      repeatCycle: 'MONTHLY',
+      repeatEvery: 1,
+      ...ANCHOR_RESETS,
+      monthlyWeekOfMonth: -1,
+      monthlyWeekday: 5, // Friday (Sun=0)
+    });
+    const second = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2');
+    expect(second.monthlyWeekOfMonth).toBe(2);
+    expect(second.monthlyWeekday).toBe(2); // Tuesday
+  });
+
+  it('leaves multi-weekday or out-of-range BYSETPOS rules unmapped (no single anchor)', () => {
+    expect(
+      rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO,TU;BYSETPOS=-1')
+        .monthlyWeekOfMonth,
+    ).toBeUndefined();
+    expect(
+      rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=5').monthlyWeekOfMonth,
+    ).toBeUndefined();
+    expect(
+      rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1,-1')
+        .monthlyWeekOfMonth,
+    ).toBeUndefined();
+  });
+
   it('MONTHLY last day → monthlyLastDay', () => {
     expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYMONTHDAY=-1')).toEqual({
       repeatCycle: 'MONTHLY',

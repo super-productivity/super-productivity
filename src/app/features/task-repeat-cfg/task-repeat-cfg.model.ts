@@ -35,6 +35,28 @@ export type RepeatQuickSetting =
   // because existing stored data and data-repair still produce it.
   | 'CUSTOM';
 
+// Every concrete preset, in menu order — excludes the 'RRULE' builder mode and
+// the legacy 'CUSTOM' persistence value. Single source for preset-driven logic
+// (dialog preset detection + preset inference); a preset missing here would
+// silently reopen as the generic RRULE builder.
+export const QUICK_SETTING_PRESETS: readonly RepeatQuickSetting[] = [
+  'DAILY',
+  'EVERY_OTHER_DAY',
+  'MONDAY_TO_FRIDAY',
+  'WEEKENDS',
+  'WEEKLY_CURRENT_WEEKDAY',
+  'BIWEEKLY_CURRENT_WEEKDAY',
+  'MONTHLY_CURRENT_DATE',
+  'MONTHLY_FIRST_DAY',
+  'MONTHLY_LAST_DAY',
+  'MONTHLY_NTH_WEEKDAY',
+  'MONTHLY_LAST_WEEKDAY',
+  'QUARTERLY_CURRENT_DATE',
+  'SEMIANNUALLY_CURRENT_DATE',
+  'YEARLY_CURRENT_DATE',
+  'EVERY_OTHER_YEAR_CURRENT_DATE',
+];
+
 // The quickSetting values present in the RELEASED (master) RepeatQuickSetting
 // union — the ONLY values safe to PERSIST/sync. typia sync-validation on an
 // older/mobile client rejects any out-of-union value on this required field, so
