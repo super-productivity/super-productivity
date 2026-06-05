@@ -71,12 +71,7 @@
     <activity-heatmap></activity-heatmap>
   </section>
 
-  @if (showGlobalMetrics()) {
-    @if (!metricService.hasData()) {
-      <p class="no-data-msg">
-        {{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}
-      </p>
-    }
+  @if (isShowingAllTasks()) {
     @if (metricService.hasData()) {
       <section class="metric-metrics">
         <h1>{{ T.F.METRIC.CMP.GLOBAL_METRICS | translate }}</h1>
@@ -118,8 +113,6 @@
           }
         </section>
       </section>
-    }
-    @if (metricService.hasData()) {
       <section class="metric-metrics">
         <h2>{{ T.F.METRIC.CMP.SIMPLE_COUNTERS | translate }}</h2>
         <section class="line-charts">
@@ -159,6 +152,10 @@
           }
         </section>
       </section>
+    } @else {
+      <p class="no-data-msg">
+        {{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}
+      </p>
     }
   }
 </div>
