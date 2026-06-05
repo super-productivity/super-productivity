@@ -202,12 +202,6 @@ export class AddTaskBarActionsComponent {
     return isSingleEmoji(icon);
   });
 
-  // Emoji detection for tag icons
-  isTagEmojiIcon(tag: any): boolean {
-    const icon = tag?.icon || 'label';
-    return isSingleEmoji(icon);
-  }
-
   openScheduleDialog(): void {
     const state = this.state();
     this.scheduleDialogOpenChange.emit(true);
