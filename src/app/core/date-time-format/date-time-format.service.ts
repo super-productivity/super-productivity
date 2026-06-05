@@ -3,6 +3,7 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
 import { TranslateService } from '@ngx-translate/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Injectable({
   providedIn: 'root',
@@ -13,9 +14,24 @@ export class DateTimeFormatService {
   private readonly _translateService = inject(TranslateService);
   private readonly _localeSig = signal<DateTimeLocale>(DEFAULT_LOCALE);
 
+  private _mapToParseSafeLocale(locale: string): DateTimeLocale {
+    if (locale === 'en') {
+      return 'en-gb' as DateTimeLocale;
+    }
+    if (locale === 'fa') {
+      return 'fa-u-ca-gregory-nu-latn' as DateTimeLocale;
+    }
+    if (locale === 'ar') {
+      return 'ar-u-ca-gregory-nu-latn' as DateTimeLocale;
+    }
+    return locale as DateTimeLocale;
+  }
+
   // Signal for the locale to use
   readonly currentLocale = computed<DateTimeLocale>(() => {
-    return this._globalConfigService.localization()?.dateTimeLocale || this._localeSig();
+    const locale =
+      this._globalConfigService.localization()?.dateTimeLocale || this._localeSig();
+    return this._mapToParseSafeLocale(locale);
   });
 
   /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
@@ -57,14 +73,26 @@ export class DateTimeFormatService {
   constructor() {
     // Use effect to reactively update date adapter locale when config changes
     effect(() => {
-      const cfgValue = this._globalConfigService.localization()?.dateTimeLocale;
+      const localization = this._globalConfigService.localization();
+      const cfgValue = localization?.dateTimeLocale;
       if (cfgValue) {
         this.setDateAdapterLocale(cfgValue);
       } else {
         const uiLang =
+          localization?.lng ||
           this._translateService.currentLang ||
           this._translateService.defaultLang ||
           DEFAULT_LOCALE;
+        this.setDateAdapterLocale(uiLang as DateTimeLocale);
+      }
+    });
+
+    // Also update if translate service language changes
+    this._translateService.onLangChange.pipe(takeUntilDestroyed()).subscribe((event) => {
+      const localization = this._globalConfigService.localization();
+      const cfgValue = localization?.dateTimeLocale;
+      if (!cfgValue) {
+        const uiLang = localization?.lng || event.lang || DEFAULT_LOCALE;
         this.setDateAdapterLocale(uiLang as DateTimeLocale);
       }
     });
@@ -72,10 +100,11 @@ export class DateTimeFormatService {
 
   /** Set the locale for the date adapter formatting */
   setDateAdapterLocale(locale: DateTimeLocale): void {
+    const safeLocale = this._mapToParseSafeLocale(locale);
     if (this._dateAdapter && typeof this._dateAdapter.setLocale === 'function') {
-      this._dateAdapter.setLocale(locale);
+      this._dateAdapter.setLocale(safeLocale);
     }
-    this._localeSig.set(locale);
+    this._localeSig.set(safeLocale);
   }
 
   /**
