@@ -143,8 +143,10 @@
   font-size: 18px;
   line-height: 1;
   margin-right: var(--s-half);
+  color: var(--c-primary);
 
   &.nav-icon-emoji {
+    color: inherit;
     font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
     font-size: 16px;
     font-feature-settings: normal;
