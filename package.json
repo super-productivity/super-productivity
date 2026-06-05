@@ -318,7 +318,15 @@
   },
   "overrides": {
     "app-builder-lib": {
-      "minimatch": "10.2.5"
+      "minimatch": "10.2.5",
+      "@electron/asar": {
+        "minimatch": "3.1.2"
+      },
+      "@electron/universal": {
+        "@electron/asar": {
+          "minimatch": "3.1.2"
+        }
+      }
     },
     "webpack-dev-server": "5.2.4"
   },
