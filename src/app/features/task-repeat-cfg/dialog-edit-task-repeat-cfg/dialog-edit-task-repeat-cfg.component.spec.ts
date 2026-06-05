@@ -18,7 +18,7 @@ import { TagService } from '../../tag/tag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
-import { TaskCopy } from '../../tasks/task.model';
+import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 
@@ -506,5 +506,21 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       // Now the button is disabled until isLoading becomes false,
       // which only happens after repeatCfgInitial is set
     }));
+  });
+
+  describe('default reminders for repeat configs', () => {
+    it('should set remindAt to defaultTaskRemindOption when initializing an existing repeatCfg with startTime but undefined remindAt', async () => {
+      const cfgWithTimeNoReminder: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startTime: '14:30',
+        remindAt: undefined,
+      };
+
+      const fixture = await setupTestBed({ repeatCfg: cfgWithTimeNoReminder });
+      const component = fixture.componentInstance;
+
+      expect(component.repeatCfg().remindAt).toBeDefined();
+      expect(component.repeatCfg().remindAt).not.toBe(TaskReminderOptionId.DoNotRemind);
+    });
   });
 });

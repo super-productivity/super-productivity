@@ -135,17 +135,21 @@ export class DialogEditTaskRepeatCfgComponent {
       created: Date.now(),
     };
 
+    const defaultRemindOption =
+      this._data.defaultRemindOption ??
+      this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+      DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
+    const remindAt =
+      currentCfg.remindAt !== undefined ? currentCfg.remindAt : defaultRemindOption;
+
     if (currentCfg.startDate && currentCfg.startTime) {
       const dt = getDateTimeFromClockString(
         currentCfg.startTime,
         dateStrToUtcDate(currentCfg.startDate),
       );
       dummyTask.dueWithTime = dt;
-      if (
-        currentCfg.remindAt &&
-        currentCfg.remindAt !== TaskReminderOptionId.DoNotRemind
-      ) {
-        dummyTask.remindAt = remindOptionToMilliseconds(dt, currentCfg.remindAt);
+      if (remindAt && remindAt !== TaskReminderOptionId.DoNotRemind) {
+        dummyTask.remindAt = remindOptionToMilliseconds(dt, remindAt);
       }
     }
 
@@ -258,11 +262,18 @@ export class DialogEditTaskRepeatCfgComponent {
   private _initializeRepeatCfg(): Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg {
     if (this._data.repeatCfg) {
       // Process the repeat config to determine if quickSetting needs to be changed to CUSTOM
-      const processedCfg = this._processQuickSettingForDate(this._data.repeatCfg);
+      const processedCfg = { ...this._data.repeatCfg };
+      if (processedCfg.startTime && processedCfg.remindAt === undefined) {
+        processedCfg.remindAt =
+          this._data.defaultRemindOption ??
+          this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+          DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
+      }
+      const finalProcessedCfg = this._processQuickSettingForDate(processedCfg);
 
       // Set initial value for comparison
       this.repeatCfgInitial.set({ ...this._data.repeatCfg });
-      return processedCfg;
+      return finalProcessedCfg;
     } else if (this._data.task) {
       const startTime = this._data.task.dueWithTime
         ? clockStringFromDate(this._data.task.dueWithTime)
