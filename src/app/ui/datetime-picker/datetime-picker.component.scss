@@ -81,8 +81,8 @@
     }
 
     // Style previous/next buttons hover circles
-    .mat-calendar-previous-button:hover,
-    .mat-calendar-next-button:hover {
+    .mat-calendar-previous-button:not(:disabled):hover,
+    .mat-calendar-next-button:not(:disabled):hover {
       background-color: color-mix(in srgb, var(--c-primary) 35%, transparent) !important;
       border-radius: 50% !important;
     }
