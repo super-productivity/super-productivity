@@ -435,7 +435,7 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
 .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
   > .mat-calendar-body-cell-content,
 .mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
-  outline: 2px solid var(--c-accent) !important;
+  outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
 }
 
 .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover

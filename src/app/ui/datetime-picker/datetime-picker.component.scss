@@ -16,7 +16,10 @@
       .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus)
         > .mat-calendar-body-cell-content {
         outline: none !important;
-        background-color: transparent !important;
+
+        &:not(.mat-calendar-body-selected) {
+          background-color: transparent !important;
+        }
       }
     }
   }
