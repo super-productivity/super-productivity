@@ -1,9 +1,11 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
   computed,
   effect,
+  ElementRef,
   EventEmitter,
   inject,
   input,
@@ -80,12 +82,13 @@ const DEFAULT_TIME = '09:00';
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandFadeAnimation, fadeAnimation],
 })
-export class DateTimePickerComponent {
+export class DateTimePickerComponent implements AfterViewInit {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _dateAdapter = inject(DateAdapter);
   private readonly _cdr = inject(ChangeDetectorRef);
+  private _el = inject(ElementRef);
 
   pickerSelectedDate: Date | null = null;
   private _lastView: 'month' | 'year' | 'multi-year' | null = null;
@@ -261,6 +264,77 @@ export class DateTimePickerComponent {
       setTimeout(() => {
         cal.currentView = 'month';
       });
+    }
+  }
+
+  private _lastMouseCoords: { x: number; y: number } | null = null;
+
+  ngAfterViewInit(): void {
+    // Focus the active calendar cell when the picker opens
+    setTimeout(() => {
+      const activeCell = this._el.nativeElement.querySelector(
+        '.mat-calendar-body-active',
+      ) as HTMLElement;
+      if (activeCell) {
+        activeCell.focus();
+      }
+    }, 50);
+  }
+
+  onCalendarMouseOver(ev: MouseEvent): void {
+    const coords = { x: ev.clientX, y: ev.clientY };
+    if (
+      this._lastMouseCoords &&
+      this._lastMouseCoords.x === coords.x &&
+      this._lastMouseCoords.y === coords.y
+    ) {
+      return;
+    }
+    this._lastMouseCoords = coords;
+
+    const cal = this.calendar();
+    if (!cal) {
+      return;
+    }
+    const target = ev.target as HTMLElement;
+    const cell = target.closest('.mat-calendar-body-cell') as HTMLElement;
+    if (!cell) {
+      return;
+    }
+    const cellContent = cell.querySelector('.mat-calendar-body-cell-content');
+    if (!cellContent) {
+      return;
+    }
+
+    if (cal.currentView === 'month') {
+      const day = parseInt(cellContent.textContent?.trim() || '', 10);
+      if (!isNaN(day) && day >= 1 && day <= 31) {
+        const activeDate = cal.activeDate;
+        if (activeDate.getDate() !== day) {
+          cal.activeDate = new Date(activeDate.getFullYear(), activeDate.getMonth(), day);
+        }
+      }
+    } else if (cal.currentView === 'year') {
+      const activeCells = Array.from(
+        (ev.currentTarget as HTMLElement).querySelectorAll('.mat-calendar-body-cell'),
+      ).filter((c) => c.querySelector('.mat-calendar-body-cell-content'));
+      const index = activeCells.indexOf(cell);
+      if (index !== -1 && cal.activeDate.getMonth() !== index) {
+        cal.activeDate = new Date(cal.activeDate.getFullYear(), index, 1);
+      }
+    } else if (cal.currentView === 'multi-year') {
+      const year = parseInt(cellContent.textContent?.trim() || '', 10);
+      if (!isNaN(year) && cal.activeDate.getFullYear() !== year) {
+        cal.activeDate = new Date(year, cal.activeDate.getMonth(), 1);
+      }
+    }
+
+    // Focus the hovered cell if the user is not actively typing in an input field
+    const activeEl = document.activeElement;
+    const isTyping =
+      activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+    if (!isTyping) {
+      cell.focus();
     }
   }
 }

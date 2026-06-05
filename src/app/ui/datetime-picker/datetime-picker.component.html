@@ -40,6 +40,7 @@
   <mat-calendar
     [headerComponent]="customHeader"
     (keydown)="onKeyDownOnCalendar($event)"
+    (mouseover)="onCalendarMouseOver($event)"
     [selected]="calendarSelectedDate"
     [minDate]="minDate()"
     (selectedChange)="dateSelected.emit($event)"
