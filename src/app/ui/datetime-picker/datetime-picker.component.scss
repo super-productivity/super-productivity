@@ -87,6 +87,15 @@
       border-radius: 50% !important;
     }
   }
+
+  :host-context([dir='rtl']) {
+    ::ng-deep {
+      .mat-calendar-previous-button,
+      .mat-calendar-next-button {
+        transform: rotate(180deg);
+      }
+    }
+  }
 }
 
 .quick-access {

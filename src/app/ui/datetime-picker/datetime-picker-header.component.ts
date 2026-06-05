@@ -4,7 +4,7 @@ import {
   Component,
   inject,
 } from '@angular/core';
-import { MatCalendar } from '@angular/material/datepicker';
+import { MatCalendar, MatDatepickerIntl } from '@angular/material/datepicker';
 import { DateAdapter } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -22,6 +22,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           type="button"
           class="mat-calendar-period-button sp-month-button"
           (click)="monthLabelClicked()"
+          [attr.aria-label]="monthButtonLabel"
         >
           <span>{{ monthLabel }}</span>
         </button>
@@ -31,6 +32,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           type="button"
           class="mat-calendar-period-button sp-year-button"
           (click)="yearLabelClicked()"
+          [attr.aria-label]="yearButtonLabel"
         >
           <span>{{ yearLabel }}</span>
           <mat-icon
@@ -50,6 +52,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             class="mat-calendar-previous-button"
             [disabled]="!previousEnabled()"
             (click)="previousClicked()"
+            [attr.aria-label]="prevButtonLabel"
           >
             <mat-icon>chevron_left</mat-icon>
           </button>
@@ -60,6 +63,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             class="mat-calendar-next-button"
             [disabled]="!nextEnabled()"
             (click)="nextClicked()"
+            [attr.aria-label]="nextButtonLabel"
           >
             <mat-icon>chevron_right</mat-icon>
           </button>
@@ -73,11 +77,45 @@ export class DateTimePickerHeaderComponent<D> {
   calendar = inject<MatCalendar<D>>(MatCalendar);
   private _dateAdapter = inject<DateAdapter<D>>(DateAdapter);
   private _cdr = inject(ChangeDetectorRef);
+  private _intl = inject(MatDatepickerIntl);
 
   constructor() {
     this.calendar.stateChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this._cdr.markForCheck();
     });
+    this._intl.changes.pipe(takeUntilDestroyed()).subscribe(() => {
+      this._cdr.markForCheck();
+    });
+  }
+
+  get prevButtonLabel(): string {
+    if (this.calendar.currentView === 'month') {
+      return this._intl.prevMonthLabel;
+    }
+    return this.calendar.currentView === 'year'
+      ? this._intl.prevYearLabel
+      : this._intl.prevMultiYearLabel;
+  }
+
+  get nextButtonLabel(): string {
+    if (this.calendar.currentView === 'month') {
+      return this._intl.nextMonthLabel;
+    }
+    return this.calendar.currentView === 'year'
+      ? this._intl.nextYearLabel
+      : this._intl.nextMultiYearLabel;
+  }
+
+  get monthButtonLabel(): string {
+    return this.calendar.currentView === 'month'
+      ? this._intl.switchToMultiYearViewLabel
+      : this._intl.switchToMonthViewLabel;
+  }
+
+  get yearButtonLabel(): string {
+    return this.calendar.currentView === 'month'
+      ? this._intl.switchToMultiYearViewLabel
+      : this._intl.switchToMonthViewLabel;
   }
 
   get monthLabel(): string {
