@@ -39,6 +39,7 @@ import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
 import { Log } from '../../core/log';
+import { DateTimePickerHeaderComponent } from './datetime-picker-header.component';
 
 const DEFAULT_TIME = '09:00';
 
@@ -70,6 +71,7 @@ const DEFAULT_TIME = '09:00';
     TranslateModule,
     TranslatePipe,
     TimeStepDirective,
+    DateTimePickerHeaderComponent,
   ],
   templateUrl: './datetime-picker.component.html',
   styleUrl: './datetime-picker.component.scss',
@@ -79,6 +81,8 @@ const DEFAULT_TIME = '09:00';
 export class DateTimePickerComponent {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
+
+  customHeader = DateTimePickerHeaderComponent;
 
   // Inputs
   selectedDate = input<Date | null>(null);

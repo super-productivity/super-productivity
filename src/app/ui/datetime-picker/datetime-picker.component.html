@@ -38,6 +38,7 @@
 
 @if (isConfigReady()) {
   <mat-calendar
+    [headerComponent]="customHeader"
     (keydown)="onKeyDownOnCalendar($event)"
     [selected]="selectedDate()"
     [minDate]="minDate()"
