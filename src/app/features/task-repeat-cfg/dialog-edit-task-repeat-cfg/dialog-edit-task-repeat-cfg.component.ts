@@ -97,17 +97,19 @@ export class DialogEditTaskRepeatCfgComponent {
     const locale = this._dateTimeFormatService.currentLocale();
     const time = this.repeatCfg().startTime;
     if (time) {
-      const [hours, minutes] = time.split(':').map(Number);
-      const dateTime = new Date(date);
-      dateTime.setHours(hours, minutes, 0, 0);
-      return dateTime.toLocaleString(locale, {
+      const formattedDate = date.toLocaleDateString(locale, {
         weekday: 'short',
         year: 'numeric',
         month: 'short',
         day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
       });
+      const [hours, minutes] = time.split(':').map(Number);
+      const safeTimeDate = new Date(2000, 0, 1, hours, minutes, 0, 0);
+      const formattedTime = this._dateTimeFormatService.formatTime(
+        safeTimeDate.getTime(),
+        locale,
+      );
+      return `${formattedDate}, ${formattedTime}`;
     }
     return date.toLocaleDateString(locale, {
       weekday: 'short',
@@ -160,6 +162,8 @@ export class DialogEditTaskRepeatCfgComponent {
           task: dummyTask,
           isSelectDueOnly: true,
           showQuickAccess: true,
+          targetDay: currentCfg.startDate || undefined,
+          targetTime: currentCfg.startTime || undefined,
         },
       })
       .afterClosed()
@@ -337,15 +341,18 @@ export class DialogEditTaskRepeatCfgComponent {
 
     // Memoize to avoid rebuilding options on every formly change cycle
     let lastStartDate: string | undefined;
+    let lastLocale: string | undefined;
     let cachedOptions: { value: string; label: string }[];
 
-    // Update options reactively when startDate changes
+    // Update options reactively when startDate or locale changes
     quickSettingField.expressionProperties = {
       ...quickSettingField.expressionProperties,
       ['templateOptions.options']: (model: Record<string, unknown>) => {
         const sd = model['startDate'] as string | undefined;
-        if (sd !== lastStartDate || !cachedOptions) {
+        const currentLocale = this._dateTimeFormatService.currentLocale();
+        if (sd !== lastStartDate || currentLocale !== lastLocale || !cachedOptions) {
           lastStartDate = sd;
+          lastLocale = currentLocale;
           const refDate = sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
           cachedOptions = buildOptions(refDate);
         }
