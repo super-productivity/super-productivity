@@ -49,8 +49,12 @@
     }
 
     // Hide extra month name inside the calendar body
+    // NOTE: visibility: hidden (not display: none) is intentional — the cell must
+    // stay in the grid flow so the first week's day numbers are offset to the
+    // correct weekday column. display: none collapses it and left-aligns all days.
     .mat-calendar-body-label {
-      display: none !important;
+      visibility: hidden !important;
+      padding: 0 !important;
     }
 
     // Hide period button arrow and style period button hover
