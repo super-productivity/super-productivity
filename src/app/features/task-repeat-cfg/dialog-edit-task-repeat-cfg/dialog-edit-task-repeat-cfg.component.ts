@@ -54,6 +54,7 @@ import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.compon
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 
 // Fields whose change requires offering "Update all task instances?" — covers
 // what propagates to existing tasks (vs. schedule fields, which only affect
@@ -108,7 +109,7 @@ export class DialogEditTaskRepeatCfgComponent {
     const date = dateStrToUtcDate(d);
     const locale = this._dateTimeFormatService.currentLocale();
     const time = this.repeatCfg().startTime;
-    if (time) {
+    if (time && isValidSplitTime(time)) {
       const formattedDate = date.toLocaleDateString(locale, {
         weekday: 'short',
         year: 'numeric',
@@ -156,9 +157,11 @@ export class DialogEditTaskRepeatCfgComponent {
     const remindAt =
       currentCfg.remindAt !== undefined ? currentCfg.remindAt : defaultRemindOption;
 
-    if (currentCfg.startDate && currentCfg.startTime) {
+    const hasValidTime = !!currentCfg.startTime && isValidSplitTime(currentCfg.startTime);
+
+    if (currentCfg.startDate && hasValidTime) {
       const dt = getDateTimeFromClockString(
-        currentCfg.startTime,
+        currentCfg.startTime!,
         dateStrToUtcDate(currentCfg.startDate),
       );
       dummyTask.dueWithTime = dt;
@@ -175,7 +178,7 @@ export class DialogEditTaskRepeatCfgComponent {
           isSelectDueOnly: true,
           showQuickAccess: true,
           targetDay: currentCfg.startDate || undefined,
-          targetTime: currentCfg.startTime || undefined,
+          targetTime: hasValidTime ? currentCfg.startTime : undefined,
         },
       })
       .afterClosed()

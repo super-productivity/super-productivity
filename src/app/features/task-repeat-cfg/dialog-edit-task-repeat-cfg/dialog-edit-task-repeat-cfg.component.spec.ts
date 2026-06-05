@@ -1,6 +1,11 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialog,
+  MatDialogModule,
+  MatDialogRef,
+} from '@angular/material/dialog';
 import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
@@ -24,6 +29,7 @@ import { T } from '../../../t.const';
 
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
+  let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockTaskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let mockTagService: jasmine.SpyObj<TagService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
@@ -61,6 +67,10 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     getTaskRepeatCfgById$ReturnValue?: Observable<TaskRepeatCfg> | Subject<TaskRepeatCfg>,
   ): Promise<ComponentFixture<DialogEditTaskRepeatCfgComponent>> => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
+    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockMatDialog.open.and.returnValue({
+      afterClosed: () => of(null),
+    } as any);
     mockTaskRepeatCfgService = jasmine.createSpyObj('TaskRepeatCfgService', [
       'getTaskRepeatCfgById$',
       'updateTaskRepeatCfg',
@@ -116,6 +126,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       providers: [
         provideMockStore(),
         { provide: MatDialogRef, useValue: mockDialogRef },
+        { provide: MatDialog, useValue: mockMatDialog },
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: TaskRepeatCfgService, useValue: mockTaskRepeatCfgService },
         { provide: TagService, useValue: mockTagService },
@@ -616,6 +627,42 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
       expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
       expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('openScheduleDialog()', () => {
+    it('should fall back to date-only/no-time when startTime is corrupt/invalid', async () => {
+      const cfgWithCorruptTime: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startTime: 'INVALID_CLOCK_STRING',
+      };
+      const fixture = await setupTestBed({ repeatCfg: cfgWithCorruptTime });
+      const component = fixture.componentInstance;
+
+      component.openScheduleDialog();
+
+      expect(mockMatDialog.open).toHaveBeenCalled();
+      const openArgs = mockMatDialog.open.calls.mostRecent().args;
+      const dialogData = openArgs[1]?.data as any;
+      expect(dialogData.task.dueWithTime).toBeUndefined();
+      expect(dialogData.targetTime).toBeUndefined();
+    });
+
+    it('should use the time when startTime is valid', async () => {
+      const cfgWithValidTime: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startTime: '12:30',
+      };
+      const fixture = await setupTestBed({ repeatCfg: cfgWithValidTime });
+      const component = fixture.componentInstance;
+
+      component.openScheduleDialog();
+
+      expect(mockMatDialog.open).toHaveBeenCalled();
+      const openArgs = mockMatDialog.open.calls.mostRecent().args;
+      const dialogData = openArgs[1]?.data as any;
+      expect(dialogData.task.dueWithTime).toBeDefined();
+      expect(dialogData.targetTime).toBe('12:30');
     });
   });
 });
