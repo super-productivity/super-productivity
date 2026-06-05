@@ -39,6 +39,11 @@ test.describe('Project completion', () => {
     await expect(resolveDialog).toBeVisible();
     await resolveDialog.getByRole('button', { name: /mark as done/i }).click();
 
+    // Confirm before final completion
+    const confirmDialog = page.locator('dialog-confirm');
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole('button', { name: /complete project/i }).click();
+
     // Celebration dialog with stats
     const celebration = page.locator('dialog-project-complete');
     await expect(celebration).toBeVisible();

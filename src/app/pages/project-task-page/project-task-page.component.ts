@@ -39,7 +39,11 @@ export class ProjectTaskPageComponent {
   restoreProject(): void {
     const project = this.currentProject();
     if (project) {
-      this._projectService.unarchive(project.id);
+      if (project.isDone) {
+        this._projectService.reopen(project.id);
+      } else {
+        this._projectService.unarchive(project.id);
+      }
     }
   }
 }

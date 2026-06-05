@@ -12,6 +12,9 @@ import { ShareService } from '../../core/share/share.service';
 import { Store } from '@ngrx/store';
 import { TranslateModule } from '@ngx-translate/core';
 import { WorkContextType } from '../../features/work-context/work-context.model';
+import { DialogCompleteResolveTasksComponent } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { DateService } from '../../core/date/date.service';
 
 describe('WorkContextMenuComponent', () => {
   let component: WorkContextMenuComponent;
@@ -19,8 +22,10 @@ describe('WorkContextMenuComponent', () => {
   let mockProjectService: jasmine.SpyObj<ProjectService>;
   let mockWorkContextService: { activeWorkContextId: string | undefined };
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
+  let resolveResult$: any;
   let confirmResult$: any;
   let router: Router;
+  const logicalDoneOn = new Date(2026, 5, 5, 1, 0, 0).getTime();
 
   // Finds the rendered mat-menu-item whose icon matches `iconName`.
   const menuButtonByIcon = (iconName: string): HTMLButtonElement | null => {
@@ -47,7 +52,12 @@ describe('WorkContextMenuComponent', () => {
     );
     // Default: nothing unfinished → completion skips the resolve prompt.
     mockProjectService.getCompletionInfo.and.returnValue(
-      Promise.resolve({ topLevelTasks: [], allTasks: [], undoneTopLevelTasks: [] }),
+      Promise.resolve({
+        topLevelTasks: [],
+        allTasks: [],
+        unfinishedTasks: [],
+        topLevelTasksWithUnfinishedWork: [],
+      }),
     );
     mockProjectService.moveTasksToInbox.and.returnValue(Promise.resolve());
     mockProjectService.markTasksDone.and.returnValue(Promise.resolve());
@@ -60,10 +70,17 @@ describe('WorkContextMenuComponent', () => {
     mockShareService.getShareSupport.and.returnValue(Promise.resolve('none'));
 
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    resolveResult$ = of(undefined);
     confirmResult$ = of(true);
-    mockMatDialog.open.and.callFake(
-      () => ({ afterClosed: () => confirmResult$ }) as MatDialogRef<unknown>,
-    );
+    mockMatDialog.open.and.callFake((componentOrTemplateRef) => {
+      if (componentOrTemplateRef === DialogCompleteResolveTasksComponent) {
+        return { afterClosed: () => resolveResult$ } as MatDialogRef<unknown>;
+      }
+      if (componentOrTemplateRef === DialogConfirmComponent) {
+        return { afterClosed: () => confirmResult$ } as MatDialogRef<unknown>;
+      }
+      return { afterClosed: () => of(undefined) } as MatDialogRef<unknown>;
+    });
 
     TestBed.configureTestingModule({
       imports: [WorkContextMenuComponent, TranslateModule.forRoot()],
@@ -80,6 +97,12 @@ describe('WorkContextMenuComponent', () => {
         { provide: WorkContextMarkdownService, useValue: {} },
         { provide: ShareService, useValue: mockShareService },
         { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+        {
+          provide: DateService,
+          useValue: {
+            getLogicalTodayDate: () => new Date(logicalDoneOn),
+          },
+        },
       ],
     });
 
@@ -95,7 +118,8 @@ describe('WorkContextMenuComponent', () => {
     const undoneInfo = {
       topLevelTasks: [{ id: 't1', isDone: false } as any],
       allTasks: [{ id: 't1', isDone: false } as any],
-      undoneTopLevelTasks: [{ id: 't1', isDone: false } as any],
+      unfinishedTasks: [{ id: 't1', isDone: false } as any],
+      topLevelTasksWithUnfinishedWork: [{ id: 't1', isDone: false } as any],
     };
 
     it('completes the project and navigates away when it is active', async () => {
@@ -103,7 +127,7 @@ describe('WorkContextMenuComponent', () => {
       await component.completeProject();
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
-        jasmine.any(Number),
+        logicalDoneOn,
       );
       expect(router.navigateByUrl).toHaveBeenCalledWith('/');
     });
@@ -117,15 +141,46 @@ describe('WorkContextMenuComponent', () => {
 
     it('moves unfinished tasks to the Inbox when chosen, then completes', async () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
-      confirmResult$ = of('inbox');
+      resolveResult$ = of('inbox');
       await component.completeProject();
-      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalled();
+      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledWith(
+        undoneInfo.topLevelTasksWithUnfinishedWork,
+      );
+      expect(mockProjectService.complete).toHaveBeenCalled();
+    });
+
+    it('marks all unfinished tasks done when chosen, then completes', async () => {
+      mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
+      resolveResult$ = of('markDone');
+      await component.completeProject();
+      expect(mockProjectService.markTasksDone).toHaveBeenCalledWith(
+        undoneInfo.unfinishedTasks,
+      );
       expect(mockProjectService.complete).toHaveBeenCalled();
     });
 
     it('aborts without completing when the unfinished-task prompt is cancelled', async () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
-      confirmResult$ = of(undefined);
+      resolveResult$ = of(undefined);
+      await component.completeProject();
+      expect(mockProjectService.complete).not.toHaveBeenCalled();
+    });
+
+    it('asks for confirmation before completing', async () => {
+      await component.completeProject();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        DialogConfirmComponent,
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            message: jasmine.any(String),
+          }),
+        }),
+      );
+      expect(mockProjectService.complete).toHaveBeenCalled();
+    });
+
+    it('aborts without completing when confirmation is cancelled', async () => {
+      confirmResult$ = of(false);
       await component.completeProject();
       expect(mockProjectService.complete).not.toHaveBeenCalled();
     });
@@ -166,9 +221,12 @@ describe('WorkContextMenuComponent', () => {
   });
 
   describe('rendered archive/restore action', () => {
-    it('renders Restore (and wires it up) for an archived project', () => {
+    it('renders Restore (and wires it up) for an archived project', async () => {
       mockProjectService.getByIdLive$.and.returnValue(
         of({ id: 'project-123', isArchived: true } as any),
+      );
+      mockProjectService.getByIdOnce$.and.returnValue(
+        of({ id: 'project-123', isArchived: true, isDone: false } as any),
       );
       mockProjectService.unarchive.and.returnValue(Promise.resolve());
       fixture.detectChanges();
@@ -178,7 +236,25 @@ describe('WorkContextMenuComponent', () => {
       expect(restoreBtn).toBeTruthy();
 
       restoreBtn!.click();
+      await fixture.whenStable();
       expect(mockProjectService.unarchive).toHaveBeenCalledWith('project-123');
+    });
+
+    it('renders Reopen for a completed project', async () => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', isArchived: true, isDone: true } as any),
+      );
+      mockProjectService.getByIdOnce$.and.returnValue(
+        of({ id: 'project-123', isArchived: true, isDone: true } as any),
+      );
+      fixture.detectChanges();
+
+      const reopenBtn = menuButtonByIcon('replay');
+      expect(reopenBtn).toBeTruthy();
+
+      reopenBtn!.click();
+      await fixture.whenStable();
+      expect(mockProjectService.reopen).toHaveBeenCalledWith('project-123');
     });
 
     it('renders Complete (not Archive) for a non-archived project', () => {

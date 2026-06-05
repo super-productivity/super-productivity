@@ -54,6 +54,13 @@ import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DateService } from '../../core/date/date.service';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
+export interface ProjectCompletionInfo {
+  topLevelTasks: Task[];
+  allTasks: Task[];
+  unfinishedTasks: Task[];
+  topLevelTasksWithUnfinishedWork: Task[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -194,31 +201,48 @@ export class ProjectService {
    * (for worked-day stats). Completing only sets a flag, so all of these stay
    * live in the store — no archive lookup needed.
    */
-  async getCompletionInfo(projectId: string): Promise<{
-    topLevelTasks: Task[];
-    allTasks: Task[];
-    undoneTopLevelTasks: Task[];
-  }> {
+  async getCompletionInfo(projectId: string): Promise<ProjectCompletionInfo> {
     const taskState = await firstValueFrom(this._store$.select(selectTaskFeatureState));
     const project = await firstValueFrom(this.getByIdOnce$(projectId));
     const ids = [...(project?.taskIds ?? []), ...(project?.backlogTaskIds ?? [])];
     const topLevelTasks = ids
       .map((id) => taskState.entities[id])
       .filter((t): t is Task => !!t);
-    const allTasks: Task[] = [];
-    topLevelTasks.forEach((t) => {
-      allTasks.push(t);
-      (t.subTaskIds ?? []).forEach((subId) => {
+    const collectTaskAndSubTasks = (
+      task: Task,
+      allTasks: Task[],
+      seen: Set<string>,
+    ): void => {
+      if (seen.has(task.id)) {
+        return;
+      }
+      seen.add(task.id);
+      allTasks.push(task);
+      (task.subTaskIds ?? []).forEach((subId) => {
         const sub = taskState.entities[subId];
         if (sub) {
-          allTasks.push(sub);
+          collectTaskAndSubTasks(sub, allTasks, seen);
         }
       });
+    };
+    const allTasks: Task[] = [];
+    const seenTaskIds = new Set<string>();
+    topLevelTasks.forEach((t) => {
+      collectTaskAndSubTasks(t, allTasks, seenTaskIds);
     });
+    const unfinishedTasks = allTasks.filter((t) => !t.isDone);
+    const unfinishedTaskIds = new Set(unfinishedTasks.map((t) => t.id));
+    const hasUnfinishedWork = (task: Task): boolean =>
+      unfinishedTaskIds.has(task.id) ||
+      (task.subTaskIds ?? []).some((subId) => {
+        const subTask = taskState.entities[subId];
+        return !!subTask && hasUnfinishedWork(subTask);
+      });
     return {
       topLevelTasks,
       allTasks,
-      undoneTopLevelTasks: topLevelTasks.filter((t) => !t.isDone),
+      unfinishedTasks,
+      topLevelTasksWithUnfinishedWork: topLevelTasks.filter((t) => hasUnfinishedWork(t)),
     };
   }
 
@@ -232,6 +256,9 @@ export class ProjectService {
         this._taskService.getByIdWithSubTaskData$(task.id),
       );
       this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
+      if (task.isDone) {
+        this._taskService.setUnDone(task.id);
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }

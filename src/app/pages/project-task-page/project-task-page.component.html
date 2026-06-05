@@ -5,7 +5,12 @@
       mat-button
       (click)="restoreProject()"
     >
-      {{ T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate }}
+      {{
+        (currentProject()?.isDone
+          ? T.F.PROJECT.COMPLETE.REOPEN
+          : T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE
+        ) | translate
+      }}
     </button>
   </div>
 }

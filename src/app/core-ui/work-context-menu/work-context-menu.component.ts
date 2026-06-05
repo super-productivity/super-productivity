@@ -35,6 +35,7 @@ import { TaskWithSubTasks } from '../../features/tasks/task.model';
 import { firstValueFrom, Observable, of } from 'rxjs';
 import { AsyncPipe } from '@angular/common';
 import type { WorkContextSettingsDialogData } from '../../features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
+import { DateService } from '../../core/date/date.service';
 
 @Component({
   selector: 'work-context-menu',
@@ -55,6 +56,7 @@ export class WorkContextMenuComponent implements OnInit {
   private _shareService = inject(ShareService);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
+  private _dateService = inject(DateService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -64,6 +66,7 @@ export class WorkContextMenuComponent implements OnInit {
   TODAY_TAG_ID: string = TODAY_TAG.id as string;
   isForProject: boolean = true;
   isArchived$: Observable<boolean> = of(false);
+  isDone$: Observable<boolean> = of(false);
   base: string = 'project';
   shareSupport: ShareSupport = 'none';
 
@@ -79,6 +82,9 @@ export class WorkContextMenuComponent implements OnInit {
       this.isArchived$ = this._projectService
         .getByIdLive$(this.contextId)
         .pipe(map((project) => !!project?.isArchived));
+      this.isDone$ = this._projectService
+        .getByIdLive$(this.contextId)
+        .pipe(map((project) => !!project?.isDone));
     }
     const support = await this._shareService.getShareSupport();
     this._setShareSupport(support);
@@ -144,29 +150,49 @@ export class WorkContextMenuComponent implements OnInit {
 
     const info = await this._projectService.getCompletionInfo(this.contextId);
 
+    let resolution: 'inbox' | 'markDone' | undefined;
     // Auto-archiving would otherwise bury live, undone work — ask first.
-    if (info.undoneTopLevelTasks.length) {
-      const resolution = await firstValueFrom(
+    if (info.unfinishedTasks.length) {
+      resolution = await firstValueFrom(
         this._matDialog
           .open(DialogCompleteResolveTasksComponent, {
             restoreFocus: true,
-            data: { title: project.title, nr: info.undoneTopLevelTasks.length },
+            data: { title: project.title, nr: info.unfinishedTasks.length },
           })
           .afterClosed(),
       );
       if (!resolution) {
         return;
       }
-      if (resolution === 'inbox') {
-        await this._projectService.moveTasksToInbox(info.undoneTopLevelTasks);
-      } else if (resolution === 'markDone') {
-        await this._projectService.markTasksDone(info.undoneTopLevelTasks);
-      }
+    }
+
+    const isConfirmed = await firstValueFrom(
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          restoreFocus: true,
+          data: {
+            title: T.F.PROJECT.COMPLETE.CONFIRM.TITLE,
+            titleIcon: 'check_circle',
+            message: T.F.PROJECT.COMPLETE.CONFIRM.MSG,
+            translateParams: { title: project.title },
+            okTxt: T.MH.COMPLETE_PROJECT,
+          },
+        })
+        .afterClosed(),
+    );
+    if (!isConfirmed) {
+      return;
+    }
+
+    if (resolution === 'inbox') {
+      await this._projectService.moveTasksToInbox(info.topLevelTasksWithUnfinishedWork);
+    } else if (resolution === 'markDone') {
+      await this._projectService.markTasksDone(info.unfinishedTasks);
     }
 
     // Recompute after resolution so the stats reflect the final task list.
     const finalInfo = await this._projectService.getCompletionInfo(this.contextId);
-    const doneOn = Date.now();
+    const doneOn = this._dateService.getLogicalTodayDate().getTime();
     const stats = getProjectCompletionStats(
       finalInfo.topLevelTasks,
       finalInfo.allTasks,
@@ -190,7 +216,17 @@ export class WorkContextMenuComponent implements OnInit {
   }
 
   async restoreProject(): Promise<void> {
-    await this._projectService.unarchive(this.contextId);
+    const project = await firstValueFrom(
+      this._projectService.getByIdOnce$(this.contextId),
+    );
+    if (!project) {
+      return;
+    }
+    if (project.isDone) {
+      this._projectService.reopen(this.contextId);
+    } else {
+      await this._projectService.unarchive(this.contextId);
+    }
   }
 
   async duplicateProject(): Promise<void> {

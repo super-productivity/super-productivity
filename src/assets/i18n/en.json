@@ -931,6 +931,10 @@
           "MOVE_TO_INBOX": "Move to Inbox",
           "MARK_DONE": "Mark as done"
         },
+        "CONFIRM": {
+          "TITLE": "Complete project?",
+          "MSG": "Complete <strong>{{title}}</strong> and move it to archived projects?"
+        },
         "CELEBRATION": {
           "TITLE": "Project complete!",
           "STARTED": "Started",

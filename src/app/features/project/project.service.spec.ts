@@ -88,6 +88,10 @@ describe('ProjectService', () => {
     taskService = jasmine.createSpyObj('TaskService', [
       'add',
       'createNewTaskWithDefaults',
+      'getByIdWithSubTaskData$',
+      'moveToProject',
+      'setDone',
+      'setUnDone',
     ]);
     taskService.createNewTaskWithDefaults.and.callFake(() => {
       taskCounter++;
@@ -414,15 +418,23 @@ describe('ProjectService', () => {
       });
     });
 
-    it('returns top-level tasks, all tasks incl. subtasks, and undone top-level', async () => {
+    it('returns top-level tasks, all tasks incl. subtasks, and unfinished tasks', async () => {
       const info = await service.getCompletionInfo('project-1');
       expect(info.topLevelTasks.map((t) => t.id)).toEqual(['task-1', 'task-2']);
       // task-1 has sub-task-1 → included in allTasks, after its parent
       expect(info.allTasks.map((t) => t.id)).toEqual(['task-1', 'sub-task-1', 'task-2']);
-      expect(info.undoneTopLevelTasks.map((t) => t.id)).toEqual(['task-1', 'task-2']);
+      expect(info.unfinishedTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'sub-task-1',
+        'task-2',
+      ]);
+      expect(info.topLevelTasksWithUnfinishedWork.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
     });
 
-    it('excludes done tasks from undoneTopLevelTasks', async () => {
+    it('keeps a done parent with an unfinished subtask in topLevelTasksWithUnfinishedWork', async () => {
       store.overrideSelector(selectTaskFeatureState, {
         ...initialTaskState,
         entities: {
@@ -433,7 +445,41 @@ describe('ProjectService', () => {
       });
       store.refreshState();
       const info = await service.getCompletionInfo('project-1');
-      expect(info.undoneTopLevelTasks.map((t) => t.id)).toEqual(['task-2']);
+      expect(info.unfinishedTasks.map((t) => t.id)).toEqual(['sub-task-1', 'task-2']);
+      expect(info.topLevelTasksWithUnfinishedWork.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+    });
+  });
+
+  describe('resolve unfinished completion tasks', () => {
+    it('moves top-level task trees with unfinished work to the Inbox', async () => {
+      const task = { ...initialTaskState.entities['task-1']!, isDone: true };
+      const taskWithSubTasks = {
+        ...task,
+        subTasks: [initialTaskState.entities['sub-task-1']!],
+      };
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskWithSubTasks as any));
+
+      await service.moveTasksToInbox([task]);
+
+      expect(taskService.getByIdWithSubTaskData$).toHaveBeenCalledWith('task-1');
+      expect(taskService.moveToProject).toHaveBeenCalledWith(
+        taskWithSubTasks as any,
+        'INBOX_PROJECT',
+      );
+      expect(taskService.setUnDone).toHaveBeenCalledWith('task-1');
+    });
+
+    it('marks every unfinished task done, including subtasks', async () => {
+      const parent = initialTaskState.entities['task-1']!;
+      const subTask = initialTaskState.entities['sub-task-1']!;
+
+      await service.markTasksDone([parent, subTask]);
+
+      expect(taskService.setDone).toHaveBeenCalledWith('task-1');
+      expect(taskService.setDone).toHaveBeenCalledWith('sub-task-1');
     });
   });
 });
