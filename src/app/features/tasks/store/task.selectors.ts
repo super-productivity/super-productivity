@@ -12,10 +12,7 @@ import { taskAdapter } from './task.adapter';
 import { devError } from '../../../util/dev-error';
 import { isDBDateStr } from '../../../util/get-db-date-str';
 import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
-import {
-  selectArchivedProjectIds,
-  selectHiddenProjectIds,
-} from '../../project/store/project.selectors';
+import { selectArchivedProjectIds } from '../../project/store/project.selectors';
 import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
 import {
   selectStartOfNextDayDiffMs,
@@ -719,13 +716,6 @@ export const selectAllTaskIssueIdsForIssueProvider = (issueProvider: IssueProvid
       .map((t) => t.issueId as string);
   });
 };
-
-export const selectAllTasksWithoutHiddenProjects = createSelector(
-  selectAllTasksInActiveProjects,
-  selectHiddenProjectIds,
-  (tasks: Task[], hiddenIds: Set<string>): Task[] =>
-    tasks.filter((t) => !t.projectId || !hiddenIds.has(t.projectId)),
-);
 
 export const selectAllUndoneTasksWithDueDay = createSelector(
   selectAllTasksInActiveProjects,

@@ -924,7 +924,7 @@
       },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Enable Project Backlog",
-        "L_IS_HIDDEN_FROM_MENU": "Hide project from menu",
+        "L_IS_HIDDEN_FROM_MENU": "Hide project from sidebar",
         "L_TITLE": "Project Name",
         "TITLE": "Basic Settings"
       },
@@ -954,9 +954,9 @@
         "ARCHIVED": "Archived Project",
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the menu on the top left.",
         "DELETED": "Deleted Project",
-        "SHOW_IN_MENU": "Show in menu",
+        "SHOW_IN_MENU": "Show in sidebar",
         "UNARCHIVED": "Project restored",
-        "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the menu",
+        "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the sidebar",
         "UPDATED": "Updated project settings"
       },
       "ARCHIVED_NOTICE": "This project is archived.",
@@ -984,7 +984,7 @@
         "PLACEHOLDER": "Select folder"
       },
       "TOOLTIP_CREATE": "Create project folder",
-      "TOOLTIP_VISIBILITY": "Show/hide projects"
+      "TOOLTIP_VISIBILITY": "Show/hide sidebar projects"
     },
     "QUICK_HISTORY": {
       "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
