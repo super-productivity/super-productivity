@@ -97,6 +97,9 @@ export class DateTimePickerComponent {
   private _dateAdapter = inject(DateAdapter);
   private readonly _cdr = inject(ChangeDetectorRef);
 
+  pickerSelectedDate: Date | null = null;
+  private _lastView: 'month' | 'year' | 'multi-year' | null = null;
+
   constructor() {
     effect(() => {
       const locale = this._dateTimeFormatService.currentLocale();
@@ -106,7 +109,19 @@ export class DateTimePickerComponent {
     effect((onCleanup) => {
       const cal = this.calendar();
       if (cal) {
+        // Set initial view and date
+        this._lastView = cal.currentView;
+        if (cal.currentView !== 'month') {
+          this.pickerSelectedDate = cal.activeDate;
+        }
+
         const sub = cal.stateChanges.subscribe(() => {
+          if (cal.currentView !== this._lastView) {
+            this._lastView = cal.currentView;
+            if (cal.currentView !== 'month') {
+              this.pickerSelectedDate = cal.activeDate;
+            }
+          }
           this._cdr.markForCheck();
         });
         onCleanup(() => sub.unsubscribe());
@@ -151,7 +166,10 @@ export class DateTimePickerComponent {
     if (!cal) {
       return this.selectedDate();
     }
-    return cal.currentView === 'month' ? this.selectedDate() : cal.activeDate;
+    if (cal.currentView === 'month') {
+      return this.selectedDate();
+    }
+    return this.pickerSelectedDate || cal.activeDate;
   }
 
   private _syncActiveDateEffect = effect(() => {
@@ -249,7 +267,9 @@ export class DateTimePickerComponent {
   onYearSelected(date: unknown): void {
     const cal = this.calendar();
     if (cal) {
-      cal.currentView = 'month';
+      setTimeout(() => {
+        cal.currentView = 'month';
+      });
     }
   }
 }
