@@ -53,14 +53,6 @@ mat-dialog-content {
   white-space: normal;
   overflow-wrap: anywhere;
   text-align: center;
-
-  &[color='primary']:not([disabled]) {
-    color: var(--palette-primary-900) !important;
-
-    :host-context(body.isDarkTheme) & {
-      color: var(--brand) !important;
-    }
-  }
 }
 
 .deadline-actions button:not(:last-child) {
