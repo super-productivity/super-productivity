@@ -109,17 +109,30 @@ export class NotesComponent implements OnInit {
   }
 
   private _focusNote(noteId: string): void {
-    // Wait a short time for the DOM to render the note list
-    setTimeout(() => {
-      const el = document.getElementById(`n-${noteId}`);
+    const id = `n-${noteId}`;
+    const startTime = Date.now();
+    const timeout = 4000;
+    let isDestroyed = false;
+    this._destroyRef.onDestroy(() => (isDestroyed = true));
+
+    const tryFocus = (): void => {
+      if (isDestroyed) {
+        return;
+      }
+      const el = document.getElementById(id);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('highlight-searched-item');
         setTimeout(() => {
-          el.classList.remove('highlight-searched-item');
+          if (!isDestroyed) {
+            el.classList.remove('highlight-searched-item');
+          }
         }, 3000);
+      } else if (Date.now() - startTime < timeout) {
+        setTimeout(tryFocus, 100);
       }
-    }, 300);
+    };
+    tryFocus();
   }
 
   @HostListener('window:popstate')
