@@ -58,19 +58,36 @@ export const openRecurDialogFromProjection = async (
  * type-and-commit cycle (fill + Tab) until the committed value sticks.
  */
 export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
-  const dialog = page.locator(DIALOG_CONTAINER);
-  const startDateInput = dialog
-    .locator('mat-form-field')
-    .filter({ hasText: /Start date/i })
-    .locator('input')
+  const dialog = page.locator(DIALOG_CONTAINER).first();
+  const scheduleBtn = dialog.locator('.planned-start-date-btn');
+  await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+  await scheduleBtn.click();
+
+  const scheduleDialog = page
+    .locator(DIALOG_CONTAINER)
+    .filter({ has: page.locator('datetime-picker') });
+  await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+  const calendar = scheduleDialog.locator('mat-calendar');
+  await expect(calendar).toBeVisible({ timeout: 5000 });
+
+  const [dayStr] = ddmmyyyy.split('/');
+  const day = parseInt(dayStr, 10);
+
+  const dayCell = scheduleDialog
+    .locator('.mat-calendar-body-cell')
+    .filter({ hasText: new RegExp(`^\\s*${day}\\s*$`) })
     .first();
-  await expect(startDateInput).toBeVisible({ timeout: 5000 });
-  await expect(async () => {
-    await startDateInput.fill('');
-    await startDateInput.fill(ddmmyyyy);
-    await startDateInput.press('Tab');
-    await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 1000 });
-  }).toPass({ timeout: 10000 });
+  await expect(dayCell).toBeVisible({ timeout: 5000 });
+  await dayCell.click();
+
+  // Click Schedule button
+  const scheduleSubmitBtn = scheduleDialog.getByRole('button', {
+    name: 'Schedule',
+    exact: true,
+  });
+  await scheduleSubmitBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 };
 
 /** Switch the recurring-config quick-setting select (e.g. Daily → Mon-Fri). */
