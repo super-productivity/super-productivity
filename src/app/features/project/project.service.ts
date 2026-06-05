@@ -21,16 +21,18 @@ import { WorkContextService } from '../work-context/work-context.service';
 import {
   addProject,
   archiveProject,
+  completeProject,
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
+  reopenProject,
   toggleHideFromMenu,
   unarchiveProject,
   updateProject,
   updateProjectOrder,
 } from './store/project.actions';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { DEFAULT_PROJECT } from './project.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from './project.const';
 import {
   selectArchivedProjects,
   selectProjectById,
@@ -166,6 +168,77 @@ export class ProjectService {
             msg: T.F.PROJECT.S.UNARCHIVED,
           },
     );
+  }
+
+  complete(projectId: string, doneOn: number): void {
+    this._store$.dispatch(completeProject({ id: projectId, doneOn }));
+    this._snackService.open({
+      ico: 'celebration',
+      msg: T.F.PROJECT.S.COMPLETED,
+      actionStr: T.F.PROJECT.COMPLETE.UNDO,
+      actionFn: () => this.reopen(projectId),
+    });
+  }
+
+  reopen(projectId: string): void {
+    this._store$.dispatch(reopenProject({ id: projectId }));
+    this._snackService.open({
+      ico: 'replay',
+      msg: T.F.PROJECT.S.REOPENED,
+    });
+  }
+
+  /**
+   * Tasks of a project for the completion flow. `topLevelTasks` are the parent
+   * tasks (taskIds + backlogTaskIds); `allTasks` also includes their subtasks
+   * (for worked-day stats). Completing only sets a flag, so all of these stay
+   * live in the store — no archive lookup needed.
+   */
+  async getCompletionInfo(projectId: string): Promise<{
+    topLevelTasks: Task[];
+    allTasks: Task[];
+    undoneTopLevelTasks: Task[];
+  }> {
+    const taskState = await firstValueFrom(this._store$.select(selectTaskFeatureState));
+    const project = await firstValueFrom(this.getByIdOnce$(projectId));
+    const ids = [...(project?.taskIds ?? []), ...(project?.backlogTaskIds ?? [])];
+    const topLevelTasks = ids
+      .map((id) => taskState.entities[id])
+      .filter((t): t is Task => !!t);
+    const allTasks: Task[] = [];
+    topLevelTasks.forEach((t) => {
+      allTasks.push(t);
+      (t.subTaskIds ?? []).forEach((subId) => {
+        const sub = taskState.entities[subId];
+        if (sub) {
+          allTasks.push(sub);
+        }
+      });
+    });
+    return {
+      topLevelTasks,
+      allTasks,
+      undoneTopLevelTasks: topLevelTasks.filter((t) => !t.isDone),
+    };
+  }
+
+  /**
+   * Move tasks to the Inbox one by one, then yield a microtask so the rapid
+   * dispatches settle before the caller continues (bulk-dispatch rule).
+   */
+  async moveTasksToInbox(tasks: Task[]): Promise<void> {
+    for (const task of tasks) {
+      const withSubTasks = await firstValueFrom(
+        this._taskService.getByIdWithSubTaskData$(task.id),
+      );
+      this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  async markTasksDone(tasks: Task[]): Promise<void> {
+    tasks.forEach((task) => this._taskService.setDone(task.id));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   getByIdOnce$(id: string): Observable<Project | undefined> {
@@ -311,6 +384,10 @@ export class ProjectService {
       taskIds: [],
       backlogTaskIds: [],
       noteIds: [],
+      // A duplicate is a fresh, active project — never inherit completed/archived state.
+      isDone: false,
+      doneOn: null,
+      isArchived: false,
     });
 
     const noteState = await firstValueFrom(this._store$.select(selectNoteFeatureState));

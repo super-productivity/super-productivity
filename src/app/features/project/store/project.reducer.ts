@@ -27,6 +27,7 @@ import {
   addProject,
   addProjects,
   archiveProject,
+  completeProject,
   loadProjects,
   moveAllProjectBacklogTasksToRegularList,
   moveProjectTaskDownInBacklogList,
@@ -38,6 +39,7 @@ import {
   moveProjectTaskToRegularListAuto,
   moveProjectTaskToTopInBacklogList,
   moveProjectTaskUpInBacklogList,
+  reopenProject,
   toggleHideFromMenu,
   unarchiveProject,
   updateProject,
@@ -181,6 +183,37 @@ export const projectReducer = createReducer<ProjectState>(
       {
         id,
         changes: {
+          isArchived: false,
+        },
+      },
+      state,
+    ),
+  ),
+
+  // Completing a project marks it done AND archives it (hide from active menu).
+  // isDone stays distinct from isArchived so a finish ≠ a quiet shelve.
+  on(completeProject, (state, { id, doneOn }) => {
+    if (id === INBOX_PROJECT.id) return state;
+    return projectAdapter.updateOne(
+      {
+        id,
+        changes: {
+          isDone: true,
+          doneOn,
+          isArchived: true,
+        },
+      },
+      state,
+    );
+  }),
+
+  on(reopenProject, (state, { id }) =>
+    projectAdapter.updateOne(
+      {
+        id,
+        changes: {
+          isDone: false,
+          doneOn: null,
           isArchived: false,
         },
       },

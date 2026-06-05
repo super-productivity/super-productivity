@@ -353,4 +353,87 @@ describe('ProjectService', () => {
       });
     });
   });
+
+  describe('complete', () => {
+    it('dispatches completeProject with the given doneOn and an undo snack', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.complete('project-1', 12345);
+      const completeAction = dispatchSpy.calls
+        .allArgs()
+        .map((args: any) => args[0])
+        .find((a: any) => a?.type === '[Project] Complete Project');
+      expect(completeAction).toBeTruthy();
+      expect(completeAction.id).toBe('project-1');
+      expect(completeAction.doneOn).toBe(12345);
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.PROJECT.S.COMPLETED,
+          actionStr: T.F.PROJECT.COMPLETE.UNDO,
+        }),
+      );
+    });
+
+    it('reopens the project via the undo snack action', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.complete('project-1', 1);
+      const snackArg = snackService.open.calls.mostRecent().args[0] as any;
+      dispatchSpy.calls.reset();
+      snackArg.actionFn();
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Reopen Project');
+    });
+  });
+
+  describe('reopen', () => {
+    it('dispatches reopenProject and shows a snack', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.reopen('project-1');
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Reopen Project');
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.PROJECT.S.REOPENED }),
+      );
+    });
+  });
+
+  describe('getCompletionInfo', () => {
+    beforeEach(() => {
+      store.setState({
+        projects: {
+          ids: ['project-1'],
+          entities: {
+            /* eslint-disable @typescript-eslint/naming-convention */
+            'project-1': createProject({
+              id: 'project-1',
+              title: 'Project 1',
+              taskIds: ['task-1', 'task-2'],
+            }),
+            /* eslint-enable @typescript-eslint/naming-convention */
+          },
+        },
+      });
+    });
+
+    it('returns top-level tasks, all tasks incl. subtasks, and undone top-level', async () => {
+      const info = await service.getCompletionInfo('project-1');
+      expect(info.topLevelTasks.map((t) => t.id)).toEqual(['task-1', 'task-2']);
+      // task-1 has sub-task-1 → included in allTasks, after its parent
+      expect(info.allTasks.map((t) => t.id)).toEqual(['task-1', 'sub-task-1', 'task-2']);
+      expect(info.undoneTopLevelTasks.map((t) => t.id)).toEqual(['task-1', 'task-2']);
+    });
+
+    it('excludes done tasks from undoneTopLevelTasks', async () => {
+      store.overrideSelector(selectTaskFeatureState, {
+        ...initialTaskState,
+        entities: {
+          ...initialTaskState.entities,
+          /* eslint-disable-next-line @typescript-eslint/naming-convention */
+          'task-1': { ...initialTaskState.entities['task-1'], isDone: true } as any,
+        },
+      });
+      store.refreshState();
+      const info = await service.getCompletionInfo('project-1');
+      expect(info.undoneTopLevelTasks.map((t) => t.id)).toEqual(['task-2']);
+    });
+  });
 });

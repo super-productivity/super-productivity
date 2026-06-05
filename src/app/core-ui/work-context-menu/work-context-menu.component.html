@@ -87,6 +87,13 @@
     </button>
   } @else {
     <button
+      (click)="completeProject()"
+      mat-menu-item
+    >
+      <mat-icon>check_circle</mat-icon>
+      <span class="text">{{ T.MH.COMPLETE_PROJECT | translate }}</span>
+    </button>
+    <button
       (click)="archiveProject()"
       mat-menu-item
     >

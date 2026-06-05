@@ -17,6 +17,9 @@ import { WorkContextService } from '../../features/work-context/work-context.ser
 import { Router, RouterLink, RouterModule } from '@angular/router';
 
 import { ProjectService } from '../../features/project/project.service';
+import { getProjectCompletionStats } from '../../features/project/project-completion-stats.util';
+import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
+import { DialogCompleteResolveTasksComponent } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
 import { SectionService } from '../../features/section/section.service';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { MatMenuItem } from '@angular/material/menu';
@@ -155,6 +158,58 @@ export class WorkContextMenuComponent implements OnInit {
     }
     const activeId = this._workContextService.activeWorkContextId;
     this._projectService.archive(this.contextId);
+    if (activeId === this.contextId) {
+      await this._router.navigateByUrl('/');
+    }
+  }
+
+  async completeProject(): Promise<void> {
+    const project = await firstValueFrom(
+      this._projectService.getByIdOnce$(this.contextId),
+    );
+    if (!project) {
+      return;
+    }
+
+    const info = await this._projectService.getCompletionInfo(this.contextId);
+
+    // Auto-archiving would otherwise bury live, undone work — ask first.
+    if (info.undoneTopLevelTasks.length) {
+      const resolution = await firstValueFrom(
+        this._matDialog
+          .open(DialogCompleteResolveTasksComponent, {
+            restoreFocus: true,
+            data: { title: project.title, nr: info.undoneTopLevelTasks.length },
+          })
+          .afterClosed(),
+      );
+      if (!resolution) {
+        return;
+      }
+      if (resolution === 'inbox') {
+        await this._projectService.moveTasksToInbox(info.undoneTopLevelTasks);
+      } else if (resolution === 'markDone') {
+        await this._projectService.markTasksDone(info.undoneTopLevelTasks);
+      }
+    }
+
+    // Recompute after resolution so the stats reflect the final task list.
+    const finalInfo = await this._projectService.getCompletionInfo(this.contextId);
+    const doneOn = Date.now();
+    const stats = getProjectCompletionStats(
+      finalInfo.topLevelTasks,
+      finalInfo.allTasks,
+      doneOn,
+    );
+
+    const activeId = this._workContextService.activeWorkContextId;
+    this._projectService.complete(this.contextId, doneOn);
+
+    this._matDialog.open(DialogProjectCompleteComponent, {
+      restoreFocus: true,
+      data: { project, stats },
+    });
+
     if (activeId === this.contextId) {
       await this._router.navigateByUrl('/');
     }

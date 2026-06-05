@@ -922,6 +922,27 @@
       "D_DELETE": {
         "MSG": "Are you sure you want to delete the project \"{{title}}\"?"
       },
+      "COMPLETE": {
+        "UNDO": "Undo",
+        "COMPLETED_ON": "Completed {{date}}",
+        "REOPEN": "Reopen",
+        "RESOLVE": {
+          "MSG": "<strong>{{title}}</strong> still has {{nr}} unfinished task(s). What should happen to them?",
+          "MOVE_TO_INBOX": "Move to Inbox",
+          "MARK_DONE": "Mark as done"
+        },
+        "CELEBRATION": {
+          "TITLE": "Project complete!",
+          "STARTED": "Started",
+          "FINISHED": "Finished",
+          "DURATION": "Finished in {{nr}} days",
+          "TASKS_DONE": "Tasks done",
+          "TIME_SPENT": "Time tracked",
+          "DAYS_WORKED": "Days worked",
+          "DONE_BTN": "Nice!",
+          "VIEW_COMPLETED": "View completed projects"
+        }
+      },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Enable Project Backlog",
         "L_IS_HIDDEN_FROM_MENU": "Hide project from sidebar",
@@ -952,8 +973,10 @@
       },
       "S": {
         "ARCHIVED": "Archived Project",
+        "COMPLETED": "Project completed",
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the sidebar.",
         "DELETED": "Deleted Project",
+        "REOPENED": "Project reopened",
         "SHOW_IN_MENU": "Show in sidebar",
         "UNARCHIVED": "Project restored",
         "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the sidebar",
@@ -2572,6 +2595,7 @@
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
     "ARCHIVE_PROJECT": "Archive project",
+    "COMPLETE_PROJECT": "Complete project",
     "DELETE_PROJECT": "Delete project",
     "DELETE_TAG": "Delete tag",
     "DISABLE_FEATURE": "Disable feature",

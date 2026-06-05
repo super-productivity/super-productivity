@@ -27,6 +27,16 @@ export const selectUnarchivedVisibleProjects = createSelector(
 export const selectArchivedProjects = createSelector(selectAllProjects, (projects) =>
   projects.filter((p) => p.isArchived),
 );
+// Completed projects (a celebrated finish). Completing also sets isArchived, so
+// these are a subset of selectArchivedProjects — keep that one as-is, since it
+// drives active-task filtering (selectArchivedProjectIds in task.selectors).
+export const selectCompletedProjects = createSelector(selectAllProjects, (projects) =>
+  projects.filter((p) => p.isDone),
+);
+// Plain archives only (shelved, not finished) — for separating them in the UI.
+export const selectPlainArchivedProjects = createSelector(selectAllProjects, (projects) =>
+  projects.filter((p) => p.isArchived && !p.isDone),
+);
 export const selectArchivedProjectsSortedByTitle = createSelector(
   selectArchivedProjects,
   (projects) => [...projects].sort((a, b) => a.title.localeCompare(b.title)),
