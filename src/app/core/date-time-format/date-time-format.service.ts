@@ -61,11 +61,17 @@ export class DateTimeFormatService {
       if (cfgValue) {
         this.setDateAdapterLocale(cfgValue);
       } else {
-        const uiLang =
+        // No explicit date/time override: follow the browser's regional locale
+        // (e.g. 'en-GB' → DD/MM/YYYY) rather than the UI translation language.
+        // The UI language is region-agnostic — 'en' resolves to US MM/DD/YYYY,
+        // which would mis-format dates for en-GB/en-AU/etc. users who never
+        // picked a date locale. Fall back to UI language, then the default.
+        const fallbackLocale =
+          this._translateService.getBrowserCultureLang?.()?.toLowerCase() ||
           this._translateService.currentLang ||
           this._translateService.defaultLang ||
           DEFAULT_LOCALE;
-        this.setDateAdapterLocale(uiLang as DateTimeLocale);
+        this.setDateAdapterLocale(fallbackLocale as DateTimeLocale);
       }
     });
   }
