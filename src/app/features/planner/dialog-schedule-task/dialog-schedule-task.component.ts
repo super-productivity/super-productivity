@@ -154,7 +154,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   });
   scheduleWarnings = computed(() => {
     const plannedTimestamp = this.plannedTimestamp();
-    if (!plannedTimestamp) {
+    if (!plannedTimestamp || this.data.isSelectDueOnly) {
       return {
         hasOverlap: false,
         isOutsideWorkHours: false,
