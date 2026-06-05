@@ -11,7 +11,11 @@ import { ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
 import { combineLatest, Observable } from 'rxjs';
 import { debounceTime, filter, map, startWith, withLatestFrom } from 'rxjs/operators';
 import { TaskService } from '../../features/tasks/task.service';
-import { DEFAULT_TAG } from '../../features/tag/tag.const';
+import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
+import { NoteService } from '../../features/note/note.service';
+import { Note } from '../../features/note/note.model';
+import { Router } from '@angular/router';
+import { LayoutService } from '../../core-ui/layout/layout.service';
 import { Project } from '../../features/project/project.model';
 import { Tag } from '../../features/tag/tag.model';
 import { ProjectService } from '../../features/project/project.service';
@@ -32,6 +36,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogViewArchivedTaskComponent } from '../../features/tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { Log } from '../../core/log';
+import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
 
 const MAX_RESULTS = 50;
 
@@ -61,6 +66,10 @@ export class SearchPageComponent implements OnInit {
   private _tagService = inject(TagService);
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _matDialog = inject(MatDialog);
+  private _noteService = inject(NoteService);
+  private _router = inject(Router);
+  private _layoutService = inject(LayoutService);
+  private _menuTreeService = inject(MenuTreeService);
 
   readonly inputEl = viewChild.required<ElementRef>('inputEl');
 
@@ -73,19 +82,32 @@ export class SearchPageComponent implements OnInit {
   private _searchableItems$: Observable<SearchItem[]> = combineLatest([
     this._taskService.allTasks$,
     this._taskService.getArchivedTasks(),
+    this._noteService.notes$,
   ]).pipe(
     withLatestFrom(this._projectService.list$, this._tagService.tags$),
-    map(([[allTasks, archiveTasks], projects, tags]) => {
+    map(([[allTasks, archiveTasks, notes], projects, tags]) => {
+      const projectFolderMap = this._menuTreeService.projectFolderMap();
+      const tagFolderMap = this._menuTreeService.tagFolderMap();
       if (!this._cachedArchiveItems) {
         this._cachedArchiveItems = this._mapTasksToSearchItems(
           true,
           archiveTasks,
           projects,
           tags,
+          projectFolderMap,
+          tagFolderMap,
         );
       }
       return [
-        ...this._mapTasksToSearchItems(false, allTasks, projects, tags),
+        ...this._mapTasksToSearchItems(
+          false,
+          allTasks,
+          projects,
+          tags,
+          projectFolderMap,
+          tagFolderMap,
+        ),
+        ...this._mapNotesToSearchItems(notes, projects, projectFolderMap),
         ...this._cachedArchiveItems,
       ];
     }),
@@ -96,6 +118,8 @@ export class SearchPageComponent implements OnInit {
     tasks: Task[],
     projects: Project[],
     tags: Tag[],
+    projectFolderMap: Map<string, string>,
+    tagFolderMap: Map<string, string>,
   ): SearchItem[] {
     const taskMap = new Map(tasks.map((t) => [t.id, t]));
     const projectMap = new Map(projects.map((p) => [p.id, p]));
@@ -118,9 +142,65 @@ export class SearchPageComponent implements OnInit {
         timeSpentOnDay: task.timeSpentOnDay,
         created: task.created,
         issueType: task.issueType || null,
-        ctx: this._getContextIcon(task, projectMap, tagMap, tagId),
+        ctx: this._getContextIcon(
+          task,
+          projectMap,
+          tagMap,
+          tagId,
+          projectFolderMap,
+          tagFolderMap,
+        ),
         isArchiveTask,
         isDone: !!task.isDone,
+      };
+    });
+  }
+
+  private _mapNotesToSearchItems(
+    notes: Note[],
+    projects: Project[],
+    projectFolderMap: Map<string, string>,
+  ): SearchItem[] {
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
+
+    return notes.map((note) => {
+      const title = note.content ? note.content.split('\n')[0] : 'Note';
+      const ctx = note.projectId
+        ? projectMap.get(note.projectId) || {
+            ...DEFAULT_TAG,
+            icon: 'comment',
+            color: 'black',
+          }
+        : TODAY_TAG;
+
+      let ctxTitle = ctx.title;
+      if (note.projectId) {
+        const folderPath = projectFolderMap.get(note.projectId);
+        if (folderPath) {
+          ctxTitle = `${folderPath.replace(/ › /g, ' > ')} > ${ctx.title}`;
+        }
+      }
+
+      return {
+        id: note.id,
+        title,
+        taskNotes: note.content || '',
+        searchText: (note.content || '').toLowerCase(),
+        projectId: note.projectId || null,
+        parentId: null,
+        parentTitle: null,
+        tagId: note.projectId ? '' : TODAY_TAG.id,
+        timeSpentOnDay: {},
+        created: note.created,
+        issueType: null,
+        ctx: {
+          ...ctx,
+          title: ctxTitle,
+          icon: (ctx as Tag).icon || (note.projectId && 'list') || 'comment',
+        } as Tag | Project,
+        isArchiveTask: false,
+        isDone: false,
+        isNote: true,
       };
     });
   }
@@ -130,6 +210,8 @@ export class SearchPageComponent implements OnInit {
     projectMap: Map<string, Project>,
     tagMap: Map<string, Tag>,
     tagId: string,
+    projectFolderMap: Map<string, string>,
+    tagFolderMap: Map<string, string>,
   ): Tag | Project {
     let context: Tag | Project | undefined = task.projectId
       ? projectMap.get(task.projectId)
@@ -140,8 +222,22 @@ export class SearchPageComponent implements OnInit {
       context = { ...DEFAULT_TAG, icon: 'help_outline', color: 'black' };
     }
 
+    let title = context.title;
+    if (task.projectId) {
+      const folderPath = projectFolderMap.get(task.projectId);
+      if (folderPath) {
+        title = `${folderPath.replace(/ › /g, ' > ')} > ${context.title}`;
+      }
+    } else if (tagId && tagId !== TODAY_TAG.id) {
+      const folderPath = tagFolderMap.get(tagId);
+      if (folderPath) {
+        title = `${folderPath.replace(/ › /g, ' > ')} > ${context.title}`;
+      }
+    }
+
     return {
       ...context,
+      title,
       icon: (context as Tag).icon || (task.projectId && 'list') || null,
     };
   }
@@ -177,7 +273,18 @@ export class SearchPageComponent implements OnInit {
 
   navigateToItem(item: SearchItem): void {
     if (!item) return;
-    this._navigateToTaskService.navigate(item.id, item.isArchiveTask).then(() => {});
+    if (item.isNote) {
+      const path = item.projectId
+        ? `/project/${item.projectId}/tasks`
+        : `/tag/TODAY/tasks`;
+      this._router.navigate([path], { queryParams: { focusItem: item.id } }).then(() => {
+        if (!this._layoutService.isShowNotes()) {
+          this._layoutService.toggleNotes();
+        }
+      });
+    } else {
+      this._navigateToTaskService.navigate(item.id, item.isArchiveTask).then(() => {});
+    }
   }
 
   clearSearch(): void {

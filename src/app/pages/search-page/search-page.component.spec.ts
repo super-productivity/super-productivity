@@ -1,4 +1,11 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { signal, WritableSignal } from '@angular/core';
+import { Router } from '@angular/router';
+import { NoteService } from '../../features/note/note.service';
+import { Note } from '../../features/note/note.model';
+import { LayoutService } from '../../core-ui/layout/layout.service';
+import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
+
 import { SearchPageComponent } from './search-page.component';
 import { TaskService } from '../../features/tasks/task.service';
 import { ProjectService } from '../../features/project/project.service';
@@ -48,6 +55,7 @@ const createTag = (overrides: Partial<Tag> = {}): Tag =>
   }) as Tag;
 
 describe('SearchPageComponent', () => {
+  console.log('DEBUG NoteService:', NoteService);
   let fixture: ComponentFixture<SearchPageComponent>;
   let component: SearchPageComponent;
 
@@ -55,15 +63,23 @@ describe('SearchPageComponent', () => {
   let archivedTasks: Task[];
   let projectList$: BehaviorSubject<Project[]>;
   let tags$: BehaviorSubject<Tag[]>;
+  let notes$: BehaviorSubject<Note[]>;
+  let projectFolderMapSignal: WritableSignal<Map<string, string>>;
+  let tagFolderMapSignal: WritableSignal<Map<string, string>>;
 
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
+  let routerSpy: jasmine.SpyObj<Router>;
+  let layoutServiceSpy: jasmine.SpyObj<LayoutService>;
 
   beforeEach(async () => {
     allTasks$ = new BehaviorSubject<Task[]>([]);
     archivedTasks = [];
     projectList$ = new BehaviorSubject<Project[]>([createProject()]);
     tags$ = new BehaviorSubject<Tag[]>([createTag()]);
+    notes$ = new BehaviorSubject<Note[]>([]);
+    projectFolderMapSignal = signal<Map<string, string>>(new Map());
+    tagFolderMapSignal = signal<Map<string, string>>(new Map());
 
     taskServiceSpy = jasmine.createSpyObj('TaskService', ['getArchivedTasks'], {
       allTasks$,
@@ -74,6 +90,13 @@ describe('SearchPageComponent', () => {
       'navigate',
     ]);
     navigateToTaskServiceSpy.navigate.and.returnValue(Promise.resolve());
+
+    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    routerSpy.navigate.and.returnValue(Promise.resolve(true));
+
+    layoutServiceSpy = jasmine.createSpyObj('LayoutService', ['toggleNotes'], {
+      isShowNotes: signal(false),
+    });
 
     await TestBed.configureTestingModule({
       imports: [SearchPageComponent, NoopAnimationsModule, TranslateModule.forRoot()],
@@ -87,6 +110,16 @@ describe('SearchPageComponent', () => {
         {
           provide: NavigateToTaskService,
           useValue: navigateToTaskServiceSpy,
+        },
+        { provide: NoteService, useValue: { notes$ } },
+        { provide: Router, useValue: routerSpy },
+        { provide: LayoutService, useValue: layoutServiceSpy },
+        {
+          provide: MenuTreeService,
+          useValue: {
+            projectFolderMap: projectFolderMapSignal,
+            tagFolderMap: tagFolderMapSignal,
+          },
         },
       ],
     })
@@ -383,5 +416,76 @@ describe('SearchPageComponent', () => {
     expect(latestResults[0].searchText).toBeDefined();
     expect(latestResults[0].searchText).toContain('hello world');
     expect(latestResults[0].searchText).toContain('some notes');
+  }));
+
+  it('should find notes by content (case-insensitive)', fakeAsync(() => {
+    notes$.next([
+      {
+        id: 'n1',
+        content: 'Check out this important note\nSecond line',
+        created: 1000,
+      } as any,
+    ]);
+    initAndFlush();
+    typeAndFlush('IMPORTANT');
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].id).toBe('n1');
+    expect(latestResults[0].title).toBe('Check out this important note');
+    expect(latestResults[0].isNote).toBe(true);
+  }));
+
+  it('should navigate to note correctly in navigateToItem', fakeAsync(() => {
+    const item = {
+      id: 'n1',
+      isNote: true,
+      projectId: 'proj-1',
+    } as SearchItem;
+    component.navigateToItem(item);
+    tick();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/project/proj-1/tasks'], {
+      queryParams: { focusItem: 'n1' },
+    });
+    expect(layoutServiceSpy.toggleNotes).toHaveBeenCalled();
+  }));
+
+  it('should navigate to Today notes correctly in navigateToItem when projectId is null', fakeAsync(() => {
+    const item = {
+      id: 'n2',
+      isNote: true,
+      projectId: null,
+    } as SearchItem;
+    component.navigateToItem(item);
+    tick();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/tag/TODAY/tasks'], {
+      queryParams: { focusItem: 'n2' },
+    });
+    expect(layoutServiceSpy.toggleNotes).toHaveBeenCalled();
+  }));
+
+  it('should include full folder path in context tag title for task', fakeAsync(() => {
+    projectFolderMapSignal.set(new Map([['proj-1', 'Folder 1 › Subfolder A']]));
+    projectList$.next([createProject({ id: 'proj-1', title: 'My Project' })]);
+    allTasks$.next([createTask({ id: 't1', title: 'Folder Task', projectId: 'proj-1' })]);
+    initAndFlush();
+    typeAndFlush('Folder');
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
+  }));
+
+  it('should include full folder path in context tag title for note', fakeAsync(() => {
+    projectFolderMapSignal.set(new Map([['proj-1', 'Folder 1 › Subfolder A']]));
+    projectList$.next([createProject({ id: 'proj-1', title: 'My Project' })]);
+    notes$.next([
+      {
+        id: 'n1',
+        content: 'Folder Note Content',
+        projectId: 'proj-1',
+        created: 1000,
+      } as any,
+    ]);
+    initAndFlush();
+    typeAndFlush('Folder Note');
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
   }));
 });

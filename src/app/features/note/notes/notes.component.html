@@ -32,6 +32,7 @@
   <!---->
   @for (note of notes; track note.id) {
     <div
+      [id]="'n-' + note.id"
       cdkDrag
       [cdkDragStartDelay]="dragDelayForTouch()"
     >

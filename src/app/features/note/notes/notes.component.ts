@@ -5,7 +5,9 @@ import {
   inject,
   viewChild,
   OnInit,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NoteService } from '../note.service';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -25,6 +27,7 @@ import { HISTORY_STATE } from '../../../app.constants';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from 'src/app/core-ui/layout/layout.service';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'notes',
@@ -47,6 +50,8 @@ export class NotesComponent implements OnInit {
   workContextService = inject(WorkContextService);
   private _matDialog = inject(MatDialog);
   private _layoutService = inject(LayoutService);
+  private _activatedRoute = inject(ActivatedRoute);
+  private _destroyRef = inject(DestroyRef);
 
   T: typeof T = T;
   isElementWasAdded: boolean = false;
@@ -93,6 +98,28 @@ export class NotesComponent implements OnInit {
         window.history.pushState({ [HISTORY_STATE.NOTES]: true }, '');
       }
     }
+
+    this._activatedRoute.queryParams
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((params) => {
+        if (params.focusItem) {
+          this._focusNote(params.focusItem);
+        }
+      });
+  }
+
+  private _focusNote(noteId: string): void {
+    // Wait a short time for the DOM to render the note list
+    setTimeout(() => {
+      const el = document.getElementById(`n-${noteId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-searched-item');
+        setTimeout(() => {
+          el.classList.remove('highlight-searched-item');
+        }, 3000);
+      }
+    }, 300);
   }
 
   @HostListener('window:popstate')

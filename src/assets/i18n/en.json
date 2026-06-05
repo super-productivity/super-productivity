@@ -1067,9 +1067,9 @@
       "START": "Work Start"
     },
     "SEARCH_BAR": {
-      "INFO": "Start typing to search for tasks",
-      "NO_RESULTS": "No tasks found matching your search",
-      "PLACEHOLDER": "Search for task or task notes"
+      "INFO": "Start typing to search for tasks or notes",
+      "NO_RESULTS": "No tasks or notes found matching your search",
+      "PLACEHOLDER": "Search for task, task notes or project notes"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {

@@ -1072,9 +1072,9 @@
       "START": "Arbeitsbeginn"
     },
     "SEARCH_BAR": {
-      "INFO": "Klicke auf das Listensymbol, um nach archivierten Aufgaben zu suchen",
-      "NO_RESULTS": "Keine Aufgaben gefunden, die deiner Suche entsprechen",
-      "PLACEHOLDER": "Suche nach Aufgabe oder Aufgabenbeschreibung"
+      "INFO": "Tippe, um nach Aufgaben oder Notizen zu suchen",
+      "NO_RESULTS": "Keine Aufgaben oder Notizen gefunden, die deiner Suche entsprechen",
+      "PLACEHOLDER": "Suche nach Aufgabe, Aufgabenbeschreibung oder Projektnotiz"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
