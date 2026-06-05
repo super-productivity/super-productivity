@@ -121,21 +121,41 @@ export class DateTimePickerHeaderComponent<D> {
   }
 
   get monthLabel(): string {
+    if (this.calendar.currentView === 'year') {
+      const selected = this.calendar.selected;
+      if (selected) {
+        const month = this._dateAdapter.getMonth(selected as D);
+        return this._dateAdapter.getMonthNames('long')[month];
+      }
+    }
     const month = this._dateAdapter.getMonth(this.calendar.activeDate);
     return this._dateAdapter.getMonthNames('long')[month];
   }
 
   get yearLabel(): string {
+    if (this.calendar.currentView === 'multi-year') {
+      const selected = this.calendar.selected;
+      if (selected) {
+        return this._dateAdapter.getYearName(selected as D);
+      }
+    }
     return this._dateAdapter.getYearName(this.calendar.activeDate);
   }
 
   monthLabelClicked(): void {
-    this.calendar.currentView = this.calendar.currentView === 'year' ? 'month' : 'year';
+    const isTogglingToMonth = this.calendar.currentView === 'year';
+    this.calendar.currentView = isTogglingToMonth ? 'month' : 'year';
+    if (isTogglingToMonth && this.calendar.selected) {
+      this.calendar.activeDate = this.calendar.selected as D;
+    }
   }
 
   yearLabelClicked(): void {
-    this.calendar.currentView =
-      this.calendar.currentView === 'multi-year' ? 'month' : 'multi-year';
+    const isTogglingToMonth = this.calendar.currentView === 'multi-year';
+    this.calendar.currentView = isTogglingToMonth ? 'month' : 'multi-year';
+    if (isTogglingToMonth && this.calendar.selected) {
+      this.calendar.activeDate = this.calendar.selected as D;
+    }
   }
 
   previousClicked(): void {
