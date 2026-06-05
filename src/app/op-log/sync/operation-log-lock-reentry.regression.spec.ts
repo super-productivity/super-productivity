@@ -40,11 +40,11 @@ import { T } from '../../t.const';
 
 /**
  * Real LockService, but with a tiny default timeout so the loud-fail
- * test below exhausts processDeferredActions's retry budget in tens of
- * ms instead of 90s. All behaviour (Web Locks path, fallback mutex,
+ * test below exhausts processDeferredActions's retry budget in around
+ * 1 second instead of 90s. All behaviour (Web Locks path, fallback mutex,
  * cleanup) is otherwise untouched.
  */
-const SHORT_TIMEOUT_MS = 50;
+const SHORT_TIMEOUT_MS = 300;
 
 class ShortTimeoutLockService extends LockService {
   override request<T>(
