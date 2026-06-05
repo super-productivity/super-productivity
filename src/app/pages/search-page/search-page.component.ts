@@ -6,10 +6,11 @@ import {
   OnInit,
   viewChild,
 } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { T } from '../../t.const';
 import { ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
 import { combineLatest, Observable } from 'rxjs';
-import { debounceTime, filter, map, startWith, withLatestFrom } from 'rxjs/operators';
+import { debounceTime, filter, map, startWith } from 'rxjs/operators';
 import { TaskService } from '../../features/tasks/task.service';
 import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
 import { NoteService } from '../../features/note/note.service';
@@ -78,39 +79,71 @@ export class SearchPageComponent implements OnInit {
   filteredResults$: Observable<SearchItem[]> = new Observable();
 
   private _cachedArchiveItems: SearchItem[] | null = null;
+  private _archiveCacheInputs?: {
+    archiveTasks: Task[];
+    projects: Project[];
+    tags: Tag[];
+    projectFolderMap: Map<string, string>;
+    tagFolderMap: Map<string, string>;
+  };
 
   private _searchableItems$: Observable<SearchItem[]> = combineLatest([
     this._taskService.allTasks$,
     this._taskService.getArchivedTasks(),
     this._noteService.notes$,
+    this._projectService.list$,
+    this._tagService.tags$,
+    toObservable(this._menuTreeService.projectFolderMap),
+    toObservable(this._menuTreeService.tagFolderMap),
   ]).pipe(
-    withLatestFrom(this._projectService.list$, this._tagService.tags$),
-    map(([[allTasks, archiveTasks, notes], projects, tags]) => {
-      const projectFolderMap = this._menuTreeService.projectFolderMap();
-      const tagFolderMap = this._menuTreeService.tagFolderMap();
-      if (!this._cachedArchiveItems) {
-        this._cachedArchiveItems = this._mapTasksToSearchItems(
-          true,
-          archiveTasks,
-          projects,
-          tags,
-          projectFolderMap,
-          tagFolderMap,
-        );
-      }
-      return [
-        ...this._mapTasksToSearchItems(
-          false,
-          allTasks,
-          projects,
-          tags,
-          projectFolderMap,
-          tagFolderMap,
-        ),
-        ...this._mapNotesToSearchItems(notes, projects, projectFolderMap),
-        ...this._cachedArchiveItems,
-      ];
-    }),
+    map(
+      ([
+        allTasks,
+        archiveTasks,
+        notes,
+        projects,
+        tags,
+        projectFolderMap,
+        tagFolderMap,
+      ]) => {
+        if (
+          !this._cachedArchiveItems ||
+          this._archiveCacheInputs?.archiveTasks !== archiveTasks ||
+          this._archiveCacheInputs?.projects !== projects ||
+          this._archiveCacheInputs?.tags !== tags ||
+          this._archiveCacheInputs?.projectFolderMap !== projectFolderMap ||
+          this._archiveCacheInputs?.tagFolderMap !== tagFolderMap
+        ) {
+          this._archiveCacheInputs = {
+            archiveTasks,
+            projects,
+            tags,
+            projectFolderMap,
+            tagFolderMap,
+          };
+          this._cachedArchiveItems = this._mapTasksToSearchItems(
+            true,
+            archiveTasks,
+            projects,
+            tags,
+            projectFolderMap,
+            tagFolderMap,
+          );
+        }
+        return [
+          ...this._mapTasksToSearchItems(
+            false,
+            allTasks,
+            projects,
+            tags,
+            projectFolderMap,
+            tagFolderMap,
+          ),
+          ...this._mapNotesToSearchItems(notes, projects, projectFolderMap),
+          ...this._cachedArchiveItems,
+        ];
+      },
+    ),
   );
 
   private _mapTasksToSearchItems(
