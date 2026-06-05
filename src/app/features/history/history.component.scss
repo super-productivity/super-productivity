@@ -29,16 +29,31 @@
   padding-top: var(--s2);
 
   &-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s);
     margin-bottom: var(--s);
-    cursor: pointer;
 
     .collapsible-expand-icon {
       vertical-align: middle;
     }
+  }
 
-    button {
-      margin-left: var(--s);
-    }
+  .month-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .month-toggle:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 
   &-time-spent {
@@ -78,6 +93,24 @@
   &-title {
     white-space: nowrap;
     margin-bottom: 0;
+  }
+
+  // day-row disclosure control — renders as plain text, keyboard-accessible
+  .day-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    white-space: nowrap;
+  }
+
+  .day-toggle:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 
   table.week-table {
@@ -121,7 +154,9 @@
       }
 
       > tr.week-row {
+        // :focus-within highlights the row when its day-toggle button is focused
         &:hover,
+        &:focus-within,
         &.isExpanded {
           cursor: pointer;
 
@@ -139,26 +174,18 @@
   }
 }
 
-.day-date {
-  position: relative;
+// work start–end column in the per-day table
+.work-range {
+  white-space: nowrap;
+  // the header row is not a .week-row, so it misses the table's middle-align
+  vertical-align: middle;
 
-  span {
-    &:first-child {
-      @include center;
-      visibility: visible;
-
-      tr:hover & {
-        visibility: hidden;
-      }
-    }
-
-    &:last-child {
-      visibility: hidden;
-
-      tr:hover & {
-        visibility: visible;
-      }
-    }
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    vertical-align: middle;
   }
 }
 
@@ -197,81 +224,7 @@
 
   > table > tr:focus {
     outline: none;
-    box-shadow: 0px 0px 0px 1px var(--palette-primary-400);
-    border-radius: 3px;
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
+    border-radius: var(--card-border-radius);
   }
-
-  caption {
-    font-weight: bold;
-  }
-
-  td {
-    text-align: left;
-    white-space: normal;
-    line-height: 16px;
-    padding: var(--s) calc(var(--s) * 1.5);
-    vertical-align: middle;
-
-    &.title {
-      padding-left: var(--s2);
-      padding-right: 0;
-    }
-
-    &.worked {
-      white-space: nowrap;
-      text-align: center;
-      padding: 0;
-
-      ::ng-deep .inline-input-wrapper {
-        padding: var(--s) calc(var(--s) * 1.5);
-      }
-    }
-
-    &.actions {
-      padding: 0 0 0 0;
-    }
-
-    &.isSubTask {
-      .task-title {
-        font-style: italic;
-        padding-left: var(--s2);
-        position: relative;
-        display: inline-block;
-        // prevent overflow for looooong words
-        overflow-wrap: anywhere;
-
-        &:before {
-          content: '•';
-          position: absolute;
-          top: 50%;
-          left: 0;
-          transform: translateY(-50%);
-        }
-      }
-    }
-  }
-}
-
-.task-title-clickable {
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-.repeat-task-icon {
-  vertical-align: middle;
-  margin-right: var(--s-half);
-  transform: rotate(45deg);
-  opacity: 0.7;
-}
-
-.project-color {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  margin-right: var(--s);
-  vertical-align: middle;
 }

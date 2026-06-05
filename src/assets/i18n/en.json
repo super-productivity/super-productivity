@@ -986,11 +986,6 @@
       "TOOLTIP_CREATE": "Create project folder",
       "TOOLTIP_VISIBILITY": "Show/hide projects"
     },
-    "QUICK_HISTORY": {
-      "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
-      "PAGE_TITLE": "Quick History",
-      "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
-    },
     "REDMINE": {
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Activity",
@@ -2045,7 +2040,8 @@
         "WAIT_FOR_COMPLETION_DESCRIPTION": "Prevents multiple pending recurring tasks from piling up. The next instance will only be created once the current task is completed",
         "WEDNESDAY": "Wednesday",
         "WEEK_OF_MONTH": "Week of month",
-        "WEEKDAY": "Weekday"
+        "WEEKDAY": "Weekday",
+        "WEEKDAY_REQUIRED": "Select at least one weekday"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Could not open repeat config dialog. You can configure it from the task menu."
     },
@@ -2151,6 +2147,7 @@
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Days, worked:",
+        "EXPORT_DATA": "Export data",
         "MONTH_WORKED": "Month worked:",
         "REPEATING_TASK": "Recurring task",
         "RESTORE_TASK_FROM_ARCHIVE": "Restore task from archive",
@@ -2159,7 +2156,9 @@
         "VIEW_TASK_DETAILS": "View task details",
         "WEEK_NR": "Week {{nr}}",
         "WEEK_NR_SHORT": "W{{nr}}",
-        "WORKED": "Worked"
+        "WEEK_RANGE_TOOLTIP": "{{start}}.–{{end}}., days: {{days}}, time: {{time}}",
+        "WORKED": "Worked",
+        "WORK_TIMES": "Working times"
       },
       "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Today task list?",
       "D_EXPORT_TITLE": "Worklog Export {{start}}–{{end}}",
@@ -2709,6 +2708,7 @@
       "START_WELCOME": "Start welcome tour",
       "SYNC": "How to: Configure sync"
     },
+    "HISTORY": "History",
     "METRICS": "Metrics",
     "NO_PROJECT_INFO": "No projects available. You can create a new project by clicking the 'Create Project' button.",
     "NO_TAG_INFO": "There are currently no tags. You can add tags by entering `#yourTagName` when adding or editing tasks.",
@@ -2721,7 +2721,6 @@
     "PROJECT_MENU": "Project Menu",
     "PROJECT_SETTINGS": "Project Settings",
     "PROJECTS": "Projects",
-    "QUICK_HISTORY": "Quick history",
     "SCHEDULE": "Schedule",
     "SEARCH": "Search",
     "SETTINGS": "Settings",
@@ -2743,7 +2742,6 @@
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
-    "WORKLOG": "Worklog",
     "ARCHIVED_PROJECTS": "Archived Projects"
   },
   "MIGRATE": {

@@ -1,0 +1,57 @@
+<td
+  [class.isSubTask]="entry().task.parentId"
+  class="title"
+>
+  @if (projectColor(); as pc) {
+    <div
+      class="project-color"
+      [title]="pc.title"
+      [style.background]="pc.color"
+    ></div>
+  }
+  @if (showRepeatIcon() && entry().task.repeatCfgId) {
+    <mat-icon
+      [title]="T.F.WORKLOG.CMP.REPEATING_TASK | translate"
+      class="repeat-task-icon"
+      >repeat
+    </mat-icon>
+  }
+  <button
+    type="button"
+    (click)="taskClick.emit(entry().task)"
+    class="task-title task-title-clickable"
+    [attr.aria-label]="
+      (T.F.WORKLOG.CMP.VIEW_TASK_DETAILS | translate) + ': ' + entry().task.title
+    "
+  >
+    {{ entry().task.title }}
+  </button>
+</td>
+<td class="worked">
+  @if (entry().task.subTaskIds && entry().task.subTaskIds.length > 0) {
+    <span>∑ {{ entry().task.timeSpentOnDay[dateStr()] | msToClockString }}</span>
+  } @else {
+    <inline-input
+      (changed)="timeChange.emit($event)"
+      [displayValue]="entry().task.timeSpentOnDay[dateStr()] | msToClockString"
+      [type]="'duration'"
+      [value]="entry().task.timeSpentOnDay[dateStr()]"
+    >
+    </inline-input>
+  }
+</td>
+@if (hasActionsColumn()) {
+  <td class="actions">
+    @if (canRestore()) {
+      <button
+        (click)="restore.emit(entry().task)"
+        [title]="T.F.WORKLOG.CMP.RESTORE_TASK_FROM_ARCHIVE | translate"
+        [attr.aria-label]="T.F.WORKLOG.CMP.RESTORE_TASK_FROM_ARCHIVE | translate"
+        color=""
+        mat-icon-button
+      >
+        <mat-icon>settings_backup_restore</mat-icon>
+      </button>
+    }
+  </td>
+}

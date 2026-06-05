@@ -339,4 +339,67 @@ describe('autoFixTypiaErrors', () => {
       expect((result as any).task.entities['t1'].projectId).toBe('INBOX_PROJECT');
     });
   });
+
+  // Discussion #8022: a Nextcloud-synced state imported from MS Todos had 84
+  // taskRepeatCfg entities with undefined `quickSetting` (required field) and
+  // a TODAY tag with undefined `created`. dataRepair couldn't repair them so
+  // post-sync validation looped on "State still invalid after repair".
+  describe('discussion #8022 — legacy entities missing required fields', () => {
+    it('should default undefined taskRepeatCfg.quickSetting to "CUSTOM"', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).taskRepeatCfg = {
+        ids: ['rpt1'],
+        entities: {
+          rpt1: { id: 'rpt1', title: 'imported' },
+        },
+      };
+      const errors = [
+        createTypiaError(
+          '$input.taskRepeatCfg.entities["rpt1"].quickSetting',
+          '("CUSTOM" | "DAILY" | "MONDAY_TO_FRIDAY" | ...)',
+          undefined,
+        ),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).taskRepeatCfg.entities.rpt1.quickSetting).toBe('CUSTOM');
+      expect(errSpy).toHaveBeenCalledWith(
+        '[auto-fix-typia-errors] Applied validation auto-fix',
+        undefined,
+        jasmine.objectContaining({
+          fix: 'task-repeat-cfg-quickSetting-undefined-to-custom',
+          pathRoot: 'taskRepeatCfg',
+        }),
+      );
+    });
+
+    it('should default undefined tag.created to a number timestamp', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['TODAY'],
+        entities: {
+          TODAY: { id: 'TODAY', title: 'Today', taskIds: [] },
+        },
+      };
+      const before = Date.now();
+      const errors = [
+        createTypiaError('$input.tag.entities.TODAY.created', 'number', undefined),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      const created = (result as any).tag.entities.TODAY.created;
+      expect(typeof created).toBe('number');
+      expect(created).toBeGreaterThanOrEqual(before);
+      expect(errSpy).toHaveBeenCalledWith(
+        '[auto-fix-typia-errors] Applied validation auto-fix',
+        undefined,
+        jasmine.objectContaining({
+          fix: 'tag-created-undefined-to-now',
+          pathRoot: 'tag',
+        }),
+      );
+    });
+  });
 });

@@ -1,0 +1,93 @@
+:host {
+  display: table-row;
+}
+
+td {
+  text-align: left;
+  white-space: normal;
+  line-height: 16px;
+  padding: var(--s) calc(var(--s) * 1.5);
+  vertical-align: middle;
+
+  &.title {
+    padding-left: var(--s2);
+    padding-right: 0;
+    width: 100%;
+    // prevent overflow for looooong words
+    overflow-wrap: anywhere;
+  }
+
+  &.worked {
+    white-space: nowrap;
+    text-align: center;
+    padding: 0;
+
+    ::ng-deep .inline-input-wrapper {
+      padding: var(--s) calc(var(--s) * 1.5);
+    }
+  }
+
+  &.actions {
+    padding: 0;
+  }
+
+  &.isSubTask {
+    .task-title {
+      font-style: italic;
+      padding-left: var(--s2);
+      position: relative;
+      display: inline-block;
+      // prevent overflow for looooong words
+      overflow-wrap: anywhere;
+
+      &:before {
+        content: '•';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        transform: translateY(-50%);
+      }
+    }
+  }
+}
+
+.task-title-clickable {
+  // reset native <button> styling so it renders inline like the surrounding text
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  // wrap long titles inside the table cell
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+.repeat-task-icon {
+  vertical-align: middle;
+  margin-right: var(--s-half);
+  transform: rotate(45deg);
+  opacity: 0.7;
+}
+
+.project-color {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  margin-right: var(--s);
+  vertical-align: middle;
+}

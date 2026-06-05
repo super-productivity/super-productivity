@@ -1,17 +1,9 @@
 <button
-  [routerLink]="[base, contextId, 'quick-history']"
+  [routerLink]="[base, contextId, 'history']"
   mat-menu-item
 >
   <mat-icon>history</mat-icon>
-  <span class="text">{{ T.MH.QUICK_HISTORY | translate }}</span>
-</button>
-
-<button
-  [routerLink]="[base, contextId, 'worklog']"
-  mat-menu-item
->
-  <mat-icon>date_range</mat-icon>
-  <span class="text">{{ T.MH.WORKLOG | translate }}</span>
+  <span class="text">{{ T.MH.HISTORY | translate }}</span>
 </button>
 
 @if (isForProject || contextId === TODAY_TAG_ID) {

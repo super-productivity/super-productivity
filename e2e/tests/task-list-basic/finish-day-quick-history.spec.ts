@@ -5,8 +5,7 @@ const TASK_TITLE = 'task task-title';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const TABLE_CAPTION = 'quick-history h3';
-const TABLE_ROWS = 'table tr';
+const DAY_ROW = 'history .week-row';
 
 test.describe.serial('Finish Day Quick History', () => {
   test('should create task, mark as done, finish day and view in quick history', async ({
@@ -52,38 +51,25 @@ test.describe.serial('Finish Day Quick History', () => {
     await saveBtn.waitFor({ state: 'visible' });
     await saveBtn.click();
 
-    // Wait for navigation back to work view
-    await page.waitForURL(/#\/tag\/TODAY/);
+    // Wait for navigation back to work view after the archive/save flow settles.
+    await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
 
-    // Navigate to quick history via left-hand menu
-    const contextBtn = page
-      .locator('magic-side-nav .nav-list > li.nav-item:first-child nav-item')
-      .first();
-    await contextBtn.waitFor({ state: 'visible' });
-    await contextBtn.click({ button: 'right' });
-
-    const quickHistoryBtn = page.locator('work-context-menu > button:nth-child(1)');
-    await quickHistoryBtn.waitFor({ state: 'visible' });
-    await quickHistoryBtn.click();
-
-    // Wait for quick history page
+    // Navigate directly to the legacy Quick History route
+    await page.goto('/#/tag/TODAY/quick-history');
     await page.waitForURL(/#\/tag\/TODAY\/quick-history/);
-    await page.waitForSelector('quick-history', { state: 'visible' });
+    await page.waitForSelector('history', { state: 'visible' });
 
-    // Click on table caption
-    const tableCaption = page.locator(TABLE_CAPTION);
-    await tableCaption.waitFor({ state: 'visible' });
-    await tableCaption.click();
+    // Expand the day row to reveal its tasks
+    const dayRow = page.locator(DAY_ROW).first();
+    await dayRow.waitFor({ state: 'visible' });
+    await dayRow.click();
 
-    // Confirm quick history page loads
-    await expect(page.locator('quick-history')).toBeVisible();
-
-    // Confirm task is in the table
-    await page.waitForSelector(TABLE_ROWS, { state: 'visible' });
-    const tableTaskTitle = page.locator('table > tr:nth-child(1) > td.title > span');
+    // Confirm the task appears in the expanded day's task table
+    const tableTaskTitle = page
+      .locator('.task-summary-table td.title button')
+      .filter({ hasText: taskName })
+      .first();
     await tableTaskTitle.waitFor({ state: 'visible' });
-
-    // Verify the task title is present in the table
     await expect(tableTaskTitle).toContainText(taskName);
   });
 });
