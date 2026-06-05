@@ -139,26 +139,62 @@
   }
 }
 
-.day-date {
-  position: relative;
+// work start–end column in the per-day table
+.work-range {
+  white-space: nowrap;
+  // the header row is not a .week-row, so it misses the table's middle-align
+  vertical-align: middle;
 
-  span {
-    &:first-child {
-      @include center;
-      visibility: visible;
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    vertical-align: middle;
+  }
+}
 
-      tr:hover & {
-        visibility: hidden;
-      }
-    }
+// per-day habits / simple counters, shown when a day is expanded
+.day-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s) var(--s2);
+  padding: var(--s) var(--s2);
+  margin-bottom: var(--s);
+  border-bottom: 1px solid var(--separator-color);
+}
 
-    &:last-child {
-      visibility: hidden;
+.simple-counter-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  font-size: 13px;
+  white-space: nowrap;
 
-      tr:hover & {
-        visibility: visible;
-      }
-    }
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    opacity: 0.8;
+  }
+
+  .habit-initial {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bg-lighter);
+    font-size: 10px;
+    font-weight: bold;
+  }
+
+  .count {
+    font-weight: bold;
   }
 }
 
@@ -200,78 +236,4 @@
     box-shadow: 0px 0px 0px 1px var(--palette-primary-400);
     border-radius: 3px;
   }
-
-  caption {
-    font-weight: bold;
-  }
-
-  td {
-    text-align: left;
-    white-space: normal;
-    line-height: 16px;
-    padding: var(--s) calc(var(--s) * 1.5);
-    vertical-align: middle;
-
-    &.title {
-      padding-left: var(--s2);
-      padding-right: 0;
-    }
-
-    &.worked {
-      white-space: nowrap;
-      text-align: center;
-      padding: 0;
-
-      ::ng-deep .inline-input-wrapper {
-        padding: var(--s) calc(var(--s) * 1.5);
-      }
-    }
-
-    &.actions {
-      padding: 0 0 0 0;
-    }
-
-    &.isSubTask {
-      .task-title {
-        font-style: italic;
-        padding-left: var(--s2);
-        position: relative;
-        display: inline-block;
-        // prevent overflow for looooong words
-        overflow-wrap: anywhere;
-
-        &:before {
-          content: '•';
-          position: absolute;
-          top: 50%;
-          left: 0;
-          transform: translateY(-50%);
-        }
-      }
-    }
-  }
-}
-
-.task-title-clickable {
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-.repeat-task-icon {
-  vertical-align: middle;
-  margin-right: var(--s-half);
-  transform: rotate(45deg);
-  opacity: 0.7;
-}
-
-.project-color {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  margin-right: var(--s);
-  vertical-align: middle;
 }

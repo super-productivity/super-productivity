@@ -5,21 +5,24 @@ import {
   inject,
   OnDestroy,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { expandFadeAnimation } from '../../ui/animations/expand.ani';
-import { WorklogDataForDay, WorklogMonth, WorklogWeek } from './worklog.model';
+import { WorklogDataForDay, WorklogMonth, WorklogWeek } from '../worklog/worklog.model';
+import { SimpleCounter } from '../simple-counter/simple-counter.model';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
-import { DialogWorklogExportComponent } from './dialog-worklog-export/dialog-worklog-export.component';
+import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { ActivatedRoute, Router } from '@angular/router';
 import { standardListAnimation } from '../../ui/animations/standard-list.ani';
-import { WorklogService } from './worklog.service';
+import { WorklogService } from '../worklog/worklog.service';
 import { getDateRangeForMonth } from '../../util/get-date-range-for-month';
 import { getDateRangeForWeek } from '../../util/get-date-range-for-week';
 import { fadeAnimation, fadeInSlowAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { WorkContextService } from '../work-context/work-context.service';
+import { SimpleCounterService } from '../simple-counter/simple-counter.service';
 import { SearchQueryParams } from '../../pages/search-page/search-page.model';
 import { Subscription } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -29,19 +32,21 @@ import { AsyncPipe, KeyValue, KeyValuePipe } from '@angular/common';
 import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { InlineInputComponent } from '../../ui/inline-input/inline-input.component';
 import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
 import { MsToStringPipe } from '../../ui/duration/ms-to-string.pipe';
+import { MsToMinuteClockStringPipe } from '../../ui/duration/ms-to-minute-clock-string.pipe';
+import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
 import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
+import { HistoryTaskRowComponent } from './history-task-row/history-task-row.component';
 
 @Component({
-  selector: 'worklog',
-  templateUrl: './worklog.component.html',
-  styleUrls: ['./worklog.component.scss'],
+  selector: 'history',
+  templateUrl: './history.component.html',
+  styleUrls: ['./history.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [
     expandFadeAnimation,
@@ -54,19 +59,22 @@ import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-t
     MatMiniFabButton,
     MatIcon,
     MatTooltip,
-    InlineInputComponent,
     MatIconButton,
     AsyncPipe,
     KeyValuePipe,
     MsToClockStringPipe,
     MsToStringPipe,
+    MsToMinuteClockStringPipe,
+    MomentFormatPipe,
     NumberToMonthPipe,
     TranslatePipe,
+    HistoryTaskRowComponent,
   ],
 })
-export class WorklogComponent implements AfterViewInit, OnDestroy {
+export class HistoryComponent implements AfterViewInit, OnDestroy {
   readonly worklogService = inject(WorklogService);
   readonly workContextService = inject(WorkContextService);
+  readonly simpleCounterService = inject(SimpleCounterService);
   private readonly _taskService = inject(TaskService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _router = inject(Router);
@@ -75,6 +83,10 @@ export class WorklogComponent implements AfterViewInit, OnDestroy {
   private readonly _taskArchiveService = inject(TaskArchiveService);
 
   T: typeof T = T;
+  readonly enabledSimpleCounters = toSignal(
+    this.simpleCounterService.enabledSimpleCounters$,
+    { initialValue: [] as SimpleCounter[] },
+  );
   expanded: { [key: string]: boolean } = {};
   expandedMonths: { [key: string]: boolean } = (() => {
     const now = new Date();
@@ -131,6 +143,18 @@ export class WorklogComponent implements AfterViewInit, OnDestroy {
       restoreFocus: true,
       data: { task },
     });
+  }
+
+  countForDay(sc: SimpleCounter, dateStr: string): number {
+    return sc.countOnDay?.[dateStr] || 0;
+  }
+
+  // only show the project color dot on the combined "Today" list
+  projectColorFor(task: Task): { title: string; color: string } | null {
+    if (!this.workContextService.isTodayList) {
+      return null;
+    }
+    return this.allProjectsColorAndTitle[task.projectId] ?? null;
   }
 
   restoreTask(task: TaskCopy): void {

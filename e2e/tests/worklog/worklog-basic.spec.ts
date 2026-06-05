@@ -14,11 +14,11 @@ test.describe('Worklog', () => {
     await workViewPage.waitForTaskList();
 
     // Navigate to worklog
-    await page.goto('/#/tag/TODAY/worklog');
+    await page.goto('/#/tag/TODAY/history');
     await page.waitForLoadState('networkidle');
 
     // Verify URL
-    await expect(page).toHaveURL(/worklog/);
+    await expect(page).toHaveURL(/history/);
 
     // Verify worklog component is visible
     await expect(page.locator('.route-wrapper')).toBeVisible();
@@ -56,7 +56,7 @@ test.describe('Worklog', () => {
     await saveBtn.click();
 
     // Navigate to worklog
-    await page.goto('/#/tag/TODAY/worklog');
+    await page.goto('/#/tag/TODAY/history');
     await page.waitForLoadState('networkidle');
 
     // Worklog should show today's date and the completed task
@@ -79,15 +79,15 @@ test.describe('Worklog', () => {
       await contextBtn.click({ button: 'right' });
 
       // Look for worklog option in context menu
-      const worklogBtn = page.locator('.mat-mdc-menu-content button:has-text("Worklog")');
+      const worklogBtn = page.locator('.mat-mdc-menu-content button:has-text("History")');
       const worklogBtnVisible = await worklogBtn
         .isVisible({ timeout: 3000 })
         .catch(() => false);
 
       if (worklogBtnVisible) {
         await worklogBtn.click();
-        await page.waitForURL(/worklog/);
-        await expect(page).toHaveURL(/worklog/);
+        await page.waitForURL(/history/);
+        await expect(page).toHaveURL(/history/);
       }
     }
   });
@@ -96,13 +96,13 @@ test.describe('Worklog', () => {
     await workViewPage.waitForTaskList();
 
     // Navigate to worklog
-    await page.goto('/#/tag/TODAY/worklog');
+    await page.goto('/#/tag/TODAY/history');
     await page.waitForLoadState('networkidle');
 
     // Verify worklog page loads
     await expect(page.locator('.route-wrapper')).toBeVisible();
 
     // Just verify the page loaded without errors
-    await expect(page).toHaveURL(/worklog/);
+    await expect(page).toHaveURL(/history/);
   });
 });

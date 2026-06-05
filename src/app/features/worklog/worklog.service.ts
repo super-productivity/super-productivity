@@ -60,9 +60,10 @@ export class WorklogService {
             filter((event: any) => event instanceof NavigationEnd),
             filter(
               ({ urlAfterRedirects }: NavigationEnd) =>
+                // 'history' also matches the legacy 'quick-history' substring
+                urlAfterRedirects.includes('history') ||
                 urlAfterRedirects.includes('worklog') ||
                 urlAfterRedirects.includes('daily-summary') ||
-                urlAfterRedirects.includes('quick-history') ||
                 urlAfterRedirects.includes('metrics'),
             ),
           ),

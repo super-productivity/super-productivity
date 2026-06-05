@@ -2033,7 +2033,8 @@
         "VIEW_TASK_DETAILS": "View task details",
         "WEEK_NR": "Week {{nr}}",
         "WEEK_NR_SHORT": "W{{nr}}",
-        "WORKED": "Worked"
+        "WORKED": "Worked",
+        "WORK_TIMES": "Working times"
       },
       "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Today task list?",
       "D_EXPORT_TITLE": "Worklog Export {{start}}–{{end}}",
@@ -2583,6 +2584,7 @@
       "START_WELCOME": "Start welcome tour",
       "SYNC": "How to: Configure sync"
     },
+    "HISTORY": "History",
     "METRICS": "Metrics",
     "NO_PROJECT_INFO": "No projects available. You can create a new project by clicking the 'Create Project' button.",
     "NO_TAG_INFO": "There are currently no tags. You can add tags by entering `#yourTagName` when adding or editing tasks.",

@@ -9,37 +9,39 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { BehaviorSubject, of } from 'rxjs';
 
-import { Worklog } from './worklog.model';
-import { WorklogComponent } from './worklog.component';
-import { WorklogService } from './worklog.service';
+import { Worklog } from '../worklog/worklog.model';
+import { HistoryComponent } from './history.component';
+import { WorklogService } from '../worklog/worklog.service';
 import { WorkContextService } from '../work-context/work-context.service';
+import { SimpleCounterService } from '../simple-counter/simple-counter.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TaskService } from '../tasks/task.service';
 import { Task } from '../tasks/task.model';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
-import { mapArchiveToWorklog } from './util/map-archive-to-worklog';
+import { mapArchiveToWorklog } from '../worklog/util/map-archive-to-worklog';
 
-describe('WorklogComponent', () => {
-  let fixture: ComponentFixture<WorklogComponent>;
+describe('HistoryComponent', () => {
+  let fixture: ComponentFixture<HistoryComponent>;
 
   const worklogData$ = new BehaviorSubject({
     worklog: {} as Worklog,
     totalTimeSpent: 0,
   });
 
-  const createTaskForDate = (dateStr: string, timeSpent = 60000): Task => ({
-    attachments: [],
-    created: new Date(dateStr).getTime(),
-    id: dateStr,
-    isDone: false,
-    projectId: 'project',
-    subTaskIds: [],
-    tagIds: [],
-    timeEstimate: 0,
-    timeSpent,
-    timeSpentOnDay: { [dateStr]: timeSpent },
-    title: dateStr,
-  });
+  const createTaskForDate = (dateStr: string, timeSpent = 60000): Task =>
+    ({
+      attachments: [],
+      created: new Date(dateStr).getTime(),
+      id: dateStr,
+      isDone: false,
+      projectId: 'project',
+      subTaskIds: [],
+      tagIds: [],
+      timeEstimate: 0,
+      timeSpent,
+      timeSpentOnDay: { [dateStr]: timeSpent },
+      title: dateStr,
+    }) as unknown as Task;
 
   beforeEach(async () => {
     const activatedRouteSpy = jasmine.createSpyObj<ActivatedRoute>('ActivatedRoute', [], {
@@ -50,7 +52,7 @@ describe('WorklogComponent', () => {
     });
 
     await TestBed.configureTestingModule({
-      imports: [TranslateModule.forRoot(), WorklogComponent],
+      imports: [TranslateModule.forRoot(), HistoryComponent],
       providers: [
         provideMockStore({
           selectors: [
@@ -66,11 +68,12 @@ describe('WorklogComponent', () => {
         { provide: TaskArchiveService, useValue: {} },
         { provide: TaskService, useValue: {} },
         { provide: WorkContextService, useValue: {} },
+        { provide: SimpleCounterService, useValue: { enabledSimpleCounters$: of([]) } },
         { provide: WorklogService, useValue: worklogServiceSpy },
       ],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(WorklogComponent);
+    fixture = TestBed.createComponent(HistoryComponent);
     fixture.detectChanges();
   });
 

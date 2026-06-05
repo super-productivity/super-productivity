@@ -9,8 +9,6 @@ const SECOND_TASK = 'task:nth-child(2)';
 const THIRD_TASK = 'task:nth-child(3)';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const TABLE_CAPTION = 'quick-history  h3';
-const TABLE_ROWS = 'table tr';
 
 test.describe('Finish Day Quick History With Subtasks', () => {
   test('should complete full finish day flow with subtasks', async ({
@@ -72,7 +70,7 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     // Wait for navigation back to work view
     await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
 
-    // Step 5: Navigate to quick history via left-hand menu
+    // Step 5: Navigate to history via left-hand menu
     // Right-click on work view in magic-side-nav (first main nav item)
     const navItemBtn = page
       .locator('magic-side-nav .nav-list > li.nav-item:first-child nav-item button')
@@ -88,35 +86,25 @@ test.describe('Finish Day Quick History With Subtasks', () => {
       state: 'visible',
     });
     await page.click('work-context-menu > button:nth-child(1)');
-    await page.waitForSelector('quick-history', { state: 'visible' });
+    await page.waitForSelector('history', { state: 'visible' });
 
-    // Step 6: Click on table caption
-    await page.waitForSelector(TABLE_CAPTION, { state: 'visible' });
-    await page.click(TABLE_CAPTION);
+    // Step 6: Expand the day row to reveal its tasks (current month auto-expands)
+    const dayRow = page.locator('history .week-row').first();
+    await dayRow.waitFor({ state: 'visible' });
+    await dayRow.click();
 
-    // Step 7: Confirm quick history page loads
-    await page.waitForSelector('quick-history', { state: 'visible' });
-    // Verify we're on the quick history page without specific task checks
-    // Tasks created with 'a' shortcut may not be properly nested/archived
-    await expect(page.locator('quick-history')).toBeVisible();
-    await expect(page.locator('table')).toBeVisible();
-
-    // Step 8: Confirm tasks are in the table
-    // Tasks are now sorted alphabetically: First Subtask, Main Task with Subtasks, Second Subtask
-    await page.waitForSelector(TABLE_ROWS, { state: 'visible', timeout: 5000 });
-    await expect(page.locator(TABLE_ROWS).first()).toBeVisible();
-    await page.waitForSelector('table > tr:nth-child(1) > td.title > span', {
+    // Step 7: Confirm the history page + task table render
+    await expect(page.locator('history')).toBeVisible();
+    await page.waitForSelector('.task-summary-table tr', {
       state: 'visible',
+      timeout: 5000,
     });
-    // Verify the tasks appear in alphabetical order
-    await expect(page.locator('table > tr:nth-child(1) > td.title > span')).toContainText(
-      'First Subtask',
-    );
-    await expect(page.locator('table > tr:nth-child(2) > td.title > span')).toContainText(
-      'Main Task with Subtasks',
-    );
-    await expect(page.locator('table > tr:nth-child(3) > td.title > span')).toContainText(
-      'Second Subtask',
-    );
+
+    // Step 8: Tasks appear in alphabetical order
+    // (First Subtask, Main Task with Subtasks, Second Subtask)
+    const rows = page.locator('.task-summary-table tr td.title span');
+    await expect(rows.nth(0)).toContainText('First Subtask');
+    await expect(rows.nth(1)).toContainText('Main Task with Subtasks');
+    await expect(rows.nth(2)).toContainText('Second Subtask');
   });
 });

@@ -171,9 +171,9 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         console.log('[Import Test] Phase 5: Verifying archived tasks in worklog');
 
         // Navigate to worklog on Client B
-        await clientB.page.goto('/#/tag/TODAY/worklog');
+        await clientB.page.goto('/#/tag/TODAY/history');
         await clientB.page.waitForLoadState('networkidle');
-        await clientB.page.waitForSelector('worklog', { timeout: 10000 });
+        await clientB.page.waitForSelector('history', { timeout: 10000 });
 
         // Expand worklog to see archived tasks
         const weekRow = clientB.page.locator('.week-row').first();
@@ -199,7 +199,7 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
           console.log('[Import Test] Client B worklog has archived task entries');
         } else {
           // Archive data may not show in TODAY tag worklog - navigate to project worklog
-          await clientB.page.goto('/#/project/test-project-1/worklog');
+          await clientB.page.goto('/#/project/test-project-1/history');
           await clientB.page.waitForLoadState('networkidle');
           console.log('[Import Test] Checking project worklog for archived tasks');
         }

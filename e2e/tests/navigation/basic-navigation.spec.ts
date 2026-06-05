@@ -15,16 +15,16 @@ test.describe('Basic Navigation', () => {
     await expect(page).toHaveURL(/\/#\/schedule/);
     await expect(page.locator('.route-wrapper')).toBeVisible();
 
-    // Navigate to quick history
-    await page.goto('/#/tag/TODAY/quick-history');
+    // Navigate to history (merged Quick History + Worklog)
+    await page.goto('/#/tag/TODAY/history');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/quick-history/);
-    await expect(page.locator('quick-history')).toBeVisible();
+    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/history/);
+    await expect(page.locator('history')).toBeVisible();
 
-    // Navigate to worklog
+    // Legacy worklog route redirects to history
     await page.goto('/#/tag/TODAY/worklog');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/worklog/);
+    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/history/);
     await expect(page.locator('.route-wrapper')).toBeVisible();
 
     // Navigate to metrics
