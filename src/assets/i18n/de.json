@@ -2306,6 +2306,7 @@
       "TASK_OPEN_CONTEXT_MENU": "Öffne das Aufgabenkontextmenü",
       "TASK_OPEN_ESTIMATION_DIALOG": "Schätzung / Zeitaufwand bearbeiten",
       "TASK_SCHEDULE": "Aufgabe planen",
+      "TASK_SCHEDULE_DEADLINE": "Frist für Aufgabe setzen",
       "TASK_SHORTCUTS": "Aufgaben",
       "TASK_SHORTCUTS_INFO": "Die folgenden Verknüpfungen gelten für die aktuell ausgewählte Aufgabe (Auswahl über Tab oder Maus).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Zusätzliche Aufgabeninfo ein- oder ausblenden",

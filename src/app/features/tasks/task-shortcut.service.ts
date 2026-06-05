@@ -176,6 +176,11 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskScheduleDeadline)) {
+      this._handleTaskShortcut(focusedTaskId, 'openDeadlineDialog');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskUnschedule)) {
       this._handleTaskShortcut(focusedTaskId, 'unschedule');
       ev.preventDefault();

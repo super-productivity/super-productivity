@@ -28,6 +28,7 @@ describe('TaskShortcutService', () => {
     taskOpenNotesFullscreen: 'Shift+N',
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
+    taskScheduleDeadline: 'Shift+S',
     taskToggleDone: 'D',
     taskAddSubTask: 'A',
     taskAddAttachment: null,
@@ -276,6 +277,25 @@ describe('TaskShortcutService', () => {
       expect(result).toBe(true);
       expect(event.preventDefault).toHaveBeenCalled();
       expect(mockTaskComponent.openNotesPanel).toHaveBeenCalled();
+    });
+
+    it('should delegate taskScheduleDeadline shortcut to focused task component', () => {
+      const mockTaskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        openDeadlineDialog: jasmine.createSpy('openDeadlineDialog'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('S', 'KeyS', { shiftKey: true });
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockTaskComponent.openDeadlineDialog).toHaveBeenCalled();
     });
 
     it('should return false for non-togglePlay shortcuts when no focused task', () => {

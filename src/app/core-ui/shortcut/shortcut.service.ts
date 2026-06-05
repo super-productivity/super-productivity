@@ -110,6 +110,11 @@ export class ShortcutService {
       return;
     }
 
+    // Handle task-specific shortcuts first when a task is focused
+    if (this._taskShortcutService.handleTaskShortcuts(ev)) {
+      return;
+    }
+
     if (
       checkKeyCombo(ev, keys.toggleBacklog) &&
       this._workContextService.activeWorkContextType === WorkContextType.PROJECT
@@ -219,11 +224,6 @@ export class ShortcutService {
       } else if (checkKeyCombo(ev, keys.zoomDefault)) {
         this._uiHelperService.zoomTo(1);
       }
-    }
-
-    // Handle task-specific shortcuts
-    if (this._taskShortcutService.handleTaskShortcuts(ev)) {
-      return;
     }
 
     // Check plugin shortcuts (exec last)

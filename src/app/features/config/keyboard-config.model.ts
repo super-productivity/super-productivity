@@ -36,6 +36,7 @@ export type KeyboardConfig = Readonly<{
   taskOpenContextMenu?: string | null;
   taskDelete?: string | null;
   taskSchedule?: string | null;
+  taskScheduleDeadline?: string | null;
   taskUnschedule?: string | null;
   selectPreviousTask?: string | null;
   selectNextTask?: string | null;
