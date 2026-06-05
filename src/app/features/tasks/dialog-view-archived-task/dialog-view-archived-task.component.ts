@@ -114,6 +114,7 @@ export class DialogViewArchivedTaskComponent {
               repeatCfg,
               this._dateTimeFormatService.currentLocale(),
               this._dateTimeFormatService,
+              this._translateService,
             );
             this.repeatCfgLabel.set(this._translateService.instant(key, params));
           }

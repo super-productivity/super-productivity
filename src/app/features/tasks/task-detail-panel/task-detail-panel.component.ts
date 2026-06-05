@@ -213,6 +213,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
           repeatCfg,
           this._dateTimeFormatService.currentLocale(),
           this._dateTimeFormatService,
+          this._translateService,
         );
         return this._translateService.instant(key, params);
       }),
