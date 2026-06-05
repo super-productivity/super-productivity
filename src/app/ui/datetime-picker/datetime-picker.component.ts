@@ -6,7 +6,6 @@ import {
   effect,
   EventEmitter,
   inject,
-  Injectable,
   input,
   Output,
   viewChild,
@@ -42,17 +41,9 @@ import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
 import { Log } from '../../core/log';
 import { DateTimePickerHeaderComponent } from './datetime-picker-header.component';
-import { CustomDateAdapter } from '../../core/date-time-format/custom-date-adapter';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 const DEFAULT_TIME = '09:00';
-
-@Injectable()
-export class DateTimePickerDateAdapter extends CustomDateAdapter {
-  override getMonthNames(style: 'long' | 'short' | 'narrow'): string[] {
-    return super.getMonthNames('long');
-  }
-}
 
 @Component({
   selector: 'datetime-picker',
@@ -88,7 +79,6 @@ export class DateTimePickerDateAdapter extends CustomDateAdapter {
   styleUrl: './datetime-picker.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandFadeAnimation, fadeAnimation],
-  providers: [{ provide: DateAdapter, useClass: DateTimePickerDateAdapter }],
 })
 export class DateTimePickerComponent {
   private _dateService = inject(DateService);

@@ -19,12 +19,6 @@
       border: none !important;
     }
 
-    // Hover circle/oval over date cells
-    .mat-calendar-body-cell-content:not(.mat-calendar-body-selected):hover {
-      background-color: color-mix(in srgb, var(--c-primary) 35%, transparent) !important;
-      border-radius: 999px !important;
-    }
-
     // Remove focus outline on selected date and active dates
     .mat-calendar-body-cell-content:focus,
     .mat-calendar-body-cell-content:focus-visible,
@@ -44,7 +38,6 @@
       outline: none !important;
       border: none !important;
       box-shadow: none !important;
-      border-radius: 999px !important;
     }
 
     .mat-calendar-controls {
