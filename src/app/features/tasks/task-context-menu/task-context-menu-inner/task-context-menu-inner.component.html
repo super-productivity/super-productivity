@@ -367,22 +367,22 @@
   (closed)="focusRelatedTaskOrNext()"
 >
   <ng-template matMenuContent>
-    @for (
-      project of moveToProjectList$ | async;
-      track trackByProjectId($index, project)
-    ) {
-      <button
-        (click)="moveTaskToProject(project.id)"
-        mat-menu-item
-        menuTouchFix
-      >
-        <mat-icon
-          [style.color]="project.theme.primary"
-          class="tag-ico"
-          >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
+    @if (moveToProjectList$ | async; as list) {
+      @for (project of list; track trackByProjectId($index, project)) {
+        <button
+          (click)="moveTaskToProject(project.id)"
+          mat-menu-item
+          menuTouchFix
         >
-        {{ project.title }}
-      </button>
+          <select-option-row
+            [title]="project.title"
+            [icon]="project.icon"
+            [defaultIcon]="DEFAULT_PROJECT_ICON"
+            [color]="project.theme?.primary"
+            [folderPath]="projectFolderMap().get(project.id)"
+          ></select-option-row>
+        </button>
+      }
     }
   </ng-template>
 </mat-menu>
@@ -393,23 +393,21 @@
 >
   <ng-template matMenuContent>
     <div (click)="$event.stopPropagation()">
-      @for (tag of toggleTagList(); track $index) {
+      @for (tag of toggleTagList(); track tag.id) {
         <button
           (click)="toggleTag(tag.id)"
           mat-menu-item
           menuTouchFix
         >
-          @if (task.tagIds.includes(tag.id)) {
-            <mat-icon class="check-ico">check_box</mat-icon>
-          } @else {
-            <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
-          }
-          <mat-icon
-            [style.color]="tag.color || tag.theme.primary"
-            class="tag-ico"
-            >{{ tag.icon || 'label' }}</mat-icon
-          >
-          {{ tag.title }}
+          <select-option-row
+            [title]="tag.title"
+            [icon]="tag.icon"
+            defaultIcon="label"
+            [color]="tag.color || tag.theme?.primary"
+            [isSelected]="task.tagIds.includes(tag.id)"
+            [showCheckbox]="true"
+            [folderPath]="tagFolderMap().get(tag.id)"
+          ></select-option-row>
         </button>
       }
     </div>

@@ -192,20 +192,13 @@
       mat-menu-item
       (click)="stateService.updateProjectId(project.id)"
     >
-      @if (isTagEmojiIcon(project)) {
-        <span
-          matMenuItemIcon
-          class="menu-icon-emoji"
-          [style.color]="project.theme?.primary"
-        >
-          {{ project.icon || DEFAULT_PROJECT_ICON }}
-        </span>
-      } @else {
-        <mat-icon [style.color]="project.theme?.primary">
-          {{ project.icon || DEFAULT_PROJECT_ICON }}
-        </mat-icon>
-      }
-      {{ project.title }}
+      <select-option-row
+        [title]="project.title"
+        [icon]="project.icon"
+        [defaultIcon]="DEFAULT_PROJECT_ICON"
+        [color]="project.theme?.primary"
+        [folderPath]="projectFolderMap().get(project.id)"
+      ></select-option-row>
     </button>
   }
 </mat-menu>
@@ -218,26 +211,15 @@
         (click)="toggleTagWithSyntax(tag)"
         [class.selected]="hasSelectedTag(tag.id)"
       >
-        @if (hasSelectedTag(tag.id)) {
-          <mat-icon class="check-ico">check_box</mat-icon>
-        } @else {
-          <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
-        }
-        @if (isTagEmojiIcon(tag)) {
-          <span
-            matMenuItemIcon
-            [style.color]="tag.color || tag.theme?.primary"
-            class="tag-ico tag-ico-emoji"
-            >{{ tag.icon || 'label' }}</span
-          >
-        } @else {
-          <mat-icon
-            [style.color]="tag.color || tag.theme?.primary"
-            class="tag-ico"
-            >{{ tag.icon || 'label' }}
-          </mat-icon>
-        }
-        {{ tag.title }}
+        <select-option-row
+          [title]="tag.title"
+          [icon]="tag.icon"
+          defaultIcon="label"
+          [color]="tag.color || tag.theme?.primary"
+          [isSelected]="hasSelectedTag(tag.id)"
+          [showCheckbox]="true"
+          [folderPath]="tagFolderMap().get(tag.id)"
+        ></select-option-row>
       </button>
     }
   </div>

@@ -82,6 +82,8 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
 @Component({
   selector: 'add-task-bar',
@@ -106,6 +108,7 @@ import { DateService } from '../../../core/date/date.service';
     TagComponent,
     AddTaskBarActionsComponent,
     TranslateModule,
+    SelectOptionRowComponent,
   ],
   providers: [AddTaskBarStateService, AddTaskBarParserService],
 })
@@ -125,6 +128,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _markdownPasteService = inject(MarkdownPasteService);
   private readonly _dateService = inject(DateService);
+  private readonly _menuTreeService = inject(MenuTreeService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -165,6 +169,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   activatedIssueTask = toSignal(this.activatedSuggestion$, { initialValue: null });
 
   // Computed values
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
+
+  getFolderPath(id?: string): string | null {
+    if (!id) return null;
+    return this.projectFolderMap().get(id) || this.tagFolderMap().get(id) || null;
+  }
+
   hasNewTags = computed(() => this.stateService.state().newTagTitles.length > 0);
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),

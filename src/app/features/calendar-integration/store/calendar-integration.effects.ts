@@ -101,15 +101,23 @@ export class CalendarIntegrationEffects {
                 switchMap((allEventsToday) =>
                   timer(0, CHECK_TO_SHOW_INTERVAL).pipe(
                     tap(async () => {
-                      if (
+                      const isAutoImportAllowed =
                         calProvider.isAutoImportForCurrentDay &&
                         this._syncTriggerService.isInitialSyncDoneSync() &&
-                        !this._hydrationStateService.isInSyncWindow()
-                      ) {
-                        const allIssueIds =
-                          await this._taskService.getAllIssueIdsForProviderEverywhere(
-                            calProvider.id,
-                          );
+                        !this._hydrationStateService.isInSyncWindow();
+                      let allIssueIdsForProvider: string[] | undefined;
+                      const getAllIssueIdsForProvider = async (): Promise<string[]> => {
+                        if (!allIssueIdsForProvider) {
+                          allIssueIdsForProvider =
+                            await this._taskService.getAllIssueIdsForProviderEverywhere(
+                              calProvider.id,
+                            );
+                        }
+                        return allIssueIdsForProvider;
+                      };
+
+                      if (isAutoImportAllowed) {
+                        const allIssueIds = await getAllIssueIdsForProvider();
                         // Re-check after the IDB read: a sync window can open
                         // during the await (e.g. tab resume → openSyncWindow()),
                         // and importing now would still emit a duplicate CRT op.
@@ -137,7 +145,7 @@ export class CalendarIntegrationEffects {
                         }
                       }
 
-                      const eventsToShowBannerFor = allEventsToday.filter(
+                      const dueEventsToShowBannerFor = allEventsToday.filter(
                         (calEv) =>
                           passesCalendarEventRegexFilter(
                             calEv,
@@ -152,6 +160,16 @@ export class CalendarIntegrationEffects {
                           ) &&
                           !calEv.isReferenceCalendar,
                       );
+                      const eventsToShowBannerFor: CalendarIntegrationEvent[] = [];
+                      const archivedLinkedEvents: CalendarIntegrationEvent[] = [];
+                      for (const calEv of dueEventsToShowBannerFor) {
+                        if (await this._isLinkedToArchivedTask(calEv, calProvider)) {
+                          archivedLinkedEvents.push(calEv);
+                        } else {
+                          eventsToShowBannerFor.push(calEv);
+                        }
+                      }
+                      this._removeArchivedLinkedBanners(archivedLinkedEvents);
                       eventsToShowBannerFor.forEach((calEv) => {
                         this._addEvToShow(calEv, calProvider);
                       });
@@ -304,5 +322,46 @@ export class CalendarIntegrationEffects {
             },
           },
     });
+  }
+
+  private async _isLinkedToArchivedTask(
+    calEv: CalendarIntegrationEvent,
+    calProvider: IssueProviderCalendar,
+  ): Promise<boolean> {
+    const issueProviderKey = (calEv.issueProviderKey as IssueProviderKey) || 'ICAL';
+    const issueIdsToCheck = Array.from(
+      new Set([calEv.id, ...getCalendarEventIdCandidates(calEv)]),
+    );
+
+    for (const issueId of issueIdsToCheck) {
+      const linkedTask = await this._taskService.checkForTaskWithIssueEverywhere(
+        issueId,
+        issueProviderKey,
+        calProvider.id,
+      );
+      if (linkedTask) {
+        return linkedTask.isFromArchive;
+      }
+    }
+
+    return false;
+  }
+
+  private _removeArchivedLinkedBanners(
+    archivedLinkedEvents: CalendarIntegrationEvent[],
+  ): void {
+    if (!archivedLinkedEvents.length) {
+      return;
+    }
+
+    const nextBanners = this._currentlyShownBanners$
+      .getValue()
+      .filter(
+        ({ calEv }) =>
+          !archivedLinkedEvents.some((archivedLinkedEvent) =>
+            shareCalendarEventId(calEv, archivedLinkedEvent),
+          ),
+      );
+    this._currentlyShownBanners$.next(nextBanners);
   }
 }

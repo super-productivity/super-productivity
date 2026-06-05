@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { saveRecurDialog, setRecurStartDate } from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/6860
@@ -87,5 +88,41 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await expect(saveBtn).toBeEnabled({ timeout: 5000 });
     await saveBtn.click();
     await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+  });
+  test('should preserve start date when configuring recurring task via helper', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+
+    // 1. Create a task
+    const taskTitle = `${testPrefix}-EpochBugManual`;
+    await workViewPage.addTask(taskTitle);
+
+    const task = taskPage.getTaskByText(taskTitle).first();
+    await expect(task).toBeVisible({ timeout: 10000 });
+
+    // 2. Open task detail panel and click the repeat item
+    await task.hover();
+    const detailBtn = page.getByRole('button', {
+      name: 'Show/hide task panel',
+    });
+    await expect(detailBtn).toBeVisible({ timeout: 5000 });
+    await detailBtn.click();
+
+    const recurItem = page
+      .locator('task-detail-item')
+      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
+    await expect(recurItem).toBeVisible({ timeout: 5000 });
+    await recurItem.click();
+
+    // 3. Wait for the repeat dialog to appear
+    const repeatDialog = page.locator('mat-dialog-container').first();
+    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+
+    await setRecurStartDate(page, '15/06/2026');
+    await saveRecurDialog(page);
   });
 });

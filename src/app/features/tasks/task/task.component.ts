@@ -89,6 +89,8 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
 @Component({
   selector: 'task',
@@ -132,6 +134,7 @@ import { MatTooltip } from '@angular/material/tooltip';
     TagToggleMenuListComponent,
     DoneToggleComponent,
     SwipeBlockComponent,
+    SelectOptionRowComponent,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
@@ -146,6 +149,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _menuTreeService = inject(MenuTreeService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -303,6 +307,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   // Lazy-loaded project list - only fetched when project menu opens
   moveToProjectList = signal<Project[] | undefined>(undefined);
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   private _loadedProjectListForProjectId: string | null | undefined;
   private _moveToProjectListSub?: Subscription;
 

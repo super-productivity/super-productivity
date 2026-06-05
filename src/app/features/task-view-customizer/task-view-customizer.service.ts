@@ -40,6 +40,12 @@ const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
   (opt) => opt.type !== GROUP_OPTION_TYPE.project,
 );
 
+/** Result of {@link TaskViewCustomizerService.customizeUndoneTasks}. */
+export interface CustomizedUndoneTasks {
+  list: TaskWithSubTasks[];
+  grouped?: Record<string, TaskWithSubTasks[]>;
+}
+
 @Injectable({ providedIn: 'root' })
 export class TaskViewCustomizerService {
   private store = inject(Store);
@@ -93,7 +99,7 @@ export class TaskViewCustomizerService {
         const stored = this._stateByContext[this._currentContextKey];
         this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
         this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
-        this.selectedFilter.set(stored?.filter ?? DEFAULT_OPTIONS.filter);
+        this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
         this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
       });
 
@@ -163,10 +169,25 @@ export class TaskViewCustomizerService {
     return stored;
   }
 
-  customizeUndoneTasks(undoneTasks$: Observable<TaskWithSubTasks[]>): Observable<{
-    list: TaskWithSubTasks[];
-    grouped?: Record<string, TaskWithSubTasks[]>;
-  }> {
+  // Unlike _sanitizeGroupForContext (which passes the stored value through),
+  // re-resolve the option from the current OPTIONS.filter.list and keep only the
+  // user's `preset`. The persisted `label` can be stale after a translation-key
+  // change (the panel renders selectedFilter().label directly), so we always
+  // adopt the current label; an unknown stored `type` falls back to the default.
+  private _sanitizeFilter(stored: FilterOption | undefined): FilterOption {
+    if (!stored) return DEFAULT_OPTIONS.filter;
+
+    const currentFilter = OPTIONS.filter.list.find(
+      (option) => option.type === stored.type,
+    );
+    return currentFilter
+      ? { ...currentFilter, preset: stored.preset ?? null }
+      : DEFAULT_OPTIONS.filter;
+  }
+
+  customizeUndoneTasks(
+    undoneTasks$: Observable<TaskWithSubTasks[]>,
+  ): Observable<CustomizedUndoneTasks> {
     return combineLatest([
       undoneTasks$,
       toObservable(this.selectedSort),

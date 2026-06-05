@@ -24,6 +24,7 @@ const EVENT_TITLE = 'E2E-7971 Dentist Appointment';
 const CONTROL_TITLE = 'E2E-7971 Control Tomorrow';
 
 const PANEL_BTN = '.e2e-toggle-issue-provider-panel';
+const BANNER_SELECTOR = 'banner';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))';
 
@@ -128,12 +129,20 @@ test.describe('Calendar #7971', () => {
     await page.goto(page.url().replace(/#.*$/, '') + '#/schedule');
     await page.waitForSelector('schedule', { state: 'visible', timeout: 10000 });
     // Anchor: the un-archived control event must render → calendar has finished loading.
-    await expect(page.getByText(CONTROL_TITLE).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(EVENT_TITLE)).toHaveCount(0);
+    const schedule = page.locator('schedule');
+    await expect(schedule.getByText(CONTROL_TITLE).first()).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(schedule.getByText(EVENT_TITLE)).toHaveCount(0);
+    await expect(page.locator(BANNER_SELECTOR).getByText(EVENT_TITLE)).toHaveCount(0);
 
     // …nor in the Planner. (Without the fix it re-surfaces as an un-added calendar entry.)
     await page.goto(page.url().replace(/#.*$/, '') + '#/planner');
-    await expect(page.getByText(CONTROL_TITLE).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(EVENT_TITLE)).toHaveCount(0);
+    const planner = page.locator('planner');
+    await expect(planner.getByText(CONTROL_TITLE).first()).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(planner.getByText(EVENT_TITLE)).toHaveCount(0);
+    await expect(page.locator(BANNER_SELECTOR).getByText(EVENT_TITLE)).toHaveCount(0);
   });
 });
