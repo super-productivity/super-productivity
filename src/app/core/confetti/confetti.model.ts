@@ -1,5 +1,6 @@
 export interface ConfettiConfig {
   particleCount?: number;
+  angle?: number;
   angel?: number;
   spread?: number;
   startVelocity?: number;
@@ -13,6 +14,7 @@ export interface ConfettiConfig {
   shapes?: (string | Shape)[];
   scalar?: number;
   zIndex?: number;
+  disableForReducedMotion?: boolean;
 }
 
 interface Shape {

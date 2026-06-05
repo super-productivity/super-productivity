@@ -187,12 +187,21 @@ export class ProjectService {
     });
   }
 
-  reopen(projectId: string): void {
+  reopen(projectId: string, project?: Pick<Project, 'isHiddenFromMenu'>): void {
     this._store$.dispatch(reopenProject({ id: projectId }));
-    this._snackService.open({
-      ico: 'replay',
-      msg: T.F.PROJECT.S.REOPENED,
-    });
+    this._snackService.open(
+      project?.isHiddenFromMenu
+        ? {
+            ico: 'replay',
+            msg: T.F.PROJECT.S.REOPENED,
+            actionStr: T.F.PROJECT.S.SHOW_IN_MENU,
+            actionFn: () => this._store$.dispatch(toggleHideFromMenu({ id: projectId })),
+          }
+        : {
+            ico: 'replay',
+            msg: T.F.PROJECT.S.REOPENED,
+          },
+    );
   }
 
   /**

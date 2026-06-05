@@ -150,6 +150,27 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.complete).toHaveBeenCalled();
     });
 
+    it('uses refreshed unfinished work after final confirmation', async () => {
+      const refreshedInfo = {
+        topLevelTasks: [{ id: 't2', isDone: false } as any],
+        allTasks: [{ id: 't2', isDone: false } as any],
+        unfinishedTasks: [{ id: 't2', isDone: false } as any],
+        topLevelTasksWithUnfinishedWork: [{ id: 't2', isDone: false } as any],
+      };
+      mockProjectService.getCompletionInfo.and.returnValues(
+        Promise.resolve(undoneInfo),
+        Promise.resolve(refreshedInfo),
+        Promise.resolve(refreshedInfo),
+      );
+      resolveResult$ = of('inbox');
+
+      await component.completeProject();
+
+      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledWith(
+        refreshedInfo.topLevelTasksWithUnfinishedWork,
+      );
+    });
+
     it('marks all unfinished tasks done when chosen, then completes', async () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
       resolveResult$ = of('markDone');
@@ -158,6 +179,40 @@ describe('WorkContextMenuComponent', () => {
         undoneInfo.unfinishedTasks,
       );
       expect(mockProjectService.complete).toHaveBeenCalled();
+    });
+
+    it('does not move unfinished tasks when Inbox is chosen but confirmation is cancelled', async () => {
+      mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
+      resolveResult$ = of('inbox');
+      confirmResult$ = of(false);
+
+      await component.completeProject();
+
+      expect(mockProjectService.moveTasksToInbox).not.toHaveBeenCalled();
+      expect(mockProjectService.markTasksDone).not.toHaveBeenCalled();
+      expect(mockProjectService.complete).not.toHaveBeenCalled();
+      expect(
+        mockMatDialog.open.calls
+          .allArgs()
+          .some((args) => args[0] === DialogProjectCompleteComponent),
+      ).toBe(false);
+    });
+
+    it('does not mark unfinished tasks done when chosen but confirmation is cancelled', async () => {
+      mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
+      resolveResult$ = of('markDone');
+      confirmResult$ = of(false);
+
+      await component.completeProject();
+
+      expect(mockProjectService.moveTasksToInbox).not.toHaveBeenCalled();
+      expect(mockProjectService.markTasksDone).not.toHaveBeenCalled();
+      expect(mockProjectService.complete).not.toHaveBeenCalled();
+      expect(
+        mockMatDialog.open.calls
+          .allArgs()
+          .some((args) => args[0] === DialogProjectCompleteComponent),
+      ).toBe(false);
     });
 
     it('aborts without completing when the unfinished-task prompt is cancelled', async () => {
@@ -178,6 +233,12 @@ describe('WorkContextMenuComponent', () => {
         }),
       );
       expect(mockProjectService.complete).toHaveBeenCalled();
+      const confirmCall = mockMatDialog.open.calls
+        .all()
+        .find((call) => call.args[0] === DialogConfirmComponent);
+      expect((confirmCall as any)?.invocationOrder).toBeLessThan(
+        (mockProjectService.complete.calls.first() as any).invocationOrder,
+      );
     });
 
     it('opens the celebration as a fullscreen overlay', async () => {
@@ -186,10 +247,11 @@ describe('WorkContextMenuComponent', () => {
         DialogProjectCompleteComponent,
         jasmine.objectContaining({
           panelClass: 'project-complete-fullscreen-dialog',
+          ariaLabelledBy: 'project-complete-title',
           width: '100vw',
-          height: '100dvh',
+          height: '100vh',
           maxWidth: '100vw',
-          maxHeight: '100dvh',
+          maxHeight: '100vh',
         }),
       );
     });
@@ -269,7 +331,11 @@ describe('WorkContextMenuComponent', () => {
 
       reopenBtn!.click();
       await fixture.whenStable();
-      expect(mockProjectService.reopen).toHaveBeenCalledWith('project-123');
+      expect(mockProjectService.reopen).toHaveBeenCalledWith('project-123', {
+        id: 'project-123',
+        isArchived: true,
+        isDone: true,
+      } as any);
     });
 
     it('renders Complete (not Archive) for a non-archived project', () => {

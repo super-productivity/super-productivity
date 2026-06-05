@@ -13,13 +13,17 @@
   min-height: 0;
   overflow: hidden;
   color: var(--text-color-most-intense);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--c-accent) 12%, var(--bg-lightest)),
-      var(--bg-lightest) 42%
-    ),
-    var(--bg-lightest);
+  background: var(--bg-lightest);
+
+  @supports (background: color-mix(in srgb, black 50%, white)) {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--c-accent) 12%, var(--bg-lightest)),
+        var(--bg-lightest) 42%
+      ),
+      var(--bg-lightest);
+  }
 }
 
 .confetti-canvas {
@@ -34,10 +38,14 @@
 .close-btn {
   position: absolute;
   z-index: 3;
-  top: var(--s2);
-  right: var(--s2);
-  background: color-mix(in srgb, var(--bg-lightest) 86%, transparent);
+  top: calc(var(--safe-area-top, 0px) + var(--s2));
+  right: calc(var(--safe-area-right, 0px) + var(--s2));
+  background: var(--bg-lightest);
   box-shadow: var(--whiteframe-shadow-1dp);
+
+  @supports (background: color-mix(in srgb, black 50%, white)) {
+    background: color-mix(in srgb, var(--bg-lightest) 86%, transparent);
+  }
 }
 
 .celebration-content {
@@ -51,7 +59,8 @@
   min-height: 0;
   overflow: auto;
   gap: 28px;
-  padding: 56px 24px 40px;
+  padding: calc(var(--safe-area-top, 0px) + 56px) calc(var(--safe-area-right, 0px) + 24px)
+    calc(var(--safe-area-bottom, 0px) + 40px) calc(var(--safe-area-left, 0px) + 24px);
 }
 
 .hero {
@@ -69,10 +78,15 @@
   height: 104px;
   margin-bottom: 20px;
   color: var(--c-accent);
-  background: color-mix(in srgb, var(--c-accent) 18%, var(--bg-lightest));
-  border: 1px solid color-mix(in srgb, var(--c-accent) 34%, transparent);
+  background: var(--bg-lightest);
+  border: 1px solid var(--extra-border-color);
   border-radius: 50%;
   box-shadow: var(--whiteframe-shadow-4dp);
+
+  @supports (background: color-mix(in srgb, black 50%, white)) {
+    background: color-mix(in srgb, var(--c-accent) 18%, var(--bg-lightest));
+    border-color: color-mix(in srgb, var(--c-accent) 34%, transparent);
+  }
 
   mat-icon {
     width: 56px;
@@ -112,9 +126,13 @@
   justify-content: center;
   min-height: 112px;
   padding: 16px;
-  background: color-mix(in srgb, var(--bg-lightest) 86%, var(--c-accent));
+  background: var(--bg-lightest);
   border: 1px solid var(--extra-border-color);
   border-radius: 8px;
+
+  @supports (background: color-mix(in srgb, black 50%, white)) {
+    background: color-mix(in srgb, var(--bg-lightest) 86%, var(--c-accent));
+  }
 }
 
 .stat-value {
@@ -165,14 +183,16 @@
 
 @media (max-width: 599px) {
   .close-btn {
-    top: var(--s);
-    right: var(--s);
+    top: calc(var(--safe-area-top, 0px) + var(--s));
+    right: calc(var(--safe-area-right, 0px) + var(--s));
   }
 
   .celebration-content {
     justify-content: flex-start;
     gap: 20px;
-    padding: 72px 16px 24px;
+    padding: calc(var(--safe-area-top, 0px) + 72px)
+      calc(var(--safe-area-right, 0px) + 16px) calc(var(--safe-area-bottom, 0px) + 24px)
+      calc(var(--safe-area-left, 0px) + 16px);
   }
 
   .trophy {

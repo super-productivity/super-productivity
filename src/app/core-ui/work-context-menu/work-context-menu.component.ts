@@ -184,10 +184,27 @@ export class WorkContextMenuComponent implements OnInit {
       return;
     }
 
+    const currentInfo = await this._projectService.getCompletionInfo(this.contextId);
+    if (!resolution && currentInfo.unfinishedTasks.length) {
+      resolution = await firstValueFrom(
+        this._matDialog
+          .open(DialogCompleteResolveTasksComponent, {
+            restoreFocus: true,
+            data: { title: project.title, nr: currentInfo.unfinishedTasks.length },
+          })
+          .afterClosed(),
+      );
+      if (!resolution) {
+        return;
+      }
+    }
+
     if (resolution === 'inbox') {
-      await this._projectService.moveTasksToInbox(info.topLevelTasksWithUnfinishedWork);
+      await this._projectService.moveTasksToInbox(
+        currentInfo.topLevelTasksWithUnfinishedWork,
+      );
     } else if (resolution === 'markDone') {
-      await this._projectService.markTasksDone(info.unfinishedTasks);
+      await this._projectService.markTasksDone(currentInfo.unfinishedTasks);
     }
 
     // Recompute after resolution so the stats reflect the final task list.
@@ -212,10 +229,11 @@ export class WorkContextMenuComponent implements OnInit {
     this._matDialog.open(DialogProjectCompleteComponent, {
       restoreFocus: true,
       panelClass: 'project-complete-fullscreen-dialog',
+      ariaLabelledBy: 'project-complete-title',
       width: '100vw',
-      height: '100dvh',
+      height: '100vh',
       maxWidth: '100vw',
-      maxHeight: '100dvh',
+      maxHeight: '100vh',
       data: { project, stats },
     });
   }
@@ -228,7 +246,7 @@ export class WorkContextMenuComponent implements OnInit {
       return;
     }
     if (project.isDone) {
-      this._projectService.reopen(this.contextId);
+      this._projectService.reopen(this.contextId, project);
     } else {
       await this._projectService.unarchive(this.contextId);
     }

@@ -10,23 +10,19 @@ export class ConfettiService {
   private readonly _configService = inject(GlobalConfigService);
 
   async createConfetti(props: ConfettiConfig): Promise<void> {
-    const misc = this._configService.misc();
-
-    if (misc && misc.isDisableAnimations) {
+    if (this._isDisabled()) {
       return;
     }
 
     const confettiModule = await import('canvas-confetti');
-    confettiModule.default(props);
+    confettiModule.default({ disableForReducedMotion: true, ...props });
   }
 
   async createConfettiOnCanvas(
     canvas: HTMLCanvasElement,
     props: ConfettiConfig,
   ): Promise<void> {
-    const misc = this._configService.misc();
-
-    if (misc && misc.isDisableAnimations) {
+    if (this._isDisabled()) {
       return;
     }
 
@@ -34,6 +30,14 @@ export class ConfettiService {
     const confetti = confettiModule.default.create(canvas, {
       resize: true,
     });
-    await confetti(props);
+    await confetti({ disableForReducedMotion: true, ...props });
+  }
+
+  private _isDisabled(): boolean {
+    const misc = this._configService.misc();
+    return (
+      !!misc?.isDisableAnimations ||
+      !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    );
   }
 }

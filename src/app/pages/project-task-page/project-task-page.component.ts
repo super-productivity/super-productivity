@@ -40,7 +40,7 @@ export class ProjectTaskPageComponent {
     const project = this.currentProject();
     if (project) {
       if (project.isDone) {
-        this._projectService.reopen(project.id);
+        this._projectService.reopen(project.id, project);
       } else {
         this._projectService.unarchive(project.id);
       }

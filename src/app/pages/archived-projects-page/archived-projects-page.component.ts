@@ -66,6 +66,6 @@ export class ArchivedProjectsPageComponent {
   }
 
   reopen(project: Project): void {
-    this._projectService.reopen(project.id);
+    this._projectService.reopen(project.id, project);
   }
 }

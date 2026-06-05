@@ -20,7 +20,10 @@
       <div class="trophy">
         <mat-icon>emoji_events</mat-icon>
       </div>
-      <h2 class="complete-title">
+      <h2
+        id="project-complete-title"
+        class="complete-title"
+      >
         {{ T.F.PROJECT.COMPLETE.CELEBRATION.TITLE | translate }}
       </h2>
       <p class="project-title">{{ data.project.title }}</p>
@@ -73,6 +76,12 @@
     </div>
 
     <div class="actions">
+      <button
+        mat-button
+        (click)="undo()"
+      >
+        {{ T.F.PROJECT.COMPLETE.UNDO | translate }}
+      </button>
       <button
         mat-button
         (click)="viewCompleted()"

@@ -162,10 +162,15 @@ body .mat-mdc-dialog-surface {
 
 .project-complete-fullscreen-dialog {
   width: 100vw !important;
-  height: 100dvh !important;
+  height: 100vh !important;
   max-width: 100vw !important;
-  max-height: 100dvh !important;
+  max-height: 100vh !important;
   margin: 0 !important;
+
+  @supports (height: 100dvh) {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
 
   .mat-mdc-dialog-surface {
     width: 100%;

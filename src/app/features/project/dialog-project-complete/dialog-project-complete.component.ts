@@ -19,6 +19,7 @@ import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { MatTooltip } from '@angular/material/tooltip';
+import { ProjectService } from '../project.service';
 
 export interface DialogProjectCompleteData {
   project: Project;
@@ -46,6 +47,7 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
   private readonly _confettiService = inject(ConfettiService);
   private readonly _configService = inject(GlobalConfigService);
   private readonly _router = inject(Router);
+  private readonly _projectService = inject(ProjectService);
 
   readonly data = inject<DialogProjectCompleteData>(MAT_DIALOG_DATA);
   readonly T: typeof T = T;
@@ -79,5 +81,10 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
   viewCompleted(): void {
     this._matDialogRef.close();
     this._router.navigateByUrl('/archived-projects');
+  }
+
+  undo(): void {
+    this._matDialogRef.close();
+    this._projectService.reopen(this.data.project.id, this.data.project);
   }
 }

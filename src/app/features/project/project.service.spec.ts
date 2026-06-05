@@ -398,6 +398,19 @@ describe('ProjectService', () => {
         jasmine.objectContaining({ msg: T.F.PROJECT.S.REOPENED }),
       );
     });
+
+    it('offers to show the project in the menu when reopening a hidden project', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.reopen('project-1', { isHiddenFromMenu: true });
+      const snackArg = snackService.open.calls.mostRecent().args[0] as any;
+
+      expect(snackArg.actionStr).toBe(T.F.PROJECT.S.SHOW_IN_MENU);
+      dispatchSpy.calls.reset();
+      snackArg.actionFn();
+
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Toggle hide from menu');
+    });
   });
 
   describe('getCompletionInfo', () => {

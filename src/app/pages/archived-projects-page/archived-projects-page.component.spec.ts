@@ -93,9 +93,10 @@ describe('ArchivedProjectsPageComponent', () => {
   });
 
   it('calls ProjectService.reopen for completed projects', async () => {
-    await setUp([makeProject('p-a', 'Alpha', { isDone: true, doneOn: 1234 })]);
+    const project = makeProject('p-a', 'Alpha', { isDone: true, doneOn: 1234 });
+    await setUp([project]);
     const btn = fixture.debugElement.query(By.css('.project-row button'));
     btn.nativeElement.click();
-    expect(projectService.reopen).toHaveBeenCalledWith('p-a');
+    expect(projectService.reopen).toHaveBeenCalledWith('p-a', project);
   });
 });
