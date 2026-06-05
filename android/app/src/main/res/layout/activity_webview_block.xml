@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/webview_block_scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#111111">
@@ -30,6 +31,17 @@
             android:textSize="14sp" />
 
         <Button
+            android:id="@+id/webview_block_retry"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:backgroundTint="#4285F4"
+            android:text="@string/webview_block_retry"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/webview_block_update"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -44,7 +56,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:backgroundTint="#424242"
+            android:backgroundTint="@color/webview_block_secondary"
             android:text="@string/webview_block_close"
             android:textAllCaps="false"
             android:textColor="#FFFFFF" />

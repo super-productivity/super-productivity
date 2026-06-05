@@ -2300,6 +2300,35 @@ describe('FocusModeEffects', () => {
       }, 50);
     });
 
+    // #7856: after a native timer-complete ends the session (createIdleTimer ->
+    // purpose null), a following resume tick must NOT make this effect dispatch a
+    // SECOND completeFocusSession. Guards the no-double-completion race invariant.
+    it('should NOT dispatch when the session is already idle (purpose null)', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: null,
+          duration: 0,
+          elapsed: 0,
+        }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
+        done();
+      }, 50);
+    });
+
     // Overtime: when _isOvertimeEnabled is true, the tick reducer keeps the timer running,
     // so detectSessionCompletion$ should never fire. This guard handles the edge case
     // where the user pauses during overtime (isRunning becomes false).

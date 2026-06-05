@@ -181,7 +181,7 @@ jobs:
 
   mac-bin:
     needs: [create-release]
-    runs-on: macos-latest
+    runs-on: macos-15
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}

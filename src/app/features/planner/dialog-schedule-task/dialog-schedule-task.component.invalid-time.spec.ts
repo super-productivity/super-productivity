@@ -135,12 +135,40 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
     expect(component.plannedTimestamp()).toBeNull();
   });
 
-  // --- repro for #7802 (currently FAILING) ---
+  // --- repro for #7802 ---
 
-  // After the fix, reading plannedTimestamp() with a malformed time must not
-  // throw "Invalid clock string". Returning null is the natural fallback —
-  // scheduleWarnings already treats null as "no warnings".
-  ['13:30:00', '25:00', '13:60', 'abc', '12'].forEach((badTime) => {
+  // A stray seconds component (`13:30:00`, which macOS Chrome produces from
+  // <input type="time"> even with step="60") is recoverable: it must normalize
+  // to `13:30` and schedule, not be dropped. See the dedicated tests below.
+  it('plannedTimestamp normalizes a "13:30:00" time and returns a number', () => {
+    const component = createComponent();
+    component.selectedDate = new Date(2026, 4, 26);
+    component.selectedTime = '13:30:00';
+
+    const ts = component.plannedTimestamp();
+    expect(typeof ts).toBe('number');
+    const d = new Date(ts as number);
+    expect(d.getHours()).toBe(13);
+    expect(d.getMinutes()).toBe(30);
+  });
+
+  it('submit() schedules with the normalized time for "13:30:00"', async () => {
+    const component = createComponent();
+    component.selectedDate = new Date(2026, 4, 26);
+    component.selectedTime = '13:30:00';
+
+    await component.submit();
+
+    expect(taskServiceSpy.scheduleTask).toHaveBeenCalled();
+    const scheduledTs = taskServiceSpy.scheduleTask.calls.mostRecent().args[1] as number;
+    const d = new Date(scheduledTs);
+    expect(d.getHours()).toBe(13);
+    expect(d.getMinutes()).toBe(30);
+  });
+
+  // Genuinely malformed values still fail validation after normalization and
+  // must not throw "Invalid clock string" — they fall back to null / day-only.
+  ['25:00', '13:60', 'abc', '12'].forEach((badTime) => {
     it(`plannedTimestamp does NOT throw for malformed selectedTime "${badTime}"`, () => {
       const component = createComponent();
       component.selectedDate = new Date(2026, 4, 26);

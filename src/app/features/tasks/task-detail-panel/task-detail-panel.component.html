@@ -280,6 +280,7 @@
               <mat-icon>add</mat-icon>
               <span>{{ T.F.TASK.ADDITIONAL_INFO.ADD_ATTACHMENT | translate }}</span>
             </button>
+            <span class="paste-hint">{{ pasteImageHintKey | translate }}</span>
           </div>
         </div>
       </ng-container>
@@ -299,6 +300,7 @@
       </ng-container>
       <ng-container input-value></ng-container>
     </task-detail-item>
+    <span class="paste-hint">{{ pasteImageHintKey | translate }}</span>
   }
   @if (!task().parentId && !task().issueId) {
     <task-detail-item

@@ -21,6 +21,7 @@ import { NavItem } from './magic-side-nav.model';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MagicNavConfigService } from './magic-nav-config.service';
 import { lsSetItem, readBoolLS, readNumberLSBounded } from '../../util/ls-util';
+import { getPointerPosition } from '../../util/get-pointer-position';
 import { MatMenuModule } from '@angular/material/menu';
 import { NavMatMenuComponent } from './nav-mat-menu/nav-mat-menu.component';
 import { TaskService } from '../../features/tasks/task.service';
@@ -673,7 +674,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
-    const pointerPos = this._getPointerPosition(event);
+    const pointerPos = getPointerPosition(event);
     if (!pointerPos) {
       return;
     }
@@ -734,16 +735,5 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     }
 
     this._externalDragService.setActiveTask(null);
-  }
-
-  private _getPointerPosition(
-    event: MouseEvent | TouchEvent,
-  ): { x: number; y: number } | null {
-    if (!('touches' in event)) {
-      return { x: event.clientX, y: event.clientY };
-    }
-
-    const touch = event.touches[0] ?? event.changedTouches?.[0];
-    return touch ? { x: touch.clientX, y: touch.clientY } : null;
   }
 }

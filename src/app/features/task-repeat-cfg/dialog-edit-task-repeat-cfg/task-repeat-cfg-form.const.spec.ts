@@ -35,6 +35,14 @@ describe('TaskRepeatCfgFormConfig', () => {
     it('should pass through undefined unchanged', () => {
       expect(parser(undefined)).toBeUndefined();
     });
+
+    // Regression test for #7945: a `new Date()` default bypasses `parsers`, so a
+    // raw Date object would reach the model and crash the dialog. The default
+    // must already be a 'YYYY-MM-DD' string.
+    it('should default to a YYYY-MM-DD string, not a Date', () => {
+      expect(typeof startDateField?.defaultValue).toBe('string');
+      expect(startDateField?.defaultValue).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
   });
 
   describe('remindAt field', () => {

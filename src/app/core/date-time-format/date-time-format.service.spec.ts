@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { DateTimeFormatService } from './date-time-format.service';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
 import {
@@ -9,6 +9,7 @@ import {
 } from 'src/app/core/locale.constants';
 import { GlobalConfigState } from '../../features/config/global-config.model';
 import { CustomDateAdapter } from './custom-date-adapter';
+import { TranslateService } from '@ngx-translate/core';
 
 describe('DateTimeFormatService', () => {
   let service: DateTimeFormatService;
@@ -31,6 +32,10 @@ describe('DateTimeFormatService', () => {
       providers: [
         DateTimeFormatService,
         { provide: DateAdapter, useClass: CustomDateAdapter },
+        {
+          provide: TranslateService,
+          useValue: { currentLang: 'en', defaultLang: 'en' },
+        },
         provideMockStore({
           initialState: {
             globalConfig: config,
@@ -49,6 +54,10 @@ describe('DateTimeFormatService', () => {
       providers: [
         DateTimeFormatService,
         { provide: DateAdapter, useClass: CustomDateAdapter },
+        {
+          provide: TranslateService,
+          useValue: { currentLang: 'en', defaultLang: 'en' },
+        },
         provideMockStore({
           initialState: {
             globalConfig: DEFAULT_GLOBAL_CONFIG,
@@ -229,6 +238,62 @@ describe('DateTimeFormatService', () => {
 
       const formattedKoKr = service.formatTime(testTime, DateTimeLocales.ko_kr);
       expect(formattedKoKr).toBe('오후 2:00');
+    });
+  });
+
+  describe('dateTimeLocale config fallback', () => {
+    let mockStore: MockStore;
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          {
+            provide: TranslateService,
+            useValue: {
+              currentLang: 'fr',
+              defaultLang: 'en',
+            },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: {
+                  ...DEFAULT_GLOBAL_CONFIG.localization,
+                  dateTimeLocale: 'de',
+                },
+              },
+            },
+          }),
+        ],
+      });
+      mockStore = TestBed.inject(MockStore);
+      service = TestBed.inject(DateTimeFormatService);
+    });
+
+    it('should fall back to active UI language when dateTimeLocale is removed', () => {
+      // Initially, it should use the configured override 'de'
+      TestBed.flushEffects();
+      expect(service.currentLocale()).toBe('de');
+
+      // Now update config to remove the override (setting it to null)
+      mockStore.setState({
+        globalConfig: {
+          ...DEFAULT_GLOBAL_CONFIG,
+          localization: {
+            ...DEFAULT_GLOBAL_CONFIG.localization,
+            dateTimeLocale: null,
+          },
+        },
+      });
+      TestBed.flushEffects();
+
+      // It should fall back to currentLang 'fr'
+      expect(service.currentLocale()).toBe('fr');
     });
   });
 });

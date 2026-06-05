@@ -7,8 +7,7 @@
     "declarationMap": false,
     "noEmit": true,
     "paths": {
-      "@sp/sync-core": ["../sync-core/src/index.ts"],
-      "@sp/sync-providers/log": ["src/log.ts"]
+      "@sp/sync-core": ["../sync-core/src/index.ts"]
     },
     "rootDir": "..",
     "types": ["vitest", "node"]

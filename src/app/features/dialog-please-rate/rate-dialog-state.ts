@@ -9,6 +9,15 @@ import { getAppVersionStr } from '../../util/get-app-version-str';
 // Adding a third entry breaks the "don't be annoying" two-prompts-max guarantee.
 const TRIGGER_TIERS = [32, 96] as const;
 
+// After a real (unhandled) error we hold the rating prompt for this long, so we
+// never ask for a review right after the user hit a crash. Because the tier
+// check below stays `>=`, the prompt simply re-fires on the first app start
+// after the window elapses — this is a delay, not a cancellation. The signal is
+// device-local and stores only a timestamp (never error content). Written by
+// GlobalErrorHandler; deliberately NOT fed by error snackbars, which are often
+// third-party noise rather than a genuine app failure.
+export const ERROR_SUPPRESSION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 const MAINTAINER_EMAIL = 'contact@super-productivity.com';
 const PLAY_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.superproductivity.superproductivity';
@@ -54,8 +63,12 @@ export const saveRateDialogState = (state: RateDialogState): void => {
 export const shouldShowRateDialog = (
   state: RateDialogState,
   currentAppStarts: number,
+  msSinceLastCriticalError: number,
 ): boolean => {
   if (state.permanentOptOut) return false;
+  // Recent crash or data damage → delay (not cancel). Caller passes Infinity
+  // when none; see getMsSinceLastCriticalError in util/critical-error-signal.
+  if (msSinceLastCriticalError < ERROR_SUPPRESSION_MS) return false;
   if (currentAppStarts <= state.lastShownAppStartDay) return false;
   const nextTier = TRIGGER_TIERS.find((t) => t > state.lastShownAppStartDay);
   return nextTier !== undefined && currentAppStarts >= nextTier;

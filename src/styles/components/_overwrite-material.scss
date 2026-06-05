@@ -411,3 +411,21 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
 .mat-expansion-panel-header {
   --mat-expansion-header-expanded-state-height: 48px;
 }
+
+.mat-mdc-menu-panel:has(select-option-row) .mat-mdc-menu-item,
+.mat-mdc-autocomplete-panel:has(select-option-row) .mat-mdc-option {
+  height: auto !important;
+  min-height: 48px;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.mention-menu:has(select-option-row) .mention-item {
+  height: auto !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+}

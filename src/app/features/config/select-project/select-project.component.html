@@ -17,9 +17,11 @@
   [formlyAttributes]="field"
   [id]="id"
 >
-  <mat-option [value]="''">{{
-    field.props?.nullLabel || T.G.NONE | translate
-  }}</mat-option>
+  @if (!field.props?.hideNoneOption) {
+    <mat-option [value]="''">{{
+      field.props?.nullLabel || T.G.NONE | translate
+    }}</mat-option>
+  }
   @for (opt of projectService.list$ | async; track trackById($index, opt)) {
     <mat-option [value]="opt.id">{{ opt.title }}</mat-option>
   }

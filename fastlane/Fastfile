@@ -1,0 +1,91 @@
+# iOS and macOS App Store submission lanes.
+#
+# The signed release binaries are produced in CI:
+#   - iOS:   .github/workflows/build-ios.yml                       -> .ipa
+#   - macOS: .github/workflows/build-publish-to-mac-store-on-release.yml -> MAS .pkg
+#
+# These lanes take the finished artifact, upload it to App Store Connect, set
+# the "What's New" text, submit the version for review and flag it to be
+# released automatically once Apple approves it. The only step that cannot be
+# automated is Apple's human review itself.
+#
+# Authentication uses an App Store Connect API key (not an Apple ID +
+# app-specific password), which is far more robust in CI.
+#
+# IMPORTANT: the API key must belong to a user with the "App Manager" role (or
+# higher). A key with only the "Developer" role can upload/notarize but cannot
+# create a version or submit it for review.
+#
+# SECURITY: never enable verbose mode (--verbose / FASTLANE_VERBOSE / verbose:
+# true) in these lanes. Verbose output can dump the deliver options hash, which
+# contains the App Store Connect API key material.
+#
+# Listing metadata (description, keywords, screenshots, ...) is managed manually
+# in App Store Connect and is intentionally NOT overwritten here. METADATA_PATH
+# is a dedicated dir that contains ONLY <locale>/release_notes.txt, so deliver's
+# load_from_filesystem reads just the release notes (it skips fields with no
+# local file: `next unless File.exist?`, and upload skips nil fields). There is
+# no remote read-back, so other listing fields are left untouched. Do NOT set
+# `skip_metadata` here: it makes deliver return early and upload no release notes
+# at all. `skip_screenshots` is safe — screenshots live elsewhere.
+#
+# Required env vars (wired from GitHub secrets in the workflows):
+#   ASC_KEY_ID       App Store Connect API key id      (secrets.mac_api_key_id)
+#   ASC_ISSUER_ID    App Store Connect API issuer id   (secrets.mac_api_key_issuer_id)
+#   ASC_KEY_CONTENT  Contents of the .p8 key file      (secrets.mac_api_key)
+#   IPA_PATH         Path to the built .ipa            (ios lane)
+#   PKG_PATH         Path to the built MAS .pkg        (mac lane)
+# Optional:
+#   METADATA_PATH      release-notes dir (default: fastlane/appstore_metadata)
+#   SUBMIT_FOR_REVIEW  "false" to only upload the build without submitting
+
+APP_IDENTIFIER = 'com.super-productivity.app'
+
+def asc_api_key
+  app_store_connect_api_key(
+    key_id: ENV.fetch('ASC_KEY_ID'),
+    issuer_id: ENV.fetch('ASC_ISSUER_ID'),
+    key_content: ENV.fetch('ASC_KEY_CONTENT'),
+    is_key_content_base64: false,
+  )
+end
+
+def submit_for_review?
+  ENV.fetch('SUBMIT_FOR_REVIEW', 'true') != 'false'
+end
+
+# Shared deliver options. `extra` carries the platform-specific binary path.
+def deliver_options(extra)
+  {
+    api_key: asc_api_key,
+    app_identifier: APP_IDENTIFIER,
+    # Dir holding only <locale>/release_notes.txt -> deliver uploads just the
+    # "What's New" text and leaves every other listing field as-is. (Do not add
+    # skip_metadata; see the header comment.)
+    metadata_path: ENV.fetch('METADATA_PATH', 'fastlane/appstore_metadata'),
+    skip_screenshots: true,
+    submit_for_review: submit_for_review?,
+    automatic_release: true,
+    # Precheck inspects listing metadata we don't manage from here.
+    run_precheck_before_submit: false,
+    submission_information: {
+      add_id_info_uses_idfa: false,
+    },
+    # Non-interactive: skip the HTML report confirmation prompt.
+    force: true,
+  }.merge(extra)
+end
+
+platform :ios do
+  desc 'Upload the prebuilt iOS .ipa to App Store Connect and submit for review'
+  lane :release do
+    upload_to_app_store(deliver_options(platform: 'ios', ipa: ENV.fetch('IPA_PATH')))
+  end
+end
+
+platform :mac do
+  desc 'Upload the prebuilt macOS .pkg to App Store Connect and submit for review'
+  lane :release do
+    upload_to_app_store(deliver_options(platform: 'osx', pkg: ENV.fetch('PKG_PATH')))
+  end
+end

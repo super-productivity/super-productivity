@@ -11,6 +11,7 @@
       [tabindex]="tabindex()"
       [mention]="tagMentions$ | async"
       [mentionConfig]="mentionCfg$ | async"
+      [mentionListTemplate]="mentionListTemplate"
       (listShownChange)="updateListShown($event)"
       [matAutocomplete]="taskAutoCompleteEl"
       [placeholder]="
@@ -136,16 +137,32 @@
       } @else if (!item.ctx) {
         <mat-icon>library_books</mat-icon>
       }
+      <span [innerHTML]="item?.titleHighlighted || item?.title"></span>
       @if (item.ctx) {
         <tag
           [tag]="item.ctx"
           [isHideTitle]="isHideTagTitles()"
         ></tag>
       }
-      <span [innerHTML]="item?.titleHighlighted || item?.title"></span>
     </mat-option>
   }
 </mat-autocomplete>
+
+<ng-template
+  #mentionListTemplate
+  let-item="item"
+>
+  @if (item.id) {
+    <select-option-row
+      [title]="item.title"
+      [icon]="item.icon"
+      [color]="item.color"
+      [folderPath]="getFolderPath(item.id)"
+    ></select-option-row>
+  } @else {
+    {{ item.title }}
+  }
+</ng-template>
 
 @if (isSearchLoading()) {
   <div class="spinner">

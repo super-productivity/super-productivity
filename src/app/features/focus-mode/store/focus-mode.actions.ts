@@ -99,3 +99,19 @@ export const setOvertimeEnabled = createAction(
   '[FocusMode] Set Overtime Enabled',
   props<{ enabled: boolean }>(),
 );
+
+/**
+ * Re-adopt a focus session that survived an Android app swipe in the native
+ * foreground service, after the WebView was recreated with an idle store
+ * (#7855). `remainingMs` is the countdown remainder, or the elapsed time for
+ * Flowtime (durationMs === 0).
+ */
+export const restoreFocusSessionFromNative = createAction(
+  '[FocusMode] Restore Session From Native',
+  props<{
+    durationMs: number;
+    remainingMs: number;
+    isBreak: boolean;
+    isPaused: boolean;
+  }>(),
+);

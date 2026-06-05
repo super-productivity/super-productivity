@@ -10,6 +10,7 @@ import {
 } from '../core/operation.types';
 import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import {
   encodeOperation,
   decodeOperation,
@@ -32,6 +33,8 @@ import {
   isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { runDbUpgrade } from './db-upgrade';
+import { OpLogDbAdapter } from './op-log-db-adapter';
+import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
@@ -49,6 +52,25 @@ import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider
 interface VectorClockEntry {
   clock: VectorClock;
   lastUpdate: number;
+}
+
+/**
+ * Shape stored in the `state_cache` store (keyPath `id`).
+ *
+ * `id` is optional in the type so the read-side return types stay assignable
+ * from the looser snapshot shapes callers/tests construct (the pre-migration
+ * return types did not surface `id`); the field is always present on rows
+ * actually written here.
+ */
+interface StateCacheEntry {
+  id?: string;
+  state: unknown;
+  lastAppliedOpSeq: number;
+  vectorClock: VectorClock;
+  compactedAt: number;
+  schemaVersion?: number;
+  compactionCounter?: number;
+  snapshotEntityKeys?: string[];
 }
 
 /**
@@ -186,6 +208,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
+  // Phase A migration seam: methods migrated off direct `idb` route through
+  // this adapter, which operates on the SAME connection adopted in init().
+  // Phase B: the backend (IndexedDB vs SQLite) comes from DI.
+  private readonly _adapter: OpLogDbAdapter = inject(OP_LOG_DB_ADAPTER_FACTORY)();
 
   // Cache for getAppliedOpIds() to avoid full table scans on every download
   private _appliedOpIdsCache: Set<string> | null = null;
@@ -199,6 +225,15 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   private _vectorClockCache: VectorClock | null = null;
 
   async init(): Promise<void> {
+    // Self-managing backends (e.g. SQLite) own their handle and create their own
+    // schema via the adapter — they need no WebView IndexedDB connection. Opening
+    // one would both leave the adapter's tables uncreated AND still touch the
+    // evictable WebView store this migration exists to escape. Only the
+    // adopt-connection (IndexedDB) backend opens/owns a connection here.
+    if (!this._adapter.adoptConnection) {
+      await this._adapter.init();
+      return;
+    }
     const db = await this._openDbWithRetry();
     db.addEventListener('close', () => {
       Log.warn(
@@ -206,6 +241,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       );
       this._db = undefined;
       this._initPromise = undefined;
+      this._adapter.adoptConnection?.(undefined);
     });
     // A newer tab is upgrading SUP_OPS (a future schema bump). Close now so this
     // connection does not block the upgrade; the next access reopens
@@ -214,8 +250,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       db.close();
       this._db = undefined;
       this._initPromise = undefined;
+      this._adapter.adoptConnection?.(undefined);
     });
     this._db = db;
+    // Route already-migrated methods through the shared adapter on this same
+    // connection (Phase A incremental migration; see indexed-db-op-log-adapter).
+    this._adapter.adoptConnection?.(db);
   }
 
   /**
@@ -343,7 +383,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     };
     // seq is auto-incremented, returned for later reference
     try {
-      return await this.db.add(STORE_NAMES.OPS, entry as StoredOperationLogEntry);
+      return await this._adapter.add(STORE_NAMES.OPS, entry);
     } catch (e) {
       if (e instanceof DOMException && e.name === 'ConstraintError') {
         this._appliedOpIdsCache = null;
@@ -363,32 +403,33 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     options?: { pendingApply?: boolean },
   ): Promise<number[]> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const seqs: number[] = [];
-
     try {
-      for (const op of ops) {
-        // Encode operation to compact format for storage efficiency
-        const compactOp = encodeOperation(op);
-        const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-          op: compactOp,
-          appliedAt: Date.now(),
-          source,
-          syncedAt: source === 'remote' ? Date.now() : undefined,
-          applicationStatus:
-            source === 'remote'
-              ? options?.pendingApply
-                ? 'pending'
-                : 'applied'
-              : undefined,
-        };
-        const seq = await store.add(entry as StoredOperationLogEntry);
-        seqs.push(seq as number);
-      }
-
-      await tx.done;
-      return seqs;
+      return await this._adapter.transaction(
+        [STORE_NAMES.OPS],
+        'readwrite',
+        async (tx) => {
+          const seqs: number[] = [];
+          for (const op of ops) {
+            // Encode operation to compact format for storage efficiency
+            const compactOp = encodeOperation(op);
+            const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+              op: compactOp,
+              appliedAt: Date.now(),
+              source,
+              syncedAt: source === 'remote' ? Date.now() : undefined,
+              applicationStatus:
+                source === 'remote'
+                  ? options?.pendingApply
+                    ? 'pending'
+                    : 'applied'
+                  : undefined,
+            };
+            const seq = await tx.add(STORE_NAMES.OPS, entry);
+            seqs.push(seq);
+          }
+          return seqs;
+        },
+      );
     } catch (e) {
       // Cache is stale if we hit a constraint error - invalidate to force refresh
       // This handles the case where a previous sync partially wrote ops before failing,
@@ -429,41 +470,42 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     }
 
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const byIdIndex = store.index(OPS_INDEXES.BY_ID);
-    const seqs: number[] = [];
-    const writtenOps: Operation[] = [];
-    let skippedCount = 0;
-
     try {
-      for (const op of ops) {
-        // Check if op already exists in the same transaction (atomic)
-        const existingKey = await byIdIndex.getKey(op.id);
-        if (existingKey !== undefined) {
-          skippedCount++;
-          continue;
+      const seqs: number[] = [];
+      const writtenOps: Operation[] = [];
+      let skippedCount = 0;
+
+      await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+        for (const op of ops) {
+          // Check if op already exists in the same transaction (atomic)
+          const existingKey = await tx.getKeyFromIndex(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            op.id,
+          );
+          if (existingKey !== undefined) {
+            skippedCount++;
+            continue;
+          }
+
+          const compactOp = encodeOperation(op);
+          const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+            op: compactOp,
+            appliedAt: Date.now(),
+            source,
+            syncedAt: source === 'remote' ? Date.now() : undefined,
+            applicationStatus:
+              source === 'remote'
+                ? options?.pendingApply
+                  ? 'pending'
+                  : 'applied'
+                : undefined,
+          };
+          const seq = await tx.add(STORE_NAMES.OPS, entry);
+          seqs.push(seq);
+          writtenOps.push(op);
         }
-
-        const compactOp = encodeOperation(op);
-        const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-          op: compactOp,
-          appliedAt: Date.now(),
-          source,
-          syncedAt: source === 'remote' ? Date.now() : undefined,
-          applicationStatus:
-            source === 'remote'
-              ? options?.pendingApply
-                ? 'pending'
-                : 'applied'
-              : undefined,
-        };
-        const seq = await store.add(entry as StoredOperationLogEntry);
-        seqs.push(seq as number);
-        writtenOps.push(op);
-      }
-
-      await tx.done;
+      });
 
       if (skippedCount > 0) {
         Log.warn(
@@ -487,21 +529,20 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async markApplied(seqs: number[]): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    for (const seq of seqs) {
-      const entry = await store.get(seq);
-      // Allow transitioning from 'pending' or 'failed' to 'applied'
-      // 'failed' ops can be retried and need to be cleared when successful
-      if (
-        entry &&
-        (entry.applicationStatus === 'pending' || entry.applicationStatus === 'failed')
-      ) {
-        entry.applicationStatus = 'applied';
-        await store.put(entry);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const seq of seqs) {
+        const entry = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, seq);
+        // Allow transitioning from 'pending' or 'failed' to 'applied'
+        // 'failed' ops can be retried and need to be cleared when successful
+        if (
+          entry &&
+          (entry.applicationStatus === 'pending' || entry.applicationStatus === 'failed')
+        ) {
+          entry.applicationStatus = 'applied';
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
       }
-    }
-    await tx.done;
+    });
   }
 
   /**
@@ -513,11 +554,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
     let storedEntries: StoredOperationLogEntry[];
     try {
-      // Type assertion needed for compound index key - idb's types don't fully support this
-      storedEntries = await this.db.getAllFromIndex(
+      // Exact compound-key match expressed as a degenerate [k, k] range.
+      storedEntries = await this._adapter.getAllFromIndex<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'pending'],
+        { lower: ['remote', 'pending'], upper: ['remote', 'pending'] },
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -525,7 +566,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       Log.warn(
         'OperationLogStoreService: bySourceAndStatus index not found, using fallback scan',
       );
-      const allOps = await this.db.getAll(STORE_NAMES.OPS);
+      const allOps = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
       storedEntries = allOps.filter(
         (entry) => entry.source === 'remote' && entry.applicationStatus === 'pending',
       );
@@ -536,7 +577,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async hasOp(id: string): Promise<boolean> {
     await this._ensureInit();
-    const entry = await this.db.getFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_ID, id);
+    const entry = await this._adapter.getFromIndex(
+      STORE_NAMES.OPS,
+      OPS_INDEXES.BY_ID,
+      id,
+    );
     return !!entry;
   }
 
@@ -557,15 +602,19 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async getOpById(id: string): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
-    const stored = await this.db.getFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_ID, id);
+    const stored = await this._adapter.getFromIndex<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      OPS_INDEXES.BY_ID,
+      id,
+    );
     return stored ? decodeStoredEntry(stored) : undefined;
   }
 
   async getOpsAfterSeq(seq: number): Promise<OperationLogEntry[]> {
     await this._ensureInit();
-    const storedEntries = await this.db.getAll(
+    const storedEntries = await this._adapter.getAll<StoredOperationLogEntry>(
       STORE_NAMES.OPS,
-      IDBKeyRange.lowerBound(seq, true),
+      { lower: seq, lowerOpen: true },
     );
     return storedEntries.map(decodeStoredEntry);
   }
@@ -578,44 +627,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * BEFORE the latest full-state op should be discarded, as it references state
    * that no longer exists.
    *
-   * Uses cursor iteration for memory efficiency - avoids loading all ops into memory
-   * at once, which matters on mobile devices with limited RAM. Trade-off is slightly
-   * slower due to per-op cursor overhead vs bulk getAll().
+   * Convenience wrapper over {@link getLatestFullStateOpEntry} returning only the op.
    *
    * @returns The latest full-state operation, or undefined if none exists
    */
   async getLatestFullStateOp(): Promise<Operation | undefined> {
-    await this._ensureInit();
-
-    // Use reverse cursor to iterate from newest to oldest by seq
-    // This is more memory-efficient than getAll() and we can exit early
-    // once we've found a full-state op that's older than our current best
-    let cursor = await this.db
-      .transaction(STORE_NAMES.OPS)
-      .store.openCursor(null, 'prev');
-
-    let latestFullStateOp: Operation | undefined;
-
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
-
-      if (isFullStateOp) {
-        // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
-        if (!latestFullStateOp || entry.op.id > latestFullStateOp.id) {
-          latestFullStateOp = entry.op;
-        }
-        // NOTE: We don't early-exit here because UUIDv7 order may differ from seq order
-        // if remote ops with earlier timestamps arrive later. We must check all full-state
-        // ops to find the one with the latest UUIDv7 ID. However, we continue using
-        // reverse cursor to still benefit from early exit if the first full-state op found
-        // has the highest UUIDv7 (which is the common case).
-      }
-
-      cursor = await cursor.continue();
-    }
-
-    return latestFullStateOp;
+    return (await this.getLatestFullStateOpEntry())?.op;
   }
 
   /**
@@ -630,30 +647,37 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * - Local unsynced imports (source='local', no syncedAt) → show dialog
    * - Remote/synced imports → silently filter old ops (already accepted)
    *
+   * Uses cursor iteration for memory efficiency - avoids loading all ops into memory
+   * at once, which matters on mobile devices with limited RAM. Trade-off is slightly
+   * slower due to per-op cursor overhead vs bulk getAll().
+   *
    * @returns The latest full-state operation entry, or undefined if none exists
    */
   async getLatestFullStateOpEntry(): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
 
-    let cursor = await this.db
-      .transaction(STORE_NAMES.OPS)
-      .store.openCursor(null, 'prev');
-
     let latestEntry: OperationLogEntry | undefined;
 
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      // Pure read: readonly avoids a write lock on the hot ops store.
+      { direction: 'prev', mode: 'readonly' },
+      (value) => {
+        const entry = decodeStoredEntry(value);
+        const isFullStateOp = isFullStateOpType(entry.op.opType);
 
-      if (isFullStateOp) {
-        // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
-        if (!latestEntry || entry.op.id > latestEntry.op.id) {
-          latestEntry = entry;
+        if (isFullStateOp) {
+          // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
+          if (!latestEntry || entry.op.id > latestEntry.op.id) {
+            latestEntry = entry;
+          }
         }
-      }
-
-      cursor = await cursor.continue();
-    }
+        // We never stop early: UUIDv7 order can differ from seq order when remote
+        // ops with earlier timestamps arrive later, so we must scan all full-state
+        // ops to find the one with the latest UUIDv7 id.
+        return 'continue';
+      },
+    );
 
     return latestEntry;
   }
@@ -668,38 +692,30 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * @returns Number of operations deleted
    */
   async clearFullStateOps(): Promise<number> {
-    await this._ensureInit();
+    // Deleting all full-state ops is the no-exclusion case of clearFullStateOpsExcept.
+    return this.clearFullStateOpsExcept([]);
+  }
 
-    const opsToDelete: string[] = [];
-
-    // Find all full-state ops
-    let cursor = await this.db.transaction(STORE_NAMES.OPS).store.openCursor();
-
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
-
-      if (isFullStateOp) {
-        opsToDelete.push(entry.op.id);
-      }
-
-      cursor = await cursor.continue();
+  /**
+   * Deletes ops by their `op.id` via the unique byId index, atomically.
+   * Mirrors the original keyed-index-cursor delete used by the
+   * clearFullStateOps* methods. No-op (and no cache invalidation) for an
+   * empty list, matching prior behavior.
+   */
+  private async _deleteOpsByIds(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
     }
-
-    // Delete them in a write transaction
-    if (opsToDelete.length > 0) {
-      const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-      for (const id of opsToDelete) {
-        await tx.store
-          .index(OPS_INDEXES.BY_ID)
-          .openCursor(id)
-          .then((c) => c?.delete());
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const id of ids) {
+        await tx.iterate<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          { index: OPS_INDEXES.BY_ID, query: id },
+          () => 'delete-stop',
+        );
       }
-      await tx.done;
-      this._invalidateUnsyncedCache();
-    }
-
-    return opsToDelete.length;
+    });
+    this._invalidateUnsyncedCache();
   }
 
   /**
@@ -725,33 +741,23 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const excludeIdSet = new Set(excludeIds);
     const opsToDelete: string[] = [];
 
-    // Find all full-state ops except the excluded ones
-    let cursor = await this.db.transaction(STORE_NAMES.OPS).store.openCursor();
+    // Find all full-state ops except the excluded ones. Pure read scan — the
+    // delete happens in a separate transaction below — so readonly to avoid
+    // taking a write lock on the hot ops store (parity with the pre-adapter
+    // cursor, which was readonly).
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      { mode: 'readonly' },
+      (value) => {
+        const entry = decodeStoredEntry(value);
+        if (isFullStateOpType(entry.op.opType) && !excludeIdSet.has(entry.op.id)) {
+          opsToDelete.push(entry.op.id);
+        }
+        return 'continue';
+      },
+    );
 
-    while (cursor) {
-      const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp = isFullStateOpType(entry.op.opType);
-
-      if (isFullStateOp && !excludeIdSet.has(entry.op.id)) {
-        opsToDelete.push(entry.op.id);
-      }
-
-      cursor = await cursor.continue();
-    }
-
-    // Delete them in a write transaction
-    if (opsToDelete.length > 0) {
-      const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-      for (const id of opsToDelete) {
-        await tx.store
-          .index(OPS_INDEXES.BY_ID)
-          .openCursor(id)
-          .then((c) => c?.delete());
-      }
-      await tx.done;
-      this._invalidateUnsyncedCache();
-    }
-
+    await this._deleteOpsByIds(opsToDelete);
     return opsToDelete.length;
   }
 
@@ -767,9 +773,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     // If cache exists but is stale (new ops added), incrementally add new unsynced ops
     if (this._unsyncedCache && this._unsyncedCacheLastSeq > 0) {
-      const newStoredEntries = await this.db.getAll(
+      const newStoredEntries = await this._adapter.getAll<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
-        IDBKeyRange.lowerBound(this._unsyncedCacheLastSeq, true),
+        { lower: this._unsyncedCacheLastSeq, lowerOpen: true },
       );
       const newUnsynced = newStoredEntries
         .filter((e) => !e.syncedAt && !e.rejectedAt)
@@ -780,7 +786,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     }
 
     // Initial cache build - full scan required
-    const all = await this.db.getAll(STORE_NAMES.OPS);
+    const all = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
     this._unsyncedCache = all
       .filter((e) => !e.syncedAt && !e.rejectedAt)
       .map(decodeStoredEntry);
@@ -802,11 +808,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const unsynced = await this.getUnsynced();
     const map = new Map<string, Operation[]>();
     for (const entry of unsynced) {
-      const ids = entry.op.entityIds?.length
-        ? entry.op.entityIds
-        : entry.op.entityId
-          ? [entry.op.entityId]
-          : [];
+      const ids = getOpEntityIds(entry.op);
       for (const id of ids) {
         const key = toEntityKey(entry.op.entityType, id);
         if (!map.has(key)) map.set(key, []);
@@ -828,9 +830,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     // If cache exists but is stale, incrementally add new IDs
     if (this._appliedOpIdsCache && this._cacheLastSeq > 0) {
-      const newEntries = await this.db.getAll(
+      const newEntries = await this._adapter.getAll<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
-        IDBKeyRange.lowerBound(this._cacheLastSeq, true),
+        { lower: this._cacheLastSeq, lowerOpen: true },
       );
       for (const entry of newEntries) {
         // Handle both compact and full operation formats
@@ -841,7 +843,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     }
 
     // Initial cache build - full scan required
-    const entries = await this.db.getAll(STORE_NAMES.OPS);
+    const entries = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
     // Handle both compact and full operation formats
     this._appliedOpIdsCache = new Set(entries.map((e) => getOpId(e.op)));
     this._cacheLastSeq = currentLastSeq;
@@ -851,36 +853,35 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async markSynced(seqs: number[]): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
     const now = Date.now();
-    for (const seq of seqs) {
-      const entry = await store.get(seq);
-      if (entry) {
-        entry.syncedAt = now;
-        await store.put(entry);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const seq of seqs) {
+        const entry = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, seq);
+        if (entry) {
+          entry.syncedAt = now;
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
       }
-    }
-    await tx.done;
+    });
     this._invalidateUnsyncedCache();
   }
 
   async markRejected(opIds: string[]): Promise<void> {
     await this._ensureInit();
-
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const index = store.index(OPS_INDEXES.BY_ID);
     const now = Date.now();
-
-    for (const opId of opIds) {
-      const entry = await index.get(opId);
-      if (entry) {
-        entry.rejectedAt = now;
-        await store.put(entry);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const opId of opIds) {
+        const entry = await tx.getFromIndex<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          opId,
+        );
+        if (entry) {
+          entry.rejectedAt = now;
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
       }
-    }
-    await tx.done;
+    });
     this._invalidateUnsyncedCache();
   }
 
@@ -894,18 +895,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const unsynced = await this.getUnsynced();
     if (unsynced.length === 0) return;
 
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
     const now = Date.now();
-
-    for (const entry of unsynced) {
-      const stored = await store.get(entry.seq);
-      if (stored) {
-        stored.rejectedAt = now;
-        await store.put(stored);
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const entry of unsynced) {
+        const stored = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, entry.seq);
+        if (stored) {
+          stored.rejectedAt = now;
+          await tx.put(STORE_NAMES.OPS, stored);
+        }
       }
-    }
-    await tx.done;
+    });
     this._invalidateUnsyncedCache();
   }
 
@@ -916,28 +915,29 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async markFailed(opIds: string[], maxRetries?: number): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    const index = store.index(OPS_INDEXES.BY_ID);
     const now = Date.now();
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const opId of opIds) {
+        const entry = await tx.getFromIndex<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          opId,
+        );
+        if (entry) {
+          const newRetryCount = (entry.retryCount ?? 0) + 1;
 
-    for (const opId of opIds) {
-      const entry = await index.get(opId);
-      if (entry) {
-        const newRetryCount = (entry.retryCount ?? 0) + 1;
-
-        // If max retries reached, mark as rejected permanently
-        if (maxRetries !== undefined && newRetryCount >= maxRetries) {
-          entry.rejectedAt = now;
-          entry.applicationStatus = undefined;
-        } else {
-          entry.applicationStatus = 'failed';
-          entry.retryCount = newRetryCount;
+          // If max retries reached, mark as rejected permanently
+          if (maxRetries !== undefined && newRetryCount >= maxRetries) {
+            entry.rejectedAt = now;
+            entry.applicationStatus = undefined;
+          } else {
+            entry.applicationStatus = 'failed';
+            entry.retryCount = newRetryCount;
+          }
+          await tx.put(STORE_NAMES.OPS, entry);
         }
-        await store.put(entry);
       }
-    }
-    await tx.done;
+    });
   }
 
   /**
@@ -949,18 +949,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
     let storedEntries: StoredOperationLogEntry[];
     try {
-      // Type assertion needed for compound index key - idb's types don't fully support this
-      storedEntries = await this.db.getAllFromIndex(
+      // Exact compound-key match expressed as a degenerate [k, k] range.
+      storedEntries = await this._adapter.getAllFromIndex<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'failed'],
+        { lower: ['remote', 'failed'], upper: ['remote', 'failed'] },
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
       Log.warn(
         'OperationLogStoreService: bySourceAndStatus index not found, using fallback scan',
       );
-      const allOps = await this.db.getAll(STORE_NAMES.OPS);
+      const allOps = await this._adapter.getAll<StoredOperationLogEntry>(STORE_NAMES.OPS);
       storedEntries = allOps.filter(
         (entry) => entry.source === 'remote' && entry.applicationStatus === 'failed',
       );
@@ -971,24 +971,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async deleteOpsWhere(predicate: (entry: OperationLogEntry) => boolean): Promise<void> {
     await this._ensureInit();
-    // This requires iterating and deleting.
-    // Ideally we delete by range (older than X).
-    // The predicate in plan: syncedAt && appliedAt < old && seq <= lastSeq
-    // We can iterate via cursor.
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.OPS);
-    let cursor = await store.openCursor();
+    // Iterate the whole store, deleting entries that match the predicate.
+    // (A range delete isn't possible — the predicate is on decoded fields.)
     let deletedCount = 0;
-    while (cursor) {
+    await this._adapter.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
       // Decode stored entry before applying predicate
-      const decoded = decodeStoredEntry(cursor.value);
+      const decoded = decodeStoredEntry(value);
       if (predicate(decoded)) {
-        await cursor.delete();
         deletedCount++;
+        return 'delete';
       }
-      cursor = await cursor.continue();
-    }
-    await tx.done;
+      return 'continue';
+    });
 
     // Invalidate caches if any ops were deleted to prevent stale data
     if (deletedCount > 0) {
@@ -1000,10 +994,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   async getLastSeq(): Promise<number> {
     await this._ensureInit();
-    const cursor = await this.db
-      .transaction(STORE_NAMES.OPS)
-      .store.openCursor(null, 'prev');
-    return cursor ? (cursor.key as number) : 0;
+    let lastSeq = 0;
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      // Pure read on the hottest path (getUnsynced/getAppliedOpIds); readonly
+      // so it doesn't take an exclusive write lock that serializes appends.
+      { direction: 'prev', mode: 'readonly' },
+      (_value, key) => {
+        lastSeq = key as number;
+        return 'stop';
+      },
+    );
+    return lastSeq;
   }
 
   /**
@@ -1021,22 +1023,24 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   async hasSyncedOps(): Promise<boolean> {
     await this._ensureInit();
     // Use the bySyncedAt index to find synced ops, but exclude MIGRATION/RECOVERY
-    let cursor = await this.db
-      .transaction(STORE_NAMES.OPS)
-      .store.index(OPS_INDEXES.BY_SYNCED_AT)
-      .openCursor();
-
-    while (cursor) {
-      const op = cursor.value.op;
-      // Handle both compact format ('e') and full format ('entityType')
-      const entityType = isCompactOperation(op) ? op.e : (op as Operation).entityType;
-      // Skip MIGRATION and RECOVERY entity types - they're not real sync history
-      if (entityType !== 'MIGRATION' && entityType !== 'RECOVERY') {
-        return true; // Found a real synced op
-      }
-      cursor = await cursor.continue();
-    }
-    return false;
+    let foundRealSyncedOp = false;
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      // Pure read: readonly avoids a write lock on the hot ops store.
+      { index: OPS_INDEXES.BY_SYNCED_AT, mode: 'readonly' },
+      (value) => {
+        const op = value.op;
+        // Handle both compact format ('e') and full format ('entityType')
+        const entityType = isCompactOperation(op) ? op.e : (op as Operation).entityType;
+        // Skip MIGRATION and RECOVERY entity types - they're not real sync history
+        if (entityType !== 'MIGRATION' && entityType !== 'RECOVERY') {
+          foundRealSyncedOp = true;
+          return 'stop';
+        }
+        return 'continue';
+      },
+    );
+    return foundRealSyncedOp;
   }
 
   async saveStateCache(snapshot: {
@@ -1048,22 +1052,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     snapshotEntityKeys?: string[];
   }): Promise<void> {
     await this._ensureInit();
-    await this.db.put(STORE_NAMES.STATE_CACHE, {
+    await this._adapter.put(STORE_NAMES.STATE_CACHE, {
       id: SINGLETON_KEY,
       ...snapshot,
     });
   }
 
-  async loadStateCache(): Promise<{
-    state: unknown;
-    lastAppliedOpSeq: number;
-    vectorClock: VectorClock;
-    compactedAt: number;
-    schemaVersion?: number;
-    snapshotEntityKeys?: string[];
-  } | null> {
+  async loadStateCache(): Promise<StateCacheEntry | null> {
     await this._ensureInit();
-    const cache = await this.db.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    const cache = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      SINGLETON_KEY,
+    );
     // Return null if cache doesn't exist or if state is null/undefined.
     // incrementCompactionCounter() may create a cache entry with state: null
     // just to track the counter - this shouldn't be treated as a valid snapshot.
@@ -1083,9 +1083,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async saveStateCacheBackup(): Promise<void> {
     await this._ensureInit();
-    const current = await this.db.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    const current = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      SINGLETON_KEY,
+    );
     if (current) {
-      await this.db.put(STORE_NAMES.STATE_CACHE, {
+      await this._adapter.put(STORE_NAMES.STATE_CACHE, {
         ...current,
         id: BACKUP_KEY,
       });
@@ -1096,16 +1099,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * Loads the backup state cache, if one exists.
    * Used for crash recovery during migration.
    */
-  async loadStateCacheBackup(): Promise<{
-    state: unknown;
-    lastAppliedOpSeq: number;
-    vectorClock: VectorClock;
-    compactedAt: number;
-    schemaVersion?: number;
-    snapshotEntityKeys?: string[];
-  } | null> {
+  async loadStateCacheBackup(): Promise<StateCacheEntry | null> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    const backup = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      BACKUP_KEY,
+    );
     return backup || null;
   }
 
@@ -1114,7 +1113,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async clearStateCacheBackup(): Promise<void> {
     await this._ensureInit();
-    await this.db.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    await this._adapter.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
   }
 
   /**
@@ -1122,7 +1121,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async hasStateCacheBackup(): Promise<boolean> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    const backup = await this._adapter.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
     return !!backup;
   }
 
@@ -1132,13 +1131,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async restoreStateCacheFromBackup(): Promise<void> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+    const backup = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      BACKUP_KEY,
+    );
     if (backup) {
-      await this.db.put(STORE_NAMES.STATE_CACHE, {
+      await this._adapter.put(STORE_NAMES.STATE_CACHE, {
         ...backup,
         id: SINGLETON_KEY,
       });
-      await this.db.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
+      await this._adapter.delete(STORE_NAMES.STATE_CACHE, BACKUP_KEY);
     }
   }
 
@@ -1152,7 +1154,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async getCompactionCounter(): Promise<number> {
     await this._ensureInit();
-    const cache = await this.db.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    const cache = await this._adapter.get<StateCacheEntry>(
+      STORE_NAMES.STATE_CACHE,
+      SINGLETON_KEY,
+    );
     return cache?.compactionCounter ?? 0;
   }
 
@@ -1163,32 +1168,37 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async incrementCompactionCounter(): Promise<number> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.STATE_CACHE, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.STATE_CACHE);
-    const cache = await store.get('current');
+    return this._adapter.transaction(
+      [STORE_NAMES.STATE_CACHE],
+      'readwrite',
+      async (tx) => {
+        const cache = await tx.get<StateCacheEntry>(
+          STORE_NAMES.STATE_CACHE,
+          SINGLETON_KEY,
+        );
 
-    if (!cache) {
-      // No state cache yet - create one with counter starting at 1
-      // Provide default values for required schema fields
-      await store.put({
-        id: SINGLETON_KEY,
-        state: null,
-        lastAppliedOpSeq: 0,
-        vectorClock: {},
-        compactedAt: 0,
-        compactionCounter: 1,
-      });
-      await tx.done;
-      return 1;
-    }
+        if (!cache) {
+          // No state cache yet - create one with counter starting at 1
+          // Provide default values for required schema fields
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            id: SINGLETON_KEY,
+            state: null,
+            lastAppliedOpSeq: 0,
+            vectorClock: {},
+            compactedAt: 0,
+            compactionCounter: 1,
+          });
+          return 1;
+        }
 
-    const newCount = (cache.compactionCounter ?? 0) + 1;
-    await store.put({
-      ...cache,
-      compactionCounter: newCount,
-    });
-    await tx.done;
-    return newCount;
+        const newCount = (cache.compactionCounter ?? 0) + 1;
+        await tx.put(STORE_NAMES.STATE_CACHE, {
+          ...cache,
+          compactionCounter: newCount,
+        });
+        return newCount;
+      },
+    );
   }
 
   /**
@@ -1197,16 +1207,22 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async resetCompactionCounter(): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.STATE_CACHE, 'readwrite');
-    const store = tx.objectStore(STORE_NAMES.STATE_CACHE);
-    const cache = await store.get(SINGLETON_KEY);
-    if (cache) {
-      await store.put({
-        ...cache,
-        compactionCounter: 0,
-      });
-    }
-    await tx.done;
+    await this._adapter.transaction(
+      [STORE_NAMES.STATE_CACHE],
+      'readwrite',
+      async (tx) => {
+        const cache = await tx.get<StateCacheEntry>(
+          STORE_NAMES.STATE_CACHE,
+          SINGLETON_KEY,
+        );
+        if (cache) {
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            ...cache,
+            compactionCounter: 0,
+          });
+        }
+      },
+    );
   }
 
   /**
@@ -1215,28 +1231,21 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async _clearAllDataForTesting(): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(
-      [
-        STORE_NAMES.OPS,
-        STORE_NAMES.STATE_CACHE,
-        STORE_NAMES.IMPORT_BACKUP,
-        STORE_NAMES.VECTOR_CLOCK,
-        STORE_NAMES.ARCHIVE_YOUNG,
-        STORE_NAMES.ARCHIVE_OLD,
-        STORE_NAMES.PROFILE_DATA,
-        STORE_NAMES.CLIENT_ID,
-      ],
-      'readwrite',
-    );
-    await tx.objectStore(STORE_NAMES.OPS).clear();
-    await tx.objectStore(STORE_NAMES.STATE_CACHE).clear();
-    await tx.objectStore(STORE_NAMES.IMPORT_BACKUP).clear();
-    await tx.objectStore(STORE_NAMES.VECTOR_CLOCK).clear();
-    await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
-    await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
-    await tx.objectStore(STORE_NAMES.PROFILE_DATA).clear();
-    await tx.objectStore(STORE_NAMES.CLIENT_ID).clear();
-    await tx.done;
+    const allStores = [
+      STORE_NAMES.OPS,
+      STORE_NAMES.STATE_CACHE,
+      STORE_NAMES.IMPORT_BACKUP,
+      STORE_NAMES.VECTOR_CLOCK,
+      STORE_NAMES.ARCHIVE_YOUNG,
+      STORE_NAMES.ARCHIVE_OLD,
+      STORE_NAMES.PROFILE_DATA,
+      STORE_NAMES.CLIENT_ID,
+    ];
+    await this._adapter.transaction(allStores, 'readwrite', async (tx) => {
+      for (const store of allStores) {
+        await tx.clear(store);
+      }
+    });
     // Invalidate all caches
     this._appliedOpIdsCache = null;
     this._cacheLastSeq = 0;
@@ -1252,10 +1261,13 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   /**
    * Saves a backup of the current state before an import operation.
    * This allows manual recovery if the import causes issues.
+   *
+   * Migrated to route through `_adapter` (Phase A). Behavior is identical:
+   * the adapter operates on the same connection adopted in `init()`.
    */
   async saveImportBackup(state: unknown): Promise<void> {
     await this._ensureInit();
-    await this.db.put(STORE_NAMES.IMPORT_BACKUP, {
+    await this._adapter.put(STORE_NAMES.IMPORT_BACKUP, {
       id: SINGLETON_KEY,
       state,
       savedAt: Date.now(),
@@ -1267,7 +1279,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async loadImportBackup(): Promise<{ state: unknown; savedAt: number } | null> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
+    const backup = await this._adapter.get<{ state: unknown; savedAt: number }>(
+      STORE_NAMES.IMPORT_BACKUP,
+      SINGLETON_KEY,
+    );
     return backup ? { state: backup.state, savedAt: backup.savedAt } : null;
   }
 
@@ -1276,7 +1291,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async clearImportBackup(): Promise<void> {
     await this._ensureInit();
-    await this.db.delete(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
+    await this._adapter.delete(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
   }
 
   /**
@@ -1284,7 +1299,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async hasImportBackup(): Promise<boolean> {
     await this._ensureInit();
-    const backup = await this.db.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
+    const backup = await this._adapter.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
     return !!backup;
   }
 
@@ -1295,9 +1310,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async clearAllOperations(): Promise<void> {
     await this._ensureInit();
-    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
-    await tx.objectStore(STORE_NAMES.OPS).clear();
-    await tx.done;
+    await this._adapter.clear(STORE_NAMES.OPS);
     // Invalidate caches since we cleared all ops
     this._appliedOpIdsCache = null;
     this._cacheLastSeq = 0;
@@ -1318,7 +1331,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       return { ...this._vectorClockCache };
     }
     await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
+    const entry = await this._adapter.get<VectorClockEntry>(
+      STORE_NAMES.VECTOR_CLOCK,
+      SINGLETON_KEY,
+    );
     this._vectorClockCache = entry?.clock ?? null;
     return this._vectorClockCache ? { ...this._vectorClockCache } : null;
   }
@@ -1330,7 +1346,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async setVectorClock(clock: VectorClock): Promise<void> {
     await this._ensureInit();
-    await this.db.put(
+    await this._adapter.put(
       STORE_NAMES.VECTOR_CLOCK,
       { clock, lastUpdate: Date.now() },
       SINGLETON_KEY,
@@ -1487,7 +1503,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     );
 
     // Update the vector clock store
-    await this.db.put(
+    await this._adapter.put(
       STORE_NAMES.VECTOR_CLOCK,
       { clock: clockToStore, lastUpdate: Date.now() },
       SINGLETON_KEY,
@@ -1501,7 +1517,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async getVectorClockEntry(): Promise<VectorClockEntry | null> {
     await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
+    const entry = await this._adapter.get<VectorClockEntry>(
+      STORE_NAMES.VECTOR_CLOCK,
+      SINGLETON_KEY,
+    );
     return entry ?? null;
   }
 
@@ -1530,42 +1549,42 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
 
     try {
-      const tx = this.db.transaction(
+      return await this._adapter.transaction(
         [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK],
         'readwrite',
+        async (tx) => {
+          // 1. Append operation to ops store (encoded to compact format)
+          const compactOp = encodeOperation(op);
+          const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+            op: compactOp,
+            appliedAt: Date.now(),
+            source,
+            syncedAt: source === 'remote' ? Date.now() : undefined,
+            applicationStatus:
+              source === 'remote'
+                ? options?.pendingApply
+                  ? 'pending'
+                  : 'applied'
+                : undefined,
+          };
+          const seq = await tx.add(STORE_NAMES.OPS, entry);
+
+          // 2. Update vector clock to match the operation's clock (only for
+          // local ops). The op.vectorClock already contains the incremented
+          // value from the caller; we store it as the current clock so
+          // subsequent operations can build on it.
+          if (source === 'local') {
+            await tx.put(
+              STORE_NAMES.VECTOR_CLOCK,
+              { clock: op.vectorClock, lastUpdate: Date.now() },
+              SINGLETON_KEY,
+            );
+            this._vectorClockCache = op.vectorClock;
+          }
+
+          return seq;
+        },
       );
-      const opsStore = tx.objectStore(STORE_NAMES.OPS);
-      const vcStore = tx.objectStore(STORE_NAMES.VECTOR_CLOCK);
-
-      // 1. Append operation to ops store (encoded to compact format)
-      const compactOp = encodeOperation(op);
-      const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-        op: compactOp,
-        appliedAt: Date.now(),
-        source,
-        syncedAt: source === 'remote' ? Date.now() : undefined,
-        applicationStatus:
-          source === 'remote'
-            ? options?.pendingApply
-              ? 'pending'
-              : 'applied'
-            : undefined,
-      };
-      const seq = await opsStore.add(entry as StoredOperationLogEntry);
-
-      // 2. Update vector clock to match the operation's clock (only for local ops)
-      // The op.vectorClock already contains the incremented value from the caller.
-      // We store it as the current clock so subsequent operations can build on it.
-      if (source === 'local') {
-        await vcStore.put(
-          { clock: op.vectorClock, lastUpdate: Date.now() },
-          SINGLETON_KEY,
-        );
-        this._vectorClockCache = op.vectorClock;
-      }
-
-      await tx.done;
-      return seq as number;
     } catch (e) {
       if (e instanceof DOMException && e.name === 'ConstraintError') {
         this._appliedOpIdsCache = null;
@@ -1627,82 +1646,76 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     if (archiveOld != null) {
       storeNames.push(STORE_NAMES.ARCHIVE_OLD);
     }
-    const tx = this.db.transaction(storeNames, 'readwrite');
 
     try {
-      const opsStore = tx.objectStore(STORE_NAMES.OPS);
-      const stateCacheStore = tx.objectStore(STORE_NAMES.STATE_CACHE);
-      const vcStore = tx.objectStore(STORE_NAMES.VECTOR_CLOCK);
+      // The adapter's transaction() commits on resolve and aborts on throw,
+      // replacing the hand-rolled try/abort below. The interrupt integration
+      // tests (#7709) spy on the shared connection's `transaction` and poison
+      // `opsStore.add`; that still fires here because the adapter operates on
+      // that same adopted connection.
+      await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+        // Rotate the clientId first, inside this same atomic transaction.
+        // Writing it before the OPS clear means an interrupt injected into a
+        // later step still aborts this queued put — exercising the genuine
+        // "queued -> tx aborts -> client_id unchanged" path. Atomicity itself
+        // is order-independent.
+        await tx.put(STORE_NAMES.CLIENT_ID, syncImportOp.clientId, SINGLETON_KEY);
 
-      // Rotate the clientId first, inside this same atomic transaction. Writing
-      // it before opsStore.clear() means an interrupt injected into a later
-      // step still aborts this queued put — exercising the genuine
-      // "queued -> tx aborts -> client_id unchanged" path. Atomicity itself is
-      // order-independent.
-      await tx
-        .objectStore(STORE_NAMES.CLIENT_ID)
-        .put(syncImportOp.clientId, SINGLETON_KEY);
+        await tx.clear(STORE_NAMES.OPS);
 
-      await opsStore.clear();
+        const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+          op: compactOp,
+          appliedAt: Date.now(),
+          source: 'local',
+          syncedAt: undefined,
+          applicationStatus: undefined,
+        };
+        const seq = await tx.add(STORE_NAMES.OPS, entry);
 
-      const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-        op: compactOp,
-        appliedAt: Date.now(),
-        source: 'local',
-        syncedAt: undefined,
-        applicationStatus: undefined,
-      };
-      const seq = (await opsStore.add(entry as StoredOperationLogEntry)) as number;
+        await tx.put(
+          STORE_NAMES.VECTOR_CLOCK,
+          { clock: newVectorClock, lastUpdate: Date.now() },
+          SINGLETON_KEY,
+        );
 
-      await vcStore.put({ clock: newVectorClock, lastUpdate: Date.now() }, SINGLETON_KEY);
+        await tx.put(STORE_NAMES.STATE_CACHE, {
+          id: SINGLETON_KEY,
+          state: newState,
+          lastAppliedOpSeq: seq,
+          vectorClock: newVectorClock,
+          compactedAt,
+          schemaVersion: syncImportOp.schemaVersion,
+          snapshotEntityKeys,
+        });
 
-      await stateCacheStore.put({
-        id: SINGLETON_KEY,
-        state: newState,
-        lastAppliedOpSeq: seq,
-        vectorClock: newVectorClock,
-        compactedAt,
-        schemaVersion: syncImportOp.schemaVersion,
-        snapshotEntityKeys,
+        if (archiveYoung != null) {
+          await tx.put(STORE_NAMES.ARCHIVE_YOUNG, {
+            id: SINGLETON_KEY,
+            data: archiveYoung,
+            lastModified: compactedAt,
+          });
+        }
+
+        if (archiveOld != null) {
+          await tx.put(STORE_NAMES.ARCHIVE_OLD, {
+            id: SINGLETON_KEY,
+            data: archiveOld,
+            lastModified: compactedAt,
+          });
+        }
       });
 
-      if (archiveYoung != null) {
-        await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).put({
-          id: SINGLETON_KEY,
-          data: archiveYoung,
-          lastModified: compactedAt,
-        });
-      }
-
-      if (archiveOld != null) {
-        await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).put({
-          id: SINGLETON_KEY,
-          data: archiveOld,
-          lastModified: compactedAt,
-        });
-      }
-
-      await tx.done;
-
+      // Reached only on a committed transaction.
       this._appliedOpIdsCache = null;
       this._cacheLastSeq = 0;
       this._invalidateUnsyncedCache();
       this._vectorClockCache = newVectorClock;
       // The clientId rotated atomically with the stores above. Invalidate the
-      // ClientIdService cache so the next read sees the rotated value. Bound to
-      // a committed `tx.done`: on catch/abort this is not reached, so the cache
-      // correctly keeps the old id.
+      // ClientIdService cache so the next read sees the rotated value. On
+      // abort the transaction() above throws, so this is not reached and the
+      // cache correctly keeps the old id.
       this.clientIdProvider.clearCache();
     } catch (e) {
-      // idb auto-aborts the tx on any rejected request, but a spy that
-      // throws synchronously instead of rejecting the IDB request (used by
-      // the interrupt integration tests) leaves the tx open with queued
-      // writes — explicit abort is what unwinds them in that case.
-      try {
-        tx.abort();
-      } catch {
-        // Already aborted/committed — InvalidStateError; nothing to do.
-      }
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
         throw new StorageQuotaExceededError();
       }
@@ -1721,7 +1734,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     data: ProfileDataStoreEntry['data'],
   ): Promise<void> {
     await this._ensureInit();
-    await this.db.put(STORE_NAMES.PROFILE_DATA, {
+    await this._adapter.put(STORE_NAMES.PROFILE_DATA, {
       id: profileId,
       data,
       lastModified: Date.now(),
@@ -1736,7 +1749,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     profileId: string,
   ): Promise<ProfileDataStoreEntry['data'] | null> {
     await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.PROFILE_DATA, profileId);
+    const entry = await this._adapter.get<ProfileDataStoreEntry>(
+      STORE_NAMES.PROFILE_DATA,
+      profileId,
+    );
     return entry?.data ?? null;
   }
 
@@ -1745,7 +1761,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async deleteProfileData(profileId: string): Promise<void> {
     await this._ensureInit();
-    await this.db.delete(STORE_NAMES.PROFILE_DATA, profileId);
+    await this._adapter.delete(STORE_NAMES.PROFILE_DATA, profileId);
   }
 }
 

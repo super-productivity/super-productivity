@@ -1,6 +1,7 @@
 import { actionLoggerReducer } from './action-logger.reducer';
 import { Log } from '../../core/log';
 import { ActionReducer, Action } from '@ngrx/store';
+import { runWithBulkReplayLoggingSuppressed } from '../../util/bulk-replay-log-guard';
 
 describe('actionLoggerReducer', () => {
   const passThrough: ActionReducer<unknown, Action> = (state) => state;
@@ -54,5 +55,25 @@ describe('actionLoggerReducer', () => {
     const wrapped = actionLoggerReducer(reducer);
 
     expect(wrapped({ n: 1 }, { type: 'inc' } as Action)).toEqual({ n: 2 });
+  });
+
+  it('skips the per-op type line during a bulk-replay pass', () => {
+    const reducer: ActionReducer<{ n: number }, Action> = (state, action) =>
+      action.type === 'inc' ? { n: (state?.n ?? 0) + 1 } : (state ?? { n: 0 });
+    const wrapped = actionLoggerReducer(reducer);
+
+    // Inside a bulk-replay pass the per-op `[a]<type>` console line is suppressed
+    // (one bulk dispatch would otherwise print one line per op)...
+    const result = runWithBulkReplayLoggingSuppressed(() =>
+      wrapped({ n: 0 }, { type: '[TimeTracking] Sync sessions' } as Action),
+    );
+
+    expect(Log.exportLogHistory()).not.toContain('[TimeTracking] Sync sessions');
+    // ...but state is still reduced normally.
+    expect(result).toEqual({ n: 0 });
+
+    // ...and once the pass ends, logging resumes.
+    wrapped({ n: 0 }, { type: '[Task] Update Task' } as Action);
+    expect(Log.exportLogHistory()).toContain('[Task] Update Task');
   });
 });

@@ -267,9 +267,11 @@
 >
   Super Productivity
   <a
+    class="version"
+    [matTooltip]="T.PS.CLICK_TO_COPY_VERSION | translate"
     (click)="copyVersionToClipboard(appVersion); $event?.preventDefault()"
     href="#"
-    >{{ appVersion }}</a
+    >{{ appVersion }}<mat-icon>content_copy</mat-icon></a
   >
   –
   <a

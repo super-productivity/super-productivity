@@ -1,7 +1,10 @@
 :host {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  // 999, not 1000: stay just below the CDK overlay container (z-index 1000) so
+  // dialogs opened from here (e.g. the sync setup dialog) render above this
+  // opaque backdrop rather than relying on a same-z-index DOM-order tiebreak
+  z-index: var(--z-onboarding-presets);
 }
 
 .onboarding-backdrop {
@@ -199,6 +202,34 @@ h1 {
   animation: exit-scale-fade 450ms ease-in 350ms forwards;
 }
 
+.sync-cta {
+  color: var(--text-color-muted);
+  font-size: 13px;
+  // breathing room so it reads as a separate optional action, not a footnote
+  // to the "nothing is sent to a server" privacy line above it
+  margin: var(--s2) 0 0 0;
+}
+
+.sync-cta-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--palette-primary-500);
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
 .footer-hint {
   color: var(--text-color-muted);
   font-size: 13px;
@@ -262,6 +293,10 @@ h1 {
     .card-text p {
       font-size: 13px;
     }
+  }
+
+  .sync-cta {
+    font-size: 12px;
   }
 
   .footer-hint {

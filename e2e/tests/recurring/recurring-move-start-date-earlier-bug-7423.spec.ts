@@ -1,5 +1,10 @@
-import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import {
+  gotoHashRoute,
+  openRecurDialog,
+  saveRecurDialog,
+  setRecurStartDate,
+} from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/7423
@@ -23,42 +28,6 @@ import { expect, test } from '../../fixtures/test.fixture';
 
 const FIXED_TODAY = new Date('2026-05-01T10:00:00');
 
-const openRecurDialog = async (page: Page): Promise<Locator> => {
-  const recurItem = page
-    .locator('task-detail-item')
-    .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-  await expect(recurItem).toBeVisible({ timeout: 5000 });
-  await recurItem.click();
-  const dialog = page.locator('mat-dialog-container');
-  await dialog.waitFor({ state: 'visible', timeout: 10000 });
-  return dialog;
-};
-
-// Set the Start date by typing into the matInput directly. The input parses
-// the locale's display format (en-GB → "DD/MM/YYYY") on blur/Enter. This is
-// far more robust than driving the calendar overlay across Material versions.
-const setStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
-  const startDateInput = dialog
-    .locator('mat-form-field')
-    .filter({ hasText: /Start date/i })
-    .locator('input')
-    .first();
-  await expect(startDateInput).toBeVisible({ timeout: 5000 });
-  await startDateInput.fill('');
-  await startDateInput.fill(ddmmyyyy);
-  await startDateInput.press('Tab');
-  await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 3000 });
-};
-
-const saveDialog = async (page: Page): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
-  const saveBtn = dialog.getByRole('button', { name: /Save/i });
-  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-  await saveBtn.click();
-  await dialog.waitFor({ state: 'hidden', timeout: 10000 });
-};
-
 test.describe('Recurring Task - Move Start Date Earlier (#7423)', () => {
   test('changing startDate to an earlier date re-anchors the task on the new startDate', async ({
     page,
@@ -81,33 +50,28 @@ test.describe('Recurring Task - Move Start Date Earlier (#7423)', () => {
 
     // 2. First save: startDate = May 4, 2026 (3 days from today; daily by default).
     await openRecurDialog(page);
-    await setStartDate(page, '04/05/2026');
-    await saveDialog(page);
+    await setRecurStartDate(page, '04/05/2026');
+    await saveRecurDialog(page);
 
     // After the first save the task moves out of TODAY (dueDay = May 4) and the
     // detail panel re-renders. Reopen the panel via the Inbox project view,
-    // which lists tasks regardless of due day. The leave/enter animations need
-    // a moment to settle.
-    await page.goto('/#/project/INBOX_PROJECT/tasks');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(800);
+    // which lists tasks regardless of due day.
     const taskAfterFirstSave = page
       .locator('task')
       .filter({ hasText: taskTitle })
       .first();
-    await expect(taskAfterFirstSave).toBeVisible({ timeout: 15000 });
+    await gotoHashRoute(page, '/#/project/INBOX_PROJECT/tasks', taskAfterFirstSave);
     await taskPage.openTaskDetail(taskAfterFirstSave);
 
     // 3. Second save: change startDate to May 2, 2026 (1 day from today,
     //    still earlier than the previous value).
     await openRecurDialog(page);
-    await setStartDate(page, '02/05/2026');
-    await saveDialog(page);
+    await setRecurStartDate(page, '02/05/2026');
+    await saveRecurDialog(page);
 
     // 4. Verify in planner: task lands on May 2 ("2/5"), NOT on May 5 ("5/5").
     //    The planner header for each day uses the format DD/M (locale-aware).
-    await page.goto('/#/planner');
-    await page.waitForLoadState('networkidle');
+    await gotoHashRoute(page, '/#/planner', page.locator('planner-day').first());
 
     // The LIVE task instance lives in <planner-task>; subsequent days render
     // the same recurring task as <planner-repeat-projection> (faded preview).

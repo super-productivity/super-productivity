@@ -48,11 +48,11 @@ export class MetricComponent {
   activeWorkContext = toSignal(this.workContextService.activeWorkContext$);
 
   /**
-   * Determine which metrics service to use based on the active work context.
-   * - For TODAY_TAG: use AllTasksMetricsService (shows all tasks)
-   * - For other contexts: use ProjectMetricsService (project/tag specific)
+   * Whether the active work context is the global "Today / all tasks" view.
+   * Drives the metrics service selection (AllTasks vs Project), the view title,
+   * and whether the global charts are shown (global charts only make sense in Today).
    */
-  private _isShowingAllTasks = computed(() => {
+  isShowingAllTasks = computed(() => {
     const context = this.activeWorkContext();
     return context?.type === WorkContextType.TAG && context.id === TODAY_TAG.id;
   });
@@ -61,7 +61,7 @@ export class MetricComponent {
    * Dynamic title that changes based on context
    */
   metricsTitle = computed(() => {
-    return this._isShowingAllTasks() ? this.T.PM.ALL_TASKS_TITLE : this.T.PM.TITLE;
+    return this.isShowingAllTasks() ? this.T.PM.ALL_TASKS_TITLE : this.T.PM.TITLE;
   });
 
   simpleClickCounterData = toSignal(this.metricService.getSimpleClickCounterMetrics$());
@@ -153,7 +153,7 @@ export class MetricComponent {
    * based on the current context
    */
   simpleMetrics = computed(() => {
-    return this._isShowingAllTasks()
+    return this.isShowingAllTasks()
       ? this.allTasksMetricsService.simpleMetrics()
       : this.projectMetricsService.simpleMetrics();
   });

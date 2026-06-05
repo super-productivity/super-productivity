@@ -18,6 +18,8 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { Store } from '@ngrx/store';
 import { GlobalConfigService } from 'src/app/features/config/global-config.service';
 import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
+import { DateService } from '../../../../core/date/date.service';
+import { TaskReminderOptionId } from '../../task.model';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -35,6 +37,7 @@ describe('AddTaskBarActionsComponent', () => {
   let mockTagService: jasmine.SpyObj<TagService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
+  let mockDateService: jasmine.SpyObj<DateService>;
 
   const mockProject: Project = {
     id: '1',
@@ -67,6 +70,7 @@ describe('AddTaskBarActionsComponent', () => {
   };
 
   const mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+  mockStore.select.and.returnValue(of([]));
   const mockConfigService = (locale: DateTimeLocale): GlobalConfigService => {
     return jasmine.createSpyObj('GlobalConfigService', [], {
       localization: () => ({ timeLocale: locale }),
@@ -96,7 +100,10 @@ describe('AddTaskBarActionsComponent', () => {
       'updateDate',
       'updateEstimate',
       'updateRemindOption',
+      'updateDeadline',
+      'updateDeadlineRemindOption',
       'clearDate',
+      'clearDeadline',
       'clearTags',
       'clearEstimate',
       'toggleTag',
@@ -142,6 +149,14 @@ describe('AddTaskBarActionsComponent', () => {
 
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockMatDialog.open.and.returnValue(mockDialogRef);
+    mockDateService = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+      'getLogicalTodayDate',
+    ]);
+    mockDateService.todayStr.and.callFake(() => getDbDateStr(new Date()));
+    mockDateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    mockDateService.getLogicalTodayDate.and.callFake(() => new Date());
 
     await TestBed.configureTestingModule({
       imports: [
@@ -153,6 +168,7 @@ describe('AddTaskBarActionsComponent', () => {
         { provide: AddTaskBarStateService, useValue: mockStateService },
         { provide: AddTaskBarParserService, useValue: mockParserService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateService, useValue: mockDateService },
         {
           provide: GlobalConfigService,
           useValue: mockConfigService(DateTimeLocales.en_us),
@@ -221,7 +237,7 @@ describe('AddTaskBarActionsComponent', () => {
     });
 
     it('should compute dateDisplay for today', () => {
-      const today = getDbDateStr(new Date());
+      const today = mockDateService.todayStr();
       const stateWithToday = {
         ...mockState,
         date: today,
@@ -234,7 +250,7 @@ describe('AddTaskBarActionsComponent', () => {
     });
 
     it('should compute dateDisplay for today with time', () => {
-      const today = getDbDateStr(new Date());
+      const today = mockDateService.todayStr();
       const time = '14:30';
       const stateWithTime = {
         ...mockState,
@@ -250,7 +266,7 @@ describe('AddTaskBarActionsComponent', () => {
     });
 
     it('should compute dateDisplay for tomorrow', () => {
-      const tomorrow = new Date();
+      const tomorrow = new Date(Date.now() - mockDateService.getStartOfNextDayDiffMs());
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = getDbDateStr(tomorrow);
       const stateWithTomorrow = {
@@ -259,6 +275,36 @@ describe('AddTaskBarActionsComponent', () => {
         time: null,
       };
       (mockStateService as any)._mockStateSignal.set(stateWithTomorrow);
+
+      fixture.detectChanges();
+      expect(component.dateDisplay()).toBe('Tomorrow');
+    });
+
+    it('should compute dateDisplay for logical today before start of next day', () => {
+      // logical today = 2024-05-19; state.date 2024-05-19 matches → "Today"
+      mockDateService.getLogicalTodayDate.and.returnValue(new Date(2024, 4, 19));
+
+      const stateWithLogicalToday = {
+        ...mockState,
+        date: '2024-05-19',
+        time: null,
+      };
+      (mockStateService as any)._mockStateSignal.set(stateWithLogicalToday);
+
+      fixture.detectChanges();
+      expect(component.dateDisplay()).toBe('Today');
+    });
+
+    it('should compute dateDisplay for logical tomorrow before start of next day', () => {
+      // logical today = 2024-05-19; state.date 2024-05-20 is logical tomorrow
+      mockDateService.getLogicalTodayDate.and.returnValue(new Date(2024, 4, 19));
+
+      const stateWithLogicalTomorrow = {
+        ...mockState,
+        date: '2024-05-20',
+        time: null,
+      };
+      (mockStateService as any)._mockStateSignal.set(stateWithLogicalTomorrow);
 
       fixture.detectChanges();
       expect(component.dateDisplay()).toBe('Tomorrow');
@@ -319,6 +365,44 @@ describe('AddTaskBarActionsComponent', () => {
       expect(result).toContain(expectedLocaleTime('10:00', 'en-US'));
     });
 
+    // Repro for #7802 — a malformed time string in state crashed change
+    // detection via the "Invalid clock string" guard in _formatTimeForDisplay.
+    it('does NOT throw and shows the normalized time for a "13:30:00" state.time', () => {
+      const today = mockDateService.todayStr();
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        date: today,
+        time: '13:30:00',
+      });
+
+      expect(() => component.dateDisplay()).not.toThrow();
+      expect(component.dateDisplay()).toBe(expectedLocaleTime('13:30', 'en-US'));
+    });
+
+    it('does NOT throw for genuinely invalid state.time', () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 4);
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        date: getDbDateStr(futureDate),
+        time: 'abc',
+      });
+
+      expect(() => component.dateDisplay()).not.toThrow();
+    });
+
+    it('does NOT throw and shows the normalized time for a "13:30:00" deadlineTime', () => {
+      const today = mockDateService.todayStr();
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        deadlineDate: today,
+        deadlineTime: '13:30:00',
+      });
+
+      expect(() => component.deadlineDateDisplay()).not.toThrow();
+      expect(component.deadlineDateDisplay()).toBe(expectedLocaleTime('13:30', 'en-US'));
+    });
+
     it('should handle auto-detected state correctly', () => {
       (mockStateService as any)._mockAutoDetectedSignal.set(true);
       const stateWithProject = {
@@ -347,6 +431,7 @@ describe('AddTaskBarActionsComponent', () => {
               currentLocale: () => 'de-de',
             }),
           },
+          { provide: DateService, useValue: mockDateService },
           {
             provide: GlobalConfigService,
             useValue: mockConfigService(DateTimeLocales.de_de),
@@ -944,6 +1029,28 @@ describe('AddTaskBarActionsComponent', () => {
   });
 
   describe('Schedule Dialog Timezone Handling', () => {
+    it('should pass the existing deadline reminder option when opening deadline dialog', () => {
+      const stateWithDeadline = {
+        ...mockState,
+        deadlineDate: '2025-07-20',
+        deadlineTime: '09:15',
+        deadlineRemindOption: TaskReminderOptionId.m30,
+      };
+      (mockStateService as any)._mockStateSignal.set(stateWithDeadline);
+      fixture.detectChanges();
+
+      component.openDeadlineDialog();
+
+      expect(mockMatDialog.open).toHaveBeenCalledWith(jasmine.any(Function), {
+        data: {
+          targetDeadlineDay: '2025-07-20',
+          targetDeadlineTime: '09:15',
+          targetDeadlineRemindOption: TaskReminderOptionId.m30,
+          isSelectDeadlineOnly: true,
+        },
+      });
+    });
+
     it('should handle dialog results with dates from different timezones', () => {
       // Simulate a dialog result with a Date object that might come from a date picker
       const selectedDate = new Date(2025, 2, 15, 10, 30, 0); // March 15, 2025 at 10:30 AM

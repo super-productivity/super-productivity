@@ -63,6 +63,34 @@ describe('WebDavHttpAdapter', () => {
       );
     });
 
+    it('sends no-cache request headers on the native path (#7144)', async () => {
+      // Regression guard: iOS URLSession / upstream proxies otherwise serve a
+      // stale sync-data.json, which hides remote changes and defeats the
+      // content-hash conflict check, causing silent overwrite/data loss.
+      const nativeHttp = vi.fn().mockResolvedValue({
+        status: 200,
+        headers: {},
+        data: 'native-body',
+      });
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp }),
+      );
+
+      await adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'GET',
+        headers: { Authorization: 'Basic abc' },
+      });
+
+      const sentHeaders = (
+        nativeHttp.mock.calls[0][0] as { headers: Record<string, string> }
+      ).headers;
+      expect(sentHeaders['Cache-Control']).toBe('no-cache, no-store');
+      expect(sentHeaders['Pragma']).toBe('no-cache');
+      // Caller headers are preserved.
+      expect(sentHeaders['Authorization']).toBe('Basic abc');
+    });
+
     it('uses fetch when not native', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse(200, 'web-body'));
       const adapter = new WebDavHttpAdapter(
@@ -235,6 +263,61 @@ describe('WebDavHttpAdapter', () => {
       expect(JSON.stringify(loggedMessages)).not.toContain('user:pass');
       expect(JSON.stringify(loggedMessages)).not.toContain('alice');
       expect(JSON.stringify(loggedMessages)).not.toContain('sync/file');
+    });
+
+    it('logs allowlisted cache headers but never sensitive ones (#7144 diagnostic)', async () => {
+      /* eslint-disable @typescript-eslint/naming-convention */
+      const nativeHttp = vi.fn().mockResolvedValue({
+        status: 200,
+        headers: {
+          ETag: 'W/"v15"',
+          Age: '7',
+          'X-Cache': 'HIT',
+          'Set-Cookie': 'session=topsecret',
+          'WWW-Authenticate': 'Basic realm="x"',
+        },
+        data: 'body',
+      });
+      /* eslint-enable @typescript-eslint/naming-convention */
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      await adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'GET',
+      });
+
+      const responseLog = loggedMessages.find((l) => l.msg.includes('.response()'));
+      expect(responseLog).toBeTruthy();
+      const cacheHeaders = (responseLog?.meta as { cacheHeaders?: string }).cacheHeaders;
+      // Allowlisted, case-insensitive.
+      expect(cacheHeaders).toContain('etag=W/"v15"');
+      expect(cacheHeaders).toContain('age=7');
+      expect(cacheHeaders).toContain('x-cache=HIT');
+      // Sensitive headers never surface in the log.
+      expect(JSON.stringify(loggedMessages)).not.toContain('topsecret');
+      expect(JSON.stringify(loggedMessages)).not.toContain('set-cookie');
+      expect(JSON.stringify(loggedMessages)).not.toContain('Set-Cookie');
+    });
+
+    it('logs cacheHeaders=none when the response has no cache headers', async () => {
+      const nativeHttp = vi.fn().mockResolvedValue({
+        status: 200,
+        headers: {},
+        data: 'body',
+      });
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      await adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'GET',
+      });
+
+      const responseLog = loggedMessages.find((l) => l.msg.includes('.response()'));
+      expect((responseLog?.meta as { cacheHeaders?: string }).cacheHeaders).toBe('none');
     });
 
     it('logs structured errorMeta on unexpected error (no raw Error)', async () => {

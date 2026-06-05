@@ -8,6 +8,23 @@
  *   bootstrap present;     disableStyle false; (mixes internal style with bs)
  **/
 
+.custom-option-layout {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+
+  .option-main-icon,
+  .tag-ico-emoji {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+}
+
 .mention-menu {
   position: absolute;
   top: 100%;
@@ -44,6 +61,12 @@
   text-decoration: none;
   background-color: var(--c-primary);
   outline: 0;
+}
+.mention-active {
+  .option-main-icon,
+  .tag-ico-emoji {
+    color: var(--c-contrast) !important;
+  }
 }
 .scrollable-menu {
   display: block;

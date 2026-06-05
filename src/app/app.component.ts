@@ -508,6 +508,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     }, ONBOARDING_ENTRANCE_COMPLETE_DELAY);
   }
 
+  // Returning user set up sync from onboarding: just reveal the app with their
+  // synced data — no preset applied, no new-user hint tour.
+  onOnboardingDismissed(): void {
+    this.isShowOnboardingPresets.set(false);
+  }
+
   ngAfterViewInit(): void {
     this._ngZone.runOutsideAngular(() => {
       const doc = this._document!;

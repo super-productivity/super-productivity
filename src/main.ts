@@ -20,6 +20,7 @@ import {
 } from './app/core/locale.constants';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
+import { AndroidBackButtonService } from './app/features/android/android-back-button.service';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from './app/util/is-native-platform';
 import { DataInitStateService } from './app/core/data-init/data-init-state.service';
 // Type definitions for window.ea are in ./app/core/window-ea.d.ts
@@ -69,10 +70,8 @@ import { EffectsModule } from '@ngrx/effects';
 import { ReactiveFormsModule } from '@angular/forms';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import {
-  TRANSLATE_HTTP_LOADER_CONFIG,
-  TranslateHttpLoader,
-} from '@ngx-translate/http-loader';
+import { TRANSLATE_HTTP_LOADER_CONFIG } from '@ngx-translate/http-loader';
+import { TranslateHttpLoaderWithFallback } from './app/core/http/translate-http-loader-with-fallback.class';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { AppComponent } from './app/app.component';
 import { ShortTimeHtmlPipe } from './app/ui/pipes/short-time-html.pipe';
@@ -187,7 +186,7 @@ bootstrapApplication(AppComponent, {
         fallbackLang: DEFAULT_LANGUAGE,
         loader: {
           provide: TranslateLoader,
-          useClass: TranslateHttpLoader,
+          useClass: TranslateHttpLoaderWithFallback,
         },
       }),
       CdkDropListGroup,
@@ -475,7 +474,13 @@ if (!(environment.production || environment.stage) && IS_ANDROID_WEB_VIEW) {
 // Android-specific: Handle back button
 if (IS_ANDROID_WEB_VIEW) {
   CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-    if (!canGoBack) {
+    // Delegate to the Angular service so back from a top-level destination pops
+    // to the start destination / exits per Android guidelines (issue #7972).
+    const backButtonService = appInjector?.get(AndroidBackButtonService);
+    if (backButtonService) {
+      backButtonService.handleBackButton(canGoBack);
+    } else if (!canGoBack) {
+      // Pre-bootstrap fallback (back pressed before Angular is ready).
       CapacitorApp.minimizeApp();
     } else {
       window.history.back();

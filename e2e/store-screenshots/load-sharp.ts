@@ -23,7 +23,6 @@ export const loadSharp = async (): Promise<Sharp> => {
   try {
     cached = resolveModule(await import('sharp'));
   } catch {
-    // eslint-disable-next-line no-console
     console.log('sharp not found, installing (dev-only screenshot tool)...');
     execSync('npm install --no-save --no-package-lock sharp', { stdio: 'inherit' });
     cached = resolveModule(await import('sharp'));

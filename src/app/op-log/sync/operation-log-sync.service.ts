@@ -35,6 +35,7 @@ import { getDefaultMainModelData } from '../model/model-config';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { SyncLocalStateService } from './sync-local-state.service';
 import { SyncImportConflictCoordinatorService } from './sync-import-conflict-coordinator.service';
+import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
 
 /**
  * Orchestrates synchronization of the Operation Log with remote storage.
@@ -133,6 +134,17 @@ export class OperationLogSyncService {
   }
 
   /**
+   * Whether this client has ever completed a sync, for the SYNC_IMPORT conflict gate's
+   * never-synced guard. The orchestrator (SyncWrapperService) MUST read this BEFORE
+   * download and thread it into both downloadRemoteOps() and uploadPendingOps(): a sync
+   * persists downloaded ops with `syncedAt` and marks accepted uploads synced, so a read
+   * taken mid-cycle would see the sync's own writes and disarm the guard.
+   */
+  async hasSyncedOps(): Promise<boolean> {
+    return this.opLogStore.hasSyncedOps();
+  }
+
+  /**
    * Upload pending local operations to remote storage.
    * Any piggybacked operations received during upload are automatically processed.
    *
@@ -154,13 +166,25 @@ export class OperationLogSyncService {
    */
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
-    options?: { skipPiggybackProcessing?: boolean; skipServerMigrationCheck?: boolean },
+    options?: {
+      skipPiggybackProcessing?: boolean;
+      skipServerMigrationCheck?: boolean;
+      isNeverSynced?: boolean;
+    },
   ): Promise<UploadOutcome> {
     // CRITICAL: Ensure all pending write operations have completed before uploading.
     // The effect that writes operations uses concatMap for sequential processing,
     // but if sync is triggered before all operations are written to IndexedDB,
     // we would upload an incomplete set. This flush waits for all queued writes.
     await this.writeFlushService.flushPendingWrites();
+
+    // Capture never-synced status BEFORE the upload runs: uploadService.uploadPendingOps
+    // marks accepted ops synced, which flips hasSyncedOps() and would defeat the piggyback
+    // conflict gate's never-synced guard if it read live state afterwards. The orchestrator
+    // passes a value captured even earlier (pre-download, since download also persists
+    // synced ops); fall back to a local read for standalone upload callers.
+    const isNeverSyncedAtSyncStart =
+      options?.isNeverSynced ?? !(await this.opLogStore.hasSyncedOps());
 
     // SAFETY: Block upload from wholly fresh clients
     // A fresh client has nothing meaningful to upload and uploading could overwrite
@@ -213,6 +237,7 @@ export class OperationLogSyncService {
       const piggybackedConflict =
         await this.syncImportConflictGateService.checkIncomingFullStateConflict(
           result.piggybackedOps,
+          { isNeverSynced: isNeverSyncedAtSyncStart },
         );
       if (piggybackedConflict.fullStateOp) {
         const { fullStateOp, pendingOps, dialogData } = piggybackedConflict;
@@ -250,6 +275,14 @@ export class OperationLogSyncService {
             rejectedOps: [],
           };
         } else {
+          // Known limitation (#7985, upload→piggyback path): example-task ops accepted earlier in
+          // THIS same upload round were already marked synced, so they have left
+          // getUnsynced() and are absent from discardablePendingOpIds here — they remain on
+          // the server. State stays correct because receivers drop them as CONCURRENT
+          // against the import (SyncImportFilterService). Only reachable in the narrow window
+          // where example tasks are created on a still-empty server and uploaded just as a
+          // remote import arrives; afterInitialSyncDoneStrict$ shrinks it further.
+          await this._discardExampleTaskOps(piggybackedConflict.discardablePendingOpIds);
           OpLog.normal(
             `OperationLogSyncService: Accepting piggybacked ${fullStateOp.opType} from client ` +
               `${fullStateOp.clientId} without conflict dialog; ` +
@@ -275,7 +308,10 @@ export class OperationLogSyncService {
     const downloadCallback = async (downloadOptions?: {
       forceFromSeq0?: boolean;
     }): Promise<DownloadResultForRejection> => {
-      const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
+      const outcome = await this.downloadRemoteOps(syncProvider, {
+        ...downloadOptions,
+        isNeverSynced: isNeverSyncedAtSyncStart,
+      });
       // Validation failure (if any during the nested download) is on the
       // session-validation latch — no need to thread the boolean back. (#7330)
       switch (outcome.kind) {
@@ -347,7 +383,7 @@ export class OperationLogSyncService {
    */
   async downloadRemoteOps(
     syncProvider: OperationSyncCapable,
-    options?: { forceFromSeq0?: boolean },
+    options?: { forceFromSeq0?: boolean; isNeverSynced?: boolean },
   ): Promise<DownloadOutcome> {
     const result = await this.downloadService.downloadRemoteOps(syncProvider, options);
 
@@ -435,15 +471,37 @@ export class OperationLogSyncService {
       const unsyncedOps = await this.opLogStore.getUnsynced();
       const hasLocalChanges = unsyncedOps.length > 0;
 
+      // Collected here, applied AFTER hydrateFromRemoteSync succeeds so a
+      // hydration failure doesn't permanently drop the pending example-create
+      // ops while leaving the user without the remote snapshot.
+      let exampleTaskOpIdsToDiscard: string[] = [];
+
       if (hasLocalChanges) {
         // Throw LocalDataConflictError if unsynced ops contain meaningful user data
         // OR if the NgRx store has meaningful data (tasks, projects, tags, notes).
         // The store check catches provider-switch scenarios: user switches from
         // SuperSync→Dropbox, only has a config-change op (not "meaningful"), but the
         // store is full of real data that would be overwritten by old Dropbox state.
+        //
+        // #7985: hasMeaningfulStoreData() counts ANY task, including onboarding example
+        // tasks (they carry the isExampleTask marker only on their op-log ops, not in NgRx
+        // state). Derive the example task ids from the pending example-create ops and let
+        // the store check ignore them, so a fresh file-based client (Dropbox/WebDAV) that
+        // only has example tasks adopts remote silently instead of hitting the spurious
+        // conflict dialog #7976/#7980 removed for the SuperSync path. Scope: this fires only
+        // while the example create ops are still pending (a never-synced file client) —
+        // exactly the reachable scenario. A real (non-example) task / non-INBOX project /
+        // non-system tag / note still reads as meaningful and shows the dialog.
+        const exampleTaskEntries = unsyncedOps.filter(isExampleTaskCreateOp);
+        const exampleTaskIds = new Set(
+          exampleTaskEntries
+            .map((entry) => entry.op.entityId)
+            .filter((id): id is string => id !== undefined),
+        );
+        const exampleTaskOpIds = exampleTaskEntries.map((entry) => entry.op.id);
         const hasMeaningfulUserData =
           this.syncImportConflictGateService.hasMeaningfulPendingOps(unsyncedOps) ||
-          this.syncLocalStateService.hasMeaningfulStoreData();
+          this.syncLocalStateService.hasMeaningfulStoreData(exampleTaskIds);
 
         if (hasMeaningfulUserData) {
           // Client has meaningful user data - show conflict dialog
@@ -459,6 +517,9 @@ export class OperationLogSyncService {
             result.snapshotVectorClock,
           );
         } else {
+          // Defer the markRejected call until hydration has succeeded — see
+          // the declaration of exampleTaskOpIdsToDiscard above for rationale.
+          exampleTaskOpIdsToDiscard = exampleTaskOpIds;
           // Only system/config ops AND no meaningful store data - proceed with download
           OpLog.normal(
             `OperationLogSyncService: Client has ${unsyncedOps.length} unsynced ops but no meaningful user data. ` +
@@ -518,6 +579,12 @@ export class OperationLogSyncService {
         result.snapshotVectorClock,
         false, // Don't create SYNC_IMPORT for file-based bootstrap
       );
+
+      // Now that the remote snapshot is applied, it's safe to drop the
+      // example-create ops we previously decided were obsolete. Doing this
+      // after hydration ensures a hydration failure leaves the queue intact
+      // so the next attempt can retry.
+      await this._discardExampleTaskOps(exampleTaskOpIdsToDiscard);
 
       // CRITICAL FIX: Write recentOps to IndexedDB after snapshot hydration.
       // File-based providers return ALL recentOps on every download, relying on
@@ -650,6 +717,9 @@ export class OperationLogSyncService {
         result.newOps,
         {
           flushPendingWrites: true,
+          // Pre-download snapshot from the orchestrator (falls back to a live read here,
+          // which is correct on this path: no ops are persisted until processRemoteOps).
+          isNeverSynced: options?.isNeverSynced,
         },
       );
     if (incomingConflict.fullStateOp) {
@@ -678,6 +748,7 @@ export class OperationLogSyncService {
         // the session-validation latch — wrapper reads it. (#7330)
         return { kind: 'no_new_ops' };
       } else {
+        await this._discardExampleTaskOps(incomingConflict.discardablePendingOpIds);
         OpLog.normal(
           `OperationLogSyncService: Accepting incoming ${fullStateOp.opType} from client ` +
             `${fullStateOp.clientId} without conflict dialog; ` +
@@ -764,6 +835,22 @@ export class OperationLogSyncService {
       allOpClocks: result.allOpClocks,
       snapshotVectorClock: result.snapshotVectorClock,
     };
+  }
+
+  /**
+   * Rejects the auto-generated startup example-task ops so they are NOT uploaded
+   * after a SYNC_IMPORT is accepted silently. They were already excluded from the
+   * conflict gate's "meaningful work" check (see SyncImportConflictGateService); the
+   * import replaces local state, so rejecting them keeps the op-log consistent with
+   * the just-applied remote data instead of re-uploading throwaway onboarding tasks.
+   *
+   * These ids always come from getUnsynced() (local pending ops, never remote ops),
+   * so a remote `isExampleTask` flag can never reach this path.
+   */
+  private async _discardExampleTaskOps(opIds: string[]): Promise<void> {
+    if (opIds.length > 0) {
+      await this.opLogStore.markRejected(opIds);
+    }
   }
 
   /**

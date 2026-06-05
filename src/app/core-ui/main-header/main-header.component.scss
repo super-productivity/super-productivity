@@ -136,6 +136,9 @@ button.isActive2 {
   margin-left: auto;
   display: flex;
   align-items: center;
+  // Keep the action group at its intrinsic width so a long title shrinks
+  // (it ellipsizes) instead of pushing these buttons off screen (#7477).
+  flex: 0 0 auto;
   gap: var(--header-nav-button-gap);
   min-width: 0;
 

@@ -1,5 +1,11 @@
-import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import {
+  gotoHashRoute,
+  openRecurDialog,
+  openRecurDialogFromProjection,
+  saveRecurDialog,
+  setRecurStartDate,
+} from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/7724
@@ -29,57 +35,6 @@ import { expect, test } from '../../fixtures/test.fixture';
 
 const FIXED_TODAY = new Date('2026-05-01T10:00:00');
 
-const openRecurDialog = async (page: Page): Promise<Locator> => {
-  const recurItem = page
-    .locator('task-detail-item')
-    .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-  await expect(recurItem).toBeVisible({ timeout: 5000 });
-  await recurItem.click();
-  const dialog = page.locator('mat-dialog-container');
-  await dialog.waitFor({ state: 'visible', timeout: 10000 });
-  return dialog;
-};
-
-// After the live instance is deleted, the repeat config can only be edited via
-// a transparent projection in the planner — clicking it opens the same dialog.
-const openRecurDialogFromProjection = async (
-  page: Page,
-  taskTitle: string,
-): Promise<Locator> => {
-  const projection = page
-    .locator('planner-repeat-projection')
-    .filter({ hasText: taskTitle })
-    .first();
-  await expect(projection).toBeVisible({ timeout: 15000 });
-  await projection.click();
-  const dialog = page.locator('mat-dialog-container');
-  await dialog.waitFor({ state: 'visible', timeout: 10000 });
-  return dialog;
-};
-
-// Set the Start date by typing into the matInput directly (en-GB → "DD/MM/YYYY").
-const setStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
-  const startDateInput = dialog
-    .locator('mat-form-field')
-    .filter({ hasText: /Start date/i })
-    .locator('input')
-    .first();
-  await expect(startDateInput).toBeVisible({ timeout: 5000 });
-  await startDateInput.fill('');
-  await startDateInput.fill(ddmmyyyy);
-  await startDateInput.press('Tab');
-  await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 3000 });
-};
-
-const saveDialog = async (page: Page): Promise<void> => {
-  const dialog = page.locator('mat-dialog-container');
-  const saveBtn = dialog.getByRole('button', { name: /Save/i });
-  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-  await saveBtn.click();
-  await dialog.waitFor({ state: 'hidden', timeout: 10000 });
-};
-
 test.describe('Recurring Task - Move Start Date Earlier With No Live Instance (#7724)', () => {
   test('moving startDate earlier still projects the new days after the instance is deleted', async ({
     page,
@@ -100,19 +55,25 @@ test.describe('Recurring Task - Move Start Date Earlier With No Live Instance (#
     await expect(task).toBeVisible({ timeout: 10000 });
     await taskPage.openTaskDetail(task);
     await openRecurDialog(page);
-    await setStartDate(page, '04/05/2026');
-    await saveDialog(page);
+    await setRecurStartDate(page, '04/05/2026');
+    await saveRecurDialog(page);
 
     // 2. Delete the live (non-transparent) instance. After the first save the
     //    task has dueDay = May 4; the Inbox project view lists it regardless of
     //    due day. A plain task delete does NOT touch the repeat config's
     //    lastTaskCreationDay or deletedInstanceDates.
-    await page.goto('/#/project/INBOX_PROJECT/tasks');
-    await page.waitForLoadState('networkidle');
     const taskRows = page.locator('task').filter({ hasText: taskTitle });
-    await expect(taskRows.first()).toBeVisible({ timeout: 15000 });
-    await taskRows.first().click({ button: 'right' });
-    await page.locator('.mat-mdc-menu-content button.color-warn').click();
+    await gotoHashRoute(page, '/#/project/INBOX_PROJECT/tasks', taskRows.first());
+    // The task list can still be settling (entry animation / re-render) right
+    // after navigation, so a single right-click occasionally races the
+    // "stable" check. Retry opening the context menu with a short per-attempt
+    // timeout until it appears.
+    const contextMenu = page.locator('.mat-mdc-menu-content');
+    await expect(async () => {
+      await taskRows.first().click({ button: 'right', timeout: 4000 });
+      await expect(contextMenu).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 20000 });
+    await contextMenu.locator('button.color-warn').click();
     const confirmBtn = page.locator('[e2e="confirmBtn"]');
     await expect(confirmBtn).toBeVisible({ timeout: 5000 });
     await confirmBtn.click();
@@ -120,17 +81,19 @@ test.describe('Recurring Task - Move Start Date Earlier With No Live Instance (#
 
     // 3. Re-open the repeat config from a transparent projection and move
     //    startDate to May 2 — earlier than the stale anchor (May 4).
-    await page.goto('/#/planner');
-    await page.waitForLoadState('networkidle');
+    await gotoHashRoute(
+      page,
+      '/#/planner',
+      page.locator('planner-repeat-projection').filter({ hasText: taskTitle }).first(),
+    );
     await openRecurDialogFromProjection(page, taskTitle);
-    await setStartDate(page, '02/05/2026');
-    await saveDialog(page);
+    await setRecurStartDate(page, '02/05/2026');
+    await saveRecurDialog(page);
 
     // 4. Verify: the task now projects onto May 2, 3 and 4 — the days the stale
     //    anchor used to suppress. May 5 is the control (it projected pre-fix
     //    too). No live instance was recreated, so every day is a projection.
-    await page.goto('/#/planner');
-    await page.waitForLoadState('networkidle');
+    await gotoHashRoute(page, '/#/planner', page.locator('planner-day').first());
 
     for (const date of [/^2\/5$/, /^3\/5$/, /^4\/5$/, /^5\/5$/]) {
       const day = page

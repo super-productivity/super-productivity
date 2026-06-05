@@ -877,6 +877,156 @@ describe('FocusModeReducer', () => {
     });
   });
 
+  describe('restoreFocusSessionFromNative (#7855)', () => {
+    const NOW = 1_700_000_000_000;
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(NOW));
+    });
+
+    afterEach(() => {
+      jasmine.clock().uninstall();
+    });
+
+    it('restores a running countdown work session with reconstructed elapsed/startedAt', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.restoreFocusSessionFromNative({
+          durationMs: 25 * 60 * 1000,
+          remainingMs: 10 * 60 * 1000,
+          isBreak: false,
+          isPaused: false,
+        }),
+      );
+
+      expect(result.timer.purpose).toBe('work');
+      expect(result.timer.duration).toBe(25 * 60 * 1000);
+      expect(result.timer.elapsed).toBe(15 * 60 * 1000);
+      expect(result.timer.isRunning).toBe(true);
+      // startedAt is absolute so the existing tick reducer keeps counting
+      // (15 min before NOW; literal avoids mixing - and * operators)
+      expect(result.timer.startedAt).toBe(NOW - 900_000);
+      expect(result.currentScreen).toBe(FocusScreen.Main);
+      expect(result.mainState).toBe(FocusMainUIState.InProgress);
+    });
+
+    it('restores a paused session as not running', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.restoreFocusSessionFromNative({
+          durationMs: 25 * 60 * 1000,
+          remainingMs: 10 * 60 * 1000,
+          isBreak: false,
+          isPaused: true,
+        }),
+      );
+
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.timer.elapsed).toBe(15 * 60 * 1000);
+    });
+
+    it('restores a break session on the Break screen', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.restoreFocusSessionFromNative({
+          durationMs: 5 * 60 * 1000,
+          remainingMs: 2 * 60 * 1000,
+          isBreak: true,
+          isPaused: false,
+        }),
+      );
+
+      expect(result.timer.purpose).toBe('break');
+      expect(result.timer.isLongBreak).toBe(false);
+      expect(result.currentScreen).toBe(FocusScreen.Break);
+      expect(result.mainState).toBe(FocusMainUIState.InProgress);
+    });
+
+    it('treats durationMs <= 0 as Flowtime, with remainingMs carrying elapsed', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.restoreFocusSessionFromNative({
+          durationMs: 0,
+          remainingMs: 12 * 60 * 1000,
+          isBreak: false,
+          isPaused: false,
+        }),
+      );
+
+      expect(result.timer.duration).toBe(0);
+      expect(result.timer.elapsed).toBe(12 * 60 * 1000);
+      expect(result.timer.startedAt).toBe(NOW - 720_000);
+      // mode forced to Flowtime regardless of the (default Countdown) seed
+      expect(result.mode).toBe(FocusModeMode.Flowtime);
+    });
+
+    it('keeps a restored Flowtime session running on the next tick (no auto-complete)', () => {
+      // initialState.mode defaults to Countdown; without forcing mode=Flowtime
+      // the tick reducer would see elapsed(0) >= duration(0) for a work session
+      // and immediately stop it — re-losing the session #7855 set out to keep.
+      const restored = focusModeReducer(
+        initialState,
+        a.restoreFocusSessionFromNative({
+          durationMs: 0,
+          remainingMs: 12 * 60 * 1000,
+          isBreak: false,
+          isPaused: false,
+        }),
+      );
+
+      const afterTick = focusModeReducer(restored, a.tick());
+
+      expect(afterTick.timer.purpose).toBe('work');
+      expect(afterTick.timer.isRunning).toBe(true);
+      expect(afterTick.currentScreen).not.toBe(FocusScreen.SessionDone);
+    });
+
+    it('never leaves mode as Flowtime when restoring a fixed-duration session', () => {
+      const result = focusModeReducer(
+        { ...initialState, mode: FocusModeMode.Flowtime },
+        a.restoreFocusSessionFromNative({
+          durationMs: 25 * 60 * 1000,
+          remainingMs: 10 * 60 * 1000,
+          isBreak: false,
+          isPaused: false,
+        }),
+      );
+
+      expect(result.timer.duration).toBe(25 * 60 * 1000);
+      expect(result.mode).toBe(FocusModeMode.Countdown);
+    });
+
+    it('preserves Pomodoro mode when restoring a fixed-duration session', () => {
+      const result = focusModeReducer(
+        { ...initialState, mode: FocusModeMode.Pomodoro },
+        a.restoreFocusSessionFromNative({
+          durationMs: 25 * 60 * 1000,
+          remainingMs: 10 * 60 * 1000,
+          isBreak: false,
+          isPaused: false,
+        }),
+      );
+
+      expect(result.mode).toBe(FocusModeMode.Pomodoro);
+    });
+
+    it('clamps elapsed to 0 if remaining exceeds duration', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.restoreFocusSessionFromNative({
+          durationMs: 5 * 60 * 1000,
+          remainingMs: 9 * 60 * 1000,
+          isBreak: false,
+          isPaused: false,
+        }),
+      );
+
+      expect(result.timer.elapsed).toBe(0);
+      expect(result.timer.startedAt).toBe(NOW);
+    });
+  });
+
   describe('FOCUS_MODE_FEATURE_KEY', () => {
     it('should export the correct feature key', () => {
       expect(FOCUS_MODE_FEATURE_KEY).toBe('focusMode');

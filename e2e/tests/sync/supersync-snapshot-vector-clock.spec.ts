@@ -208,12 +208,14 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       await clientB.sync.syncAndWait();
       console.log('[SnapshotClock] Client B created and synced tasks');
 
-      // #7810 instrumentation. NB: this Phase-2 sync is plain A↔B replication.
-      // Server-side snapshot fast-forward (operation-download.service.ts ~L187-214) only
-      // triggers when a SYNC_IMPORT/BACKUP_IMPORT/REPAIR op exists. None has been written
-      // here, so the snapshot optimization is *not* in play at this assertion — the test
-      // name is misleading for this particular failure point. Failures here are about
-      // plain pairwise sync (B's upload durability vs A's download cursor).
+      // #7810: the historical flake here was NOT a sync bug. Root cause was
+      // cross-test DB clobbering: the parallel `supersync-server-backup-revert`
+      // test did a global `DROP SCHEMA public CASCADE` + full pg_dump restore on
+      // the shared Postgres, reverting this test's just-uploaded ops mid-run
+      // (server latestSeq went backwards, e.g. 4→1). Fixed by scoping that test's
+      // dump/restore to its own user. NB: the snapshot optimization IS in play —
+      // setupSuperSync enables mandatory encryption, which writes a clean-slate
+      // SYNC_IMPORT, so downloads return latestSnapshotSeq from then on.
       console.log('[SnapshotClock-DEBUG] === Pre Phase-2 A.syncAndWait ===');
       await snapshotSyncState(clientA.page, 'A pre-sync');
       await snapshotSyncState(clientB.page, 'B pre-sync');

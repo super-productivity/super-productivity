@@ -2,6 +2,7 @@
 <swipe-block
   [isDone]="t.isDone"
   [canSwipe]="!taskTitleEditEl?.isEditing()"
+  (swipeStart)="onSwipeStart()"
   (swipeRight)="toggleTaskDone()"
   (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"
@@ -319,12 +320,13 @@
             (click)="moveTaskToProject(project.id)"
             mat-menu-item
           >
-            <mat-icon
-              [style.color]="project.theme.primary"
-              class="tag-ico"
-              >{{ project.icon || 'list' }}</mat-icon
-            >
-            {{ project.title }}
+            <select-option-row
+              [title]="project.title"
+              [icon]="project.icon"
+              [defaultIcon]="DEFAULT_PROJECT_ICON"
+              [color]="project.theme?.primary"
+              [folderPath]="projectFolderMap().get(project.id)"
+            ></select-option-row>
           </button>
         }
       }

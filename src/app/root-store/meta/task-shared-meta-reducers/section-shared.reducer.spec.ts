@@ -178,6 +178,111 @@ describe('sectionSharedMetaReducer', () => {
     expect(updated.entities['s2']?.taskIds).toEqual(['t4']);
   });
 
+  it('removes a task from sections when it is converted to a subtask', () => {
+    const state = stateWith({ parent: {}, t1: {}, t2: {} }, [
+      {
+        id: 's1',
+        contextId: 'p1',
+        contextType: WorkContextType.PROJECT,
+        title: 'A',
+        taskIds: ['t1', 't2'],
+      },
+    ]);
+
+    metaReducer(
+      state,
+      TaskSharedActions.convertToSubTask({
+        taskId: 't1',
+        targetParentId: 'parent',
+        afterTaskId: null,
+      }),
+    );
+
+    const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+      SECTION_FEATURE_NAME
+    ] as SectionState;
+    expect(updated.entities['s1']?.taskIds).toEqual(['t2']);
+  });
+
+  it('keeps section membership when convertToSubTask is rejected by task eligibility', () => {
+    const state = stateWith({ parent: {}, t1: { subTaskIds: ['child'] }, child: {} }, [
+      {
+        id: 's1',
+        contextId: 'p1',
+        contextType: WorkContextType.PROJECT,
+        title: 'A',
+        taskIds: ['t1'],
+      },
+    ]);
+
+    metaReducer(
+      state,
+      TaskSharedActions.convertToSubTask({
+        taskId: 't1',
+        targetParentId: 'parent',
+        afterTaskId: null,
+      }),
+    );
+
+    expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
+  });
+
+  it('keeps section membership when the target parent does not exist', () => {
+    const state = stateWith({ t1: {} }, [
+      {
+        id: 's1',
+        contextId: 'p1',
+        contextType: WorkContextType.PROJECT,
+        title: 'A',
+        taskIds: ['t1'],
+      },
+    ]);
+
+    metaReducer(
+      state,
+      TaskSharedActions.convertToSubTask({
+        taskId: 't1',
+        targetParentId: 'missing-parent',
+        afterTaskId: null,
+      }),
+    );
+
+    // Must stay in lock-step with the crud reducer, which rejects a missing
+    // target parent — otherwise the task would vanish from its section while
+    // remaining top-level.
+    expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
+  });
+
+  it('keeps section membership when the target parent is itself a subtask', () => {
+    const state = stateWith(
+      {
+        grandparent: { subTaskIds: ['parentSub'] },
+        parentSub: { parentId: 'grandparent' },
+        t1: {},
+      },
+      [
+        {
+          id: 's1',
+          contextId: 'p1',
+          contextType: WorkContextType.PROJECT,
+          title: 'A',
+          taskIds: ['t1'],
+        },
+      ],
+    );
+
+    metaReducer(
+      state,
+      TaskSharedActions.convertToSubTask({
+        taskId: 't1',
+        targetParentId: 'parentSub',
+        afterTaskId: null,
+      }),
+    );
+
+    expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
+  });
+
   it('passes through unrelated actions unchanged', () => {
     const state = stateWith({ t1: {} }, [
       {

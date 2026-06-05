@@ -232,7 +232,11 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
             opType: op.opType,
             entityType: op.entityType,
           });
-          // State may be inconsistent (action dispatched to reducers but not persisted)
+          // State may be inconsistent (action dispatched to reducers but not persisted).
+          // NOTE: deliberately does NOT feed the rating-prompt suppression signal
+          // (recordCriticalErrorTime) — that is fed by GlobalErrorHandler and the
+          // validateState seam only; snackbar-surfaced conditions are out of scope
+          // by design. See util/critical-error-signal.ts.
           this.snackService.open({
             type: 'ERROR',
             msg: T.F.SYNC.S.INVALID_OPERATION_PAYLOAD,

@@ -211,7 +211,9 @@ export const createSimulatedClient = async (
   baseURL: string,
   clientName: string,
   testPrefix: string,
+  options: { allowExampleTasks?: boolean } = {},
 ): Promise<SimulatedE2EClient> => {
+  const { allowExampleTasks = false } = options;
   // Use provided baseURL or fall back to localhost:4242 (Playwright fixture may be undefined)
   const effectiveBaseURL = baseURL || 'http://localhost:4242';
 
@@ -228,12 +230,16 @@ export const createSimulatedClient = async (
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
-  await page.addInitScript(() => {
+  // Tests of the example-task sync gate opt back in via { allowExampleTasks: true }
+  // so first-run onboarding tasks are actually created.
+  await page.addInitScript((allowExamples) => {
     localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
     localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
     localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-  });
+    if (!allowExamples) {
+      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+    }
+  }, allowExampleTasks);
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') {

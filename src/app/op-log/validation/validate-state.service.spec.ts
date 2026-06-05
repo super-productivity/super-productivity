@@ -16,6 +16,7 @@ import {
   MenuTreeState,
 } from '../../features/menu-tree/store/menu-tree.model';
 import { environment } from '../../../environments/environment';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('ValidateStateService', () => {
   let service: ValidateStateService;
@@ -184,6 +185,32 @@ describe('ValidateStateService', () => {
     } finally {
       (environment as any).production = originalEnvProduction;
     }
+  });
+
+  describe('records the critical-error signal (rating-prompt cooldown)', () => {
+    let setItemSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      // Stub so the test never writes to the real localStorage shared by the
+      // Karma run; we only assert on the call.
+      setItemSpy = spyOn(localStorage, 'setItem');
+    });
+
+    it('records a timestamp via the central seam when data damage is detected', async () => {
+      const state = createEmptyState();
+      state.menuTree = {
+        ...(state.menuTree as MenuTreeState),
+        projectTree: [{ id: 'NON_EXISTENT_PROJECT_ID', k: MenuTreeKind.PROJECT }],
+      };
+
+      const result = await service.validateState(state);
+
+      expect(result.isValid).toBeFalse();
+      expect(setItemSpy).toHaveBeenCalledWith(
+        LS.LAST_CRITICAL_ERROR_TIME,
+        jasmine.any(String),
+      );
+    });
   });
 
   describe('validateAndRepairCurrentState', () => {

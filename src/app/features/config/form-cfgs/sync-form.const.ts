@@ -156,6 +156,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
+          { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
           ...(IS_ONEDRIVE_SUPPORTED
             ? [
                 {
@@ -164,7 +165,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
                 },
               ]
             : []),
-          { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
           {
             label: 'WebDAV (not recommended / no support)',
             value: SyncProviderId.WebDAV,
@@ -369,6 +369,14 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       resetOnHide: false,
       key: 'oneDrive',
       fieldGroup: [
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'div',
+            text: T.F.SYNC.FORM.ONEDRIVE.PLATFORM_INFO,
+            class: 'info-panel',
+          },
+        },
         ...(HAS_OFFICIAL_ONEDRIVE_CLIENT_ID
           ? [
               {

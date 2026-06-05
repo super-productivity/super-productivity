@@ -9,6 +9,7 @@ import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service'
 import { uuidv7 } from '../../util/uuid-v7';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
+import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 import { OpLog } from '../../core/log';
 import {
   AppDataComplete,
@@ -119,6 +120,8 @@ export class BackupService {
       let validatedData = backupData;
 
       if (!validationResult.isValid) {
+        // Damaged backup data — hold off the rating prompt.
+        recordCriticalErrorTime();
         // Try to repair
         OpLog.normal('BackupService: Validation failed, attempting repair...', {
           success: validationResult.typiaResult.success,

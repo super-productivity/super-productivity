@@ -15,6 +15,7 @@ import {
 import { Store } from '@ngrx/store';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { DateService } from '../../../core/date/date.service';
+import { getPointerPosition } from '../../../util/get-pointer-position';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -185,7 +186,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
 
     // Try to use drag preview position, fallback to event coordinates for touch
     const previewEl = this._getDragPreview();
-    const pointer = this._getPointerPosition(event);
+    const pointer = getPointerPosition(event);
     if (previewEl) {
       // Desktop: use drag preview top
       const previewRect = previewEl.getBoundingClientRect();
@@ -260,7 +261,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     // Treat any pointer release while the preview is active as a potential drop on the panel.
     const task = this._activeExternalTask ?? this._externalDragService.activeTask();
     const previewRect = this._getDragPreviewRect();
-    const pointer = this._getPointerPosition(event);
+    const pointer = getPointerPosition(event);
     const isInside = this._isEffectiveTopWithinDropZone(previewRect, pointer);
     const dropCalculation = isInside
       ? this._calculateDropTime(previewRect, pointer?.y ?? null)
@@ -330,17 +331,6 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     if (wasDroppedSuccessfully) {
       this._disableSnapBackAnimation();
     }
-  }
-
-  private _getPointerPosition(
-    event: MouseEvent | TouchEvent,
-  ): { x: number; y: number } | null {
-    if (!('touches' in event)) {
-      return { x: event.clientX, y: event.clientY };
-    }
-
-    const touch = event.touches[0] ?? event.changedTouches?.[0];
-    return touch ? { x: touch.clientX, y: touch.clientY } : null;
   }
 
   private _getDragPreviewRect(): DOMRect | null {
@@ -560,7 +550,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   }
 
   private _onGlobalPointerMove = (ev: MouseEvent | TouchEvent): void => {
-    const pointer = this._getPointerPosition(ev);
+    const pointer = getPointerPosition(ev);
     if (!pointer) {
       return;
     }

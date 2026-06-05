@@ -25,8 +25,10 @@ describe('OperationLogCompactionService', () => {
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
 
+  // Meaningful by default (contains a task) so compaction proceeds. The
+  // empty-state guard (#7892) is exercised by dedicated tests below.
   const mockState = {
-    task: { entities: {}, ids: [] },
+    task: { entities: { t1: { id: 't1' } }, ids: ['t1'] },
     project: { entities: {}, ids: [] },
     tag: { entities: {}, ids: [] },
   } as any;
@@ -296,14 +298,17 @@ describe('OperationLogCompactionService', () => {
       expect(capturedFilter!(futureSeqEntry)).toBeFalse();
     });
 
-    it('should handle empty state', async () => {
+    it('should skip compaction entirely when state has no meaningful data (#7892)', async () => {
+      // A transient empty/initial NgRx state must never be cached over good data,
+      // and the op-deletion must not run against it (it would prune the very ops
+      // needed to recover).
       mockStateSnapshot.getStateSnapshot.and.returnValue({} as any);
 
       await service.compact();
 
-      expect(mockOpLogStore.saveStateCache).toHaveBeenCalledWith(
-        jasmine.objectContaining({ state: {} }),
-      );
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+      expect(mockOpLogStore.resetCompactionCounter).not.toHaveBeenCalled();
     });
 
     it('should handle empty vector clock', async () => {
@@ -580,6 +585,9 @@ describe('OperationLogCompactionService', () => {
 
     it('should extract REMINDER entity keys from reminders array', async () => {
       const stateWithReminders = {
+        // Include a task so the empty-state guard (#7892) lets compaction run;
+        // the assertions below target the REMINDER keys specifically.
+        task: { ids: ['t1'], entities: {} },
         reminders: [{ id: 'rem-1' }, { id: 'rem-2' }],
       } as any;
 
@@ -594,6 +602,9 @@ describe('OperationLogCompactionService', () => {
 
     it('should extract singleton entity keys (GLOBAL_CONFIG, PLANNER, etc)', async () => {
       const stateWithSingletons = {
+        // Include a task so the empty-state guard (#7892) lets compaction run;
+        // the assertions below target the singleton keys.
+        task: { ids: ['t1'], entities: {} },
         globalConfig: { someConfig: true },
         planner: { days: [] },
         menuTree: { items: [] },
@@ -613,6 +624,9 @@ describe('OperationLogCompactionService', () => {
 
     it('should extract archived task entity keys', async () => {
       const stateWithArchive = {
+        // Include a live task so the empty-state guard (#7892) lets compaction
+        // run; the assertions below target the archived TASK keys.
+        task: { ids: ['t1'], entities: {} },
         archiveYoung: { task: { ids: ['archived-task-1'], entities: {} } },
         archiveOld: { task: { ids: ['old-archived-task'], entities: {} } },
       } as any;
@@ -627,17 +641,18 @@ describe('OperationLogCompactionService', () => {
       expect(savedCache.snapshotEntityKeys).toContain('TASK:old-archived-task');
     });
 
-    it('should handle empty state gracefully', async () => {
+    it('should skip empty state instead of caching empty keys (#7892)', async () => {
+      // Previously this saved a snapshot with empty snapshotEntityKeys. The
+      // empty-overwrite guard now skips entirely so a transient empty state can
+      // never replace good cached data.
       mockStateSnapshot.getStateSnapshot.and.returnValue({} as any);
 
       await service.compact();
 
-      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
-      expect(savedCache.snapshotEntityKeys).toBeDefined();
-      expect(savedCache.snapshotEntityKeys!.length).toBe(0);
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
     });
 
-    it('should handle state with empty ids arrays', async () => {
+    it('should skip a state whose collections are all empty (#7892)', async () => {
       const stateWithEmptyIds = {
         task: { ids: [], entities: {} },
         project: { ids: [], entities: {} },
@@ -648,13 +663,7 @@ describe('OperationLogCompactionService', () => {
 
       await service.compact();
 
-      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
-      // Should have no entity keys (but should not throw)
-      expect(savedCache.snapshotEntityKeys).toBeDefined();
-      const taskKeys = savedCache.snapshotEntityKeys!.filter((k: string) =>
-        k.startsWith('TASK:'),
-      );
-      expect(taskKeys.length).toBe(0);
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
     });
 
     it('should extract entity keys for ALL models defined in MODEL_CONFIGS', async () => {

@@ -6,5 +6,6 @@
     <color name="statusBar">#f8f8f7</color>
     <color name="navigationBar">#f8f8f7</color>
     <color name="windowBackground">#f8f8f7</color>
+    <color name="webview_block_secondary">#424242</color>
 
 </resources>

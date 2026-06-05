@@ -149,10 +149,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
           this.isDragReady.set(true);
         }, DRAG_DELAY_FOR_TOUCH);
       };
-      const onEnd = (): void => {
-        window.clearTimeout(this._dragReadyTimeout);
-        this.isDragReady.set(false);
-      };
+      const onEnd = (): void => this._cancelDragReady();
       el.addEventListener('touchstart', onStart, { passive: true });
       el.addEventListener('touchend', onEnd, { passive: true });
       el.addEventListener('touchmove', onEnd, { passive: true });
@@ -168,6 +165,17 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     window.clearTimeout(this._doneAnimationTimeout);
     window.clearTimeout(this._dragReadyTimeout);
     this._touchListenerCleanups.forEach((fn) => fn());
+  }
+
+  // A confirmed horizontal swipe (open menu / mark done) is not a drag, so
+  // cancel the pending long-press drag-ready state before it can fire mid-swipe.
+  onSwipeStart(): void {
+    this._cancelDragReady();
+  }
+
+  private _cancelDragReady(): void {
+    window.clearTimeout(this._dragReadyTimeout);
+    this.isDragReady.set(false);
   }
 
   onSwipeRightTriggered(isTriggered: boolean): void {

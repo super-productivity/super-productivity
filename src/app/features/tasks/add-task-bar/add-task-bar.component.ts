@@ -63,8 +63,10 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
 import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
@@ -79,6 +81,9 @@ import { BodyClass } from '../../../app.constants';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { DateService } from '../../../core/date/date.service';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
 // Repeat quick settings that need the full repeat dialog to assemble the rule
 // (the add-task-bar menu can't build an rrule itself): the 'RRULE' builder
@@ -110,6 +115,7 @@ const isDialogRepeatSetting = (s: string | null | undefined): boolean =>
     TagComponent,
     AddTaskBarActionsComponent,
     TranslateModule,
+    SelectOptionRowComponent,
   ],
   providers: [AddTaskBarStateService, AddTaskBarParserService],
 })
@@ -128,6 +134,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _store = inject(Store);
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _markdownPasteService = inject(MarkdownPasteService);
+  private readonly _dateService = inject(DateService);
+  private readonly _menuTreeService = inject(MenuTreeService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -168,6 +176,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   activatedIssueTask = toSignal(this.activatedSuggestion$, { initialValue: null });
 
   // Computed values
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
+
+  getFolderPath(id?: string): string | null {
+    if (!id) return null;
+    return this.projectFolderMap().get(id) || this.tagFolderMap().get(id) || null;
+  }
+
   hasNewTags = computed(() => this.stateService.state().newTagTitles.length > 0);
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),
@@ -218,7 +234,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           workContext?.id === 'TODAY'
         ) {
           return {
-            date: getDbDateStr(),
+            date: this._dateService.todayStr(),
             time: undefined as string | undefined,
           };
         }
@@ -443,6 +459,28 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         taskData.timeSpentOnDay = state.spent;
       }
 
+      if (state.deadlineDate) {
+        if (state.deadlineTime && isValidSplitTime(state.deadlineTime)) {
+          const deadlineDateObj = dateStrToUtcDate(state.deadlineDate);
+          const deadlineTimestamp = getDateTimeFromClockString(
+            state.deadlineTime,
+            deadlineDateObj,
+          );
+          taskData.deadlineWithTime = deadlineTimestamp;
+          if (
+            state.deadlineRemindOption &&
+            state.deadlineRemindOption !== TaskReminderOptionId.DoNotRemind
+          ) {
+            taskData.deadlineRemindAt = remindOptionToMilliseconds(
+              deadlineTimestamp,
+              state.deadlineRemindOption,
+            );
+          }
+        } else {
+          taskData.deadlineDay = state.deadlineDate;
+        }
+      }
+
       if (state.date) {
         // Parse date components to create date in local timezone
         // This avoids timezone issues when parsing date strings like "2024-01-15"
@@ -462,10 +500,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         state.repeatQuickSetting &&
         !isDialogRepeatSetting(state.repeatQuickSetting)
       ) {
-        // When a repeat preset is set without an explicit date,
-        // set dueDay to today so the first instance appears as today's occurrence
-        // instead of staying in inbox
-        taskData.dueDay = getDbDateStr();
+        // When a repeat preset is selected without an explicit date, set dueDay to today
+        // so the first task instance appears as today's occurrence instead of staying in inbox
+        taskData.dueDay = this._dateService.todayStr();
       } else {
         // Explicitly set dueDay to undefined when no date is selected
         // This prevents automatic assignment of today's date in TODAY context
@@ -515,7 +552,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           // RRULE builder) for the freshly created task.
           this._openRepeatDialogForTask(taskId, resolvedRemindOption);
         } else {
-          const startDate = state.date || getDbDateStr();
+          const startDate = state.date || this._dateService.todayStr();
           const referenceDate = dateStrToUtcDate(startDate);
           const quickSettingUpdates =
             getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
@@ -727,13 +764,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       ['5']: () => this._callActionMethod('openTagsMenu'),
       ['6']: () => this._callActionMethod('openEstimateMenu'),
       ['7']: () => this._callActionMethod('openRepeatMenu'),
+      ['8']: () => this._callActionMethod('openDeadlineDialog'),
     };
 
     const action = shortcutMap[event.key];
     if (action) {
       event.preventDefault();
-      // Add stopPropagation for action menu shortcuts (3-7)
-      if (['3', '4', '5', '6', '7'].includes(event.key)) {
+      // Add stopPropagation for action menu shortcuts (3-8)
+      if (['3', '4', '5', '6', '7', '8'].includes(event.key)) {
         event.stopPropagation();
       }
       action();

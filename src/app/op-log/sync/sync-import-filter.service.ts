@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { Operation, OpType } from '../core/operation.types';
+import { isFullStateOpType, Operation } from '../core/operation.types';
 import { vectorClockToString } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import { classifyOpAgainstSyncImport } from '@sp/sync-core';
@@ -76,12 +76,7 @@ export class SyncImportFilterService {
     isLocalUnsyncedImport: boolean;
   }> {
     // Find full state import operations (SYNC_IMPORT, BACKUP_IMPORT, or REPAIR) in current batch
-    const fullStateImportsInBatch = ops.filter(
-      (op) =>
-        op.opType === OpType.SyncImport ||
-        op.opType === OpType.BackupImport ||
-        op.opType === OpType.Repair,
-    );
+    const fullStateImportsInBatch = ops.filter((op) => isFullStateOpType(op.opType));
 
     // Check local store for previously downloaded import
     // Use getLatestFullStateOpEntry to get metadata (source, syncedAt)
@@ -151,11 +146,7 @@ export class SyncImportFilterService {
 
     for (const op of ops) {
       // Full state import operations themselves are always valid
-      if (
-        op.opType === OpType.SyncImport ||
-        op.opType === OpType.BackupImport ||
-        op.opType === OpType.Repair
-      ) {
+      if (isFullStateOpType(op.opType)) {
         validOps.push(op);
         continue;
       }

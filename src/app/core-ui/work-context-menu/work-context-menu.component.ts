@@ -12,7 +12,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { MatDialog } from '@angular/material/dialog';
 import { TagService } from '../../features/tag/tag.service';
-import { first } from 'rxjs/operators';
+import { first, map } from 'rxjs/operators';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { Router, RouterLink, RouterModule } from '@angular/router';
 
@@ -29,14 +29,15 @@ import { ShareService, ShareSupport } from '../../core/share/share.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TaskWithSubTasks } from '../../features/tasks/task.model';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Observable, of } from 'rxjs';
+import { AsyncPipe } from '@angular/common';
 import type { WorkContextSettingsDialogData } from '../../features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 
 @Component({
   selector: 'work-context-menu',
   templateUrl: './work-context-menu.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterModule, MatMenuItem, TranslatePipe, MatIcon],
+  imports: [RouterLink, RouterModule, MatMenuItem, TranslatePipe, MatIcon, AsyncPipe],
   standalone: true,
 })
 export class WorkContextMenuComponent implements OnInit {
@@ -59,6 +60,7 @@ export class WorkContextMenuComponent implements OnInit {
   T: typeof T = T;
   TODAY_TAG_ID: string = TODAY_TAG.id as string;
   isForProject: boolean = true;
+  isArchived$: Observable<boolean> = of(false);
   base: string = 'project';
   shareSupport: ShareSupport = 'none';
 
@@ -70,6 +72,11 @@ export class WorkContextMenuComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    if (this.isForProject) {
+      this.isArchived$ = this._projectService
+        .getByIdLive$(this.contextId)
+        .pipe(map((project) => !!project?.isArchived));
+    }
     const support = await this._shareService.getShareSupport();
     this._setShareSupport(support);
   }
@@ -151,6 +158,10 @@ export class WorkContextMenuComponent implements OnInit {
     if (activeId === this.contextId) {
       await this._router.navigateByUrl('/');
     }
+  }
+
+  async restoreProject(): Promise<void> {
+    await this._projectService.unarchive(this.contextId);
   }
 
   async duplicateProject(): Promise<void> {

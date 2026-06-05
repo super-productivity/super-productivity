@@ -100,10 +100,16 @@ export const isRRuleValid = (rrule: string | undefined): rrule is string => {
 /**
  * Next occurrence strictly after `fromDate`'s day, on/after `startDate`, and
  * strictly after `lastTaskCreationDay`. Returned at local noon, or null.
+ *
+ * With `inclusive` the occurrence may fall ON `fromDate`'s day and the
+ * prior-creation gating is ignored — mirroring the legacy engine's inclusive
+ * mode used when relocating an existing live instance on a schedule edit
+ * (#7951): today may still be a valid occurrence and must not be skipped.
  */
 export const getNextRRuleOccurrence = (
   input: RRuleOccurrenceInput,
   fromDate: Date,
+  { inclusive = false }: { inclusive?: boolean } = {},
 ): Date | null => {
   const set = _buildRuleSet(input);
   if (!set) return null;
@@ -113,9 +119,14 @@ export const getNextRRuleOccurrence = (
 
   // Earliest eligible DAY: strictly after fromDate's day and the last-created
   // day, and on/after the start day (whole-day reasoning, like the cron engine).
-  let lowerBound = new Date(_localDayAsUtc(fromDate).getTime() + DAY_MS);
-  const afterLastCreation = new Date(lastCreation.getTime() + DAY_MS);
-  if (afterLastCreation > lowerBound) lowerBound = afterLastCreation;
+  // Inclusive keeps fromDate's own day eligible and drops the creation gate.
+  let lowerBound = inclusive
+    ? _localDayAsUtc(fromDate)
+    : new Date(_localDayAsUtc(fromDate).getTime() + DAY_MS);
+  if (!inclusive) {
+    const afterLastCreation = new Date(lastCreation.getTime() + DAY_MS);
+    if (afterLastCreation > lowerBound) lowerBound = afterLastCreation;
+  }
   if (startDay > lowerBound) lowerBound = startDay;
 
   try {
