@@ -8,7 +8,7 @@
       [minDate]="minDate"
       [showQuickAccess]="data.showQuickAccess !== false"
       [showTime]="true"
-      [timeLabel]="'Time'"
+      [timeLabel]="T.F.TASK.D_SELECT_DATE_AND_TIME.TIME | translate"
       (dateSelected)="dateSelected($event)"
       (timeChanged)="selectedTime = $event"
       (reminderChanged)="selectedReminderCfgId = $event"

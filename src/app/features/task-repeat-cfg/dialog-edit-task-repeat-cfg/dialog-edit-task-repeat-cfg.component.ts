@@ -94,12 +94,27 @@ export class DialogEditTaskRepeatCfgComponent {
     const d = this.repeatCfg().startDate;
     if (!d) return this._translateService.instant(T.F.TASK_REPEAT.F.START_DATE);
     const date = dateStrToUtcDate(d);
-    const formattedDate = date.toLocaleDateString(
-      this._dateTimeFormatService.currentLocale(),
-      { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' },
-    );
+    const locale = this._dateTimeFormatService.currentLocale();
     const time = this.repeatCfg().startTime;
-    return time ? `${formattedDate} at ${time}` : formattedDate;
+    if (time) {
+      const [hours, minutes] = time.split(':').map(Number);
+      const dateTime = new Date(date);
+      dateTime.setHours(hours, minutes, 0, 0);
+      return dateTime.toLocaleString(locale, {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+    return date.toLocaleDateString(locale, {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
   });
 
   openScheduleDialog(): void {
@@ -275,11 +290,17 @@ export class DialogEditTaskRepeatCfgComponent {
   }
 
   private _initializeFormConfig(): void {
-    const _locale = this._dateTimeFormatService.currentLocale();
     const translateService = this._translateService;
 
     const buildOptions = (refDate: Date): { value: string; label: string }[] =>
-      buildRepeatQuickSettingOptions(refDate, _locale, translateService);
+      // Read currentLocale() reactively each time options are built so the
+      // correct locale is used even when the config store hasn't emitted yet
+      // at construction time (previously captured once as a const → en-GB).
+      buildRepeatQuickSettingOptions(
+        refDate,
+        this._dateTimeFormatService.currentLocale(),
+        translateService,
+      );
 
     const formConfig = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.map((field) => ({
       ...field,

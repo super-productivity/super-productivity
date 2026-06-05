@@ -2,6 +2,7 @@ import { computed, effect, inject, Injectable } from '@angular/core';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
+import { TranslateService } from '@ngx-translate/core';
 
 @Injectable({
   providedIn: 'root',
@@ -9,10 +10,19 @@ import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
 export class DateTimeFormatService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private _dateAdapter = inject(DateAdapter);
+  private _translateService = inject(TranslateService);
 
   // Signal for the locale to use
   readonly currentLocale = computed<DateTimeLocale>(() => {
-    return this._globalConfigService.localization()?.dateTimeLocale || DEFAULT_LOCALE;
+    // Prefer the explicitly configured date/time locale; fall back to the
+    // config's lng, then the active translate language (covers auto-detected
+    // browser language where lng stays undefined), then DEFAULT_LOCALE.
+    return (
+      this._globalConfigService.localization()?.dateTimeLocale ||
+      (this._globalConfigService.localization()?.lng as DateTimeLocale | undefined) ||
+      (this._translateService.currentLang as DateTimeLocale | undefined) ||
+      DEFAULT_LOCALE
+    );
   });
 
   /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */

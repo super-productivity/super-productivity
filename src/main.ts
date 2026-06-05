@@ -217,7 +217,7 @@ bootstrapApplication(AppComponent, {
             get dateInput(): string {
               return dateTimeFormatService.dateFormat().raw;
             },
-            monthYearLabel: { year: 'numeric', month: 'short' },
+            monthYearLabel: { year: 'numeric', month: 'long' },
             dateA11yLabel: { year: 'numeric', month: 'long', day: 'numeric' },
             monthYearA11yLabel: { year: 'numeric', month: 'long' },
             timeInput: { hour: 'numeric', minute: 'numeric' },
