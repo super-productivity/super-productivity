@@ -10,7 +10,6 @@ import {
 import { GlobalConfigState } from '../../features/config/global-config.model';
 import { CustomDateAdapter } from './custom-date-adapter';
 import { TranslateService } from '@ngx-translate/core';
-import { EventEmitter } from '@angular/core';
 
 describe('DateTimeFormatService', () => {
   let service: DateTimeFormatService;
@@ -35,11 +34,7 @@ describe('DateTimeFormatService', () => {
         { provide: DateAdapter, useClass: CustomDateAdapter },
         {
           provide: TranslateService,
-          useValue: {
-            currentLang: 'en',
-            defaultLang: 'en',
-            onLangChange: new EventEmitter(),
-          },
+          useValue: { currentLang: 'en', defaultLang: 'en' },
         },
         provideMockStore({
           initialState: {
@@ -61,11 +56,7 @@ describe('DateTimeFormatService', () => {
         { provide: DateAdapter, useClass: CustomDateAdapter },
         {
           provide: TranslateService,
-          useValue: {
-            currentLang: 'en',
-            defaultLang: 'en',
-            onLangChange: new EventEmitter(),
-          },
+          useValue: { currentLang: 'en', defaultLang: 'en' },
         },
         provideMockStore({
           initialState: {
@@ -265,7 +256,6 @@ describe('DateTimeFormatService', () => {
             useValue: {
               currentLang: 'fr',
               defaultLang: 'en',
-              onLangChange: new EventEmitter(),
             },
           },
           provideMockStore({
@@ -304,129 +294,6 @@ describe('DateTimeFormatService', () => {
 
       // It should fall back to currentLang 'fr'
       expect(service.currentLocale()).toBe('fr');
-    });
-  });
-
-  describe('parse-safe locale mapping', () => {
-    it('should map "en" to "en-gb" to preserve previous behavior', () => {
-      // Configure TranslateService to return currentLang = 'en'
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        imports: [MatNativeDateModule],
-        providers: [
-          DateTimeFormatService,
-          { provide: DateAdapter, useClass: CustomDateAdapter },
-          {
-            provide: TranslateService,
-            useValue: {
-              currentLang: 'en',
-              defaultLang: 'en',
-              onLangChange: new EventEmitter(),
-            },
-          },
-          provideMockStore({
-            initialState: {
-              globalConfig: {
-                ...DEFAULT_GLOBAL_CONFIG,
-                localization: {
-                  ...DEFAULT_GLOBAL_CONFIG.localization,
-                  dateTimeLocale: null,
-                },
-              },
-            },
-          }),
-        ],
-      });
-      service = TestBed.inject(DateTimeFormatService);
-      TestBed.flushEffects();
-      expect(service.currentLocale()).toBe('en-gb');
-    });
-
-    it('should map "fa" and "ar" to Gregorian + Latin numbering equivalents', () => {
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        imports: [MatNativeDateModule],
-        providers: [
-          DateTimeFormatService,
-          { provide: DateAdapter, useClass: CustomDateAdapter },
-          {
-            provide: TranslateService,
-            useValue: {
-              currentLang: 'fa',
-              defaultLang: 'en',
-              onLangChange: new EventEmitter(),
-            },
-          },
-          provideMockStore({
-            initialState: {
-              globalConfig: {
-                ...DEFAULT_GLOBAL_CONFIG,
-                localization: {
-                  ...DEFAULT_GLOBAL_CONFIG.localization,
-                  dateTimeLocale: null,
-                },
-              },
-            },
-          }),
-        ],
-      });
-      service = TestBed.inject(DateTimeFormatService);
-      TestBed.flushEffects();
-      expect(service.currentLocale()).toBe('fa-u-ca-gregory-nu-latn');
-
-      const rawFormat = service.dateFormat().raw;
-      // Should result in a Gregorian raw format like 'yyyy/MM/dd' or 'dd/MM/yyyy' with Latin digits
-      expect(rawFormat).toContain('yyyy');
-      expect(rawFormat).toContain('MM');
-      expect(rawFormat).toContain('dd');
-
-      const parsed = service.parseStringToDate('31/12/2000', 'dd/MM/yyyy');
-      expect(parsed).not.toBeNull();
-      expect(parsed?.getFullYear()).toBe(2000);
-      expect(parsed?.getMonth()).toBe(11);
-      expect(parsed?.getDate()).toBe(31);
-    });
-
-    it('should react to TranslateService onLangChange events when dateTimeLocale is not set', () => {
-      const mockTranslateEmitter = new EventEmitter<any>();
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        imports: [MatNativeDateModule],
-        providers: [
-          DateTimeFormatService,
-          { provide: DateAdapter, useClass: CustomDateAdapter },
-          {
-            provide: TranslateService,
-            useValue: {
-              currentLang: 'de',
-              defaultLang: 'en',
-              onLangChange: mockTranslateEmitter,
-            },
-          },
-          provideMockStore({
-            initialState: {
-              globalConfig: {
-                ...DEFAULT_GLOBAL_CONFIG,
-                localization: {
-                  ...DEFAULT_GLOBAL_CONFIG.localization,
-                  dateTimeLocale: null,
-                },
-              },
-            },
-          }),
-        ],
-      });
-      service = TestBed.inject(DateTimeFormatService);
-      dateAdapter = TestBed.inject(DateAdapter);
-      TestBed.flushEffects();
-      expect(service.currentLocale()).toBe('de');
-
-      // Trigger language change to 'fr'
-      mockTranslateEmitter.emit({ lang: 'fr' });
-      TestBed.flushEffects();
-      expect(service.currentLocale()).toBe('fr');
-      // Verify DateAdapter locale is also updated
-      expect((dateAdapter as any).locale).toBe('fr');
     });
   });
 });

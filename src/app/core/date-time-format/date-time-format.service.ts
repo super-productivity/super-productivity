@@ -3,7 +3,6 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
 import { TranslateService } from '@ngx-translate/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Injectable({
   providedIn: 'root',
@@ -14,24 +13,9 @@ export class DateTimeFormatService {
   private readonly _translateService = inject(TranslateService);
   private readonly _localeSig = signal<DateTimeLocale>(DEFAULT_LOCALE);
 
-  private _mapToParseSafeLocale(locale: string): DateTimeLocale {
-    if (locale === 'en') {
-      return 'en-gb' as DateTimeLocale;
-    }
-    if (locale === 'fa') {
-      return 'fa-u-ca-gregory-nu-latn' as DateTimeLocale;
-    }
-    if (locale === 'ar') {
-      return 'ar-u-ca-gregory-nu-latn' as DateTimeLocale;
-    }
-    return locale as DateTimeLocale;
-  }
-
   // Signal for the locale to use
   readonly currentLocale = computed<DateTimeLocale>(() => {
-    const locale =
-      this._globalConfigService.localization()?.dateTimeLocale || this._localeSig();
-    return this._mapToParseSafeLocale(locale);
+    return this._globalConfigService.localization()?.dateTimeLocale || this._localeSig();
   });
 
   /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
@@ -73,45 +57,31 @@ export class DateTimeFormatService {
   constructor() {
     // Use effect to reactively update date adapter locale when config changes
     effect(() => {
-      const localization = this._globalConfigService.localization();
-      const cfgValue = localization?.dateTimeLocale;
+      const cfgValue = this._globalConfigService.localization()?.dateTimeLocale;
       if (cfgValue) {
         this.setDateAdapterLocale(cfgValue);
       } else {
-        // No explicit date/time override: prefer the user's selected UI language (lng)
-        // or browser regional culture locale, falling back to currentLang/defaultLang.
-        const uiLang =
-          localization?.lng ||
+        // No explicit date/time override: follow the browser's regional locale
+        // (e.g. 'en-GB' → DD/MM/YYYY) rather than the UI translation language.
+        // The UI language is region-agnostic — 'en' resolves to US MM/DD/YYYY,
+        // which would mis-format dates for en-GB/en-AU/etc. users who never
+        // picked a date locale. Fall back to UI language, then the default.
+        const fallbackLocale =
           this._translateService.getBrowserCultureLang?.()?.toLowerCase() ||
           this._translateService.currentLang ||
           this._translateService.defaultLang ||
           DEFAULT_LOCALE;
-        this.setDateAdapterLocale(uiLang as DateTimeLocale);
-      }
-    });
-
-    // Also update if translate service language changes
-    this._translateService.onLangChange.pipe(takeUntilDestroyed()).subscribe((event) => {
-      const localization = this._globalConfigService.localization();
-      const cfgValue = localization?.dateTimeLocale;
-      if (!cfgValue) {
-        const uiLang =
-          localization?.lng ||
-          this._translateService.getBrowserCultureLang?.()?.toLowerCase() ||
-          event.lang ||
-          DEFAULT_LOCALE;
-        this.setDateAdapterLocale(uiLang as DateTimeLocale);
+        this.setDateAdapterLocale(fallbackLocale as DateTimeLocale);
       }
     });
   }
 
   /** Set the locale for the date adapter formatting */
   setDateAdapterLocale(locale: DateTimeLocale): void {
-    const safeLocale = this._mapToParseSafeLocale(locale);
     if (this._dateAdapter && typeof this._dateAdapter.setLocale === 'function') {
-      this._dateAdapter.setLocale(safeLocale);
+      this._dateAdapter.setLocale(locale);
     }
-    this._localeSig.set(safeLocale);
+    this._localeSig.set(locale);
   }
 
   /**
