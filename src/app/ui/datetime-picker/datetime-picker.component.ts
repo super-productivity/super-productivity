@@ -7,6 +7,8 @@ import {
   effect,
   ElementRef,
   EventEmitter,
+  HostBinding,
+  HostListener,
   inject,
   input,
   Output,
@@ -148,6 +150,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   T: typeof T = T;
   isInitValOnTimeFocus = true;
   isShowEnterMsg = false;
+  @HostBinding('class.sp-hide-cursor') isKeyboardNavigating = false;
 
   readonly calendar = viewChild(MatCalendar);
 
@@ -191,6 +194,22 @@ export class DateTimePickerComponent implements AfterViewInit {
       }
     } else {
       this.isShowEnterMsg = false;
+    }
+
+    if (
+      [
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'Home',
+        'End',
+        'PageUp',
+        'PageDown',
+      ].includes(ev.key)
+    ) {
+      this.isKeyboardNavigating = true;
+      this._cdr.markForCheck();
     }
   }
 
@@ -281,22 +300,40 @@ export class DateTimePickerComponent implements AfterViewInit {
     }, 50);
   }
 
-  onCalendarMouseOver(ev: MouseEvent): void {
+  @HostListener('mousemove', ['$event'])
+  onHostMouseMove(ev: MouseEvent): void {
+    this._resetKeyboardNav(ev);
+  }
+
+  private _resetKeyboardNav(ev: MouseEvent): boolean {
     const coords = { x: ev.clientX, y: ev.clientY };
     if (
       this._lastMouseCoords &&
       this._lastMouseCoords.x === coords.x &&
       this._lastMouseCoords.y === coords.y
     ) {
-      return;
+      return false;
     }
     this._lastMouseCoords = coords;
+
+    if (this.isKeyboardNavigating) {
+      this.isKeyboardNavigating = false;
+      this._cdr.markForCheck();
+    }
+    return true;
+  }
+
+  onCalendarMouseOver(ev: MouseEvent): void {
+    this._resetKeyboardNav(ev);
 
     const cal = this.calendar();
     if (!cal) {
       return;
     }
-    const target = ev.target as HTMLElement;
+    const target = ev.target as HTMLElement | null;
+    if (!target || typeof target.closest !== 'function') {
+      return;
+    }
     const cell = target.closest('.mat-calendar-body-cell') as HTMLElement;
     if (!cell) {
       return;

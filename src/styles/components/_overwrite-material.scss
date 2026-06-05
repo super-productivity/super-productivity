@@ -431,8 +431,16 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
   align-items: center !important;
 }
 
-// Shared calendar hover override
+// Shared calendar hover and focus overrides
 .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+  > .mat-calendar-body-cell-content,
+.mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
+  outline: 2px solid var(--c-accent) !important;
+}
+
+.mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+  > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected),
+.mat-calendar-body-cell:focus
   > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
   background-color: var(--calendar-hover-bg) !important;
 }

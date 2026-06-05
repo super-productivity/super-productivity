@@ -5,6 +5,22 @@
   user-select: none;
   width: 100%;
 
+  &.sp-hide-cursor {
+    cursor: none !important;
+
+    ::ng-deep {
+      .mat-calendar-body-cell-content {
+        cursor: none !important;
+      }
+      // Suppress hover-only styling (when not focused) when cursor is hidden
+      .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus)
+        > .mat-calendar-body-cell-content {
+        outline: none !important;
+        background-color: transparent !important;
+      }
+    }
+  }
+
   ::ng-deep {
     mat-calendar {
       height: 400px;
@@ -12,10 +28,6 @@
 
     .mat-calendar-header {
       padding-top: 0;
-    }
-
-    .mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
-      outline: 2px solid var(--c-accent) !important;
     }
 
     .mat-calendar-body-selected {

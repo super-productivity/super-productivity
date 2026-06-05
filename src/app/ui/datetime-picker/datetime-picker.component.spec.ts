@@ -128,4 +128,32 @@ describe('DateTimePickerComponent', () => {
 
     expect(component.timeChanged.emit).toHaveBeenCalledWith('09:00');
   });
+
+  it('should toggle isKeyboardNavigating based on keyboard navigation and mouse move', () => {
+    expect(component.isKeyboardNavigating).toBeFalse();
+
+    // Trigger keyboard navigation key down on calendar
+    const arrowDownEvent = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+    component.onKeyDownOnCalendar(arrowDownEvent);
+    expect(component.isKeyboardNavigating).toBeTrue();
+
+    // Trigger non-navigation key down on calendar - should not reset it
+    const enterEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+    component.onKeyDownOnCalendar(enterEvent);
+    expect(component.isKeyboardNavigating).toBeTrue();
+
+    // Trigger calendar mouseover with changed coordinates - should reset it to false
+    const mouseOverEvent = new MouseEvent('mouseover', { clientX: 10, clientY: 20 });
+    component.onCalendarMouseOver(mouseOverEvent);
+    expect(component.isKeyboardNavigating).toBeFalse();
+
+    // Trigger keyboard navigation again
+    component.onKeyDownOnCalendar(arrowDownEvent);
+    expect(component.isKeyboardNavigating).toBeTrue();
+
+    // Trigger host mousemove with changed coordinates - should reset it to false
+    const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
+    component.onHostMouseMove(mouseMoveEvent);
+    expect(component.isKeyboardNavigating).toBeFalse();
+  });
 });
