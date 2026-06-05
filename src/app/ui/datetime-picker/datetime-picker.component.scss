@@ -47,11 +47,7 @@
       transition: background-color var(--transition-duration-s) ease;
 
       &:hover {
-        background-color: color-mix(
-          in srgb,
-          var(--c-primary) 35%,
-          transparent
-        ) !important;
+        background-color: var(--calendar-hover-bg) !important;
         border-radius: var(--card-border-radius) !important;
       }
     }
@@ -83,7 +79,7 @@
     // Style previous/next buttons hover circles
     .mat-calendar-previous-button:not(:disabled):hover,
     .mat-calendar-next-button:not(:disabled):hover {
-      background-color: color-mix(in srgb, var(--c-primary) 35%, transparent) !important;
+      background-color: var(--calendar-hover-bg) !important;
       border-radius: 50% !important;
     }
   }
