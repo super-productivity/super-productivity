@@ -285,6 +285,17 @@ describe('rrule-form.util', () => {
     it('drops BYSETPOS=0 on parse (re-emitting it would create a dead rule)', () => {
       const m = rruleToFormModel('FREQ=MONTHLY;BYDAY=MO,TU;BYSETPOS=0');
       expect(m.bySetPos).not.toContain('0');
+      // The cleanup must survive the round-trip guard: a raw override would
+      // store the original rule verbatim and re-emit the dead BYSETPOS=0.
+      expect(m.rawOverride).toBe('');
+      expect(formModelToRRule(m)).toBe('FREQ=MONTHLY;BYDAY=MO,TU');
+    });
+
+    it('keeps non-zero BYSETPOS values when zeros are mixed in', () => {
+      const m = rruleToFormModel('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=0,2');
+      expect(m.bySetPos).toBe('2');
+      expect(m.rawOverride).toBe('');
+      expect(formModelToRRule(m)).toBe('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=2');
     });
 
     it('round-trips the migration clamp idiom structurally (no raw fallback)', () => {

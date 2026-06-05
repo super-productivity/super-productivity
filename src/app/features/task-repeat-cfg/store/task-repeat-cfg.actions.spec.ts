@@ -76,3 +76,49 @@ describe('task-repeat-cfg actions — quickSetting persist clamp', () => {
     });
   });
 });
+
+describe('task-repeat-cfg actions — monthly anchor null strip', () => {
+  // Released clients' typia schema allows the numeric anchors only
+  // absent-or-numeric: a `null` on the wire would trip their validation /
+  // repair flow. The creators normalize a null leaking in from an untyped
+  // path (formly model, import) to `undefined`, which JSON.stringify drops.
+  it('normalizes null anchors to undefined in a create payload', () => {
+    const action = addTaskRepeatCfgToTask({
+      taskId: 't1',
+      taskRepeatCfg: cfg({
+        monthlyWeekOfMonth: null,
+        monthlyWeekday: null,
+      } as unknown as Partial<TaskRepeatCfg>),
+    });
+    expect(action.taskRepeatCfg.monthlyWeekOfMonth).toBeUndefined();
+    expect(action.taskRepeatCfg.monthlyWeekday).toBeUndefined();
+    expect(
+      JSON.parse(JSON.stringify(action.taskRepeatCfg)).monthlyWeekOfMonth,
+    ).toBeUndefined();
+  });
+
+  it('normalizes null anchors to undefined in Update changes', () => {
+    const action = updateTaskRepeatCfg({
+      taskRepeatCfg: {
+        id: 'r1',
+        changes: {
+          monthlyWeekOfMonth: null,
+          monthlyWeekday: null,
+        } as unknown as Partial<TaskRepeatCfg>,
+      },
+    });
+    expect(action.taskRepeatCfg.changes.monthlyWeekOfMonth).toBeUndefined();
+    expect(action.taskRepeatCfg.changes.monthlyWeekday).toBeUndefined();
+  });
+
+  it('passes numeric anchors through unchanged', () => {
+    const action = updateTaskRepeatCfg({
+      taskRepeatCfg: {
+        id: 'r1',
+        changes: { monthlyWeekOfMonth: 2, monthlyWeekday: 3 },
+      },
+    });
+    expect(action.taskRepeatCfg.changes.monthlyWeekOfMonth).toBe(2);
+    expect(action.taskRepeatCfg.changes.monthlyWeekday).toBe(3);
+  });
+});

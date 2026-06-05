@@ -26,12 +26,15 @@ const _buildWeeklyForDay = (date: Date): Partial<TaskRepeatCfg> => {
 
 // Switching between monthly presets must clear every monthly anchor —
 // anchor presence is the discriminator, so a stale Nth-weekday or last-day
-// field would silently take effect. `null`/`false` (NOT undefined) so the
-// reset survives the op-log's JSON wire format and clears the anchor on
-// remote clients too (JSON.stringify drops undefined keys).
+// field would silently take effect. The numeric anchors clear via `undefined`
+// (NOT `null` — released clients' typia schema only allows absent-or-numeric,
+// so null must never reach the wire); remote clients keep a stale anchor on
+// the update path (JSON drops the key), which is inert because every preset
+// also carries an `rrule` the engine routes on. `monthlyLastDay` clears via
+// `false`, a master-safe value that DOES survive the JSON wire.
 const MONTHLY_ANCHOR_RESET: Partial<TaskRepeatCfg> = {
-  monthlyWeekOfMonth: null,
-  monthlyWeekday: null,
+  monthlyWeekOfMonth: undefined,
+  monthlyWeekday: undefined,
   monthlyLastDay: false,
 };
 

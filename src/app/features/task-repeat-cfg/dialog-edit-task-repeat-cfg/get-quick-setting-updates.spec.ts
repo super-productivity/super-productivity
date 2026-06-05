@@ -242,26 +242,31 @@ describe('getQuickSettingUpdates', () => {
     });
   });
 
-  // Anchor resets are null/false (NOT undefined) so they survive
-  // JSON.stringify on the op-log wire and clear stale anchors on remote
-  // clients too.
+  // The numeric anchors reset via PRESENT-but-undefined keys so the
+  // spread-merge overwrites stale values in memory. NOT null: released
+  // clients' typia schema allows these fields only absent-or-numeric, so a
+  // null must never reach the wire.
   describe('day-of-month presets clear NTH_WEEKDAY anchors', () => {
     it('MONTHLY_CURRENT_DATE explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_CURRENT_DATE');
-      expect(result!.monthlyWeekOfMonth).toBeNull();
-      expect(result!.monthlyWeekday).toBeNull();
+      expect('monthlyWeekOfMonth' in result!).toBe(true);
+      expect('monthlyWeekday' in result!).toBe(true);
+      expect(result!.monthlyWeekOfMonth).toBeUndefined();
+      expect(result!.monthlyWeekday).toBeUndefined();
     });
 
     it('MONTHLY_FIRST_DAY explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
-      expect(result!.monthlyWeekOfMonth).toBeNull();
-      expect(result!.monthlyWeekday).toBeNull();
+      expect('monthlyWeekOfMonth' in result!).toBe(true);
+      expect(result!.monthlyWeekOfMonth).toBeUndefined();
+      expect(result!.monthlyWeekday).toBeUndefined();
     });
 
     it('MONTHLY_LAST_DAY explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
-      expect(result!.monthlyWeekOfMonth).toBeNull();
-      expect(result!.monthlyWeekday).toBeNull();
+      expect('monthlyWeekOfMonth' in result!).toBe(true);
+      expect(result!.monthlyWeekOfMonth).toBeUndefined();
+      expect(result!.monthlyWeekday).toBeUndefined();
     });
   });
 

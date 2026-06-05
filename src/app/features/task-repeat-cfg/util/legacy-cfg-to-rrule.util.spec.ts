@@ -122,11 +122,13 @@ describe('legacyTaskRepeatCfgToRRule', () => {
 
 describe('rruleToLegacyTaskRepeatCfg', () => {
   // Every result carries explicit monthly-anchor resets so a spread-merge
-  // clears stale values from a previous preset/rule. null/false (NOT
-  // undefined) so the reset also survives JSON.stringify on the op-log wire.
+  // clears stale values from a previous preset/rule. The numeric anchors reset
+  // to `undefined` — `null` is NOT master-safe (released clients' typia schema
+  // allows only absent-or-numeric); `monthlyLastDay` resets to `false`, which
+  // is master-safe AND survives the JSON wire.
   const ANCHOR_RESETS = {
-    monthlyWeekOfMonth: null,
-    monthlyWeekday: null,
+    monthlyWeekOfMonth: undefined,
+    monthlyWeekday: undefined,
     monthlyLastDay: false,
   };
 
@@ -214,15 +216,20 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
 
   it('always resets the monthly anchors so stale values cannot survive a merge', () => {
     // A cfg that previously carried nth-weekday anchors gets a day-of-month
-    // rule: the spread-merge in onRRuleChange must clear the old anchors, else
-    // old clients keep firing on the nth weekday. The resets are null/false —
-    // NOT undefined — so they survive JSON.stringify on the op-log wire and
-    // actually clear the anchor on remote clients.
+    // rule: the spread-merge in onRRuleChange must clear the old anchors. The
+    // keys are PRESENT (set to undefined) so the spread actually overwrites a
+    // stale numeric value in memory; `null` would be rejected by released
+    // clients' typia schema and must never be emitted.
     const out = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYMONTHDAY=15');
-    expect(out.monthlyWeekOfMonth).toBeNull();
-    expect(out.monthlyWeekday).toBeNull();
+    expect('monthlyWeekOfMonth' in out).toBe(true);
+    expect('monthlyWeekday' in out).toBe(true);
+    expect(out.monthlyWeekOfMonth).toBeUndefined();
+    expect(out.monthlyWeekday).toBeUndefined();
     expect(out.monthlyLastDay).toBe(false);
-    expect(JSON.parse(JSON.stringify(out)).monthlyWeekOfMonth).toBeNull();
+    // The wire payload stays master-safe: no null, lastDay reset survives.
+    const wire = JSON.parse(JSON.stringify(out));
+    expect('monthlyWeekOfMonth' in wire).toBe(false);
+    expect(wire.monthlyLastDay).toBe(false);
   });
 
   it('does NOT set monthlyLastDay for the clamp idiom (BYMONTHDAY=31,-1;BYSETPOS=1)', () => {
@@ -273,15 +280,43 @@ describe('getAlignedStartDate', () => {
     ).toBeUndefined();
   });
 
-  it('keeps the TARGET day for the clamp idiom (not the clamped month-end day)', () => {
-    // An occurrence search would land on Feb 29 and old clients would fire on
-    // the 29th of every month forever. The arithmetic alignment keeps day 31
-    // (first month that has it), which the legacy engine clamps natively.
+  it('re-anchors onto the first IN-PHASE occurrence for INTERVAL rules', () => {
+    // startDate is the rule's dtstart, which anchors the INTERVAL phase:
+    // from 2024-06-20 the months are Jun, Aug, Oct… and Jun 15 is already
+    // past, so the first occurrence is Aug 15. Aligning to Jul 15 (pure date
+    // math) would shift the whole cadence to Jul, Sep, Nov.
     expect(
-      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1', '2024-02-10'),
-    ).toBe('2024-03-31');
+      getAlignedStartDate('FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15', '2024-06-20'),
+    ).toBe('2024-08-15');
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15', '2024-06-10'),
+    ).toBe('2024-06-15');
+  });
+
+  it('aligning onto the first occurrence keeps COUNT semantics intact', () => {
+    // The first occurrence from 2024-06-20 is Jul 15; re-anchoring there drops
+    // nothing, so COUNT still covers Jul/Aug/Sep.
+    expect(getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=15;COUNT=3', '2024-06-20')).toBe(
+      '2024-07-15',
+    );
+  });
+
+  it('aligns a clamp-idiom rule only when the first occurrence IS the target day', () => {
+    // From Jan 10 the first occurrence is Jan 31 — on the target day → align.
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1', '2024-01-10'),
+    ).toBe('2024-01-31');
     expect(
       getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1', '2024-01-31'),
+    ).toBeUndefined();
+  });
+
+  it('does NOT align past a valid clamped occurrence in a shorter month', () => {
+    // From 2024-02-10 the rule's first occurrence is Feb 29 (clamped). Moving
+    // the start to Mar 31 would make the engine skip it; moving it ONTO Feb 29
+    // would corrupt the day the legacy engine needs. So no alignment.
+    expect(
+      getAlignedStartDate('FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1', '2024-02-10'),
     ).toBeUndefined();
   });
 
@@ -294,13 +329,22 @@ describe('getAlignedStartDate', () => {
     );
   });
 
-  it('walks to the next leap year for a Feb-29 yearly clamp rule', () => {
+  it('aligns a Feb-29 yearly clamp rule only when the next occurrence is a leap day', () => {
+    // From 2027-03-01 the first occurrence is 2028-02-29 — a real Feb 29.
+    expect(
+      getAlignedStartDate(
+        'FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29,-1;BYSETPOS=1',
+        '2027-03-01',
+      ),
+    ).toBe('2028-02-29');
+    // From 2026-03-01 the first occurrence is 2027-02-28 (clamped) — jumping
+    // to 2028-02-29 would skip it, so the start stays put.
     expect(
       getAlignedStartDate(
         'FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29,-1;BYSETPOS=1',
         '2026-03-01',
       ),
-    ).toBe('2028-02-29');
+    ).toBeUndefined();
   });
 
   it('returns undefined for weekday-anchored, multi-day, and pure last-day rules', () => {

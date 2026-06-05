@@ -11,16 +11,34 @@ import { OpType } from '../../../op-log/core/operation.types';
 // add-task-bar, future @+/REST paths) emits a payload old/mobile clients can
 // typia-validate. The rich literal (incl. 'RRULE' / newer presets) stays in the
 // dialog form only. Only touch a defined quickSetting, never invent one.
+//
+// Same boundary guards the monthly anchors: released clients' typia schema
+// allows them only absent-or-numeric, so a `null` leaking in from an untyped
+// path (formly model, import) must never reach the wire — normalize it to
+// `undefined`, which JSON.stringify drops.
+const _stripNullAnchors = <T extends Partial<TaskRepeatCfg>>(cfg: T): T => {
+  const w = cfg.monthlyWeekOfMonth as unknown;
+  const d = cfg.monthlyWeekday as unknown;
+  if (w !== null && d !== null) return cfg;
+  return {
+    ...cfg,
+    ...(w === null ? { monthlyWeekOfMonth: undefined } : {}),
+    ...(d === null ? { monthlyWeekday: undefined } : {}),
+  };
+};
+
 const _toPersistedCfg = (cfg: TaskRepeatCfg): TaskRepeatCfg => {
-  if (!cfg.quickSetting) return cfg;
-  const safe = toSyncSafeQuickSetting(cfg.quickSetting);
-  return safe === cfg.quickSetting ? cfg : { ...cfg, quickSetting: safe };
+  const out = _stripNullAnchors(cfg);
+  if (!out.quickSetting) return out;
+  const safe = toSyncSafeQuickSetting(out.quickSetting);
+  return safe === out.quickSetting ? out : { ...out, quickSetting: safe };
 };
 
 const _toPersistedChanges = (changes: Partial<TaskRepeatCfg>): Partial<TaskRepeatCfg> => {
-  if (!changes.quickSetting) return changes;
-  const safe = toSyncSafeQuickSetting(changes.quickSetting);
-  return safe === changes.quickSetting ? changes : { ...changes, quickSetting: safe };
+  const out = _stripNullAnchors(changes);
+  if (!out.quickSetting) return out;
+  const safe = toSyncSafeQuickSetting(out.quickSetting);
+  return safe === out.quickSetting ? out : { ...out, quickSetting: safe };
 };
 
 export const addTaskRepeatCfgToTask = createAction(

@@ -401,15 +401,18 @@ export class DialogEditTaskRepeatCfgComponent {
         initialForAlign.startDate !== working.startDate;
       if (scheduleTouched && working.startDate) {
         const aligned = getAlignedStartDate(working.rrule as string, working.startDate);
-        if (aligned) {
-          this.repeatCfg.update((cfg) => ({
-            ...cfg,
-            startDate: aligned,
-            // Legacy fields were derived from the pre-alignment startDate
-            // (weekly fallback weekday) — re-derive against the final one.
-            ...rruleToLegacyTaskRepeatCfg(cfg.rrule as string, aligned),
-          }));
-        }
+        const finalStartDate = aligned ?? working.startDate;
+        // ALWAYS re-derive the legacy fallback fields against the final
+        // startDate — not only when alignment moved it. The builder emits on
+        // rule edits only, so a startDate change made after the last builder
+        // emit (e.g. a BYDAY-less weekly rule, where no alignment applies)
+        // would otherwise persist a new dtstart alongside legacy weekday
+        // booleans still derived from the old start date.
+        this.repeatCfg.update((cfg) => ({
+          ...cfg,
+          startDate: finalStartDate,
+          ...rruleToLegacyTaskRepeatCfg(cfg.rrule as string, finalStartDate),
+        }));
       }
     } else if (working.rrule) {
       // Switched away from RRULE — drop the stale string so the legacy path runs.
@@ -462,15 +465,13 @@ export class DialogEditTaskRepeatCfgComponent {
     },
   >(cfg: T): T {
     let result = cfg;
-    // The form uses `null` as the "(Day of month)" sentinel on the
+    // Legacy form models used `null` as the "(Day of month)" sentinel on the
     // monthlyWeekOfMonth select. Persisted cfgs use `undefined` for absent
-    // optional fields (project convention). Normalizing here keeps existing
-    // day-of-month cfgs from producing spurious change diffs. EXCEPT for
-    // RRULE cfgs: there `null` is the deliberate anchor RESET emitted by
-    // rruleToLegacyTaskRepeatCfg — it must survive to the op-log wire format
-    // (JSON.stringify drops `undefined`, so an undefined reset never clears
-    // the stale anchor on remote clients).
-    if (result.monthlyWeekOfMonth === null && result.quickSetting !== 'RRULE') {
+    // optional fields — and `null` is NOT master-safe for this field (released
+    // clients' typia schema only allows absent-or-numeric), so it must never
+    // be persisted. Normalizing also keeps existing day-of-month cfgs from
+    // producing spurious change diffs.
+    if (result.monthlyWeekOfMonth === null) {
       result = { ...result, monthlyWeekOfMonth: undefined };
     }
     // `monthlyLastDay` has no CUSTOM-mode form control, so a flag left over

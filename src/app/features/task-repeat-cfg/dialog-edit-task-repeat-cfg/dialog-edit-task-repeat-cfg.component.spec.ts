@@ -452,6 +452,15 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       });
       expect(normalized.monthlyWeekOfMonth).toBeUndefined();
     });
+
+    it('converts the null sentinel for RRULE cfgs too (null is not master-safe)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'RRULE',
+        monthlyWeekOfMonth: null,
+      });
+      expect(normalized.monthlyWeekOfMonth).toBeUndefined();
+    });
   });
 
   describe('startDate min floor (#7768 Bug 4)', () => {
@@ -677,9 +686,10 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       );
       component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
       const cfg = component.repeatCfg() as any;
-      // null (not undefined) so the reset survives the op-log JSON wire format.
-      expect(cfg.monthlyWeekOfMonth).toBeNull();
-      expect(cfg.monthlyWeekday).toBeNull();
+      // undefined (not null!) — released clients' typia schema allows the
+      // anchors only absent-or-numeric, so null must never be persisted.
+      expect(cfg.monthlyWeekOfMonth).toBeUndefined();
+      expect(cfg.monthlyWeekday).toBeUndefined();
     });
 
     it('onRRuleChange does NOT touch startDate (alignment happens at save only)', async () => {
@@ -731,6 +741,26 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
         .args[2] as any;
       expect(savedCfg.startDate).toBe('2024-07-15');
+    });
+
+    it('save() re-derives the legacy weekday fallback when startDate changed after the last builder emit', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-12' }) as any, // a Wednesday
+      );
+      // BYDAY-less weekly rule — the legacy fallback maps onto the start weekday.
+      component.onRRuleChange('FREQ=WEEKLY');
+      // User edits the start date afterwards; no alignment applies for weekly,
+      // but the stale Wednesday flag must still be re-derived to Thursday —
+      // else old clients fire on a different weekday than the saved dtstart.
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2024-06-13' }) as any); // a Thursday
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.startDate).toBe('2024-06-13');
+      expect(savedCfg.thursday).toBe(true);
+      expect(savedCfg.wednesday).toBe(false);
     });
 
     it('save() does NOT realign startDate on an edit when the schedule was not touched', async () => {

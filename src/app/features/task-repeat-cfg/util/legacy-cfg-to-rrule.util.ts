@@ -7,6 +7,7 @@ import {
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
 import { normalizeWeekdays, toNumArray } from './rrule-weekday.util';
+import { getFirstRRuleOccurrence } from '../store/rrule-occurrence.util';
 
 /**
  * Converts a legacy (pre-RRULE) TaskRepeatCfg — `repeatCycle` + `repeatEvery` +
@@ -153,12 +154,17 @@ export const rruleToLegacyTaskRepeatCfg = (
     repeatEvery: opts.interval && opts.interval > 0 ? opts.interval : 1,
     // Monthly anchors discriminate the legacy MONTHLY paths — always reset so a
     // stale nth-weekday/last-day anchor from a previous preset or rule can't
-    // override the new rule's semantics on old clients. They are re-set below
-    // only when this rule actually encodes them. `null`/`false` (NOT undefined)
-    // so the reset survives the op-log's JSON wire format and actually clears
-    // the anchor on remote clients (JSON.stringify drops undefined keys).
-    monthlyWeekOfMonth: null,
-    monthlyWeekday: null,
+    // override the new rule's semantics. They are re-set below only when this
+    // rule actually encodes them. The numeric anchors reset to `undefined`:
+    // released clients' typia schema allows these fields only absent-or-numeric,
+    // so a `null` must never reach the wire (it would trip their validation /
+    // repair flow). The cost: a partial update can't clear a stale anchor on
+    // REMOTE clients (JSON.stringify drops undefined keys) — harmless on
+    // rrule-aware clients (the engine routes on `rrule`) and only a best-effort
+    // approximation gap on legacy ones. `monthlyLastDay` resets to `false`, a
+    // master-safe value that DOES survive the JSON wire.
+    monthlyWeekOfMonth: undefined,
+    monthlyWeekday: undefined,
     monthlyLastDay: false,
   };
 
@@ -200,32 +206,34 @@ export const rruleToLegacyTaskRepeatCfg = (
   return out;
 };
 
-/** Days in 1-based `month` of `year`. */
-const _daysInMonth = (year: number, month: number): number =>
-  new Date(year, month, 0).getDate();
-
 const _pad2 = (n: number): string => String(n).padStart(2, '0');
 
 /**
- * Arithmetic startDate alignment for the legacy fallback. Old clients read the
- * monthly day (and yearly month+day) from `startDate`, so for date-anchored
- * rules it must sit on the rule's day — e.g. BYMONTHDAY=15 anchored on the 3rd
- * must move the start to the 15th, else old clients fire on the 3rd.
+ * startDate alignment for the legacy fallback. Old clients read the monthly
+ * day (and yearly month+day) from `startDate`, so for date-anchored rules it
+ * should sit on the rule's day — e.g. BYMONTHDAY=15 anchored on the 3rd must
+ * move the start to the 15th, else old clients fire on the 3rd.
  *
- * Returns the first 'YYYY-MM-DD' with the rule's target day (and month) that is
- * on/after `startDate`, or undefined when no alignment applies or the start
- * already matches. Alignment applies only to:
+ * `startDate` is also the rule's dtstart (it anchors the INTERVAL phase and
+ * COUNT), so alignment must never change the occurrence set. The only move
+ * that is guaranteed occurrence-neutral is re-anchoring onto the rule's own
+ * FIRST occurrence on/after the current start: an occurrence is always
+ * in-phase for any INTERVAL, and nothing before it is dropped, so COUNT and
+ * UNTIL semantics are preserved too.
+ *
+ * Returns that first occurrence as 'YYYY-MM-DD' when it falls on the rule's
+ * target day, or undefined when no alignment applies or the start already
+ * matches. Alignment applies only to:
  *  - a single positive BYMONTHDAY, or
- *  - the clamp idiom BYMONTHDAY=<d>,-1;BYSETPOS=1 → target day is <d>
- *    (the legacy engine clamps d natively every month).
+ *  - the clamp idiom BYMONTHDAY=<d>,-1;BYSETPOS=1 → target day is <d>.
+ * For the clamp idiom the first occurrence can be a clamped month-end day
+ * (e.g. Feb 29 for a day-31 rule): aligning PAST it would make the engine skip
+ * a valid occurrence, and aligning ONTO it would corrupt the day the legacy
+ * engine needs — such starts stay unaligned (old clients keep the start day as
+ * a best-effort approximation).
  * Weekday-anchored rules use the anchor fields (monthly) or stay approximate
- * (yearly) — moving the visible start date around for those is worse than the
- * approximation. Multi-day lists have no single-day legacy equivalent — the
- * user's start date is left alone.
- *
- * Deliberately pure date math, NOT an rrule occurrence search: a search lands
- * on clamped month-end days (e.g. Feb 28 for a day-31 clamp rule), corrupting
- * the day the legacy engine needs, and is too slow for save-path use.
+ * (yearly); multi-day lists have no single-day legacy equivalent — the user's
+ * start date is left alone for those.
  */
 export const getAlignedStartDate = (
   rrule: string,
@@ -260,51 +268,20 @@ export const getAlignedStartDate = (
   }
   if (day == null || day > 31) return undefined;
 
-  const months = toNumArray(opts.bymonth);
-  if (cycle === 'YEARLY' && months.length !== 1) return undefined;
+  // YEARLY needs a single BYMONTH — old clients read the month from startDate.
+  if (cycle === 'YEARLY' && toNumArray(opts.bymonth).length !== 1) return undefined;
 
   const m0 = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(startDate);
   if (!m0) return undefined;
-  const sy = +m0[1];
-  const sm = +m0[2];
-  const sd = +m0[3];
+  const startPadded = `${m0[1]}-${_pad2(+m0[2])}-${_pad2(+m0[3])}`;
 
-  let y: number;
-  let m: number;
-  if (cycle === 'MONTHLY') {
-    // First month on/after the start that can host `day` at/after the start day.
-    y = sy;
-    m = sm;
-    if (sd > day) {
-      m++;
-    }
-    // ≤ 48 steps even pathologically (day 31 only exists in 7 months/year).
-    for (let i = 0; day > _daysInMonth(y, m) && i < 48; i++) {
-      m++;
-      if (m > 12) {
-        m = 1;
-        y++;
-      }
-    }
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-    if (day > _daysInMonth(y, m)) return undefined;
-  } else {
-    // First year on/after the start where (month, day) is a real date.
-    m = months[0];
-    y = sy;
-    if (m < sm || (m === sm && day < sd)) {
-      y++;
-    }
-    // ≤ 8 steps covers the Feb-29 century-gap worst case.
-    for (let i = 0; day > _daysInMonth(y, m) && i < 8; i++) {
-      y++;
-    }
-    if (day > _daysInMonth(y, m)) return undefined;
-  }
+  // The actual first occurrence with the CURRENT start as dtstart (local noon).
+  const first = getFirstRRuleOccurrence({ rrule, startDate: startPadded });
+  if (!first) return undefined;
+  // Not on the target day → a clamped/short-month occurrence comes first;
+  // aligning would skip it or corrupt the legacy day. Leave the start alone.
+  if (first.getDate() !== day) return undefined;
 
-  const aligned = `${y}-${_pad2(m)}-${_pad2(day)}`;
+  const aligned = `${first.getFullYear()}-${_pad2(first.getMonth() + 1)}-${_pad2(day)}`;
   return aligned === startDate ? undefined : aligned;
 };

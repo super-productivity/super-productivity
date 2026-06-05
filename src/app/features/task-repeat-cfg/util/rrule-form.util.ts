@@ -345,9 +345,16 @@ export const rruleToFormModel = (
   // Round-trip guard: if the structured + advanced fields cannot faithfully
   // reproduce the input (param combos the builder doesn't model, time-of-day
   // parts, etc.), fall back to a raw override so nothing is silently lost.
+  // BYSETPOS zeros are ignored in the comparison: the mapping above drops them
+  // deliberately, and treating that as a mismatch would store the original
+  // rule as a raw override — re-emitting the dead BYSETPOS=0 verbatim and
+  // undoing the cleanup.
   const canon = (str: string): string => {
     try {
-      return RRule.fromString(str).toString();
+      const o = RRule.parseString(str);
+      const sp = toNumArray(o.bysetpos).filter((n) => n !== 0);
+      o.bysetpos = sp.length ? sp : null;
+      return new RRule(o).toString();
     } catch {
       return str;
     }

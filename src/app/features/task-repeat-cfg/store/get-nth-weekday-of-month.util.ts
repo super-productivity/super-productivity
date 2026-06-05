@@ -31,11 +31,7 @@ export const getNthWeekdayOfMonth = (
 };
 
 type AnchorFields = Pick<TaskRepeatCfg, 'monthlyWeekOfMonth' | 'monthlyWeekday'>;
-// Required<> alone keeps `| null` (the explicit "anchor cleared" wire value) —
-// strip it too: the guard below rejects null at runtime.
-type AnchorPresent = {
-  [K in keyof AnchorFields]-?: NonNullable<AnchorFields[K]>;
-};
+type AnchorPresent = Required<AnchorFields>;
 
 /**
  * Anchor presence (both fields set and in range) is the single source of
