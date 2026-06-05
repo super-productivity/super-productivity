@@ -2,12 +2,18 @@ import {
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   OnDestroy,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { expandFadeAnimation } from '../../ui/animations/expand.ani';
-import { WorklogDataForDay, WorklogMonth, WorklogWeek } from '../worklog/worklog.model';
+import {
+  WorklogDataForDay,
+  WorklogDay,
+  WorklogMonth,
+  WorklogWeek,
+} from '../worklog/worklog.model';
 import { SimpleCounter } from '../simple-counter/simple-counter.model';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../tasks/task.model';
@@ -29,7 +35,8 @@ import { Store } from '@ngrx/store';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { FullPageSpinnerComponent } from '../../ui/full-page-spinner/full-page-spinner.component';
 import { AsyncPipe, KeyValue, KeyValuePipe } from '@angular/common';
-import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
+import { MatMiniFabButton } from '@angular/material/button';
+import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
@@ -42,6 +49,8 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { HistoryTaskRowComponent } from './history-task-row/history-task-row.component';
+
+type HistoryView = 'full' | 'quick';
 
 @Component({
   selector: 'history',
@@ -59,7 +68,8 @@ import { HistoryTaskRowComponent } from './history-task-row/history-task-row.com
     MatMiniFabButton,
     MatIcon,
     MatTooltip,
-    MatIconButton,
+    MatButtonToggleGroup,
+    MatButtonToggle,
     AsyncPipe,
     KeyValuePipe,
     MsToClockStringPipe,
@@ -81,8 +91,17 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
   private readonly _route = inject(ActivatedRoute);
   private readonly _store = inject(Store);
   private readonly _taskArchiveService = inject(TaskArchiveService);
+  private readonly _queryParams = toSignal(this._route.queryParams, {
+    initialValue: this._route.snapshot.queryParams,
+  });
+  private readonly _defaultHistoryView: HistoryView =
+    this._route.snapshot.data['historyView'] === 'quick' ? 'quick' : 'full';
 
   T: typeof T = T;
+  readonly historyView = computed<HistoryView>(() => {
+    const view = this._queryParams()['view'];
+    return view === 'quick' || view === 'full' ? view : this._defaultHistoryView;
+  });
   readonly enabledSimpleCounters = toSignal(
     this.simpleCounterService.enabledSimpleCounters$,
     { initialValue: [] as SimpleCounter[] },
@@ -149,6 +168,14 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
     return sc.countOnDay?.[dateStr] || 0;
   }
 
+  setHistoryView(view: HistoryView): void {
+    void this._router.navigate(['../history'], {
+      relativeTo: this._route,
+      queryParams: { view },
+      queryParamsHandling: 'merge',
+    });
+  }
+
   // only show the project color dot on the combined "Today" list
   projectColorFor(task: Task): { title: string; color: string } | null {
     if (!this.workContextService.isTodayList) {
@@ -193,6 +220,25 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
 
   isMonthExpanded(yearKey: string, monthKey: string): boolean {
     return !!this.expandedMonths[yearKey + '-' + monthKey];
+  }
+
+  toggleDay(dateStr: string): void {
+    this.expanded[dateStr] = !this.isDayExpanded(dateStr);
+  }
+
+  isDayExpanded(dateStr: string): boolean {
+    return !!this.expanded[dateStr];
+  }
+
+  sortDays(a: KeyValue<string, WorklogDay>, b: KeyValue<string, WorklogDay>): number {
+    // avoid comparison by key (day) because a week may span across two months
+    return a.value.dateStr.localeCompare(b.value.dateStr);
+  }
+
+  filterQuickHistoryEntries(worklogDataForDay: WorklogDataForDay[]): WorklogDataForDay[] {
+    return worklogDataForDay.filter(
+      (entry) => entry.task.isDone || entry.timeSpent > 1000,
+    );
   }
 
   sortWorklogItems = <T extends KeyValue<string, unknown>>(a: T, b: T): number =>

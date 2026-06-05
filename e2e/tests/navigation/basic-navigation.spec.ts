@@ -21,11 +21,22 @@ test.describe('Basic Navigation', () => {
     await expect(page).toHaveURL(/\/#\/tag\/TODAY\/history/);
     await expect(page.locator('history')).toBeVisible();
 
-    // Legacy worklog route redirects to history
+    // Legacy worklog route still opens the full History view
     await page.goto('/#/tag/TODAY/worklog');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/history/);
-    await expect(page.locator('.route-wrapper')).toBeVisible();
+    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/worklog/);
+    await expect(page.locator('history .total-time')).toBeVisible();
+
+    // Legacy Quick History route still opens the compact History mode
+    await page.goto('/#/tag/TODAY/quick-history');
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/quick-history/);
+    await expect(
+      page.getByRole('heading', { name: /Quick History/i }).first(),
+    ).toBeVisible();
+    await page.locator('mat-button-toggle').filter({ hasText: 'Worklog' }).click();
+    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/history\?view=full/);
+    await expect(page.locator('history .total-time')).toBeVisible();
 
     // Navigate to metrics
     await page.goto('/#/tag/TODAY/metrics');

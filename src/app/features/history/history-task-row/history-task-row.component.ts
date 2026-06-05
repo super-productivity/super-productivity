@@ -1,10 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  HostBinding,
-  input,
-  output,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -25,6 +19,12 @@ import { T } from '../../../t.const';
   templateUrl: './history-task-row.component.html',
   styleUrls: ['./history-task-row.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  /* eslint-disable @typescript-eslint/naming-convention */
+  host: {
+    '[id]': 'rowAnchorId()',
+    '[attr.tabindex]': 'rowAnchorId() ? 0 : null',
+  },
+  /* eslint-enable @typescript-eslint/naming-convention */
   imports: [
     MatIcon,
     MatIconButton,
@@ -41,6 +41,7 @@ export class HistoryTaskRowComponent {
   // whether to render the trailing actions column (and thus a restore button)
   readonly hasActionsColumn = input<boolean>(false);
   readonly canRestore = input<boolean>(false);
+  readonly showRepeatIcon = input<boolean>(true);
   // when set, renders the `t-<taskId>` scroll anchor used by deep-links
   readonly rowAnchorId = input<string | null>(null);
 
@@ -49,14 +50,4 @@ export class HistoryTaskRowComponent {
   readonly timeChange = output<number | string>();
 
   T: typeof T = T;
-
-  @HostBinding('id')
-  get hostId(): string | null {
-    return this.rowAnchorId();
-  }
-
-  @HostBinding('attr.tabindex')
-  get hostTabIndex(): number | null {
-    return this.rowAnchorId() ? 0 : null;
-  }
 }

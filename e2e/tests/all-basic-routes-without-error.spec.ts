@@ -30,6 +30,8 @@ test.describe('All Basic Routes Without Error', () => {
 
     // Navigate to different routes
     await navigateAndWait('/#/tag/TODAY/history');
+    await navigateAndWait('/#/tag/TODAY/worklog');
+    await navigateAndWait('/#/tag/TODAY/quick-history');
     await navigateAndWait('/#/tag/TODAY/metrics');
     await navigateAndWait('/#/tag/TODAY/planner');
     await navigateAndWait('/#/tag/TODAY/daily-summary');

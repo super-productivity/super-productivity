@@ -5,7 +5,7 @@ const TASK_TITLE = 'task task-title';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const DAY_ROW = 'history .week-row';
+const DAY_ROW = 'history .quick-day-header';
 
 test.describe.serial('Finish Day Quick History', () => {
   test('should create task, mark as done, finish day and view in quick history', async ({
@@ -51,22 +51,12 @@ test.describe.serial('Finish Day Quick History', () => {
     await saveBtn.waitFor({ state: 'visible' });
     await saveBtn.click();
 
-    // Wait for navigation back to work view
-    await page.waitForURL(/#\/tag\/TODAY/);
+    // Wait for navigation back to work view after the archive/save flow settles.
+    await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
 
-    // Navigate to history via left-hand menu
-    const contextBtn = page
-      .locator('magic-side-nav .nav-list > li.nav-item:first-child nav-item')
-      .first();
-    await contextBtn.waitFor({ state: 'visible' });
-    await contextBtn.click({ button: 'right' });
-
-    const historyBtn = page.locator('work-context-menu > button:nth-child(1)');
-    await historyBtn.waitFor({ state: 'visible' });
-    await historyBtn.click();
-
-    // Wait for the history page (the current month auto-expands)
-    await page.waitForURL(/#\/tag\/TODAY\/history/);
+    // Navigate directly to the legacy Quick History route
+    await page.goto('/#/tag/TODAY/quick-history');
+    await page.waitForURL(/#\/tag\/TODAY\/quick-history/);
     await page.waitForSelector('history', { state: 'visible' });
 
     // Expand the day row to reveal its tasks

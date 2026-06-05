@@ -10,7 +10,7 @@
       [style.background]="pc.color"
     ></div>
   }
-  @if (entry().task.repeatCfgId) {
+  @if (showRepeatIcon() && entry().task.repeatCfgId) {
     <mat-icon
       [title]="T.F.WORKLOG.CMP.REPEATING_TASK | translate"
       class="repeat-task-icon"

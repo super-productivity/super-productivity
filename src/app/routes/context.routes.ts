@@ -8,18 +8,18 @@ const SHARED_CONTEXT_ROUTES: Routes = [
   {
     path: 'history',
     component: HistoryComponent,
-    data: { page: 'history' },
+    data: { page: 'history', historyView: 'full' },
   },
-  // legacy routes: Quick History was merged into the single History view
+  // legacy routes: both old pages now share the History component
   {
     path: 'worklog',
-    redirectTo: 'history',
-    pathMatch: 'full',
+    component: HistoryComponent,
+    data: { page: 'history', historyView: 'full' },
   },
   {
     path: 'quick-history',
-    redirectTo: 'history',
-    pathMatch: 'full',
+    component: HistoryComponent,
+    data: { page: 'history', historyView: 'quick' },
   },
   {
     path: 'daily-summary',
