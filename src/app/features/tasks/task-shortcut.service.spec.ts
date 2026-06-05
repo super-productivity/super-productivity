@@ -128,7 +128,7 @@ describe('TaskShortcutService', () => {
     });
 
     describe('when no focused task but selected task exists', () => {
-      it('should start tracking selected task when not currently tracking it', () => {
+      it('should return false (delegating to ShortcutService fallback)', () => {
         // Arrange
         mockTaskFocusService.focusedTaskId.set(null);
         mockTaskService.selectedTaskId.set('selected-task-1');
@@ -141,51 +141,14 @@ describe('TaskShortcutService', () => {
         const result = service.handleTaskShortcuts(event);
 
         // Assert
-        expect(result).toBe(true);
-        expect(event.preventDefault).toHaveBeenCalled();
-        expect(mockTaskService.setCurrentId).toHaveBeenCalledWith('selected-task-1');
-        expect(mockTaskService.toggleStartTask).not.toHaveBeenCalled();
-      });
-
-      it('should start tracking selected task when tracking a different task', () => {
-        // Arrange
-        mockTaskFocusService.focusedTaskId.set(null);
-        mockTaskService.selectedTaskId.set('selected-task-1');
-        mockTaskService.currentTaskId.set('other-task');
-
-        const event = createKeyboardEvent('Y');
-        spyOn(event, 'preventDefault');
-
-        // Act
-        const result = service.handleTaskShortcuts(event);
-
-        // Assert
-        expect(result).toBe(true);
-        expect(event.preventDefault).toHaveBeenCalled();
-        expect(mockTaskService.setCurrentId).toHaveBeenCalledWith('selected-task-1');
-      });
-
-      it('should stop tracking when selected task is already being tracked', () => {
-        // Arrange
-        mockTaskFocusService.focusedTaskId.set(null);
-        mockTaskService.selectedTaskId.set('selected-task-1');
-        mockTaskService.currentTaskId.set('selected-task-1');
-
-        const event = createKeyboardEvent('Y');
-        spyOn(event, 'preventDefault');
-
-        // Act
-        const result = service.handleTaskShortcuts(event);
-
-        // Assert
-        expect(result).toBe(true);
-        expect(event.preventDefault).toHaveBeenCalled();
-        expect(mockTaskService.setCurrentId).toHaveBeenCalledWith(null);
+        expect(result).toBe(false);
+        expect(event.preventDefault).not.toHaveBeenCalled();
+        expect(mockTaskService.setCurrentId).not.toHaveBeenCalled();
       });
     });
 
     describe('when neither focused nor selected task exists', () => {
-      it('should use global toggle behavior', () => {
+      it('should return false (delegating to ShortcutService fallback)', () => {
         // Arrange
         mockTaskFocusService.focusedTaskId.set(null);
         mockTaskService.selectedTaskId.set(null);
@@ -197,10 +160,61 @@ describe('TaskShortcutService', () => {
         const result = service.handleTaskShortcuts(event);
 
         // Assert
+        expect(result).toBe(false);
+        expect(event.preventDefault).not.toHaveBeenCalled();
+        expect(mockTaskService.toggleStartTask).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('handleTogglePlayFallback', () => {
+      it('should start tracking selected task when not currently tracking it', () => {
+        // Arrange
+        mockTaskService.selectedTaskId.set('selected-task-1');
+        mockTaskService.currentTaskId.set(null);
+
+        const event = createKeyboardEvent('Y');
+        spyOn(event, 'preventDefault');
+
+        // Act
+        const result = service.handleTogglePlayFallback(event);
+
+        // Assert
+        expect(result).toBe(true);
+        expect(event.preventDefault).toHaveBeenCalled();
+        expect(mockTaskService.setCurrentId).toHaveBeenCalledWith('selected-task-1');
+      });
+
+      it('should stop tracking when selected task is already being tracked', () => {
+        // Arrange
+        mockTaskService.selectedTaskId.set('selected-task-1');
+        mockTaskService.currentTaskId.set('selected-task-1');
+
+        const event = createKeyboardEvent('Y');
+        spyOn(event, 'preventDefault');
+
+        // Act
+        const result = service.handleTogglePlayFallback(event);
+
+        // Assert
+        expect(result).toBe(true);
+        expect(event.preventDefault).toHaveBeenCalled();
+        expect(mockTaskService.setCurrentId).toHaveBeenCalledWith(null);
+      });
+
+      it('should use global toggle behavior when no task is selected', () => {
+        // Arrange
+        mockTaskService.selectedTaskId.set(null);
+
+        const event = createKeyboardEvent('Y');
+        spyOn(event, 'preventDefault');
+
+        // Act
+        const result = service.handleTogglePlayFallback(event);
+
+        // Assert
         expect(result).toBe(true);
         expect(event.preventDefault).toHaveBeenCalled();
         expect(mockTaskService.toggleStartTask).toHaveBeenCalled();
-        expect(mockTaskService.setCurrentId).not.toHaveBeenCalled();
       });
     });
 
@@ -491,7 +505,7 @@ describe('TaskShortcutService', () => {
 
       // Recovery picks up 'other-task' from DOM, but lastFocusedTaskComponent
       // points at 'stale-task' — guard prevents delegating to wrong component.
-      expect(result).toBe(true); // shortcut matched, just didn't delegate
+      expect(result).toBe(false); // delegation failed, should return false
       expect(mockTaskComponent.toggleDoneKeyboard).not.toHaveBeenCalled();
     });
 
