@@ -130,6 +130,7 @@ export class DateTimePickerComponent {
   showQuickAccess = input<boolean>(true);
   showTime = input<boolean>(true);
   timeLabel = input<string>('Time');
+  quickAccessTranslationPrefix = input<string>('F.TASK.D_SCHEDULE_TASK');
 
   // Outputs
   @Output() dateSelected = new EventEmitter<Date>();

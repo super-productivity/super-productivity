@@ -8,6 +8,7 @@
       [showQuickAccess]="true"
       [showTime]="true"
       [timeLabel]="T.F.TASK.D_DEADLINE.ADD_TIME | translate"
+      [quickAccessTranslationPrefix]="'F.TASK.D_DEADLINE'"
       (dateSelected)="dateSelected($event)"
       (timeChanged)="selectedTime = $event"
       (reminderChanged)="selectedReminderCfgId = $event"
