@@ -11,6 +11,9 @@ import {
   type TestUser,
 } from '../../utils/supersync-helpers';
 import { execSync } from 'child_process';
+import { readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 /** Default encryption password used by setupSuperSync's mandatory encryption dialog */
 const ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
@@ -77,30 +80,38 @@ const wipeSyncDataViaSql = (userId: number): void => {
 
 /**
  * Create a pg_dump of the full database and return the path to the dump file.
+ * Cross-platform: captures pg_dump output in Node and writes it via fs — no
+ * shell redirection (`>`) and no POSIX-only /tmp path.
  */
 const createFullDump = (): string => {
-  const dumpPath = `/tmp/supersync_e2e_dump_${Date.now()}.sql`;
-  execSync(
-    `docker compose -f docker-compose.yaml exec -T db pg_dump -U supersync supersync_db > ${dumpPath}`,
-    { encoding: 'utf-8', timeout: 30000 },
+  const dumpPath = join(tmpdir(), `supersync_e2e_dump_${Date.now()}.sql`);
+  const dump = execSync(
+    'docker compose -f docker-compose.yaml exec -T db pg_dump -U supersync supersync_db',
+    { encoding: 'utf-8', timeout: 30000, maxBuffer: 64 * 1024 * 1024 },
   );
+  writeFileSync(dumpPath, dump, 'utf-8');
   return dumpPath;
 };
 
 /**
  * Wipe the entire database and restore from a dump file.
+ * Cross-platform: feeds the dump via stdin instead of `cat | …` — on Windows
+ * the `cat` pipeline failed AFTER the schema drop succeeded, leaving the DB
+ * empty and breaking every subsequent test in the run.
  */
 const restoreFullDump = (dumpPath: string): void => {
   // Drop and recreate all tables by restoring into a clean database
   execSync(
-    `docker compose -f docker-compose.yaml exec -T db psql -U supersync -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" supersync_db`,
+    'docker compose -f docker-compose.yaml exec -T db psql -U supersync -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" supersync_db',
     { encoding: 'utf-8', timeout: 10000 },
   );
   execSync(
-    `cat ${dumpPath} | docker compose -f docker-compose.yaml exec -T db psql -U supersync supersync_db`,
+    'docker compose -f docker-compose.yaml exec -T db psql -U supersync supersync_db',
     {
+      input: readFileSync(dumpPath, 'utf-8'),
       encoding: 'utf-8',
       timeout: 30000,
+      maxBuffer: 64 * 1024 * 1024,
     },
   );
 };
@@ -110,7 +121,7 @@ const restoreFullDump = (dumpPath: string): void => {
  */
 const cleanupDump = (dumpPath: string): void => {
   try {
-    execSync(`rm -f ${dumpPath}`);
+    unlinkSync(dumpPath);
   } catch {
     // ignore cleanup errors
   }
