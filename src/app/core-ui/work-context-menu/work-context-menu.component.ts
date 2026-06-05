@@ -176,14 +176,17 @@ export class WorkContextMenuComponent implements OnInit {
     const activeId = this._workContextService.activeWorkContextId;
     this._projectService.complete(this.contextId, doneOn);
 
+    // Navigate away BEFORE opening the celebration: MatDialog's closeOnNavigation
+    // (default true) would otherwise dismiss the dialog the moment we leave the
+    // now-completed project's route.
+    if (activeId === this.contextId) {
+      await this._router.navigateByUrl('/');
+    }
+
     this._matDialog.open(DialogProjectCompleteComponent, {
       restoreFocus: true,
       data: { project, stats },
     });
-
-    if (activeId === this.contextId) {
-      await this._router.navigateByUrl('/');
-    }
   }
 
   async restoreProject(): Promise<void> {
