@@ -437,6 +437,8 @@ const startServer = (): void => {
     } else {
       log(`[local-rest-api] Listening on http://${currentHost}:${LOCAL_REST_API_PORT}`);
     }
+    // Converge to desired state if it changed while we were starting up.
+    reconcile();
   });
 };
 

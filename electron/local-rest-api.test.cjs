@@ -126,10 +126,10 @@ test('isAllowedHost: localhost mode rejects attacker hostname', () => {
   assert.equal(isAllowedHost('evil.attacker.com:3876'), false);
 });
 
-test('isAllowedHost: all-interfaces mode accepts local IPv4 address', () => {
-  // Simulate currentHost === '0.0.0.0' by loading the module and invoking
-  // buildAllInterfacesAllowedHosts directly — the function drives the same
-  // allowlist that isAllowedHost uses in all-interfaces mode.
+test('buildAllInterfacesAllowedHosts: includes local IPs and excludes unknown hostnames', () => {
+  // currentHost is module-level state not accessible from tests; test the underlying
+  // helper directly — it drives the same allowlist that isAllowedHost uses in
+  // all-interfaces mode.
   const { buildAllInterfacesAllowedHosts } = loadModule();
   const set = buildAllInterfacesAllowedHosts();
   assert.ok(set.has('192.168.1.100:3876'), 'LAN IP with port should be allowed');
