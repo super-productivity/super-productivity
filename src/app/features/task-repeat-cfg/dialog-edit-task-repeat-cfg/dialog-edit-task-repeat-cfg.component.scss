@@ -92,34 +92,31 @@ mat-dialog-actions {
 
 .planned-start-date-btn {
   width: 100%;
-  text-align: left !important;
+  text-align: start !important;
+  justify-content: start !important;
   height: 48px !important;
   padding: 0 var(--s2) !important;
+}
 
-  ::ng-deep .mdc-button__label {
-    display: flex !important;
-    align-items: center;
-    width: 100%;
-  }
+.planned-start-date-btn-content {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  width: 100%;
+  text-align: start;
+}
 
-  .mat-icon {
-    margin-right: var(--s);
-  }
+.planned-date-label {
+  font-weight: bold;
+}
 
-  .planned-date-label {
-    font-weight: bold;
-    margin-right: var(--s);
-  }
+.planned-date-val {
+  flex-grow: 1;
+}
 
-  .planned-date-val {
-    flex-grow: 1;
-  }
-
-  .reminder-badge {
-    margin-left: var(--s);
-    color: var(--color-warning);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
+.reminder-badge {
+  color: var(--color-warning);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }

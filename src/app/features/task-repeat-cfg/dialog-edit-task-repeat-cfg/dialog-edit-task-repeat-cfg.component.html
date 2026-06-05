@@ -32,14 +32,16 @@
           class="planned-start-date-btn"
           (click)="openScheduleDialog()"
         >
-          <mat-icon>today</mat-icon>
-          <span class="planned-date-label">
-            {{ T.F.TASK_REPEAT.F.START_DATE | translate }}:
+          <span class="planned-start-date-btn-content">
+            <mat-icon>today</mat-icon>
+            <span class="planned-date-label">
+              {{ T.F.TASK_REPEAT.F.START_DATE | translate }}:
+            </span>
+            <span class="planned-date-val">{{ plannedStartDateStr() }}</span>
+            @if (repeatCfg().remindAt && repeatCfg().remindAt !== 'DoNotRemind') {
+              <mat-icon class="reminder-badge">alarm</mat-icon>
+            }
           </span>
-          <span class="planned-date-val">{{ plannedStartDateStr() }}</span>
-          @if (repeatCfg().remindAt && repeatCfg().remindAt !== 'DoNotRemind') {
-            <mat-icon class="reminder-badge">alarm</mat-icon>
-          }
         </button>
       </div>
 

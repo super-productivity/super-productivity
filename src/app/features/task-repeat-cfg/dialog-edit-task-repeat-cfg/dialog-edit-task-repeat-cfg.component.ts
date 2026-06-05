@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { Task, TaskReminderOptionId } from '../../tasks/task.model';
+import { Task, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -121,7 +121,7 @@ export class DialogEditTaskRepeatCfgComponent {
 
   openScheduleDialog(): void {
     const currentCfg = this.repeatCfg();
-    const dummyTask: any = {
+    const dummyTask: TaskCopy = {
       title: currentCfg.title || '',
       dueDay: currentCfg.startDate || undefined,
       dueWithTime: undefined,
@@ -135,7 +135,7 @@ export class DialogEditTaskRepeatCfgComponent {
       attachments: [],
       tagIds: [],
       created: Date.now(),
-    };
+    } as unknown as TaskCopy;
 
     const defaultRemindOption =
       this._data.defaultRemindOption ??
