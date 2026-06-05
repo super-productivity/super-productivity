@@ -9,6 +9,7 @@ import { DateAdapter } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'datetime-picker-header',
@@ -78,6 +79,7 @@ export class DateTimePickerHeaderComponent<D> {
   private _dateAdapter = inject<DateAdapter<D>>(DateAdapter);
   private _cdr = inject(ChangeDetectorRef);
   private _intl = inject(MatDatepickerIntl);
+  private _translateService = inject(TranslateService);
 
   constructor() {
     this.calendar.stateChanges.pipe(takeUntilDestroyed()).subscribe(() => {
@@ -108,14 +110,14 @@ export class DateTimePickerHeaderComponent<D> {
 
   get monthButtonLabel(): string {
     return this.calendar.currentView === 'month'
-      ? this._intl.switchToMultiYearViewLabel
+      ? this._translateService.instant('DATETIME_SCHEDULE.SWITCH_TO_YEAR_VIEW')
       : this._intl.switchToMonthViewLabel;
   }
 
   get yearButtonLabel(): string {
-    return this.calendar.currentView === 'month'
-      ? this._intl.switchToMultiYearViewLabel
-      : this._intl.switchToMonthViewLabel;
+    return this.calendar.currentView === 'multi-year'
+      ? this._intl.switchToMonthViewLabel
+      : this._translateService.instant('DATETIME_SCHEDULE.SWITCH_TO_MULTI_YEAR_VIEW');
   }
 
   get monthLabel(): string {

@@ -29,7 +29,9 @@
     "RESTORE_STRAY_BACKUP": "During the last sync, there may have been an error. Do you want to restore the last backup?"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Press enter again to save"
+    "PRESS_ENTER_AGAIN": "Press enter again to save",
+    "SWITCH_TO_YEAR_VIEW": "Choose month",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Choose year"
   },
   "DIALOG_LOGS": {
     "COPY": "Copy",

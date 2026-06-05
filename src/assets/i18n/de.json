@@ -29,7 +29,9 @@
     "RESTORE_STRAY_BACKUP": "Bei der letzten Synchronisierung ist möglicherweise ein Fehler aufgetreten. Möchtest du das letzte Backup wiederherstellen?"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Drücke zum Speichern erneut die Eingabetaste"
+    "PRESS_ENTER_AGAIN": "Drücke zum Speichern erneut die Eingabetaste",
+    "SWITCH_TO_YEAR_VIEW": "Monat wählen",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Jahr wählen"
   },
   "DIALOG_LOGS": {
     "COPY": "Kopieren",
