@@ -82,13 +82,25 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
     });
-    mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
-      currentLocale: () => 'en-US',
-      dateFormat: () => ({
-        parse: 'MM/dd/yyyy',
-        display: { dateInput: 'MM/dd/yyyy' },
-      }),
-    });
+    mockDateTimeFormatService = jasmine.createSpyObj(
+      'DateTimeFormatService',
+      ['formatTime'],
+      {
+        currentLocale: () => 'en-US',
+        dateFormat: () => ({
+          parse: 'MM/dd/yyyy',
+          display: { dateInput: 'MM/dd/yyyy' },
+        }),
+      },
+    );
+    mockDateTimeFormatService.formatTime.and.callFake(
+      (timestamp: number, locale?: string) => {
+        const date = new Date(timestamp);
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      },
+    );
 
     await TestBed.configureTestingModule({
       imports: [
