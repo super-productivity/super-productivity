@@ -860,6 +860,40 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('WEEKENDS');
     });
 
+    it('opens completion-relative cfgs in builder mode even when the rrule matches a preset', async () => {
+      // The schedule-type toggle ("from completion") only exists in the RRULE
+      // builder — a preset label (e.g. EVERY_OTHER_DAY) would hide it.
+      const completionCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-completion',
+        title: 'Every other day after done',
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'DAILY',
+        repeatEvery: 2,
+        repeatFromCompletionDate: true,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY;INTERVAL=2',
+      };
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
+    });
+
+    it('opens a completion-relative FAITHFUL preset cfg in builder mode too', async () => {
+      const faithful: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-completion-2',
+        title: 'Daily after done',
+        quickSetting: 'DAILY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY',
+      };
+      const fixture = await setupTestBed({ repeatCfg: faithful });
+      expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
+    });
+
     it('still opens the builder for a CUSTOM cfg whose rrule matches no preset', async () => {
       const handBuilt: TaskRepeatCfg = {
         ...DEFAULT_TASK_REPEAT_CFG,
@@ -940,7 +974,11 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
     });
 
-    it('save() clears a stale rrule when switching to a legacy quick setting', async () => {
+    it('save() replaces a stale builder rrule with the preset canonical rule (presets stay rrule-backed)', async () => {
+      // Switching from builder mode to a preset must NOT strip the rrule —
+      // getQuickSettingUpdates overwrites it with the preset's canonical rule.
+      // (Clearing via `rrule: undefined` would also be dropped by the JSON
+      // wire, leaving remote clients on the old rule.)
       const fixture = await setupTestBed({ task: mockTask });
       const component = fixture.componentInstance;
       component.repeatCfg.update(
@@ -949,7 +987,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       component.save();
       const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
         .args[2] as any;
-      expect(savedCfg.rrule).toBeUndefined();
+      expect(savedCfg.rrule).toBe('FREQ=DAILY');
+      expect(savedCfg.repeatCycle).toBe('DAILY');
     });
   });
 });

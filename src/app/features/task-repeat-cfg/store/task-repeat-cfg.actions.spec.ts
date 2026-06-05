@@ -4,6 +4,7 @@ import {
   updateTaskRepeatCfgs,
 } from './task-repeat-cfg.actions';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
+import { taskRepeatCfgReducer } from './task-repeat-cfg.reducer';
 
 // The op-log replays action *payloads* (operation-capture.service.ts), so the
 // action creators are the single boundary that keeps an out-of-union
@@ -160,5 +161,74 @@ describe('task-repeat-cfg actions — monthly anchor null strip', () => {
     });
     expect(action.taskRepeatCfg.changes.monthlyWeekOfMonth).toBe(-1);
     expect(action.taskRepeatCfg.changes.monthlyWeekday).toBe(0);
+  });
+});
+
+describe('task-repeat-cfg op-log JSON round-trip (remote-apply durability)', () => {
+  // The op-log serializes action payloads with JSON.stringify, which DROPS
+  // `undefined` keys — a remote client's reducer then merges a partial update
+  // that never contained the cleared field. These tests pin which schedule
+  // transitions ARE durable over the wire and which are a documented gap.
+  const wireRoundTrip = <T>(v: T): T => JSON.parse(JSON.stringify(v));
+
+  const baseEntity = cfg({
+    quickSetting: 'CUSTOM',
+    repeatCycle: 'MONTHLY',
+    startDate: '2024-06-11',
+    // Stored as an nth-weekday cfg ("2nd Tuesday"):
+    monthlyWeekOfMonth: 2,
+    monthlyWeekday: 2,
+    monthlyLastDay: false,
+    rrule: 'FREQ=MONTHLY;BYDAY=2TU',
+  });
+
+  const applyRemotely = (changes: Partial<TaskRepeatCfg>): TaskRepeatCfg | undefined => {
+    // Same creator the local client dispatches; the whole ACTION is then
+    // wire-round-tripped (like the op-log payload) and replayed through the
+    // real reducer — exactly what a remote client does.
+    const replayed = wireRoundTrip(
+      updateTaskRepeatCfg({ taskRepeatCfg: { id: baseEntity.id, changes } }),
+    );
+    const state = taskRepeatCfgReducer(
+      {
+        ids: [baseEntity.id],
+        entities: { [baseEntity.id]: baseEntity },
+      } as never,
+      replayed,
+    );
+    return state.entities[baseEntity.id];
+  };
+
+  it('rrule REPLACEMENT (preset switch) survives the wire', () => {
+    const remote = applyRemotely({
+      rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
+      monthlyLastDay: false,
+    });
+    expect(remote?.rrule).toBe('FREQ=MONTHLY;BYMONTHDAY=15');
+  });
+
+  it('monthlyLastDay clearing via `false` survives the wire', () => {
+    const remote = applyRemotely({ monthlyLastDay: false });
+    expect(remote?.monthlyLastDay).toBe(false);
+  });
+
+  it('DOCUMENTED GAP: anchor clearing via `undefined` does NOT survive the wire', () => {
+    // `null` is not an option: released clients' typia schema has no `| null`
+    // on these fields, and an out-of-schema value triggers their blocking
+    // data-repair confirm dialog on every sync. The stale anchor is inert on
+    // rrule-aware clients (the engine routes on `rrule`); legacy clients keep
+    // a best-effort approximation. Making this durable requires first SHIPPING
+    // `| null` on both anchor fields in a release, then switching the reset
+    // value to null — if this test starts failing because the anchors now
+    // clear remotely, that migration happened and this pin can be inverted.
+    const remote = applyRemotely({
+      rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
+      monthlyWeekOfMonth: undefined,
+      monthlyWeekday: undefined,
+    });
+    expect(remote?.monthlyWeekOfMonth).toBe(2); // stale — see comment above
+    expect(remote?.monthlyWeekday).toBe(2);
+    // But the rule itself DID replace, which is what rrule-aware clients use.
+    expect(remote?.rrule).toBe('FREQ=MONTHLY;BYMONTHDAY=15');
   });
 });

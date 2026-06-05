@@ -1983,6 +1983,11 @@
         "RRULE_NLP_RD": "rd",
         "RRULE_NLP_TH": "th",
         "RRULE_NLP_TO": "to",
+        "RRULE_BYMONTHDAY_PLACEHOLDER": "e.g. 1,15,-5",
+        "RRULE_BYSETPOS_PLACEHOLDER": "1,-1",
+        "RRULE_BYWEEKNO_PLACEHOLDER": "20,21",
+        "RRULE_BYYEARDAY_PLACEHOLDER": "1,100,-1",
+        "RRULE_RAW_PLACEHOLDER": "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1",
         "RRULE_FREQ_UNSUPPORTED": "Only daily, weekly, monthly and yearly frequencies are supported — sub-daily rules (hourly, minutely) are not yet.",
         "RRULE_INVALID": "This recurrence rule is invalid. Please adjust the options.",
         "RRULE_NO_OCCURRENCE": "This recurrence never produces an occurrence. Please check the rule and start date.",
@@ -2564,7 +2569,7 @@
       "WORK_START_END_DESCRIPTION": "e.g. 17:00"
     },
     "SHORT_SYNTAX": {
-      "HELP": "<p>Here you can control short syntax options when creating a task</p><p>Use <code>@+&lt;phrase&gt;</code> to make a task recurring in plain English, e.g. <code>@+every monday</code>, <code>@+every other week</code>, <code>@+first monday of the month</code> or <code>@+every saturday from march to november</code>.</p>",
+      "HELP": "<p>Here you can control short syntax options when creating a task</p>",
       "IS_ENABLE_DUE": "Enable planned at short syntax (@<planned time>)",
       "IS_ENABLE_PROJECT": "Enable project short syntax (+<project>)",
       "IS_ENABLE_TAG": "Enable tag short syntax (#<tag>)",

@@ -466,10 +466,14 @@ export class DialogEditTaskRepeatCfgComponent {
           ...rruleToLegacyTaskRepeatCfg(cfg.rrule as string, finalStartDate),
         }));
       }
-    } else if (working.rrule) {
-      // Switched away from RRULE — drop the stale string so the legacy path runs.
-      this.repeatCfg.update((cfg) => ({ ...cfg, rrule: undefined }));
     }
+    // NOTE: switching from builder mode to a preset needs no rrule cleanup —
+    // every preset's getQuickSettingUpdates() OVERWRITES `rrule` with its own
+    // canonical rule (applied above), so presets stay rrule-backed. Clearing
+    // it here would (a) break the "every saved cfg carries its rrule" contract
+    // and (b) not even propagate: an `rrule: undefined` change is dropped by
+    // the op-log's JSON wire, leaving remote clients scheduling from the old
+    // rule.
 
     // Normalize the monthly anchor fields at the boundary: convert the form's
     // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
@@ -638,6 +642,13 @@ export class DialogEditTaskRepeatCfgComponent {
     // still matches what that preset produces; a builder- / @+- / migration-built
     // or otherwise diverged rule opens the dedicated 'RRULE' builder.
     if (cfg.rrule) {
+      // Completion-relative schedules must open in builder mode regardless of
+      // any matching preset: the schedule-type toggle ("from completion") only
+      // exists inside the RRULE builder, so a preset label would hide the one
+      // control that explains — and can change — how the cfg actually fires.
+      if (cfg.repeatFromCompletionDate) {
+        return cfg.quickSetting === 'RRULE' ? cfg : { ...cfg, quickSetting: 'RRULE' };
+      }
       const qs = cfg.quickSetting;
       const isFaithfulPreset =
         !!qs &&

@@ -95,7 +95,7 @@
         <input
           class="rb-text"
           type="text"
-          placeholder="e.g. 1,15,-5"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
           [value]="model().monthDays.join(',')"
           (change)="setMonthDays($any($event.target).value)"
         />
@@ -160,7 +160,7 @@
         <input
           class="rb-text"
           type="text"
-          placeholder="e.g. 1,15,-5"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
           [value]="model().monthDays.join(',')"
           (change)="setMonthDays($any($event.target).value)"
         />
@@ -208,7 +208,7 @@
           #customWhich
           class="rb-text rb-text--inline"
           type="text"
-          placeholder="1,-1"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS_PLACEHOLDER | translate"
           [value]="model().bySetPos"
           (change)="setCustomBySetPos(customWhich.value)"
         />
@@ -442,7 +442,7 @@
             #bwn
             class="rb-text"
             type="text"
-            placeholder="20,21"
+            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_PLACEHOLDER | translate"
             [value]="model().byWeekNo"
             (input)="setByWeekNo(bwn.value)"
           />
@@ -457,7 +457,7 @@
             #byd
             class="rb-text"
             type="text"
-            placeholder="1,100,-1"
+            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_PLACEHOLDER | translate"
             [value]="model().byYearDay"
             (input)="setByYearDay(byd.value)"
           />
@@ -473,7 +473,7 @@
           #raw
           class="rb-text rb-text--mono"
           type="text"
-          placeholder="FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_RAW_PLACEHOLDER | translate"
           [value]="model().rawOverride"
           (input)="setRawOverride(raw.value)"
         />
