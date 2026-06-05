@@ -58,6 +58,7 @@ export class TagToggleMenuListComponent {
   private _tagList = toSignal(this._tagService.tagsNoMyDayAndNoList$, {
     initialValue: [],
   });
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
   // Build tree from tags to maintain menu tree ordering
   private _tagTree = computed(() => {

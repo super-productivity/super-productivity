@@ -321,8 +321,11 @@
             mat-menu-item
           >
             <select-option-row
-              [item]="project"
-              [allOptions]="moveToProjectList()"
+              [title]="project.title"
+              [icon]="project.icon"
+              [defaultIcon]="DEFAULT_PROJECT_ICON"
+              [color]="project.theme?.primary"
+              [folderPath]="projectFolderMap().get(project.id)"
             ></select-option-row>
           </button>
         }

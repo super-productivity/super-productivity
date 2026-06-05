@@ -193,8 +193,11 @@
       (click)="stateService.updateProjectId(project.id)"
     >
       <select-option-row
-        [item]="project"
-        [allOptions]="allProjects()"
+        [title]="project.title"
+        [icon]="project.icon"
+        [defaultIcon]="DEFAULT_PROJECT_ICON"
+        [color]="project.theme?.primary"
+        [folderPath]="projectFolderMap().get(project.id)"
       ></select-option-row>
     </button>
   }
@@ -209,10 +212,13 @@
         [class.selected]="hasSelectedTag(tag.id)"
       >
         <select-option-row
-          [item]="tag"
+          [title]="tag.title"
+          [icon]="tag.icon"
+          defaultIcon="label"
+          [color]="tag.color || tag.theme?.primary"
           [isSelected]="hasSelectedTag(tag.id)"
           [showCheckbox]="true"
-          [allOptions]="allTags()"
+          [folderPath]="tagFolderMap().get(tag.id)"
         ></select-option-row>
       </button>
     }
