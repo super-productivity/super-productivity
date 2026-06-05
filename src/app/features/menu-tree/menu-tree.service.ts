@@ -4,6 +4,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
+import { TODAY_TAG } from '../tag/tag.const';
 import {
   MenuTreeFolderNode,
   MenuTreeKind,
@@ -56,56 +57,36 @@ export class MenuTreeService {
     const projects = this._allProjects().filter(
       (p) => !p.isArchived && !p.isHiddenFromMenu,
     );
-    const projectMap = new Map<string, Project>();
-    const titleCounts = new Map<string, number>();
-
-    for (const p of projects) {
-      projectMap.set(p.id, p);
-      const title = p.title.trim().toLowerCase();
-      titleCounts.set(title, (titleCounts.get(title) || 0) + 1);
-    }
-
-    const folderMap = new Map<string, string>();
-    const walk = (nodes: MenuTreeTreeNode[], path: string[] = []): void => {
-      for (const node of nodes) {
-        if (node.k === MenuTreeKind.PROJECT) {
-          if (path.length > 0) {
-            const project = projectMap.get(node.id);
-            if (project) {
-              const titleKey = project.title.trim().toLowerCase();
-              if ((titleCounts.get(titleKey) || 0) > 1) {
-                folderMap.set(node.id, path.join(' › '));
-              }
-            }
-          }
-        } else if (node.k === MenuTreeKind.FOLDER) {
-          walk(node.children, [...path, node.name]);
-        }
-      }
-    };
-    walk(this.projectTree());
-    return folderMap;
+    return this._buildFolderMap(projects, this.projectTree(), MenuTreeKind.PROJECT);
   });
 
   readonly tagFolderMap = computed(() => {
-    const tags = this._allTags().filter((t) => t.id !== 'TODAY');
-    const tagMap = new Map<string, Tag>();
+    const tags = this._allTags().filter((t) => t.id !== TODAY_TAG.id);
+    return this._buildFolderMap(tags, this.tagTree(), MenuTreeKind.TAG);
+  });
+
+  private _buildFolderMap<T extends { id: string; title: string }>(
+    entities: T[],
+    tree: MenuTreeTreeNode[],
+    kind: MenuTreeKind,
+  ): Map<string, string> {
+    const entityMap = new Map<string, T>();
     const titleCounts = new Map<string, number>();
 
-    for (const t of tags) {
-      tagMap.set(t.id, t);
-      const title = t.title.trim().toLowerCase();
+    for (const item of entities) {
+      entityMap.set(item.id, item);
+      const title = item.title.trim().toLowerCase();
       titleCounts.set(title, (titleCounts.get(title) || 0) + 1);
     }
 
     const folderMap = new Map<string, string>();
     const walk = (nodes: MenuTreeTreeNode[], path: string[] = []): void => {
       for (const node of nodes) {
-        if (node.k === MenuTreeKind.TAG) {
+        if (node.k === kind) {
           if (path.length > 0) {
-            const tag = tagMap.get(node.id);
-            if (tag) {
-              const titleKey = tag.title.trim().toLowerCase();
+            const item = entityMap.get(node.id);
+            if (item) {
+              const titleKey = item.title.trim().toLowerCase();
               if ((titleCounts.get(titleKey) || 0) > 1) {
                 folderMap.set(node.id, path.join(' › '));
               }
@@ -116,9 +97,9 @@ export class MenuTreeService {
         }
       }
     };
-    walk(this.tagTree());
+    walk(tree);
     return folderMap;
-  });
+  }
 
   readonly projectFolders$ = this._store
     .select(selectMenuTreeProjectTree)
