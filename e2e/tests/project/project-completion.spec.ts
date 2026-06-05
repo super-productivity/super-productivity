@@ -47,6 +47,12 @@ test.describe('Project completion', () => {
     // Celebration dialog with stats
     const celebration = page.locator('dialog-project-complete');
     await expect(celebration).toBeVisible();
+    const celebrationPanel = page.locator('.project-complete-fullscreen-dialog');
+    await expect(celebrationPanel).toBeVisible();
+    const panelBox = await celebrationPanel.boundingBox();
+    const viewport = page.viewportSize();
+    expect(panelBox?.width ?? 0).toBeGreaterThan((viewport?.width ?? 0) * 0.95);
+    expect(panelBox?.height ?? 0).toBeGreaterThan((viewport?.height ?? 0) * 0.95);
     await expect(celebration.getByText(/project complete/i)).toBeVisible();
     await expect(celebration.getByText('Test Project')).toBeVisible();
 

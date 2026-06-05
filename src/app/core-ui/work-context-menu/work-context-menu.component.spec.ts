@@ -15,6 +15,7 @@ import { WorkContextType } from '../../features/work-context/work-context.model'
 import { DialogCompleteResolveTasksComponent } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DateService } from '../../core/date/date.service';
+import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
 
 describe('WorkContextMenuComponent', () => {
   let component: WorkContextMenuComponent;
@@ -177,6 +178,20 @@ describe('WorkContextMenuComponent', () => {
         }),
       );
       expect(mockProjectService.complete).toHaveBeenCalled();
+    });
+
+    it('opens the celebration as a fullscreen overlay', async () => {
+      await component.completeProject();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        DialogProjectCompleteComponent,
+        jasmine.objectContaining({
+          panelClass: 'project-complete-fullscreen-dialog',
+          width: '100vw',
+          height: '100dvh',
+          maxWidth: '100vw',
+          maxHeight: '100dvh',
+        }),
+      );
     });
 
     it('aborts without completing when confirmation is cancelled', async () => {

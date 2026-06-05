@@ -211,6 +211,11 @@ export class WorkContextMenuComponent implements OnInit {
 
     this._matDialog.open(DialogProjectCompleteComponent, {
       restoreFocus: true,
+      panelClass: 'project-complete-fullscreen-dialog',
+      width: '100vw',
+      height: '100dvh',
+      maxWidth: '100vw',
+      maxHeight: '100dvh',
       data: { project, stats },
     });
   }

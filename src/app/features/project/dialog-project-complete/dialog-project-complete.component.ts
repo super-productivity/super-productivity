@@ -1,14 +1,15 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import {
-  MAT_DIALOG_DATA,
-  MatDialogActions,
-  MatDialogContent,
-  MatDialogRef,
-  MatDialogTitle,
-} from '@angular/material/dialog';
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  ViewChild,
+  inject,
+} from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -17,6 +18,7 @@ import { ProjectCompletionStats } from '../project-completion-stats.util';
 import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
+import { MatTooltip } from '@angular/material/tooltip';
 
 export interface DialogProjectCompleteData {
   project: Project;
@@ -29,11 +31,10 @@ export interface DialogProjectCompleteData {
   styleUrls: ['./dialog-project-complete.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    MatDialogTitle,
-    MatDialogContent,
-    MatDialogActions,
     MatButton,
+    MatIconButton,
     MatIcon,
+    MatTooltip,
     DatePipe,
     TranslatePipe,
     MsToStringPipe,
@@ -49,20 +50,24 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
   readonly data = inject<DialogProjectCompleteData>(MAT_DIALOG_DATA);
   readonly T: typeof T = T;
 
+  @ViewChild('confettiCanvas')
+  private readonly _confettiCanvas?: ElementRef<HTMLCanvasElement>;
+
   async ngAfterViewInit(): Promise<void> {
     // ConfettiService already honors isDisableAnimations; also respect the
     // dedicated celebration toggle (the dialog still shows, just without confetti).
     if (this._configService.misc()?.isDisableCelebration) {
       return;
     }
-    // High zIndex so the burst renders above the dialog overlay; the confetti
-    // canvas is pointer-events:none, so buttons stay clickable.
-    await this._confettiService.createConfetti({
+    const canvas = this._confettiCanvas?.nativeElement;
+    if (!canvas) {
+      return;
+    }
+    await this._confettiService.createConfettiOnCanvas(canvas, {
       particleCount: 160,
       startVelocity: 45,
       spread: 360,
       ticks: 320,
-      zIndex: 10000,
       origin: { x: 0.5, y: 0.35 },
     });
   }

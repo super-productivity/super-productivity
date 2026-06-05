@@ -19,4 +19,21 @@ export class ConfettiService {
     const confettiModule = await import('canvas-confetti');
     confettiModule.default(props);
   }
+
+  async createConfettiOnCanvas(
+    canvas: HTMLCanvasElement,
+    props: ConfettiConfig,
+  ): Promise<void> {
+    const misc = this._configService.misc();
+
+    if (misc && misc.isDisableAnimations) {
+      return;
+    }
+
+    const confettiModule = await import('canvas-confetti');
+    const confetti = confettiModule.default.create(canvas, {
+      resize: true,
+    });
+    await confetti(props);
+  }
 }

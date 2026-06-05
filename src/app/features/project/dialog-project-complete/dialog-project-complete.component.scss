@@ -1,51 +1,218 @@
-.complete-title {
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.complete-overlay {
+  position: relative;
   display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text-color-most-intense);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--c-accent) 12%, var(--bg-lightest)),
+      var(--bg-lightest) 42%
+    ),
+    var(--bg-lightest);
+}
+
+.confetti-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.close-btn {
+  position: absolute;
+  z-index: 3;
+  top: var(--s2);
+  right: var(--s2);
+  background: color-mix(in srgb, var(--bg-lightest) 86%, transparent);
+  box-shadow: var(--whiteframe-shadow-1dp);
+}
+
+.celebration-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  min-height: 0;
+  overflow: auto;
+  gap: 28px;
+  padding: 56px 24px 40px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(720px, 100%);
+  text-align: center;
+}
+
+.trophy {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  margin-bottom: 20px;
+  color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent) 18%, var(--bg-lightest));
+  border: 1px solid color-mix(in srgb, var(--c-accent) 34%, transparent);
+  border-radius: 50%;
+  box-shadow: var(--whiteframe-shadow-4dp);
+
+  mat-icon {
+    width: 56px;
+    height: 56px;
+    font-size: 56px;
+    line-height: 56px;
+  }
+}
+
+.complete-title {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.05;
 }
 
 .project-title {
-  font-weight: bold;
-  text-align: center;
-  margin-top: 0;
+  max-width: 100%;
+  margin: 12px 0 0;
+  color: var(--text-color-more-intense);
+  font-size: 20px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .stats-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 24px;
-  margin: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(144px, 1fr));
+  width: min(720px, 100%);
+  gap: 12px;
 }
 
 .stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 72px;
+  justify-content: center;
+  min-height: 112px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg-lightest) 86%, var(--c-accent));
+  border: 1px solid var(--extra-border-color);
+  border-radius: 8px;
 }
 
 .stat-value {
-  font-size: 28px;
+  max-width: 100%;
+  color: var(--text-color-most-intense);
+  font-size: 32px;
   font-weight: bold;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .stat-label {
-  font-size: 12px;
-  opacity: 0.7;
+  margin-top: 8px;
+  color: var(--text-color-muted);
+  font-size: 13px;
+  line-height: 1.3;
   text-align: center;
+}
+
+.details {
+  width: min(720px, 100%);
 }
 
 .duration {
   text-align: center;
   font-weight: 500;
-  margin: 8px 0 0;
+  margin: 0;
 }
 
 .date-range {
+  color: var(--text-color-muted);
   text-align: center;
-  font-size: 12px;
-  opacity: 0.7;
+  font-size: 13px;
+  line-height: 1.4;
   margin: 8px 0 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+
+  button {
+    min-width: 164px;
+  }
+}
+
+@media (max-width: 599px) {
+  .close-btn {
+    top: var(--s);
+    right: var(--s);
+  }
+
+  .celebration-content {
+    justify-content: flex-start;
+    gap: 20px;
+    padding: 72px 16px 24px;
+  }
+
+  .trophy {
+    width: 84px;
+    height: 84px;
+    margin-bottom: 16px;
+
+    mat-icon {
+      width: 46px;
+      height: 46px;
+      font-size: 46px;
+      line-height: 46px;
+    }
+  }
+
+  .complete-title {
+    font-size: 32px;
+  }
+
+  .project-title {
+    font-size: 17px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat {
+    min-height: 92px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+  }
+
+  .actions {
+    width: 100%;
+
+    button {
+      width: 100%;
+    }
+  }
 }
