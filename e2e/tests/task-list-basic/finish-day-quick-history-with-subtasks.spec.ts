@@ -85,7 +85,7 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     });
 
     // Step 8: Parent task appears with its real subtasks grouped below it
-    const rows = page.locator('.task-summary-table tr td.title span');
+    const rows = page.locator('.task-summary-table tr td.title button');
     await expect(rows.nth(0)).toContainText(parentTitle);
     await expect(rows.nth(1)).toContainText(firstSubtaskTitle);
     await expect(rows.nth(2)).toContainText(secondSubtaskTitle);

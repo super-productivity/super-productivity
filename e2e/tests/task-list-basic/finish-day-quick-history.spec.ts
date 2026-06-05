@@ -66,7 +66,7 @@ test.describe.serial('Finish Day Quick History', () => {
 
     // Confirm the task appears in the expanded day's task table
     const tableTaskTitle = page
-      .locator('.task-summary-table td.title span')
+      .locator('.task-summary-table td.title button')
       .filter({ hasText: taskName })
       .first();
     await tableTaskTitle.waitFor({ state: 'visible' });

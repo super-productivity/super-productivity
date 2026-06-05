@@ -20,7 +20,7 @@ import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clo
 import { TranslatePipe } from '@ngx-translate/core';
 import { MetricService } from '../../metric/metric.service';
 import { DialogViewArchivedTaskComponent } from '../../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
-import { HistoryTaskRowComponent } from '../../history/history-task-row/history-task-row.component';
+import { WorklogTaskRowComponent } from '../worklog-task-row/worklog-task-row.component';
 
 @Component({
   selector: 'worklog-week',
@@ -38,7 +38,7 @@ import { HistoryTaskRowComponent } from '../../history/history-task-row/history-
     MsToClockStringPipe,
     MsToMinuteClockStringPipe,
     TranslatePipe,
-    HistoryTaskRowComponent,
+    WorklogTaskRowComponent,
   ],
 })
 export class WorklogWeekComponent {

@@ -4,20 +4,20 @@ import { MatIconButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
 import { MsToClockStringPipe } from '../../../ui/duration/ms-to-clock-string.pipe';
-import { WorklogDataForDay } from '../../worklog/worklog.model';
+import { WorklogDataForDay } from '../worklog.model';
 import { Task } from '../../tasks/task.model';
 import { T } from '../../../t.const';
 
 /**
- * Shared archive task row used by both History views and the Daily Summary
+ * Shared worklog task row used by the History view and the Daily Summary
  * "this week" widget. Uses an attribute selector so the host element IS the
  * `<tr>`, which keeps the surrounding `<table>` markup valid (a `<tr>` may not
  * be wrapped in a component host element).
  */
 @Component({
-  selector: 'tr[historyTaskRow]',
-  templateUrl: './history-task-row.component.html',
-  styleUrls: ['./history-task-row.component.scss'],
+  selector: 'tr[worklogTaskRow]',
+  templateUrl: './worklog-task-row.component.html',
+  styleUrls: ['./worklog-task-row.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
@@ -33,11 +33,11 @@ import { T } from '../../../t.const';
     MsToClockStringPipe,
   ],
 })
-export class HistoryTaskRowComponent {
+export class WorklogTaskRowComponent {
   readonly entry = input.required<WorklogDataForDay>();
   readonly dateStr = input.required<string>();
   // optional project color dot (only shown for the combined "Today" list)
-  readonly projectColor = input<{ title?: string; color?: string } | null>(null);
+  readonly projectColor = input<{ title: string; color: string } | null>(null);
   // whether to render the trailing actions column (and thus a restore button)
   readonly hasActionsColumn = input<boolean>(false);
   readonly canRestore = input<boolean>(false);

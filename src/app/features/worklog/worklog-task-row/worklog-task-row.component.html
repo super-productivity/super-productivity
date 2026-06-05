@@ -16,11 +16,16 @@
       >repeat
     </mat-icon>
   }
-  <span
+  <button
+    type="button"
     (click)="taskClick.emit(entry().task)"
     class="task-title task-title-clickable"
-    >{{ entry().task.title }}</span
+    [attr.aria-label]="
+      (T.F.WORKLOG.CMP.VIEW_TASK_DETAILS | translate) + ': ' + entry().task.title
+    "
   >
+    {{ entry().task.title }}
+  </button>
 </td>
 <td class="worked">
   @if (entry().task.subTaskIds && entry().task.subTaskIds.length > 0) {
@@ -41,7 +46,7 @@
       <button
         (click)="restore.emit(entry().task)"
         [title]="T.F.WORKLOG.CMP.RESTORE_TASK_FROM_ARCHIVE | translate"
-        aria-label="restore"
+        [attr.aria-label]="T.F.WORKLOG.CMP.RESTORE_TASK_FROM_ARCHIVE | translate"
         color=""
         mat-icon-button
       >

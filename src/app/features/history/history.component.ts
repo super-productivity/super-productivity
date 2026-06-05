@@ -8,11 +8,10 @@ import { TaskService } from '../tasks/task.service';
 import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { ActivatedRoute, Router } from '@angular/router';
-import { standardListAnimation } from '../../ui/animations/standard-list.ani';
 import { WorklogService } from '../worklog/worklog.service';
 import { getDateRangeForMonth } from '../../util/get-date-range-for-month';
 import { getDateRangeForWeek } from '../../util/get-date-range-for-week';
-import { fadeAnimation, fadeInSlowAnimation } from '../../ui/animations/fade.ani';
+import { fadeInSlowAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { WorkContextService } from '../work-context/work-context.service';
 import { SimpleCounterService } from '../simple-counter/simple-counter.service';
@@ -20,7 +19,7 @@ import { SearchQueryParams } from '../../pages/search-page/search-page.model';
 import { Store } from '@ngrx/store';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { FullPageSpinnerComponent } from '../../ui/full-page-spinner/full-page-spinner.component';
-import { AsyncPipe, KeyValue, KeyValuePipe } from '@angular/common';
+import { KeyValue, KeyValuePipe } from '@angular/common';
 import { MatMiniFabButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -32,7 +31,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
-import { HistoryTaskRowComponent } from './history-task-row/history-task-row.component';
+import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-task-row.component';
 import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.component';
 
 @Component({
@@ -40,32 +39,26 @@ import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.com
   templateUrl: './history.component.html',
   styleUrls: ['./history.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [
-    expandFadeAnimation,
-    standardListAnimation,
-    fadeAnimation,
-    fadeInSlowAnimation,
-  ],
+  animations: [expandFadeAnimation, fadeInSlowAnimation],
   imports: [
     FullPageSpinnerComponent,
     MatMiniFabButton,
     MatIcon,
     MatTooltip,
-    AsyncPipe,
     KeyValuePipe,
     MsToClockStringPipe,
     MsToStringPipe,
     MomentFormatPipe,
     NumberToMonthPipe,
     TranslatePipe,
-    HistoryTaskRowComponent,
+    WorklogTaskRowComponent,
     HistoryDayMetaComponent,
   ],
 })
 export class HistoryComponent {
-  readonly worklogService = inject(WorklogService);
-  readonly workContextService = inject(WorkContextService);
-  readonly simpleCounterService = inject(SimpleCounterService);
+  private readonly _worklogService = inject(WorklogService);
+  private readonly _workContextService = inject(WorkContextService);
+  private readonly _simpleCounterService = inject(SimpleCounterService);
   private readonly _taskService = inject(TaskService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _router = inject(Router);
@@ -77,8 +70,9 @@ export class HistoryComponent {
   });
 
   T: typeof T = T;
+  readonly worklogData = toSignal(this._worklogService.worklogData$);
   readonly enabledSimpleCounters = toSignal(
-    this.simpleCounterService.enabledSimpleCounters$,
+    this._simpleCounterService.enabledSimpleCounters$,
     { initialValue: [] as SimpleCounter[] },
   );
   private readonly _allProjectsColorAndTitle = this._store.selectSignal(
@@ -132,7 +126,7 @@ export class HistoryComponent {
 
   // only show the project color dot on the combined "Today" list
   projectColorFor(task: Task): { title: string; color: string } | null {
-    if (!this.workContextService.isTodayList) {
+    if (!this._workContextService.isTodayList) {
       return null;
     }
     return this._allProjectsColorAndTitle()[task.projectId] ?? null;
@@ -201,6 +195,6 @@ export class HistoryComponent {
         [dateStr]: +newVal,
       },
     });
-    this.worklogService.refreshWorklog();
+    this._worklogService.refreshWorklog();
   }
 }

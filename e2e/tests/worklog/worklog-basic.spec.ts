@@ -64,7 +64,7 @@ test.describe('Worklog', () => {
     await dayRow.waitFor({ state: 'visible' });
     await dayRow.click();
     await expect(
-      page.locator('.task-summary-table td.title span').filter({ hasText: taskName }),
+      page.locator('.task-summary-table td.title button').filter({ hasText: taskName }),
     ).toBeVisible();
   });
 

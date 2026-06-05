@@ -52,10 +52,27 @@ td {
 }
 
 .task-title-clickable {
+  // reset native <button> styling so it renders inline like the surrounding text
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  // wrap long titles inside the table cell
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 
   &:hover {
     text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 }
 

@@ -1,4 +1,4 @@
-@if (worklogService.worklogData$ | async; as wData) {
+@if (worklogData(); as wData) {
   <div [@fadeInSlow]>
     <h1 class="mat-headline-5 total-time">
       {{ T.F.WORKLOG.CMP.TOTAL_TIME | translate }} <br /><strong>{{
@@ -43,7 +43,7 @@
                   </button>
                   <button
                     (click)="exportData(year.key, month.key)"
-                    aria-label="export data"
+                    [attr.aria-label]="T.F.WORKLOG.CMP.EXPORT_DATA | translate"
                     class="mat-elevation-z1"
                     color="primary"
                     mat-mini-fab
@@ -78,15 +78,16 @@
                           <button
                             (click)="exportData(year.key, month.key, week.weekNr)"
                             [matTooltip]="
-                              week.start +
-                              '.-' +
-                              week.end +
-                              '. Days: ' +
-                              week.daysWorked +
-                              ', Time: ' +
-                              (week.timeSpent | msToString)
+                              T.F.WORKLOG.CMP.WEEK_RANGE_TOOLTIP
+                                | translate
+                                  : {
+                                      start: week.start,
+                                      end: week.end,
+                                      days: week.daysWorked,
+                                      time: week.timeSpent | msToString,
+                                    }
                             "
-                            aria-label="export data"
+                            [attr.aria-label]="T.F.WORKLOG.CMP.EXPORT_DATA | translate"
                             class="mat-elevation-z1"
                             color=""
                             mat-mini-fab
@@ -96,18 +97,30 @@
                         </div>
                         <div class="week-table-wrapper">
                           <table class="week-table">
-                            <tr>
-                              <th></th>
-                              <td class="work-range">
-                                <mat-icon
-                                  [matTooltip]="T.F.WORKLOG.CMP.WORK_TIMES | translate"
-                                  >schedule</mat-icon
+                            <thead>
+                              <tr>
+                                <th scope="col"></th>
+                                <th
+                                  scope="col"
+                                  class="work-range"
+                                  [attr.aria-label]="
+                                    T.F.WORKLOG.CMP.WORK_TIMES | translate
+                                  "
                                 >
-                              </td>
-                              <td>{{ T.F.WORKLOG.CMP.TASKS | translate }}</td>
-                              <td>{{ T.F.WORKLOG.CMP.WORKED | translate }}</td>
-                              <th></th>
-                            </tr>
+                                  <mat-icon
+                                    [matTooltip]="T.F.WORKLOG.CMP.WORK_TIMES | translate"
+                                    >schedule</mat-icon
+                                  >
+                                </th>
+                                <th scope="col">
+                                  {{ T.F.WORKLOG.CMP.TASKS | translate }}
+                                </th>
+                                <th scope="col">
+                                  {{ T.F.WORKLOG.CMP.WORKED | translate }}
+                                </th>
+                                <th scope="col"></th>
+                              </tr>
+                            </thead>
                             @for (
                               worklogForDay of week.ent
                                 | keyvalue: sortWorklogItemsReverse;
@@ -116,27 +129,29 @@
                               <ng-container class="day">
                                 <tr
                                   (click)="toggleDay(worklogForDay.value.dateStr)"
-                                  (keydown.enter)="toggleDay(worklogForDay.value.dateStr)"
-                                  (keydown.space)="
-                                    $event.preventDefault();
-                                    toggleDay(worklogForDay.value.dateStr)
-                                  "
-                                  [attr.aria-controls]="
-                                    'history-day-' + worklogForDay.value.dateStr
-                                  "
-                                  [attr.aria-expanded]="
-                                    isDayExpanded(worklogForDay.value.dateStr)
-                                  "
                                   [class.isExpanded]="
                                     isDayExpanded(worklogForDay.value.dateStr)
                                   "
                                   class="week-row"
-                                  role="button"
-                                  tabindex="0"
                                 >
                                   <td>
-                                    {{ worklogForDay.value.dayStr }}
-                                    {{ worklogForDay.key }}.
+                                    <button
+                                      type="button"
+                                      class="day-toggle"
+                                      (click)="
+                                        $event.stopPropagation();
+                                        toggleDay(worklogForDay.value.dateStr)
+                                      "
+                                      [attr.aria-controls]="
+                                        'history-day-' + worklogForDay.value.dateStr
+                                      "
+                                      [attr.aria-expanded]="
+                                        isDayExpanded(worklogForDay.value.dateStr)
+                                      "
+                                    >
+                                      {{ worklogForDay.value.dayStr }}
+                                      {{ worklogForDay.key }}.
+                                    </button>
                                   </td>
                                   <td class="work-range">
                                     @if (worklogForDay.value.workStart) {
@@ -202,7 +217,7 @@
                                                 projectColorFor(logEntry.task)
                                               "
                                               [rowAnchorId]="'t-' + logEntry.task.id"
-                                              historyTaskRow
+                                              worklogTaskRow
                                             ></tr>
                                           }
                                         </table>

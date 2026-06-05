@@ -2020,6 +2020,7 @@
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Days, worked:",
+        "EXPORT_DATA": "Export data",
         "MONTH_WORKED": "Month worked:",
         "REPEATING_TASK": "Recurring task",
         "RESTORE_TASK_FROM_ARCHIVE": "Restore task from archive",
@@ -2028,6 +2029,7 @@
         "VIEW_TASK_DETAILS": "View task details",
         "WEEK_NR": "Week {{nr}}",
         "WEEK_NR_SHORT": "W{{nr}}",
+        "WEEK_RANGE_TOOLTIP": "{{start}}.–{{end}}., days: {{days}}, time: {{time}}",
         "WORKED": "Worked",
         "WORK_TIMES": "Working times"
       },
