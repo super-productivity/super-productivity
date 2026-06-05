@@ -984,7 +984,7 @@
         "PLACEHOLDER": "Select folder"
       },
       "TOOLTIP_CREATE": "Create project folder",
-      "TOOLTIP_VISIBILITY": "Show/hide sidebar projects"
+      "TOOLTIP_VISIBILITY": "Show/hide projects"
     },
     "QUICK_HISTORY": {
       "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
