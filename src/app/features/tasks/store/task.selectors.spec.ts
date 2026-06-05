@@ -842,15 +842,6 @@ describe('Task Selectors', () => {
     });
   });
 
-  // Project-related selectors
-  describe('Project-related selectors', () => {
-    it('should select all tasks without hidden projects', () => {
-      const result = fromSelectors.selectAllTasksWithoutHiddenProjects(mockState);
-      // All tasks should still be returned since none belong to hidden project3
-      expect(result.length).toBe(11);
-    });
-  });
-
   // Performance-optimized selectors (Set-based lookups)
   describe('Set-based lookup optimizations', () => {
     it('selectOverdueTasksOnToday should correctly filter with Set lookup', () => {

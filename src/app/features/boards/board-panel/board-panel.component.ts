@@ -17,7 +17,7 @@ import {
 import { buildComparator, rewriteTagIdsForPanel } from '../boards.util';
 import { select, Store } from '@ngrx/store';
 import {
-  selectAllTasksWithoutHiddenProjects,
+  selectAllTasksInActiveProjects,
   selectTaskById,
   selectTaskByIdWithSubTaskData,
 } from '../../tasks/store/task.selectors';
@@ -77,7 +77,7 @@ export class BoardPanelComponent {
   taskService = inject(TaskService);
   _matDialog = inject(MatDialog);
 
-  allTasks$ = this.store.select(selectAllTasksWithoutHiddenProjects);
+  allTasks$ = this.store.select(selectAllTasksInActiveProjects);
   allTasks = toSignal(this.allTasks$, {
     initialValue: [],
   });

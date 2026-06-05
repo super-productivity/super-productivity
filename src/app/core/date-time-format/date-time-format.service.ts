@@ -78,8 +78,11 @@ export class DateTimeFormatService {
       if (cfgValue) {
         this.setDateAdapterLocale(cfgValue);
       } else {
+        // No explicit date/time override: prefer the user's selected UI language (lng)
+        // or browser regional culture locale, falling back to currentLang/defaultLang.
         const uiLang =
           localization?.lng ||
+          this._translateService.getBrowserCultureLang?.()?.toLowerCase() ||
           this._translateService.currentLang ||
           this._translateService.defaultLang ||
           DEFAULT_LOCALE;
@@ -92,7 +95,11 @@ export class DateTimeFormatService {
       const localization = this._globalConfigService.localization();
       const cfgValue = localization?.dateTimeLocale;
       if (!cfgValue) {
-        const uiLang = localization?.lng || event.lang || DEFAULT_LOCALE;
+        const uiLang =
+          localization?.lng ||
+          this._translateService.getBrowserCultureLang?.()?.toLowerCase() ||
+          event.lang ||
+          DEFAULT_LOCALE;
         this.setDateAdapterLocale(uiLang as DateTimeLocale);
       }
     });

@@ -40,42 +40,93 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await recurItem.click();
 
     // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container').first();
+    const repeatDialog = page.locator('mat-dialog-container');
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 4. Open the schedule dialog and select first day of next month
-    await repeatDialog.locator('.planned-start-date-btn').click();
-    const scheduleDialog = page
-      .locator('mat-dialog-container')
-      .filter({ has: page.locator('datetime-picker') });
-    await expect(scheduleDialog).toBeVisible();
+    // 4. Open the calendar popup and select first day of next month
+    const calendarToggle = repeatDialog.locator('mat-datepicker-toggle button');
+    await calendarToggle.click();
 
-    const calendar = scheduleDialog.locator('mat-calendar');
+    const calendar = page.locator('.mat-calendar');
     await expect(calendar).toBeVisible({ timeout: 5000 });
 
     // Navigate to next month and select the first available day
-    const nextMonthBtn = scheduleDialog.getByRole('button', { name: /next month/i });
+    const nextMonthBtn = page.getByRole('button', { name: /next month/i });
     await nextMonthBtn.click();
 
-    const firstDay = scheduleDialog
+    const firstDay = page
       .locator('.mat-calendar-body-cell:not(.mat-calendar-body-disabled)')
       .first();
     await expect(firstDay).toBeVisible({ timeout: 5000 });
     await firstDay.click();
 
-    // 5. Verify the date survives persistence and does not show epoch
-    // Click Schedule button
-    const scheduleBtn = scheduleDialog.getByRole('button', {
-      name: 'Schedule',
-      exact: true,
-    });
-    await scheduleBtn.click();
-    await scheduleDialog.waitFor({ state: 'hidden' });
+    // 5. Verify the date input does not show epoch
+    const dateInput = repeatDialog.getByRole('textbox', { name: /start date/i });
+    await expect(dateInput).toBeVisible();
+    const inputValue = await dateInput.inputValue();
+    expect(inputValue).not.toBe('');
+    expect(inputValue).not.toContain('1970');
 
     // 6. Save and verify the date survives persistence
-    const dateVal = repeatDialog.locator('.planned-date-val');
-    await expect(dateVal).not.toContainText('1970');
+    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
+    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+    await saveBtn.click();
+    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+  });
 
+  test('should preserve start date when typing date manually into input', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+
+    // 1. Create a task
+    const taskTitle = `${testPrefix}-EpochBugManual`;
+    await workViewPage.addTask(taskTitle);
+
+    const task = taskPage.getTaskByText(taskTitle).first();
+    await expect(task).toBeVisible({ timeout: 10000 });
+
+    // 2. Open task detail panel and click the repeat item
+    await task.hover();
+    const detailBtn = page.getByRole('button', {
+      name: 'Show/hide task panel',
+    });
+    await expect(detailBtn).toBeVisible({ timeout: 5000 });
+    await detailBtn.click();
+
+    const recurItem = page
+      .locator('task-detail-item')
+      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
+    await expect(recurItem).toBeVisible({ timeout: 5000 });
+    await recurItem.click();
+
+    // 3. Wait for the repeat dialog to appear
+    const repeatDialog = page.locator('mat-dialog-container');
+    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+
+    // 4. Type a date directly into the date input field
+    // The app defaults to en-GB locale (DD/MM/YYYY format)
+    const dateInput = repeatDialog.getByRole('textbox', { name: /start date/i });
+    await expect(dateInput).toBeVisible();
+    // The Material datepicker input intermittently drops the typed value while
+    // the dialog is still binding/animating: the blur (Tab) clears the field
+    // when the text hasn't parsed to a valid date yet, leaving the form invalid
+    // so Save stays disabled. Retry the whole type-and-commit cycle (clear +
+    // type + blur) until the input retains the typed date.
+    await expect(async () => {
+      await dateInput.fill('');
+      await dateInput.pressSequentially('15/06/2026', { delay: 50 });
+      // Trigger change by pressing Tab to blur
+      await dateInput.press('Tab');
+      const inputValue = await dateInput.inputValue();
+      expect(inputValue).not.toBe('');
+      expect(inputValue).not.toContain('1970');
+    }).toPass({ timeout: 10000 });
+
+    // 6. Save
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
     await expect(saveBtn).toBeEnabled({ timeout: 5000 });
     await saveBtn.click();
