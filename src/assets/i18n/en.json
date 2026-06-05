@@ -986,11 +986,6 @@
       "TOOLTIP_CREATE": "Create project folder",
       "TOOLTIP_VISIBILITY": "Show/hide projects"
     },
-    "QUICK_HISTORY": {
-      "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
-      "PAGE_TITLE": "Quick History",
-      "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
-    },
     "REDMINE": {
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Activity",
@@ -2597,7 +2592,6 @@
     "PROJECT_MENU": "Project Menu",
     "PROJECT_SETTINGS": "Project Settings",
     "PROJECTS": "Projects",
-    "QUICK_HISTORY": "Quick history",
     "SCHEDULE": "Schedule",
     "SEARCH": "Search",
     "SETTINGS": "Settings",
@@ -2619,7 +2613,6 @@
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
-    "WORKLOG": "Worklog",
     "ARCHIVED_PROJECTS": "Archived Projects"
   },
   "MIGRATE": {
