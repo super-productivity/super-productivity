@@ -185,11 +185,12 @@ export class DialogEditTaskRepeatCfgComponent {
       .subscribe((result) => {
         if (result) {
           const newDateStr = getDbDateStr(result.date);
+          const hasTime = !!result.time && isValidSplitTime(result.time);
           this.repeatCfg.update((cfg) => ({
             ...cfg,
             startDate: newDateStr,
             startTime: result.time || undefined,
-            remindAt: result.remindOption || undefined,
+            remindAt: hasTime ? result.remindOption || undefined : undefined,
           }));
         }
       });

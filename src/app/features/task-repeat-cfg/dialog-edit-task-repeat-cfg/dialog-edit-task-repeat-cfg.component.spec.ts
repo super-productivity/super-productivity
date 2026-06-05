@@ -664,5 +664,39 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(dialogData.task.dueWithTime).toBeDefined();
       expect(dialogData.targetTime).toBe('12:30');
     });
+
+    it('should set remindAt to undefined if result.time is null/absent', async () => {
+      const fixture = await setupTestBed({ repeatCfg: mockRepeatCfg });
+      const component = fixture.componentInstance;
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () =>
+          of({
+            date: new Date('2026-01-02'),
+            time: null,
+            remindOption: TaskReminderOptionId.AtStart,
+          }),
+      } as any);
+
+      component.openScheduleDialog();
+
+      expect(component.repeatCfg().remindAt).toBeUndefined();
+    });
+
+    it('should set remindAt to result.remindOption if result.time is present and valid', async () => {
+      const fixture = await setupTestBed({ repeatCfg: mockRepeatCfg });
+      const component = fixture.componentInstance;
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () =>
+          of({
+            date: new Date('2026-01-02'),
+            time: '14:30',
+            remindOption: TaskReminderOptionId.AtStart,
+          }),
+      } as any);
+
+      component.openScheduleDialog();
+
+      expect(component.repeatCfg().remindAt).toBe(TaskReminderOptionId.AtStart);
+    });
   });
 });
