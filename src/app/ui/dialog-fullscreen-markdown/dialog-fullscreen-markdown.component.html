@@ -39,7 +39,9 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBold()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate) + ' (Ctrl/Cmd+B)'
+          "
           aria-label="Bold"
         >
           <mat-icon>format_bold</mat-icon>
@@ -48,7 +50,9 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyItalic()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate) + ' (Ctrl/Cmd+I)'
+          "
           aria-label="Italic"
         >
           <mat-icon>format_italic</mat-icon>
@@ -57,7 +61,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyStrikethrough()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate) +
+            ' (Ctrl/Cmd+Shift+X)'
+          "
           aria-label="Strikethrough"
         >
           <mat-icon>strikethrough_s</mat-icon>
@@ -69,7 +76,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBulletList()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate) +
+            ' (Ctrl/Cmd+Shift+8)'
+          "
           aria-label="Bulleted list"
         >
           <mat-icon>format_list_bulleted</mat-icon>
@@ -78,7 +88,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyNumberedList()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate) +
+            ' (Ctrl/Cmd+Shift+7)'
+          "
           aria-label="Numbered list"
         >
           <mat-icon>format_list_numbered</mat-icon>
@@ -99,7 +112,9 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyQuote()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate) + ' (Ctrl/Cmd+Shift+9)'
+          "
           aria-label="Quote"
         >
           <mat-icon>format_quote</mat-icon>
@@ -108,7 +123,9 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyInlineCode()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate) + ' (Ctrl/Cmd+E)'
+          "
           aria-label="Inline code"
         >
           <mat-icon>code</mat-icon>
@@ -129,7 +146,9 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onInsertLink()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate) + ' (Ctrl/Cmd+K)'
+          "
           aria-label="Insert link"
         >
           <mat-icon>link</mat-icon>

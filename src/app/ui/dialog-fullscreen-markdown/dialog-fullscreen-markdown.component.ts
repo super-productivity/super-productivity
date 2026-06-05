@@ -89,7 +89,6 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   readonly contentChanged = output<string>();
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
-
   /**
    * Resolved content with blob URLs for images (for preview rendering).
    * Initialized in ngOnInit with raw content, updated asynchronously when images resolve.
@@ -185,9 +184,57 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       this.close();
       return;
     }
+    const hasModifier = ev.ctrlKey || ev.metaKey;
 
     const textarea = this.textareaEl()?.nativeElement;
     if (!textarea) {
+      return;
+    }
+
+    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'b') {
+      ev.preventDefault();
+      this.onApplyBold();
+      return;
+    }
+
+    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'i') {
+      ev.preventDefault();
+      this.onApplyItalic();
+      return;
+    }
+
+    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'e') {
+      ev.preventDefault();
+      this.onApplyInlineCode();
+      return;
+    }
+
+    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'k') {
+      ev.preventDefault();
+      this.onInsertLink();
+      return;
+    }
+    if (hasModifier && ev.shiftKey && ev.key.toLowerCase() == 'x') {
+      ev.preventDefault();
+      this.onApplyStrikethrough();
+      return;
+    }
+
+    if (hasModifier && ev.shiftKey && ev.code === 'Digit8') {
+      ev.preventDefault();
+      this.onApplyBulletList();
+      return;
+    }
+
+    if (hasModifier && ev.shiftKey && ev.code === 'Digit7') {
+      ev.preventDefault();
+      this.onApplyNumberedList();
+      return;
+    }
+
+    if (hasModifier && ev.shiftKey && ev.code === 'Digit9') {
+      ev.preventDefault();
+      this.onApplyQuote();
       return;
     }
     const result = handleListKeydown(
