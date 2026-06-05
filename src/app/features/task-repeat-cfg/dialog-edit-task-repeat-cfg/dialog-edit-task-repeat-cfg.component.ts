@@ -115,6 +115,9 @@ export class DialogEditTaskRepeatCfgComponent {
     repeatCfg?: TaskRepeatCfg;
     targetDate?: string;
     defaultRemindOption?: TaskReminderOptionId;
+    /** Preselect a quick setting for a NEW cfg — e.g. the add-task-bar's
+     *  "Custom recurring config" entry opens straight into the RRULE builder. */
+    initialQuickSetting?: TaskRepeatCfgCopy['quickSetting'];
   }>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
@@ -223,6 +226,9 @@ export class DialogEditTaskRepeatCfgComponent {
         : undefined;
       return {
         ...DEFAULT_TASK_REPEAT_CFG,
+        ...(this._data.initialQuickSetting
+          ? { quickSetting: this._data.initialQuickSetting }
+          : {}),
         startDate:
           this._data.task.dueDay ??
           getDbDateStr(this._data.task.dueWithTime || undefined),
