@@ -37,33 +37,33 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             iconPositionEnd
             class="sp-drop-icon sp-drop-icon-right"
           >
-            {{
-              calendar.currentView === 'multi-year' ? 'arrow_drop_up' : 'arrow_drop_down'
-            }}
+            {{ calendar.currentView === 'month' ? 'arrow_drop_down' : 'arrow_drop_up' }}
           </mat-icon>
         </button>
 
         <div class="mat-calendar-spacer"></div>
 
-        <button
-          mat-icon-button
-          type="button"
-          class="mat-calendar-previous-button"
-          [disabled]="!previousEnabled()"
-          (click)="previousClicked()"
-        >
-          <mat-icon>chevron_left</mat-icon>
-        </button>
+        @if (calendar.currentView !== 'year') {
+          <button
+            mat-icon-button
+            type="button"
+            class="mat-calendar-previous-button"
+            [disabled]="!previousEnabled()"
+            (click)="previousClicked()"
+          >
+            <mat-icon>chevron_left</mat-icon>
+          </button>
 
-        <button
-          mat-icon-button
-          type="button"
-          class="mat-calendar-next-button"
-          [disabled]="!nextEnabled()"
-          (click)="nextClicked()"
-        >
-          <mat-icon>chevron_right</mat-icon>
-        </button>
+          <button
+            mat-icon-button
+            type="button"
+            class="mat-calendar-next-button"
+            [disabled]="!nextEnabled()"
+            (click)="nextClicked()"
+          >
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        }
       </div>
     </div>
   `,

@@ -40,9 +40,10 @@
   <mat-calendar
     [headerComponent]="customHeader"
     (keydown)="onKeyDownOnCalendar($event)"
-    [selected]="selectedDate()"
+    [selected]="calendarSelectedDate"
     [minDate]="minDate()"
     (selectedChange)="dateSelected.emit($event)"
+    (yearSelected)="onYearSelected($event)"
   ></mat-calendar>
 }
 

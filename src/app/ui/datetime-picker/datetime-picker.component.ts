@@ -1,10 +1,12 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   computed,
   effect,
   EventEmitter,
   inject,
+  Injectable,
   input,
   Output,
   viewChild,
@@ -23,7 +25,7 @@ import {
 } from '@angular/material/form-field';
 import { MatInputModule, MatInput } from '@angular/material/input';
 import { MatSelectModule, MatSelect } from '@angular/material/select';
-import { MatOptionModule, MatOption } from '@angular/material/core';
+import { DateAdapter, MatOptionModule, MatOption } from '@angular/material/core';
 import { MatTooltipModule, MatTooltip } from '@angular/material/tooltip';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
@@ -40,8 +42,17 @@ import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
 import { Log } from '../../core/log';
 import { DateTimePickerHeaderComponent } from './datetime-picker-header.component';
+import { CustomDateAdapter } from '../../core/date-time-format/custom-date-adapter';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 const DEFAULT_TIME = '09:00';
+
+@Injectable()
+export class DateTimePickerDateAdapter extends CustomDateAdapter {
+  override getMonthNames(style: 'long' | 'short' | 'narrow'): string[] {
+    return super.getMonthNames('long');
+  }
+}
 
 @Component({
   selector: 'datetime-picker',
@@ -77,10 +88,31 @@ const DEFAULT_TIME = '09:00';
   styleUrl: './datetime-picker.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandFadeAnimation, fadeAnimation],
+  providers: [{ provide: DateAdapter, useClass: DateTimePickerDateAdapter }],
 })
 export class DateTimePickerComponent {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _dateAdapter = inject(DateAdapter);
+  private readonly _cdr = inject(ChangeDetectorRef);
+
+  constructor() {
+    effect(() => {
+      const locale = this._dateTimeFormatService.currentLocale();
+      this._dateAdapter.setLocale(locale);
+    });
+
+    effect((onCleanup) => {
+      const cal = this.calendar();
+      if (cal) {
+        const sub = cal.stateChanges.subscribe(() => {
+          this._cdr.markForCheck();
+        });
+        onCleanup(() => sub.unsubscribe());
+      }
+    });
+  }
 
   customHeader = DateTimePickerHeaderComponent;
 
@@ -113,6 +145,14 @@ export class DateTimePickerComponent {
   readonly isConfigReady = computed(
     () => this._globalConfigService.localization() !== undefined,
   );
+
+  get calendarSelectedDate(): Date | null {
+    const cal = this.calendar();
+    if (!cal) {
+      return this.selectedDate();
+    }
+    return cal.currentView === 'month' ? this.selectedDate() : cal.activeDate;
+  }
 
   private _syncActiveDateEffect = effect(() => {
     const date = this.selectedDate();
@@ -204,5 +244,12 @@ export class DateTimePickerComponent {
   ): void {
     ev.preventDefault();
     this.quickAccessClick.emit(val);
+  }
+
+  onYearSelected(date: unknown): void {
+    const cal = this.calendar();
+    if (cal) {
+      cal.currentView = 'month';
+    }
   }
 }
