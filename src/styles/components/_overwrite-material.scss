@@ -13,7 +13,7 @@
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-700);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-700);
   --mat-tab-header-inactive-label-text-color: var(--text-color-muted);
-  --calendar-hover-bg: rgba(0, 0, 0, 0.08);
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 35%, transparent);
 }
 
 // Dark theme tab overrides for better contrast - use lighter shade
@@ -23,7 +23,6 @@ body.isDarkTheme {
   --mat-tab-header-active-focus-label-text-color: var(--palette-primary-300);
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-300);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-300);
-  --calendar-hover-bg: rgba(255, 255, 255, 0.12);
 }
 
 // Apply tab colors explicitly to tab components
