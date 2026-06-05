@@ -103,6 +103,10 @@ export const legacyTaskRepeatCfgToRRule = (cfg: TaskRepeatCfg): string => {
   }
 };
 
+/** True when `n` fits the legacy `MonthlyWeekOfMonth` union (1..4 | -1). */
+const _isLegacyMonthlyOrdinal = (n: number): n is MonthlyWeekOfMonth =>
+  n === -1 || (Number.isInteger(n) && n >= 1 && n <= 4);
+
 /** RRULE weekday index (0=Mon … 6=Sun) → legacy weekday boolean field name. */
 const RRULE_IDX_TO_FIELD: (keyof TaskRepeatCfg)[] = [
   'monday',
@@ -179,15 +183,23 @@ export const rruleToLegacyTaskRepeatCfg = (
     }
   } else if (cycle === 'MONTHLY') {
     const setPos = toNumArray(opts.bysetpos);
-    if (weekdays.length && weekdays[0].n != null) {
+    const nthOrdinal = weekdays.length ? weekdays[0].n : undefined;
+    if (nthOrdinal != null && _isLegacyMonthlyOrdinal(nthOrdinal)) {
       // "2nd Tuesday" → BYDAY=2TU. legacy monthlyWeekday is 0=Sun…6=Sat.
-      out.monthlyWeekOfMonth = weekdays[0].n as MonthlyWeekOfMonth;
+      // Ordinals outside the model union (BYDAY=5MO, -2MO — the builder's
+      // custom input allows ±5) must NOT be persisted: released clients
+      // typia-validate monthlyWeekOfMonth against 1|2|3|4|-1, and an
+      // out-of-union value trips their repair flow. Left unset, the rrule
+      // engine still fires correctly and old clients fall back to
+      // day-of-month — an approximation instead of broken validation.
+      out.monthlyWeekOfMonth = nthOrdinal;
       out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
     } else if (
       weekdays.length === 1 &&
+      weekdays[0].n == null &&
       monthDays.length === 0 &&
       setPos.length === 1 &&
-      (setPos[0] === -1 || (setPos[0] >= 1 && setPos[0] <= 4))
+      _isLegacyMonthlyOrdinal(setPos[0])
     ) {
       // The builder's weekday-set form of the same anchor: BYDAY=FR;BYSETPOS=-1
       // ("last Friday") is losslessly equivalent to BYDAY=-1FR. Without this
@@ -226,6 +238,7 @@ const _pad2 = (n: number): string => String(n).padStart(2, '0');
  * Returns that first occurrence as 'YYYY-MM-DD' when it falls on the rule's
  * target day, or undefined when no alignment applies or the start already
  * matches. Alignment applies only to:
+ *  - WEEKLY with exactly one plain BYDAY (see below), or
  *  - a single positive BYMONTHDAY, or
  *  - the clamp idiom BYMONTHDAY=<d>,-1;BYSETPOS=1 → target day is <d>.
  * For the clamp idiom the first occurrence can be a clamped month-end day
@@ -233,9 +246,19 @@ const _pad2 = (n: number): string => String(n).padStart(2, '0');
  * a valid occurrence, and aligning ONTO it would corrupt the day the legacy
  * engine needs — such starts stay unaligned (old clients keep the start day as
  * a best-effort approximation).
- * Weekday-anchored rules use the anchor fields (monthly) or stay approximate
- * (yearly); multi-day lists have no single-day legacy equivalent — the user's
- * start date is left alone for those.
+ *
+ * WEEKLY: the engine groups weeks by WKST while the legacy fallback counts
+ * rolling 7-day blocks from startDate. For INTERVAL > 1 they disagree on
+ * WHICH alternating week fires whenever the start doesn't sit on the rule's
+ * weekday — and WKST shifts the engine's phase, which legacy cannot express.
+ * Re-anchoring onto the first occurrence makes a single-weekday cadence
+ * exactly interval*7 days in both engines, WKST-proof. Multi-weekday sets
+ * stay approximate (no single anchor day); BYDAY-less rules already anchor
+ * on the start weekday.
+ *
+ * Monthly/yearly weekday-anchored rules use the anchor fields and stay
+ * unaligned; multi-day lists have no single-day legacy equivalent — the
+ * user's start date is left alone for those.
  */
 export const getAlignedStartDate = (
   rrule: string,
@@ -244,7 +267,30 @@ export const getAlignedStartDate = (
   const opts = safeParseRRuleOptions(rrule);
   if (!opts) return undefined;
   const cycle = FREQ_TO_CYCLE[opts.freq];
-  if (cycle !== 'MONTHLY' && cycle !== 'YEARLY') return undefined;
+  if (cycle !== 'WEEKLY' && cycle !== 'MONTHLY' && cycle !== 'YEARLY') {
+    return undefined;
+  }
+
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(startDate);
+  if (!m) return undefined;
+  const startPadded = `${m[1]}-${_pad2(+m[2])}-${_pad2(+m[3])}`;
+
+  if (cycle === 'WEEKLY') {
+    const wd = normalizeWeekdays(opts.byweekday);
+    if (wd.length !== 1 || wd[0].n != null) return undefined;
+    if (
+      toNumArray(opts.bymonthday).length ||
+      toNumArray(opts.bysetpos).length ||
+      toNumArray(opts.bymonth).length
+    ) {
+      return undefined;
+    }
+    const firstWeekly = getFirstRRuleOccurrence({ rrule, startDate: startPadded });
+    if (!firstWeekly) return undefined;
+    const alignedWeekly = getDbDateStr(firstWeekly);
+    return alignedWeekly === startDate ? undefined : alignedWeekly;
+  }
+
   if (normalizeWeekdays(opts.byweekday).length) return undefined;
 
   // Target day: a single positive day, or the clamp idiom {d,-1} + BYSETPOS=1.
@@ -267,10 +313,6 @@ export const getAlignedStartDate = (
 
   // YEARLY needs a single BYMONTH — old clients read the month from startDate.
   if (cycle === 'YEARLY' && toNumArray(opts.bymonth).length !== 1) return undefined;
-
-  const m0 = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(startDate);
-  if (!m0) return undefined;
-  const startPadded = `${m0[1]}-${_pad2(+m0[2])}-${_pad2(+m0[3])}`;
 
   // The actual first occurrence with the CURRENT start as dtstart (local noon).
   const first = getFirstRRuleOccurrence({ rrule, startDate: startPadded });

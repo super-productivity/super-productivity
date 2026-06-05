@@ -12,25 +12,34 @@ import { OpType } from '../../../op-log/core/operation.types';
 // typia-validate. The rich literal (incl. 'RRULE' / newer presets) stays in the
 // dialog form only. Only touch a defined quickSetting, never invent one.
 //
-// Same boundary guards the monthly anchors: released clients' typia schema
-// allows them only absent-or-numeric, so a `null` leaking in from an untyped
-// path (formly model, import) must never reach the wire — normalize it to
+// Same boundary guards the monthly anchors: released clients typia-validate
+// monthlyWeekOfMonth against 1|2|3|4|-1 and monthlyWeekday against 0..6
+// (absent allowed). A `null` or out-of-union number leaking in from an
+// untyped path (formly model, import, a converter bug) must never reach the
+// wire — it would trip old clients' validation/repair flow. Normalize to
 // `undefined`, which JSON.stringify drops.
-const _stripNullAnchors = <T extends Partial<TaskRepeatCfg>>(cfg: T): T => {
+const _isValidWeekOfMonth = (v: unknown): boolean =>
+  v === -1 || (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 4);
+const _isValidWeekday = (v: unknown): boolean =>
+  Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 6;
+
+const _sanitizeAnchors = <T extends Partial<TaskRepeatCfg>>(cfg: T): T => {
   const w = cfg.monthlyWeekOfMonth as unknown;
   const d = cfg.monthlyWeekday as unknown;
-  if (w !== null && d !== null) return cfg;
+  const wBad = w !== undefined && !_isValidWeekOfMonth(w);
+  const dBad = d !== undefined && !_isValidWeekday(d);
+  if (!wBad && !dBad) return cfg;
   return {
     ...cfg,
-    ...(w === null ? { monthlyWeekOfMonth: undefined } : {}),
-    ...(d === null ? { monthlyWeekday: undefined } : {}),
+    ...(wBad ? { monthlyWeekOfMonth: undefined } : {}),
+    ...(dBad ? { monthlyWeekday: undefined } : {}),
   };
 };
 
 // One persist-boundary transform for full cfgs and partial Update changes —
 // two copies of this body would inevitably drift.
 const _toPersisted = <T extends Partial<TaskRepeatCfg>>(cfg: T): T => {
-  const out = _stripNullAnchors(cfg);
+  const out = _sanitizeAnchors(cfg);
   if (!out.quickSetting) return out;
   const safe = toSyncSafeQuickSetting(out.quickSetting);
   return safe === out.quickSetting ? out : { ...out, quickSetting: safe };

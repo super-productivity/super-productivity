@@ -43,7 +43,7 @@ import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { SnackService } from '../../../core/snack/snack.service';
 import { getFirstRRuleOccurrence, isRRuleValid } from '../store/rrule-occurrence.util';
-import { safeParseRRuleOptions } from '../util/rrule-parse.util';
+import { FREQ_TO_CYCLE, safeParseRRuleOptions } from '../util/rrule-parse.util';
 import {
   getAlignedStartDate,
   legacyTaskRepeatCfgToRRule,
@@ -220,8 +220,13 @@ export class DialogEditTaskRepeatCfgComponent {
       // Process the repeat config to determine if quickSetting needs to be changed to CUSTOM
       const processedCfg = this._processQuickSettingForDate(this._data.repeatCfg);
 
-      // Set initial value for comparison
-      this.repeatCfgInitial.set({ ...this._data.repeatCfg });
+      // Diff against the PROCESSED cfg, not the stored one: open-time
+      // adjustments (lazy legacy→rrule migration, preset inference) must not
+      // leak into the change set of an unrelated edit — `rrule` is a
+      // SCHEDULE_AFFECTING_FIELD, so persisting it from a title-only save
+      // would relocate today's live instance. The migration only persists
+      // once the user actually touches the schedule.
+      this.repeatCfgInitial.set({ ...processedCfg });
       return processedCfg;
     } else if (this._data.task) {
       const startTime = this._data.task.dueWithTime
@@ -389,14 +394,25 @@ export class DialogEditTaskRepeatCfgComponent {
         formGroup1.markAllAsTouched();
         return;
       }
+      const parsedRule = safeParseRRuleOptions(working.rrule);
+      // The engine is day-granular (every occurrence resolves to local noon),
+      // so a sub-daily FREQ (HOURLY/…, reachable via the raw override) would
+      // be accepted but silently collapse to ~daily firing — and it has no
+      // legacy repeatCycle equivalent for old clients. Reject until sub-daily
+      // support actually exists.
+      if (!parsedRule || FREQ_TO_CYCLE[parsedRule.freq] == null) {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.TASK_REPEAT.F.RRULE_FREQ_UNSUPPORTED,
+        });
+        formGroup1.markAllAsTouched();
+        return;
+      }
       // COUNT has no stable origin together with "repeat from completion":
       // completing an instance re-anchors startDate AND lastTaskCreationDay to
       // the completion day (task-repeat-cfg.effects), which restarts the COUNT
       // window — the series would never terminate. Reject the combination.
-      if (
-        working.repeatFromCompletionDate &&
-        safeParseRRuleOptions(working.rrule)?.count != null
-      ) {
+      if (working.repeatFromCompletionDate && parsedRule.count != null) {
         this._snackService.open({
           type: 'ERROR',
           msg: T.F.TASK_REPEAT.F.RRULE_COUNT_WITH_COMPLETION,
@@ -473,6 +489,12 @@ export class DialogEditTaskRepeatCfgComponent {
       // filter checks `field in changes`), pushing today's task to tomorrow
       // when only the time was edited (issue #7373).
       const changes = getTaskRepeatCfgChanges(initial, finalRepeatCfg);
+      if (Object.keys(changes).length === 0) {
+        // Nothing changed (e.g. a migrated legacy cfg opened and saved as-is)
+        // — don't dispatch an empty update that would still create a sync op.
+        this.close();
+        return;
+      }
       const isRelevantChangesForUpdateAllTasks = RELEVANT_KEYS_FOR_UPDATE_ALL_TASKS.some(
         (k) => k in changes,
       );
@@ -596,7 +618,8 @@ export class DialogEditTaskRepeatCfgComponent {
   private _setRepeatCfgInitiallyForEditOnly(repeatCfg: TaskRepeatCfg): void {
     const processedCfg = this._processQuickSettingForDate(repeatCfg);
     this.repeatCfg.set(processedCfg);
-    this.repeatCfgInitial.set({ ...repeatCfg });
+    // Processed, not stored — see _initializeRepeatCfg for why.
+    this.repeatCfgInitial.set({ ...processedCfg });
   }
 
   private _getReferenceDate(): Date {

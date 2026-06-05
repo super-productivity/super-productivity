@@ -802,6 +802,20 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
     });
 
+    it('save() blocks sub-daily frequencies (raw override FREQ=HOURLY)', async () => {
+      // The engine is day-granular: a sub-daily rule would be accepted but
+      // silently collapse to ~daily firing, and it has no legacy repeatCycle
+      // for old clients (rruleToLegacyTaskRepeatCfg returns {}).
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-03' }) as any,
+      );
+      component.onRRuleChange('FREQ=HOURLY');
+      component.save();
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
     it('save() blocks COUNT combined with repeat-from-completion (count never finishes)', async () => {
       // Completing an instance re-anchors startDate + lastTaskCreationDay to
       // the completion day, which restarts the COUNT window — the series would
@@ -858,6 +872,62 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       };
       const fixture = await setupTestBed({ repeatCfg: handBuilt });
       expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
+    });
+
+    it('does NOT persist the lazy rrule migration on a title-only edit (no reschedule)', async () => {
+      // Opening a legacy CUSTOM cfg migrates it to rrule IN MEMORY. `rrule` is
+      // a SCHEDULE_AFFECTING_FIELD — leaking it into the change set of an
+      // unrelated edit would relocate today's live instance (#7373 class).
+      const legacyCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'legacy-migrate',
+        title: 'Old custom',
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 2,
+        startDate: '2024-06-03',
+        monday: true,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+      };
+      const fixture = await setupTestBed({ repeatCfg: legacyCfg });
+      const component = fixture.componentInstance;
+      // Migrated in-memory:
+      expect(component.repeatCfg().rrule).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
+      component.repeatCfg.update((c) => ({ ...c, title: 'Renamed' }) as any);
+      component.save();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.title).toBe('Renamed');
+      expect('rrule' in changes).toBe(false);
+      expect('quickSetting' in changes).toBe(false);
+      expect('startDate' in changes).toBe(false);
+    });
+
+    it('skips the update dispatch entirely when nothing changed', async () => {
+      const storedCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-noop',
+        title: 'Unchanged',
+        startDate: '2024-06-03',
+        repeatCycle: 'WEEKLY',
+        quickSetting: 'CUSTOM',
+        rrule: 'FREQ=WEEKLY;INTERVAL=3;BYDAY=MO',
+        monday: true,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+      };
+      const fixture = await setupTestBed({ repeatCfg: storedCfg });
+      fixture.componentInstance.save();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
     });
 
     it('save() blocks when the rrule is missing/invalid in RRULE mode', async () => {

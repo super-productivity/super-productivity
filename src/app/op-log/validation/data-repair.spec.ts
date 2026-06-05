@@ -2113,6 +2113,45 @@ describe('dataRepair()', () => {
     });
   });
 
+  describe('should clear out-of-union monthly anchors', () => {
+    it('clears invalid monthlyWeekOfMonth / monthlyWeekday but keeps valid ones', () => {
+      const taskRepeatCfgState = {
+        ...mock.taskRepeatCfg,
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'BAD',
+            title: 'BAD',
+            // e.g. a BYDAY=5MO ordinal an older build converted unguarded
+            monthlyWeekOfMonth: 5 as any,
+            monthlyWeekday: 9 as any,
+            startDate: '2024-06-01',
+          },
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'GOOD',
+            title: 'GOOD',
+            monthlyWeekOfMonth: -1,
+            monthlyWeekday: 0,
+            startDate: '2024-06-01',
+          },
+        ]),
+      } as any;
+
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: taskRepeatCfgState,
+      } as any);
+
+      expect(
+        result.data.taskRepeatCfg.entities['BAD']?.monthlyWeekOfMonth,
+      ).toBeUndefined();
+      expect(result.data.taskRepeatCfg.entities['BAD']?.monthlyWeekday).toBeUndefined();
+      expect(result.data.taskRepeatCfg.entities['GOOD']?.monthlyWeekOfMonth).toBe(-1);
+      expect(result.data.taskRepeatCfg.entities['GOOD']?.monthlyWeekday).toBe(0);
+    });
+  });
+
   describe('should fix repeat configs with invalid quickSetting (issue #5802)', () => {
     it('downgrades an out-of-released-union quickSetting to CUSTOM (forward-compat)', () => {
       const taskRepeatCfgState = {

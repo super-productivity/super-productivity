@@ -189,6 +189,32 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
     expect(second.monthlyWeekday).toBe(2); // Tuesday
   });
 
+  it('never emits an out-of-union monthlyWeekOfMonth for out-of-range BYDAY ordinals', () => {
+    // The builder's custom ordinal input allows ±5 for monthly rules, but the
+    // synced model (and released clients' typia schema) only allows 1..4 | -1.
+    // An out-of-range ordinal must leave the anchor unset — the rrule engine
+    // still fires correctly; old clients fall back to day-of-month.
+    const fifth = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=5MO');
+    expect(fifth.repeatCycle).toBe('MONTHLY');
+    expect(fifth.monthlyWeekOfMonth).toBeUndefined();
+    expect(fifth.monthlyWeekday).toBeUndefined();
+
+    const secondToLast = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=-2MO');
+    expect(secondToLast.monthlyWeekOfMonth).toBeUndefined();
+    expect(secondToLast.monthlyWeekday).toBeUndefined();
+
+    // In-range ordinals keep mapping.
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=4MO').monthlyWeekOfMonth).toBe(
+      4,
+    );
+  });
+
+  it('returns {} for sub-daily rules (never a repeatCycle of undefined)', () => {
+    const out = rruleToLegacyTaskRepeatCfg('FREQ=HOURLY');
+    expect(out).toEqual({});
+    expect('repeatCycle' in out).toBe(false);
+  });
+
   it('leaves multi-weekday or out-of-range BYSETPOS rules unmapped (no single anchor)', () => {
     expect(
       rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO,TU;BYSETPOS=-1')
@@ -394,8 +420,42 @@ describe('getAlignedStartDate', () => {
     ).toBeUndefined();
   });
 
-  it('returns undefined for weekly/daily rules and garbage', () => {
+  it('re-anchors single-BYDAY weekly rules onto the first occurrence (WKST-proof biweekly phase)', () => {
+    // Sun start, biweekly Monday: the engine (default WKST=MO) first fires
+    // Jun 17 — the legacy rolling-week fallback from Jun 9 would fire Jun 10,
+    // the OPPOSITE alternating Monday, forever.
+    expect(getAlignedStartDate('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO', '2024-06-09')).toBe(
+      '2024-06-17',
+    );
+    // WKST shifts the engine's phase (legacy cannot express WKST at all);
+    // alignment captures whichever week the engine actually picks.
+    expect(
+      getAlignedStartDate('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;WKST=SU', '2024-06-09'),
+    ).toBe('2024-06-10');
+    // After alignment the cadence is exactly interval*7 days in BOTH engines.
+  });
+
+  it('weekly alignment is a no-op when the start already sits on the pattern day', () => {
     expect(getAlignedStartDate('FREQ=WEEKLY;BYDAY=MO', '2024-06-03')).toBeUndefined();
+    expect(
+      getAlignedStartDate('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO', '2024-06-03'),
+    ).toBeUndefined();
+  });
+
+  it('leaves multi-weekday, BYDAY-less, and seasonal weekly rules unaligned', () => {
+    // Multi-weekday sets have no single anchor day.
+    expect(
+      getAlignedStartDate('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE', '2024-06-09'),
+    ).toBeUndefined();
+    // BYDAY-less weekly anchors on the start weekday already.
+    expect(getAlignedStartDate('FREQ=WEEKLY;INTERVAL=2', '2024-06-09')).toBeUndefined();
+    // Seasonal (BYMONTH) weekly: aligning could move the visible start months.
+    expect(
+      getAlignedStartDate('FREQ=WEEKLY;BYDAY=MO;BYMONTH=12', '2024-06-09'),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined for daily rules and garbage', () => {
     expect(getAlignedStartDate('FREQ=DAILY', '2024-06-03')).toBeUndefined();
     expect(getAlignedStartDate('not an rrule', '2024-06-03')).toBeUndefined();
   });

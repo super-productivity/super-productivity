@@ -73,7 +73,7 @@ const _buildRuleSet = (input: RRuleOccurrenceInput): RRuleSet | null => {
   } catch (e) {
     // Never log the rule body — the raw-override field makes it free-text user
     // input, and the log history is exportable.
-    Log.warn('Invalid RRULE', e);
+    Log.warn('Invalid RRULE', (e as Error)?.name);
     return null;
   }
 };
@@ -150,7 +150,7 @@ export const getNextRRuleOccurrence = (
     const occ = set.after(new Date(lowerBound.getTime() - 1), false);
     return occ ? toLocalNoon(occ) : null;
   } catch (e) {
-    Log.warn(`RRULE next() failed`, e);
+    Log.warn(`RRULE next() failed`, (e as Error)?.name);
     return null;
   }
 };
@@ -187,7 +187,7 @@ export const getNewestPossibleRRuleDueDate = (
     if (occDay <= lastCreation) return null;
     return toLocalNoon(occ);
   } catch (e) {
-    Log.warn(`RRULE before() failed`, e);
+    Log.warn(`RRULE before() failed`, (e as Error)?.name);
     return null;
   }
 };
@@ -207,7 +207,7 @@ export const getFirstRRuleOccurrence = (input: RRuleOccurrenceInput): Date | nul
     const occ = set.after(new Date(startDay.getTime() - 1), false);
     return occ ? toLocalNoon(occ) : null;
   } catch (e) {
-    Log.warn(`RRULE first() failed`, e);
+    Log.warn(`RRULE first() failed`, (e as Error)?.name);
     return null;
   }
 };
@@ -232,7 +232,7 @@ export const getRRuleOccurrencesInRange = (
   try {
     return set.between(lower, upper, true).map(toLocalNoon);
   } catch (e) {
-    Log.warn(`RRULE between() failed`, e);
+    Log.warn(`RRULE between() failed`, (e as Error)?.name);
     return [];
   }
 };

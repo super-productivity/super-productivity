@@ -121,4 +121,44 @@ describe('task-repeat-cfg actions — monthly anchor null strip', () => {
     expect(action.taskRepeatCfg.changes.monthlyWeekOfMonth).toBe(2);
     expect(action.taskRepeatCfg.changes.monthlyWeekday).toBe(3);
   });
+
+  it('strips out-of-union anchor numbers (released clients typia-reject them)', () => {
+    // e.g. a BYDAY=5MO / -2MO ordinal a converter bug let through, or a
+    // foreign import — must never reach the wire.
+    const action = updateTaskRepeatCfg({
+      taskRepeatCfg: {
+        id: 'r1',
+        changes: {
+          monthlyWeekOfMonth: 5,
+          monthlyWeekday: 9,
+        } as unknown as Partial<TaskRepeatCfg>,
+      },
+    });
+    expect(action.taskRepeatCfg.changes.monthlyWeekOfMonth).toBeUndefined();
+    expect(action.taskRepeatCfg.changes.monthlyWeekday).toBeUndefined();
+
+    const negative = addTaskRepeatCfgToTask({
+      taskId: 't1',
+      taskRepeatCfg: cfg({
+        monthlyWeekOfMonth: -2,
+        monthlyWeekday: 1.5,
+      } as unknown as Partial<TaskRepeatCfg>),
+    });
+    expect(negative.taskRepeatCfg.monthlyWeekOfMonth).toBeUndefined();
+    expect(negative.taskRepeatCfg.monthlyWeekday).toBeUndefined();
+    expect(
+      JSON.parse(JSON.stringify(negative.taskRepeatCfg)).monthlyWeekOfMonth,
+    ).toBeUndefined();
+  });
+
+  it('keeps the -1 (last) anchor and boundary weekday values', () => {
+    const action = updateTaskRepeatCfg({
+      taskRepeatCfg: {
+        id: 'r1',
+        changes: { monthlyWeekOfMonth: -1, monthlyWeekday: 0 },
+      },
+    });
+    expect(action.taskRepeatCfg.changes.monthlyWeekOfMonth).toBe(-1);
+    expect(action.taskRepeatCfg.changes.monthlyWeekday).toBe(0);
+  });
 });
