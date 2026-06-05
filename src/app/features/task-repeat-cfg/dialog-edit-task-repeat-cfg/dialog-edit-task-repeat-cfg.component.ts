@@ -159,7 +159,7 @@ export class DialogEditTaskRepeatCfgComponent {
         data: {
           task: dummyTask,
           isSelectDueOnly: true,
-          showQuickAccess: false,
+          showQuickAccess: true,
         },
       })
       .afterClosed()
