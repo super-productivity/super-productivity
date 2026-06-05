@@ -1,0 +1,245 @@
+@if (worklogData(); as wData) {
+  <div [@fadeInSlow]>
+    <h1 class="mat-headline-5 total-time">
+      {{ T.F.WORKLOG.CMP.TOTAL_TIME | translate }} <br /><strong>{{
+        wData.totalTimeSpent | msToString
+      }}</strong>
+    </h1>
+    <div class="years">
+      @for (year of wData.worklog | keyvalue: sortWorklogItems; track year.key) {
+        <div class="year">
+          <h1
+            [innerHtml]="year.key"
+            class="year-title mat-headline-5"
+          ></h1>
+          <div class="year-time-spent">
+            {{ T.F.WORKLOG.CMP.MONTH_WORKED | translate }}
+            <strong>{{ year.value.monthWorked }}</strong
+            ><br />
+            {{ T.F.WORKLOG.CMP.DAYS_WORKED | translate }}
+            <strong>{{ year.value.daysWorked }}</strong
+            ><br />
+            {{ T.F.WORKLOG.CMP.TOTAL_TIME | translate }}
+            <strong [innerHtml]="year.value.timeSpent | msToString"></strong>
+          </div>
+          <div class="months">
+            @for (month of year.value.ent | keyvalue: sortWorklogItems; track month.key) {
+              <div class="month">
+                <h2 class="month-title mat-headline-5">
+                  <button
+                    type="button"
+                    class="month-toggle"
+                    (click)="toggleMonth(year.key, month.key)"
+                    [attr.aria-controls]="'history-month-' + year.key + '-' + month.key"
+                    [attr.aria-expanded]="isMonthExpanded(year.key, month.key)"
+                  >
+                    <span
+                      class="month-label"
+                      [innerHtml]="month.key | numberToMonth"
+                    ></span>
+                    <mat-icon class="collapsible-expand-icon">{{
+                      isMonthExpanded(year.key, month.key) ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  </button>
+                  <button
+                    (click)="exportData(year.key, month.key)"
+                    [attr.aria-label]="T.F.WORKLOG.CMP.EXPORT_DATA | translate"
+                    class="mat-elevation-z1"
+                    color="primary"
+                    mat-mini-fab
+                  >
+                    <mat-icon>call_made</mat-icon>
+                  </button>
+                </h2>
+                <div class="month-time-spent">
+                  {{ T.F.WORKLOG.CMP.DAYS_WORKED | translate }}
+                  <strong>{{ month.value.daysWorked }}</strong
+                  ><br />
+                  {{ T.F.WORKLOG.CMP.TOTAL_TIME | translate }}
+                  <strong [innerHtml]="month.value.timeSpent | msToString"></strong>
+                </div>
+                @if (isMonthExpanded(year.key, month.key)) {
+                  <div
+                    [id]="'history-month-' + year.key + '-' + month.key"
+                    [@expandFade]
+                    class="weeks"
+                  >
+                    @for (week of month.value.weeks; track week.weekNr) {
+                      <div class="week">
+                        <div class="week-header">
+                          <div class="wrap">
+                            <h3 class="week-title mat-h4">
+                              {{
+                                T.F.WORKLOG.CMP.WEEK_NR | translate: { nr: week.weekNr }
+                              }}
+                            </h3>
+                            <div>{{ week.timeSpent | msToString }}</div>
+                          </div>
+                          <button
+                            (click)="exportData(year.key, month.key, week.weekNr)"
+                            [matTooltip]="
+                              T.F.WORKLOG.CMP.WEEK_RANGE_TOOLTIP
+                                | translate
+                                  : {
+                                      start: week.start,
+                                      end: week.end,
+                                      days: week.daysWorked,
+                                      time: week.timeSpent | msToString,
+                                    }
+                            "
+                            [attr.aria-label]="T.F.WORKLOG.CMP.EXPORT_DATA | translate"
+                            class="mat-elevation-z1"
+                            color=""
+                            mat-mini-fab
+                          >
+                            <mat-icon>call_made</mat-icon>
+                          </button>
+                        </div>
+                        <div class="week-table-wrapper">
+                          <table class="week-table">
+                            <thead>
+                              <tr>
+                                <th scope="col"></th>
+                                <th
+                                  scope="col"
+                                  class="work-range"
+                                  [attr.aria-label]="
+                                    T.F.WORKLOG.CMP.WORK_TIMES | translate
+                                  "
+                                >
+                                  <mat-icon
+                                    [matTooltip]="T.F.WORKLOG.CMP.WORK_TIMES | translate"
+                                    >schedule</mat-icon
+                                  >
+                                </th>
+                                <th scope="col">
+                                  {{ T.F.WORKLOG.CMP.TASKS | translate }}
+                                </th>
+                                <th scope="col">
+                                  {{ T.F.WORKLOG.CMP.WORKED | translate }}
+                                </th>
+                                <th scope="col"></th>
+                              </tr>
+                            </thead>
+                            @for (
+                              worklogForDay of week.ent
+                                | keyvalue: sortWorklogItemsReverse;
+                              track worklogForDay.key
+                            ) {
+                              <ng-container class="day">
+                                <tr
+                                  (click)="toggleDay(worklogForDay.value.dateStr)"
+                                  [class.isExpanded]="
+                                    isDayExpanded(worklogForDay.value.dateStr)
+                                  "
+                                  class="week-row"
+                                >
+                                  <td>
+                                    <button
+                                      type="button"
+                                      class="day-toggle"
+                                      (click)="
+                                        $event.stopPropagation();
+                                        toggleDay(worklogForDay.value.dateStr)
+                                      "
+                                      [attr.aria-controls]="
+                                        'history-day-' + worklogForDay.value.dateStr
+                                      "
+                                      [attr.aria-expanded]="
+                                        isDayExpanded(worklogForDay.value.dateStr)
+                                      "
+                                    >
+                                      {{ worklogForDay.value.dayStr }}
+                                      {{ worklogForDay.key }}.
+                                    </button>
+                                  </td>
+                                  <td class="work-range">
+                                    @if (worklogForDay.value.workStart) {
+                                      {{
+                                        worklogForDay.value.workStart
+                                          | momentFormat: 'HH:mm'
+                                      }}-{{
+                                        worklogForDay.value.workEnd
+                                          | momentFormat: 'HH:mm'
+                                      }}
+                                    }
+                                  </td>
+                                  <td>{{ worklogForDay.value.logEntries.length }}</td>
+                                  <td>
+                                    {{ worklogForDay.value.timeSpent | msToClockString }}
+                                  </td>
+                                  <td>
+                                    @if (!isDayExpanded(worklogForDay.value.dateStr)) {
+                                      <mat-icon>list </mat-icon>
+                                    }
+                                    @if (isDayExpanded(worklogForDay.value.dateStr)) {
+                                      <mat-icon>close </mat-icon>
+                                    }
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td colspan="5">
+                                    @if (isDayExpanded(worklogForDay.value.dateStr)) {
+                                      <div
+                                        [id]="
+                                          'history-day-' + worklogForDay.value.dateStr
+                                        "
+                                        [@expandFade]
+                                        class="summary-table-wrapper material-table"
+                                      >
+                                        <history-day-meta
+                                          [counters]="enabledSimpleCounters()"
+                                          [dateStr]="worklogForDay.value.dateStr"
+                                        ></history-day-meta>
+                                        <table class="task-summary-table">
+                                          @for (
+                                            logEntry of worklogForDay.value.logEntries;
+                                            track logEntry.task.id
+                                          ) {
+                                            <tr
+                                              (restore)="restoreTask($event)"
+                                              (taskClick)="viewTaskDetails($event)"
+                                              (timeChange)="
+                                                updateTimeSpentTodayForTask(
+                                                  logEntry.task,
+                                                  worklogForDay.value.dateStr,
+                                                  $event
+                                                )
+                                              "
+                                              [canRestore]="
+                                                !logEntry.task?.parentId &&
+                                                !logEntry.isNoRestore
+                                              "
+                                              [dateStr]="worklogForDay.value.dateStr"
+                                              [entry]="logEntry"
+                                              [hasActionsColumn]="true"
+                                              [projectColor]="
+                                                projectColorFor(logEntry.task)
+                                              "
+                                              [rowAnchorId]="'t-' + logEntry.task.id"
+                                              worklogTaskRow
+                                            ></tr>
+                                          }
+                                        </table>
+                                      </div>
+                                    }
+                                  </td>
+                                </tr>
+                              </ng-container>
+                            }
+                          </table>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+} @else {
+  <full-page-spinner></full-page-spinner>
+}

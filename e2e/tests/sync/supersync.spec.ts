@@ -691,15 +691,15 @@ test.describe('@supersync SuperSync E2E', () => {
 
       // ============ PHASE 6: Verify Worklog on Both Clients ============
       // Navigate Client A to worklog
-      await clientA.page.goto('/#/tag/TODAY/worklog');
+      await clientA.page.goto('/#/tag/TODAY/history');
       await clientA.page.waitForLoadState('networkidle');
-      await clientA.page.waitForSelector('worklog', { timeout: 10000 });
+      await clientA.page.waitForSelector('history', { timeout: 10000 });
       console.log('[Archive Test] Client A navigated to worklog');
 
       // Navigate Client B to worklog
-      await clientB.page.goto('/#/tag/TODAY/worklog');
+      await clientB.page.goto('/#/tag/TODAY/history');
       await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('worklog', { timeout: 10000 });
+      await clientB.page.waitForSelector('history', { timeout: 10000 });
       console.log('[Archive Test] Client B navigated to worklog');
 
       // Expand the current day's worklog to see tasks

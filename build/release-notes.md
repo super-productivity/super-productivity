@@ -2,38 +2,22 @@ For all current downloads, package links, and platform-specific notes: [check th
 
 ### Features
 
-- Added OneDrive as a sync provider and marked it as desktop/mobile-only.
-- Improved the project archive flow.
-- Added a Start break action to break reminders.
-- Improved the task swipe menu appearance.
-- Improved the task attachment dialog and URL handling.
-- Delayed rating prompts for 30 days after crashes or data damage.
-- Added plugin persistence improvements, persisted-data change hooks, and support for multiple handlers per plugin hook.
-- Improved plugin sync data size.
+- Unified Quick History and Worklog into one History view (#8033)
+- Show parent folder context for projects and tags in the menu tree (#7988)
+
+### Improvements
+
+- Fixed visual inconsistencies in icons (#7989)
+- Hide global metric charts outside Today (#8019)
 
 ### Fixes
 
-- Fixed Android edge-to-edge, keyboard inset, startup overlay, and dark-theme keyboard resize issues.
-- Improved Android recovery from transient WebView startup failures.
-- Kept Android foreground services alive when the app task is removed.
-- Fixed iOS time tracking and focus mode state after app resume.
-- Restored iOS local notifications and fixed notification timing after the permission dialog.
-- Prevented the iOS tag picker from opening automatically when opening tasks in portrait mode.
-- Fixed macOS app quit behavior.
-- Updated search results immediately when a task is marked done.
-- Guarded the schedule dialog against malformed time input.
-- Retried transient client-side network GET failures once.
-- Hardened OneDrive sync follow-ups and encrypted sync retry handling.
-- Fixed recurring task cases around start dates moved to today and overdue untracked instances from yesterday.
-- Preserved issue-number prefixes on imported issue tasks.
-- Fixed the label shown when re-opening a completed task.
-- Preserved the visible default notes template when toggling checklist mode.
-- Fixed browser blocking when sync removes the active project.
-- Guarded boards loading against malformed payloads.
-- Allowed parent tasks and subtasks to share tags independently.
-- Improved selected-subtask highlighting, current-task styling in Zen and Lines, and habit tracker day-circle readability.
-- Improved German, Turkish, and mismatched translation wording.
-
-### Performance
-
-- Skipped no-op plugin document-mode saves.
+- Keep custom weekdays interactive in repeat settings (#8034)
+- Apply project primary colors to icons in the visibility menu (#8030)
+- Clear the selected task when a customizer filter hides it (#8024)
+- Hide archived event banners in the calendar
+- Stop linked events from creating due banners in the calendar
+- Use the browser's regional locale for the default date format (#8023)
+- Show board tasks from projects hidden in the sidebar (#8021)
+- Fix frequency translations (#8000)
+- Preserve user edits across sync, repeat cleanup, and deadline parsing (#8001)

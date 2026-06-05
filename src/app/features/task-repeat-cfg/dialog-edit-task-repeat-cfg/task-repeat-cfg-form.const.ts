@@ -127,13 +127,25 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
         ],
       },
       {
+        // Hide via a dynamic CSS class instead of `hideExpression`. With formly's
+        // default `lazyRender`, hiding a field group destroys its child views and
+        // recreates them on re-show, and the recreated mat-checkboxes lose their
+        // wiring to the (re-registered) FormControls. After a cycle round-trip
+        // (Week -> Month -> Week) the checkboxes then look enabled but are inert:
+        // clicks no longer update the model (#8025). Keeping the group mounted and
+        // toggling only its visibility preserves the control/view binding.
+        // `resetOnHide: false` on each checkbox keeps the selection when the
+        // CUSTOM container itself is hidden (quickSetting != CUSTOM).
         fieldGroupClassName: 'weekdays',
-        resetOnHide: false,
-        hideExpression: (model: any) => model.repeatCycle !== 'WEEKLY',
+        expressionProperties: {
+          className: (model: TaskRepeatCfg) =>
+            model.repeatCycle === 'WEEKLY' ? '' : 'repeat-cfg-hidden',
+        },
         fieldGroup: [
           {
             key: 'monday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.MONDAY,
             },
@@ -141,6 +153,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'tuesday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.TUESDAY,
             },
@@ -148,6 +161,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'wednesday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.WEDNESDAY,
             },
@@ -155,6 +169,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'thursday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.THURSDAY,
             },
@@ -162,6 +177,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'friday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.FRIDAY,
             },
@@ -169,6 +185,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'saturday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.SATURDAY,
             },
@@ -176,6 +193,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'sunday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.SUNDAY,
             },

@@ -1140,8 +1140,8 @@ export const hasTaskInWorklog = async (
 ): Promise<boolean> => {
   // Only navigate if not already on worklog page
   const currentUrl = client.page.url();
-  if (!currentUrl.includes('/worklog')) {
-    await client.page.goto('/#/tag/TODAY/worklog');
+  if (!currentUrl.includes('/history')) {
+    await client.page.goto('/#/tag/TODAY/history');
     await client.page.waitForLoadState('networkidle');
     await client.page.waitForTimeout(UI_SETTLE_EXTENDED);
   }
@@ -1215,7 +1215,7 @@ export const getWorklogTaskCount = async (
   client: SimulatedE2EClient,
 ): Promise<number> => {
   // Navigate to worklog
-  await client.page.goto('/#/tag/TODAY/worklog');
+  await client.page.goto('/#/tag/TODAY/history');
   await client.page.waitForLoadState('networkidle');
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 

@@ -1,0 +1,43 @@
+// per-day habits / simple counters, shown when a day is expanded
+.day-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s) var(--s2);
+  padding: var(--s) var(--s2);
+  margin-bottom: var(--s);
+  border-bottom: 1px solid var(--separator-color);
+}
+
+.simple-counter-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  font-size: 13px;
+  white-space: nowrap;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    opacity: 0.8;
+  }
+
+  .habit-initial {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bg-lighter);
+    font-size: 10px;
+    font-weight: bold;
+  }
+
+  .count {
+    font-weight: bold;
+  }
+}
