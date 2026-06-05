@@ -6,7 +6,7 @@ const TASK_TITLE = 'task task-title';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const QUICK_HISTORY_DAY_ROW = 'history .quick-day-header';
+const QUICK_HISTORY_DAY_ROW = 'history .week-row';
 
 const markTaskAsDone = async (task: Locator): Promise<void> => {
   await task.hover();

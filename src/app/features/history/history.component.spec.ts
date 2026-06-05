@@ -9,7 +9,7 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { BehaviorSubject, of } from 'rxjs';
 
-import { Worklog, WorklogDataForDay, WorklogWeekSimple } from '../worklog/worklog.model';
+import { Worklog } from '../worklog/worklog.model';
 import { HistoryComponent } from './history.component';
 import { WorklogService } from '../worklog/worklog.service';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -27,7 +27,6 @@ describe('HistoryComponent', () => {
     worklog: {} as Worklog,
     totalTimeSpent: 0,
   });
-  const quickHistoryWeeks$ = new BehaviorSubject<WorklogWeekSimple[] | null>([]);
   const queryParams$ = new BehaviorSubject<Record<string, string>>({});
 
   const createTaskForDate = (
@@ -54,19 +53,17 @@ describe('HistoryComponent', () => {
     const activatedRouteSpy: Pick<ActivatedRoute, 'queryParams' | 'snapshot'> = {
       queryParams: queryParams$.asObservable(),
       snapshot: {
-        data: { historyView: 'full' },
+        data: {},
         queryParams: {},
       } as unknown as ActivatedRoute['snapshot'],
     };
     const worklogServiceSpy = jasmine.createSpyObj<WorklogService>('WorklogService', [], {
       worklogData$,
-      quickHistoryWeeks$,
     });
     worklogData$.next({
       worklog: {} as Worklog,
       totalTimeSpent: 0,
     });
-    quickHistoryWeeks$.next([]);
     queryParams$.next({});
 
     await TestBed.configureTestingModule({
@@ -170,49 +167,5 @@ describe('HistoryComponent', () => {
       .map((de) => de.nativeElement.textContent.trim());
 
     expect(dayLabels).toEqual(['Wed 1.', 'Thu 2.', 'Fri 3.']);
-  });
-
-  it('shows Quick History mode with the old significant-entry filter', () => {
-    const visibleTask = createTaskForDate('2025-01-01', 1, true, 'visible');
-    const hiddenTask = createTaskForDate('2025-01-01', 1, false, 'hidden');
-    const logEntries: WorklogDataForDay[] = [
-      {
-        isNoRestore: false,
-        task: visibleTask,
-        timeSpent: 1,
-      },
-      {
-        isNoRestore: false,
-        task: hiddenTask,
-        timeSpent: 1,
-      },
-    ];
-
-    queryParams$.next({ view: 'quick' });
-    quickHistoryWeeks$.next([
-      {
-        daysWorked: 1,
-        ent: {
-          [1]: {
-            dateStr: '2025-01-01',
-            dayStr: 'Wed 1.1',
-            logEntries,
-            timeSpent: 1,
-            workEnd: 0,
-            workStart: 0,
-          },
-        },
-        timeSpent: 1,
-        weekNr: 1,
-      },
-    ]);
-    fixture.componentInstance.toggleDay('2025-01-01');
-    fixture.detectChanges();
-
-    const rowTitles = fixture.debugElement
-      .queryAll(By.css('.task-summary-table tr td.title span'))
-      .map((de) => de.nativeElement.textContent.trim());
-
-    expect(rowTitles).toEqual(['visible']);
   });
 });

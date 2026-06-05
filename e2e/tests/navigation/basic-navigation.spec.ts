@@ -27,15 +27,10 @@ test.describe('Basic Navigation', () => {
     await expect(page).toHaveURL(/\/#\/tag\/TODAY\/worklog/);
     await expect(page.locator('history .total-time')).toBeVisible();
 
-    // Legacy Quick History route still opens the compact History mode
+    // Legacy Quick History route now also opens the unified History view
     await page.goto('/#/tag/TODAY/quick-history');
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/\/#\/tag\/TODAY\/quick-history/);
-    await expect(
-      page.getByRole('heading', { name: /Quick History/i }).first(),
-    ).toBeVisible();
-    await page.locator('mat-button-toggle').filter({ hasText: 'Worklog' }).click();
-    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/history\?view=full/);
     await expect(page.locator('history .total-time')).toBeVisible();
 
     // Navigate to metrics

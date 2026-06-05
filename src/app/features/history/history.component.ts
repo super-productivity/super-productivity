@@ -1,19 +1,6 @@
-import {
-  AfterViewInit,
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  OnDestroy,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { expandFadeAnimation } from '../../ui/animations/expand.ani';
-import {
-  WorklogDataForDay,
-  WorklogDay,
-  WorklogMonth,
-  WorklogWeek,
-} from '../worklog/worklog.model';
 import { SimpleCounter } from '../simple-counter/simple-counter.model';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../tasks/task.model';
@@ -30,18 +17,15 @@ import { T } from '../../t.const';
 import { WorkContextService } from '../work-context/work-context.service';
 import { SimpleCounterService } from '../simple-counter/simple-counter.service';
 import { SearchQueryParams } from '../../pages/search-page/search-page.model';
-import { Subscription } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { FullPageSpinnerComponent } from '../../ui/full-page-spinner/full-page-spinner.component';
 import { AsyncPipe, KeyValue, KeyValuePipe } from '@angular/common';
 import { MatMiniFabButton } from '@angular/material/button';
-import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
 import { MsToStringPipe } from '../../ui/duration/ms-to-string.pipe';
-import { MsToMinuteClockStringPipe } from '../../ui/duration/ms-to-minute-clock-string.pipe';
 import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
 import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -49,8 +33,7 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { HistoryTaskRowComponent } from './history-task-row/history-task-row.component';
-
-type HistoryView = 'full' | 'quick';
+import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.component';
 
 @Component({
   selector: 'history',
@@ -68,20 +51,18 @@ type HistoryView = 'full' | 'quick';
     MatMiniFabButton,
     MatIcon,
     MatTooltip,
-    MatButtonToggleGroup,
-    MatButtonToggle,
     AsyncPipe,
     KeyValuePipe,
     MsToClockStringPipe,
     MsToStringPipe,
-    MsToMinuteClockStringPipe,
     MomentFormatPipe,
     NumberToMonthPipe,
     TranslatePipe,
     HistoryTaskRowComponent,
+    HistoryDayMetaComponent,
   ],
 })
-export class HistoryComponent implements AfterViewInit, OnDestroy {
+export class HistoryComponent {
   readonly worklogService = inject(WorklogService);
   readonly workContextService = inject(WorkContextService);
   readonly simpleCounterService = inject(SimpleCounterService);
@@ -94,54 +75,39 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
   private readonly _queryParams = toSignal(this._route.queryParams, {
     initialValue: this._route.snapshot.queryParams,
   });
-  private readonly _defaultHistoryView: HistoryView =
-    this._route.snapshot.data['historyView'] === 'quick' ? 'quick' : 'full';
 
   T: typeof T = T;
-  readonly historyView = computed<HistoryView>(() => {
-    const view = this._queryParams()['view'];
-    return view === 'quick' || view === 'full' ? view : this._defaultHistoryView;
-  });
   readonly enabledSimpleCounters = toSignal(
     this.simpleCounterService.enabledSimpleCounters$,
     { initialValue: [] as SimpleCounter[] },
+  );
+  private readonly _allProjectsColorAndTitle = this._store.selectSignal(
+    selectAllProjectColorsAndTitles,
   );
   expanded: { [key: string]: boolean } = {};
   expandedMonths: { [key: string]: boolean } = (() => {
     const now = new Date();
     return { [`${now.getFullYear()}-${now.getMonth() + 1}`]: true };
   })();
-  allProjectsColorAndTitle: { [key: string]: { title: string; color: string } } = {};
 
-  private _subs: Subscription = new Subscription();
-
-  ngAfterViewInit(): void {
-    this._subs.add(
-      this._route.queryParams.subscribe((params) => {
-        const { dateStr } = params as SearchQueryParams;
-        if (!!dateStr) {
-          this.expanded[dateStr] = true;
-          // Auto-expand the month containing this day
-          const parts = dateStr.split('-');
-          if (parts.length === 3) {
-            this.expandedMonths[+parts[0] + '-' + +parts[1]] = true;
-          }
-        }
-      }),
-    );
-    this._subs.add(
-      this._store
-        .select(selectAllProjectColorsAndTitles)
-        .subscribe((colorMap) => (this.allProjectsColorAndTitle = colorMap)),
-    );
+  constructor() {
+    // Auto-expand the day (and its containing month) that a deep-link targets
+    // via the `dateStr` query param. `_queryParams` is already a signal, so an
+    // effect replaces the old subscription + lifecycle hooks.
+    effect(() => {
+      const { dateStr } = this._queryParams() as SearchQueryParams;
+      if (!dateStr) {
+        return;
+      }
+      this.expanded[dateStr] = true;
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        this.expandedMonths[+parts[0] + '-' + +parts[1]] = true;
+      }
+    });
   }
 
-  exportData(
-    monthData: WorklogMonth,
-    year: string | number,
-    month: string | number,
-    week?: number,
-  ): void {
+  exportData(year: string | number, month: string | number, week?: number): void {
     const { rangeStart, rangeEnd } =
       typeof week === 'number'
         ? getDateRangeForWeek(+year, week, +month)
@@ -164,24 +130,12 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  countForDay(sc: SimpleCounter, dateStr: string): number {
-    return sc.countOnDay?.[dateStr] || 0;
-  }
-
-  setHistoryView(view: HistoryView): void {
-    void this._router.navigate(['../history'], {
-      relativeTo: this._route,
-      queryParams: { view },
-      queryParamsHandling: 'merge',
-    });
-  }
-
   // only show the project color dot on the combined "Today" list
   projectColorFor(task: Task): { title: string; color: string } | null {
     if (!this.workContextService.isTodayList) {
       return null;
     }
-    return this.allProjectsColorAndTitle[task.projectId] ?? null;
+    return this._allProjectsColorAndTitle()[task.projectId] ?? null;
   }
 
   restoreTask(task: TaskCopy): void {
@@ -198,16 +152,16 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
       .subscribe(async (isConfirm: boolean) => {
         // because we navigate away we don't need to worry about updating the worklog itself
         if (isConfirm) {
-          let subTasks;
+          let subTasks: Task[] | undefined;
           if (task.subTaskIds && task.subTaskIds.length) {
             const archiveState = await this._taskArchiveService.load();
             subTasks = task.subTaskIds
               .map((id) => archiveState.entities[id])
-              .filter((v) => !!v);
+              .filter((t): t is Task => !!t);
           }
 
           Log.log('RESTORE', { taskId: task.id, subTaskCount: subTasks?.length });
-          this._taskService.restoreTask(task, (subTasks || []) as Task[]);
+          this._taskService.restoreTask(task, subTasks || []);
           this._router.navigate(['/active/tasks']);
         }
       });
@@ -230,37 +184,11 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
     return !!this.expanded[dateStr];
   }
 
-  sortDays(a: KeyValue<string, WorklogDay>, b: KeyValue<string, WorklogDay>): number {
-    // avoid comparison by key (day) because a week may span across two months
-    return a.value.dateStr.localeCompare(b.value.dateStr);
-  }
-
-  filterQuickHistoryEntries(worklogDataForDay: WorklogDataForDay[]): WorklogDataForDay[] {
-    return worklogDataForDay.filter(
-      (entry) => entry.task.isDone || entry.timeSpent > 1000,
-    );
-  }
-
   sortWorklogItems = <T extends KeyValue<string, unknown>>(a: T, b: T): number =>
     +b.key - +a.key;
 
   sortWorklogItemsReverse = <T extends KeyValue<string, unknown>>(a: T, b: T): number =>
     -this.sortWorklogItems(a, b);
-
-  trackByKey<T extends KeyValue<K, V>, K extends string | number = string, V = unknown>(
-    i: number,
-    val: T,
-  ): K {
-    return val.key;
-  }
-
-  trackByForLogEntry(i: number, val: WorklogDataForDay): string {
-    return val.task.id;
-  }
-
-  trackByForWeek(i: number, val: WorklogWeek): number {
-    return val.weekNr;
-  }
 
   async updateTimeSpentTodayForTask(
     task: Task,
@@ -274,9 +202,5 @@ export class HistoryComponent implements AfterViewInit, OnDestroy {
       },
     });
     this.worklogService.refreshWorklog();
-  }
-
-  ngOnDestroy(): void {
-    this._subs.unsubscribe();
   }
 }

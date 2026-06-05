@@ -100,60 +100,6 @@ $this-border-radius: 8px;
       width: 100%;
     }
   }
-
-  th,
-  td {
-    text-align: left;
-    white-space: normal;
-    line-height: 16px;
-    padding: var(--s) calc(var(--s) * 1.5);
-    vertical-align: middle;
-
-    &.with-icon {
-      text-align: center;
-    }
-
-    &.title {
-      padding-left: var(--s2);
-      padding-right: 0;
-      width: 100%;
-    }
-
-    &.worked {
-      white-space: nowrap;
-      text-align: center;
-      padding: 0;
-
-      ::ng-deep .inline-input-wrapper {
-        padding: var(--s) calc(var(--s) * 1.5);
-      }
-    }
-
-    &.isSubTask {
-      .task-title {
-        font-style: italic;
-        padding-left: var(--s2);
-        position: relative;
-        display: inline-block;
-
-        &:before {
-          content: '•';
-          position: absolute;
-          top: 50%;
-          left: 0;
-          transform: translateY(-50%);
-        }
-      }
-    }
-  }
-}
-
-.task-title-clickable {
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
 }
 
 .simple-counter-items {

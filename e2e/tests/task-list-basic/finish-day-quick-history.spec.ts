@@ -5,7 +5,7 @@ const TASK_TITLE = 'task task-title';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const DAY_ROW = 'history .quick-day-header';
+const DAY_ROW = 'history .week-row';
 
 test.describe.serial('Finish Day Quick History', () => {
   test('should create task, mark as done, finish day and view in quick history', async ({
