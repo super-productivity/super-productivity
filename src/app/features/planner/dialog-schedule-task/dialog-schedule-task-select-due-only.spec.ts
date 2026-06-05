@@ -133,7 +133,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       expect(taskServiceSpy.scheduleTask).not.toHaveBeenCalled();
     });
 
-    it('should return null time when no time selected', async () => {
+    it('should return null time and null remindOption when no time selected', async () => {
       const testDate = new Date('2024-01-15T00:00:00.000Z');
 
       component.selectedDate = testDate;
@@ -144,7 +144,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       expect(dialogRefSpy.close).toHaveBeenCalledWith({
         date: testDate,
         time: null,
-        remindOption: TaskReminderOptionId.AtStart,
+        remindOption: null,
       });
     });
 

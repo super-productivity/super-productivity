@@ -335,7 +335,7 @@ export class DateTimePickerComponent implements AfterViewInit {
       return;
     }
     const cell = target.closest('.mat-calendar-body-cell') as HTMLElement;
-    if (!cell) {
+    if (!cell || cell.classList.contains('mat-calendar-body-disabled')) {
       return;
     }
     const cellContent = cell.querySelector('.mat-calendar-body-cell-content');

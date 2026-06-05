@@ -304,10 +304,14 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
     // If in select-due-only mode, return the selected values instead of dispatching actions
     if (this.data.isSelectDueOnly) {
+      const normalizedTime = this._normalizedTime();
       this.close({
         date: this.selectedDate as Date,
-        time: this._normalizedTime(),
-        remindOption: this.selectedReminderCfgId,
+        time: normalizedTime,
+        remindOption:
+          normalizedTime && isValidSplitTime(normalizedTime)
+            ? this.selectedReminderCfgId
+            : null,
       });
       return;
     }
