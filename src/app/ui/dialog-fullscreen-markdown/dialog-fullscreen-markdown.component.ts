@@ -14,7 +14,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatButton } from '@angular/material/button';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatIcon } from '@angular/material/icon';
@@ -51,6 +51,7 @@ import { HISTORY_STATE } from 'src/app/app.constants';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
 import { IS_IOS } from 'src/app/util/is-ios';
 import { Keyboard } from '@capacitor/keyboard';
+import { DialogMarkdownShortcutsComponent } from './dialog-markdown-shortcuts.component';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -89,6 +90,8 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   readonly contentChanged = output<string>();
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
+  private readonly _matDialog = inject(MatDialog);
+
   /**
    * Resolved content with blob URLs for images (for preview rendering).
    * Initialized in ngOnInit with raw content, updated asynchronously when images resolve.
@@ -177,6 +180,12 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   ngAfterViewInit(): void {
     // Focus textarea if present (not in PARSED view mode)
     this.textareaEl()?.nativeElement?.focus();
+  }
+
+  openShortcutsHelp(): void {
+    this._matDialog.open(DialogMarkdownShortcutsComponent, {
+      width: '402px',
+    });
   }
 
   keydownHandler(ev: KeyboardEvent): void {

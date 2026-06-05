@@ -171,6 +171,18 @@
         >
           <mat-icon>table_chart</mat-icon>
         </button>
+
+        <span class="toolbar-divider"></span>
+
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="openShortcutsHelp()"
+          [matTooltip]="'Keyboard Shortcuts'"
+          aria-label="Keyboard Shortcuts"
+        >
+          <mat-icon>keyboard</mat-icon>
+        </button>
       </div>
 
       <textarea
