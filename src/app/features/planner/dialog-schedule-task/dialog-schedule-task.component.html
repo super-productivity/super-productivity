@@ -40,7 +40,11 @@
 
     <mat-dialog-actions align="start">
       <div class="schedule-actions">
-        @if (data.task && (data.task.dueWithTime || plannedDayForTask)) {
+        @if (
+          !data.isSelectDueOnly &&
+          data.task &&
+          (data.task.dueWithTime || plannedDayForTask)
+        ) {
           <button
             (click)="remove()"
             color="warn"
