@@ -205,6 +205,8 @@ export class ShortcutService {
       if (await this._syncWrapperService.isEnabledAndReady$.pipe(first()).toPromise()) {
         this._syncWrapperService.sync(true);
       }
+    } else if (this._taskShortcutService.handleTogglePlayFallback(ev)) {
+      return;
     } else if (
       checkKeyCombo(ev, 'Ctrl+Shift+*') &&
       document.activeElement &&

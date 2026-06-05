@@ -75,26 +75,13 @@ export class TaskShortcutService {
     if (checkKeyCombo(ev, keys.togglePlay) && this.isTimeTrackingEnabled()) {
       if (focusedTaskId) {
         // Focused task exists - delegate to the task component
-        this._handleTaskShortcut(focusedTaskId, 'togglePlayPause');
-      } else {
-        // No focused task - check for selected task (e.g., from Schedule view)
-        const selectedId = this._taskService.selectedTaskId();
-        if (selectedId) {
-          const currentTaskId = this._taskService.currentTaskId();
-          if (currentTaskId === selectedId) {
-            // Already tracking this task - stop tracking
-            this._taskService.setCurrentId(null);
-          } else {
-            // Start tracking the selected task
-            this._taskService.setCurrentId(selectedId);
-          }
-        } else {
-          // Neither focused nor selected - use global toggle
-          this._taskService.toggleStartTask();
+        if (this._handleTaskShortcut(focusedTaskId, 'togglePlayPause')) {
+          ev.preventDefault();
+          return true;
         }
       }
-      ev.preventDefault();
-      return true;
+      // If no focused task (or delegation failed), return false to let ShortcutService handle global fallback
+      return false;
     }
 
     // All other shortcuts require a focused task
@@ -137,9 +124,10 @@ export class TaskShortcutService {
     // earlier (line ~74), so remapping `togglePlay` to Mod+Enter takes
     // precedence over this hardcoded combo.
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
-      this._handleTaskShortcut(focusedTaskId, 'addSubTask');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'addSubTask')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     // Basic task actions that work through component delegation
@@ -147,100 +135,117 @@ export class TaskShortcutService {
       !isContextMenuOpen &&
       (checkKeyCombo(ev, keys.taskEditTitle) || ev.key === 'Enter')
     ) {
-      this._handleTaskShortcut(focusedTaskId, 'focusTitleForEdit');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'focusTitleForEdit')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) {
-      this._handleTaskShortcut(focusedTaskId, 'toggleShowDetailPanel');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'toggleShowDetailPanel')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskOpenNotesPanel)) {
-      this._handleTaskShortcut(focusedTaskId, 'openNotesPanel');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'openNotesPanel')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskOpenNotesFullscreen)) {
-      this._handleTaskShortcut(focusedTaskId, 'openNotesFullscreen');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'openNotesFullscreen')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskOpenEstimationDialog)) {
-      this._handleTaskShortcut(focusedTaskId, 'estimateTime');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'estimateTime')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskSchedule)) {
-      this._handleTaskShortcut(focusedTaskId, 'scheduleTask');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'scheduleTask')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskScheduleDeadline)) {
-      this._handleTaskShortcut(focusedTaskId, 'openDeadlineDialog');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'openDeadlineDialog')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskUnschedule)) {
-      this._handleTaskShortcut(focusedTaskId, 'unschedule');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'unschedule')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskToggleDone)) {
-      this._handleTaskShortcut(focusedTaskId, 'toggleDoneKeyboard');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'toggleDoneKeyboard')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskAddSubTask)) {
-      this._handleTaskShortcut(focusedTaskId, 'addSubTask');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'addSubTask')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskAddAttachment)) {
-      this._handleTaskShortcut(focusedTaskId, 'addAttachment');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'addAttachment')) {
+        ev.preventDefault();
+        return true;
+      }
     }
     if (checkKeyCombo(ev, keys.taskDelete)) {
-      this._handleTaskShortcut(focusedTaskId, 'deleteTask');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'deleteTask')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     // Move to project / Open project menu for project selection (only for non-sub-tasks)
     if (!isContextMenuOpen && checkKeyCombo(ev, keys.taskMoveToProject)) {
-      this._handleTaskShortcut(focusedTaskId, 'openProjectMenu');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'openProjectMenu')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     // Edit tags
     if (checkKeyCombo(ev, keys.taskEditTags)) {
-      this._handleTaskShortcut(focusedTaskId, 'editTags');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'editTags')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     // Toggle context menu
     if (checkKeyCombo(ev, keys.taskOpenContextMenu)) {
-      this._handleTaskShortcut(focusedTaskId, 'openContextMenu', ev);
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'openContextMenu', ev)) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     // Move to backlog/today (only for project tasks, not sub-tasks)
     if (checkKeyCombo(ev, keys.moveToBacklog)) {
-      this._handleTaskShortcut(focusedTaskId, 'moveToBacklogWithFocus');
-      ev.preventDefault();
-      ev.stopPropagation();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'moveToBacklogWithFocus')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
     }
 
     if (checkKeyCombo(ev, keys.moveToTodaysTasks)) {
-      this._handleTaskShortcut(focusedTaskId, 'moveToTodayWithFocus');
-      ev.preventDefault();
-      ev.stopPropagation();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'moveToTodayWithFocus')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
     }
 
     // Navigation shortcuts - only work if context menu is not open
@@ -249,9 +254,10 @@ export class TaskShortcutService {
       ((!isShiftOrCtrlPressed && ev.key === 'ArrowUp') ||
         checkKeyCombo(ev, keys.selectPreviousTask))
     ) {
-      ev.preventDefault();
-      this._handleTaskShortcut(focusedTaskId, 'handleArrowUp');
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'handleArrowUp')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     if (
@@ -259,9 +265,10 @@ export class TaskShortcutService {
       ((!isShiftOrCtrlPressed && ev.key === 'ArrowDown') ||
         checkKeyCombo(ev, keys.selectNextTask))
     ) {
-      ev.preventDefault();
-      this._handleTaskShortcut(focusedTaskId, 'handleArrowDown');
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'handleArrowDown')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     // Arrow navigation for expand/collapse - only work if context menu is not open
@@ -269,49 +276,87 @@ export class TaskShortcutService {
       !isContextMenuOpen &&
       (ev.key === 'ArrowLeft' || checkKeyCombo(ev, keys.collapseSubTasks))
     ) {
-      this._handleTaskShortcut(focusedTaskId, 'handleArrowLeft');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'handleArrowLeft')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     if (
       !isContextMenuOpen &&
       (ev.key === 'ArrowRight' || checkKeyCombo(ev, keys.expandSubTasks))
     ) {
-      this._handleTaskShortcut(focusedTaskId, 'handleArrowRight');
-      ev.preventDefault();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'handleArrowRight')) {
+        ev.preventDefault();
+        return true;
+      }
     }
 
     // Task movement shortcuts
     if (checkKeyCombo(ev, keys.moveTaskUp)) {
-      this._handleTaskShortcut(focusedTaskId, 'moveTaskUp');
-      ev.preventDefault();
-      ev.stopPropagation();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'moveTaskUp')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
     }
 
     if (checkKeyCombo(ev, keys.moveTaskDown)) {
-      this._handleTaskShortcut(focusedTaskId, 'moveTaskDown');
-      ev.preventDefault();
-      ev.stopPropagation();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'moveTaskDown')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
     }
 
     if (checkKeyCombo(ev, keys.moveTaskToTop)) {
-      this._handleTaskShortcut(focusedTaskId, 'moveTaskToTop');
-      ev.preventDefault();
-      ev.stopPropagation();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'moveTaskToTop')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
     }
 
     if (checkKeyCombo(ev, keys.moveTaskToBottom)) {
-      this._handleTaskShortcut(focusedTaskId, 'moveTaskToBottom');
-      ev.preventDefault();
-      ev.stopPropagation();
-      return true;
+      if (this._handleTaskShortcut(focusedTaskId, 'moveTaskToBottom')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
     }
 
+    return false;
+  }
+
+  /**
+   * Handles togglePlay shortcut as a fallback when no task is focused.
+   *
+   * @param ev - The keyboard event
+   * @returns True if handled, false otherwise
+   */
+  handleTogglePlayFallback(ev: KeyboardEvent): boolean {
+    const cfg = this._configService.cfg();
+    if (!cfg) return false;
+
+    if (checkKeyCombo(ev, cfg.keyboard.togglePlay) && this.isTimeTrackingEnabled()) {
+      // Check for selected task (e.g., from Schedule view)
+      const selectedId = this._taskService.selectedTaskId();
+      if (selectedId) {
+        const currentTaskId = this._taskService.currentTaskId();
+        if (currentTaskId === selectedId) {
+          // Already tracking this task - stop tracking
+          this._taskService.setCurrentId(null);
+        } else {
+          // Start tracking the selected task
+          this._taskService.setCurrentId(selectedId);
+        }
+      } else {
+        // Neither focused nor selected - use global toggle
+        this._taskService.toggleStartTask();
+      }
+      ev.preventDefault();
+      return true;
+    }
     return false;
   }
 
@@ -323,22 +368,23 @@ export class TaskShortcutService {
    *   the active element belongs to a different task than the one tracked).
    * @param method - The method name to call on the task component
    * @param args - Arguments to pass to the method
+   * @returns True if the method was found and called, false otherwise
    */
   private _handleTaskShortcut(
     taskId: TaskId,
     method: TaskComponentMethod,
     ...args: unknown[]
-  ): void {
+  ): boolean {
     const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
     if (!taskComponent) {
       Log.warn(`No focused task component available for ID: ${taskId}`);
-      return;
+      return false;
     }
     if (taskComponent.task().id !== taskId) {
       Log.warn(
         `Focused task component (${taskComponent.task().id}) does not match shortcut target (${taskId})`,
       );
-      return;
+      return false;
     }
 
     if (typeof taskComponent[method] === 'function') {
@@ -346,8 +392,10 @@ export class TaskShortcutService {
       this._closeContextMenuIfOpen(taskComponent);
 
       (taskComponent[method] as (...args: unknown[]) => void)(...args);
+      return true;
     } else {
       Log.warn(`Method ${method} not found on task component`, taskComponent);
+      return false;
     }
   }
 
