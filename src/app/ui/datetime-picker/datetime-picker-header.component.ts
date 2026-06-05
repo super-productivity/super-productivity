@@ -23,9 +23,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           class="mat-calendar-period-button sp-month-button"
           (click)="monthLabelClicked()"
         >
-          <mat-icon class="sp-drop-icon sp-drop-icon-left">
-            {{ calendar.currentView === 'year' ? 'arrow_drop_up' : 'arrow_drop_down' }}
-          </mat-icon>
           <span>{{ monthLabel }}</span>
         </button>
 
