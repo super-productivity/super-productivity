@@ -952,7 +952,7 @@
       },
       "S": {
         "ARCHIVED": "Archived Project",
-        "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the menu on the top left.",
+        "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the sidebar.",
         "DELETED": "Deleted Project",
         "SHOW_IN_MENU": "Show in sidebar",
         "UNARCHIVED": "Project restored",
