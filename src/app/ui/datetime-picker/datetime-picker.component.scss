@@ -14,20 +14,6 @@
       padding-top: 0;
     }
 
-    .mat-calendar-body-cell-content {
-      background: transparent !important;
-      border: none !important;
-    }
-
-    // Remove focus outline on selected date and active dates
-    .mat-calendar-body-cell-content:focus,
-    .mat-calendar-body-cell-content:focus-visible,
-    .mat-calendar-body-active {
-      outline: none !important;
-      border: none !important;
-      box-shadow: none !important;
-    }
-
     .mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
       outline: 2px solid var(--c-accent) !important;
     }
@@ -35,9 +21,6 @@
     .mat-calendar-body-selected {
       background: var(--c-primary) !important;
       color: var(--c-contrast) !important;
-      outline: none !important;
-      border: none !important;
-      box-shadow: none !important;
     }
 
     .mat-calendar-controls {
