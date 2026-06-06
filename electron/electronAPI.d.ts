@@ -56,6 +56,18 @@ export interface ElectronAPI {
 
   fileSyncListFiles(args: { dirPath: string }): Promise<string[] | Error>;
 
+  protonDriveEnsureServer(args: {
+    remoteName: string;
+    rcloneBinaryPath?: string;
+  }): Promise<{ baseUrl: string; userName: string; password: string } | Error>;
+
+  protonDriveStopServer(): Promise<void>;
+
+  protonDriveCheck(args: {
+    remoteName: string;
+    rcloneBinaryPath?: string;
+  }): Promise<true | Error>;
+
   checkDirExists(args: { dirPath: string }): Promise<true | Error>;
 
   pickDirectory(): Promise<string | undefined>;

@@ -41,14 +41,14 @@ then a post-implementation code review). Adjustments:
    draft added a `flushOnPause$` effect that called
    `OperationWriteFlushService.flushPendingWrites()`. The post-implementation
    review found this was (a) a duplicate of the drain `main.ts`'s existing iOS
-   `appStateChange` listener already performs, (b) run *outside* the
+   `appStateChange` listener already performs, (b) run _outside_ the
    `BackgroundTask.beforeExit` budget (so unprotected against suspension), and
    (c) racing the `main.ts` listener — if `main.ts` drained first, the
    accumulated time the effect dispatched afterwards could be lost. `flushPendingWrites()`
    also has a 30 s `MAX_WAIT_TIME`, so it is not bounded by the iOS budget.
    Fix: the only new work needed on pause is dispatching accumulated tracked
    time, so `flushAccumulatedTimeSpent()` is called inside the existing
-   `main.ts` iOS handler, *before* its budgeted drain. The pause effect is
+   `main.ts` iOS handler, _before_ its budgeted drain. The pause effect is
    removed entirely.
 3. **Test seam via `iosInterface.ts`.** A small `iosInterface` exposes
    `onResume$`, fed from a single Capacitor `appStateChange` listener. A plain
@@ -58,7 +58,7 @@ then a post-implementation code review). Adjustments:
    the spec exercises it directly (no `IS_IOS_NATIVE` gate inside the spec).
 4. **Conditional focus dispatch.** Skip the `focusModeActions.tick()`
    dispatch unless the focus timer is actually running (`timer.purpose !==
-   null && timer.isRunning`). The reducer no-ops anyway, but conditioning
+null && timer.isRunning`). The reducer no-ops anyway, but conditioning
    avoids spurious action noise.
 5. **Reset anchor after wake-up tick.** Android resets
    `_currentTrackingStart` after a sync (`android-foreground-tracking.effects.ts:548`)
@@ -70,14 +70,14 @@ then a post-implementation code review). Adjustments:
 
 ### Files
 
-| File | Purpose |
-|---|---|
-| `src/app/app.constants.ts` | Add `MOBILE_BACKGROUND_IDLE_CAP_MS = 4 * 60 * 60 * 1000`. |
-| `src/main.ts` | In the existing iOS `appStateChange` handler, call `flushAccumulatedTimeSpent()` before the budgeted op-log drain. |
-| `src/app/features/ios/ios-interface.ts` (new) | `iosInterface` with an `onResume$` Subject; one `appStateChange` listener feeds it when `IS_IOS_NATIVE`. |
-| `src/app/features/ios/store/ios-background-tracking.effects.ts` (new) | One `{ dispatch: false }` resume effect gated by `IS_IOS_NATIVE`. Exports the pure handler function for spec. |
-| `src/app/features/ios/store/ios-background-tracking.effects.spec.ts` (new) | Karma spec covering the resume edge cases. |
-| `src/app/root-store/feature-stores.module.ts` | Register effect under `IS_IOS_NATIVE`, beside Android. |
+| File                                                                       | Purpose                                                                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/app/app.constants.ts`                                                 | Add `MOBILE_BACKGROUND_IDLE_CAP_MS = 4 * 60 * 60 * 1000`.                                                          |
+| `src/main.ts`                                                              | In the existing iOS `appStateChange` handler, call `flushAccumulatedTimeSpent()` before the budgeted op-log drain. |
+| `src/app/features/ios/ios-interface.ts` (new)                              | `iosInterface` with an `onResume$` Subject; one `appStateChange` listener feeds it when `IS_IOS_NATIVE`.           |
+| `src/app/features/ios/store/ios-background-tracking.effects.ts` (new)      | One `{ dispatch: false }` resume effect gated by `IS_IOS_NATIVE`. Exports the pure handler function for spec.      |
+| `src/app/features/ios/store/ios-background-tracking.effects.spec.ts` (new) | Karma spec covering the resume edge cases.                                                                         |
+| `src/app/root-store/feature-stores.module.ts`                              | Register effect under `IS_IOS_NATIVE`, beside Android.                                                             |
 
 ### Pause (in `main.ts`)
 
@@ -99,20 +99,23 @@ const taskId = await BackgroundTask.beforeExit(async () => {
 ```ts
 // Credit the wall-clock gap to the active task (capped), reset the anchor,
 // drain accumulated time, then nudge the focus reducer if a session is running.
-reconcileOnResume$ = IS_IOS_NATIVE && createEffect(
-  () => iosInterface.onResume$.pipe(
-    withLatestFrom(this._store.select(selectTimer)),
-    tap(([, timer]) =>
-      handleIosResume(
-        this._globalTrackingIntervalService,
-        this._taskService,
-        this._store,
-        timer,
-      )
-    ),
-  ),
-  { dispatch: false },
-);
+reconcileOnResume$ =
+  IS_IOS_NATIVE &&
+  createEffect(
+    () =>
+      iosInterface.onResume$.pipe(
+        withLatestFrom(this._store.select(selectTimer)),
+        tap(([, timer]) =>
+          handleIosResume(
+            this._globalTrackingIntervalService,
+            this._taskService,
+            this._store,
+            timer,
+          ),
+        ),
+      ),
+    { dispatch: false },
+  );
 ```
 
 ### Pure handler function

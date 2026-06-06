@@ -31,10 +31,10 @@ upgrade until the user manually closes that tab.
 
 `SUP_OPS` connections and their `versionchange` handler status:
 
-| Connection owner | `versionchange` handler today |
-| --- | --- |
-| `OperationLogStoreService` (`init()`) | ❌ **no** — fix here |
-| `ArchiveStoreService` (`_init()`) | ❌ **no** — fix here |
+| Connection owner                      | `versionchange` handler today   |
+| ------------------------------------- | ------------------------------- |
+| `OperationLogStoreService` (`init()`) | ❌ **no** — fix here            |
+| `ArchiveStoreService` (`_init()`)     | ❌ **no** — fix here            |
 | `ClientIdService` (`_openSupOpsDb()`) | ✅ yes — exists only post-#7732 |
 
 This fix must land before any `DB_VERSION` increase.
@@ -47,7 +47,7 @@ a `close` (but no `versionchange`) handler **identically before and after
 two `SUP_OPS` connections (both handler-less); #7732 adds a third
 (`ClientIdService`, which ships with its own `versionchange` handler). So this
 fix is not gated on #7732 and may land first. The post-#7732 `ClientIdService`
-handler is a *consistency reference*, not a dependency.
+handler is a _consistency reference_, not a dependency.
 
 ## The fix
 
@@ -92,7 +92,7 @@ The identical addition next to its existing `close` listener (fields `_db` /
   close-and-reopen; nothing else changes.
 - **`db.close()` is graceful — it does NOT abort in-flight transactions.** Per
   the IndexedDB spec, a scripted `close()` (the `forced` flag is false) sets a
-  *close-pending* flag, lets every transaction already running on the connection
+  _close-pending_ flag, lets every transaction already running on the connection
   **run to completion**, and only then closes — it raises no `AbortError`. So a
   `versionchange` landing mid-transaction (e.g. during
   `runDestructiveStateReplacement`) lets that transaction commit normally; the
@@ -104,7 +104,7 @@ The identical addition next to its existing `close` listener (fields `_db` /
   `versionchange` handler must null `_db` / `_initPromise` itself — exactly as
   `ClientIdService`'s handler does.
 - The handler closes over `db` and nulls `this._db` unconditionally. A stale
-  `versionchange` cannot clobber a *newer* connection: a closed IndexedDB
+  `versionchange` cannot clobber a _newer_ connection: a closed IndexedDB
   connection receives no further events, and there is **no `await`** between
   `addEventListener('versionchange', …)` and `this._db = db` (they run in one
   synchronous tick, so the event cannot fire between them). Keep them adjacent —
@@ -128,7 +128,7 @@ the DB version), poisoning every later test with `VersionError`.
    `_initPromise` is genuinely populated: reset `(service as any)._db` and
    `_initPromise` to `undefined`, then call a cheap read-only method (op-log:
    e.g. `getLastSeq()`; archive: e.g. `loadArchiveYoung()`) and `await` it to
-   completion. (The specs' `beforeEach` uses a *direct* `init()`, which leaves
+   completion. (The specs' `beforeEach` uses a _direct_ `init()`, which leaves
    `_initPromise` unset — asserting it without the lazy path makes the
    `_initPromise` check vacuous.) Awaiting the read keeps the test
    deterministic.
@@ -146,7 +146,7 @@ the DB version), poisoning every later test with `VersionError`.
    `_initPromise` would make `_ensureInit()` skip the reopen and the `db` getter
    throw).
 
-This proves *our* code: the handler closes the connection and the service
+This proves _our_ code: the handler closes the connection and the service
 reopens. That Chrome fires `versionchange` on a real cross-connection upgrade is
 browser behaviour, not ours — a true end-to-end "the upgrade completes across
 tabs" check is e2e territory and out of scope here.
@@ -156,6 +156,7 @@ Also add a minimal **`close`-handler test** in the same describe block (dispatch
 and the fix adds a sibling listener right next to it; cheap regression cover.
 
 Spec files:
+
 - `OperationLogStoreService` has `operation-log-store.service.spec.ts` — add the
   tests in a new `describe`. Use the **real** `init()` path, not the fully-faked
   `_openDbOnce` db used by the `_openDbWithRetry` describe block.
@@ -171,7 +172,7 @@ Spec files:
   connection has no `versionchange` handler and still blocks the upgrade. A
   fully hang-proof v-bump rollout also needs a `blocked`-path UX story; that
   belongs with the schema-bump PR, not here.
-- An `openDB({ blocked })` diagnostic callback (logs when *this* service's own
+- An `openDB({ blocked })` diagnostic callback (logs when _this_ service's own
   open is stalled by other tabs) is **deferred** — it is diagnostics, not the
   fix; keep this PR minimal.
 
@@ -219,11 +220,11 @@ shared connection, breaking a DI cycle, and relocating `ClientIdService` out of
 Rationale:
 
 - **No behavioral benefit.** #7735 admits this itself. The DI cycle is
-  *prospective*, not live — post-#7732 `ClientIdService` injects nothing, so
+  _prospective_, not live — post-#7732 `ClientIdService` injects nothing, so
   there is no cycle today. Three same-origin connections serialize their
   transactions correctly; that is the documented, working state, not a bug.
 - **A bad LOC trade.** The consolidation is not a delete-and-simplify refactor —
-  it *adds* a service file and a few hundred lines of net-new code (mostly new
+  it _adds_ a service file and a few hundred lines of net-new code (mostly new
   test surface) and edits ~16 files, for zero behavioral change, on the app's
   most safety-critical path (op-log + clientId + destructive replacement).
 - The only genuine win underneath — de-duplicating `_openDbWithRetry` across two

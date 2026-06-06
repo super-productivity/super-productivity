@@ -8,12 +8,12 @@ This means disaster recovery is simpler than in a traditional server-authoritati
 
 ## What the Backup Protects
 
-| Data | Where it lives | Why back it up |
-|---|---|---|
-| User accounts (email, password hash) | Server only | Users can't authenticate without this |
-| Passkeys (WebAuthn credentials) | Server only | Can't be regenerated |
-| Operation log | Server + all clients | Last resort if all client devices are lost |
-| Task/project/tag data | Derived from operation log | Clients reconstruct from ops |
+| Data                                 | Where it lives             | Why back it up                             |
+| ------------------------------------ | -------------------------- | ------------------------------------------ |
+| User accounts (email, password hash) | Server only                | Users can't authenticate without this      |
+| Passkeys (WebAuthn credentials)      | Server only                | Can't be regenerated                       |
+| Operation log                        | Server + all clients       | Last resort if all client devices are lost |
+| Task/project/tag data                | Derived from operation log | Clients reconstruct from ops               |
 
 ## Backup Setup
 
@@ -36,14 +36,14 @@ Backups are saved to `backups/` next to the scripts directory.
 
 ### Configuration
 
-| Variable | Default | Description |
-|---|---|---|
-| `BACKUP_DIR` | `../backups` | Where to store backup files |
-| `RETENTION_DAYS` | `14` | Delete backups older than this |
-| `DB_CONTAINER` | `supersync-postgres` | Docker container name |
-| `POSTGRES_USER` | `supersync` | Database user |
-| `POSTGRES_DB` | `supersync` | Database name |
-| `RCLONE_REMOTE` | (empty) | Optional rclone remote for off-site upload |
+| Variable         | Default              | Description                                |
+| ---------------- | -------------------- | ------------------------------------------ |
+| `BACKUP_DIR`     | `../backups`         | Where to store backup files                |
+| `RETENTION_DAYS` | `14`                 | Delete backups older than this             |
+| `DB_CONTAINER`   | `supersync-postgres` | Docker container name                      |
+| `POSTGRES_USER`  | `supersync`          | Database user                              |
+| `POSTGRES_DB`    | `supersync`          | Database name                              |
+| `RCLONE_REMOTE`  | (empty)              | Optional rclone remote for off-site upload |
 
 ### Off-site Backup (Optional)
 
@@ -65,6 +65,7 @@ RCLONE_REMOTE=b2:my-bucket/supersync ./scripts/backup.sh --upload
 This is the simplest and most reliable recovery method when at least one client device has been online recently.
 
 **How it works:**
+
 1. Restore the accounts-only dump (users + passkeys)
 2. Sync data (operations, snapshots) starts empty
 3. When clients reconnect, gap detection fires automatically
@@ -72,6 +73,7 @@ This is the simplest and most reliable recovery method when at least one client 
 5. All clients converge to a consistent state
 
 **Steps:**
+
 ```bash
 # 1. Restore accounts from backup
 gunzip -c backups/supersync_accounts_YYYYMMDD_HHMMSS.sql.gz | \
@@ -81,6 +83,7 @@ gunzip -c backups/supersync_accounts_YYYYMMDD_HHMMSS.sql.gz | \
 ```
 
 **Why this is preferred:**
+
 - Avoids `SYNC_IMPORT_EXISTS` conflicts that occur with partial restores
 - Clients hold the complete data — they are the authoritative source
 - Produces a clean, consistent server state
@@ -124,8 +127,8 @@ Server is down / data lost
 
 The procedures above recover the **whole server**. A different situation: one
 user's account is wiped — usually because a bad `SYNC_IMPORT` propagated an
-empty or stale snapshot across their devices — and you need to roll *that one
-user* back to a point in time.
+empty or stale snapshot across their devices — and you need to roll _that one
+user_ back to a point in time.
 
 The in-app **Restore from History** handles this for unencrypted accounts. It
 does **not** work for E2E-encrypted accounts: the server cannot decrypt the op

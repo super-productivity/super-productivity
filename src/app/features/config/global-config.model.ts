@@ -174,6 +174,14 @@ export interface LocalFileSyncConfig {
   syncFolderPath?: string | null;
 }
 
+export interface ProtonDriveConfig {
+  /** Name of the rclone remote configured for Proton Drive (e.g. "protondrive"). */
+  rcloneRemoteName?: string | null;
+  /** Optional explicit path to the rclone executable (falls back to PATH). */
+  rcloneBinaryPath?: string | null;
+  syncFolderPath?: string | null;
+}
+
 export type LocalBackupConfig = Readonly<{
   isEnabled: boolean;
 }>;
@@ -218,6 +226,7 @@ export type SyncConfig = Readonly<{
   /* NOTE: view model for form only*/
   nextcloud?: NextcloudConfig;
   /* NOTE: view model for form only*/
+  protonDrive?: ProtonDriveConfig;
   oneDrive?: OneDriveConfig;
 }>;
 

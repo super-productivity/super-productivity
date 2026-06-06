@@ -11,7 +11,7 @@ the CDK-overlay fix made explicit scope; a cheap `distinctUntilChanged()` win.
 **Trigger:** On Android the screen resize when the soft keyboard opens/closes is
 choppy/janky, and (before the fix below) the white page background briefly
 flashed even in dark theme. The white flash is already fixed; this doc is about
-the remaining *choppiness*.
+the remaining _choppiness_.
 **Already shipped (commit `80b08f0e96`):** white-flash fix — the native WebView
 surface is now painted in the theme background (`values`/`values-night`
 `windowBackground` color + a `NavigationBar.setWebViewBackgroundColor` push kept
@@ -30,7 +30,7 @@ window on every frame of the IME slide → the layout viewport shrinks each fram
 → the entire Angular tree relayouts and the full-viewport backdrop repaints per
 frame.
 
-Since Chrome 108 the *browser* resizes only the visual viewport for the keyboard
+Since Chrome 108 the _browser_ resizes only the visual viewport for the keyboard
 (precisely to avoid this jank), but that change **explicitly excludes Android
 WebView** — the host app owns the behavior via `windowSoftInputMode`. So the
 real lever is native: switch the Capacitor activity from `adjustResize` to
@@ -41,7 +41,7 @@ keyboard-inset signal the app already tracks (`--keyboard-height`).
 visualViewport" KISS path is **not viable for this app's support matrix.** The
 WebView gate is `MIN_CHROMIUM_VERSION = 107` (`WebViewCompatibilityChecker.kt:26`),
 but the automatic IME visual-viewport resize in WebView only landed ~Chrome 139.
-Today `--keyboard-height` works *because* `adjustResize` shrinks the window (and
+Today `--keyboard-height` works _because_ `adjustResize` shrinks the window (and
 thus the visual viewport). Switch to `adjustNothing` and Chrome 107–138 lose the
 window resize **and** don't auto-resize the visual viewport → `innerHeight -
 visualViewport.height` stays 0 → keyboard silently covers inputs. So the
@@ -49,7 +49,7 @@ visualViewport.height` stays 0 → keyboard silently covers inputs. So the
 optional.**
 
 **Non-regressive design = runtime-gated, not a static manifest flip.** Keep
-`adjustResize` in the manifest as the fallback; at runtime, *only if*
+`adjustResize` in the manifest as the fallback; at runtime, _only if_
 `'virtualKeyboard' in navigator`, set `overlaysContent = true`, switch the
 activity to `adjustNothing` via a **new native plugin method**, and drive
 `--keyboard-height` from VirtualKeyboard `geometrychange`. WebViews without the
@@ -70,12 +70,12 @@ dominates — and weigh the cheaper "keep `adjustResize` + CSS containment" rout
   window and the **layout viewport** (ICB) shrinks every frame, viewport units
   recompute → per-frame relayout = the stutter.
 - **Which cost dominates is unverified** (review caveat). The strongest leg is
-  *layout reflow* of the shrinking ICB. The full-viewport `body::before` repaint
+  _layout reflow_ of the shrinking ICB. The full-viewport `body::before` repaint
   is a weaker leg — see the compositing caveat above. A **baseline DevTools
   trace must attribute Layout vs Recalc-Style vs Paint vs Scripting before we
   commit to the fix**, so we don't optimize the wrong thing.
 - A likely-underweighted **third leg** (review): `CapacitorMainActivity`'s
-  `OnGlobalLayoutListener` fires on *every* layout pass during the slide and
+  `OnGlobalLayoutListener` fires on _every_ layout pass during the slide and
   pushes into `isKeyboardShown$` — a bare `BehaviorSubject` with **no**
   `distinctUntilChanged` — whose subscriber rewrites `<body>` classes each
   frame, invalidating style across the tree and re-triggering Angular CD. This
@@ -93,19 +93,19 @@ dominates — and weigh the cheaper "keep `adjustResize` + CSS containment" rout
   [crbug 40287394](https://issues.chromium.org/issues/40287394))
 
 **The load-bearing finding:** the `interactive-widget` viewport meta key and the
-VirtualKeyboard API only suppress the *Blink* viewport resize — neither
+VirtualKeyboard API only suppress the _Blink_ viewport resize — neither
 overrides the native window resize in a WebView. The fix is primarily a native
 `windowSoftInputMode` decision, optionally hardened by a web-platform mechanism.
 
 ## Approach comparison
 
-| Approach | Mechanism | Stops per-frame reflow? | WebView support | Interaction w/ adjustResize + edge-to-edge | Effort | Risk | Reversibility |
-|---|---|---|---|---|---|---|---|
-| **A. `interactive-widget=overlays-content` meta** | Tells Blink not to resize viewport | Only the Blink resize — OS still resizes window under it | Blink feature (Chrome 108+); intent says not wired for WebView | Must ALSO change `windowSoftInputMode` or it's a no-op | Low | High (likely no-op alone) | Trivial |
-| **B. VirtualKeyboard API (`overlaysContent=true` + `env(keyboard-inset-*)`)** | JS opt-out: no viewport resize, keyboard overlays, geometry via CSS env vars | Yes (no resize) — but only the Blink side; OS must also not resize | API since Chrome 94; BCD `webview_android: mirror` | Needs `adjustNothing`; then drive layout from `env(keyboard-inset-bottom)` | Medium | Medium (you own focus-scroll) | Medium (feature-detect + flag) |
-| **C. `adjustNothing` + VisualViewport/JS-driven** | OS doesn't resize window; read `visualViewport`, set `--keyboard-height` | Yes — window doesn't resize | VisualViewport Chrome 61+; M139+ also resizes visual viewport | Replaces `adjustResize`; edge-to-edge plugin keeps sole inset ownership (no double-handling) | Medium | Medium (own scroll-into-view; pre-M139 may give no signal) | Easy (manifest one-liner) |
-| **D. `WindowInsetsAnimationCompat` deferred insets (native)** | Native per-frame translation matched to IME curve | N/A for web reflow — animates the native view | Android 11+ (compat to 10) | Used WITH `adjustResize` | High | High (single WebView; fights web `--keyboard-height`) | Hard |
-| **E. CSS containment / compositor hints** | `contain: layout paint`, composite backdrop | Reduces reflow/repaint *cost*, doesn't stop it | All target WebViews | Orthogonal — no manifest/edge-to-edge interaction | Low | Low (over-broad `contain` can shift fixed children / clip overlays) | Trivial |
+| Approach                                                                      | Mechanism                                                                    | Stops per-frame reflow?                                            | WebView support                                                | Interaction w/ adjustResize + edge-to-edge                                                   | Effort | Risk                                                                | Reversibility                  |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------- | ------------------------------ |
+| **A. `interactive-widget=overlays-content` meta**                             | Tells Blink not to resize viewport                                           | Only the Blink resize — OS still resizes window under it           | Blink feature (Chrome 108+); intent says not wired for WebView | Must ALSO change `windowSoftInputMode` or it's a no-op                                       | Low    | High (likely no-op alone)                                           | Trivial                        |
+| **B. VirtualKeyboard API (`overlaysContent=true` + `env(keyboard-inset-*)`)** | JS opt-out: no viewport resize, keyboard overlays, geometry via CSS env vars | Yes (no resize) — but only the Blink side; OS must also not resize | API since Chrome 94; BCD `webview_android: mirror`             | Needs `adjustNothing`; then drive layout from `env(keyboard-inset-bottom)`                   | Medium | Medium (you own focus-scroll)                                       | Medium (feature-detect + flag) |
+| **C. `adjustNothing` + VisualViewport/JS-driven**                             | OS doesn't resize window; read `visualViewport`, set `--keyboard-height`     | Yes — window doesn't resize                                        | VisualViewport Chrome 61+; M139+ also resizes visual viewport  | Replaces `adjustResize`; edge-to-edge plugin keeps sole inset ownership (no double-handling) | Medium | Medium (own scroll-into-view; pre-M139 may give no signal)          | Easy (manifest one-liner)      |
+| **D. `WindowInsetsAnimationCompat` deferred insets (native)**                 | Native per-frame translation matched to IME curve                            | N/A for web reflow — animates the native view                      | Android 11+ (compat to 10)                                     | Used WITH `adjustResize`                                                                     | High   | High (single WebView; fights web `--keyboard-height`)               | Hard                           |
+| **E. CSS containment / compositor hints**                                     | `contain: layout paint`, composite backdrop                                  | Reduces reflow/repaint _cost_, doesn't stop it                     | All target WebViews                                            | Orthogonal — no manifest/edge-to-edge interaction                                            | Low    | Low (over-broad `contain` can shift fixed children / clip overlays) | Trivial                        |
 
 Why C is the backbone (not A or D): A is likely a no-op in WebView without a
 `windowSoftInputMode` change; D adds high-risk native code that fights our
@@ -116,7 +116,7 @@ one-line manifest revert.
 ("we already use Capacitor"), but wrong: it was removed on purpose because it
 registers an unused insets callback that crashes in `Keyboard$1.onEnd` on some
 devices (`capacitor.config.ts:38-40`; cf. capacitor #8055, capacitor-keyboard
-#28 on API 35). Its `resize: 'none'/'body'` modes *still* need a
+#28 on API 35). Its `resize: 'none'/'body'` modes _still_ need a
 `windowSoftInputMode` change, so it doesn't avoid the flip — it just stacks a
 known-flaky native callback on top of it. The visualViewport backbone is
 strictly less code.
@@ -141,9 +141,11 @@ cheaper alternative to measure first.
 ## Migration (cheapest verified step first; the flip is now a larger change)
 
 ### Phase 0 — Baseline measurement (go/no-go gate, no code)
+
 Capture a DevTools trace (chrome://inspect) of a keyboard open AND close on a
 real device, **categorized by Layout / Recalc-Style / Paint / Scripting**. This
 confirms the dominant cost before any fix.
+
 - **Layout** dominates → only the `adjustNothing` switch (Phase 2) truly removes
   it, but try Phase 1 first to see how far cheap mitigation gets.
 - **Paint** dominates → Phase 1's containment is the targeted, low-risk fix and
@@ -153,10 +155,11 @@ confirms the dominant cost before any fix.
   `OnGlobalLayoutListener` JNI round-trip also needs native debouncing.
 
 ### Phase 1 — Cheap, low-risk mitigations (no mechanism change)
+
 - **Done — `distinctUntilChanged()`** on the Android `isKeyboardShown$`
   subscription (`global-theme.service.ts`, commit `f486496b7b`): the subscriber
   no longer rewrites `<body>` classes every frame of the slide.
-- **CSS containment** *(if Phase 0 shows it helps).* `contain: layout paint` on
+- **CSS containment** _(if Phase 0 shows it helps)._ `contain: layout paint` on
   large keyboard-affected containers to scope reflow/repaint cost while staying
   on `adjustResize`. Keep it OFF any ancestor of the add-task bar and the CDK
   overlay root (it can create a containing-block/scroll context that shifts fixed
@@ -165,12 +168,14 @@ confirms the dominant cost before any fix.
   here** — the higher-risk Phase 2 becomes unnecessary.
 
 ### Phase 2 — Runtime-gated `adjustNothing` + VirtualKeyboard (only if Phase 1 is insufficient)
+
 This is the real reflow fix, but a coupled native+web change that is **100%
 on-device-gated** and must be built with a device in the loop. Because the
 support matrix starts at Chrome 107 (< the ~139 that auto-resizes the visual
 viewport under `adjustNothing`), the VirtualKeyboard API is the required signal
 source, and the switch must be **runtime-gated so no-API WebViews keep
 `adjustResize` unchanged**:
+
 1. **New native plugin method** to set `windowSoftInputMode` at runtime
    (`SOFT_INPUT_ADJUST_NOTHING`) on `CapacitorMainActivity`. The manifest stays
    `adjustResize` (the fallback); only this call flips capable devices.
@@ -184,15 +189,15 @@ source, and the switch must be **runtime-gated so no-API WebViews keep
    visualViewport path as the M139+/mobile-web fallback.
 3. **Generalize `_scrollActiveInputIntoView`** (`:708`, iOS-only) to the Android
    WebView path — `adjustNothing` won't move content for you. **Scope guard:**
-   Capacitor Android WebView only, NOT Android *mobile-web* (also runs the
+   Capacitor Android WebView only, NOT Android _mobile-web_ (also runs the
    tracker at `:366` but gets no flip and is handled by the browser). This is the
-   one genuinely iterative piece (scrolling a focused input above an *overlay*
+   one genuinely iterative piece (scrolling a focused input above an _overlay_
    keyboard needs real-device tuning).
 4. **Extend `_patchCdkViewportForSafeArea`** (`:752`, iOS-only narrowing at
    `:769-773`) to subtract the Android keyboard height so CDK overlays
    (autocomplete/menus/selects) stay above the keyboard once the window no longer
    shrinks.
-5. **Transition reconciliation** *(polish).* Re-evaluate the add-task-bar
+5. **Transition reconciliation** _(polish)._ Re-evaluate the add-task-bar
    `transition: bottom 225ms`: keep it, or drive `bottom` from
    `env(keyboard-inset-bottom)` 1:1. Decide on-device.
 
@@ -214,7 +219,7 @@ clearing focus** (focus → resize → `blur()` → keyboard hides → loop). To
 Android path's `onViewportResize` (the locally-scoped listener in
 `_initVisualViewportKeyboardTracking`) only sets a CSS var, and the Android
 `isKeyboardShown$` subscriber only toggles body classes — both safe, no `blur()`.
-(`_visualViewportResizeListener` is the separate *iOS* listener.) Preserve the
+(`_visualViewportResizeListener` is the separate _iOS_ listener.) Preserve the
 no-focus-clearing invariant in any change.
 ([Android WebView insets doc](https://developer.android.com/develop/ui/views/layout/webapps/understand-window-insets))
 
@@ -251,7 +256,7 @@ VirtualKeyboard/visual-viewport-resize boundary). The shipped Phase 1
 - [VirtualKeyboard API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/VirtualKeyboard_API)
 - [VirtualKeyboard.overlaysContent — MDN](https://developer.mozilla.org/en-US/docs/Web/API/VirtualKeyboard/overlaysContent)
 - [browser-compat-data: VirtualKeyboard (webview_android: mirror, added 94)](https://github.com/mdn/browser-compat-data/blob/main/api/VirtualKeyboard.json)
-- [The Virtual Keyboard API — Ahmad Shadeed (env(keyboard-inset-*) patterns + caveats)](https://ishadeed.com/article/virtual-keyboard-api/)
+- [The Virtual Keyboard API — Ahmad Shadeed (env(keyboard-inset-\*) patterns + caveats)](https://ishadeed.com/article/virtual-keyboard-api/)
 - [Synchronize animations with the software keyboard — Android (WindowInsetsAnimationCompat)](https://developer.android.com/develop/ui/views/layout/sw-keyboard)
 - [content-visibility & CSS containment — web.dev](https://web.dev/articles/content-visibility)
 - [crbug 40287394: WebView can't resize the Visual Viewport on keyboard appear](https://issues.chromium.org/issues/40287394)

@@ -48,6 +48,7 @@ import {
 } from '@sp/sync-providers/webdav';
 import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
 import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
+import type { ProtonDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/webdav/proton-drive.model';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -109,6 +110,12 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       return {
         ...item,
         fieldGroup: [...item.fieldGroup, this._nextcloudTestConnectionBtn()],
+      };
+    }
+    if (item.key === 'protonDrive' && item.fieldGroup) {
+      return {
+        ...item,
+        fieldGroup: [...item.fieldGroup, this._protonDriveTestConnectionBtn()],
       };
     }
     if (
@@ -186,6 +193,14 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
       className: 'mt3 block',
       onClick: (model) => this._testNextcloudConnection(model as NextcloudPrivateCfg),
+    });
+  }
+
+  private _protonDriveTestConnectionBtn(): FormlyFieldConfig {
+    return this._actionBtn({
+      text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
+      className: 'mt3 block',
+      onClick: (model) => this._testProtonDriveConnection(model as ProtonDrivePrivateCfg),
     });
   }
 
@@ -282,6 +297,45 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       });
     }
   }
+
+  private async _testProtonDriveConnection(cfg: ProtonDrivePrivateCfg): Promise<void> {
+    if (!cfg?.rcloneRemoteName?.trim()) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.FORM.PROTON_DRIVE.S_FILL_REMOTE,
+      });
+      return;
+    }
+
+    try {
+      const result = await window.ea.protonDriveCheck({
+        remoteName: cfg.rcloneRemoteName,
+        rcloneBinaryPath: cfg.rcloneBinaryPath || undefined,
+      });
+      if (result === true) {
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.F.SYNC.FORM.PROTON_DRIVE.S_TEST_SUCCESS,
+        });
+      } else {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.FORM.PROTON_DRIVE.S_TEST_FAIL,
+          translateParams: {
+            error: result instanceof Error ? result.message : 'Unknown error',
+          },
+        });
+      }
+    } catch (e) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.FORM.PROTON_DRIVE.S_TEST_FAIL,
+        translateParams: {
+          error: e instanceof Error ? e.message : 'Unexpected error',
+        },
+      });
+    }
+  }
   // Note: _isInitialSetup flag is checked by sync-form.const.ts hideExpressions
   // to hide the encryption button/warning (encryption is handled by _promptSuperSyncEncryptionIfNeeded after sync)
   _tmpUpdatedCfg: SyncConfig & { _isInitialSetup?: boolean } = {
@@ -293,6 +347,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     localFileSync: {},
     webDav: {},
     nextcloud: {},
+    protonDrive: {},
     superSync: {},
     _isInitialSetup: true,
   };
@@ -376,6 +431,11 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           } else if (newProvider === SyncProviderId.Nextcloud && privateCfg) {
             providerSpecificUpdate = {
               nextcloud: privateCfg as any,
+              encryptKey: privateCfg.encryptKey || '',
+            };
+          } else if (newProvider === SyncProviderId.ProtonDrive && privateCfg) {
+            providerSpecificUpdate = {
+              protonDrive: privateCfg as any,
               encryptKey: privateCfg.encryptKey || '',
             };
           } else if (newProvider === SyncProviderId.Dropbox && privateCfg) {

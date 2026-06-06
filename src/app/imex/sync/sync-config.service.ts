@@ -23,6 +23,7 @@ const PROP_MAP_TO_FORM: Record<SyncProviderId, keyof SyncConfig | null> = {
   [SyncProviderId.WebDAV]: 'webDav',
   [SyncProviderId.SuperSync]: 'superSync',
   [SyncProviderId.Nextcloud]: 'nextcloud',
+  [SyncProviderId.ProtonDrive]: 'protonDrive',
   [SyncProviderId.OneDrive]: 'oneDrive',
   [SyncProviderId.Dropbox]: null,
 };
@@ -90,6 +91,12 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     loginName: '',
     userName: '',
     password: '',
+    syncFolderPath: '',
+    encryptKey: '',
+  },
+  [SyncProviderId.ProtonDrive]: {
+    rcloneRemoteName: '',
+    rcloneBinaryPath: '',
     syncFolderPath: '',
     encryptKey: '',
   },
@@ -186,6 +193,10 @@ export class SyncConfigService {
           ...DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
           ...syncCfg?.nextcloud,
         },
+        protonDrive: {
+          ...DEFAULT_GLOBAL_CONFIG.sync.protonDrive,
+          ...syncCfg?.protonDrive,
+        },
         oneDrive: {
           ...DEFAULT_GLOBAL_CONFIG.sync.oneDrive,
           ...syncCfg?.oneDrive,
@@ -243,6 +254,7 @@ export class SyncConfigService {
         webDav: DEFAULT_GLOBAL_CONFIG.sync.webDav,
         superSync: DEFAULT_GLOBAL_CONFIG.sync.superSync,
         nextcloud: DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
+        protonDrive: DEFAULT_GLOBAL_CONFIG.sync.protonDrive,
         oneDrive: DEFAULT_GLOBAL_CONFIG.sync.oneDrive,
       };
 
@@ -314,7 +326,13 @@ export class SyncConfigService {
     const providerId = newSettings.syncProvider as SyncProviderId | null;
     type SyncPublicConfig = Omit<
       SyncConfig,
-      'encryptKey' | 'webDav' | 'localFileSync' | 'superSync' | 'nextcloud' | 'oneDrive'
+      | 'encryptKey'
+      | 'webDav'
+      | 'localFileSync'
+      | 'superSync'
+      | 'nextcloud'
+      | 'protonDrive'
+      | 'oneDrive'
     >;
 
     // Split settings into public (global config) and private (credentials/secrets)

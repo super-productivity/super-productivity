@@ -257,6 +257,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
       syncFolderPath: 'super-productivity',
     },
 
+    protonDrive: {
+      rcloneRemoteName: 'protondrive',
+      rcloneBinaryPath: null,
+      syncFolderPath: 'super-productivity',
+    },
+
     oneDrive: {
       useCustomApp: !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
       clientId: OFFICIAL_ONEDRIVE_CLIENT_ID,

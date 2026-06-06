@@ -82,6 +82,7 @@ import type { LocalFileSyncPrivateCfg as PackageLocalFileSyncPrivateCfg } from '
 import type { NextcloudPrivateCfg, WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import type { OneDrivePrivateCfg } from '@sp/sync-providers/onedrive';
+import type { ProtonDrivePrivateCfg } from '../../sync-providers/file-based/webdav/proton-drive.model';
 
 export type LocalFileSyncPrivateCfg = PackageLocalFileSyncPrivateCfg;
 
@@ -91,7 +92,8 @@ export type SyncProviderPrivateCfg =
   | WebdavPrivateCfg
   | SuperSyncPrivateCfg
   | LocalFileSyncPrivateCfg
-  | NextcloudPrivateCfg;
+  | NextcloudPrivateCfg
+  | ProtonDrivePrivateCfg;
 
 export type PrivateCfgByProviderId<T extends SyncProviderId> =
   T extends SyncProviderId.LocalFile
@@ -106,7 +108,9 @@ export type PrivateCfgByProviderId<T extends SyncProviderId> =
             ? SuperSyncPrivateCfg
             : T extends SyncProviderId.Nextcloud
               ? NextcloudPrivateCfg
-              : never;
+              : T extends SyncProviderId.ProtonDrive
+                ? ProtonDrivePrivateCfg
+                : never;
 
 // ============================================================================
 // Current Provider Config (for observable emissions)

@@ -78,6 +78,15 @@ const ea: ElectronAPI = {
   fileSyncRemove: (filePath) => _invoke('FILE_SYNC_REMOVE', filePath) as Promise<void>,
   fileSyncListFiles: (args) =>
     _invoke('FILE_SYNC_LIST_FILES', args) as Promise<string[] | Error>,
+
+  protonDriveEnsureServer: (args) =>
+    _invoke('PROTON_DRIVE_ENSURE_SERVER', args) as Promise<
+      { baseUrl: string; userName: string; password: string } | Error
+    >,
+  protonDriveStopServer: () => _invoke('PROTON_DRIVE_STOP_SERVER') as Promise<void>,
+  protonDriveCheck: (args) =>
+    _invoke('PROTON_DRIVE_CHECK', args) as Promise<true | Error>,
+
   checkDirExists: (dirPath) =>
     _invoke('CHECK_DIR_EXISTS', dirPath) as Promise<true | Error>,
 

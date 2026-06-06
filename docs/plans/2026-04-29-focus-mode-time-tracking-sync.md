@@ -2,7 +2,7 @@
 
 ## Context
 
-GitHub Discussion [#6781](https://github.com/super-productivity/super-productivity/discussions/6781) polled Pomodoro+time-tracking users on whether they sync the two; the result is ~100% yes. The current default `focusMode.isSyncSessionWithTracking: false` is therefore wrong for the population that uses both. Worse, the unsynced mode has user-visible defects (issue [#6731](https://github.com/super-productivity/super-productivity/issues/6731): pausing focus does NOT pause tracking — users call this a bug, not a config trade-off). Issue [#5737](https://github.com/super-productivity/super-productivity/issues/5737) records a long-time user lost the *old* simple workflow where pressing the tracking play button silently started a Pomodoro alongside it. Issue [#7112](https://github.com/super-productivity/super-productivity/issues/7112) proposes the replacement settings.
+GitHub Discussion [#6781](https://github.com/super-productivity/super-productivity/discussions/6781) polled Pomodoro+time-tracking users on whether they sync the two; the result is ~100% yes. The current default `focusMode.isSyncSessionWithTracking: false` is therefore wrong for the population that uses both. Worse, the unsynced mode has user-visible defects (issue [#6731](https://github.com/super-productivity/super-productivity/issues/6731): pausing focus does NOT pause tracking — users call this a bug, not a config trade-off). Issue [#5737](https://github.com/super-productivity/super-productivity/issues/5737) records a long-time user lost the _old_ simple workflow where pressing the tracking play button silently started a Pomodoro alongside it. Issue [#7112](https://github.com/super-productivity/super-productivity/issues/7112) proposes the replacement settings.
 
 Time tracking and focus mode are independent features by default — pressing the play button just tracks time; focus mode is opt-in via F-key or the header focus button. Coupling them is a power-user choice. The redesign keeps that boundary intact while making the coupling, when active, cleaner and more predictable.
 
@@ -15,20 +15,22 @@ Time tracking and focus mode are independent features by default — pressing th
 
 ## Decision summary
 
-| Today | After |
-|---|---|
-| `isSyncSessionWithTracking: false` (default) gates 8 effects; "off" mode buggy | Flag removed. Sync is always on. The 8 effects lose the gate. |
-| Play button → tracks time; if sync on, also opens overlay | Play button → tracks time. If new opt-in `autoStartFocusOnPlay: true`, also spawns a focus session shown via a quiet header indicator (never overlay). |
-| `isPauseTrackingDuringBreak` (default true) sits next to other flags in flat form | Default unchanged. Flag moved into a collapsed "Advanced" section. |
-| `isStartInBackground` and `isSkipPreparation` apply to all entry points | Apply only to **manual** entry (F / focus button / context menu). Auto-spawn ignores them: indicator-only, no rocket. Both moved to "Advanced". |
-| `isManualBreakStart` declared in form, missing from defaults | Add `false` default. Move to "Advanced". |
+| Today                                                                             | After                                                                                                                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `isSyncSessionWithTracking: false` (default) gates 8 effects; "off" mode buggy    | Flag removed. Sync is always on. The 8 effects lose the gate.                                                                                          |
+| Play button → tracks time; if sync on, also opens overlay                         | Play button → tracks time. If new opt-in `autoStartFocusOnPlay: true`, also spawns a focus session shown via a quiet header indicator (never overlay). |
+| `isPauseTrackingDuringBreak` (default true) sits next to other flags in flat form | Default unchanged. Flag moved into a collapsed "Advanced" section.                                                                                     |
+| `isStartInBackground` and `isSkipPreparation` apply to all entry points           | Apply only to **manual** entry (F / focus button / context menu). Auto-spawn ignores them: indicator-only, no rocket. Both moved to "Advanced".        |
+| `isManualBreakStart` declared in form, missing from defaults                      | Add `false` default. Move to "Advanced".                                                                                                               |
 
 ## Behavior changes — concrete
 
 ### Always-sync (when both are running)
+
 The 8 effects in `src/app/features/focus-mode/store/focus-mode.effects.ts` (`autoShowOverlay$`, `syncTrackingStartToSession$`, `syncTrackingStopToSession$`, `syncSessionPauseToTracking$`, `syncSessionResumeToTracking$`, `syncSessionStartToTracking$`, `stopTrackingOnSessionEnd$`, `stopTrackingOnExitBreakToPlanning$`) lose the `cfg?.isSyncSessionWithTracking` filter. Their other gates (`isFocusModeEnabled`, screen state, etc.) remain. This fixes [#6731](https://github.com/super-productivity/super-productivity/issues/6731) by construction.
 
 ### Auto-spawn on play
+
 - New flag: `focusMode.autoStartFocusOnPlay: boolean`, default `false`.
 - New effect, sibling to the existing sync effects: when `currentTaskId$` transitions `null → id` AND `autoStartFocusOnPlay` AND `isFocusModeEnabled` AND no session is currently running → dispatch `startFocusSession({ duration })`. **Do not** dispatch `showFocusOverlay()`.
 - F-key during a quiet/auto-spawned session → existing `showFocusOverlay()` dispatch promotes to overlay (free).
@@ -58,9 +60,11 @@ Banner usage (`BannerId.FocusMode`, the `updateBanner$` effect) is removed entir
 **Open for community input**: which anchor (play button vs focus button). The interaction (inline countdown + hover-popover controls + always-shown on mobile) is the same either way.
 
 ### `autoShowOverlay$` redesign
+
 Today this effect fires whenever `currentTaskId$` changes and the gates pass — meaning play-button presses indirectly trigger the overlay. After: **delete the effect entirely**. The overlay opens only via explicit `showFocusOverlay()` dispatches (F-key handler, header focus button, task context menu). This is the cleanest way to enforce "entry point determines surface."
 
 ### Migration
+
 - Existing config with `isSyncSessionWithTracking: true` → migrate to `autoStartFocusOnPlay: true`. Their behavior is largely preserved (auto-spawn still happens), but they now see a quiet header indicator instead of the overlay on auto-spawn. Pressing F still gets them the overlay. Acceptable trade.
 - Existing config with `isSyncSessionWithTracking: false` (default-untouched) → migrate to `autoStartFocusOnPlay: false`. No auto-spawn. The only behavior change they perceive is that pause-focus now stops tracking (fixing #6731) — which they already wanted, per the bug report.
 - Strip `isSyncSessionWithTracking` from the type so it cannot be re-introduced via stale stored configs.
@@ -70,11 +74,11 @@ Today this effect fires whenever `currentTaskId$` changes and the gates pass —
 Useful to clarify the mental model:
 
 - `appFeatures.isFocusModeEnabled` (default `true`) is a permanent feature switch. With it off, focus mode is unavailable entirely. **No "permanent Pomodoro on" setting exists** — there is no toggle that says "I am a Pomodoro user, always run a Pomodoro on my tracked task."
-- A focus *session* is always **explicitly started** by the user via one of three entry points:
+- A focus _session_ is always **explicitly started** by the user via one of three entry points:
   1. The `F` keyboard shortcut → `showFocusOverlay()` (`src/app/core-ui/shortcut/shortcut.service.ts:130`).
   2. The header focus button → `showFocusOverlay()` (`src/app/core-ui/main-header/focus-button/focus-button.component.ts:106`).
   3. The task context menu "Focus Session" item → sets the current task and dispatches `showFocusOverlay()` (`task-context-menu-inner.component.ts:341`).
-- After the overlay is shown, the user picks/confirms a task, the *mode* (Pomodoro/Flowtime/Countdown) is read from prior state, optional preparation screen runs, and the session begins.
+- After the overlay is shown, the user picks/confirms a task, the _mode_ (Pomodoro/Flowtime/Countdown) is read from prior state, optional preparation screen runs, and the session begins.
 - The selected **mode is persistent** across sessions: stored in `localStorage` under `LS.FOCUS_MODE_MODE`, default `Countdown` if absent (`focus-mode.reducer.ts:15-32`). It is the closest thing to a "Pomodoro switch" — but it lives in the focus-mode UI, not in settings, and only activates once the user explicitly starts a session.
 
 The new `autoStartFocusOnPlay` toggle becomes the closest thing to a "Pomodoro/focus is always on while I track" switch — exactly what issue #5737 asked for. With it off (default) nothing changes; the three explicit entry points remain the only way to start a session. With it on, pressing the play button on a task is treated as a fourth, implicit entry point — and the session that spawns uses the persistent mode the user last chose.
@@ -82,6 +86,7 @@ The new `autoStartFocusOnPlay` toggle becomes the closest thing to a "Pomodoro/f
 ## Files to touch
 
 ### Config / model
+
 - `src/app/features/config/global-config.model.ts` — `FocusModeConfig` (around line 231): remove `isSyncSessionWithTracking?`; add `autoStartFocusOnPlay?: boolean`.
 - `src/app/features/config/default-global-config.const.ts` (line 93-100): remove old flag, add `autoStartFocusOnPlay: false`, add missing `isManualBreakStart: false`.
 - `src/app/features/config/form-cfgs/focus-mode-form.const.ts`: restructure into two-tier form. Primary: `autoStartFocusOnPlay`, `focusModeSound`. Advanced (collapsible — copy pattern from `src/app/features/config/form-cfgs/sync-form.const.ts:13-20`, `type: 'collapsible'` + `props: { syncRole: 'advanced' }`): `isPauseTrackingDuringBreak`, `isStartInBackground`, `isSkipPreparation`, `isManualBreakStart`.
@@ -89,6 +94,7 @@ The new `autoStartFocusOnPlay` toggle becomes the closest thing to a "Pomodoro/f
 - `src/app/t.const.ts`: matching key changes.
 
 ### Effects
+
 - `src/app/features/focus-mode/store/focus-mode.effects.ts`:
   - Delete `autoShowOverlay$` (lines 73-91) entirely.
   - Delete or repurpose `updateBanner$` (lines ~829-978) — banner-as-session-indicator is being replaced by the dedicated indicator (see surface options A/B above).
@@ -96,6 +102,7 @@ The new `autoStartFocusOnPlay` toggle becomes the closest thing to a "Pomodoro/f
   - Add `autoStartFocusOnTracking$` effect: drives `currentTaskId$` → `null→id` transition; dispatches `startFocusSession` only when `autoStartFocusOnPlay && isFocusModeEnabled && timer.purpose === null` (no session active). Reuses `FocusModeStrategyFactory` to compute initial duration (same path as `syncTrackingStartToSession$:148-153`).
 
 ### Components
+
 - `src/app/features/focus-mode/focus-mode-main/focus-mode-main.component.ts:190`: replace the `isSyncSessionWithTracking` read in `isPlayButtonDisabled` with the always-coupled equivalent.
 - New / extended **session indicator** on whichever anchor we pick:
   - **Anchor A**: extend `src/app/core-ui/main-header/play-button/play-button.component.ts` to render an inline countdown when `selectIsSessionRunning` is true and the overlay is hidden, plus a hover-revealed controls row (pause/resume/skip/end/open-overlay).
@@ -104,9 +111,11 @@ The new `autoStartFocusOnPlay` toggle becomes the closest thing to a "Pomodoro/f
   - Either way, remove `BannerService` calls related to `BannerId.FocusMode` and the `updateBanner$` effect.
 
 ### Migration
+
 - `src/app/op-log/validation/repair-global-config.ts` is currently fully commented out. Either revive it with focusMode-specific repair (strip stale `isSyncSessionWithTracking`; backfill `autoStartFocusOnPlay`) **or** rely on the existing deep-merge against `DEFAULT_GLOBAL_CONFIG` for backfill and add a one-liner that drops the old key. Prefer the second path for minimum surface area; only revive `repair-global-config.ts` if testing reveals defaults aren't merging.
 
 ### Tests
+
 - Update spec files that reference `isSyncSessionWithTracking`:
   - `src/app/features/focus-mode/store/focus-mode.effects.spec.ts`
   - `src/app/features/focus-mode/store/focus-mode.bug-5875.spec.ts`

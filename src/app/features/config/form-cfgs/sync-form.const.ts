@@ -157,6 +157,10 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
           { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
+          // Proton Drive bridges through a local rclone process, desktop-only
+          ...(IS_ELECTRON
+            ? [{ label: 'Proton Drive', value: SyncProviderId.ProtonDrive }]
+            : []),
           ...(IS_ONEDRIVE_SUPPORTED
             ? [
                 {
@@ -327,6 +331,62 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           expressions: {
             'props.required': (field: FormlyFieldConfig) =>
               field?.parent?.parent?.model?.syncProvider === SyncProviderId.Nextcloud,
+          },
+        },
+      ],
+    },
+
+    // Proton Drive provider form fields (desktop only, via rclone bridge)
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.ProtonDrive,
+      resetOnHide: false,
+      key: 'protonDrive',
+      fieldGroup: [
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'div',
+            text: T.F.SYNC.FORM.PROTON_DRIVE.INFO,
+            class: 'sync-warning',
+          },
+        },
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            text: T.F.SYNC.FORM.PROTON_DRIVE.SETUP_INFO,
+          },
+        },
+        {
+          key: 'rcloneRemoteName',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.PROTON_DRIVE.L_RCLONE_REMOTE_NAME,
+            description: T.F.SYNC.FORM.PROTON_DRIVE.RCLONE_REMOTE_NAME_DESCRIPTION,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              field?.parent?.parent?.model?.syncProvider === SyncProviderId.ProtonDrive,
+          },
+        },
+        {
+          key: 'syncFolderPath',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.WEB_DAV.L_SYNC_FOLDER_PATH,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              field?.parent?.parent?.model?.syncProvider === SyncProviderId.ProtonDrive,
+          },
+        },
+        {
+          key: 'rcloneBinaryPath',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.PROTON_DRIVE.L_RCLONE_BINARY_PATH,
+            description: T.F.SYNC.FORM.PROTON_DRIVE.RCLONE_BINARY_PATH_DESCRIPTION,
           },
         },
       ],

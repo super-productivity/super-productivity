@@ -43,7 +43,7 @@ For SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/CLAUDE.
 
 ## Sync-correctness rules
 
-Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing. Rules 1–3 and 6 are one invariant — *one user intent = one op; replayed/remote ops must not re-trigger effects* — fully explained in [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md).
+Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing. Rules 1–3 and 6 are one invariant — _one user intent = one op; replayed/remote ops must not re-trigger effects_ — fully explained in [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md).
 
 1. **Effects inject `LOCAL_ACTIONS`**, never `Actions` (`ALL_ACTIONS` only for the op-log capture effect; remote archive side effects → `ArchiveOperationHandler`, not `ALL_ACTIONS`). Lint-enforced (`no-actions-in-effects`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `src/app/util/local-actions.token.ts`.
 2. **Prefer action-based effects**; a selector-based effect needs `skipDuringSyncWindow()`. Lint-enforced (`require-hydration-guard`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md).
@@ -61,12 +61,12 @@ Angular format `type(scope): description`. Types: `feat`, `fix`, `docs`, `style`
 
 ## Anti-patterns
 
-| Avoid                                                                      | Do instead                               |
-| -------------------------------------------------------------------------- | ---------------------------------------- |
-| `any` type                                                                 | proper types, `unknown` if truly unknown |
-| Direct DOM access                                                          | Angular bindings, `viewChild()`          |
-| Side effects in constructors                                               | `async` pipe or `toSignal`               |
-| Subscribing without cleanup                                                | `takeUntilDestroyed()` or async pipe     |
-| `NgModules` for new code                                                   | standalone components                    |
-| Re-declaring Material theme styles                                         | existing theme variables                 |
+| Avoid                                                                      | Do instead                                |
+| -------------------------------------------------------------------------- | ----------------------------------------- |
+| `any` type                                                                 | proper types, `unknown` if truly unknown  |
+| Direct DOM access                                                          | Angular bindings, `viewChild()`           |
+| Side effects in constructors                                               | `async` pipe or `toSignal`                |
+| Subscribing without cleanup                                                | `takeUntilDestroyed()` or async pipe      |
+| `NgModules` for new code                                                   | standalone components                     |
+| Re-declaring Material theme styles                                         | existing theme variables                  |
 | One-off `.mat-*`, `.mdc-*`, `button[mat-*]`, or shared component overrides | reusable inputs, tokens, or shared styles |

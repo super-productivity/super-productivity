@@ -1413,6 +1413,17 @@
           "L_APP_PASSWORD": "App Password",
           "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one"
         },
+        "PROTON_DRIVE": {
+          "INFO": "<strong>Desktop only.</strong> Proton Drive has no official sync API, so syncing is bridged through <a href='https://rclone.org/protondrive/'>rclone</a>. This option is not available on the web or mobile apps.",
+          "SETUP_INFO": "<strong>One-time setup:</strong> install <a href='https://rclone.org/downloads/'>rclone</a>, then run <code>rclone config</code> in a terminal and create a remote of type <em>protondrive</em> (this handles your Proton login, 2FA and mailbox password). Enter that remote's name below.",
+          "L_RCLONE_REMOTE_NAME": "rclone Remote Name",
+          "RCLONE_REMOTE_NAME_DESCRIPTION": "The name of the Proton Drive remote you created with `rclone config` (default: protondrive).",
+          "L_RCLONE_BINARY_PATH": "rclone Path (optional)",
+          "RCLONE_BINARY_PATH_DESCRIPTION": "Leave empty to use rclone from your system PATH, or set the full path to the rclone executable.",
+          "S_FILL_REMOTE": "Please enter the rclone remote name first",
+          "S_TEST_SUCCESS": "Proton Drive connection successful! The rclone bridge is running.",
+          "S_TEST_FAIL": "Proton Drive connection failed: {{error}}"
+        },
         "ONEDRIVE": {
           "CLIENT_ID_DESCRIPTION": "Application (client) ID from your Microsoft Entra app registration",
           "INFO_TEXT": "Microsoft 365 authentication uses OAuth. Fill client and tenant first, then authenticate.",

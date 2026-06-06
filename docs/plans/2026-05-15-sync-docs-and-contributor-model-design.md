@@ -12,7 +12,7 @@ architecture — less to hold in your head, easier to onboard.
 Research (four parallel deep-dives, see "Evidence") produced a counterintuitive
 conclusion that shapes this whole plan:
 
-> **The sync *code* is not meaningfully over-engineered. The team already did the
+> **The sync _code_ is not meaningfully over-engineered. The team already did the
 > hard simplification (deleted PFAPI ~83 files, removed the vector-clock defense
 > layers, unified both transports behind one `OperationSyncCapable` interface +
 > a shared `@sp/sync-core` orchestrator). Three prior independent analyses
@@ -22,14 +22,14 @@ conclusion that shapes this whole plan:
 
 Findings per candidate area:
 
-| Area | Verdict | Safe code reduction | Risk |
-|---|---|---|---|
-| Transport duplication | Already unified; `file-based-sync-adapter` is *necessary server-emulation on dumb storage*, not redundancy | ~50–120 LOC, touches the most fragile code (snapshot-hydration; issues #7339/#7330) | High — **excluded** |
-| Validation/repair | Mostly load-bearing; "4522 LOC" includes 471 test-only LOC | ~155–215 LOC (Tier 3, **deferred**) | Low |
-| Four contributor rules | **Real win** — all four are one invariant; codebase already 100% compliant | n/a (adds lint) | Very low |
-| Doc sprawl | **Biggest win** — ~33 files/~600 KB, one provably-stale doc falsely marked "Completed" | n/a (docs) | Near-zero |
+| Area                   | Verdict                                                                                                    | Safe code reduction                                                                 | Risk                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------- |
+| Transport duplication  | Already unified; `file-based-sync-adapter` is _necessary server-emulation on dumb storage_, not redundancy | ~50–120 LOC, touches the most fragile code (snapshot-hydration; issues #7339/#7330) | High — **excluded** |
+| Validation/repair      | Mostly load-bearing; "4522 LOC" includes 471 test-only LOC                                                 | ~155–215 LOC (Tier 3, **deferred**)                                                 | Low                 |
+| Four contributor rules | **Real win** — all four are one invariant; codebase already 100% compliant                                 | n/a (adds lint)                                                                     | Very low            |
+| Doc sprawl             | **Biggest win** — ~33 files/~600 KB, one provably-stale doc falsely marked "Completed"                     | n/a (docs)                                                                          | Near-zero           |
 
-Therefore: the maintenance-burden ceiling for *code* is low and risky. The
+Therefore: the maintenance-burden ceiling for _code_ is low and risky. The
 **conceptual-complexity** pain has a large, cheap, low-risk fix that lives in
 the **docs** and the **scattered/unenforced contributor rules** — that is this plan.
 
@@ -39,7 +39,7 @@ the **docs** and the **scattered/unenforced contributor rules** — that is this
 
 1. Consolidate `docs/sync-and-op-log/` from ~33 files to a lean authoritative set.
 2. Add one new `contributor-sync-model.md` capturing the single sync invariant.
-3. Add two ESLint rules to the existing `eslint-local-rules/` plugin to *enforce*
+3. Add two ESLint rules to the existing `eslint-local-rules/` plugin to _enforce_
    the model instead of relying on memory.
 4. Tighten CLAUDE.md sync rules 1–3,6 to one line each + link to the new doc.
 
@@ -55,16 +55,16 @@ the **docs** and the **scattered/unenforced contributor rules** — that is this
 
 ### Target active doc set (7 docs)
 
-| Doc | Action |
-|---|---|
-| `README.md` | Rewrite as a pure navigation index. Drop the historical/status tables (they drift; that drift is part of the problem). |
-| `operation-log-architecture.md` | Remains the **one** authoritative architecture doc. Fold in: (a) `quick-reference.md`'s unique cheat-sheet tables as an appendix; (b) a new condensed **"Rejected alternatives & why"** section preserving the load-bearing rationale from `background-info/` (no-silent-data-loss / offline / dumb-E2EE-server constraint; why delta-sync, LWW, CRDT were rejected). |
-| `contributor-sync-model.md` | **New.** The single contributor mental model (see Tier 1 §"New doc"). |
-| `vector-clocks.md` | Keep as-is (current; cited by CLAUDE.md rule 8). |
-| `supersync-encryption-architecture.md` | Keep as-is (current; implemented). |
-| `operation-rules.md` | Keep as-is (short, current, lint-aligned). |
-| `package-boundaries.md` | Keep as-is (short, current, matches enforced eslint boundaries). |
-| `diagrams/` (directory) | Keep as the canonical diagram set. Fold in the 3 stray flowcharts' content where unique. |
+| Doc                                    | Action                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `README.md`                            | Rewrite as a pure navigation index. Drop the historical/status tables (they drift; that drift is part of the problem).                                                                                                                                                                                                                                                |
+| `operation-log-architecture.md`        | Remains the **one** authoritative architecture doc. Fold in: (a) `quick-reference.md`'s unique cheat-sheet tables as an appendix; (b) a new condensed **"Rejected alternatives & why"** section preserving the load-bearing rationale from `background-info/` (no-silent-data-loss / offline / dumb-E2EE-server constraint; why delta-sync, LWW, CRDT were rejected). |
+| `contributor-sync-model.md`            | **New.** The single contributor mental model (see Tier 1 §"New doc").                                                                                                                                                                                                                                                                                                 |
+| `vector-clocks.md`                     | Keep as-is (current; cited by CLAUDE.md rule 8).                                                                                                                                                                                                                                                                                                                      |
+| `supersync-encryption-architecture.md` | Keep as-is (current; implemented).                                                                                                                                                                                                                                                                                                                                    |
+| `operation-rules.md`                   | Keep as-is (short, current, lint-aligned).                                                                                                                                                                                                                                                                                                                            |
+| `package-boundaries.md`                | Keep as-is (short, current, matches enforced eslint boundaries).                                                                                                                                                                                                                                                                                                      |
+| `diagrams/` (directory)                | Keep as the canonical diagram set. Fold in the 3 stray flowcharts' content where unique.                                                                                                                                                                                                                                                                              |
 
 ### Deletions (hard-delete; git history is the archive)
 
@@ -75,7 +75,7 @@ No `archive/` folder. Delete; if a surviving doc needs the rationale, link the
 - `long-term-plans/replace-pfapi-with-oplog-plan.md` — completed Jan 2026; outcome captured by current architecture doc.
 - `long-term-plans/e2e-encryption-plan.md` — superseded by `supersync-encryption-architecture.md` (its own header says so).
 - `operation-payload-optimization-discussion.md` — dated discussion, not a spec.
-- `background-info/` (5 files) — historical research/LLM-synthesized analyses. **Note (review R3):** the synthesized reports self-caveat that the models analyzed different/stale artifacts, so their *specifics are unreliable*; only the durable constraint (no-silent-data-loss / offline / dumb-E2EE-server, and why delta-sync/LWW/CRDT were rejected) is load-bearing. `operation-log-architecture.md` currently has **no** rejected-alternatives section (it covers LWW only as the *implemented* strategy at :1365). So the fold is **net-new synthesis written from first principles**, not mechanical extraction — a writing-judgment task, done **before** deletion.
+- `background-info/` (5 files) — historical research/LLM-synthesized analyses. **Note (review R3):** the synthesized reports self-caveat that the models analyzed different/stale artifacts, so their _specifics are unreliable_; only the durable constraint (no-silent-data-loss / offline / dumb-E2EE-server, and why delta-sync/LWW/CRDT were rejected) is load-bearing. `operation-log-architecture.md` currently has **no** rejected-alternatives section (it covers LWW only as the _implemented_ strategy at :1365). So the fold is **net-new synthesis written from first principles**, not mechanical extraction — a writing-judgment task, done **before** deletion.
 - `quick-reference.md` — unique cheat-sheet tables folded into the architecture doc, then deleted.
 - `operation-log-architecture-diagrams.md` (86 KB monolith) — unique **current** diagrams folded into `diagrams/`, then deleted. **Carve-out (review C2): exclude §5 and §6 "Hybrid Manifest ✅ IMPLEMENTED" (lines ~1507–1546) from the fold** — they assert `OperationLogManifestService` is "Complete", the exact false claim driving the hybrid-manifest deletion. They are deleted, not migrated. Sweep the kept `diagrams/*` for any other `HybridManifest`/`OperationLogManifestService` content during step 2.
 - `supersync-scenarios.md`, `supersync-scenarios-flowchart.md`, `file-based-sync-flowchart.md` — fold any unique current flow into `diagrams/`, then delete.
@@ -100,10 +100,10 @@ States **one invariant, two boundaries, one atomicity rule**:
 > re-trigger effects.**
 >
 > - **Action boundary** — effects inject `LOCAL_ACTIONS`, not `Actions`.
->   *Enforced by `local-rules/no-actions-in-effects` (Tier 2).*
+>   _Enforced by `local-rules/no-actions-in-effects` (Tier 2)._
 > - **Selector boundary** — selector-driven effects guard with
 >   `skipDuringSyncWindow()` / `HydrationStateService.isApplyingRemoteOps()`.
->   *Enforced by the existing `local-rules/require-hydration-guard`.*
+>   _Enforced by the existing `local-rules/require-hydration-guard`._
 > - **Atomicity** — multi-entity changes are meta-reducers (one reducer pass =
 >   one op); bulk-dispatch loops yield with
 >   `await new Promise(r => setTimeout(r, 0))`.
@@ -125,7 +125,7 @@ Existing plugin: `eslint-local-rules/` (`eslint-plugin-local-rules` convention),
   `Actions` imports across all 43 real `*.effects.ts`) → zero migration, pure
   regression guard. **Correction (review R2):** the existing rules do
   CallExpression/selector analysis only and have **no `ImportDeclaration`
-  handling**; this rule follows the *plugin + spec structure* of the existing
+  handling**; this rule follows the _plugin + spec structure_ of the existing
   rules but adds new `ImportDeclaration` + `inject()`-call detection. The spec
   must cover the aliased-import case.
 - **`eslint-local-rules/rules/no-multi-entity-effect.js`** (`warn`): heuristic —
@@ -197,12 +197,12 @@ No production TypeScript changes. No runtime behavior change.
 
 - **Low overall** — docs + non-bypassable lint + CLAUDE.md text. No production
   code path changes; no sync behavior change.
-- *Knowledge loss on delete:* mitigated by folding load-bearing rationale into
+- _Knowledge loss on delete:_ mitigated by folding load-bearing rationale into
   the architecture doc **before** deletion, plus git history + commit-hash
   references.
-- *`no-multi-entity-effect` false positives:* mitigated by shipping as `warn`
+- _`no-multi-entity-effect` false positives:_ mitigated by shipping as `warn`
   with an allowed inline-disable + justification.
-- *CLAUDE.md too terse:* the guardrail sentence stays in always-loaded context;
+- _CLAUDE.md too terse:_ the guardrail sentence stays in always-loaded context;
   only the "why" moves to the linked doc.
 
 ## Evidence (research provenance)

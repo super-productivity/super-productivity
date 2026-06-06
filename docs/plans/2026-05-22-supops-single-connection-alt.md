@@ -40,8 +40,8 @@ schema type. Plan B reuses that owner instead of extracting a new one.
   sync, validation, `imex/sync`). Only `OperationLogStoreService` is in the
   (prospective) cycle. The token is **kept unchanged** for the other 10; this
   plan does not touch the `CLIENT_ID_PROVIDER` abstraction.
-- The cycle #7735 describes is *prospective*, not current: post-#7732
-  `ClientIdService` injects nothing. The cycle would only appear *if*
+- The cycle #7735 describes is _prospective_, not current: post-#7732
+  `ClientIdService` injects nothing. The cycle would only appear _if_
   `ClientIdService` delegated DB access to `OperationLogStoreService` while the
   latter still injected `CLIENT_ID_PROVIDER`. Plan B removes that edge first, so
   the delegation becomes safe.
@@ -55,13 +55,14 @@ The method body keeps its existing null-check / "cannot prune" warning; it just
 reads the parameter instead of `await this.clientIdProvider.loadClientId()`.
 
 Callers (~5, all already inject `CLIENT_ID_PROVIDER`):
+
 - `operation-log-hydrator.service.ts` — 4 call sites (`:213`, `:239`, `:291`,
   `:315`). Field `clientIdProvider` already present (`:57`). Load once per
   hydration pass and pass it in.
 - `conflict-resolution.service.ts` — 1 call site (`:432`). Field already present
   (`:100`); it already loads the clientId at `:614`/`:654`.
 
-This is arguably *better design* — `mergeRemoteOpClocks` is a pure-ish clock
+This is arguably _better design_ — `mergeRemoteOpClocks` is a pure-ish clock
 operation; taking its inputs explicitly beats reaching into DI.
 
 ### Step 2 — Move the `clearCache()` call to `runDestructiveStateReplacement`'s callers
@@ -75,7 +76,7 @@ Delete `this.clientIdProvider.clearCache()` from
 > "both services already import `ClientIdService`." That is **false** —
 > `backup.service.ts` and `clean-slate.service.ts` import only the pure
 > `generateClientId` util, not `ClientIdService`, and both carry comments
-> stating the cache-clear happens *inside* `runDestructiveStateReplacement`'s
+> stating the cache-clear happens _inside_ `runDestructiveStateReplacement`'s
 > transaction. So Step 2 must **add** a new `ClientIdService` injection to two
 > more services and **move** a correctness guarantee (cache-clear bound to a
 > committed `tx.done`) out into callers that cannot see `tx.done`. This widens
@@ -88,6 +89,7 @@ Delete `this.clientIdProvider.clearCache()` from
 ### Step 4 — Expose the connection on `OperationLogStoreService`
 
 Add a narrow public surface. Two options (decision point — see Open questions):
+
 - **4a** — `getDb(): Promise<IDBPDatabase<OpLogDB>>` (or `init()` + `db` getter):
   consumers get the raw handle.
 - **4b** — narrow typed methods (`readClientId()`, `putClientId()`, …): consumers
@@ -117,7 +119,7 @@ is the single handler the app needs for the op-log/clientId connection.
 
 `ArchiveStoreService` does not inject `CLIENT_ID_PROVIDER`, so
 `ArchiveStoreService → OperationLogStoreService` is cycle-free today. To reach
-*one connection process-wide*, `ArchiveStoreService` injects
+_one connection process-wide_, `ArchiveStoreService` injects
 `OperationLogStoreService` and drops its own opener; `_withRetryOnClose` (iOS
 #6643) stays, repointed at an invalidate hook. Without Step 7 the end state is
 two connections (op-log+clientId shared, archive separate).
@@ -140,16 +142,16 @@ Optional Step 8: ~16 import sites + `eslint.config.js` + docs. **No new file.**
 
 ## Estimated size
 
-| Scope | Diff churn |
-| --- | --- |
-| Steps 1–6 (core: cut the edge, share the connection) | ~300–450 |
-| + Step 7 (archive folded in) | +~80 |
-| + Step 8 (relocation + ESLint) | +~80 |
-| **Plan B full** | **~450–600** |
-| (Plan A full, for comparison) | ~750–1,100 |
+| Scope                                                | Diff churn   |
+| ---------------------------------------------------- | ------------ |
+| Steps 1–6 (core: cut the edge, share the connection) | ~300–450     |
+| + Step 7 (archive folded in)                         | +~80         |
+| + Step 8 (relocation + ESLint)                       | +~80         |
+| **Plan B full**                                      | **~450–600** |
+| (Plan A full, for comparison)                        | ~750–1,100   |
 
 Plan B is smaller mainly because it adds no service and no new spec file, and
-because the connection machinery is *reused in place* rather than relocated.
+because the connection machinery is _reused in place_ rather than relocated.
 
 ## Acceptance criteria
 
@@ -170,23 +172,23 @@ because the connection machinery is *reused in place* rather than relocated.
 
 ## Risks & mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| A future cycle if `OperationLogStoreService` gains an injected dep that reaches `ClientIdService` | "Injects nothing" is an enforced acceptance criterion; a store service *should* be a leaf |
-| `clearCache` now at 2 caller sites — one could be forgotten on a future destructive flow | Only 2 call sites today; cover both with tests; consider an ESLint/review note. (Plan A keeps it centralized — a genuine point for A.) |
-| `ClientIdService` / `ArchiveStoreService` depend on the whole 1,745-line `OperationLogStoreService` for a DB handle | Step 4b: expose only narrow typed methods, not the raw handle — the DI dependency is on the class but the *used* surface is tiny |
-| `mergeRemoteOpClocks` signature change ripples to specs + integration helpers | ~5 call sites + helpers; mechanical, enumerated |
-| `OperationLogStoreService` becomes the connection "landlord" (dual responsibility) | This is the central A-vs-B trade-off — see below |
+| Risk                                                                                                                | Mitigation                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| A future cycle if `OperationLogStoreService` gains an injected dep that reaches `ClientIdService`                   | "Injects nothing" is an enforced acceptance criterion; a store service _should_ be a leaf                                              |
+| `clearCache` now at 2 caller sites — one could be forgotten on a future destructive flow                            | Only 2 call sites today; cover both with tests; consider an ESLint/review note. (Plan A keeps it centralized — a genuine point for A.) |
+| `ClientIdService` / `ArchiveStoreService` depend on the whole 1,745-line `OperationLogStoreService` for a DB handle | Step 4b: expose only narrow typed methods, not the raw handle — the DI dependency is on the class but the _used_ surface is tiny       |
+| `mergeRemoteOpClocks` signature change ripples to specs + integration helpers                                       | ~5 call sites + helpers; mechanical, enumerated                                                                                        |
+| `OperationLogStoreService` becomes the connection "landlord" (dual responsibility)                                  | This is the central A-vs-B trade-off — see below                                                                                       |
 
 ## The central trade-off vs Plan A
 
 - **Plan A** adds a dedicated `SupOpsConnectionService` (single-responsibility:
-  it *only* owns the connection). Cleaner separation; one more service/file;
+  it _only_ owns the connection). Cleaner separation; one more service/file;
   larger diff; keeps `CLIENT_ID_PROVIDER` on `OperationLogStoreService`.
 - **Plan B** removes a dependency edge so `OperationLogStoreService` itself can
   be the connection owner. Fewer moving parts; no new file; smaller diff; makes
   `OperationLogStoreService` a proper leaf and `mergeRemoteOpClocks` explicit —
-  but `OperationLogStoreService` carries connection-ownership *and* op storage,
+  but `OperationLogStoreService` carries connection-ownership _and_ op storage,
   and other services depend on it for a DB handle.
 
 KISS leans B; single-responsibility purity leans A. Both are correct; both are

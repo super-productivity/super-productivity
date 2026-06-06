@@ -1,4 +1,4 @@
-# How to Rate ***Super Productivity***
+# How to Rate **_Super Productivity_**
 
 ## How ratings affect app discoverability
 

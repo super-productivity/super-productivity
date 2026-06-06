@@ -6,6 +6,7 @@ export enum SyncProviderId {
   'LocalFile' = 'LocalFile',
   'SuperSync' = 'SuperSync',
   'Nextcloud' = 'Nextcloud',
+  'ProtonDrive' = 'ProtonDrive',
 }
 
 /**

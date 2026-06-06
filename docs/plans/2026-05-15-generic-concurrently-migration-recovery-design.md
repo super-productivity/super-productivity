@@ -31,7 +31,7 @@ The recovery logic was **duplicated and name-hardcoded** in two places:
 `deploy.sh` runs **on the host** and self-updates only via a best-effort
 `git pull --ff-only || echo "WARNING: … continuing with current files"`. The
 production host's `deploy.sh` predated PR #7621, so it knew only about
-`20260512000000`. It pulled the new image (which *does* contain the new
+`20260512000000`. It pulled the new image (which _does_ contain the new
 CONCURRENTLY migration), ran `prisma migrate deploy`, hit P3018 on
 `20260514000000`, matched none of its hardcoded recovery branches, and bailed.
 
@@ -41,7 +41,7 @@ and a stale host script silently degrades.
 
 ## Goals
 
-1. Eliminate host/image skew: recovery logic ships *inside the image*,
+1. Eliminate host/image skew: recovery logic ships _inside the image_,
    version-locked to `prisma/migrations/` in the same build.
 2. Name-agnostic: no migration names hardcoded anywhere. New CONCURRENTLY
    migrations need zero changes to deploy tooling.
@@ -54,16 +54,16 @@ and a stale host script silently degrades.
 existing filename — already `COPY`'d into the image by the `Dockerfile`,
 already the startup `CMD` target; Dockerfile unchanged).
 
-| Caller | Before | After |
-| --- | --- | --- |
-| Host `deploy.sh` | `npx prisma migrate deploy` + ~310 lines of hardcoded host-side recovery | `timeout "$MIGRATION_TIMEOUT" $MIGRATOR_RUN sh -ec 'sh scripts/migrate-deploy.sh'` + exit-code handling only |
-| Image startup (`RUN_MIGRATIONS_ON_STARTUP=true`) | own hardcoded copy | the new generic script (wiring unchanged) |
-| Manual ops | run the deploy.sh dance by hand | `docker compose run --rm supersync sh scripts/migrate-deploy.sh` |
+| Caller                                           | Before                                                                   | After                                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Host `deploy.sh`                                 | `npx prisma migrate deploy` + ~310 lines of hardcoded host-side recovery | `timeout "$MIGRATION_TIMEOUT" $MIGRATOR_RUN sh -ec 'sh scripts/migrate-deploy.sh'` + exit-code handling only |
+| Image startup (`RUN_MIGRATIONS_ON_STARTUP=true`) | own hardcoded copy                                                       | the new generic script (wiring unchanged)                                                                    |
+| Manual ops                                       | run the deploy.sh dance by hand                                          | `docker compose run --rm supersync sh scripts/migrate-deploy.sh`                                             |
 
 Because `scripts/` and `prisma/migrations/` are copied into the image in the
 same `Dockerfile` build, the recovery logic can never be stale relative to the
 migrations it must handle. A stale host `deploy.sh` only needs to know how to
-*invoke* the in-image script; the recovery *content* always comes from the
+_invoke_ the in-image script; the recovery _content_ always comes from the
 freshly pulled image.
 
 Removed: the entire `deploy.sh` block from `MIGRATE_LOG=""` (~line 176) through
@@ -116,7 +116,7 @@ verbatim in the observed production log.
 3. If **any** statement fails: STOP, do **not** `resolve --applied`, print the
    exact remaining manual commands, exit non-zero.
 4. Only if **every** statement succeeded: `npx prisma migrate resolve --applied
-   <name>`.
+<name>`.
 
 `--applied` is therefore never "force" — it is asserted only after the
 migration's own SQL verifiably ran. Genuine bugs, non-CONCURRENTLY migrations,
