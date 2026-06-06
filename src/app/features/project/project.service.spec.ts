@@ -88,10 +88,6 @@ describe('ProjectService', () => {
     taskService = jasmine.createSpyObj('TaskService', [
       'add',
       'createNewTaskWithDefaults',
-      'getByIdWithSubTaskData$',
-      'moveToProject',
-      'setDone',
-      'setUnDone',
       'getAllTasksForProject',
     ]);
     taskService.createNewTaskWithDefaults.and.callFake(() => {
