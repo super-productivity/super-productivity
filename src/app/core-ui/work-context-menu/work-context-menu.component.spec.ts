@@ -129,6 +129,8 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
+        jasmine.objectContaining({ id: 'project-123', title: 'Demo project' }),
+        {},
       );
       expect(router.navigateByUrl).toHaveBeenCalledWith('/');
     });
@@ -144,10 +146,13 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
       resolveResult$ = of('inbox');
       await component.completeProject();
-      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledWith(
-        undoneInfo.topLevelTasksWithUnfinishedWork,
+      expect(mockProjectService.moveTasksToInbox).not.toHaveBeenCalled();
+      expect(mockProjectService.complete).toHaveBeenCalledWith(
+        'project-123',
+        logicalDoneOn,
+        jasmine.anything(),
+        { topLevelTaskIdsToMoveToInbox: ['t1'] },
       );
-      expect(mockProjectService.complete).toHaveBeenCalled();
     });
 
     it('uses refreshed unfinished work after final confirmation', async () => {
@@ -166,8 +171,11 @@ describe('WorkContextMenuComponent', () => {
 
       await component.completeProject();
 
-      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledWith(
-        refreshedInfo.topLevelTasksWithUnfinishedWork,
+      expect(mockProjectService.complete).toHaveBeenCalledWith(
+        'project-123',
+        logicalDoneOn,
+        jasmine.anything(),
+        { topLevelTaskIdsToMoveToInbox: ['t2'] },
       );
     });
 
@@ -175,10 +183,13 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
       resolveResult$ = of('markDone');
       await component.completeProject();
-      expect(mockProjectService.markTasksDone).toHaveBeenCalledWith(
-        undoneInfo.unfinishedTasks,
+      expect(mockProjectService.markTasksDone).not.toHaveBeenCalled();
+      expect(mockProjectService.complete).toHaveBeenCalledWith(
+        'project-123',
+        logicalDoneOn,
+        jasmine.anything(),
+        { taskIdsToMarkDone: ['t1'] },
       );
-      expect(mockProjectService.complete).toHaveBeenCalled();
     });
 
     it('does not move unfinished tasks when Inbox is chosen but confirmation is cancelled', async () => {

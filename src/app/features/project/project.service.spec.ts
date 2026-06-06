@@ -367,13 +367,13 @@ describe('ProjectService', () => {
   });
 
   describe('complete', () => {
-    it('dispatches completeProject with the given doneOn and an undo snack', () => {
+    it('dispatches the atomic task-shared completeProject action and an undo snack', () => {
       const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
       service.complete('project-1', 12345);
       const completeAction = dispatchSpy.calls
         .allArgs()
         .map((args: any) => args[0])
-        .find((a: any) => a?.type === '[Project] Complete Project');
+        .find((a: any) => a?.type === '[Task Shared] completeProject');
       expect(completeAction).toBeTruthy();
       expect(completeAction.id).toBe('project-1');
       expect(completeAction.doneOn).toBe(12345);
@@ -393,6 +393,21 @@ describe('ProjectService', () => {
       snackArg.actionFn();
       const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
       expect(types).toContain('[Project] Reopen Project');
+    });
+
+    it('preserves the hidden-project show-in-menu undo path', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.complete('project-1', 1, { isHiddenFromMenu: true });
+      const snackArg = snackService.open.calls.mostRecent().args[0] as any;
+
+      dispatchSpy.calls.reset();
+      snackArg.actionFn();
+
+      expect(snackService.open.calls.mostRecent().args[0]).toEqual(
+        jasmine.objectContaining({
+          actionStr: T.F.PROJECT.S.SHOW_IN_MENU,
+        }),
+      );
     });
   });
 

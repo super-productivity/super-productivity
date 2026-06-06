@@ -552,6 +552,17 @@ describe('projectReducer', () => {
       );
       expect((afterReArchive.entities as any).P1.isArchived).toBeTrue();
     });
+
+    it('should clear completed state to preserve isDone implies isArchived', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: true, isDone: true, doneOn: 123 },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(s as any, unarchiveProject({ id: 'P1' }) as any);
+      expect((r.entities as any).P1.isArchived).toBeFalse();
+      expect((r.entities as any).P1.isDone).toBeFalse();
+      expect((r.entities as any).P1.doneOn).toBeNull();
+    });
   });
 
   describe('completeProject', () => {

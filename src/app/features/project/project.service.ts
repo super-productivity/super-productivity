@@ -21,7 +21,6 @@ import { WorkContextService } from '../work-context/work-context.service';
 import {
   addProject,
   archiveProject,
-  completeProject,
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
@@ -59,6 +58,11 @@ export interface ProjectCompletionInfo {
   allTasks: Task[];
   unfinishedTasks: Task[];
   topLevelTasksWithUnfinishedWork: Task[];
+}
+
+export interface ProjectCompletionResolution {
+  taskIdsToMarkDone?: string[];
+  topLevelTaskIdsToMoveToInbox?: string[];
 }
 
 @Injectable({
@@ -177,13 +181,24 @@ export class ProjectService {
     );
   }
 
-  complete(projectId: string, doneOn: number): void {
-    this._store$.dispatch(completeProject({ id: projectId, doneOn }));
+  complete(
+    projectId: string,
+    doneOn: number,
+    project?: Pick<Project, 'isHiddenFromMenu'>,
+    resolution: ProjectCompletionResolution = {},
+  ): void {
+    this._store$.dispatch(
+      TaskSharedActions.completeProject({
+        id: projectId,
+        doneOn,
+        ...resolution,
+      }),
+    );
     this._snackService.open({
       ico: 'celebration',
       msg: T.F.PROJECT.S.COMPLETED,
       actionStr: T.F.PROJECT.COMPLETE.UNDO,
-      actionFn: () => this.reopen(projectId),
+      actionFn: () => this.reopen(projectId, project),
     });
   }
 

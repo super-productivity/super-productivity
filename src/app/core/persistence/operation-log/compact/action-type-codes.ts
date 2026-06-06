@@ -82,6 +82,7 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.TASK_SHARED_UPDATE_MULTIPLE]: 'HUM',
   [ActionType.TASK_SHARED_MOVE_TO_PROJECT]: 'HMP',
   [ActionType.TASK_SHARED_DELETE_PROJECT]: 'HPD',
+  [ActionType.TASK_SHARED_COMPLETE_PROJECT]: 'HCP',
   [ActionType.TASK_SHARED_PLAN_FOR_TODAY]: 'HPT',
   [ActionType.TASK_SHARED_REMOVE_FROM_TODAY]: 'HRT',
   [ActionType.TASK_SHARED_ADD_TAG]: 'HGT',

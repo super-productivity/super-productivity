@@ -8,6 +8,10 @@ import {
   TASK_FEATURE_NAME,
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
+import {
+  updateDoneOnForTask,
+  updateTimeEstimateForTask,
+} from '../../../features/tasks/store/task.reducer.util';
 import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
 import { TimeTrackingState } from '../../../features/time-tracking/time-tracking.model';
 import { Tag } from '../../../features/tag/tag.model';
@@ -24,6 +28,10 @@ import {
 import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfgState } from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { adapter as taskRepeatCfgAdapter } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { INBOX_PROJECT } from '../../../features/project/project.const';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 /**
  * Extended state type that includes feature stores not in RootState.
@@ -89,6 +97,171 @@ const handleMoveToOtherProject = (
   };
 
   return updatedState;
+};
+
+const addTasksToTodayTagIfNeeded = (
+  state: RootState,
+  taskIdsToAdd: string[],
+): RootState => {
+  const todayTag = state[TAG_FEATURE_NAME].entities[TODAY_TAG.id];
+  if (!todayTag || taskIdsToAdd.length === 0) {
+    return state;
+  }
+  return updateTags(state, [
+    {
+      id: TODAY_TAG.id,
+      changes: {
+        taskIds: unique([...todayTag.taskIds, ...taskIdsToAdd]),
+      },
+    },
+  ]);
+};
+
+const updateTasksDoneState = (
+  state: RootState,
+  taskIds: string[],
+  isDone: boolean,
+  doneOn: number,
+): RootState => {
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const taskIdsToAddToToday: string[] = [];
+  let taskState = state[TASK_FEATURE_NAME];
+
+  unique(taskIds).forEach((taskId) => {
+    const currentTask = taskState.entities[taskId] as Task | undefined;
+    if (!currentTask || currentTask.isDone === isDone) {
+      return;
+    }
+
+    const update: Update<Task> = {
+      id: taskId,
+      changes: isDone ? { isDone: true, doneOn } : { isDone: false },
+    };
+
+    taskState = updateTimeEstimateForTask(update, null, taskState);
+    taskState = updateDoneOnForTask(update, taskState, todayStr);
+    taskState = taskAdapter.updateOne(
+      {
+        id: taskId,
+        changes: {
+          ...update.changes,
+          modified: Date.now(),
+        },
+      },
+      taskState,
+    );
+
+    const updatedTask = taskState.entities[taskId] as Task | undefined;
+    if (
+      isDone &&
+      !currentTask.parentId &&
+      currentTask.dueDay !== todayStr &&
+      updatedTask?.dueDay === todayStr
+    ) {
+      taskIdsToAddToToday.push(taskId);
+    }
+  });
+
+  const updatedState = {
+    ...state,
+    [TASK_FEATURE_NAME]: taskState,
+  };
+
+  return addTasksToTodayTagIfNeeded(updatedState, taskIdsToAddToToday);
+};
+
+const getTaskWithCurrentSubTasks = (
+  state: RootState,
+  taskId: string,
+): TaskWithSubTasks | undefined => {
+  const task = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
+  if (!task || task.parentId) {
+    return undefined;
+  }
+
+  const subTasks = (task.subTaskIds ?? [])
+    .map((subTaskId) => state[TASK_FEATURE_NAME].entities[subTaskId])
+    .filter((subTask): subTask is Task => !!subTask);
+
+  return {
+    ...task,
+    subTaskIds: task.subTaskIds ?? [],
+    subTasks,
+  };
+};
+
+const moveTopLevelTasksToInbox = (
+  state: RootState,
+  taskIds: string[],
+  doneOn: number,
+): RootState => {
+  if (!state[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id]) {
+    return state;
+  }
+
+  return unique(taskIds).reduce((updatedState, taskId) => {
+    const task = getTaskWithCurrentSubTasks(updatedState, taskId);
+    if (!task) {
+      return updatedState;
+    }
+
+    const stateAfterMove = handleMoveToOtherProject(updatedState, task, INBOX_PROJECT.id);
+
+    return task.isDone
+      ? updateTasksDoneState(stateAfterMove, [task.id], false, doneOn)
+      : stateAfterMove;
+  }, state);
+};
+
+const clearCurrentTaskForCompletedProject = (
+  state: RootState,
+  projectId: string,
+): RootState => {
+  const taskState = state[TASK_FEATURE_NAME];
+  const currentTaskId = taskState.currentTaskId;
+  if (!currentTaskId) {
+    return state;
+  }
+
+  const currentTask = taskState.entities[currentTaskId] as Task | undefined;
+  if (currentTask?.projectId !== projectId) {
+    return state;
+  }
+
+  return {
+    ...state,
+    [TASK_FEATURE_NAME]: {
+      ...taskState,
+      currentTaskId: null,
+      lastCurrentTaskId: currentTaskId,
+    },
+  };
+};
+
+const handleCompleteProject = (
+  state: RootState,
+  id: string,
+  doneOn: number,
+  taskIdsToMarkDone: string[] = [],
+  topLevelTaskIdsToMoveToInbox: string[] = [],
+): RootState => {
+  if (id === INBOX_PROJECT.id || !state[PROJECT_FEATURE_NAME].entities[id]) {
+    return state;
+  }
+
+  let updatedState = clearCurrentTaskForCompletedProject(state, id);
+  updatedState = moveTopLevelTasksToInbox(
+    updatedState,
+    topLevelTaskIdsToMoveToInbox,
+    doneOn,
+  );
+  updatedState = updateTasksDoneState(updatedState, taskIdsToMarkDone, true, doneOn);
+
+  return updateProject(updatedState, id, {
+    isDone: true,
+    doneOn,
+    isArchived: true,
+  });
 };
 
 /**
@@ -207,6 +380,21 @@ const createActionHandlers = (
       typeof TaskSharedActions.deleteProject
     >;
     return handleDeleteProject(state, projectId, allTaskIds);
+  },
+  [TaskSharedActions.completeProject.type]: () => {
+    const {
+      id,
+      doneOn,
+      taskIdsToMarkDone = [],
+      topLevelTaskIdsToMoveToInbox = [],
+    } = action as ReturnType<typeof TaskSharedActions.completeProject>;
+    return handleCompleteProject(
+      state,
+      id,
+      doneOn,
+      taskIdsToMarkDone,
+      topLevelTaskIdsToMoveToInbox,
+    );
   },
 });
 

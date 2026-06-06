@@ -61,6 +61,7 @@ export enum ActionType {
   TASK_SHARED_UPDATE_MULTIPLE = '[Task Shared] updateTasks',
   TASK_SHARED_MOVE_TO_PROJECT = '[Task Shared] moveToOtherProject',
   TASK_SHARED_DELETE_PROJECT = '[Task Shared] deleteProject',
+  TASK_SHARED_COMPLETE_PROJECT = '[Task Shared] completeProject',
   TASK_SHARED_PLAN_FOR_TODAY = '[Task Shared] planTasksForToday',
   TASK_SHARED_REMOVE_FROM_TODAY = '[Task Shared] removeTasksFromTodayTag',
   TASK_SHARED_ADD_TAG = '[Task Shared] addTagToTask',

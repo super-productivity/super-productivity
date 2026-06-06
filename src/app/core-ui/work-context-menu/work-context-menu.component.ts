@@ -199,17 +199,24 @@ export class WorkContextMenuComponent implements OnInit {
       }
     }
 
-    if (resolution === 'inbox') {
-      await this._projectService.moveTasksToInbox(
-        currentInfo.topLevelTasksWithUnfinishedWork,
-      );
-    } else if (resolution === 'markDone') {
-      await this._projectService.markTasksDone(currentInfo.unfinishedTasks);
-    }
-
-    // Recompute after resolution so the stats reflect the final task list.
-    const finalInfo = await this._projectService.getCompletionInfo(this.contextId);
     const doneOn = this._dateService.getLogicalTodayDate().getTime();
+    this._projectService.complete(
+      this.contextId,
+      doneOn,
+      project,
+      resolution === 'inbox'
+        ? {
+            topLevelTaskIdsToMoveToInbox: currentInfo.topLevelTasksWithUnfinishedWork.map(
+              (task) => task.id,
+            ),
+          }
+        : resolution === 'markDone'
+          ? { taskIdsToMarkDone: currentInfo.unfinishedTasks.map((task) => task.id) }
+          : {},
+    );
+
+    // Recompute after completion so the stats reflect moved/done task resolution.
+    const finalInfo = await this._projectService.getCompletionInfo(this.contextId);
     const stats = getProjectCompletionStats(
       finalInfo.topLevelTasks,
       finalInfo.allTasks,
@@ -217,7 +224,6 @@ export class WorkContextMenuComponent implements OnInit {
     );
 
     const activeId = this._workContextService.activeWorkContextId;
-    this._projectService.complete(this.contextId, doneOn);
 
     // Navigate away BEFORE opening the celebration: MatDialog's closeOnNavigation
     // (default true) would otherwise dismiss the dialog the moment we leave the

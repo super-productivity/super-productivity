@@ -301,6 +301,21 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
+    completeProject: (projectProps: {
+      id: string;
+      doneOn: number;
+      taskIdsToMarkDone?: string[];
+      topLevelTaskIdsToMoveToInbox?: string[];
+    }) => ({
+      ...projectProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'PROJECT',
+        entityId: projectProps.id,
+        opType: OpType.Batch,
+      } satisfies PersistentActionMeta,
+    }),
+
     // Today Tag Management
     planTasksForToday: (taskProps: {
       taskIds: string[];

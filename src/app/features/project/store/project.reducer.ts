@@ -184,6 +184,8 @@ export const projectReducer = createReducer<ProjectState>(
         id,
         changes: {
           isArchived: false,
+          isDone: false,
+          doneOn: null,
         },
       },
       state,
