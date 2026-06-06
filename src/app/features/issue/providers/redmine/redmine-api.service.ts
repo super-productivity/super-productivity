@@ -3,7 +3,7 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { HttpClient, HttpHeaders, HttpParams, HttpRequest } from '@angular/common/http';
 import { RedmineCfg } from './redmine.model';
 import { catchError, filter, map } from 'rxjs/operators';
-import { Observable } from 'rxjs';
+import { forkJoin, Observable, of, throwError } from 'rxjs';
 import { throwHandledError } from '../../../../util/throw-handled-error';
 import { T } from '../../../../t.const';
 import { ISSUE_PROVIDER_HUMANIZED, REDMINE_TYPE } from '../../issue.const';
@@ -16,12 +16,17 @@ import {
   RedmineSearchResultItem,
   RedmineTimeEntriesResult,
 } from './redmine-issue.model';
-import { mapRedmineSearchResultItemToSearchResult } from './redmine-issue-map.util';
+import {
+  mapRedmineIssueToSearchResult,
+  mapRedmineSearchResultItemToSearchResult,
+} from './redmine-issue-map.util';
 import { SearchResultItem } from '../../issue.model';
 import { ScopeOptions } from './redmine.const';
 import { handleIssueProviderHttpError$ } from '../../handle-issue-provider-http-error';
 
 /* eslint-disable @typescript-eslint/naming-convention */
+
+const ISSUE_ID_QUERY_RGX = /^#?(\d+)$/;
 
 @Injectable({
   providedIn: 'root',
@@ -31,7 +36,7 @@ export class RedmineApiService {
   private _http = inject(HttpClient);
 
   searchIssuesInProject$(query: string, cfg: RedmineCfg): Observable<SearchResultItem[]> {
-    return this._sendRequest$(
+    const textSearch$: Observable<SearchResultItem[]> = this._sendRequest$(
       {
         url: `${cfg.host}/projects/${cfg.projectId}/search.json`,
         params: ParamsBuilder.create()
@@ -50,6 +55,31 @@ export class RedmineApiService {
             )
           : [];
       }),
+    );
+
+    // Redmine's search API only does full text search and does not match issue ids,
+    // so for numeric queries (e.g. "1234" or "#1234") we additionally try to fetch
+    // the issue directly by its id and merge it into the results.
+    const idMatch = query.trim().match(ISSUE_ID_QUERY_RGX);
+    if (!idMatch) {
+      return textSearch$;
+    }
+
+    const issueId = Number(idMatch[1]);
+    return forkJoin([
+      this.getById$(issueId, cfg, { isSkipErrorHandling: true }).pipe(
+        catchError(() => of(null)),
+      ),
+      textSearch$,
+    ]).pipe(
+      map(([issueById, textResults]) =>
+        issueById
+          ? [
+              mapRedmineIssueToSearchResult(issueById),
+              ...textResults.filter((result) => result.issueData.id !== issueId),
+            ]
+          : textResults,
+      ),
     );
   }
 
@@ -123,12 +153,17 @@ export class RedmineApiService {
     );
   }
 
-  getById$(issueId: number, cfg: RedmineCfg): Observable<RedmineIssue> {
+  getById$(
+    issueId: number,
+    cfg: RedmineCfg,
+    { isSkipErrorHandling = false }: { isSkipErrorHandling?: boolean } = {},
+  ): Observable<RedmineIssue> {
     return this._sendRequest$(
       {
         url: `${cfg.host}/issues/${issueId}.json`,
       },
       cfg,
+      { isSkipErrorHandling },
     ).pipe(
       map(({ issue }) => Object.assign({ url: `${cfg.host}/issues/${issueId}` }, issue)),
     );
@@ -137,6 +172,7 @@ export class RedmineApiService {
   private _sendRequest$(
     params: HttpRequest<string> | any,
     cfg: RedmineCfg,
+    { isSkipErrorHandling = false }: { isSkipErrorHandling?: boolean } = {},
   ): Observable<any> {
     this._checkSettings(cfg);
     params.headers = {
@@ -169,7 +205,9 @@ export class RedmineApiService {
       filter((res) => !(res === Object(res) && res.type === 0)),
       map((res: any) => (res && res.body ? res.body : res)),
       catchError((err) =>
-        handleIssueProviderHttpError$(REDMINE_TYPE, this._snackService, err),
+        isSkipErrorHandling
+          ? throwError(() => err)
+          : handleIssueProviderHttpError$(REDMINE_TYPE, this._snackService, err),
       ),
     );
   }
