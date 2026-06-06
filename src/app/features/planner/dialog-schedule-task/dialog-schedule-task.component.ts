@@ -72,6 +72,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     targetTime?: string;
     isSelectDueOnly?: boolean;
     showQuickAccess?: boolean;
+    minDate?: Date;
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogScheduleTaskComponent>>(MatDialogRef);
   private _cd = inject(ChangeDetectorRef);
@@ -96,7 +97,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   );
 
   T: typeof T = T;
-  minDate = new Date();
+  minDate = this.data.minDate || new Date();
 
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
