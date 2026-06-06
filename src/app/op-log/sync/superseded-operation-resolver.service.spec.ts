@@ -585,7 +585,6 @@ describe('SupersededOperationResolverService', () => {
         entityType: 'TASK',
         entityId: entityIds[0],
         entityIds,
-        affectedEntities: entityIds.map((entityId) => ({ entityType: 'TASK', entityId })),
         payload: {
           actionPayload: {
             tasks: entityIds.map((eid) => ({ id: eid, title: `Task ${eid}` })),
@@ -623,10 +622,6 @@ describe('SupersededOperationResolverService', () => {
         expect(appendedOp.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
         expect(appendedOp.opType).toBe(OpType.Update);
         expect(appendedOp.entityType).toBe('TASK');
-        expect(appendedOp.affectedEntities).toEqual([
-          { entityType: 'TASK', entityId: 'task-1' },
-          { entityType: 'TASK', entityId: 'task-2' },
-        ]);
       });
 
       it('should preserve original payload exactly', async () => {
@@ -646,56 +641,6 @@ describe('SupersededOperationResolverService', () => {
         const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
           .args[0] as Operation;
         expect(appendedOp.payload).toEqual(archiveOp.payload);
-      });
-
-      it('should re-create completeProject batch op instead of project-only LWW update', async () => {
-        const completeProjectOp: Operation = {
-          id: 'op-complete-project-1',
-          actionType: ActionType.TASK_SHARED_COMPLETE_PROJECT,
-          opType: OpType.Batch,
-          entityType: 'PROJECT',
-          entityId: 'project-1',
-          affectedEntities: [
-            { entityType: 'PROJECT', entityId: 'project-1' },
-            { entityType: 'TASK', entityId: 'task-1' },
-            { entityType: 'TASK', entityId: 'task-2' },
-          ],
-          payload: {
-            actionPayload: {
-              id: 'project-1',
-              doneOn: 1000,
-              taskIdsToMarkDone: ['task-1', 'task-2'],
-            },
-            entityChanges: [],
-          },
-          clientId: 'original-client',
-          vectorClock: { clientA: 5 },
-          timestamp: 1000,
-          schemaVersion: 1,
-        };
-
-        mockVectorClockService.getCurrentVectorClock.and.returnValue(
-          Promise.resolve({ clientB: 2 }),
-        );
-
-        await service.resolveSupersededLocalOps([
-          {
-            opId: 'op-complete-project-1',
-            op: completeProjectOp,
-            existingClock: { clientC: 3 },
-          },
-        ]);
-
-        expect(
-          mockConflictResolutionService.getCurrentEntityState,
-        ).not.toHaveBeenCalled();
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
-          .args[0] as Operation;
-        expect(appendedOp.actionType).toBe(ActionType.TASK_SHARED_COMPLETE_PROJECT);
-        expect(appendedOp.opType).toBe(OpType.Batch);
-        expect(appendedOp.payload).toEqual(completeProjectOp.payload);
-        expect(appendedOp.affectedEntities).toEqual(completeProjectOp.affectedEntities);
-        expect(appendedOp.vectorClock['clientC']).toBeGreaterThanOrEqual(3);
       });
 
       it('should preserve entityId and entityIds in new operation', async () => {

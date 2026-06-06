@@ -79,7 +79,6 @@ model Operation {
   syncImportReason   String? @map("sync_import_reason")
 
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  affectedEntities OperationAffectedEntity[]
 
   @@unique([userId, serverSeq])
   @@index([userId, entityType, entityId, serverSeq])
@@ -87,21 +86,6 @@ model Operation {
   @@index([userId, receivedAt])
   // Restore-point opType lookups use a raw partial index in the 20260512000000 migration.
   @@map("operations")
-}
-
-model OperationAffectedEntity {
-  id          BigInt @id @default(autoincrement())
-  operationId String @map("operation_id")
-  userId      Int    @map("user_id")
-  entityType  String @map("entity_type")
-  entityId    String @map("entity_id")
-  serverSeq   Int    @map("server_seq")
-
-  operation Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
-
-  @@unique([operationId, entityType, entityId])
-  @@index([userId, entityType, entityId, serverSeq])
-  @@map("operation_affected_entities")
 }
 
 model UserSyncState {

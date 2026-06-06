@@ -31,31 +31,11 @@ import { WorkContextMarkdownService } from '../../features/work-context/work-con
 import { ShareService, ShareSupport } from '../../core/share/share.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+import { TaskWithSubTasks } from '../../features/tasks/task.model';
 import { firstValueFrom, Observable, of } from 'rxjs';
 import { AsyncPipe } from '@angular/common';
 import type { WorkContextSettingsDialogData } from '../../features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 import { DateService } from '../../core/date/date.service';
-
-const getTaskTreeIds = (
-  allTasks: Pick<Task, 'id' | 'subTaskIds'>[],
-  rootTasks: Pick<Task, 'id' | 'subTaskIds'>[],
-): string[] => {
-  const taskById = new Map(allTasks.map((task) => [task.id, task]));
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  const collect = (taskId: string): void => {
-    if (seen.has(taskId)) {
-      return;
-    }
-    seen.add(taskId);
-    ids.push(taskId);
-    taskById.get(taskId)?.subTaskIds?.forEach(collect);
-  };
-
-  rootTasks.forEach((task) => collect(task.id));
-  return ids;
-};
 
 @Component({
   selector: 'work-context-menu',
@@ -253,17 +233,11 @@ export class WorkContextMenuComponent implements OnInit {
       this.contextId,
       doneOn,
       resolution === 'inbox'
-        ? (() => {
-            const topLevelTasks = currentInfo.topLevelTasksWithUnfinishedWork;
-            const taskIdsToMarkUndone = topLevelTasks
-              .filter((task) => task.isDone)
-              .map((task) => task.id);
-            return {
-              topLevelTaskIdsToMoveToInbox: topLevelTasks.map((task) => task.id),
-              taskIdsToMoveToInbox: getTaskTreeIds(currentInfo.allTasks, topLevelTasks),
-              ...(taskIdsToMarkUndone.length ? { taskIdsToMarkUndone } : {}),
-            };
-          })()
+        ? {
+            topLevelTaskIdsToMoveToInbox: currentInfo.topLevelTasksWithUnfinishedWork.map(
+              (task) => task.id,
+            ),
+          }
         : resolution === 'markDone'
           ? { taskIdsToMarkDone: currentInfo.unfinishedTasks.map((task) => task.id) }
           : {},

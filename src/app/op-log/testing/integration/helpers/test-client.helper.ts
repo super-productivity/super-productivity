@@ -4,7 +4,6 @@ import {
   EntityType,
   VectorClock,
   ActionType,
-  AffectedEntity,
 } from '../../../core/operation.types';
 import { mergeVectorClocks } from '../../../../core/util/vector-clock';
 import { CURRENT_SCHEMA_VERSION } from '../../../persistence/schema-migration.service';
@@ -62,7 +61,6 @@ export class TestClient {
     entityId: string;
     payload: unknown;
     entityIds?: string[];
-    affectedEntities?: AffectedEntity[];
   }): Operation {
     // Increment our clock component before creating the operation
     this.vectorClock[this.clientId] = (this.vectorClock[this.clientId] || 0) + 1;
@@ -74,7 +72,6 @@ export class TestClient {
       entityType: params.entityType,
       entityId: params.entityId,
       entityIds: params.entityIds,
-      affectedEntities: params.affectedEntities,
       payload: params.payload,
       clientId: this.clientId,
       vectorClock: { ...this.vectorClock },

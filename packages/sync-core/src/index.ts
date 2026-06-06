@@ -5,13 +5,11 @@ export {
   extractActionPayload,
   extractEntityFromPayload,
   extractUpdateChanges,
-  getOperationAffectedEntities,
 } from './operation.types';
 export type {
   VectorClock,
   Operation,
   OperationLogEntry,
-  AffectedEntity,
   EntityConflict,
   ConflictResult,
   EntityChange,

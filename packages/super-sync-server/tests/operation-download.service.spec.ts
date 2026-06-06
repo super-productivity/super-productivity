@@ -13,7 +13,6 @@ vi.mock('../src/db', () => ({
       findUnique: vi.fn(),
     },
     $queryRaw: vi.fn(),
-    $queryRawUnsafe: vi.fn(),
     $transaction: vi.fn(),
   },
 }));
@@ -111,7 +110,6 @@ describe('OperationDownloadService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
-    vi.mocked(prisma.$queryRawUnsafe).mockResolvedValue([]);
     service = new OperationDownloadService();
   });
 
@@ -148,22 +146,6 @@ describe('OperationDownloadService', () => {
       expect(result[0].op.id).toBe('op-1');
       expect(result[0].op.opType).toBe('ADD');
       expect(result[1].serverSeq).toBe(2);
-    });
-
-    it('should include affected entities when present', async () => {
-      const mockOps = [createMockOpRow(1, 'client-1', { id: 'op-1' })];
-      vi.mocked(prisma.operation.findMany).mockResolvedValue(mockOps as any);
-      vi.mocked(prisma.$queryRawUnsafe).mockResolvedValue([
-        { operationId: 'op-1', entityType: 'PROJECT', entityId: 'project-1' },
-        { operationId: 'op-1', entityType: 'TASK', entityId: 'task-1' },
-      ]);
-
-      const result = await service.getOpsSince(1, 0);
-
-      expect(result[0].op.affectedEntities).toEqual([
-        { entityType: 'PROJECT', entityId: 'project-1' },
-        { entityType: 'TASK', entityId: 'task-1' },
-      ]);
     });
 
     it('should exclude operations from specified client', async () => {
@@ -248,8 +230,6 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn(),
           },
-          $queryRaw: vi.fn().mockResolvedValue([]),
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return mockFn(mockTx);
       });
@@ -459,7 +439,6 @@ describe('OperationDownloadService', () => {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
           },
           $queryRaw: vi.fn(),
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(capturedTx);
       });
@@ -566,7 +545,6 @@ describe('OperationDownloadService', () => {
           $queryRaw: vi
             .fn()
             .mockResolvedValue([{ client_id: 'snapshot-author', max_counter: 1n }]),
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(mockTx);
       });
@@ -593,7 +571,6 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(mockTx);
       });
@@ -674,7 +651,6 @@ describe('OperationDownloadService', () => {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 50 }),
           },
           $queryRaw: vi.fn().mockResolvedValue([]),
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(mockTx);
       });
@@ -699,7 +675,6 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(mockTx);
       });
@@ -763,7 +738,6 @@ describe('OperationDownloadService', () => {
             { client_id: 'client-2', max_counter: 5n },
             { client_id: 'client-3', max_counter: 8n },
           ]),
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(mockTx);
       });
@@ -1076,7 +1050,6 @@ describe('OperationDownloadService', () => {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 70 }),
           },
           $queryRaw: vi.fn(),
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(capturedTx);
       });
@@ -1121,7 +1094,6 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 70 }),
           },
-          $queryRawUnsafe: vi.fn().mockResolvedValue([]),
         };
         return fn(mockTx);
       });

@@ -147,7 +147,6 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.PROJECT_AUTO_MOVE_TO_BACKLOG]: 'PAB',
   [ActionType.PROJECT_AUTO_MOVE_FROM_BACKLOG]: 'PAR',
   [ActionType.PROJECT_MOVE_ALL_BACKLOG]: 'PBA',
-  [ActionType.PROJECT_COMPLETE]: 'PCO',
 
   // TaskRepeatCfg actions (R)
   [ActionType.REPEAT_CFG_ADD]: 'RA',

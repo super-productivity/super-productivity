@@ -31,10 +31,6 @@ describe('operation-codec.service', () => {
   const mockOperationWithOptionals: Operation = {
     ...mockOperation,
     entityIds: ['task-1', 'task-2'],
-    affectedEntities: [
-      { entityType: 'PROJECT', entityId: 'project-1' },
-      { entityType: 'TASK', entityId: 'task-1' },
-    ],
   };
 
   describe('encodeOperation', () => {
@@ -58,10 +54,6 @@ describe('operation-codec.service', () => {
       const compact = encodeOperation(mockOperationWithOptionals);
 
       expect(compact.ds).toEqual(['task-1', 'task-2']);
-      expect(compact.ae).toEqual([
-        { entityType: 'PROJECT', entityId: 'project-1' },
-        { entityType: 'TASK', entityId: 'task-1' },
-      ]);
     });
   });
 

@@ -1041,34 +1041,6 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       });
     });
 
-    it('should update repeat-on-complete cfgs when project completion marks a task done', () => {
-      testScheduler.run(({ hot, expectObservable }) => {
-        const action = TaskSharedActions.completeProject({
-          id: 'project-1',
-          doneOn: Date.now(),
-          taskIdsToMarkDone: ['parent-task-id'],
-        });
-
-        actions$ = hot('-a', { a: action });
-        taskService.getByIdOnce$.and.returnValue(of(mockTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
-          of({ ...mockRepeatCfg, repeatFromCompletionDate: true }),
-        );
-
-        const today = getDbDateStr();
-        const expectedAction = updateTaskRepeatCfg({
-          taskRepeatCfg: {
-            id: 'repeat-cfg-id',
-            changes: { startDate: today, lastTaskCreationDay: today },
-          },
-        });
-
-        expectObservable(effects.updateStartDateOnProjectComplete$).toBe('-a', {
-          a: expectedAction,
-        });
-      });
-    });
-
     it('should not emit when task has no repeatCfgId', () => {
       testScheduler.run(({ hot, expectObservable }) => {
         const action = TaskSharedActions.updateTask({

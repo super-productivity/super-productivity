@@ -182,64 +182,6 @@ export class IssueTwoWaySyncEffects {
     { dispatch: false },
   );
 
-  pushDoneStateOnProjectComplete$: Observable<unknown> = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.completeProject),
-        concatMap((action) =>
-          from([
-            ...(action.taskIdsToMarkDone ?? []).map((taskId) => ({
-              taskId,
-              changes: { isDone: true },
-            })),
-            ...(action.taskIdsToMarkUndone ?? []).map((taskId) => ({
-              taskId,
-              changes: { isDone: false },
-            })),
-          ]),
-        ),
-        filter(({ taskId }) => {
-          if (this._syncOriginatedTaskIds.delete(taskId)) {
-            return false;
-          }
-          return true;
-        }),
-        concatMap(({ taskId, changes }) =>
-          this._taskService.getByIdOnce$(taskId).pipe(
-            map((fullTask) => ({
-              fullTask,
-              changes,
-            })),
-          ),
-        ),
-        filter(({ fullTask }) => {
-          if (
-            !fullTask ||
-            !fullTask.issueType ||
-            !fullTask.issueProviderId ||
-            !fullTask.issueId
-          ) {
-            return false;
-          }
-          return !!this._getAdapter(fullTask.issueType);
-        }),
-        concatMap(({ fullTask, changes }) =>
-          this._pushChanges$(fullTask, changes).pipe(
-            catchError((err) => {
-              IssueLog.err('Two-way sync project completion push failed', err);
-              this._snackService.open({
-                type: 'ERROR',
-                msg: T.F.ISSUE.S.TWO_WAY_SYNC_PUSH_FAILED,
-                translateParams: { errorMsg: getErrorTxt(err) },
-              });
-              return EMPTY;
-            }),
-          ),
-        ),
-      ),
-    { dispatch: false },
-  );
-
   pushTagChangesAfterTagDelete$: Observable<unknown> = createEffect(
     () =>
       this._actions$.pipe(

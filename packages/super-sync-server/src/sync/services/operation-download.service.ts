@@ -4,7 +4,6 @@
  * Extracted from SyncService for better separation of concerns.
  * This service handles operation retrieval with gap detection and snapshot optimization.
  */
-import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import {
   Operation,
@@ -64,32 +63,7 @@ type OperationDownloadRow = {
   syncImportReason: string | null;
 };
 
-type OperationAffectedEntityRow = {
-  operationId: string;
-  entityType: string;
-  entityId: string;
-};
-
-type Queryable = Pick<Prisma.TransactionClient, '$queryRaw'> & {
-  $queryRawUnsafe?: <T = unknown>(query: string, ...values: unknown[]) => Promise<T>;
-};
-
-const toTemplateStringsArray = (query: string): TemplateStringsArray =>
-  Object.assign([query], { raw: [query] }) as unknown as TemplateStringsArray;
-
-const queryRawWithBoundParams = <T>(
-  tx: Queryable,
-  query: string,
-  ...values: unknown[]
-): Promise<T> =>
-  tx.$queryRawUnsafe
-    ? tx.$queryRawUnsafe<T>(query, ...values)
-    : tx.$queryRaw<T>(toTemplateStringsArray(query), ...values);
-
-const mapOperationRow = (
-  row: OperationDownloadRow,
-  affectedEntities?: Operation['affectedEntities'],
-): ServerOperation => ({
+const mapOperationRow = (row: OperationDownloadRow): ServerOperation => ({
   serverSeq: row.serverSeq,
   op: {
     id: row.id,
@@ -104,7 +78,6 @@ const mapOperationRow = (
     timestamp: Number(row.clientTimestamp),
     isPayloadEncrypted: row.isPayloadEncrypted,
     syncImportReason: row.syncImportReason ?? undefined,
-    ...(affectedEntities ? { affectedEntities } : {}),
   },
   receivedAt: Number(row.receivedAt),
 });
@@ -155,13 +128,8 @@ export class OperationDownloadService {
       take: limit,
       select: OPERATION_DOWNLOAD_SELECT,
     });
-    const affectedEntitiesByOpId = await this._getAffectedEntitiesByOpId(
-      prisma,
-      userId,
-      ops.map((op) => op.id),
-    );
 
-    return ops.map((op) => mapOperationRow(op, affectedEntitiesByOpId.get(op.id)));
+    return ops.map(mapOperationRow);
   }
 
   /**
@@ -316,14 +284,7 @@ export class OperationDownloadService {
           }
         }
 
-        const affectedEntitiesByOpId = await this._getAffectedEntitiesByOpId(
-          tx,
-          userId,
-          ops.map((op) => op.id),
-        );
-        const mappedOps = ops.map((op) =>
-          mapOperationRow(op, affectedEntitiesByOpId.get(op.id)),
-        );
+        const mappedOps = ops.map(mapOperationRow);
         const persistedSnapshotVectorClock =
           latestFullStateOp && seqRow?.latestFullStateSeq === latestFullStateOp.serverSeq
             ? parsePersistedVectorClock(seqRow.latestFullStateVectorClock)
@@ -371,45 +332,6 @@ export class OperationDownloadService {
       latestSnapshotSeq: result.latestSnapshotSeq,
       snapshotVectorClock,
     };
-  }
-
-  private async _getAffectedEntitiesByOpId(
-    tx: Queryable,
-    userId: number,
-    opIds: string[],
-  ): Promise<Map<string, Operation['affectedEntities']>> {
-    const affectedEntitiesByOpId = new Map<string, Operation['affectedEntities']>();
-    if (opIds.length === 0) {
-      return affectedEntitiesByOpId;
-    }
-
-    const opIdPlaceholders = opIds.map((_, index) => `$${index + 2}`).join(', ');
-    const rows = await queryRawWithBoundParams<OperationAffectedEntityRow[]>(
-      tx,
-      `
-      SELECT
-        operation_id AS "operationId",
-        entity_type AS "entityType",
-        entity_id AS "entityId"
-      FROM operation_affected_entities
-      WHERE user_id = $1
-        AND operation_id IN (${opIdPlaceholders})
-      ORDER BY operation_id, id ASC
-    `,
-      userId,
-      ...opIds,
-    );
-
-    for (const row of rows) {
-      const entities = affectedEntitiesByOpId.get(row.operationId) ?? [];
-      entities.push({
-        entityType: row.entityType,
-        entityId: row.entityId,
-      });
-      affectedEntitiesByOpId.set(row.operationId, entities);
-    }
-
-    return affectedEntitiesByOpId;
   }
 
   private async _computeSnapshotVectorClock(

@@ -24,23 +24,9 @@ import {
   type CacheSnapshotResult,
   type SnapshotDedupResponse,
 } from './services';
-
-const REPEATABLE_READ_ISOLATION_LEVEL = 'RepeatableRead' as const;
-
-type PrismaKnownRequestErrorLike = {
-  code?: string;
-  meta?: {
-    target?: unknown;
-  };
-};
-
-const getPrismaErrorCode = (err: unknown): string | undefined => {
-  if (!err || typeof err !== 'object') return undefined;
-  const code = (err as { code?: unknown }).code;
-  return typeof code === 'string' ? code : undefined;
-};
-
-const getPrismaP2002TargetTokens = (err: PrismaKnownRequestErrorLike): string[] => {
+const getPrismaP2002TargetTokens = (
+  err: Prisma.PrismaClientKnownRequestError,
+): string[] => {
   const target = err.meta?.target;
   if (Array.isArray(target)) return target.map(String);
   if (typeof target === 'string') return [target];
@@ -48,11 +34,11 @@ const getPrismaP2002TargetTokens = (err: PrismaKnownRequestErrorLike): string[] 
 };
 
 const isRetryableOperationUniqueViolation = (err: unknown): boolean => {
-  if (getPrismaErrorCode(err) !== 'P2002') {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
     return false;
   }
 
-  const targetTokens = getPrismaP2002TargetTokens(err as PrismaKnownRequestErrorLike);
+  const targetTokens = getPrismaP2002TargetTokens(err);
   if (targetTokens.length === 0) return true;
 
   const normalizedTargets = targetTokens.map((target) =>
@@ -280,7 +266,7 @@ export class SyncService {
           // The serial path also performs the legacy post-sequence conflict re-check.
           // The batch path serializes accepted writers through the shared
           // user_sync_state.last_seq row update; see ARCHITECTURE-DECISIONS.md.
-          isolationLevel: REPEATABLE_READ_ISOLATION_LEVEL,
+          isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
         },
       );
 
@@ -312,7 +298,7 @@ export class SyncService {
       // Prisma uses P2034 for "Transaction failed due to a write conflict or a deadlock"
       // PostgreSQL uses 40001 (serialization_failure) and 40P01 (deadlock_detected)
       const isSerializationFailure =
-        getPrismaErrorCode(err) === 'P2034' ||
+        (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') ||
         (this.config.batchUpload && isRetryableOperationUniqueViolation(err)) ||
         errorMessage.includes('40001') ||
         errorMessage.includes('40P01') ||

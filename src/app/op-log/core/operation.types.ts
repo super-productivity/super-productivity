@@ -7,7 +7,6 @@ import type {
   VectorClock,
   Operation as LibOperation,
   OperationLogEntry as LibOperationLogEntry,
-  AffectedEntity as LibAffectedEntity,
   EntityChange as LibEntityChange,
   EntityConflict as LibEntityConflict,
   ConflictResult as LibConflictResult,
@@ -23,7 +22,6 @@ import {
 import { ActionType } from './action-types.enum';
 
 export { OpType, extractActionPayload } from '@sp/sync-core';
-export { getOperationAffectedEntities } from '@sp/sync-core';
 export type { VectorClock };
 export { ENTITY_TYPES, ActionType };
 
@@ -59,13 +57,9 @@ export type SyncImportReason =
  * `entityType` to the app's enums and adds the optional `syncImportReason`
  * field carried on full-state ops.
  */
-export interface Operation extends Omit<
-  LibOperation,
-  'actionType' | 'entityType' | 'affectedEntities'
-> {
+export interface Operation extends Omit<LibOperation, 'actionType' | 'entityType'> {
   actionType: ActionType;
   entityType: EntityType;
-  affectedEntities?: AffectedEntity[];
   /**
    * Optional reason for full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
    * Used in the conflict dialog to explain why the import was created.
@@ -77,23 +71,6 @@ export interface Operation extends Omit<
 export interface OperationLogEntry extends Omit<LibOperationLogEntry, 'op'> {
   op: Operation;
 }
-
-export interface AffectedEntity extends Omit<LibAffectedEntity, 'entityType'> {
-  entityType: EntityType;
-}
-
-export const toAppAffectedEntities = (
-  affectedEntities:
-    | ReadonlyArray<{
-        entityType: string;
-        entityId: string;
-      }>
-    | undefined,
-): AffectedEntity[] | undefined =>
-  affectedEntities?.map((entity) => ({
-    entityType: entity.entityType as EntityType,
-    entityId: entity.entityId,
-  }));
 
 export interface EntityChange extends Omit<LibEntityChange, 'entityType'> {
   entityType: EntityType;

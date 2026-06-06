@@ -4,7 +4,6 @@ export const SUPER_SYNC_CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 export const SUPER_SYNC_MAX_CLIENT_ID_LENGTH = 255;
 export const SUPER_SYNC_MAX_OPS_PER_UPLOAD = 100;
 export const SUPER_SYNC_MAX_ENTITY_IDS_PER_OP = 1000;
-export const SUPER_SYNC_MAX_AFFECTED_ENTITIES_PER_OP = SUPER_SYNC_MAX_ENTITY_IDS_PER_OP;
 
 export const SUPER_SYNC_OP_TYPES = [
   'CRT',
@@ -56,11 +55,6 @@ export const SuperSyncClientIdSchema = z
     'clientId must be alphanumeric with underscores/hyphens only',
   );
 
-export const SuperSyncAffectedEntitySchema = z.object({
-  entityType: z.string().min(1).max(255),
-  entityId: z.string().min(1).max(255),
-});
-
 export const SuperSyncOperationSchema = z.object({
   id: z.string().min(1).max(255),
   clientId: SuperSyncClientIdSchema,
@@ -71,10 +65,6 @@ export const SuperSyncOperationSchema = z.object({
   entityIds: z
     .array(z.string().max(255))
     .max(SUPER_SYNC_MAX_ENTITY_IDS_PER_OP)
-    .optional(),
-  affectedEntities: z
-    .array(SuperSyncAffectedEntitySchema)
-    .max(SUPER_SYNC_MAX_AFFECTED_ENTITIES_PER_OP)
     .optional(),
   payload: z.unknown(),
   vectorClock: SuperSyncVectorClockSchema,

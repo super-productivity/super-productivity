@@ -148,37 +148,6 @@ export class TimeBlockSyncEffects {
     { dispatch: false },
   );
 
-  upsertOnProjectComplete$: Observable<unknown> = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.completeProject),
-        concatMap(({ taskIdsToMarkDone = [], taskIdsToMarkUndone = [] }) => {
-          const taskIds = Array.from(
-            new Set([...taskIdsToMarkDone, ...taskIdsToMarkUndone]),
-          );
-          return taskIds.length ? this._queueUpsertTimeBlocks$(taskIds) : EMPTY;
-        }),
-      ),
-    { dispatch: false },
-  );
-
-  private _queueUpsertTimeBlocks$(taskIds: string[]): Observable<unknown> {
-    return this._withTimeBlockContext$((ctx) =>
-      from(taskIds).pipe(
-        mergeMap(
-          (taskId) =>
-            from(
-              this._queueTimeBlockOperation(taskId, {
-                type: 'upsertIfScheduled',
-                ctx,
-              }),
-            ),
-          MAX_PARALLEL_TIME_BLOCK_HTTP,
-        ),
-      ),
-    );
-  }
-
   /**
    * When a task is unscheduled or transferred (which clears dueWithTime),
    * delete the time-block event.

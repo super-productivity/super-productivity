@@ -63,8 +63,6 @@ export interface ProjectCompletionInfo {
 export interface ProjectCompletionResolution {
   taskIdsToMarkDone?: string[];
   topLevelTaskIdsToMoveToInbox?: string[];
-  taskIdsToMoveToInbox?: string[];
-  taskIdsToMarkUndone?: string[];
 }
 
 @Injectable({

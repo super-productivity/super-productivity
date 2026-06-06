@@ -11,7 +11,6 @@ import { VectorClock } from '../../../util/vector-clock';
  * - e = entityType
  * - d = entityId
  * - ds = entityIds
- * - ae = affectedEntities
  * - p = payload
  * - c = clientId
  * - v = vectorClock
@@ -36,9 +35,6 @@ export interface CompactOperation {
 
   /** entityIds for batch (optional) */
   ds?: string[];
-
-  /** affectedEntities for mixed-entity batch operations (optional) */
-  ae?: Array<{ entityType: string; entityId: string }>;
 
   /** payload - unchanged */
   p: unknown;

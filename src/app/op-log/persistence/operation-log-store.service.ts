@@ -10,7 +10,7 @@ import {
 } from '../core/operation.types';
 import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
-import { getOpAffectedEntities } from '../util/get-op-entity-ids.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import {
   encodeOperation,
   decodeOperation,
@@ -808,9 +808,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const unsynced = await this.getUnsynced();
     const map = new Map<string, Operation[]>();
     for (const entry of unsynced) {
-      const affectedEntities = getOpAffectedEntities(entry.op);
-      for (const entity of affectedEntities) {
-        const key = toEntityKey(entity.entityType, entity.entityId);
+      const ids = getOpEntityIds(entry.op);
+      for (const id of ids) {
+        const key = toEntityKey(entry.op.entityType, id);
         if (!map.has(key)) map.set(key, []);
         map.get(key)!.push(entry.op);
       }

@@ -216,7 +216,6 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
           entityType: action.meta.entityType,
           entityId,
           entityIds,
-          affectedEntities: action.meta.affectedEntities,
           payload: multiEntityPayload,
           clientId: clientId,
           vectorClock: newClock,

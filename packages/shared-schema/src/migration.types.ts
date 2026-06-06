@@ -21,14 +21,8 @@ export interface OperationLike {
   entityType: string;
   entityId?: string;
   entityIds?: string[];
-  affectedEntities?: AffectedEntityLike[];
   payload: unknown;
   schemaVersion: number;
-}
-
-export interface AffectedEntityLike {
-  entityType: string;
-  entityId: string;
 }
 
 /**

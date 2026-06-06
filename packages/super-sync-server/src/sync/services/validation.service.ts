@@ -13,7 +13,7 @@ import {
   sanitizeVectorClock,
   validatePayload,
 } from '../sync.types';
-import { ENTITY_TYPES, SUPER_SYNC_MAX_AFFECTED_ENTITIES_PER_OP } from '@sp/shared-schema';
+import { ENTITY_TYPES } from '@sp/shared-schema';
 import { Logger } from '../../logger';
 
 /**
@@ -97,52 +97,6 @@ export class ValidationService {
           error: 'entityId cannot be empty or whitespace-only',
           errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
         };
-      }
-    }
-    if (op.affectedEntities !== undefined) {
-      if (!Array.isArray(op.affectedEntities)) {
-        return {
-          valid: false,
-          error: 'affectedEntities must be an array',
-          errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
-        };
-      }
-      if (op.affectedEntities.length > SUPER_SYNC_MAX_AFFECTED_ENTITIES_PER_OP) {
-        return {
-          valid: false,
-          error: `affectedEntities has too many entries (${op.affectedEntities.length}, max ${SUPER_SYNC_MAX_AFFECTED_ENTITIES_PER_OP})`,
-          errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
-        };
-      }
-      for (const entity of op.affectedEntities) {
-        if (!entity || typeof entity !== 'object') {
-          return {
-            valid: false,
-            error: 'Invalid affectedEntities entry',
-            errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
-          };
-        }
-        if (
-          typeof entity.entityType !== 'string' ||
-          !ALLOWED_ENTITY_TYPES.has(entity.entityType)
-        ) {
-          return {
-            valid: false,
-            error: `Invalid affected entityType: ${entity.entityType}`,
-            errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_TYPE,
-          };
-        }
-        if (
-          typeof entity.entityId !== 'string' ||
-          entity.entityId.length > 255 ||
-          entity.entityId.trim().length === 0
-        ) {
-          return {
-            valid: false,
-            error: 'Invalid affected entityId format or length',
-            errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
-          };
-        }
       }
     }
 

@@ -4,7 +4,6 @@ import {
   Operation,
   OperationLogEntry,
   OpType,
-  toAppAffectedEntities,
 } from '../../../core/operation.types';
 import { OperationLogStoreService } from '../../../persistence/operation-log-store.service';
 import {
@@ -149,7 +148,6 @@ export class SimulatedClient {
       entityType: entry.op.entityType,
       entityId: entry.op.entityId,
       entityIds: entry.op.entityIds,
-      affectedEntities: entry.op.affectedEntities,
       payload: entry.op.payload,
       vectorClock: entry.op.vectorClock,
       timestamp: entry.op.timestamp,
@@ -316,7 +314,6 @@ export class SimulatedClient {
         entityType: serverOp.op.entityType as any,
         entityId: serverOp.op.entityId,
         entityIds: serverOp.op.entityIds,
-        affectedEntities: toAppAffectedEntities(serverOp.op.affectedEntities),
         payload: serverOp.op.payload,
         vectorClock: serverOp.op.vectorClock,
         timestamp: serverOp.op.timestamp,

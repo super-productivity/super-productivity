@@ -52,9 +52,7 @@ export class SyncImportConflictGateService {
         USER_ENTITY_TYPES.has(entry.op.entityType) &&
         (entry.op.opType === OpType.Create ||
           entry.op.opType === OpType.Update ||
-          entry.op.opType === OpType.Delete ||
-          entry.op.opType === OpType.Move ||
-          entry.op.opType === OpType.Batch)
+          entry.op.opType === OpType.Delete)
       );
     });
   }

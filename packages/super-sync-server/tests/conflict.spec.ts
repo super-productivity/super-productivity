@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   isSameDuplicateOperation,
   isSameDuplicateTimestamp,
-  getConflictEntityPairs,
   pruneVectorClockForStorage,
   resolveConflictForExistingOp,
   stableJsonStringify,
@@ -133,7 +132,6 @@ describe('conflict helpers', () => {
   it('classifies concurrent vector clocks as conflicts', () => {
     const result = resolveConflictForExistingOp(
       op({ vectorClock: { 'client-a': 1 } }),
-      'TASK',
       'task-1',
       { clientId: 'client-b', vectorClock: { 'client-b': 1 } },
     );
@@ -148,7 +146,6 @@ describe('conflict helpers', () => {
   it('classifies less-than vector clocks as superseded', () => {
     const result = resolveConflictForExistingOp(
       op({ vectorClock: { 'client-a': 1 } }),
-      'TASK',
       'task-1',
       { clientId: 'client-a', vectorClock: { 'client-a': 2 } },
     );
@@ -164,27 +161,6 @@ describe('conflict helpers', () => {
     expect(stableJsonStringify({ z: 1, a: { b: 2, a: 1 } })).toBe(
       '{"a":{"a":1,"b":2},"z":1}',
     );
-  });
-
-  it('unions typed affected entities with legacy entity ids', () => {
-    expect(
-      getConflictEntityPairs(
-        op({
-          entityType: 'PROJECT',
-          entityId: 'project-1',
-          entityIds: ['project-1', 'project-2'],
-          affectedEntities: [
-            { entityType: 'PROJECT', entityId: 'project-1' },
-            { entityType: 'TASK', entityId: 'task-1' },
-            { entityType: 'TASK', entityId: 'task-1' },
-          ],
-        }),
-      ),
-    ).toEqual([
-      { entityType: 'PROJECT', entityId: 'project-1' },
-      { entityType: 'TASK', entityId: 'task-1' },
-      { entityType: 'PROJECT', entityId: 'project-2' },
-    ]);
   });
 
   it('prunes and mutates vector clocks before storage', () => {

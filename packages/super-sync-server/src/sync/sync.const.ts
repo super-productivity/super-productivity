@@ -36,7 +36,6 @@ export const isValidClientId = (cid: unknown): cid is string =>
  * SUM(pg_column_size) DoS that scanning every delta op caused.
  */
 export const APPROX_BYTES_PER_OP = 1024;
-const APPROX_BYTES_PER_AFFECTED_ENTITY_ROW = 96;
 
 /**
  * Locally-computed approximation of how many bytes an operation's payload and
@@ -55,18 +54,12 @@ const APPROX_BYTES_PER_AFFECTED_ENTITY_ROW = 96;
 export const computeOpStorageBytes = (op: {
   payload: unknown;
   vectorClock: unknown;
-  affectedEntities?: unknown;
 }): { bytes: number; fallback: boolean } => {
   try {
-    const affectedEntities = Array.isArray(op.affectedEntities)
-      ? op.affectedEntities
-      : [];
     return {
       bytes:
         Buffer.byteLength(JSON.stringify(op.payload ?? null), 'utf8') +
-        Buffer.byteLength(JSON.stringify(op.vectorClock ?? {}), 'utf8') +
-        Buffer.byteLength(JSON.stringify(affectedEntities), 'utf8') +
-        affectedEntities.length * APPROX_BYTES_PER_AFFECTED_ENTITY_ROW,
+        Buffer.byteLength(JSON.stringify(op.vectorClock ?? {}), 'utf8'),
       fallback: false,
     };
   } catch {

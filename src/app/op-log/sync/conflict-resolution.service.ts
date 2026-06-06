@@ -34,7 +34,7 @@ import { OperationApplierService } from '../apply/operation-applier.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OpLog } from '../../core/log';
 import { toEntityKey } from '../util/entity-key.util';
-import { getOpAffectedEntities } from '../util/get-op-entity-ids.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -676,7 +676,6 @@ export class ConflictResolutionService {
       entityType: archiveOp.entityType,
       entityId: archiveOp.entityId,
       entityIds: archiveOp.entityIds,
-      affectedEntities: archiveOp.affectedEntities,
       payload: archiveOp.payload,
       clientId,
       vectorClock: newClock,
@@ -895,55 +894,26 @@ export class ConflictResolutionService {
       hasNoSnapshotClock: boolean;
     },
   ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
-    const entitiesToCheck = getOpAffectedEntities(remoteOp);
-    let hasCoveredEntity = false;
-    let hasEntityThatNeedsApply = false;
-    let mixedCoverageConflict: EntityConflict | null = null;
+    const entityIdsToCheck = getOpEntityIds(remoteOp);
 
-    for (const entity of entitiesToCheck) {
-      const entityKey = toEntityKey(entity.entityType, entity.entityId);
+    for (const entityId of entityIdsToCheck) {
+      const entityKey = toEntityKey(remoteOp.entityType, entityId);
       const localOpsForEntity = ctx.localPendingOpsByEntity.get(entityKey) || [];
 
-      const result = await this._checkEntityForConflict(
-        remoteOp,
-        entity.entityType,
-        entity.entityId,
-        entityKey,
-        {
-          localOpsForEntity,
-          appliedFrontier: ctx.appliedFrontierByEntity.get(entityKey),
-          snapshotVectorClock: ctx.snapshotVectorClock,
-          snapshotEntityKeys: ctx.snapshotEntityKeys,
-          hasNoSnapshotClock: ctx.hasNoSnapshotClock,
-        },
-      );
+      const result = await this._checkEntityForConflict(remoteOp, entityId, entityKey, {
+        localOpsForEntity,
+        appliedFrontier: ctx.appliedFrontierByEntity.get(entityKey),
+        snapshotVectorClock: ctx.snapshotVectorClock,
+        snapshotEntityKeys: ctx.snapshotEntityKeys,
+        hasNoSnapshotClock: ctx.hasNoSnapshotClock,
+      });
 
       if (result.isSupersededOrDuplicate) {
-        hasCoveredEntity = true;
-        mixedCoverageConflict ??= {
-          entityType: entity.entityType,
-          entityId: entity.entityId,
-          localOps: localOpsForEntity,
-          remoteOps: [remoteOp],
-          suggestedResolution: 'manual',
-        };
-        continue;
+        return { isSupersededOrDuplicate: true, conflict: null };
       }
       if (result.conflict) {
         return { isSupersededOrDuplicate: false, conflict: result.conflict };
       }
-      hasEntityThatNeedsApply = true;
-    }
-
-    if (hasCoveredEntity && hasEntityThatNeedsApply) {
-      return {
-        isSupersededOrDuplicate: false,
-        conflict: mixedCoverageConflict,
-      };
-    }
-
-    if (hasCoveredEntity) {
-      return { isSupersededOrDuplicate: true, conflict: null };
     }
 
     return { isSupersededOrDuplicate: false, conflict: null };
@@ -954,7 +924,6 @@ export class ConflictResolutionService {
    */
   private async _checkEntityForConflict(
     remoteOp: Operation,
-    entityType: EntityType,
     entityId: string,
     entityKey: string,
     ctx: {
@@ -1003,11 +972,14 @@ export class ConflictResolutionService {
       if (vcComparison === VectorClockComparison.CONCURRENT) {
         // CONCURRENT + no pending ops = entity may have been archived/deleted
         // by an already-synced operation. Check current state.
-        const entityState = await this.getCurrentEntityState(entityType, entityId);
+        const entityState = await this.getCurrentEntityState(
+          remoteOp.entityType,
+          entityId,
+        );
         if (entityState === undefined || entityState === null) {
           OpLog.normal(
             `ConflictResolutionService: Skipping CONCURRENT remote op ${remoteOp.id} ` +
-              `for ${entityType}:${entityId} - entity no longer in state ` +
+              `for ${remoteOp.entityType}:${entityId} - entity no longer in state ` +
               `(archive/delete wins over concurrent update)`,
           );
           return { isSupersededOrDuplicate: true, conflict: null };
@@ -1021,7 +993,7 @@ export class ConflictResolutionService {
       return {
         isSupersededOrDuplicate: false,
         conflict: {
-          entityType,
+          entityType: remoteOp.entityType,
           entityId,
           localOps: ctx.localOpsForEntity,
           remoteOps: [remoteOp],

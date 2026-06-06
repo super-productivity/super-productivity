@@ -146,7 +146,6 @@ export class SchemaMigrationService {
       entityType: op.entityType,
       entityId: op.entityId,
       entityIds: op.entityIds,
-      affectedEntities: op.affectedEntities,
       payload: op.payload,
       schemaVersion: opVersion,
     };
@@ -169,8 +168,6 @@ export class SchemaMigrationService {
         entityType: migratedOpLike.entityType as Operation['entityType'],
         entityId: migratedOpLike.entityId,
         entityIds: migratedOpLike.entityIds,
-        affectedEntities:
-          migratedOpLike.affectedEntities as Operation['affectedEntities'],
         payload: migratedOpLike.payload,
         schemaVersion: migratedOpLike.schemaVersion,
       }));
@@ -182,8 +179,6 @@ export class SchemaMigrationService {
       opType: result.data.opType as Operation['opType'],
       entityType: result.data.entityType as Operation['entityType'],
       entityId: result.data.entityId,
-      entityIds: result.data.entityIds,
-      affectedEntities: result.data.affectedEntities as Operation['affectedEntities'],
       payload: result.data.payload,
       schemaVersion: result.data.schemaVersion,
     };

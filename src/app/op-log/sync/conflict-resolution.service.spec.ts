@@ -2565,10 +2565,6 @@ describe('ConflictResolutionService', () => {
         opType: OpType.Update,
         entityType: 'TASK',
         entityId: 'task-1',
-        affectedEntities: [
-          { entityType: 'TASK', entityId: 'task-1' },
-          { entityType: 'TAG', entityId: 'TODAY' },
-        ],
         payload: { task: { id: 'task-1', title: 'Archived Task' } },
         vectorClock: { [TEST_CLIENT_ID]: 1 },
         timestamp: 1000,
@@ -2605,9 +2601,6 @@ describe('ConflictResolutionService', () => {
       // Local archive wins — a new op should be created
       expect(result.localWinOpsCreated).toBe(1);
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
-        .args[0] as Operation;
-      expect(appendedOp.affectedEntities).toEqual(localArchiveOp.affectedEntities);
     });
 
     it('should resolve remote moveToArchive winning over local UPDATE with later timestamp', async () => {
@@ -2886,34 +2879,6 @@ describe('ConflictResolutionService', () => {
       // Without the fix, entityIds: [] would be used as-is, skipping the entity entirely.
       expect(result.conflict).not.toBeNull();
       expect(result.conflict!.entityId).toBe('task-1');
-    });
-
-    it('should not skip a mixed-entity remote op when only one affected entity is covered', async () => {
-      const remoteOp: Operation = {
-        ...createMockOp('remote-1', 'clientA'),
-        actionType: ActionType.TASK_SHARED_COMPLETE_PROJECT,
-        opType: OpType.Batch,
-        entityType: 'PROJECT',
-        entityId: 'project-1',
-        affectedEntities: [
-          { entityType: 'PROJECT', entityId: 'project-1' },
-          { entityType: 'TASK', entityId: 'task-1' },
-        ],
-        vectorClock: { clientA: 1 },
-      };
-
-      const appliedFrontierByEntity = new Map<string, VectorClock>();
-      appliedFrontierByEntity.set('PROJECT:project-1', { clientA: 1 });
-
-      const result = await service.checkOpForConflicts(
-        remoteOp,
-        buildCtx({ appliedFrontierByEntity }),
-      );
-
-      expect(result.isSupersededOrDuplicate).toBe(false);
-      expect(result.conflict).not.toBeNull();
-      expect(result.conflict!.entityType).toBe('PROJECT');
-      expect(result.conflict!.remoteOps).toEqual([remoteOp]);
     });
   });
 

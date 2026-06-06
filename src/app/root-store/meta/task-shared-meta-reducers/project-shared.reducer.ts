@@ -135,14 +135,7 @@ const updateTasksDoneState = (
 
     const update: Update<Task> = {
       id: taskId,
-      changes: isDone
-        ? {
-            isDone: true,
-            doneOn,
-            remindAt: undefined,
-            deadlineRemindAt: undefined,
-          }
-        : { isDone: false },
+      changes: isDone ? { isDone: true, doneOn } : { isDone: false },
     };
 
     taskState = updateTimeEstimateForTask(update, null, taskState);
