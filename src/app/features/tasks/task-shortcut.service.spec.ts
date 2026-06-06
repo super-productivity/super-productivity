@@ -505,7 +505,9 @@ describe('TaskShortcutService', () => {
 
       // Recovery picks up 'other-task' from DOM, but lastFocusedTaskComponent
       // points at 'stale-task' — guard prevents delegating to wrong component.
-      expect(result).toBe(false); // delegation failed, should return false
+      // We should still return true to prevent fall-through to global shortcuts
+      // when we are clearly focused inside a task.
+      expect(result).toBe(true);
       expect(mockTaskComponent.toggleDoneKeyboard).not.toHaveBeenCalled();
     });
 
