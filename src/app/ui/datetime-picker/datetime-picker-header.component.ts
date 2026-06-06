@@ -212,11 +212,16 @@ export class DateTimePickerHeaderComponent<D> {
     if (this.calendar.currentView === 'year') {
       return this._dateAdapter.getYear(date1) === this._dateAdapter.getYear(date2);
     }
-    // multi-year view: Material anchors pages at yearsPerPage boundaries.
+    // multi-year view: Material anchors pages based on minDate if present.
     const yearsPerPage = 24;
     const getStartYear = (date: D): number => {
       const year = this._dateAdapter.getYear(date);
-      return year - (year % yearsPerPage);
+      const minYear = this.calendar.minDate
+        ? this._dateAdapter.getYear(this.calendar.minDate)
+        : 0;
+      const offset = (year - minYear) % yearsPerPage;
+      // Handle negative offset for years before minYear (if minYear was set later)
+      return year - (offset < 0 ? offset + yearsPerPage : offset);
     };
     return getStartYear(date1) === getStartYear(date2);
   }
