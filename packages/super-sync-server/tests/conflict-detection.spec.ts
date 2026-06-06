@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import { Prisma } from '@prisma/client';
 import { testState, resetTestState } from './sync.service.test-state';
 
 // Mock the database module with Prisma mocks
@@ -10,19 +9,32 @@ vi.mock('../src/db', async () => {
     hasOperationUniqueConflict,
     testState: state,
   } = await import('./sync.service.test-state');
-  const { Prisma: PrismaModule } = await import('@prisma/client');
+
+  class PrismaClientKnownRequestError extends Error {
+    code: string;
+    clientVersion: string;
+    meta?: unknown;
+
+    constructor(
+      message: string,
+      options: { code: string; clientVersion: string; meta?: unknown },
+    ) {
+      super(message);
+      this.name = 'PrismaClientKnownRequestError';
+      this.code = options.code;
+      this.clientVersion = options.clientVersion;
+      this.meta = options.meta;
+    }
+  }
 
   const createTxMock = () => ({
     operation: {
       create: vi.fn().mockImplementation(async (args: any) => {
         if (state.operations.has(args.data.id)) {
-          throw new PrismaModule.PrismaClientKnownRequestError(
-            'Unique constraint failed',
-            {
-              code: 'P2002',
-              clientVersion: '5.0.0',
-            },
-          );
+          throw new PrismaClientKnownRequestError('Unique constraint failed', {
+            code: 'P2002',
+            clientVersion: '5.0.0',
+          });
         }
         state.serverSeqCounter++;
         const op = {
@@ -42,10 +54,10 @@ vi.mock('../src/db', async () => {
             if (args.skipDuplicates) {
               continue;
             }
-            throw new PrismaModule.PrismaClientKnownRequestError(
-              'Unique constraint failed',
-              { code: 'P2002', clientVersion: '5.0.0' },
-            );
+            throw new PrismaClientKnownRequestError('Unique constraint failed', {
+              code: 'P2002',
+              clientVersion: '5.0.0',
+            });
           }
 
           state.operations.set(row.id, {
@@ -161,10 +173,55 @@ vi.mock('../src/db', async () => {
         return state.users.get(args.where.id) || null;
       }),
     },
-    // Upload transaction writes the storage counter atomically via $executeRaw.
-    $executeRaw: vi.fn().mockResolvedValue(0),
+    // Upload transaction writes the storage counter via $executeRaw and
+    // affected-entity rows via $executeRawUnsafe.
+    $executeRaw: vi.fn().mockImplementation(async (strings: unknown) => {
+      const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      return sql.includes('operation_affected_entities') ? 1 : 0;
+    }),
+    $executeRawUnsafe: vi
+      .fn()
+      .mockImplementation(async (sql: string, ...params: unknown[]) => {
+        if (!sql.includes('operation_affected_entities')) {
+          return 0;
+        }
+
+        for (let i = 0; i < params.length; i += 5) {
+          const [operationId, userId, entityType, entityId, serverSeq] = params.slice(
+            i,
+            i + 5,
+          );
+          const exists = state.operationAffectedEntities.some(
+            (row: any) =>
+              row.operationId === operationId &&
+              row.entityType === entityType &&
+              row.entityId === entityId,
+          );
+          if (!exists) {
+            state.operationAffectedEntities.push({
+              operationId,
+              userId,
+              entityType,
+              entityId,
+              serverSeq,
+            });
+          }
+        }
+        return state.operationAffectedEntities.length;
+      }),
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('INSERT INTO user_sync_state')) {
+        const [txUserId, incrementBy] = params as [number, number];
+        const existing = state.userSyncStates.get(txUserId) ?? {
+          userId: txUserId,
+          lastSeq: 0,
+        };
+        const lastSeq = existing.lastSeq + incrementBy;
+        state.userSyncStates.set(txUserId, { ...existing, lastSeq });
+        return [{ lastSeq }];
+      }
+
       // Full-state op uploads aggregate prior vector clocks via $queryRaw.
       if (sql.includes('jsonb_each_text(vector_clock)')) {
         const [txUserId, beforeServerSeq] = params as [number, number];
@@ -188,39 +245,50 @@ vi.mock('../src/db', async () => {
         }));
       }
 
-      const [userId, entityType, entityIdsSql] = params as [number, string, Prisma.Sql];
-      state.batchConflictQueryCount++;
-      if (!Array.isArray(entityIdsSql.values)) {
-        throw new Error(
-          'Expected batched conflict query entity IDs to be passed via Prisma.join(...)',
-        );
-      }
-      const batchEntityIds = new Set(
-        entityIdsSql.values.filter(
-          (entityId): entityId is string => typeof entityId === 'string',
-        ),
-      );
-      const latestByEntityId = new Map<string, any>();
-      const ops = Array.from(state.operations.values())
-        .filter(
-          (op: any) =>
-            op.userId === userId &&
-            op.entityType === entityType &&
-            batchEntityIds.has(op.entityId),
-        )
-        .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-
-      for (const op of ops) {
-        if (!op.entityId || latestByEntityId.has(op.entityId)) continue;
-        latestByEntityId.set(op.entityId, op);
-      }
-
-      return Array.from(latestByEntityId.values()).map((op: any) => ({
-        entityId: op.entityId,
-        clientId: op.clientId,
-        vectorClock: op.vectorClock,
-      }));
+      return [];
     }),
+    $queryRawUnsafe: vi
+      .fn()
+      .mockImplementation(async (sql: string, ...params: unknown[]) => {
+        if (!sql.includes('FROM operation_affected_entities')) {
+          return [];
+        }
+
+        state.batchConflictQueryCount++;
+        const userId = params[0] as number;
+        const touchedValues = params.slice(1);
+        const touchedPairs = new Set<string>();
+        for (let i = 0; i < touchedValues.length; i += 2) {
+          const [entityType, entityId] = touchedValues.slice(i, i + 2);
+          if (typeof entityType === 'string' && typeof entityId === 'string') {
+            touchedPairs.add(`${entityType}\u0000${entityId}`);
+          }
+        }
+
+        const latestByEntity = new Map<string, any>();
+        const rows = [...state.operationAffectedEntities]
+          .filter(
+            (row: any) =>
+              row.userId === userId &&
+              touchedPairs.has(`${row.entityType}\u0000${row.entityId}`),
+          )
+          .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+
+        for (const row of rows) {
+          const key = `${row.entityType}\u0000${row.entityId}`;
+          if (latestByEntity.has(key)) continue;
+          const op = state.operations.get(row.operationId);
+          if (!op) continue;
+          latestByEntity.set(key, { row, op });
+        }
+
+        return Array.from(latestByEntity.values()).map(({ row, op }: any) => ({
+          entityType: row.entityType,
+          entityId: row.entityId,
+          clientId: op.clientId,
+          vectorClock: op.vectorClock,
+        }));
+      }),
   });
 
   return {
@@ -228,6 +296,24 @@ vi.mock('../src/db', async () => {
       $transaction: vi
         .fn()
         .mockImplementation(async (callback: any) => callback(createTxMock())),
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      $queryRawUnsafe: vi
+        .fn()
+        .mockImplementation(async (sql: string, ...params: unknown[]) => {
+          if (!sql.includes('FROM operation_affected_entities')) {
+            return [];
+          }
+
+          const userId = params[0] as number;
+          const opIds = new Set(params.slice(1));
+          return state.operationAffectedEntities
+            .filter((row: any) => row.userId === userId && opIds.has(row.operationId))
+            .map((row: any) => ({
+              operationId: row.operationId,
+              entityType: row.entityType,
+              entityId: row.entityId,
+            }));
+        }),
       userSyncState: {
         findUnique: vi.fn().mockImplementation(async (args: any) => {
           return state.userSyncStates.get(args.where.userId) || null;
@@ -694,6 +780,38 @@ describe('Conflict Detection', () => {
   });
 
   describe('Entity Type Isolation', () => {
+    it('should detect conflicts through typed affected entities on mixed-entity batches', async () => {
+      const service = getSyncService();
+
+      const projectCompletion = createOp({
+        entityType: 'PROJECT',
+        entityId: 'project-1',
+        actionType: '[Task Shared] completeProject',
+        opType: 'BATCH',
+        affectedEntities: [
+          { entityType: 'PROJECT', entityId: 'project-1' },
+          { entityType: 'TASK', entityId: 'task-1' },
+        ],
+        clientId: clientA,
+        vectorClock: { [clientA]: 1 },
+      });
+      expect(
+        (await service.uploadOps(userId, clientA, [projectCompletion]))[0].accepted,
+      ).toBe(true);
+
+      const taskUpdate = createOp({
+        entityType: 'TASK',
+        entityId: 'task-1',
+        clientId: clientB,
+        vectorClock: { [clientB]: 1 },
+      });
+      const result = await service.uploadOps(userId, clientB, [taskUpdate]);
+
+      expect(result[0].accepted).toBe(false);
+      expect(result[0].errorCode).toBe(SYNC_ERROR_CODES.CONFLICT_CONCURRENT);
+      expect(result[0].error).toContain('TASK:task-1');
+    });
+
     it('should not conflict operations on different entities of same type', async () => {
       const service = getSyncService();
 

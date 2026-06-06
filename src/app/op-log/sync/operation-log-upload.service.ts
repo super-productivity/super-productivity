@@ -387,6 +387,7 @@ export class OperationLogUploadService {
       entityType: entry.op.entityType,
       entityId: entry.op.entityId,
       entityIds: entry.op.entityIds,
+      affectedEntities: entry.op.affectedEntities,
       payload: entry.op.payload,
       vectorClock: entry.op.vectorClock,
       timestamp: entry.op.timestamp,

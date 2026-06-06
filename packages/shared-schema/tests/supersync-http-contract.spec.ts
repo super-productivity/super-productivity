@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  SUPER_SYNC_MAX_AFFECTED_ENTITIES_PER_OP,
   SUPER_SYNC_MAX_ENTITY_IDS_PER_OP,
   SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   SuperSyncDownloadOpsQuerySchema,
@@ -35,6 +36,26 @@ describe('SuperSync HTTP contract schemas', () => {
     expect(SUPER_SYNC_MAX_OPS_PER_UPLOAD).toBe(100);
   });
 
+  it('preserves affectedEntities during upload parsing', () => {
+    const parsed = SuperSyncUploadOpsRequestSchema.parse({
+      ops: [
+        {
+          ...createValidOperation(),
+          affectedEntities: [
+            { entityType: 'PROJECT', entityId: 'project-1' },
+            { entityType: 'TASK', entityId: 'task-1' },
+          ],
+        },
+      ],
+      clientId: 'client_1',
+    });
+
+    expect(parsed.ops[0].affectedEntities).toEqual([
+      { entityType: 'PROJECT', entityId: 'project-1' },
+      { entityType: 'TASK', entityId: 'task-1' },
+    ]);
+  });
+
   it('preserves server request behavior by stripping unknown upload fields', () => {
     const parsed = SuperSyncUploadOpsRequestSchema.parse({
       ops: [{ ...createValidOperation(), extraOpField: true }],
@@ -55,6 +76,23 @@ describe('SuperSync HTTP contract schemas', () => {
             entityIds: Array.from(
               { length: SUPER_SYNC_MAX_ENTITY_IDS_PER_OP + 1 },
               (_, i) => `task-${i}`,
+            ),
+          },
+        ],
+        clientId: 'client_1',
+      }),
+    ).toThrow();
+  });
+
+  it('caps affectedEntities per operation', () => {
+    expect(() =>
+      SuperSyncUploadOpsRequestSchema.parse({
+        ops: [
+          {
+            ...createValidOperation(),
+            affectedEntities: Array.from(
+              { length: SUPER_SYNC_MAX_AFFECTED_ENTITIES_PER_OP + 1 },
+              (_, i) => ({ entityType: 'TASK', entityId: `task-${i}` }),
             ),
           },
         ],

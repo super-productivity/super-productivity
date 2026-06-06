@@ -520,4 +520,41 @@ describe('TimeBlockSyncEffects', () => {
     bulkSub.unsubscribe();
     flush();
   }));
+
+  it('caps project-completion HTTP fan-out so it does not burst rate limits', fakeAsync(() => {
+    const projectCompleteSub = effects.upsertOnProjectComplete$.subscribe();
+    const taskIds = ['t-1', 't-2', 't-3', 't-4', 't-5'];
+
+    const resolvers: Array<() => void> = [];
+    upsertEventSpy.and.callFake(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    actions$.next(
+      TaskSharedActions.completeProject({
+        id: 'project-1',
+        doneOn: Date.now(),
+        taskIdsToMarkDone: taskIds,
+      }),
+    );
+
+    expect(upsertEventSpy).toHaveBeenCalledTimes(3);
+
+    resolvers[0]();
+    flushMicrotasks();
+    expect(upsertEventSpy).toHaveBeenCalledTimes(4);
+
+    resolvers[1]();
+    flushMicrotasks();
+    expect(upsertEventSpy).toHaveBeenCalledTimes(5);
+
+    resolvers.slice(2).forEach((r) => r());
+    flushMicrotasks();
+    expect(upsertEventSpy).toHaveBeenCalledTimes(5);
+    projectCompleteSub.unsubscribe();
+    flush();
+  }));
 });

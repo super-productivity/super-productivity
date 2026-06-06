@@ -168,12 +168,18 @@ export interface Operation {
   entityType: string;
   entityId?: string;
   entityIds?: string[]; // For batch operations
+  affectedEntities?: AffectedEntityRef[];
   payload: unknown;
   vectorClock: VectorClock;
   timestamp: number;
   schemaVersion: number;
   isPayloadEncrypted?: boolean; // True if payload is E2E encrypted
   syncImportReason?: string;
+}
+
+export interface AffectedEntityRef {
+  entityType: string;
+  entityId: string;
 }
 
 export interface DuplicateOperationCandidate {

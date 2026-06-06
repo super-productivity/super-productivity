@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { Logger } from '../logger';
 import {
   BatchUploadCandidate,
@@ -13,6 +13,27 @@ import {
   isFullStateOpType,
   limitVectorClockSize,
 } from './sync.types';
+
+export interface EntityConflictPair {
+  entityType: string;
+  entityId: string;
+}
+
+type RawQueryTx = Prisma.TransactionClient & {
+  $queryRawUnsafe?: <T = unknown>(query: string, ...values: unknown[]) => Promise<T>;
+};
+
+const toTemplateStringsArray = (query: string): TemplateStringsArray =>
+  Object.assign([query], { raw: [query] }) as unknown as TemplateStringsArray;
+
+const queryRawWithBoundParams = <T>(
+  tx: RawQueryTx,
+  query: string,
+  ...values: unknown[]
+): Promise<T> =>
+  tx.$queryRawUnsafe
+    ? tx.$queryRawUnsafe<T>(query, ...values)
+    : tx.$queryRaw<T>(toTemplateStringsArray(query), ...values);
 
 /**
  * Check if an incoming operation conflicts with existing operations.
@@ -32,25 +53,51 @@ export const detectConflict = async (
     return { hasConflict: false };
   }
 
-  // Build list of entity IDs to check for conflicts.
-  // Operations may have either entityId (singular) or entityIds (batch operations).
-  const rawEntityIdsToCheck = op.entityIds?.length
-    ? op.entityIds
-    : op.entityId
-      ? [op.entityId]
-      : [];
+  const entityPairsToCheck = getConflictEntityPairs(op);
 
   // Skip if no entity IDs (can't have entity-level conflicts)
-  if (rawEntityIdsToCheck.length === 0) {
+  if (entityPairsToCheck.length === 0) {
     return { hasConflict: false };
   }
 
-  if (rawEntityIdsToCheck.length === 1) {
-    return detectConflictForEntity(userId, op, rawEntityIdsToCheck[0], tx);
+  if (entityPairsToCheck.length === 1) {
+    const [entity] = entityPairsToCheck;
+    return detectConflictForEntity(userId, op, entity.entityType, entity.entityId, tx);
   }
 
-  const entityIdsToCheck = Array.from(new Set(rawEntityIdsToCheck));
-  return detectConflictForEntities(userId, op, entityIdsToCheck, tx);
+  return detectConflictForEntityPairs(userId, op, entityPairsToCheck, tx);
+};
+
+export const detectConflictForEntityPairs = async (
+  userId: number,
+  op: Operation,
+  entityPairsToCheck: EntityConflictPair[],
+  tx: Prisma.TransactionClient,
+): Promise<ConflictResult> => {
+  const latestOpByEntity = await prefetchLatestEntityOpsForBatch(
+    userId,
+    entityPairsToCheck,
+    tx,
+  );
+
+  for (const entity of entityPairsToCheck) {
+    const existingOp = latestOpByEntity.get(
+      getEntityConflictKey(entity.entityType, entity.entityId),
+    );
+    if (!existingOp) continue;
+
+    const conflictResult = resolveConflictForExistingOp(
+      op,
+      entity.entityType,
+      entity.entityId,
+      existingOp,
+    );
+    if (conflictResult.hasConflict) {
+      return conflictResult;
+    }
+  }
+
+  return { hasConflict: false };
 };
 
 export const detectConflictForEntities = async (
@@ -68,17 +115,27 @@ export const detectConflictForEntities = async (
       start,
       start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
     );
-    const latestOps = await tx.$queryRaw<LatestEntityOperationRow[]>`
+    const entityIdPlaceholders = batchEntityIds
+      .map((_, index) => `$${index + 3}`)
+      .join(', ');
+
+    const latestOps = await queryRawWithBoundParams<LatestEntityOperationRow[]>(
+      tx,
+      `
       SELECT DISTINCT ON (entity_id)
         entity_id AS "entityId",
         client_id AS "clientId",
         vector_clock AS "vectorClock"
       FROM operations
-      WHERE user_id = ${userId}
-        AND entity_type = ${op.entityType}
-        AND entity_id IN (${Prisma.join(batchEntityIds)})
+      WHERE user_id = $1
+        AND entity_type = $2
+        AND entity_id IN (${entityIdPlaceholders})
       ORDER BY entity_id, server_seq DESC
-    `;
+    `,
+      userId,
+      op.entityType,
+      ...batchEntityIds,
+    );
 
     const latestOpByEntityId = new Map<string, LatestEntityOperationRow>();
     for (const latestOp of latestOps) {
@@ -89,7 +146,12 @@ export const detectConflictForEntities = async (
       const existingOp = latestOpByEntityId.get(entityId);
       if (!existingOp) continue;
 
-      const conflictResult = resolveConflictForExistingOp(op, entityId, existingOp);
+      const conflictResult = resolveConflictForExistingOp(
+        op,
+        op.entityType,
+        entityId,
+        existingOp,
+      );
       if (conflictResult.hasConflict) {
         return conflictResult;
       }
@@ -101,6 +163,7 @@ export const detectConflictForEntities = async (
 
 export const resolveConflictForExistingOp = (
   op: Operation,
+  entityType: string,
   entityId: string,
   existingOp: { clientId: string; vectorClock: unknown },
 ): ConflictResult => {
@@ -127,7 +190,7 @@ export const resolveConflictForExistingOp = (
     return {
       hasConflict: true,
       conflictType: 'equal_different_client',
-      reason: `Equal vector clocks from different clients for ${op.entityType}:${entityId} (client ${op.clientId} vs ${existingOp.clientId})`,
+      reason: `Equal vector clocks from different clients for ${entityType}:${entityId} (client ${op.clientId} vs ${existingOp.clientId})`,
       existingClock,
     };
   }
@@ -137,7 +200,7 @@ export const resolveConflictForExistingOp = (
     return {
       hasConflict: true,
       conflictType: 'concurrent',
-      reason: `Concurrent modification detected for ${op.entityType}:${entityId}`,
+      reason: `Concurrent modification detected for ${entityType}:${entityId}`,
       existingClock,
     };
   }
@@ -147,7 +210,7 @@ export const resolveConflictForExistingOp = (
     return {
       hasConflict: true,
       conflictType: 'superseded',
-      reason: `Superseded operation: server has newer version of ${op.entityType}:${entityId}`,
+      reason: `Superseded operation: server has newer version of ${entityType}:${entityId}`,
       existingClock,
     };
   }
@@ -157,7 +220,7 @@ export const resolveConflictForExistingOp = (
   return {
     hasConflict: true,
     conflictType: 'unknown',
-    reason: `Unknown vector clock comparison result for ${op.entityType}:${entityId}`,
+    reason: `Unknown vector clock comparison result for ${entityType}:${entityId}`,
     existingClock,
   };
 };
@@ -170,31 +233,23 @@ export const resolveConflictForExistingOp = (
 export const detectConflictForEntity = async (
   userId: number,
   op: Operation,
+  entityType: string,
   entityId: string,
   tx: Prisma.TransactionClient,
 ): Promise<ConflictResult> => {
-  // Get the latest operation for this entity
-  const existingOp = await tx.operation.findFirst({
-    where: {
-      userId,
-      entityType: op.entityType,
-      entityId,
-    },
-    select: {
-      clientId: true,
-      vectorClock: true,
-    },
-    orderBy: {
-      serverSeq: 'desc',
-    },
-  });
+  const latestOpByEntity = await prefetchLatestEntityOpsForBatch(
+    userId,
+    [{ entityType, entityId }],
+    tx,
+  );
+  const existingOp = latestOpByEntity.get(getEntityConflictKey(entityType, entityId));
 
   // No existing operation = no conflict
   if (!existingOp) {
     return { hasConflict: false };
   }
 
-  return resolveConflictForExistingOp(op, entityId, existingOp);
+  return resolveConflictForExistingOp(op, entityType, entityId, existingOp);
 };
 
 export const isSameDuplicateOperation = (
@@ -296,23 +351,41 @@ export const getConflictEntityIds = (op: Operation): string[] => {
   return Array.from(new Set(rawEntityIds));
 };
 
+export const getConflictEntityPairs = (op: Operation): EntityConflictPair[] => {
+  const rawEntityPairs: EntityConflictPair[] = [
+    ...(op.affectedEntities ?? []),
+    ...getConflictEntityIds(op).map((entityId) => ({
+      entityType: op.entityType,
+      entityId,
+    })),
+  ];
+  const entityPairs = new Map<string, EntityConflictPair>();
+
+  for (const entity of rawEntityPairs) {
+    if (!entity.entityType || !entity.entityId) continue;
+    entityPairs.set(getEntityConflictKey(entity.entityType, entity.entityId), {
+      entityType: entity.entityType,
+      entityId: entity.entityId,
+    });
+  }
+
+  return Array.from(entityPairs.values());
+};
+
 export const getEntityConflictKey = (entityType: string, entityId: string): string => {
   return `${entityType}\u0000${entityId}`;
 };
 
 export const getBatchConflictEntityPairs = (
   candidates: BatchUploadCandidate[],
-): { entityType: string; entityId: string }[] => {
-  const entityPairs = new Map<string, { entityType: string; entityId: string }>();
+): EntityConflictPair[] => {
+  const entityPairs = new Map<string, EntityConflictPair>();
 
   for (const candidate of candidates) {
     if (isFullStateOpType(candidate.op.opType)) continue;
 
-    for (const entityId of getConflictEntityIds(candidate.op)) {
-      entityPairs.set(getEntityConflictKey(candidate.op.entityType, entityId), {
-        entityType: candidate.op.entityType,
-        entityId,
-      });
+    for (const entity of getConflictEntityPairs(candidate.op)) {
+      entityPairs.set(getEntityConflictKey(entity.entityType, entity.entityId), entity);
     }
   }
 
@@ -321,7 +394,7 @@ export const getBatchConflictEntityPairs = (
 
 export const prefetchLatestEntityOpsForBatch = async (
   userId: number,
-  entityPairs: { entityType: string; entityId: string }[],
+  entityPairs: EntityConflictPair[],
   tx: Prisma.TransactionClient,
 ): Promise<Map<string, LatestBatchEntityOperationRow>> => {
   const latestByEntity = new Map<string, LatestBatchEntityOperationRow>();
@@ -332,23 +405,37 @@ export const prefetchLatestEntityOpsForBatch = async (
     start < entityPairs.length;
     start += CONFLICT_DETECTION_ENTITY_BATCH_SIZE
   ) {
-    const touchedRows = entityPairs
-      .slice(start, start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE)
-      .map(({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`);
+    const touchedRows = entityPairs.slice(
+      start,
+      start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+    );
+    const touchedPlaceholders = touchedRows
+      .map((_, index) => `($${index * 2 + 2}, $${index * 2 + 3})`)
+      .join(', ');
+    const touchedParams = touchedRows.flatMap(({ entityType, entityId }) => [
+      entityType,
+      entityId,
+    ]);
 
-    const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
-      SELECT DISTINCT ON (o.entity_type, o.entity_id)
-        o.entity_type AS "entityType",
-        o.entity_id AS "entityId",
+    const latestOps = await queryRawWithBoundParams<LatestBatchEntityOperationRow[]>(
+      tx,
+      `
+      SELECT DISTINCT ON (ae.entity_type, ae.entity_id)
+        ae.entity_type AS "entityType",
+        ae.entity_id AS "entityId",
         o.client_id AS "clientId",
         o.vector_clock AS "vectorClock"
-      FROM operations o
-      JOIN (VALUES ${Prisma.join(touchedRows)}) AS touched(entity_type, entity_id)
-        ON touched.entity_type = o.entity_type
-       AND touched.entity_id = o.entity_id
-      WHERE o.user_id = ${userId}
-      ORDER BY o.entity_type, o.entity_id, o.server_seq DESC
-    `;
+      FROM operation_affected_entities ae
+      JOIN operations o ON o.id = ae.operation_id
+      JOIN (VALUES ${touchedPlaceholders}) AS touched(entity_type, entity_id)
+        ON touched.entity_type = ae.entity_type
+       AND touched.entity_id = ae.entity_id
+      WHERE ae.user_id = $1
+      ORDER BY ae.entity_type, ae.entity_id, ae.server_seq DESC
+    `,
+      userId,
+      ...touchedParams,
+    );
 
     for (const latestOp of latestOps) {
       latestByEntity.set(

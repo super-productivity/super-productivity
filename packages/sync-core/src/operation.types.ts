@@ -74,6 +74,14 @@ export interface Operation<TOpType extends string = OpType> {
    */
   entityIds?: string[];
 
+  /**
+   * Typed entity refs touched by this operation.
+   *
+   * Use this when one operation changes multiple entity types. `entityId` and
+   * `entityIds` stay as the legacy primary scope for backwards compatibility.
+   */
+  affectedEntities?: AffectedEntity[];
+
   // DATA
   /**
    * The actual data change associated with the operation.
@@ -108,6 +116,11 @@ export interface Operation<TOpType extends string = OpType> {
    * Allows the system to migrate or transform payloads if the data structure changes in the future.
    */
   schemaVersion: number;
+}
+
+export interface AffectedEntity {
+  entityType: string;
+  entityId: string;
 }
 
 export interface OperationLogEntry<TOperation extends Operation<string> = Operation> {
@@ -201,6 +214,31 @@ export interface MultiEntityPayload<TOpType extends string = OpType> {
   actionPayload: Record<string, unknown>;
   entityChanges: EntityChange<TOpType>[];
 }
+
+export const getOperationAffectedEntities = (
+  op: Pick<
+    Operation<string>,
+    'entityType' | 'entityId' | 'entityIds' | 'affectedEntities'
+  >,
+): AffectedEntity[] => {
+  const rawEntities: AffectedEntity[] = [
+    ...(op.affectedEntities ?? []),
+    ...(op.entityIds?.length ? op.entityIds : op.entityId ? [op.entityId] : []).map(
+      (entityId) => ({ entityType: op.entityType, entityId }),
+    ),
+  ];
+
+  const seen = new Set<string>();
+  const result: AffectedEntity[] = [];
+  for (const entity of rawEntities) {
+    if (!entity.entityType || !entity.entityId) continue;
+    const key = `${entity.entityType}\u0000${entity.entityId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(entity);
+  }
+  return result;
+};
 
 /**
  * Type guard to check if a payload is a multi-entity payload.

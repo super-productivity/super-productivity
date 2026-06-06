@@ -6,6 +6,7 @@
 
 export const testState = {
   operations: new Map<string, any>(),
+  operationAffectedEntities: [] as any[],
   syncDevices: new Map<string, any>(),
   userSyncStates: new Map<number, any>(),
   users: new Map<number, any>(),
@@ -16,6 +17,7 @@ export const testState = {
 
 export function resetTestState(): void {
   testState.operations = new Map();
+  testState.operationAffectedEntities = [];
   testState.syncDevices = new Map();
   testState.userSyncStates = new Map();
   testState.users = new Map();

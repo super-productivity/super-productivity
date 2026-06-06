@@ -22,7 +22,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
  * reference the old action type.
  */
 export const ACTION_TYPE_ALIASES: Record<string, string> = {
-  // Example: '[Task] Update Task': '[Task] Update',
+  [ActionType.PROJECT_COMPLETE]: ActionType.TASK_SHARED_COMPLETE_PROJECT,
 };
 
 /**
@@ -218,6 +218,7 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
       entityType: op.entityType,
       entityId: op.entityId,
       entityIds: op.entityIds,
+      affectedEntities: op.affectedEntities,
       opType: op.opType,
       isRemote: true, // Important to prevent re-logging during replay/sync
     },

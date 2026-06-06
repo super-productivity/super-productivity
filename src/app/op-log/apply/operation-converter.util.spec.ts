@@ -361,6 +361,24 @@ describe('operation-converter utility', () => {
       }
     });
 
+    it('should replay legacy project completion as the current shared action', () => {
+      const op = createMockOperation({
+        actionType: ActionType.PROJECT_COMPLETE,
+        opType: OpType.Batch,
+        entityType: 'PROJECT',
+        entityId: 'project-1',
+        payload: { id: 'project-1', doneOn: 1_800_000_000_000 },
+      });
+
+      const action = convertOpToAction(op);
+
+      expect(action.type).toBe(ActionType.TASK_SHARED_COMPLETE_PROJECT);
+      expect(action.meta.entityType).toBe('PROJECT');
+      expect(action.meta.entityId).toBe('project-1');
+      expect((action as any).id).toBe('project-1');
+      expect((action as any).doneOn).toBe(1_800_000_000_000);
+    });
+
     describe('legacy planTasksForToday date backfill', () => {
       it('injects today from the originating operation timestamp when missing', () => {
         const op = createMockOperation({

@@ -54,6 +54,7 @@ describe('action-type-codes', () => {
       expect(decodeActionType('HA')).toBe('[Task Shared] addTask');
       expect(decodeActionType('GA')).toBe('[Tag] Add Tag');
       expect(decodeActionType('PA')).toBe('[Project] Add Project');
+      expect(decodeActionType('PCO')).toBe('[Project] Complete Project');
     });
 
     it('should return code as-is for unknown codes (assumed to be full action type)', () => {

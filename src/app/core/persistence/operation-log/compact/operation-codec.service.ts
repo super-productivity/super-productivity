@@ -32,6 +32,9 @@ export const encodeOperation = (op: Operation): CompactOperation => {
   if (op.entityIds !== undefined) {
     compact.ds = op.entityIds;
   }
+  if (op.affectedEntities !== undefined) {
+    compact.ae = op.affectedEntities;
+  }
   if (op.syncImportReason !== undefined) {
     compact.r = op.syncImportReason;
   }
@@ -62,6 +65,9 @@ export const decodeOperation = (compact: CompactOperation): Operation => {
   }
   if (compact.ds !== undefined) {
     op.entityIds = compact.ds;
+  }
+  if (compact.ae !== undefined) {
+    op.affectedEntities = compact.ae as Operation['affectedEntities'];
   }
   if (compact.r !== undefined) {
     op.syncImportReason = compact.r as SyncImportReason;

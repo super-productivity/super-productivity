@@ -144,6 +144,9 @@ describe('Migrate MiscConfig to TasksConfig', () => {
       const miscOp = resultArray.find((r) => r.entityId === 'misc');
       expect(miscOp).toBeDefined();
       expect(miscOp!.id).toBe('op_1_misc');
+      expect(miscOp!.affectedEntities).toEqual([
+        { entityType: 'GLOBAL_CONFIG', entityId: 'misc' },
+      ]);
       expect(miscOp!.payload).toEqual({
         isMinimizeToTray: false,
       });
@@ -152,6 +155,9 @@ describe('Migrate MiscConfig to TasksConfig', () => {
       const tasksOp = resultArray.find((r) => r.entityId === 'tasks');
       expect(tasksOp).toBeDefined();
       expect(tasksOp!.id).toBe('op_1_tasks');
+      expect(tasksOp!.affectedEntities).toEqual([
+        { entityType: 'GLOBAL_CONFIG', entityId: 'tasks' },
+      ]);
       expect(tasksOp!.payload).toEqual({
         isConfirmBeforeDelete: true,
         isMarkdownFormattingInNotesEnabled: false, // Inverted from isTurnOffMarkdown: true
@@ -178,6 +184,9 @@ describe('Migrate MiscConfig to TasksConfig', () => {
       const singleOp = result as OperationLike;
       expect(singleOp.id).toBe('op_2_tasks');
       expect(singleOp.entityId).toBe('tasks');
+      expect(singleOp.affectedEntities).toEqual([
+        { entityType: 'GLOBAL_CONFIG', entityId: 'tasks' },
+      ]);
       expect(singleOp.payload).toEqual({
         isAutoAddWorkedOnToToday: true,
         defaultProjectId: 'project_123',

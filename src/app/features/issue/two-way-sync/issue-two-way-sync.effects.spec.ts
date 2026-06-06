@@ -173,8 +173,12 @@ describe('IssueTwoWaySyncEffects', () => {
         issueProviderId: 'provider-1',
         issueLastSyncedValues: { status: 'NEEDS-ACTION' },
       });
+      const taskAfterReducer = {
+        ...task,
+        isDone: true,
+      };
 
-      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      taskServiceSpy.getByIdOnce$.and.returnValues(of(task), of(taskAfterReducer));
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
 
       effects.pushFieldsOnTaskUpdate$.subscribe();
@@ -182,6 +186,102 @@ describe('IssueTwoWaySyncEffects', () => {
       actions$.next(
         TaskSharedActions.updateTask({
           task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+
+      tick();
+
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { status: 'COMPLETED' },
+        jasmine.any(Object),
+      );
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should push reopened project-completion tasks to remote issue', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.resolveTo({ status: 'COMPLETED' }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'COMPLETED' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { status: 'COMPLETED' },
+        isDone: false,
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushDoneStateOnProjectComplete$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.completeProject({
+          id: 'project-1',
+          doneOn: Date.now(),
+          taskIdsToMarkUndone: ['task-1'],
+        }),
+      );
+
+      tick();
+
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { status: 'NEEDS-ACTION' },
+        jasmine.any(Object),
+      );
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should push isDone changes from project completion to remote issue', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.resolveTo({ status: 'NEEDS-ACTION' }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'NEEDS-ACTION' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+        isDone: true,
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushDoneStateOnProjectComplete$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.completeProject({
+          id: 'project-1',
+          doneOn: Date.now(),
+          taskIdsToMarkDone: ['task-1'],
         }),
       );
 

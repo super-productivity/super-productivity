@@ -59,6 +59,7 @@ export class SupersededOperationResolverService {
       entityType: sourceOp.entityType,
       entityId: sourceOp.entityId,
       entityIds: sourceOp.entityIds,
+      affectedEntities: sourceOp.affectedEntities,
       payload: sourceOp.payload,
       clientId,
       vectorClock,
@@ -121,24 +122,21 @@ export class SupersededOperationResolverService {
       const newOpsCreated: Operation[] = [];
 
       // Handle bulk semantic operations BEFORE entity-by-entity grouping.
-      // moveToArchive uses OpType.Update but its reducer removes entities from the NgRx store
-      // (via deleteTaskHelper). This is the ONLY action with this pattern — all other entity
-      // removals use OpType.Delete (handled below). The normal resolution path would call
-      // getCurrentEntityState() → undefined → discard, permanently losing the archive.
-      // Instead, re-create the operation with a merged clock preserving the original payload.
-      // NOTE: If a future action type also removes entities with OpType.Update, add it here.
+      // Some semantic multi-entity actions cannot be replaced by a single LWW
+      // update for their primary entity. Re-create them with a merged clock,
+      // preserving the original payload and affected entity metadata.
       const regularSupersededOps: Array<{
         opId: string;
         op: Operation;
         existingClock?: VectorClock;
       }> = [];
       for (const item of supersededOps) {
-        if (item.op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE) {
-          // Re-create the archive operation with a merged vector clock.
-          // The original payload is preserved exactly (MultiEntityPayload format with
-          // actionPayload.tasks containing full task data for remote archive writes).
+        if (
+          item.op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
+          item.op.actionType === ActionType.TASK_SHARED_COMPLETE_PROJECT
+        ) {
           const mergedClock = this.conflictResolutionService.mergeAndIncrementClocks(
-            [globalClock, item.op.vectorClock],
+            [globalClock, item.op.vectorClock, item.existingClock ?? {}],
             clientId,
           );
           // Don't prune here — the server prunes AFTER conflict detection (before storage).
@@ -154,8 +152,8 @@ export class SupersededOperationResolverService {
           newOpsCreated.push(newOp);
           opsToReject.push(item.opId);
           OpLog.normal(
-            `SupersededOperationResolverService: Created replacement moveToArchive op ${newOp.id} ` +
-              `with ${item.op.entityIds?.length ?? 0} tasks, replacing superseded op ${item.opId}`,
+            `SupersededOperationResolverService: Created replacement semantic op ${newOp.id} ` +
+              `for ${item.op.actionType}, replacing superseded op ${item.opId}`,
           );
         } else {
           regularSupersededOps.push(item);

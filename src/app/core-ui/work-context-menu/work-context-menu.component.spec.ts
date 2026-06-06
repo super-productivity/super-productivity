@@ -144,7 +144,38 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
-        { topLevelTaskIdsToMoveToInbox: ['t1'] },
+        {
+          topLevelTaskIdsToMoveToInbox: ['t1'],
+          taskIdsToMoveToInbox: ['t1'],
+        },
+      );
+    });
+
+    it('includes moved subtasks and reopened parents in Inbox completion metadata', async () => {
+      const info = {
+        topLevelTasks: [{ id: 't1', isDone: true, subTaskIds: ['s1'] } as any],
+        allTasks: [
+          { id: 't1', isDone: true, subTaskIds: ['s1'] } as any,
+          { id: 's1', isDone: false, subTaskIds: [] } as any,
+        ],
+        unfinishedTasks: [{ id: 's1', isDone: false, subTaskIds: [] } as any],
+        topLevelTasksWithUnfinishedWork: [
+          { id: 't1', isDone: true, subTaskIds: ['s1'] } as any,
+        ],
+      };
+      mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(info));
+      resolveResult$ = of('inbox');
+
+      await component.completeProject();
+
+      expect(mockProjectService.complete).toHaveBeenCalledWith(
+        'project-123',
+        logicalDoneOn,
+        {
+          topLevelTaskIdsToMoveToInbox: ['t1'],
+          taskIdsToMoveToInbox: ['t1', 's1'],
+          taskIdsToMarkUndone: ['t1'],
+        },
       );
     });
 
@@ -167,7 +198,10 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
-        { topLevelTaskIdsToMoveToInbox: ['t2'] },
+        {
+          topLevelTaskIdsToMoveToInbox: ['t2'],
+          taskIdsToMoveToInbox: ['t2'],
+        },
       );
     });
 

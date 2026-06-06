@@ -1,11 +1,12 @@
 import { Action } from '@ngrx/store';
-import { EntityType, OpType } from './operation.types';
+import { AffectedEntity, EntityType, OpType } from './operation.types';
 
 export interface PersistentActionMeta {
   isPersistent?: boolean; // When false, the action is blacklisted and not persisted
   entityType: EntityType;
   entityId?: string; // Optional if entityIds is provided
   entityIds?: string[]; // For batch operations
+  affectedEntities?: AffectedEntity[]; // Typed refs for mixed-entity batch operations
   opType: OpType;
   isRemote?: boolean; // TRUE if from Sync (prevents re-logging)
   isBulk?: boolean; // TRUE for batch operations

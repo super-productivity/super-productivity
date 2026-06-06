@@ -449,6 +449,35 @@ describe('projectSharedMetaReducer', () => {
       expect(updatedState[TASK_FEATURE_NAME].lastCurrentTaskId).toBe('task1');
     });
 
+    it('should clear reminder timestamps when marking unfinished tasks done', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], [], []);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        isDone: false,
+        remindAt: 1_800_000_010_000,
+        deadlineRemindAt: 1_800_000_020_000,
+      });
+
+      const action = TaskSharedActions.completeProject({
+        id: 'project1',
+        doneOn,
+        taskIdsToMarkDone: ['task1'],
+      });
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1).toEqual(
+        jasmine.objectContaining({
+          isDone: true,
+          doneOn,
+          remindAt: undefined,
+          deadlineRemindAt: undefined,
+        }),
+      );
+    });
+
     it('should move unresolved top-level task trees to Inbox before completing', () => {
       const testState = createStateWithExistingTasks(['task1'], [], [], []);
       testState[PROJECT_FEATURE_NAME].ids = ['project1', INBOX_PROJECT.id];

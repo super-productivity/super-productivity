@@ -9,6 +9,7 @@ import { DownloadCallback, RejectedOpInfo } from '../core/types/sync-results.typ
 import { handleStorageQuotaError } from './sync-error-utils';
 import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
 import { toEntityKey } from '../util/entity-key.util';
+import { getOpAffectedEntities } from '../util/get-op-entity-ids.util';
 
 // Re-export for consumers that import from this service
 export type {
@@ -435,8 +436,8 @@ export class RejectedOpsHandlerService {
   }
 
   private _getEntityKey(op: Operation): string {
-    const entityId = op.entityId || op.entityIds?.[0];
-    if (!entityId) {
+    const [entity] = getOpAffectedEntities(op);
+    if (!entity) {
       OpLog.warn(
         '[RejectedOpsHandler] Operation has no entityId/entityIds, using wildcard key',
         op.actionType,
@@ -444,6 +445,6 @@ export class RejectedOpsHandlerService {
       );
       return toEntityKey(op.entityType, '*');
     }
-    return toEntityKey(op.entityType, entityId);
+    return toEntityKey(entity.entityType, entity.entityId);
   }
 }

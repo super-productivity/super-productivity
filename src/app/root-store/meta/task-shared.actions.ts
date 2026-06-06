@@ -5,7 +5,55 @@ import { IssueDataReduced } from '../../features/issue/issue.model';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { BatchOperation } from '@super-productivity/plugin-api';
 import { PersistentActionMeta } from '../../op-log/core/persistent-action.interface';
-import { OpType } from '../../op-log/core/operation.types';
+import { AffectedEntity, EntityType, OpType } from '../../op-log/core/operation.types';
+import { INBOX_PROJECT } from '../../features/project/project.const';
+import { TODAY_TAG } from '../../features/tag/tag.const';
+
+interface CompleteProjectProps {
+  id: string;
+  doneOn: number;
+  taskIdsToMarkDone?: string[];
+  topLevelTaskIdsToMoveToInbox?: string[];
+  taskIdsToMoveToInbox?: string[];
+  taskIdsToMarkUndone?: string[];
+}
+
+const buildCompleteProjectAffectedEntities = (
+  projectProps: CompleteProjectProps,
+): AffectedEntity[] => {
+  const seen = new Set<string>();
+  const affectedEntities: AffectedEntity[] = [];
+  const addEntity = (entityType: EntityType, entityId: string): void => {
+    const key = `${entityType}\u0000${entityId}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    affectedEntities.push({ entityType, entityId });
+  };
+
+  addEntity('PROJECT', projectProps.id);
+
+  if (
+    projectProps.topLevelTaskIdsToMoveToInbox?.length ||
+    projectProps.taskIdsToMoveToInbox?.length
+  ) {
+    addEntity('PROJECT', INBOX_PROJECT.id);
+  }
+
+  [
+    ...(projectProps.taskIdsToMarkDone ?? []),
+    ...(projectProps.topLevelTaskIdsToMoveToInbox ?? []),
+    ...(projectProps.taskIdsToMoveToInbox ?? []),
+    ...(projectProps.taskIdsToMarkUndone ?? []),
+  ].forEach((taskId) => addEntity('TASK', taskId));
+
+  if (projectProps.taskIdsToMarkDone?.length) {
+    addEntity('TAG', TODAY_TAG.id);
+  }
+
+  return affectedEntities;
+};
 
 /**
  * Shared actions that affect multiple reducers (tasks, projects, tags)
@@ -301,17 +349,13 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
-    completeProject: (projectProps: {
-      id: string;
-      doneOn: number;
-      taskIdsToMarkDone?: string[];
-      topLevelTaskIdsToMoveToInbox?: string[];
-    }) => ({
+    completeProject: (projectProps: CompleteProjectProps) => ({
       ...projectProps,
       meta: {
         isPersistent: true,
         entityType: 'PROJECT',
         entityId: projectProps.id,
+        affectedEntities: buildCompleteProjectAffectedEntities(projectProps),
         opType: OpType.Batch,
       } satisfies PersistentActionMeta,
     }),

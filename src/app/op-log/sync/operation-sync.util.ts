@@ -1,4 +1,10 @@
-import { ActionType, OpType, Operation, SyncImportReason } from '../core/operation.types';
+import {
+  ActionType,
+  OpType,
+  Operation,
+  SyncImportReason,
+  toAppAffectedEntities,
+} from '../core/operation.types';
 import {
   SyncProviderBase,
   OperationSyncCapable,
@@ -66,6 +72,7 @@ export const syncOpToOperation = (syncOp: SyncOperation): Operation => {
     entityType: syncOp.entityType as Operation['entityType'],
     entityId: syncOp.entityId,
     entityIds: syncOp.entityIds,
+    affectedEntities: toAppAffectedEntities(syncOp.affectedEntities),
     payload: syncOp.payload,
     vectorClock: syncOp.vectorClock,
     timestamp: syncOp.timestamp,

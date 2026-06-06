@@ -86,12 +86,18 @@ export interface SyncOperation {
   entityType: string;
   entityId?: string;
   entityIds?: string[];
+  affectedEntities?: SyncAffectedEntity[];
   payload: unknown;
   vectorClock: VectorClock;
   timestamp: number;
   schemaVersion: number;
   isPayloadEncrypted?: boolean;
   syncImportReason?: string;
+}
+
+export interface SyncAffectedEntity {
+  entityType: string;
+  entityId: string;
 }
 
 export interface ServerSyncOperation {

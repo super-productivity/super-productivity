@@ -223,6 +223,45 @@ describe('SyncImportConflictGateService', () => {
     });
   });
 
+  it('should treat pending user batch ops as meaningful', async () => {
+    const incomingSyncImport = createOperation();
+    const pendingProjectCompletionEntry = createEntry(
+      createOperation({
+        id: 'local-project-complete',
+        actionType: ActionType.TASK_SHARED_COMPLETE_PROJECT,
+        opType: OpType.Batch,
+        entityType: 'PROJECT',
+        entityId: 'project-1',
+        affectedEntities: [
+          { entityType: 'PROJECT', entityId: 'project-1' },
+          { entityType: 'TASK', entityId: 'task-1' },
+        ],
+        payload: {
+          actionPayload: {
+            id: 'project-1',
+            doneOn: 1_800_000_000_000,
+            taskIdsToMarkDone: ['task-1'],
+          },
+          entityChanges: [],
+        },
+        clientId: 'client-A',
+        vectorClock: { clientA: 1 },
+      }),
+    );
+    opLogStoreSpy.getUnsynced.and.resolveTo([pendingProjectCompletionEntry]);
+
+    const result = await service.checkIncomingFullStateConflict([incomingSyncImport]);
+
+    expect(result.hasMeaningfulPending).toBeTrue();
+    expect(result.dialogData).toEqual({
+      filteredOpCount: 1,
+      localImportTimestamp: 123,
+      syncImportReason: undefined,
+      scenario: 'INCOMING_IMPORT',
+      isNeverSynced: true,
+    });
+  });
+
   it('should mark dialogData.isNeverSynced=false for an already-synced client', async () => {
     opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
     const incomingSyncImport = createOperation();

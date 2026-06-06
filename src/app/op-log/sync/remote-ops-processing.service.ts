@@ -27,6 +27,7 @@ import { OperationLogCompactionService } from '../persistence/operation-log-comp
 import { SyncImportFilterService } from './sync-import-filter.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
+import { getOpAffectedEntities } from '../util/get-op-entity-ids.util';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -151,12 +152,9 @@ export class RemoteOpsProcessingService {
         const migrated = this.schemaMigrationService.migrateOperation(op);
         if (migrated === null) {
           // Track dropped entity IDs for dependency warning
-          if (op.entityId) {
-            droppedEntityIds.add(op.entityId);
-          }
-          if (op.entityIds) {
-            op.entityIds.forEach((id) => droppedEntityIds.add(id));
-          }
+          getOpAffectedEntities(op).forEach((entity) =>
+            droppedEntityIds.add(entity.entityId),
+          );
           OpLog.verbose(
             `RemoteOpsProcessingService: Dropped op ${op.id} (migrated to null)`,
           );

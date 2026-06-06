@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
+import { Action } from '@ngrx/store';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
   concatMap,
@@ -610,63 +611,16 @@ export class TaskRepeatCfgEffects {
     this._localActions$.pipe(
       ofType(TaskSharedActions.updateTask),
       filter((a) => a.task.changes.isDone === true),
-      switchMap(({ task }) =>
-        this._taskService.getByIdOnce$(task.id as string).pipe(
-          switchMap((fullTask) => {
-            if (fullTask) {
-              return rxOf(fullTask);
-            }
-            return from(this._taskArchiveService.load()).pipe(
-              map((archive) => archive.entities[task.id as string]),
-            );
-          }),
-        ),
-      ),
-      filter((task): task is Task => !!task?.repeatCfgId),
-      switchMap((task) =>
-        this._taskRepeatCfgService.getTaskRepeatCfgById$(task.repeatCfgId as string).pipe(
-          take(1),
-          map((cfg) => ({ task, cfg })),
-        ),
-      ),
-      filter(
-        ({ cfg }) =>
-          !!cfg &&
-          (cfg.repeatFromCompletionDate === true || cfg.waitForCompletion === true),
-      ),
-      concatMap(({ task, cfg }) => {
-        const today = this._dateService.todayStr();
-        const isLatestInstance = this._isLatestInstance(task, cfg);
+      switchMap(({ task }) => this._getActionsForCompletedTask(task.id as string)),
+      mergeMap((actions) => actions),
+    ),
+  );
 
-        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay
-        // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
-        // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
-        if (cfg.repeatFromCompletionDate && isLatestInstance) {
-          return rxOf([
-            updateTaskRepeatCfg({
-              taskRepeatCfg: {
-                id: cfg.id as string,
-                changes: {
-                  startDate: today,
-                  lastTaskCreationDay: today,
-                },
-              },
-            }),
-          ]);
-        }
-
-        // For waitForCompletion, probe creation after any repeat instance is
-        // completed. The service checks whether any live or archived instance
-        // still blocks the gate, so completing an older final blocker can
-        // materialize the next due task immediately.
-        if (cfg.waitForCompletion) {
-          return from(
-            this._taskRepeatCfgService._getActionsForTaskRepeatCfg(cfg, Date.now()),
-          ).pipe(map((nextTaskActions) => nextTaskActions));
-        }
-
-        return rxOf([]);
-      }),
+  updateStartDateOnProjectComplete$ = createEffect(() =>
+    this._localActions$.pipe(
+      ofType(TaskSharedActions.completeProject),
+      mergeMap(({ taskIdsToMarkDone = [] }) => from(taskIdsToMarkDone)),
+      concatMap((taskId) => this._getActionsForCompletedTask(taskId)),
       mergeMap((actions) => actions),
     ),
   );
@@ -892,6 +846,64 @@ export class TaskRepeatCfgEffects {
       notes: st.notes,
       timeEstimate: st.timeEstimate,
     }));
+  }
+
+  private _getActionsForCompletedTask(taskId: string): Observable<Action[]> {
+    return this._taskService.getByIdOnce$(taskId).pipe(
+      switchMap((fullTask) => {
+        if (fullTask) {
+          return rxOf(fullTask);
+        }
+        return from(this._taskArchiveService.load()).pipe(
+          map((archive) => archive.entities[taskId]),
+        );
+      }),
+      filter((task): task is Task => !!task?.repeatCfgId),
+      switchMap((task) =>
+        this._taskRepeatCfgService.getTaskRepeatCfgById$(task.repeatCfgId as string).pipe(
+          take(1),
+          map((cfg) => ({ task, cfg })),
+        ),
+      ),
+      filter(
+        ({ cfg }) =>
+          !!cfg &&
+          (cfg.repeatFromCompletionDate === true || cfg.waitForCompletion === true),
+      ),
+      concatMap(({ task, cfg }) => {
+        const today = this._dateService.todayStr();
+        const isLatestInstance = this._isLatestInstance(task, cfg);
+
+        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay
+        // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
+        // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
+        if (cfg.repeatFromCompletionDate && isLatestInstance) {
+          return rxOf([
+            updateTaskRepeatCfg({
+              taskRepeatCfg: {
+                id: cfg.id as string,
+                changes: {
+                  startDate: today,
+                  lastTaskCreationDay: today,
+                },
+              },
+            }),
+          ]);
+        }
+
+        // For waitForCompletion, probe creation after any repeat instance is
+        // completed. The service checks whether any live or archived instance
+        // still blocks the gate, so completing an older final blocker can
+        // materialize the next due task immediately.
+        if (cfg.waitForCompletion) {
+          return from(
+            this._taskRepeatCfgService._getActionsForTaskRepeatCfg(cfg, Date.now()),
+          ).pipe(map((nextTaskActions) => nextTaskActions));
+        }
+
+        return rxOf([]);
+      }),
+    );
   }
 
   private _isLatestInstance(task: Task, cfg: TaskRepeatCfgCopy): boolean {

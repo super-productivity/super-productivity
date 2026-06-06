@@ -24,6 +24,7 @@ import {
   OpType,
   EntityType,
   SyncImportReason,
+  toAppAffectedEntities,
 } from '../../core/operation.types';
 import {
   FileBasedSyncData,
@@ -981,6 +982,7 @@ export class FileBasedSyncAdapterService {
       entityType: op.entityType as EntityType,
       entityId: op.entityId,
       entityIds: op.entityIds,
+      affectedEntities: toAppAffectedEntities(op.affectedEntities),
       payload: op.payload,
       clientId: op.clientId,
       vectorClock: op.vectorClock,
@@ -1006,6 +1008,7 @@ export class FileBasedSyncAdapterService {
       entityType: fullOp.entityType,
       entityId: fullOp.entityId,
       entityIds: fullOp.entityIds,
+      affectedEntities: fullOp.affectedEntities,
       payload: fullOp.payload,
       vectorClock: fullOp.vectorClock,
       timestamp: fullOp.timestamp,

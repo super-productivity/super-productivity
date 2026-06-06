@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { Logger } from '../../logger';
 import { computeOpStorageBytes } from '../sync.const';
 import {
@@ -19,7 +19,7 @@ import {
 import {
   detectConflict,
   getBatchConflictEntityPairs,
-  getConflictEntityIds,
+  getConflictEntityPairs,
   getEntityConflictKey,
   isSameDuplicateOperation,
   prefetchLatestEntityOpsForBatch,
@@ -52,6 +52,22 @@ const toSafeServerSeq = (value: number | bigint | undefined, userId: number): nu
 
   throw new Error(`Invalid last_seq value returned for user ${userId}`);
 };
+
+type RawExecuteTx = Prisma.TransactionClient & {
+  $executeRawUnsafe?: (query: string, ...values: unknown[]) => Promise<number>;
+};
+
+const toTemplateStringsArray = (query: string): TemplateStringsArray =>
+  Object.assign([query], { raw: [query] }) as unknown as TemplateStringsArray;
+
+const executeRawWithBoundParams = (
+  tx: RawExecuteTx,
+  query: string,
+  ...values: unknown[]
+): Promise<number> =>
+  tx.$executeRawUnsafe
+    ? tx.$executeRawUnsafe(query, ...values)
+    : tx.$executeRaw(toTemplateStringsArray(query), ...values);
 
 export class OperationUploadService {
   constructor(
@@ -110,6 +126,51 @@ export class OperationUploadService {
       errorCode,
       existingClock,
     };
+  }
+
+  private async insertAffectedEntities(
+    userId: number,
+    accepted: Array<{ op: Operation; serverSeq: number }>,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const rows = accepted.flatMap((candidate) =>
+      getConflictEntityPairs(candidate.op).map((entity) => ({
+        operationId: candidate.op.id,
+        userId,
+        entityType: entity.entityType,
+        entityId: entity.entityId,
+        serverSeq: candidate.serverSeq,
+      })),
+    );
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    const valuePlaceholders = rows
+      .map(
+        (_, index) =>
+          `($${index * 5 + 1}, $${index * 5 + 2}, $${index * 5 + 3}, $${index * 5 + 4}, $${index * 5 + 5})`,
+      )
+      .join(', ');
+    const values = rows.flatMap((row) => [
+      row.operationId,
+      row.userId,
+      row.entityType,
+      row.entityId,
+      row.serverSeq,
+    ]);
+
+    await executeRawWithBoundParams(
+      tx,
+      `
+      INSERT INTO operation_affected_entities
+        (operation_id, user_id, entity_type, entity_id, server_seq)
+      VALUES ${valuePlaceholders}
+      ON CONFLICT DO NOTHING
+    `,
+      ...values,
+    );
   }
 
   /**
@@ -443,13 +504,18 @@ export class OperationUploadService {
       const { op } = candidate;
       if (!isFullStateOpType(op.opType)) {
         let conflict: ConflictResult | null = null;
-        for (const entityId of getConflictEntityIds(op)) {
+        for (const entity of getConflictEntityPairs(op)) {
           const existingOp = latestOpByEntity.get(
-            getEntityConflictKey(op.entityType, entityId),
+            getEntityConflictKey(entity.entityType, entity.entityId),
           );
           if (!existingOp) continue;
 
-          const conflictResult = resolveConflictForExistingOp(op, entityId, existingOp);
+          const conflictResult = resolveConflictForExistingOp(
+            op,
+            entity.entityType,
+            entity.entityId,
+            existingOp,
+          );
           if (conflictResult.hasConflict) {
             conflict = conflictResult;
             break;
@@ -487,10 +553,10 @@ export class OperationUploadService {
       accepted.push(acceptedOperation);
 
       if (!isFullStateOpType(op.opType)) {
-        for (const entityId of getConflictEntityIds(op)) {
-          latestOpByEntity.set(getEntityConflictKey(op.entityType, entityId), {
-            entityType: op.entityType,
-            entityId,
+        for (const entity of getConflictEntityPairs(op)) {
+          latestOpByEntity.set(getEntityConflictKey(entity.entityType, entity.entityId), {
+            entityType: entity.entityType,
+            entityId: entity.entityId,
             clientId: op.clientId,
             vectorClock: op.vectorClock,
           });
@@ -504,8 +570,8 @@ export class OperationUploadService {
   /**
    * Stage 5: reserve a contiguous server_seq range for the accepted ops in one
    * INSERT ... ON CONFLICT (which also serializes concurrent batches via the
-   * user_sync_state row lock), assign each op its seq, and bulk-insert. Returns
-   * the DB round trips consumed (2).
+   * user_sync_state row lock), assign each op its seq, bulk-insert operations,
+   * and persist typed affected-entity refs. Returns the DB round trips consumed (3).
    */
   private async reserveSeqAndInsert(
     userId: number,
@@ -550,7 +616,8 @@ export class OperationUploadService {
         syncImportReason: candidate.op.syncImportReason ?? null,
       })),
     });
-    return 2;
+    await this.insertAffectedEntities(userId, accepted, tx);
+    return 3;
   }
 
   /**
@@ -861,6 +928,8 @@ export class OperationUploadService {
         errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
       };
     }
+
+    await this.insertAffectedEntities(userId, [{ op, serverSeq }], tx);
 
     if (fullStateVectorClock) {
       // Persist the aggregate of (prior history ∪ this op's clock), not just the

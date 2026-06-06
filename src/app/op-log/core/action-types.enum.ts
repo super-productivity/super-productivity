@@ -126,6 +126,7 @@ export enum ActionType {
   PROJECT_AUTO_MOVE_TO_BACKLOG = '[Project] Auto Move Task from regular to backlog',
   PROJECT_AUTO_MOVE_FROM_BACKLOG = '[Project] Auto Move Task from backlog to regular',
   PROJECT_MOVE_ALL_BACKLOG = '[Project] Move all backlog tasks to regular',
+  PROJECT_COMPLETE = '[Project] Complete Project',
 
   // TaskRepeatCfg actions (R)
   REPEAT_CFG_ADD = '[TaskRepeatCfg][Task] Add TaskRepeatCfg to Task',

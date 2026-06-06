@@ -45,6 +45,8 @@ const REPLAY_OPERATION_SELECT = {
   isPayloadEncrypted: true,
 } as const;
 
+const REPEATABLE_READ_ISOLATION_LEVEL = 'RepeatableRead' as const;
+
 export class SnapshotGenerationService {
   /**
    * Internal implementation of snapshot generation.
@@ -289,7 +291,7 @@ export class SnapshotGenerationService {
         // Prevent races between `_assertNoEncryptedOps` / `_assertCachedSnapshotBaseReplayable`
         // and the subsequent `findMany` batches: a concurrent writer must not be able to
         // slip an encrypted op into the snapshot window after the guards have passed.
-        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        isolationLevel: REPEATABLE_READ_ISOLATION_LEVEL,
       },
     );
 
@@ -434,7 +436,7 @@ export class SnapshotGenerationService {
       },
       {
         timeout: 60000, // Snapshot generation can take time
-        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        isolationLevel: REPEATABLE_READ_ISOLATION_LEVEL,
       },
     );
   }

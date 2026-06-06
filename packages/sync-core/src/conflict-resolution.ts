@@ -2,6 +2,7 @@ import {
   extractActionPayload,
   extractEntityFromPayload,
   extractUpdateChanges,
+  getOperationAffectedEntities,
   OpType,
 } from './operation.types';
 import type { EntityConflict, Operation } from './operation.types';
@@ -430,13 +431,10 @@ export const partitionLwwResolutions = <
       partitions.remoteWinsOps.push(...processRemoteWinnerOps(conflict));
 
       for (const op of conflict.remoteOps) {
-        const ids = op.entityIds?.length
-          ? op.entityIds
-          : op.entityId
-            ? [op.entityId]
-            : [];
-        for (const id of ids) {
-          partitions.remoteWinnerAffectedEntityKeys.add(toEntityKey(op.entityType, id));
+        for (const entity of getOperationAffectedEntities(op)) {
+          partitions.remoteWinnerAffectedEntityKeys.add(
+            toEntityKey(entity.entityType, entity.entityId),
+          );
         }
       }
       continue;
