@@ -11,7 +11,6 @@ import {
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DatePipe } from '@angular/common';
-import { Router } from '@angular/router';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -52,7 +51,6 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
     inject<MatDialogRef<DialogProjectCompleteComponent>>(MatDialogRef);
   private readonly _confettiService = inject(ConfettiService);
   private readonly _configService = inject(GlobalConfigService);
-  private readonly _router = inject(Router);
   private readonly _projectService = inject(ProjectService);
   private readonly _globalThemeService = inject(GlobalThemeService);
 
@@ -141,11 +139,6 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
 
   close(): void {
     this._matDialogRef.close();
-  }
-
-  viewCompleted(): void {
-    this._matDialogRef.close();
-    this._router.navigateByUrl('/archived-projects');
   }
 
   undo(): void {

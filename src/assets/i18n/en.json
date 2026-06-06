@@ -939,12 +939,11 @@
           "TITLE": "Project complete!",
           "STARTED": "Started",
           "FINISHED": "Finished",
-          "DURATION": "Finished in {{nr}} days",
-          "TASKS_DONE": "Tasks done",
+          "DURATION": "Completed in {{nr}} days",
+          "TASKS_DONE": "Tasks completed",
           "TIME_SPENT": "Time tracked",
           "DAYS_WORKED": "Days worked",
-          "DONE_BTN": "Nice!",
-          "VIEW_COMPLETED": "View completed projects"
+          "DONE_BTN": "Close"
         }
       },
       "FORM_BASIC": {

@@ -141,10 +141,11 @@
 
 .project-title {
   max-width: 100%;
-  margin: calc(var(--s) + var(--s-half)) 0 0;
-  color: var(--text-color-more-intense);
-  font-size: 20px;
-  font-weight: 600;
+  margin: var(--s2) 0 0;
+  color: var(--text-color-muted);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
@@ -246,7 +247,7 @@
   }
 
   .project-title {
-    font-size: 17px;
+    font-size: 16px;
   }
 
   .stats-grid {

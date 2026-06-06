@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
+import { By } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
 import {
   DialogProjectCompleteComponent,
@@ -19,7 +20,6 @@ describe('DialogProjectCompleteComponent', () => {
   let confettiService: jasmine.SpyObj<ConfettiService>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<DialogProjectCompleteComponent>>;
   let projectService: jasmine.SpyObj<ProjectService>;
-  let router: Router;
   let misc: { isDisableCelebration?: boolean; isDisableAnimations?: boolean };
   let isDarkTheme: WritableSignal<boolean>;
 
@@ -73,8 +73,6 @@ describe('DialogProjectCompleteComponent', () => {
 
     fixture = TestBed.createComponent(DialogProjectCompleteComponent);
     component = fixture.componentInstance;
-    router = TestBed.inject(Router);
-    spyOn(router, 'navigateByUrl').and.returnValue(Promise.resolve(true));
   });
 
   it('creates confetti on the component canvas', async () => {
@@ -119,14 +117,15 @@ describe('DialogProjectCompleteComponent', () => {
     expect(dialogRef.close).toHaveBeenCalled();
   });
 
-  it('closes and navigates to completed projects', () => {
-    component.viewCompleted();
+  it('renders only reopen and close actions', () => {
+    fixture.detectChanges();
 
-    expect(dialogRef.close).toHaveBeenCalled();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/archived-projects');
+    const actionButtons = fixture.debugElement.queryAll(By.css('.actions button'));
+
+    expect(actionButtons.length).toBe(2);
   });
 
-  it('closes and reopens the project from Undo', () => {
+  it('closes and reopens the project from Reopen', () => {
     component.undo();
 
     expect(dialogRef.close).toHaveBeenCalled();
