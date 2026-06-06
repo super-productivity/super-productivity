@@ -69,9 +69,9 @@ export class TaskPage extends BasePage {
     // The done animation can briefly render old and new rows with the same id.
     await this.page.waitForFunction(
       (id) => {
-        const matchingTasks = Array.from(document.querySelectorAll('task')).filter(
-          (el) => el.getAttribute('data-task-id') === id,
-        );
+        const matchingTasks = Array.from(
+          document.querySelectorAll('task, planner-task'),
+        ).filter((el) => el.getAttribute('data-task-id') === id);
         return (
           matchingTasks.length > 0 &&
           matchingTasks.every((el) => el.classList.contains('isDone'))
@@ -195,7 +195,7 @@ export class TaskPage extends BasePage {
   async waitForTaskCount(expectedCount: number, timeout: number = 10000): Promise<void> {
     await this.page.waitForFunction(
       (args) => {
-        const currentCount = document.querySelectorAll('task').length;
+        const currentCount = document.querySelectorAll('task, planner-task').length;
         return currentCount === args.expectedCount;
       },
       { expectedCount },

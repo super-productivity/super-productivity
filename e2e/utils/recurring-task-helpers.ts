@@ -77,7 +77,8 @@ export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<v
   const year = parseInt(yearStr, 10);
 
   // Navigate to correct year
-  await scheduleDialog.locator('.sp-year-button').click();
+  await scheduleDialog.locator('.mat-calendar-period-button').click();
+  await scheduleDialog.locator('.mat-calendar-period-button').click();
   const yearCell = scheduleDialog
     .locator('.mat-calendar-body-cell')
     .filter({ hasText: new RegExp(`^\\s*${year}\\s*$`) })
@@ -86,7 +87,15 @@ export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<v
   await yearCell.click();
 
   // Navigate to correct month
-  const monthCell = scheduleDialog.locator('.mat-calendar-body-cell').nth(month);
+  const monthCell = scheduleDialog
+    .locator('.mat-calendar-body-cell')
+    .filter({
+      hasText: new RegExp(
+        `^\\s*${new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(year, month, 1))}\\s*$`,
+        'i',
+      ),
+    })
+    .first();
   await expect(monthCell).toBeVisible({ timeout: 5000 });
   await monthCell.click();
 
