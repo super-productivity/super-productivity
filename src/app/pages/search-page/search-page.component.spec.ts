@@ -488,4 +488,17 @@ describe('SearchPageComponent', () => {
     expect(latestResults.length).toBe(1);
     expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
   }));
+
+  it('should update folder path reactively when projectFolderMap changes after init', fakeAsync(() => {
+    projectList$.next([createProject({ id: 'proj-1', title: 'My Project' })]);
+    allTasks$.next([createTask({ id: 't1', title: 'Folder Task', projectId: 'proj-1' })]);
+    initAndFlush();
+    typeAndFlush('Folder');
+    expect(latestResults[0].ctx.title).toBe('My Project');
+
+    projectFolderMapSignal.set(new Map([['proj-1', 'Folder 1 › Subfolder A']]));
+    fixture.detectChanges();
+    tick(150); // combineLatest debounce
+    expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
+  }));
 });
