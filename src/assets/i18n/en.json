@@ -1641,6 +1641,11 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",
+        "ADD_CHECKLIST_ITEM": "Add checklist item",
+        "CHECKLIST_ACTIONS": "Checklist actions",
+        "CHECK_ALL": "Check all",
+        "CLEAR_COMPLETED": "Clear completed",
+        "UNCHECK_ALL": "Uncheck all",
         "PASTED_IMAGE_TITLE": "Pasted image",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Links & Files ({{nr}})",

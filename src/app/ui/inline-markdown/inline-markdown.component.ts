@@ -19,11 +19,19 @@ import { FormsModule } from '@angular/forms';
 import { MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
+import { TranslatePipe } from '@ngx-translate/core';
 import { MarkdownComponent } from 'ngx-markdown';
 import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
+import {
+  moveChecklistItem,
+  removeCheckedChecklistItems,
+  setAllChecklistItemsChecked,
+} from '../../features/markdown-checklist/checklist-operations';
+import { T } from '../../t.const';
 import { fadeInAnimation } from '../animations/fade.ani';
 import { DialogFullscreenMarkdownComponent } from '../dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
@@ -46,6 +54,10 @@ const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
     MatIconButton,
     MatTooltip,
     MatIcon,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+    TranslatePipe,
     ResolveClipboardImagesDirective,
   ],
 })
@@ -89,7 +101,19 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   });
 
   isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
+
+  // True when the current notes are a markdown checklist — gates checklist
+  // actions (bulk check/uncheck/clear and drag-to-reorder) in the UI.
+  isCurrentlyChecklist = computed(
+    () =>
+      this.isShowChecklistToggle() &&
+      this.isMarkdownFormattingEnabled() &&
+      isMarkdownChecklist(this.modelCopy() || ''),
+  );
+
+  readonly T = T;
   private _hideOverFlowTimeout: number | undefined;
+  private _dragFromIndex: number | null = null;
 
   constructor() {
     this.resizeParsedToFit();
@@ -176,6 +200,101 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   checklistToggle(): void {
     this.isChecklistMode.set(!this.isChecklistMode());
+  }
+
+  checkAllChecklistItems(): void {
+    this._applyChecklistTransform((notes) => setAllChecklistItemsChecked(notes, true));
+  }
+
+  uncheckAllChecklistItems(): void {
+    this._applyChecklistTransform((notes) => setAllChecklistItemsChecked(notes, false));
+  }
+
+  clearCompletedChecklistItems(): void {
+    this._applyChecklistTransform(removeCheckedChecklistItems);
+  }
+
+  /**
+   * Reorders checklist items via native drag-and-drop on the rendered preview.
+   * Each `.checkbox-wrapper` is tagged with its checklist index in
+   * `onMarkdownReady()`, mirroring the index mapping used for toggling.
+   */
+  onMarkdownReady(): void {
+    if (!this.isCurrentlyChecklist()) {
+      return;
+    }
+    const wrappers = this.previewEl()?.element.nativeElement.querySelectorAll(
+      '.checkbox-wrapper',
+    ) as NodeListOf<HTMLElement> | undefined;
+    wrappers?.forEach((el, i) => {
+      el.draggable = true;
+      el.dataset['checkIndex'] = String(i);
+    });
+  }
+
+  onChecklistDragStart(ev: DragEvent): void {
+    const wrapper = (ev.target as HTMLElement)?.closest?.(
+      '.checkbox-wrapper',
+    ) as HTMLElement | null;
+    if (!wrapper) {
+      return;
+    }
+    this._dragFromIndex = Number(wrapper.dataset['checkIndex']);
+    ev.dataTransfer?.setData('text/plain', String(this._dragFromIndex));
+    if (ev.dataTransfer) {
+      ev.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  onChecklistDragOver(ev: DragEvent): void {
+    if (this._dragFromIndex === null) {
+      return;
+    }
+    const wrapper = (ev.target as HTMLElement)?.closest?.('.checkbox-wrapper');
+    if (wrapper) {
+      // Allow dropping onto another checklist item.
+      ev.preventDefault();
+    }
+  }
+
+  onChecklistDrop(ev: DragEvent): void {
+    if (this._dragFromIndex === null) {
+      return;
+    }
+    const wrapper = (ev.target as HTMLElement)?.closest?.(
+      '.checkbox-wrapper',
+    ) as HTMLElement | null;
+    const fromIndex = this._dragFromIndex;
+    this._dragFromIndex = null;
+    if (!wrapper) {
+      return;
+    }
+    ev.preventDefault();
+    const toIndex = Number(wrapper.dataset['checkIndex']);
+    this._applyChecklistTransform((notes) =>
+      moveChecklistItem(notes, fromIndex, toIndex),
+    );
+  }
+
+  onChecklistDragEnd(): void {
+    this._dragFromIndex = null;
+  }
+
+  private _applyChecklistTransform(transform: (notes: string) => string): void {
+    // Read the freshest content: the textarea when editing, else the model.
+    const textareaEl = this.textareaEl();
+    const current = textareaEl ? textareaEl.nativeElement.value : this._model || '';
+    const next = transform(current);
+    if (next === current) {
+      return;
+    }
+    this.model = next;
+    this.modelCopy.set(next);
+    if (textareaEl) {
+      textareaEl.nativeElement.value = next;
+    }
+    this.changed.emit(next);
+    window.setTimeout(() => this.resizeParsedToFit());
   }
 
   keypressHandler(ev: KeyboardEvent): void {

@@ -131,4 +131,16 @@
       text-decoration: line-through;
     }
   }
+
+  // Drag-to-reorder affordance: only on checklists, where wrappers are made
+  // draggable (see inline-markdown.component onMarkdownReady).
+  &.is-checklist .checkbox-wrapper[draggable='true'] {
+    &:hover {
+      cursor: grab;
+    }
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
 }
