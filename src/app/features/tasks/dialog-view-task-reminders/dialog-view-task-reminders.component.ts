@@ -38,6 +38,7 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DateService } from '../../../core/date/date.service';
+import { MatTooltip } from '@angular/material/tooltip';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -63,6 +64,7 @@ const MINUTES_TO_MILLISECONDS = 1000 * 60;
     TagListComponent,
     LocaleDatePipe,
     LocalDateStrPipe,
+    MatTooltip,
   ],
 })
 export class DialogViewTaskRemindersComponent implements OnDestroy {
@@ -109,9 +111,10 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       ),
     ),
   );
+  todayTaskIds$: Observable<string[]> = this._store.select(selectTodayTaskIds);
   isSingleOnToday$: Observable<boolean> = combineLatest([
     this.tasks$,
-    this._store.select(selectTodayTaskIds),
+    this.todayTaskIds$,
   ]).pipe(
     map(
       ([tasks, todayTaskIds]) =>
