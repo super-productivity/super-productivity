@@ -53,6 +53,8 @@ export class NotesComponent implements OnInit {
   private _activatedRoute = inject(ActivatedRoute);
   private _destroyRef = inject(DestroyRef);
 
+  private _focusToken?: object;
+
   T: typeof T = T;
   isElementWasAdded: boolean = false;
   isDragOver: boolean = false;
@@ -99,6 +101,8 @@ export class NotesComponent implements OnInit {
       }
     }
 
+    this._destroyRef.onDestroy(() => (this._focusToken = undefined));
+
     this._activatedRoute.queryParams
       .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((params) => {
@@ -112,11 +116,11 @@ export class NotesComponent implements OnInit {
     const id = `n-${noteId}`;
     const startTime = Date.now();
     const timeout = 4000;
-    let isDestroyed = false;
-    this._destroyRef.onDestroy(() => (isDestroyed = true));
+    const token = {};
+    this._focusToken = token;
 
     const tryFocus = (): void => {
-      if (isDestroyed) {
+      if (this._focusToken !== token) {
         return;
       }
       const el = document.getElementById(id);
@@ -124,7 +128,7 @@ export class NotesComponent implements OnInit {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('highlight-searched-item');
         setTimeout(() => {
-          if (!isDestroyed) {
+          if (this._focusToken === token) {
             el.classList.remove('highlight-searched-item');
           }
         }, 3000);
