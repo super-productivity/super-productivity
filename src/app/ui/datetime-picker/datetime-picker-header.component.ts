@@ -6,15 +6,15 @@ import {
 } from '@angular/core';
 import { MatCalendar, MatDatepickerIntl } from '@angular/material/datepicker';
 import { DateAdapter } from '@angular/material/core';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
+import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'datetime-picker-header',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule],
+  imports: [MatButton, MatIconButton, MatIcon],
   template: `
     <div class="mat-calendar-header">
       <div class="mat-calendar-controls">
@@ -224,9 +224,12 @@ export class DateTimePickerHeaderComponent<D> {
     if (this.calendar.currentView === 'year') {
       return this._dateAdapter.getYear(date1) === this._dateAdapter.getYear(date2);
     }
-    // multi-year view
-    const y1 = this._dateAdapter.getYear(date1);
-    const y2 = this._dateAdapter.getYear(date2);
-    return Math.floor(y1 / 24) === Math.floor(y2 / 24);
+    // multi-year view: Material anchors pages at yearsPerPage boundaries.
+    const yearsPerPage = 24;
+    const getStartYear = (date: D): number => {
+      const year = this._dateAdapter.getYear(date);
+      return year - (year % yearsPerPage);
+    };
+    return getStartYear(date1) === getStartYear(date2);
   }
 }

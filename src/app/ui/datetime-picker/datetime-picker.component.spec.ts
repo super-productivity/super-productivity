@@ -50,34 +50,6 @@ describe('DateTimePickerComponent', () => {
     expect(calendarEl).toBeTruthy();
   });
 
-  it('should show quick access buttons if showQuickAccess is true', () => {
-    fixture.componentRef.setInput('showQuickAccess', true);
-    fixture.detectChanges();
-    const quickAccessEl = fixture.nativeElement.querySelector('.quick-access');
-    expect(quickAccessEl).toBeTruthy();
-  });
-
-  it('should hide quick access buttons if showQuickAccess is false', () => {
-    fixture.componentRef.setInput('showQuickAccess', false);
-    fixture.detectChanges();
-    const quickAccessEl = fixture.nativeElement.querySelector('.quick-access');
-    expect(quickAccessEl).toBeFalsy();
-  });
-
-  it('should show time input if showTime is true', () => {
-    fixture.componentRef.setInput('showTime', true);
-    fixture.detectChanges();
-    const timeField = fixture.nativeElement.querySelector('.time-form-field');
-    expect(timeField).toBeTruthy();
-  });
-
-  it('should hide time input if showTime is false', () => {
-    fixture.componentRef.setInput('showTime', false);
-    fixture.detectChanges();
-    const timeField = fixture.nativeElement.querySelector('.time-form-field');
-    expect(timeField).toBeFalsy();
-  });
-
   it('should emit dateSelected when a date is selected on the calendar', () => {
     spyOn(component.dateSelected, 'emit');
     const testDate = new Date();
@@ -142,9 +114,9 @@ describe('DateTimePickerComponent', () => {
     component.onKeyDownOnCalendar(enterEvent);
     expect(component.isKeyboardNavigating).toBeTrue();
 
-    // Trigger calendar mouseover with changed coordinates - should reset it to false
-    const mouseOverEvent = new MouseEvent('mouseover', { clientX: 10, clientY: 20 });
-    component.onCalendarMouseOver(mouseOverEvent);
+    // Trigger calendar mousemove with changed coordinates - should reset it to false
+    const mouseMoveEvent1 = new MouseEvent('mousemove', { clientX: 10, clientY: 20 });
+    component.onCalendarMouseMove(mouseMoveEvent1);
     expect(component.isKeyboardNavigating).toBeFalse();
 
     // Trigger keyboard navigation again
@@ -152,8 +124,8 @@ describe('DateTimePickerComponent', () => {
     expect(component.isKeyboardNavigating).toBeTrue();
 
     // Trigger host mousemove with changed coordinates - should reset it to false
-    const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
-    component.onHostMouseMove(mouseMoveEvent);
+    const mouseMoveEvent2 = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
+    component.onHostMouseMove(mouseMoveEvent2);
     expect(component.isKeyboardNavigating).toBeFalse();
   });
 });

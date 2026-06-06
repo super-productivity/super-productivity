@@ -6,30 +6,27 @@ import {
   computed,
   effect,
   ElementRef,
-  EventEmitter,
   HostBinding,
   HostListener,
   inject,
   input,
-  Output,
+  output,
   viewChild,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatCalendar, MatDatepickerModule } from '@angular/material/datepicker';
-import { MatButtonModule, MatIconButton } from '@angular/material/button';
-import { MatIconModule, MatIcon } from '@angular/material/icon';
+import { MatCalendar } from '@angular/material/datepicker';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import {
-  MatFormFieldModule,
   MatFormField,
   MatLabel,
   MatPrefix,
   MatSuffix,
 } from '@angular/material/form-field';
-import { MatInputModule, MatInput } from '@angular/material/input';
-import { MatSelectModule, MatSelect } from '@angular/material/select';
-import { DateAdapter, MatOptionModule, MatOption } from '@angular/material/core';
-import { MatTooltipModule, MatTooltip } from '@angular/material/tooltip';
+import { MatInput } from '@angular/material/input';
+import { MatSelect } from '@angular/material/select';
+import { DateAdapter, MatOption } from '@angular/material/core';
+import { MatTooltip } from '@angular/material/tooltip';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { DateService } from '../../core/date/date.service';
@@ -52,26 +49,17 @@ const DEFAULT_TIME = '09:00';
   selector: 'datetime-picker',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
-    MatDatepickerModule,
     MatCalendar,
     MatButtonModule,
-    MatIconButton,
-    MatIconModule,
     MatIcon,
-    MatFormFieldModule,
     MatFormField,
     MatLabel,
     MatPrefix,
     MatSuffix,
-    MatInputModule,
     MatInput,
-    MatSelectModule,
     MatSelect,
-    MatOptionModule,
     MatOption,
-    MatTooltipModule,
     MatTooltip,
     TranslateModule,
     TranslatePipe,
@@ -131,19 +119,16 @@ export class DateTimePickerComponent implements AfterViewInit {
   selectedReminderCfgId = input<TaskReminderOptionId>(TaskReminderOptionId.DoNotRemind);
   reminderOptions = input<TaskReminderOption[]>(TASK_REMINDER_OPTIONS);
   minDate = input<Date | null>(null);
-  showQuickAccess = input<boolean>(true);
-  showTime = input<boolean>(true);
   timeLabel = input<string>('Time');
+  reminderLabel = input<string>(T.F.TASK.D_SCHEDULE_TASK.REMIND_AT);
   quickAccessTranslationPrefix = input<string>('F.TASK.D_SCHEDULE_TASK');
 
   // Outputs
-  @Output() dateSelected = new EventEmitter<Date>();
-  @Output() timeChanged = new EventEmitter<string | null>();
-  @Output() reminderChanged = new EventEmitter<TaskReminderOptionId>();
-  @Output() quickAccessClick = new EventEmitter<
-    'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'
-  >();
-  @Output() enterSubmit = new EventEmitter<void>();
+  dateSelected = output<Date>();
+  timeChanged = output<string | null>();
+  reminderChanged = output<TaskReminderOptionId>();
+  quickAccessClick = output<'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'>();
+  enterSubmit = output<void>();
 
   // Template variables
   T: typeof T = T;
@@ -275,7 +260,7 @@ export class DateTimePickerComponent implements AfterViewInit {
     this.quickAccessClick.emit(val);
   }
 
-  onYearSelected(date: unknown): void {
+  onYearSelected(): void {
     const cal = this.calendar();
     if (cal) {
       setTimeout(() => {
@@ -321,7 +306,7 @@ export class DateTimePickerComponent implements AfterViewInit {
     return true;
   }
 
-  onCalendarMouseOver(ev: MouseEvent): void {
+  onCalendarMouseMove(ev: MouseEvent): void {
     if (!this._resetKeyboardNav(ev)) {
       return;
     }

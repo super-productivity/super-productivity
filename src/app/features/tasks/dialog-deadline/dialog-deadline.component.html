@@ -6,9 +6,8 @@
       [selectedReminderCfgId]="selectedReminderCfgId"
       [reminderOptions]="reminderOptions"
       [minDate]="minDate"
-      [showQuickAccess]="true"
-      [showTime]="true"
       [timeLabel]="T.F.TASK.D_DEADLINE.ADD_TIME | translate"
+      [reminderLabel]="T.F.TASK.D_DEADLINE.REMIND_AT"
       [quickAccessTranslationPrefix]="'F.TASK.D_DEADLINE'"
       (dateSelected)="dateSelected($event)"
       (timeChanged)="selectedTime = $event"
@@ -18,40 +17,38 @@
     ></datetime-picker>
   }
 
-  <div class="dialog-actions-and-warnings">
-    <mat-dialog-actions align="start">
-      <div class="deadline-actions">
-        @if (hasExistingDeadline) {
-          <button
-            (click)="remove()"
-            color="warn"
-            mat-stroked-button
-            type="button"
-          >
-            <mat-icon>flag_circle</mat-icon>
-            {{ T.F.TASK.D_DEADLINE.REMOVE_DEADLINE | translate }}
-          </button>
-        }
+  <mat-dialog-actions align="start">
+    <div class="deadline-actions">
+      @if (hasExistingDeadline && !data.isSelectDeadlineOnly) {
         <button
-          color="primary"
+          (click)="remove()"
+          color="warn"
           mat-stroked-button
-          [disabled]="!selectedDate"
-          (click)="submit()"
           type="button"
         >
-          <mat-icon>flag</mat-icon>
-          {{ T.F.TASK.D_DEADLINE.SET_DEADLINE | translate }}
+          <mat-icon>event_busy</mat-icon>
+          {{ T.F.TASK.D_DEADLINE.REMOVE_DEADLINE | translate }}
         </button>
-      </div>
+      }
       <button
-        class="dialog-cancel-btn"
+        color="primary"
         mat-stroked-button
-        color="default"
-        (click)="close()"
+        [disabled]="!selectedDate"
+        (click)="submit()"
         type="button"
       >
-        {{ T.G.CANCEL | translate }}
+        <mat-icon>event_available</mat-icon>
+        {{ T.F.TASK.D_DEADLINE.SET_DEADLINE | translate }}
       </button>
-    </mat-dialog-actions>
-  </div>
+    </div>
+    <button
+      class="dialog-cancel-btn"
+      mat-stroked-button
+      color="default"
+      (click)="close()"
+      type="button"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
+  </mat-dialog-actions>
 </mat-dialog-content>
