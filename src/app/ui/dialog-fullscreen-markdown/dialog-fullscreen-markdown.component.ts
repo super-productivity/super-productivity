@@ -223,7 +223,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       this.onInsertLink();
       return;
     }
-    if (hasModifier && ev.shiftKey && ev.key.toLowerCase() == 'x') {
+    if (hasModifier && ev.shiftKey && ev.key.toLowerCase() == 's') {
       ev.preventDefault();
       this.onApplyStrikethrough();
       return;
