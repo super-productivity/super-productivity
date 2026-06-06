@@ -1,6 +1,6 @@
 import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { first, map, switchMap } from 'rxjs/operators';
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -12,6 +12,7 @@ import { TaskService } from '../task.service';
 import { ProjectService } from '../../project/project.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { DateService } from '../../../core/date/date.service';
 
 /**
  * Tests for the tasks$ filter logic in DialogViewTaskRemindersComponent.
@@ -588,6 +589,10 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: ReminderService, useValue: reminderServiceStub },
+        {
+          provide: 'DateService',
+          useValue: { todayStr: () => '2026-06-06', getStartOfNextDayDiffMs: () => 0 },
+        },
         TranslateService,
         TranslateStore,
       ],
@@ -723,4 +728,172 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
 
     expect(dispatchedClearIds()).toEqual([]);
   });
+});
+
+/**
+ * Tests for focus management and keyboard navigation.
+ */
+describe('DialogViewTaskRemindersComponent navigation and focus', () => {
+  let component: DialogViewTaskRemindersComponent;
+  let fixture: any;
+  let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let reminderServiceStub: { onRemindersActive$: Subject<TaskWithReminderData[]> };
+
+  const buildTask = (id: string): Task =>
+    ({ ...DEFAULT_TASK, id, title: `Task ${id}` }) as Task;
+  const buildReminder = (id: string): TaskWithReminderData =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      title: `Task ${id}`,
+      reminderData: { remindAt: Date.now() },
+    }) as TaskWithReminderData;
+
+  beforeEach(async () => {
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [
+      'getByIdsLive$',
+      'setDone',
+      'setCurrentId',
+    ]);
+    reminderServiceStub = { onRemindersActive$: new Subject<TaskWithReminderData[]>() };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        DialogViewTaskRemindersComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
+      providers: [
+        provideMockStore({ initialState: {} }),
+        {
+          provide: MatDialogRef,
+          useValue: { close: jasmine.createSpy('close'), getState: () => 0 },
+        },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: { reminders: [buildReminder('t1'), buildReminder('t2')] },
+        },
+        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: ProjectService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: ReminderService, useValue: reminderServiceStub },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-06-06', getStartOfNextDayDiffMs: () => 0 },
+        },
+      ],
+    })
+      .overrideComponent(DialogViewTaskRemindersComponent, {
+        set: {
+          template: `
+          @for (task of tasks$ | async; track task.id) {
+            <div class="task">
+              <div class="actions">
+                <button [id]="task.id + '-b1'">{{task.id}} B1</button>
+                <button [id]="task.id + '-b2'">{{task.id}} B2</button>
+              </div>
+            </div>
+          }
+          <div class="wrap-buttons">
+            <button id="f1">F1</button>
+            <button id="f2">F2</button>
+          </div>
+        `,
+        },
+      })
+      .compileComponents();
+
+    taskServiceSpy.getByIdsLive$.and.callFake((ids: string[]) => {
+      return ids.includes('t1') && ids.includes('t2')
+        ? of([buildTask('t1'), buildTask('t2')])
+        : ids.includes('t2')
+          ? of([buildTask('t2')])
+          : of([]);
+    });
+
+    fixture = TestBed.createComponent(DialogViewTaskRemindersComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    // Must be in document for focus tests
+    document.body.appendChild(fixture.nativeElement);
+  });
+
+  afterEach(() => {
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should focus button on mouseover', () => {
+    const btn = document.getElementById('t1-b1') as HTMLButtonElement;
+    const ev = new MouseEvent('mouseover', { bubbles: true });
+    Object.defineProperty(ev, 'target', { value: btn });
+
+    component.onMouseOver(ev);
+    expect(document.activeElement).toBe(btn);
+  });
+
+  it('should move focus down with ArrowDown', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
+    t1b1.focus();
+
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+    component.onKeyDown(ev);
+    expect(document.activeElement).toBe(t2b1);
+  });
+
+  it('should move focus to footer from last task row with ArrowDown', () => {
+    const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
+    const f1 = document.getElementById('f1') as HTMLButtonElement;
+    t2b1.focus();
+
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+    component.onKeyDown(ev);
+    expect(document.activeElement).toBe(f1);
+  });
+
+  it('should move focus up with ArrowUp', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
+    t2b1.focus();
+
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowUp' });
+    component.onKeyDown(ev);
+    expect(document.activeElement).toBe(t1b1);
+  });
+
+  it('should move focus right with ArrowRight', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
+    t1b1.focus();
+
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowRight' });
+    component.onKeyDown(ev);
+    expect(document.activeElement).toBe(t1b2);
+  });
+
+  it('should move focus left with ArrowLeft', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
+    t1b2.focus();
+
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
+    component.onKeyDown(ev);
+    expect(document.activeElement).toBe(t1b1);
+  });
+
+  it('should preserve focus on next task after removal', fakeAsync(() => {
+    fixture.detectChanges();
+    const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
+    t1b2.focus();
+    expect(document.activeElement).toBe(t1b2);
+
+    // Call the actual private method that performs removal and focus logic
+    (component as any)._removeTaskFromList('t1');
+
+    tick();
+    fixture.detectChanges();
+
+    const t2b2 = document.getElementById('t2-b2') as HTMLButtonElement;
+    expect(document.activeElement).toBe(t2b2);
+  }));
 });
