@@ -36,9 +36,7 @@
 
 @if (isConfigReady()) {
   <mat-calendar
-    [headerComponent]="customHeader"
     (keydown)="onKeyDownOnCalendar($event)"
-    (mousemove)="onCalendarMouseMove($event)"
     [selected]="calendarSelectedDate"
     [minDate]="minDate()"
     (selectedChange)="dateSelected.emit($event)"

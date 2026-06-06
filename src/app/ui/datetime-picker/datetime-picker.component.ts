@@ -40,7 +40,6 @@ import { TimeStepDirective } from '../time-step/time-step.directive';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
-import { DateTimePickerHeaderComponent } from './datetime-picker-header.component';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 const DEFAULT_TIME = '09:00';
@@ -64,7 +63,6 @@ const DEFAULT_TIME = '09:00';
     TranslateModule,
     TranslatePipe,
     TimeStepDirective,
-    DateTimePickerHeaderComponent,
   ],
   templateUrl: './datetime-picker.component.html',
   styleUrl: './datetime-picker.component.scss',
@@ -108,8 +106,6 @@ export class DateTimePickerComponent implements AfterViewInit {
       }
     });
   }
-
-  customHeader = DateTimePickerHeaderComponent;
 
   // Inputs
   selectedDate = input<Date | null>(null);
@@ -302,59 +298,5 @@ export class DateTimePickerComponent implements AfterViewInit {
       this._cdr.markForCheck();
     }
     return true;
-  }
-
-  onCalendarMouseMove(ev: MouseEvent): void {
-    if (!this._resetKeyboardNav(ev)) {
-      return;
-    }
-
-    const cal = this.calendar();
-    if (!cal) {
-      return;
-    }
-    const target = ev.target as HTMLElement | null;
-    if (!target || typeof target.closest !== 'function') {
-      return;
-    }
-    const cell = target.closest('.mat-calendar-body-cell') as HTMLElement;
-    if (!cell || cell.classList.contains('mat-calendar-body-disabled')) {
-      return;
-    }
-    const cellContent = cell.querySelector('.mat-calendar-body-cell-content');
-    if (!cellContent) {
-      return;
-    }
-
-    if (cal.currentView === 'month') {
-      const day = parseInt(cellContent.textContent?.trim() || '', 10);
-      if (!isNaN(day) && day >= 1 && day <= 31) {
-        const activeDate = cal.activeDate;
-        if (activeDate.getDate() !== day) {
-          cal.activeDate = new Date(activeDate.getFullYear(), activeDate.getMonth(), day);
-        }
-      }
-    } else if (cal.currentView === 'year') {
-      const activeCells = Array.from(
-        (ev.currentTarget as HTMLElement).querySelectorAll('.mat-calendar-body-cell'),
-      ).filter((c) => c.querySelector('.mat-calendar-body-cell-content'));
-      const index = activeCells.indexOf(cell);
-      if (index !== -1 && cal.activeDate.getMonth() !== index) {
-        cal.activeDate = new Date(cal.activeDate.getFullYear(), index, 1);
-      }
-    } else if (cal.currentView === 'multi-year') {
-      const year = parseInt(cellContent.textContent?.trim() || '', 10);
-      if (!isNaN(year) && cal.activeDate.getFullYear() !== year) {
-        cal.activeDate = new Date(year, cal.activeDate.getMonth(), 1);
-      }
-    }
-
-    // Focus the hovered cell if the user is not actively typing in an input field
-    const activeEl = document.activeElement;
-    const isTyping =
-      activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
-    if (!isTyping) {
-      cell.focus();
-    }
   }
 }
