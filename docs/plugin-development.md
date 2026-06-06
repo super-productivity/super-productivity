@@ -303,6 +303,7 @@ Iframe plugins automatically receive:
 #### Projects
 
 - `getAllProjects()` - Get all projects
+- Returned projects include optional read-only `folderPath` when the project tree exposes a folder display path, primarily for labeling/disambiguating duplicate project names.
 - `addProject(project)` - Create new project
 - `updateProject(projectId, updates)` - Update project
 

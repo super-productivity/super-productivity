@@ -1,0 +1,20 @@
+{
+  "name": "markdown-notes",
+  "version": "0.1.0",
+  "description": "Read-only markdown notes folder viewer for Super Productivity",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "lint": "tsc --noEmit",
+    "test": "node scripts/test.js"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api",
+    "marked": "^17.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.33",
+    "esbuild": "^0.25.11",
+    "typescript": "^5.8.3"
+  }
+}

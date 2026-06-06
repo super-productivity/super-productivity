@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Markdown Notes</title>
+    <style>
+      body {
+        margin: 0;
+        padding: var(--s2);
+        background: transparent;
+        color: var(--text-color);
+      }
+
+      .shell {
+        display: grid;
+        grid-template-rows: auto auto auto minmax(0, 1fr);
+        gap: var(--s2);
+        min-height: 100vh;
+      }
+
+      .toolbar,
+      .config,
+      .status,
+      .group {
+        border: 1px solid var(--extra-border-color);
+        border-radius: var(--card-border-radius);
+        background: var(--card-bg);
+      }
+
+      .toolbar,
+      .config,
+      .status {
+        padding: var(--s);
+      }
+
+      .toolbar {
+        display: flex;
+        gap: var(--s);
+        align-items: center;
+      }
+
+      .toolbar input,
+      .config input,
+      .group select {
+        min-width: 0;
+        width: 100%;
+      }
+
+      input[type='search']::-webkit-search-cancel-button,
+      input[type='search']::-webkit-search-decoration {
+        appearance: none;
+      }
+
+      input[type='search']::-webkit-search-cancel-button {
+        width: 16px;
+        height: 16px;
+        margin-left: var(--s-half);
+        background-color: var(--text-color-muted);
+        cursor: pointer;
+        mask:
+          linear-gradient(45deg, transparent 43%, #000 43% 57%, transparent 57%),
+          linear-gradient(-45deg, transparent 43%, #000 43% 57%, transparent 57%);
+      }
+
+      .config {
+        display: grid;
+        gap: var(--s);
+      }
+
+      .path-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: var(--s);
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: minmax(0, 42%) minmax(0, 58%);
+        gap: var(--s2);
+        min-height: 0;
+      }
+
+      .list,
+      .preview {
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .group {
+        margin-bottom: var(--s);
+        overflow: hidden;
+      }
+
+      .group-header {
+        display: grid;
+        gap: var(--s-half);
+        padding: var(--s);
+        border-bottom: 1px solid var(--extra-border-color);
+      }
+
+      .group-header select {
+        font-size: 0.9em;
+        text-overflow: ellipsis;
+      }
+
+      .group-title {
+        font-weight: 600;
+      }
+
+      .group-path,
+      .note-meta,
+      .empty,
+      .status {
+        color: var(--text-color-muted);
+        font-size: 0.9em;
+      }
+
+      .note-btn {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: var(--s);
+        border: 0;
+        border-bottom: 1px solid var(--extra-border-color);
+        background: transparent;
+        color: var(--text-color);
+        cursor: pointer;
+      }
+
+      .note-btn:hover,
+      .note-btn.is-selected {
+        background: var(--hover-color);
+      }
+
+      .note-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: calc(-1 * var(--focus-ring-width));
+      }
+
+      .note-title {
+        font-weight: 500;
+        margin-bottom: var(--s-half);
+      }
+
+      .preview {
+        border-left: 1px solid var(--extra-border-color);
+        padding-left: var(--s2);
+      }
+
+      .preview-header {
+        margin-bottom: var(--s2);
+      }
+
+      .markdown-preview {
+        line-height: 1.5;
+      }
+
+      .markdown-preview img {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .markdown-preview pre {
+        overflow: auto;
+      }
+
+      @media (max-width: 600px) {
+        .content {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .preview {
+          border-left: 0;
+          border-top: 1px solid var(--extra-border-color);
+          padding-left: 0;
+          padding-top: var(--s2);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
