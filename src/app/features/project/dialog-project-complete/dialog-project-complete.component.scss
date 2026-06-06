@@ -10,7 +10,6 @@
     --project-complete-primary,
     var(--palette-primary-500)
   );
-  --project-complete-accent-color: var(--project-complete-accent, var(--c-accent));
 
   position: relative;
   display: flex;
@@ -30,12 +29,12 @@
     background:
       radial-gradient(
         ellipse 120% 80% at 0% -10%,
-        color-mix(in srgb, var(--project-complete-primary-color) 28%, transparent) 0%,
+        color-mix(in srgb, var(--project-complete-primary-color) 22%, transparent) 0%,
         transparent 65%
       ),
       radial-gradient(
         ellipse 90% 70% at 100% 100%,
-        color-mix(in srgb, var(--project-complete-accent-color) 18%, transparent) 0%,
+        color-mix(in srgb, var(--project-complete-primary-color) 10%, transparent) 0%,
         transparent 60%
       );
     content: '';
@@ -123,21 +122,17 @@
   width: 104px;
   height: 104px;
   margin-bottom: var(--s2);
-  color: var(--project-complete-accent-color);
+  color: var(--project-complete-primary-color);
   background: var(--bg-lightest);
   border: 1px solid var(--extra-border-color);
   border-radius: 50%;
   box-shadow: var(--whiteframe-shadow-4dp);
 
   @supports (background: color-mix(in srgb, black 50%, white)) {
-    background: color-mix(
-      in srgb,
-      var(--project-complete-accent-color) 18%,
-      var(--bg-lightest)
-    );
+    background: color-mix(in srgb, var(--bg-lightest) 72%, transparent);
     border-color: color-mix(
       in srgb,
-      var(--project-complete-accent-color) 34%,
+      var(--project-complete-primary-color) 30%,
       transparent
     );
   }
@@ -185,11 +180,8 @@
   border-radius: 8px;
 
   @supports (background: color-mix(in srgb, black 50%, white)) {
-    background: color-mix(
-      in srgb,
-      var(--bg-lightest) 86%,
-      var(--project-complete-accent-color)
-    );
+    background: color-mix(in srgb, var(--bg-lightest) 68%, transparent);
+    border-color: color-mix(in srgb, var(--text-color-most-intense) 16%, transparent);
   }
 }
 

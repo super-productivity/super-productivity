@@ -106,7 +106,7 @@ describe('DialogProjectCompleteComponent', () => {
     const bgOverlay = nativeElement.querySelector('.project-bg-overlay') as HTMLElement;
 
     expect(overlay.style.getPropertyValue('--project-complete-primary')).toBe('#123456');
-    expect(overlay.style.getPropertyValue('--project-complete-accent')).toBe('#abcdef');
+    expect(overlay.style.getPropertyValue('--project-complete-accent')).toBe('');
     expect(bgImage.style.background).toContain('data:image/gif');
     expect(bgImage.style.filter).toBe('blur(4px)');
     expect(bgImage.classList).toContain('is-blurred');

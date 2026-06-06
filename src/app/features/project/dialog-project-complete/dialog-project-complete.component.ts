@@ -63,9 +63,6 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
     () => !!this.data.project.theme?.isDisableBackgroundTint,
   );
   readonly projectPrimaryColor = computed(() => this.data.project.theme?.primary ?? null);
-  readonly projectAccentColor = computed(
-    () => this.data.project.theme?.accent ?? this.data.project.theme?.primary ?? null,
-  );
   readonly backgroundOverlayOpacity = computed(
     () => (this.data.project.theme?.backgroundOverlayOpacity ?? 20) * 0.01,
   );
