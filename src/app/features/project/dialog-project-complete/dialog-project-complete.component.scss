@@ -85,10 +85,6 @@
   right: calc(var(--safe-area-right, 0px) + var(--s2));
   background: var(--bg-lightest);
   box-shadow: var(--whiteframe-shadow-1dp);
-
-  @supports (background: color-mix(in srgb, black 50%, white)) {
-    background: color-mix(in srgb, var(--bg-lightest) 86%, transparent);
-  }
 }
 
 .celebration-content {
@@ -127,15 +123,6 @@
   border: 1px solid var(--extra-border-color);
   border-radius: 50%;
   box-shadow: var(--whiteframe-shadow-4dp);
-
-  @supports (background: color-mix(in srgb, black 50%, white)) {
-    background: color-mix(in srgb, var(--bg-lightest) 72%, transparent);
-    border-color: color-mix(
-      in srgb,
-      var(--project-complete-primary-color) 30%,
-      transparent
-    );
-  }
 
   mat-icon {
     width: 56px;
@@ -178,11 +165,6 @@
   background: var(--bg-lightest);
   border: 1px solid var(--extra-border-color);
   border-radius: 8px;
-
-  @supports (background: color-mix(in srgb, black 50%, white)) {
-    background: color-mix(in srgb, var(--bg-lightest) 68%, transparent);
-    border-color: color-mix(in srgb, var(--text-color-most-intense) 16%, transparent);
-  }
 }
 
 .stat-value {
