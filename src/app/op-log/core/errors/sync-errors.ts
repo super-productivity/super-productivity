@@ -27,6 +27,7 @@ export {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
+  WebDavNativeRequestError,
 } from '@sp/sync-providers/errors';
 
 export const extractErrorMessage = packageExtractErrorMessage;

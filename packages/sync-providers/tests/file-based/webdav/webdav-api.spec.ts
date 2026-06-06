@@ -15,6 +15,7 @@ import {
   MissingCredentialsSPError,
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
+  WebDavNativeRequestError,
 } from '../../../src/errors';
 
 const cfg: WebdavPrivateCfg = {
@@ -289,6 +290,28 @@ describe('WebdavApi', () => {
       const r = await makeApi(adapter).testConnection(cfg);
       expect(r.success).toBe(false);
       expect(r.error).toBe('Network unreachable');
+      expect(r.fullUrl).toContain('dav.example.com');
+    });
+
+    // Issue #8053: on native platforms the adapter wraps a thrown native
+    // request error (SSL/timeout/DNS) into WebDavNativeRequestError carrying a
+    // readable, already-redacted message. testConnection must surface that
+    // message verbatim as `result.error` so the "Test connection" snackbar
+    // shows something actionable instead of "Unknown error". This guards the
+    // seam between the adapter (proven to redact in webdav-http-adapter.spec)
+    // and the user-facing return value.
+    it('surfaces a native WebDavNativeRequestError message to the user', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValue(
+        new WebDavNativeRequestError(
+          'SSL error: Trust anchor for certification path not found',
+          'SSL_ERROR',
+        ),
+      );
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(false);
+      expect(r.error).toBe('SSL error: Trust anchor for certification path not found');
+      expect(r.error).not.toBe('Unknown error');
       expect(r.fullUrl).toContain('dav.example.com');
     });
 

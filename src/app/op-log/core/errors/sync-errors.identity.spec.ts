@@ -13,6 +13,7 @@ import {
   RemoteFileNotFoundAPIError as PackageRemoteFileNotFoundAPIError,
   TooManyRequestsAPIError as PackageTooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError as PackageUploadRevToMatchMismatchAPIError,
+  WebDavNativeRequestError as PackageWebDavNativeRequestError,
 } from '@sp/sync-providers/errors';
 import { WebCryptoNotAvailableError as PackageWebCryptoNotAvailableError } from '@sp/sync-core';
 import {
@@ -30,6 +31,7 @@ import {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
+  WebDavNativeRequestError,
   WebCryptoNotAvailableError,
 } from './sync-errors';
 
@@ -83,6 +85,11 @@ describe('sync-errors identity (single class definition across import paths)', (
       'RemoteFileChangedUnexpectedly',
       RemoteFileChangedUnexpectedly,
       PackageRemoteFileChangedUnexpectedly,
+    ],
+    [
+      'WebDavNativeRequestError',
+      WebDavNativeRequestError,
+      PackageWebDavNativeRequestError,
     ],
     // Re-exported from @sp/sync-core (not @sp/sync-providers/errors), but the
     // identity rule is the same: a single class definition must back every

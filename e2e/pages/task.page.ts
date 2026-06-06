@@ -53,6 +53,10 @@ export class TaskPage extends BasePage {
    */
   async markTaskAsDone(task: Locator): Promise<void> {
     await task.waitFor({ state: 'visible' });
+    const taskId = await task.getAttribute('data-task-id');
+    if (!taskId) {
+      throw new Error('Unable to wait for done state: task is missing data-task-id');
+    }
     await task.hover();
 
     // Give hover effects time to settle
@@ -62,8 +66,20 @@ export class TaskPage extends BasePage {
     await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
     await doneBtn.click();
 
-    // Wait for the done animation delay (200ms) and state change to settle
-    await this.page.waitForTimeout(300);
+    // The done animation can briefly render old and new rows with the same id.
+    await this.page.waitForFunction(
+      (id) => {
+        const matchingTasks = Array.from(document.querySelectorAll('task')).filter(
+          (el) => el.getAttribute('data-task-id') === id,
+        );
+        return (
+          matchingTasks.length > 0 &&
+          matchingTasks.every((el) => el.classList.contains('isDone'))
+        );
+      },
+      taskId,
+      { timeout: 10000 },
+    );
     await waitForAngularStability(this.page);
   }
 

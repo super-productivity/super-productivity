@@ -7,6 +7,7 @@ import {
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
+  WebDavNativeRequestError,
 } from '../../../src/errors';
 import type { NativeHttpExecutor } from '../../../src/http';
 import type { ProviderPlatformInfo, WebFetchFactory } from '../../../src/platform';
@@ -121,9 +122,14 @@ describe('WebDavHttpAdapter', () => {
       const adapter = new WebDavHttpAdapter(
         makeDeps({ fetchImpl: fetchImpl as unknown as typeof fetch }),
       );
-      await expect(
-        adapter.request({ url: 'https://dav.example.com/x', method: 'GET' }),
-      ).rejects.toBeInstanceOf(AuthFailSPError);
+      const promise = adapter.request({
+        url: 'https://dav.example.com/x',
+        method: 'GET',
+      });
+      await expect(promise).rejects.toBeInstanceOf(AuthFailSPError);
+      await expect(promise).rejects.toMatchObject({
+        message: 'Authentication failed (HTTP 401)',
+      });
     });
 
     it('throws RemoteFileNotFoundAPIError on 404', async () => {
@@ -343,6 +349,67 @@ describe('WebDavHttpAdapter', () => {
           url: 'dav.example.com',
         }),
       );
+    });
+
+    it('surfaces native network errors with code and readable message', async () => {
+      const nativeHttp = vi.fn().mockRejectedValue(
+        Object.assign(new Error('Network error: Unable to resolve host'), {
+          code: 'NETWORK_ERROR',
+        }),
+      );
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      const promise = adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'PROPFIND',
+      });
+      await expect(promise).rejects.toBeInstanceOf(WebDavNativeRequestError);
+      await expect(promise).rejects.toMatchObject({
+        message: 'Network error: Unable to resolve host',
+        code: 'NETWORK_ERROR',
+      });
+
+      const errorLog = loggedMessages.find((l) => l.msg.includes('error'));
+      expect(errorLog?.meta).toEqual(
+        expect.objectContaining({
+          errorName: 'Error',
+          errorCode: 'NETWORK_ERROR',
+          url: 'dav.example.com',
+        }),
+      );
+    });
+
+    it('redacts URL secrets and paths from re-thrown native error messages', async () => {
+      const nativeHttp = vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(
+            new Error(
+              'Network error: Failed for https://user:pass@dav.example.com/remote.php/dav/files/alice/sp?token=secret#frag',
+            ),
+            { code: 'NETWORK_ERROR' },
+          ),
+        );
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      try {
+        await adapter.request({
+          url: 'https://dav.example.com/sync/file',
+          method: 'PROPFIND',
+        });
+        expect.fail('expected throw');
+      } catch (e) {
+        const message = (e as Error).message;
+        expect(message).toContain('https://dav.example.com');
+        expect(message).not.toContain('user:pass');
+        expect(message).not.toContain('token=secret');
+        expect(message).not.toContain('/remote.php');
+        expect(message).not.toContain('alice');
+      }
     });
   });
 });
