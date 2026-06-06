@@ -159,23 +159,45 @@ export class DateTimePickerHeaderComponent<D> {
   }
 
   previousClicked(): void {
-    this.calendar.activeDate =
-      this.calendar.currentView === 'month'
-        ? this._dateAdapter.addCalendarMonths(this.calendar.activeDate, -1)
-        : this._dateAdapter.addCalendarYears(
-            this.calendar.activeDate,
-            this.calendar.currentView === 'year' ? -1 : -24,
-          );
+    const activeDate = this.calendar.activeDate;
+    if (this.calendar.currentView === 'month') {
+      const prevMonth = this._dateAdapter.addCalendarMonths(activeDate, -1);
+      this.calendar.activeDate = this._dateAdapter.createDate(
+        this._dateAdapter.getYear(prevMonth),
+        this._dateAdapter.getMonth(prevMonth),
+        1,
+      );
+    } else if (this.calendar.currentView === 'year') {
+      const prevYear = this._dateAdapter.addCalendarYears(activeDate, -1);
+      this.calendar.activeDate = this._dateAdapter.createDate(
+        this._dateAdapter.getYear(prevYear),
+        0,
+        1,
+      );
+    } else {
+      this.calendar.activeDate = this._dateAdapter.addCalendarYears(activeDate, -24);
+    }
   }
 
   nextClicked(): void {
-    this.calendar.activeDate =
-      this.calendar.currentView === 'month'
-        ? this._dateAdapter.addCalendarMonths(this.calendar.activeDate, 1)
-        : this._dateAdapter.addCalendarYears(
-            this.calendar.activeDate,
-            this.calendar.currentView === 'year' ? 1 : 24,
-          );
+    const activeDate = this.calendar.activeDate;
+    if (this.calendar.currentView === 'month') {
+      const nextMonth = this._dateAdapter.addCalendarMonths(activeDate, 1);
+      this.calendar.activeDate = this._dateAdapter.createDate(
+        this._dateAdapter.getYear(nextMonth),
+        this._dateAdapter.getMonth(nextMonth),
+        1,
+      );
+    } else if (this.calendar.currentView === 'year') {
+      const nextYear = this._dateAdapter.addCalendarYears(activeDate, 1);
+      this.calendar.activeDate = this._dateAdapter.createDate(
+        this._dateAdapter.getYear(nextYear),
+        0,
+        1,
+      );
+    } else {
+      this.calendar.activeDate = this._dateAdapter.addCalendarYears(activeDate, 24);
+    }
   }
 
   previousEnabled(): boolean {

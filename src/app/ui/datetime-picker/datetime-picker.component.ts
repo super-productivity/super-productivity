@@ -324,7 +324,9 @@ export class DateTimePickerComponent implements AfterViewInit {
   }
 
   onCalendarMouseOver(ev: MouseEvent): void {
-    this._resetKeyboardNav(ev);
+    if (!this._resetKeyboardNav(ev)) {
+      return;
+    }
 
     const cal = this.calendar();
     if (!cal) {
