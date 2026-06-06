@@ -22,6 +22,7 @@ const PROP_MAP_TO_FORM: Record<SyncProviderId, keyof SyncConfig | null> = {
   [SyncProviderId.WebDAV]: 'webDav',
   [SyncProviderId.SuperSync]: 'superSync',
   [SyncProviderId.Nextcloud]: 'nextcloud',
+  [SyncProviderId.ProtonDrive]: 'protonDrive',
   [SyncProviderId.Dropbox]: null,
 };
 
@@ -80,6 +81,12 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     serverUrl: '',
     userName: '',
     password: '',
+    syncFolderPath: '',
+    encryptKey: '',
+  },
+  [SyncProviderId.ProtonDrive]: {
+    rcloneRemoteName: '',
+    rcloneBinaryPath: '',
     syncFolderPath: '',
     encryptKey: '',
   },
@@ -166,6 +173,10 @@ export class SyncConfigService {
           ...DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
           ...syncCfg?.nextcloud,
         },
+        protonDrive: {
+          ...DEFAULT_GLOBAL_CONFIG.sync.protonDrive,
+          ...syncCfg?.protonDrive,
+        },
       };
 
       // If no provider is active, return base config with empty encryption key
@@ -219,6 +230,7 @@ export class SyncConfigService {
         webDav: DEFAULT_GLOBAL_CONFIG.sync.webDav,
         superSync: DEFAULT_GLOBAL_CONFIG.sync.superSync,
         nextcloud: DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
+        protonDrive: DEFAULT_GLOBAL_CONFIG.sync.protonDrive,
       };
 
       // Add current provider config if applicable
@@ -285,9 +297,17 @@ export class SyncConfigService {
 
     // Split settings into public (global config) and private (credentials/secrets)
     // to maintain security boundaries - credentials never go to global config
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { encryptKey, webDav, localFileSync, superSync, nextcloud, ...globalConfig } =
-      newSettings;
+    /* eslint-disable @typescript-eslint/no-unused-vars */
+    const {
+      encryptKey,
+      webDav,
+      localFileSync,
+      superSync,
+      nextcloud,
+      protonDrive,
+      ...globalConfig
+    } = newSettings;
+    /* eslint-enable @typescript-eslint/no-unused-vars */
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {
       await this._updatePrivateConfig(providerId, newSettings);

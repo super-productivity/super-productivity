@@ -60,6 +60,15 @@ const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> =
     const { LocalFileSyncElectron } =
       await import('./file-based/local-file/local-file-sync-electron');
     providers.push(new LocalFileSyncElectron() as SyncProviderBase<SyncProviderId>);
+
+    // Proton Drive bridges through a local `rclone serve webdav` process managed
+    // by the Electron main process, so it is desktop-only.
+    const { ProtonDriveProvider } = await import('./file-based/webdav/proton-drive');
+    providers.push(
+      new ProtonDriveProvider(
+        environment.production ? undefined : `/DEV`,
+      ) as SyncProviderBase<SyncProviderId>,
+    );
   }
 
   if (IS_ANDROID_WEB_VIEW) {

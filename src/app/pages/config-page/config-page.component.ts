@@ -350,6 +350,75 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
         };
       }
 
+      // Find the Proton Drive fieldGroup and add the Test Connection button
+      if (item.key === 'protonDrive' && item.fieldGroup && IS_ELECTRON) {
+        return {
+          ...item,
+          fieldGroup: [
+            ...item.fieldGroup,
+            {
+              type: 'btn',
+              className: 'mt3 block',
+              templateOptions: {
+                text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
+                required: false,
+                onClick: async (_field: unknown, _form: unknown, model: unknown) => {
+                  const cfg = model as {
+                    rcloneRemoteName?: string;
+                    rcloneBinaryPath?: string;
+                  };
+                  if (!cfg?.rcloneRemoteName) {
+                    this._snackService.open({
+                      type: 'ERROR',
+                      msg: T.F.SYNC.FORM.PROTON_DRIVE.S_FILL_REMOTE,
+                    });
+                    return;
+                  }
+                  try {
+                    const result = await window.ea.protonDriveCheck({
+                      remoteName: cfg.rcloneRemoteName,
+                      rcloneBinaryPath: cfg.rcloneBinaryPath || undefined,
+                    });
+                    if (result === true) {
+                      this._snackService.open({
+                        type: 'SUCCESS',
+                        msg: T.F.SYNC.FORM.PROTON_DRIVE.S_TEST_SUCCESS,
+                      });
+                      const fullSyncModel = (
+                        _field as { parent?: { parent?: { model?: SyncConfig } } }
+                      )?.parent?.parent?.model;
+                      if (fullSyncModel) {
+                        await this.syncSettingsService.updateSettingsFromForm(
+                          fullSyncModel,
+                          true,
+                        );
+                      }
+                    } else {
+                      this._snackService.open({
+                        type: 'ERROR',
+                        msg: T.F.SYNC.FORM.PROTON_DRIVE.S_TEST_FAIL,
+                        translateParams: {
+                          error:
+                            result instanceof Error ? result.message : 'Unknown error',
+                        },
+                      });
+                    }
+                  } catch (e) {
+                    this._snackService.open({
+                      type: 'ERROR',
+                      msg: T.F.SYNC.FORM.PROTON_DRIVE.S_TEST_FAIL,
+                      translateParams: {
+                        error: e instanceof Error ? e.message : 'Unexpected error',
+                      },
+                    });
+                  }
+                },
+              },
+            },
+          ],
+        };
+      }
+
       // Find the Dropbox fieldGroup and add the authentication button
       if ((item as any).props?.dropboxAuth && item.fieldGroup) {
         // Check if Dropbox is already authenticated

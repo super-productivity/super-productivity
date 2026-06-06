@@ -240,5 +240,11 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
       password: null,
       syncFolderPath: 'super-productivity',
     },
+
+    protonDrive: {
+      rcloneRemoteName: 'protondrive',
+      rcloneBinaryPath: null,
+      syncFolderPath: 'super-productivity',
+    },
   },
 } as const;

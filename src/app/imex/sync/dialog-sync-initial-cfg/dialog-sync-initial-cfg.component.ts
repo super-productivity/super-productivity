@@ -158,6 +158,11 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
                 nextcloud: privateCfg as any,
                 encryptKey: privateCfg.encryptKey || '',
               };
+            } else if (newProvider === SyncProviderId.ProtonDrive && privateCfg) {
+              providerSpecificUpdate = {
+                protonDrive: privateCfg as any,
+                encryptKey: privateCfg.encryptKey || '',
+              };
             } else if (newProvider === SyncProviderId.Dropbox && privateCfg) {
               providerSpecificUpdate = {
                 encryptKey: privateCfg.encryptKey || '',

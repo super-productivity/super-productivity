@@ -8,6 +8,10 @@ import electronDl from 'electron-dl';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { initBackupAdapter } from './backup';
 import { initLocalFileSyncAdapter } from './local-file-sync';
+import {
+  cleanupProtonDriveRclone,
+  initProtonDriveRcloneAdapter,
+} from './proton-drive-rclone';
 import { initFullScreenBlocker } from './full-screen-blocker';
 import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
@@ -249,6 +253,7 @@ export const startApp = (): void => {
   appIN.on('ready', () => createMainWin());
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
+  appIN.on('ready', () => initProtonDriveRcloneAdapter());
   appIN.on('ready', () => initFullScreenBlocker(IS_DEV));
 
   if (!isDisableTray) {
@@ -393,6 +398,8 @@ export const startApp = (): void => {
   appIN.on('will-quit', () => {
     // un-register all shortcuts.
     globalShortcut.unregisterAll();
+    // Stop the Proton Drive rclone serve child process, if running.
+    cleanupProtonDriveRclone();
     // Safe to remove IPC listeners here: all windows are closed and before-close
     // IPC flows (sync, finish-day) are guaranteed to have completed.
     ipcMain.removeAllListeners();

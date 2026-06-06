@@ -6,12 +6,13 @@ import {
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
 
-/** Provider IDs that use file-based operation sync (WebDAV, Dropbox, LocalFile, Nextcloud) */
+/** Provider IDs that use file-based operation sync (WebDAV, Dropbox, LocalFile, Nextcloud, ProtonDrive) */
 const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
   SyncProviderId.WebDAV,
   SyncProviderId.Dropbox,
   SyncProviderId.LocalFile,
   SyncProviderId.Nextcloud,
+  SyncProviderId.ProtonDrive,
 ]);
 
 /**
@@ -29,7 +30,7 @@ export const isOperationSyncCapable = (
 
 /**
  * Type guard to check if a provider uses file-based operation sync.
- * File-based providers (WebDAV, Dropbox, LocalFile, Nextcloud) use file storage for sync.
+ * File-based providers (WebDAV, Dropbox, LocalFile, Nextcloud, ProtonDrive) use file storage for sync.
  */
 export const isFileBasedProvider = (
   provider: SyncProviderBase<SyncProviderId>,

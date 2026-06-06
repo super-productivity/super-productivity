@@ -41,6 +41,13 @@ describe('operation-sync utility', () => {
       expect(isFileBasedProvider(provider)).toBeTrue();
     });
 
+    it('should return true for ProtonDrive provider', () => {
+      const provider = {
+        id: SyncProviderId.ProtonDrive,
+      } as unknown as SyncProviderBase<SyncProviderId>;
+      expect(isFileBasedProvider(provider)).toBeTrue();
+    });
+
     it('should return false for SuperSync provider', () => {
       const provider = {
         id: SyncProviderId.SuperSync,
@@ -58,6 +65,7 @@ describe('operation-sync utility', () => {
         SyncProviderId.WebDAV,
         SyncProviderId.LocalFile,
         SyncProviderId.Nextcloud,
+        SyncProviderId.ProtonDrive,
       ]);
       const KNOWN_NON_FILE_BASED: ReadonlySet<SyncProviderId> = new Set([
         SyncProviderId.SuperSync,
