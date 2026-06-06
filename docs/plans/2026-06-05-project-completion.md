@@ -3,6 +3,9 @@
 **Date:** 2026-06-05 (rev. after multi-agent review)
 **Status:** ✅ Implemented on `feat/completing-projects-48eeb4` — state layer, stats util, service, celebration + resolve dialogs, menu wiring, trophy badge on the archived page, translations, wiki. Verified: unit tests (reducer 34, selectors 4, stats 6) + existing specs (menu 10, service 12, page 5) green; dev build exit 0; eslint + int:test clean.
 **Branch:** `feat/completing-projects-48eeb4`
+
+> **Revision 2026-06-06 — completion is decoupled from task resolution (Option C).**
+> A later iteration made completion one **atomic** multi-entity op (`completeProject` `Batch`) that marked/moved unfinished tasks inside the project-shared meta-reducer. That bypassed the normal per-task actions, so it needed a new cross-stack `affectedEntities` conflict-detection feature (~1,565 LOC + a Prisma migration) plus dedicated `completeProject` listeners in the reminder / issue-sync / time-block / repeat-cfg effects — and it still didn't give a reversible undo (`reopenProject` clears project flags only). We **reverted all of it** and kept the **simple** mechanic below: resolve via the normal per-task actions, then a plain single-entity `completeProject` flag flip. See **[ARCHITECTURE-DECISIONS.md #5](../../ARCHITECTURE-DECISIONS.md)** for the full rationale; atomic implementation preserved at commit `0893a86162`.
 **Scope:** Give projects a rewarding "done" state. The **append/merge** half ("fold a project's tasks into another") was split out to issue **#8032** after review (YAGNI-adjacent + materially heavier than first scoped).
 
 ## Problem
@@ -104,11 +107,11 @@ Trigger: a "Complete project" item in the project context menu (`work-context-me
    - **Move to Inbox** _(default)_ — safe carry-forward.
    - **Mark them done** — "close enough."
    - **Cancel.**
-   - _Bulk mechanic:_ no bulk action exists today. For Part 1, loop the existing per-task action (`moveToOtherProject` / `updateTask isDone`) and apply the **Rule #6 flush** (`await new Promise(r => setTimeout(r, 0))`) after the loop. (A single bulk meta-reducer action is the cleaner upgrade — deferred; note the op-count.)
+   - _Bulk mechanic (chosen — Option C):_ no bulk action exists today, and we deliberately did **not** add one. Loop the existing per-task action (`moveToOtherProject` / `updateTask isDone`) and apply the **Rule #6 flush** (`await new Promise(r => setTimeout(r, 0))`) after the loop. (A single atomic meta-reducer op was tried and **reverted** — see the Revision note above and ARCHITECTURE-DECISIONS.md #5. Trade-off: N+1 ops per completion, accepted.)
 2. `ProjectService.complete(id)` dispatches `completeProject` (reducer sets done + archived).
 3. **Celebrate** (section 3).
 4. If the completed project was active, navigate to `/` (archive already does this; also clear any selected-task/detail-panel pointing at the now-hidden project — cf. recent fix `d44cb1138d`).
-5. **Undo:** show a snack with **Undo** → `reopenProject` (accidental/instant-regret escape, since the project otherwise vanishes from the menu).
+5. **Undo:** none. Completion is **not reversible** via a snack — its task resolution (move-to-inbox / mark-done) can't be cleanly restored by `reopenProject`, which only clears the project flags. The fullscreen celebration is the feedback; reactivation lives on the archived-projects page.
 
 ### 3. Celebration (separate component)
 
