@@ -43,7 +43,6 @@ import { TimeStepDirective } from '../time-step/time-step.directive';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
-import { Log } from '../../core/log';
 import { DateTimePickerHeaderComponent } from './datetime-picker-header.component';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
@@ -214,7 +213,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   }
 
   onTimeFocus(): void {
-    Log.log('onTimeFocus');
     if (!this.selectedTime() && this.isInitValOnTimeFocus) {
       this.isInitValOnTimeFocus = false;
 
@@ -224,13 +222,13 @@ export class DateTimePickerComponent implements AfterViewInit {
       const selDate = this.selectedDate();
       if (selDate) {
         if (this._dateService.isToday(selDate)) {
-          targetTime = getClockStringFromHours(new Date().getHours() + 1);
+          targetTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
         } else {
           targetTime = DEFAULT_TIME;
         }
       } else {
         // get current time +1h
-        targetTime = getClockStringFromHours(new Date().getHours() + 1);
+        targetTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
         targetDate = new Date();
       }
 
