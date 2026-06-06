@@ -1,6 +1,9 @@
 import { createFeatureSelector, createSelector } from '@ngrx/store';
 import * as fromPlanner from './planner.reducer';
-import { selectTaskFeatureState } from '../../tasks/store/task.selectors';
+import {
+  selectMapOfAllTasksInActiveProjects,
+  selectAllTasksInActiveProjects,
+} from '../../tasks/store/task.selectors';
 import {
   NoStartTimeRepeatProjection,
   PlannerDay,
@@ -11,12 +14,7 @@ import {
   ScheduleItemType,
 } from '../planner.model';
 import { ScheduleFromCalendarEvent } from '../../schedule/schedule.model';
-import {
-  TaskCopy,
-  TaskState,
-  TaskWithDueDay,
-  TaskWithDueTime,
-} from '../../tasks/task.model';
+import { Task, TaskCopy, TaskWithDueDay, TaskWithDueTime } from '../../tasks/task.model';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
@@ -34,6 +32,7 @@ import {
 } from '../../../root-store/app-state/app-state.selectors';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { oneDayInMilliseconds } from '../../../util/month-time-conversion';
 
 export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState>(
   fromPlanner.plannerFeatureKey,
@@ -42,30 +41,26 @@ export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState
 export const selectAllTasksDueToday = createSelector(
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  selectTaskFeatureState,
+  selectAllTasksInActiveProjects,
   selectPlannerState,
   (
     todayStr,
     startOfNextDayDiffMs,
-    taskState,
+    activeTasks,
     plannerState,
   ): (TaskWithDueTime | TaskWithDueDay)[] => {
-    // Start with tasks from planner state for today
-    const allDue: (TaskWithDueTime | TaskWithDueDay)[] = (
-      plannerState.days[todayStr] || []
-    )
-      .map((tid) => taskState.entities[tid])
-      // there is a chance that the task is not in the store anymore
-      .filter((t): t is TaskWithDueDay => !!t);
+    // activeTasks excludes tasks from archived projects, so filter planner IDs through it.
+    const plannedTodayIds = new Set(plannerState.days[todayStr] || []);
+    const allDue: (TaskWithDueTime | TaskWithDueDay)[] = activeTasks.filter(
+      (t): t is TaskWithDueDay => plannedTodayIds.has(t.id),
+    );
 
     // Use Set for O(1) lookup
     const allDueIds = new Set(allDue.map((t) => t.id));
 
-    // PERF: Single pass over ids instead of two Object.values() calls
-    for (const id of taskState.ids) {
+    for (const task of activeTasks) {
+      const id = task.id;
       if (allDueIds.has(id)) continue;
-      const task = taskState.entities[id];
-      if (!task) continue;
 
       // Check if task is due today
       // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity pattern)
@@ -89,12 +84,11 @@ export const selectAllTasksDueToday = createSelector(
 export const selectTasksForPlannerDay = (day: string) => {
   return createSelector(
     selectPlannerState,
-    selectTaskFeatureState,
-    (plannerState, taskState) =>
-      (plannerState.days[day] || [])
-        .map((tid) => taskState.entities[tid] as TaskCopy)
-        // there is a chance that the task is not in the store anymore
-        .filter((t) => !!t),
+    selectAllTasksInActiveProjects,
+    (plannerState, activeTasks) => {
+      const dayIds = new Set(plannerState.days[day] || []);
+      return activeTasks.filter((t) => dayIds.has(t.id)) as TaskCopy[];
+    },
   );
 };
 
@@ -113,11 +107,11 @@ export const selectPlannerDays = (
   const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
 
   return createSelector(
-    selectTaskFeatureState,
+    selectMapOfAllTasksInActiveProjects,
     selectPlannerState,
     selectTimelineConfig,
     selectStartOfNextDayDiffMs,
-    (taskState, plannerState, scheduleConfig, startOfNextDayDiffMs): PlannerDay[] => {
+    (activeTasks, plannerState, scheduleConfig, startOfNextDayDiffMs): PlannerDay[] => {
       const allDatesWithData = Object.keys(plannerState.days);
       const dayDatesToUse = [
         ...dayDates,
@@ -127,13 +121,16 @@ export const selectPlannerDays = (
       ];
 
       // Pre-compute deadline tasks grouped by day (O(N) once, then O(1) per day)
-      const deadlineMap = groupDeadlineTasksByDay(taskState, startOfNextDayDiffMs);
+      const deadlineMap = groupDeadlineTasksByDay(
+        activeTasks.values(),
+        startOfNextDayDiffMs,
+      );
 
       return dayDatesToUse.map((dayDate) =>
         getPlannerDay(
           dayDate,
           todayStr,
-          taskState,
+          activeTasks,
           plannerState,
           taskRepeatCfgs,
           allPlannedTasks,
@@ -149,29 +146,24 @@ export const selectPlannerDays = (
 };
 
 export const selectPlannerDayMap = createSelector(
-  selectTaskFeatureState,
+  selectMapOfAllTasksInActiveProjects,
   selectPlannerState,
-  (taskState, plannerState): PlannerDayMap => {
+  (taskMap, plannerState): PlannerDayMap => {
     const map: PlannerDayMap = {};
 
     Object.keys(plannerState.days).forEach((dayDate) => {
       const tids = plannerState.days[dayDate] || [];
-      const normalTasks = tids
-        .map((id) => taskState.entities[id] as TaskCopy)
-        // filter out deleted tasks
-        .filter((t) => !!t);
-      map[dayDate] = normalTasks;
+      map[dayDate] = tids.map((id) => taskMap.get(id) as TaskCopy).filter((t) => !!t);
     });
 
     return map;
   },
 );
 
-// Extracted common function
 const getPlannerDay = (
   dayDate: string,
   todayStr: string,
-  taskState: TaskState,
+  taskMap: Map<string, Task>,
   plannerState: any,
   taskRepeatCfgs: TaskRepeatCfg[],
   allPlannedTasks: TaskWithDueTime[],
@@ -189,7 +181,7 @@ const getPlannerDay = (
       ? unplannedTaskIdsToday
       : plannerState.days[dayDate] || [];
   const normalTasks = tIds
-    .map((id) => taskState.entities[id] as TaskCopy)
+    .map((id) => taskMap.get(id) as TaskCopy)
     .filter((t) => !!t)
     // Filter out tasks with dueDay in future if it is Today's column
     .filter((t) => !isTodayI || !t.dueDay || t.dueDay <= todayStr);
@@ -217,13 +209,23 @@ const getPlannerDay = (
     scheduledTaskItems,
   );
 
+  // Add calendar event durations (CalDAV/ICAL events) to the total time estimate
+  // Only count timed events, not all-day events (which use raw 24h duration)
+  const calendarEventsTime = timedEvents.reduce(
+    (acc, ev) => acc + (ev.end - ev.start),
+    0,
+  );
+
+  const totalTimeEstimate = timeEstimate + calendarEventsTime;
+
   // Calculate available hours and progress percentage
   let availableHours;
   let progressPercentage;
 
   if (scheduleConfig && scheduleConfig.isWorkStartEndEnabled) {
     availableHours = calculateAvailableHours(dayDate, scheduleConfig);
-    progressPercentage = availableHours > 0 ? (timeEstimate / availableHours) * 100 : 0;
+    progressPercentage =
+      availableHours > 0 ? (totalTimeEstimate / availableHours) * 100 : 0;
   }
 
   return {
@@ -245,7 +247,7 @@ const getPlannerDay = (
     deadlineTasks,
     noStartTimeRepeatProjections,
     allDayEvents,
-    timeEstimate,
+    timeEstimate: totalTimeEstimate,
     availableHours,
     progressPercentage,
   };
@@ -351,9 +353,9 @@ const getIcalEventsForDay = (
     icalMapEntry.items.forEach((calEv) => {
       const start = calEv.start;
       if (getDbDateStr(new Date(start - startOfNextDayDiffMs)) === dayDate) {
-        if (calEv.isAllDay) {
-          // All-day events go to a separate list with full event data
-          allDayEvents.push({ ...calEv });
+        if (isPlannerAllDayCalendarEvent(calEv)) {
+          // Some providers expose all-day events as 24h timed events.
+          allDayEvents.push({ ...calEv, isAllDay: true });
         } else {
           // Timed events go to scheduled items
           const end = calEv.start + calEv.duration;
@@ -373,18 +375,20 @@ const getIcalEventsForDay = (
   return { timedEvents, allDayEvents };
 };
 
+const isPlannerAllDayCalendarEvent = (calEv: ScheduleFromCalendarEvent): boolean =>
+  calEv.isAllDay === true || calEv.duration >= oneDayInMilliseconds;
+
 /**
  * Groups all undone deadline tasks by their effective day string.
  * O(N) single pass — callers can then do O(1) map lookups per day.
  */
 const groupDeadlineTasksByDay = (
-  taskState: TaskState,
+  activeTasks: Iterable<Task>,
   startOfNextDayDiffMs: number = 0,
 ): Record<string, TaskCopy[]> => {
   const result: Record<string, TaskCopy[]> = {};
-  for (const id of taskState.ids) {
-    const task = taskState.entities[id] as TaskCopy | undefined;
-    if (!task || task.isDone) continue;
+  for (const task of activeTasks) {
+    if (task.isDone) continue;
 
     let dayKey: string | undefined;
     if (task.deadlineWithTime) {
@@ -393,7 +397,7 @@ const groupDeadlineTasksByDay = (
       dayKey = task.deadlineDay;
     }
     if (dayKey) {
-      (result[dayKey] ??= []).push(task);
+      (result[dayKey] ??= []).push(task as TaskCopy);
     }
   }
   return result;

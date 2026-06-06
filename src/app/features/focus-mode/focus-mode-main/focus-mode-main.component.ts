@@ -22,6 +22,7 @@ import {
   adjustRemainingTime,
   completeFocusSession,
   completeTask,
+  endFlowtimeSession,
   focusModeLoaded,
   pauseFocusSession,
   resetCycles,
@@ -68,6 +69,7 @@ import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { ANI_STANDARD_TIMING } from '../../../ui/animations/animation.const';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
 import { DialogPomodoroSettingsComponent } from '../dialog-pomodoro-settings/dialog-pomodoro-settings.component';
+import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dialog-flowtime-settings.component';
 
 @Component({
   selector: 'focus-mode-main',
@@ -170,6 +172,9 @@ export class FocusModeMainComponent {
   isShowPomodoroSettings = computed(
     () => this._isPreparation() && this.mode() === FocusModeMode.Pomodoro,
   );
+  isShowFlowtimeSettings = computed(
+    () => this._isPreparation() && this.mode() === FocusModeMode.Flowtime,
+  );
   isShowSimpleCounters = computed(() => this._isInProgress());
   isShowPauseButton = computed(() => this._isInProgress());
   isShowCompleteSessionButton = computed(() => this._isInProgress());
@@ -184,33 +189,41 @@ export class FocusModeMainComponent {
   );
   isPomodoro = computed(() => this.mode() === FocusModeMode.Pomodoro);
 
-  // Play button should be disabled when sync with tracking is enabled but no task is selected
-  isPlayButtonDisabled = computed(() => {
-    const config = this.focusModeConfig();
-    return config?.isSyncSessionWithTracking && !this.currentTask();
-  });
+  // Play button should be disabled when no task is selected.
+  // Sync between focus session and tracking is always on, so starting a session
+  // without a task would leave tracking with nothing to bind to.
+  isPlayButtonDisabled = computed(() => !this.currentTask());
 
   // Mode selector options
-  readonly modeOptions: ReadonlyArray<SegmentedButtonOption> = [
-    {
-      id: FocusModeMode.Flowtime,
-      icon: 'auto_awesome',
-      labelKey: T.F.FOCUS_MODE.FLOWTIME,
-      hintKey: T.F.FOCUS_MODE.FLOWTIME_HINT,
-    },
-    {
-      id: FocusModeMode.Pomodoro,
-      icon: 'timer',
-      labelKey: T.F.FOCUS_MODE.POMODORO,
-      hintKey: T.F.FOCUS_MODE.POMODORO_HINT,
-    },
-    {
-      id: FocusModeMode.Countdown,
-      icon: 'hourglass_bottom',
-      labelKey: T.F.FOCUS_MODE.COUNTDOWN,
-      hintKey: T.F.FOCUS_MODE.COUNTDOWN_HINT,
-    },
-  ];
+  readonly modeOptions = computed<ReadonlyArray<SegmentedButtonOption>>(() => {
+    const currentMode = this.mode();
+    const options: ReadonlyArray<SegmentedButtonOption> = [
+      {
+        id: FocusModeMode.Flowtime,
+        icon: 'auto_awesome',
+        labelKey: T.F.FOCUS_MODE.FLOWTIME,
+        hintKey: T.F.FOCUS_MODE.FLOWTIME_HINT,
+      },
+      {
+        id: FocusModeMode.Pomodoro,
+        icon: 'timer',
+        labelKey: T.F.FOCUS_MODE.POMODORO,
+        hintKey: T.F.FOCUS_MODE.POMODORO_HINT,
+      },
+      {
+        id: FocusModeMode.Countdown,
+        icon: 'hourglass_bottom',
+        labelKey: T.F.FOCUS_MODE.COUNTDOWN,
+        hintKey: T.F.FOCUS_MODE.COUNTDOWN_HINT,
+      },
+    ];
+
+    return this._isInProgress()
+      ? options.filter(
+          (option) => option.id === currentMode || option.id === FocusModeMode.Flowtime,
+        )
+      : options;
+  });
 
   isFocusNotes = signal(false);
   isDragOver = signal(false);
@@ -349,6 +362,14 @@ export class FocusModeMainComponent {
   }
 
   completeFocusSession(): void {
+    if (this.mode() === FocusModeMode.Flowtime) {
+      // Flowtime uses a dedicated action because the end of a session must
+      // trigger a break offer effect based on elapsed time, rather than
+      // immediately resetting the timer and UI state
+      const currentTaskId = this.taskService.currentTaskId();
+      this._store.dispatch(endFlowtimeSession({ pausedTaskId: currentTaskId }));
+      return;
+    }
     this._store.dispatch(completeFocusSession({ isManual: true }));
   }
 
@@ -363,8 +384,9 @@ export class FocusModeMainComponent {
   startSession(): void {
     const config = this.focusModeConfig();
 
-    // If sync with tracking is enabled, require a task to be selected
-    if (config?.isSyncSessionWithTracking && !this.currentTask()) {
+    // Sync between focus session and tracking is always on — require a task
+    // before starting so tracking has something to bind to.
+    if (!this.currentTask()) {
       this.openTaskSelector();
       return;
     }
@@ -412,11 +434,20 @@ export class FocusModeMainComponent {
     if (!Object.values(FocusModeMode).includes(mode as FocusModeMode)) {
       return;
     }
+
+    if (this._isInProgress() && mode !== this.mode() && mode !== FocusModeMode.Flowtime) {
+      return;
+    }
+
     this._store.dispatch(setFocusModeMode({ mode: mode as FocusModeMode }));
   }
 
   openPomodoroSettings(): void {
     this._matDialog.open(DialogPomodoroSettingsComponent);
+  }
+
+  openFlowtimeSettings(): void {
+    this._matDialog.open(DialogFlowtimeSettingsComponent);
   }
 
   onDurationChange(duration: number): void {

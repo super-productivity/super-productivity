@@ -18,10 +18,10 @@ android {
     defaultConfig {
         applicationId "com.superproductivity.superproductivity"
         minSdkVersion 24
-        targetSdkVersion 35
-        compileSdk 35
-        versionCode 18_02_08_9000
-        versionName "18.2.8"
+        targetSdkVersion 36
+        compileSdk 36
+        versionCode 18_09_01_9000
+        versionName "18.9.1"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
                 hostName       : "app.super-productivity.com",

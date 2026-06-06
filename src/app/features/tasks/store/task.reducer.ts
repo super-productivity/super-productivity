@@ -107,6 +107,60 @@ const normalizeTimeSpentOnDay = (state: TaskState): TaskState => {
   return { ...state, entities };
 };
 
+const normalizeSubTaskIds = (state: TaskState): TaskState => {
+  const parentIdsWithDuplicates: string[] = [];
+  for (const id of state.ids as string[]) {
+    const task = state.entities[id];
+    if (task?.subTaskIds && new Set(task.subTaskIds).size !== task.subTaskIds.length) {
+      parentIdsWithDuplicates.push(id);
+    }
+  }
+  if (parentIdsWithDuplicates.length === 0) return state;
+
+  const entities: TaskState['entities'] = { ...state.entities };
+  for (const id of parentIdsWithDuplicates) {
+    const task = state.entities[id];
+    if (task) {
+      entities[id] = {
+        ...task,
+        subTaskIds: unique(task.subTaskIds),
+      };
+    }
+  }
+
+  return { ...state, entities };
+};
+
+const reorderSubTask = (
+  state: TaskState,
+  id: string,
+  parentId: string,
+  moveFn: (subTaskIds: string[], id: string) => string[],
+): TaskState => {
+  const parentTask = state.entities[parentId];
+  if (!parentTask) {
+    TaskLog.err(`Parent task ${parentId} not found`);
+    return state;
+  }
+  const parentSubTaskIds = parentTask.subTaskIds;
+
+  // Check if the subtask is actually in the parent's subtask list
+  if (!parentSubTaskIds.includes(id)) {
+    TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
+    return state;
+  }
+
+  return taskAdapter.updateOne(
+    {
+      id: parentId,
+      changes: {
+        subTaskIds: moveFn(parentSubTaskIds, id),
+      },
+    },
+    state,
+  );
+};
+
 // REDUCER
 // -------
 export const initialTaskState: TaskState = taskAdapter.getInitialState({
@@ -135,13 +189,15 @@ export const taskReducer = createReducer<TaskState>(
     const sanitized = hasOrphans
       ? { ...task, ids: ids.filter((id) => !!task.entities[id]) }
       : task;
-    return normalizeTimeSpentOnDay({
-      ...sanitized,
-      currentTaskId: null,
-      selectedTaskId: null,
-      lastCurrentTaskId: task.currentTaskId,
-      isDataLoaded: true,
-    } as TaskState);
+    return normalizeSubTaskIds(
+      normalizeTimeSpentOnDay({
+        ...sanitized,
+        currentTaskId: null,
+        selectedTaskId: null,
+        lastCurrentTaskId: task.currentTaskId,
+        isDataLoaded: true,
+      } as TaskState),
+    );
   }),
 
   on(TaskSharedActions.deleteProject, (state, { allTaskIds }) => {
@@ -155,6 +211,13 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(TimeTrackingActions.addTimeSpent, (state, { task, date, duration }) => {
+    // NaN/Infinity → JSON.stringify → null → auto-fix zeroes the day. Catch source.
+    if (!Number.isFinite(duration)) {
+      devError(
+        `addTimeSpent: non-finite duration for task ${task.id} on ${date}: ${duration}`,
+      );
+      return state;
+    }
     const currentTimeSpentForTickDay =
       (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
     return updateTimeSpentForTask(
@@ -180,6 +243,12 @@ export const taskReducer = createReducer<TaskState>(
     const task = state.entities[taskId];
     if (!task) {
       TaskLog.warn(`[syncTimeSpent] Task ${taskId} not found, skipping`);
+      return state;
+    }
+    if (!Number.isFinite(duration)) {
+      devError(
+        `syncTimeSpent (remote): non-finite duration for task ${taskId} on ${date}: ${duration}`,
+      );
       return state;
     }
 
@@ -257,6 +326,19 @@ export const taskReducer = createReducer<TaskState>(
         selectedTaskId: id,
       };
     }
+
+    const isExplicitTargetPanel =
+      !!taskDetailTargetPanel &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.Default &&
+      taskDetailTargetPanel !== TaskDetailTargetPanel.DONT_OPEN_PANEL;
+
+    if (id && id === state.selectedTaskId && isExplicitTargetPanel) {
+      return {
+        ...state,
+        taskDetailTargetPanel,
+      };
+    }
+
     return {
       ...state,
       taskDetailTargetPanel:
@@ -324,6 +406,24 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {
+    // Guard against invalid moves (e.g. 'UNDONE' passed as ID) that may
+    // appear in older op-log entries. Also reject self-moves where the
+    // task being moved is its own src/target — that would put a task into
+    // its own subTaskIds.
+    if (
+      !state.entities[srcTaskId] ||
+      !state.entities[targetTaskId] ||
+      taskId === srcTaskId ||
+      taskId === targetTaskId
+    ) {
+      TaskLog.warn('Ignoring invalid moveSubTask action', {
+        taskId,
+        srcTaskId,
+        targetTaskId,
+      });
+      return state;
+    }
+
     // Prevent circular references (task becoming subtask of its own descendant)
     if (wouldCreateCircularReference(state, taskId, targetTaskId)) {
       TaskLog.err(
@@ -376,105 +476,21 @@ export const taskReducer = createReducer<TaskState>(
     return newState;
   }),
 
-  on(moveSubTaskUp, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
+  on(moveSubTaskUp, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveLeft),
+  ),
 
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
+  on(moveSubTaskDown, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveRight),
+  ),
 
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveLeft(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
+  on(moveSubTaskToTop, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveToStart),
+  ),
 
-  on(moveSubTaskDown, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
-
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveRight(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
-
-  on(moveSubTaskToTop, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
-
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveToStart(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
-
-  on(moveSubTaskToBottom, (state, { id, parentId }) => {
-    const parentTask = state.entities[parentId];
-    if (!parentTask) {
-      TaskLog.err(`Parent task ${parentId} not found`);
-      return state;
-    }
-    const parentSubTaskIds = parentTask.subTaskIds;
-
-    // Check if the subtask is actually in the parent's subtask list
-    if (!parentSubTaskIds.includes(id)) {
-      TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
-      return state;
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: parentId,
-        changes: {
-          subTaskIds: arrayMoveToEnd(parentSubTaskIds, id),
-        },
-      },
-      state,
-    );
-  }),
+  on(moveSubTaskToBottom, (state, { id, parentId }) =>
+    reorderSubTask(state, id, parentId, arrayMoveToEnd),
+  ),
 
   on(removeTimeSpent, (state, { id, date, duration }) => {
     const task = getTaskById(id, state);
@@ -524,6 +540,12 @@ export const taskReducer = createReducer<TaskState>(
       state,
     );
 
+    // Keep this guard at the reducer boundary: normal creators generate fresh IDs,
+    // but op-log replay/import or direct action dispatch can replay the same task ID.
+    const parentSubTaskIds = parentTask.subTaskIds.includes(task.id)
+      ? parentTask.subTaskIds
+      : [...parentTask.subTaskIds, task.id];
+
     const stateWithParentTask: TaskState = {
       ...stateCopy,
       // update current task to new sub task if parent was current before
@@ -533,7 +555,7 @@ export const taskReducer = createReducer<TaskState>(
         ...stateCopy.entities,
         [parentId]: {
           ...parentTask,
-          subTaskIds: [...parentTask.subTaskIds, task.id],
+          subTaskIds: parentSubTaskIds,
         },
       },
     };

@@ -63,6 +63,7 @@ describe('operation-sync utility', () => {
       const KNOWN_FILE_BASED: ReadonlySet<SyncProviderId> = new Set([
         SyncProviderId.Dropbox,
         SyncProviderId.WebDAV,
+        SyncProviderId.OneDrive,
         SyncProviderId.LocalFile,
         SyncProviderId.Nextcloud,
         SyncProviderId.ProtonDrive,
@@ -95,11 +96,22 @@ describe('operation-sync utility', () => {
     it('should return true for provider with supportsOperationSync = true', () => {
       const provider = {
         supportsOperationSync: true,
+        providerMode: 'superSyncOps',
         downloadOps: jasmine.createSpy(),
         uploadOps: jasmine.createSpy(),
       } as unknown as SyncProviderBase<SyncProviderId> & OperationSyncCapable;
 
       expect(isOperationSyncCapable(provider)).toBeTrue();
+    });
+
+    it('should return false for provider without providerMode', () => {
+      const provider = {
+        supportsOperationSync: true,
+        downloadOps: jasmine.createSpy(),
+        uploadOps: jasmine.createSpy(),
+      } as unknown as SyncProviderBase<SyncProviderId>;
+
+      expect(isOperationSyncCapable(provider)).toBeFalse();
     });
 
     it('should return false for provider with supportsOperationSync = false', () => {

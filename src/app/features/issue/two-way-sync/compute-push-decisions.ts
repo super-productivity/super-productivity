@@ -1,11 +1,27 @@
 import { FieldMapping, FieldMappingContext, FieldSyncConfig } from './issue-sync.model';
 
+/** Why a `skip` decision was emitted. Stable codes that consumers can branch on. */
+export type PushDecisionSkipReason =
+  | 'direction-skip'
+  | 'no-baseline'
+  | 'provider-changed';
+
 export interface PushDecision {
   field: string;
   action: 'push' | 'skip';
   issueValue?: unknown;
+  /** Present only on `skip` decisions. */
+  reasonCode?: PushDecisionSkipReason;
+  /** Human-readable detail (for logging only — never branch on this). */
   reason?: string;
 }
+
+const valuesEqual = (a: unknown, b: unknown): boolean => {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => v === b[i]);
+  }
+  return a === b;
+};
 
 export const computePushDecisions = (
   changedTaskFields: Record<string, unknown>,
@@ -33,6 +49,7 @@ export const computePushDecisions = (
       decisions.push({
         field: mapping.issueField,
         action: 'skip',
+        reasonCode: 'direction-skip',
         reason: `direction is '${direction}'`,
       });
       decidedIssueFields.add(mapping.issueField);
@@ -43,16 +60,23 @@ export const computePushDecisions = (
       decisions.push({
         field: mapping.issueField,
         action: 'skip',
+        reasonCode: 'no-baseline',
         reason: 'no baseline (first sync)',
       });
       decidedIssueFields.add(mapping.issueField);
       continue;
     }
 
-    if (freshIssueValues[mapping.issueField] !== lastSyncedValues[mapping.issueField]) {
+    if (
+      !valuesEqual(
+        freshIssueValues[mapping.issueField],
+        lastSyncedValues[mapping.issueField],
+      )
+    ) {
       decisions.push({
         field: mapping.issueField,
         action: 'skip',
+        reasonCode: 'provider-changed',
         reason: 'provider changed (provider wins)',
       });
       decidedIssueFields.add(mapping.issueField);

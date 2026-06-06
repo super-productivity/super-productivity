@@ -4,7 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 
 import { WorkViewComponent } from './work-view.component';
 import { TaskService } from '../tasks/task.service';
@@ -12,7 +12,10 @@ import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
 import { WorkContextService } from '../work-context/work-context.service';
+import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { ProjectService } from '../project/project.service';
+import { SectionService } from '../section/section.service';
+import { Section } from '../section/section.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
@@ -29,11 +32,11 @@ import { TODAY_TAG } from '../tag/tag.const';
 /**
  * Tests for the constructor effect() in WorkViewComponent that deselects the
  * currently selected task when it is no longer present in any visible task list
- * (undone / done / later / overdue / backlog). The customizer's list is
- * intentionally NOT consulted: after #7279 it is always a subset of the context's
- * undoneTasks, so checking undoneTasks is sufficient. These tests exercise the
- * real component; the template is overridden to a no-op so we don't have to
- * stand up every child component.
+ * (undone / done / later / overdue / backlog). When the task view customizer
+ * filters the undone list, the selected task must also be present in the
+ * customized visible list. These tests exercise the real component; the
+ * template is overridden to a no-op so we don't have to stand up every child
+ * component.
  */
 
 const buildTask = (id: string, subTasks: TaskWithSubTasks[] = []): TaskWithSubTasks =>
@@ -44,6 +47,10 @@ describe('WorkViewComponent', () => {
     let selectedTaskId: ReturnType<typeof signal<string | null>>;
     let setSelectedId: jasmine.Spy;
     let customized$: BehaviorSubject<{ list: TaskWithSubTasks[] }>;
+    // Indirection so a single test can swap in a source that hasn't emitted yet
+    // (a plain Subject) to exercise the sentinel/readiness guard.
+    let customizeSource: () => Observable<{ list: TaskWithSubTasks[] }>;
+    let isCustomized: ReturnType<typeof signal<boolean>>;
     let activeWorkContextId: string;
     let store: MockStore;
 
@@ -67,6 +74,8 @@ describe('WorkViewComponent', () => {
       selectedTaskId = signal<string | null>(null);
       setSelectedId = jasmine.createSpy('setSelectedId');
       customized$ = new BehaviorSubject<{ list: TaskWithSubTasks[] }>({ list: [] });
+      customizeSource = () => customized$.asObservable();
+      isCustomized = signal(false);
       activeWorkContextId = 'some-project-id';
 
       TestBed.configureTestingModule({
@@ -94,8 +103,8 @@ describe('WorkViewComponent', () => {
           {
             provide: TaskViewCustomizerService,
             useValue: {
-              customizeUndoneTasks: () => customized$.asObservable(),
-              isCustomized: signal(false),
+              customizeUndoneTasks: () => customizeSource(),
+              isCustomized,
             },
           },
           {
@@ -109,14 +118,27 @@ describe('WorkViewComponent', () => {
               estimateRemainingToday$: of(0),
               workingToday$: of(0),
               isTodayList$: of(false),
+              activeWorkContextId$: of(null),
               activeWorkContextTypeAndId$: of({
                 activeType: 'TAG',
                 activeId: 'TODAY',
               }),
+              activeWorkContext$: of({ id: TODAY_TAG.id, type: 'TAG' }),
+              isActiveWorkContextProject$: of(false),
               isContextChanging$: of(false),
             },
           },
+          {
+            provide: PluginBridgeService,
+            useValue: { workContextEmbedPluginId: signal(null) },
+          },
           { provide: ProjectService, useValue: { onMoveToBacklog$: of() } },
+          {
+            provide: SectionService,
+            useValue: {
+              getSectionsByContextId$: () => of([] as readonly Section[]),
+            },
+          },
           { provide: SnackService, useValue: { open: () => {} } },
           {
             provide: GlobalConfigService,
@@ -157,6 +179,52 @@ describe('WorkViewComponent', () => {
       TestBed.flushEffects();
 
       expect(setSelectedId).not.toHaveBeenCalled();
+    });
+
+    it('deselects when the customizer filters the selected undone task out', async () => {
+      isCustomized.set(true);
+      customized$.next({ list: [buildTask('visible-1')] });
+
+      await createComponent({ undone: [buildTask('hidden-1'), buildTask('visible-1')] });
+      selectedTaskId.set('hidden-1');
+      TestBed.flushEffects();
+
+      expect(setSelectedId).toHaveBeenCalledOnceWith(null);
+    });
+
+    it('keeps the selection when the selected undone task remains in the customized list', async () => {
+      isCustomized.set(true);
+      customized$.next({ list: [buildTask('visible-1')] });
+
+      await createComponent({ undone: [buildTask('hidden-1'), buildTask('visible-1')] });
+      selectedTaskId.set('visible-1');
+      TestBed.flushEffects();
+
+      expect(setSelectedId).not.toHaveBeenCalled();
+    });
+
+    it('does not deselect while the customized list has not emitted yet, then deselects once it does', async () => {
+      // isCustomized() flips synchronously, but customizeUndoneTasks defers the
+      // customized branch by one animation frame, so the list can lag. Use a
+      // source that has not emitted: the signal stays at the sentinel initial
+      // value and the deselect must be skipped (returning null) rather than
+      // firing against a not-yet-ready list.
+      const pendingCustomized$ = new Subject<{ list: TaskWithSubTasks[] }>();
+      customizeSource = () => pendingCustomized$;
+      isCustomized.set(true);
+
+      await createComponent({ undone: [buildTask('hidden-1')] });
+      selectedTaskId.set('hidden-1');
+      TestBed.flushEffects();
+
+      // List not ready yet -> skip, do not close the panel on the selected task.
+      expect(setSelectedId).not.toHaveBeenCalled();
+
+      // The filtered list lands without the selected task -> now it deselects.
+      pendingCustomized$.next({ list: [buildTask('other-1')] });
+      TestBed.flushEffects();
+
+      expect(setSelectedId).toHaveBeenCalledOnceWith(null);
     });
 
     it('keeps the selection when the task is in doneTasks (existing behaviour)', async () => {
@@ -205,6 +273,164 @@ describe('WorkViewComponent', () => {
       TestBed.flushEffects();
 
       expect(setSelectedId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('undoneTasksBySection', () => {
+    const buildSection = (id: string, taskIds: string[]): Section =>
+      ({
+        id,
+        title: id,
+        contextId: 'ctx',
+        contextType: 'PROJECT',
+        taskIds,
+      }) as unknown as Section;
+
+    const setup = async (
+      sections: Section[],
+      undone: TaskWithSubTasks[],
+    ): Promise<WorkViewComponent> => {
+      TestBed.configureTestingModule({
+        imports: [WorkViewComponent, TranslateModule.forRoot()],
+        providers: [
+          provideNoopAnimations(),
+          provideMockStore({ initialState: {} }),
+          {
+            provide: TaskService,
+            useValue: {
+              selectedTaskId: signal<string | null>(null),
+              setSelectedId: () => {},
+              moveToArchive: () => Promise.resolve(),
+            },
+          },
+          { provide: TakeABreakService, useValue: { resetTimer: () => {} } },
+          {
+            provide: LayoutService,
+            useValue: {
+              isXs: signal(false),
+              isWorkViewScrolled: { set: () => {} },
+              showAddTaskBar: () => {},
+            },
+          },
+          {
+            provide: TaskViewCustomizerService,
+            useValue: {
+              customizeUndoneTasks: () => of({ list: [] as TaskWithSubTasks[] }),
+              isCustomized: signal(false),
+            },
+          },
+          {
+            provide: WorkContextService,
+            useValue: {
+              activeWorkContextId: 'ctx',
+              undoneTasks$: of([]),
+              todayRemainingInProject$: of(0),
+              estimateRemainingToday$: of(0),
+              workingToday$: of(0),
+              isTodayList$: of(false),
+              activeWorkContextId$: of('ctx'),
+              activeWorkContextTypeAndId$: of({
+                activeType: 'PROJECT',
+                activeId: 'ctx',
+              }),
+              activeWorkContext$: of({ id: 'ctx', type: 'PROJECT' }),
+              isActiveWorkContextProject$: of(true),
+              isContextChanging$: of(false),
+            },
+          },
+          {
+            provide: PluginBridgeService,
+            useValue: { workContextEmbedPluginId: signal(null) },
+          },
+          { provide: ProjectService, useValue: { onMoveToBacklog$: of() } },
+          {
+            provide: SectionService,
+            useValue: {
+              getSectionsByContextId$: () => of(sections as readonly Section[]),
+            },
+          },
+          { provide: SnackService, useValue: { open: () => {} } },
+          {
+            provide: GlobalConfigService,
+            useValue: {
+              appFeatures: signal({ isFinishDayEnabled: false }),
+              cfg: () => ({}),
+            },
+          },
+          { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
+        ],
+      });
+      TestBed.overrideComponent(WorkViewComponent, {
+        set: { template: '', imports: [], styles: [''] },
+      });
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectOverdueTasksWithSubTasks, []);
+      store.overrideSelector(selectLaterTodayTasksWithSubTasks, []);
+      store.overrideSelector(selectTaskRepeatCfgsByProjectId, []);
+      store.overrideSelector(selectTaskRepeatCfgsByTagId, []);
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', undone);
+      fixture.componentRef.setInput('doneTasks', []);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+      return fixture.componentInstance;
+    };
+
+    it('orders tasks within a section by section.taskIds, not undoneTasks order', async () => {
+      // undoneTasks order is [a, b, c] but section says [c, a]
+      const cmp = await setup(
+        [buildSection('s1', ['c', 'a'])],
+        [buildTask('a'), buildTask('b'), buildTask('c')],
+      );
+
+      const result = cmp.undoneTasksBySection();
+      expect(result.dict['s1'].map((t) => t.id)).toEqual(['c', 'a']);
+      expect(result.noSection.map((t) => t.id)).toEqual(['b']);
+    });
+
+    it('filters out stale ids in section.taskIds (deleted/archived tasks)', async () => {
+      const cmp = await setup(
+        [buildSection('s1', ['ghost', 'a', 'also-gone'])],
+        [buildTask('a'), buildTask('b')],
+      );
+
+      const result = cmp.undoneTasksBySection();
+      expect(result.dict['s1'].map((t) => t.id)).toEqual(['a']);
+      expect(result.noSection.map((t) => t.id)).toEqual(['b']);
+    });
+
+    it('falls through to noSection when a task is in no section', async () => {
+      const cmp = await setup(
+        [buildSection('s1', ['a'])],
+        [buildTask('a'), buildTask('b'), buildTask('c')],
+      );
+
+      const result = cmp.undoneTasksBySection();
+      expect(result.dict['s1'].map((t) => t.id)).toEqual(['a']);
+      // noSection preserves undoneTasks order
+      expect(result.noSection.map((t) => t.id)).toEqual(['b', 'c']);
+    });
+
+    it('returns empty array for empty sections and renders all tasks in noSection', async () => {
+      const cmp = await setup(
+        [buildSection('s1', []), buildSection('s2', [])],
+        [buildTask('a'), buildTask('b')],
+      );
+
+      const result = cmp.undoneTasksBySection();
+      expect(result.dict['s1']).toEqual([]);
+      expect(result.dict['s2']).toEqual([]);
+      expect(result.noSection.map((t) => t.id)).toEqual(['a', 'b']);
+    });
+
+    it('puts all tasks in noSection when there are no sections', async () => {
+      const cmp = await setup([], [buildTask('a'), buildTask('b')]);
+
+      const result = cmp.undoneTasksBySection();
+      expect(result.dict).toEqual({});
+      expect(result.noSection.map((t) => t.id)).toEqual(['a', 'b']);
     });
   });
 });

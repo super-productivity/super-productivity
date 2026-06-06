@@ -5,6 +5,7 @@ let i: number = 0;
 const KEY_TO_REPLACE = [
   'username',
   'userName',
+  'loginName',
   'password',
   'token',
   'notes',
@@ -32,6 +33,10 @@ const KEY_TO_REPLACE = [
   'location',
   'calProviderId',
   'summary',
+
+  // Calendar regex filter patterns may contain user-specific title fragments
+  'filterIncludeRegex',
+  'filterExcludeRegex',
 ];
 
 const maskString = (key: string, val: string, counter: number): string => {

@@ -115,6 +115,10 @@ export class SimpleCounterService implements OnDestroy {
     this._countdownRemaining.set(id, initialRemaining);
   }
 
+  /**
+   * Callers must ensure `startCountdown` ran first; otherwise the value won't
+   * display while paused (paused-display is gated by `hasStartedCountdown`).
+   */
   setCountdownRemaining(id: string, remaining: number): void {
     this._countdownRemaining.set(id, remaining);
   }

@@ -62,6 +62,7 @@ export const selectAllTagsWithoutMyDay = createSelector(
  * This selector returns raw stored taskIds which may be stale or incomplete.
  * `selectTodayTaskIds` computes membership from task.dueDay (virtual tag pattern)
  * and is self-healing.
+ * Exception: cleanup code that removes stale raw TODAY_TAG ids needs this stored order.
  *
  * See: docs/ai/today-tag-architecture.md
  */

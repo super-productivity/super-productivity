@@ -1,5 +1,6 @@
 import { convertOpToAction, ACTION_TYPE_ALIASES } from './operation-converter.util';
 import { ActionType, Operation, OpType } from '../core/operation.types';
+import { SyncLog } from '../../core/log';
 
 describe('operation-converter utility', () => {
   const createMockOperation = (overrides: Partial<Operation> = {}): Operation => ({
@@ -360,6 +361,123 @@ describe('operation-converter utility', () => {
       }
     });
 
+    describe('legacy planTasksForToday date backfill', () => {
+      it('injects today from the originating operation timestamp when missing', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: new Date(2024, 5, 14, 12, 0, 0, 0).getTime(),
+          payload: { taskIds: ['task-1'] },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).today).toBe('2024-06-14');
+      });
+
+      it('injects today for MultiEntityPayload operations created before the field existed', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: new Date(2024, 5, 14, 12, 0, 0, 0).getTime(),
+          payload: {
+            actionPayload: { taskIds: ['task-1'] },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).today).toBe('2024-06-14');
+      });
+
+      it('preserves today when the operation payload already contains it', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: new Date(2024, 5, 15, 12, 0, 0, 0).getTime(),
+          payload: { taskIds: ['task-1'], today: '2024-06-14' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).today).toBe('2024-06-14');
+      });
+    });
+
+    describe('updateTask done replay date backfill', () => {
+      it('injects doneOn and legacy dueDay from the originating operation timestamp when both are missing', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp,
+          payload: {
+            actionPayload: {
+              task: { id: 'task-1', changes: { isDone: true } },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBe(timestamp);
+        expect(action.task.changes.dueDay).toBe('2024-06-14');
+      });
+
+      it('does not inject dueDay when doneOn exists and dueDay is intentionally absent', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp,
+          payload: {
+            actionPayload: {
+              task: { id: 'task-1', changes: { isDone: true, doneOn: timestamp } },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBe(timestamp);
+        expect(action.task.changes.dueDay).toBeUndefined();
+      });
+
+      it('preserves existing doneOn and dueDay when present', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp: new Date(2024, 5, 15, 12, 0, 0, 0).getTime(),
+          payload: {
+            actionPayload: {
+              task: {
+                id: 'task-1',
+                changes: {
+                  isDone: true,
+                  doneOn: 1718352000000,
+                  dueDay: '2024-06-14',
+                },
+              },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBe(1718352000000);
+        expect(action.task.changes.dueDay).toBe('2024-06-14');
+      });
+
+      it('does not inject done fields for undone updates', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp: new Date(2024, 5, 14, 12, 0, 0, 0).getTime(),
+          payload: {
+            actionPayload: {
+              task: { id: 'task-1', changes: { isDone: false } },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBeUndefined();
+        expect(action.task.changes.dueDay).toBeUndefined();
+      });
+    });
+
     describe('multi-entity payload handling', () => {
       it('should extract actionPayload from MultiEntityPayload', () => {
         const op = createMockOperation({
@@ -444,6 +562,115 @@ describe('operation-converter utility', () => {
 
         expect((action as any).task.id).toBe('t1');
         expect((action as any).subTasks[0].id).toBe('st1');
+      });
+    });
+
+    // Issue #7330: LWW Update apply path requires payload.id to be set so
+    // lwwUpdateMetaReducer can write the entity. Producers force this on the
+    // on-disk shape, but as a universal safety net the converter backfills
+    // payload.id from op.entityId for any LWW Update op missing it.
+    describe('LWW Update id backfill (#7330)', () => {
+      it('injects id from op.entityId into adapter LWW Update payloads when missing', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-789',
+          // payload lacks `id` (e.g. an op produced before the producer fixes,
+          // or via a path that didn't backfill).
+          payload: { title: 'Recovered' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).id).toBe('task-789');
+        expect((action as any).title).toBe('Recovered');
+      });
+
+      it('preserves payload id when it already matches op.entityId', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-canonical', title: 'Match' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).id).toBe('task-canonical');
+      });
+
+      // Regression net (#7330 / codex review): a malformed or older remote
+      // LWW op whose payload.id disagrees with op.entityId would otherwise
+      // update the WRONG entity in lwwUpdateMetaReducer (which trusts
+      // entityData.id). The converter must enforce op.entityId as canonical.
+      it('overrides a payload id that disagrees with op.entityId', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-malicious-or-stale', title: 'Drift' },
+        });
+        const action = convertOpToAction(op);
+
+        // op.entityId is the canonical identifier — payload.id is overridden.
+        expect((action as any).id).toBe('task-canonical');
+      });
+
+      // The override is correct in direction but silently fixes a wire/producer
+      // bug. The converter logs a warning so that if the assumption ever breaks
+      // in production we have a head start before users report a corrupt entity.
+      // Telemetry-by-log: never log payload content, only ids.
+      it('warns when overriding a mismatched payload.id (visibility for stale producer)', () => {
+        const warnSpy = spyOn(SyncLog, 'warn');
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-stale', title: 'should not leak to log' },
+        });
+
+        convertOpToAction(op);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          jasmine.stringMatching(/payload\.id mismatch/),
+          jasmine.objectContaining({
+            entityId: 'task-canonical',
+            payloadId: 'task-stale',
+          }),
+        );
+        // Sanity: payload content (title) must NOT appear in the log args.
+        const logCall = warnSpy.calls.mostRecent();
+        expect(JSON.stringify(logCall.args)).not.toContain('should not leak');
+      });
+
+      it('does not warn when payload.id already matches op.entityId', () => {
+        const warnSpy = spyOn(SyncLog, 'warn');
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-canonical',
+          payload: { id: 'task-canonical', title: 'fine' },
+        });
+
+        convertOpToAction(op);
+
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it('does NOT inject id for singleton LWW Update (entityId === "*")', () => {
+        const op = createMockOperation({
+          actionType: '[GLOBAL_CONFIG] LWW Update' as ActionType,
+          entityId: '*',
+          payload: { theme: 'dark' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).id).toBeUndefined();
+        expect((action as any).theme).toBe('dark');
+      });
+
+      it('does NOT inject id for non-LWW action types', () => {
+        const op = createMockOperation({
+          actionType: '[Task] Update Task' as ActionType,
+          entityId: 'task-789',
+          payload: { title: 'No id here' },
+        });
+        const action = convertOpToAction(op);
+
+        expect((action as any).id).toBeUndefined();
       });
     });
   });

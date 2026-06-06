@@ -3,8 +3,17 @@ import {
   MenuTreeKind,
   MenuTreeState,
 } from '../../features/menu-tree/store/menu-tree.model';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
 describe('repairMenuTree', () => {
+  let logSpy: jasmine.Spy;
+  let warnSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    logSpy = spyOn(OP_LOG_SYNC_LOGGER, 'log').and.stub();
+    warnSpy = spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
+  });
+
   it('should remove orphaned project references from projectTree', () => {
     const validProjectIds = new Set(['project1', 'project2']);
     const validTagIds = new Set<string>();
@@ -187,5 +196,41 @@ describe('repairMenuTree', () => {
 
     expect(result.projectTree).toEqual([{ k: MenuTreeKind.PROJECT, id: 'project1' }]);
     expect(result.tagTree).toEqual([{ k: MenuTreeKind.TAG, id: 'tag1' }]);
+  });
+
+  it('should log invalid nodes without raw node values', () => {
+    const privateNodeName = 'Private Folder Name';
+    const validProjectIds = new Set<string>();
+    const validTagIds = new Set<string>();
+
+    const menuTree: MenuTreeState = {
+      projectTree: [
+        {
+          k: 'unexpected',
+          id: 'invalid-node-id',
+          name: privateNodeName,
+        } as any,
+      ],
+      tagTree: [],
+    };
+
+    const result = repairMenuTree(menuTree, validProjectIds, validTagIds);
+
+    expect(result.projectTree).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[repair-menu-tree] Removed invalid node',
+      jasmine.objectContaining({
+        treeType: 'projectTree',
+        nodeKind: 'unknown',
+        hasNodeId: true,
+      }),
+    );
+
+    const serializedLogArgs = JSON.stringify([
+      ...logSpy.calls.allArgs(),
+      ...warnSpy.calls.allArgs(),
+    ]);
+    expect(serializedLogArgs).not.toContain(privateNodeName);
+    expect(serializedLogArgs).not.toContain('invalid-node-id');
   });
 });

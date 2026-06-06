@@ -44,4 +44,13 @@ export class DeviceService {
     });
     return count;
   }
+
+  async deleteStaleDevices(beforeTime: number): Promise<number> {
+    const result = await prisma.syncDevice.deleteMany({
+      where: {
+        lastSeenAt: { lt: BigInt(beforeTime) },
+      },
+    });
+    return result.count;
+  }
 }

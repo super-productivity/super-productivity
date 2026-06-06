@@ -169,6 +169,46 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       const freshDownload = await clientB.downloadOps(0);
       expect(freshDownload.snapshotState).toBeDefined();
     });
+
+    it('should keep firing snapshot-replacement gap detection on every sync from a non-writing client (issue #7339 reproducer)', async () => {
+      // Reproduces the iOS loop. The adapter's snapshotReplacement heuristic
+      // uses `syncData.clientId !== excludeClient` when excludeClient is set,
+      // which is true forever for any client that hasn't uploaded its own
+      // snapshot. Without an "I already applied this snapshot" memory upstream,
+      // the conflict path re-fires every sync.
+      const clientA = harness.createClient('windows-client');
+      const clientB = harness.createClient('ios-client');
+
+      // Windows uploads the only snapshot. recentOps stays empty.
+      await clientA.adapter.uploadSnapshot(
+        { task: { ids: [], entities: {} } },
+        'windows-client',
+        'initial',
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        { 'windows-client': 1 },
+        1,
+        undefined,
+        'snap-op-issue-7339',
+      );
+
+      // iOS does its first fresh-bootstrap download.
+      const first = await clientB.downloadOps(0);
+      expect(first.snapshotState).toBeDefined();
+      expect(first.gapDetected).toBeFalsy();
+
+      // iOS now believes it's caught up at sinceSeq = latestSeq. Subsequent
+      // downloads MUST keep returning gapDetected=true because the snapshot
+      // file is still authored by `windows-client` and recentOps is still
+      // empty — that's the behavior that traps the conflict dialog upstream.
+      const second = await clientB.downloadOps(first.latestSeq);
+      expect(second.gapDetected).toBe(true);
+
+      const third = await clientB.downloadOps(second.latestSeq);
+      expect(third.gapDetected).toBe(true);
+      // No actual ops are ever returned — the loop has nothing to apply,
+      // it just keeps signalling "there's a snapshot you need to resolve".
+      expect(third.ops).toEqual([]);
+    });
   });
 
   describe('Partial Trimming Gap Detection', () => {

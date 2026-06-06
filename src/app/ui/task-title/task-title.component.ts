@@ -21,6 +21,7 @@ import { AsyncPipe } from '@angular/common';
 import { Observable } from 'rxjs';
 import { MentionConfigService } from '../../features/tasks/mention-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
+import { SubmitTrigger } from 'src/app/features/tasks/task.model';
 
 /**
  * Inline-editable text field for task titles.
@@ -40,6 +41,7 @@ import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
   },
 })
 export class TaskTitleComponent implements OnDestroy {
+  private static readonly _DEFAULT_SUBMIT_TRIGGER = 'blur' as const;
   T: typeof T = T;
 
   // short-syntax autocomplete config shared across all editor instances
@@ -90,11 +92,13 @@ export class TaskTitleComponent implements OnDestroy {
     newVal: string;
     wasChanged: boolean;
     blurEvent?: FocusEvent;
+    submitTrigger: SubmitTrigger;
   }>();
 
   private readonly _isFocused = signal(false);
   private readonly _isEditing = signal(false);
   private _focusTimeoutId: number | undefined;
+  private _submitTrigger: SubmitTrigger = TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
 
   updateMentionListShown(isShown: boolean): void {
     // use setTimeout to ensure blur event order doesn't interfere with mention selection
@@ -184,18 +188,22 @@ export class TaskTitleComponent implements OnDestroy {
   // Enter/Escape to submit and blur
   handleKeyDown(ev: KeyboardEvent): void {
     ev.stopPropagation();
+
+    let trigger: SubmitTrigger | null = null;
     if (ev.key === 'Escape') {
-      // if mention list is open, Escape is handled by MentionDirective - don't blur
-      if (!this._isMentionListShown()) {
-        this._forceBlur();
-      }
+      trigger = 'escape';
     } else if (ev.key === 'Enter') {
-      // if mention list is open, Enter selects from list - don't blur
-      if (!this._isMentionListShown()) {
-        this._forceBlur();
-        ev.preventDefault();
-      }
+      trigger = ev.ctrlKey || ev.metaKey ? 'modEnter' : 'enter';
     }
+    if (!trigger) return;
+
+    // While the mention list is open, MentionDirective owns Enter (selects)
+    // and Escape (closes) — leave the textarea focused for either path.
+    if (this._isMentionListShown()) return;
+
+    this._submitTrigger = trigger;
+    this._forceBlur();
+    ev.preventDefault();
   }
 
   // Android WebView: Enter key comes through as textInput
@@ -265,12 +273,15 @@ export class TaskTitleComponent implements OnDestroy {
   private _submit(blurEvent?: FocusEvent): void {
     const previousValue = this.lastExternalValue;
     const cleanVal = this._cleanValue(this.tmpValue());
+    const submitTrigger = this._submitTrigger;
     this.tmpValue.set(cleanVal);
     this.lastExternalValue = cleanVal;
+    this._submitTrigger = TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
     this.valueEdited.emit({
       newVal: cleanVal,
       wasChanged: cleanVal !== previousValue,
       blurEvent,
+      submitTrigger,
     });
   }
 

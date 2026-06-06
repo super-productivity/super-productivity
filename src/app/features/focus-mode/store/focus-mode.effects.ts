@@ -16,7 +16,6 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import * as actions from './focus-mode.actions';
-import { showFocusOverlay } from './focus-mode.actions';
 import * as selectors from './focus-mode.selectors';
 import { FocusModeStrategyFactory } from '../focus-mode-strategies';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -33,17 +32,8 @@ import {
   selectIsFocusModeEnabled,
   selectPomodoroConfig,
 } from '../../config/store/global-config.reducer';
-import { FocusModeConfig } from '../../config/global-config.model';
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
-import {
-  FocusModeMode,
-  FocusScreen,
-  getBreakCycle,
-  TimerState,
-} from '../focus-mode.model';
-import { BannerService } from '../../../core/banner/banner.service';
-import { Banner, BannerId } from '../../../core/banner/banner.model';
-import { T } from '../../../t.const';
+import { FocusModeMode, FocusScreen, getBreakCycle } from '../focus-mode.model';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
@@ -60,40 +50,20 @@ export class FocusModeEffects {
   private strategyFactory = inject(FocusModeStrategyFactory);
   private globalConfigService = inject(GlobalConfigService);
   private taskService = inject(TaskService);
-  private bannerService = inject(BannerService);
   private metricService = inject(MetricService);
   private storageService = inject(FocusModeStorageService);
   private takeABreakService = inject(TakeABreakService);
 
-  // Auto-show overlay when task is selected (if sync session with tracking is enabled)
-  // Skip showing overlay if isStartInBackground is enabled
-  // Only triggers when focus mode feature is enabled
-  // Fix #6521: Use currentTaskId$ as the driver and config as a gate check (withLatestFrom)
-  // so that config changes don't re-trigger the overlay
-  autoShowOverlay$ = createEffect(() =>
-    this.taskService.currentTaskId$.pipe(
-      skipWhileApplyingRemoteOps(),
-      // currentTaskId$ is local UI state (not synced), so distinctUntilChanged is sufficient
-      distinctUntilChanged(),
-      filter((id) => !!id),
-      withLatestFrom(
-        this.store.select(selectFocusModeConfig),
-        this.store.select(selectIsFocusModeEnabled),
-      ),
-      filter(
-        ([_id, cfg, isFocusModeEnabled]) =>
-          isFocusModeEnabled &&
-          !!cfg?.isSyncSessionWithTracking &&
-          !cfg?.isStartInBackground,
-      ),
-      map(() => actions.showFocusOverlay()),
-    ),
-  );
-
-  // Sync: When tracking starts → start/unpause focus session
-  // Only triggers when isSyncSessionWithTracking is enabled and focus mode feature is enabled
-  // Fix #6521: Use currentTaskId$ as the driver and config as a gate check (withLatestFrom)
-  // so that config changes don't re-trigger session start
+  // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
+  //
+  // Sync (always): if a session/break is in progress, keep it in lockstep with
+  // tracking — resume paused work, skip a stale break, etc.
+  //
+  // Auto-spawn (opt-in via `autoStartFocusOnPlay`): if no session is active and
+  // the user has opted in, start a new session quietly. The overlay is NOT
+  // dispatched — surface comes from the existing banner / future indicator.
+  // Inside the overlay we still respect `isSkipPreparation` so #7384's
+  // rocket-prep flow keeps working for users who entered via F-key.
   syncTrackingStartToSession$ = createEffect(() =>
     this.taskService.currentTaskId$.pipe(
       skipWhileApplyingRemoteOps(),
@@ -104,21 +74,25 @@ export class FocusModeEffects {
         this.store.select(selectFocusModeConfig),
         this.store.select(selectIsFocusModeEnabled),
       ),
-      filter(
-        ([_taskId, cfg, isFocusModeEnabled]) =>
-          isFocusModeEnabled && !!cfg?.isSyncSessionWithTracking,
-      ),
+      filter(([_taskId, _cfg, isFocusModeEnabled]) => isFocusModeEnabled),
       withLatestFrom(
         this.store.select(selectors.selectTimer),
         this.store.select(selectors.selectMode),
         this.store.select(selectors.selectCurrentScreen),
-        this.store.select(selectors.selectPausedTaskId),
+        this.store.select(selectors.selectIsOverlayShown),
         // Bug #5995 Fix: Get the LATEST value of isResumingBreak here
         // to avoid using stale value from outer closure
         this.store.select(selectors.selectIsResumingBreak),
       ),
       switchMap(
-        ([[_taskId, cfg], timer, mode, currentScreen, pausedTaskId, isResumingBreak]) => {
+        ([
+          [_taskId, cfg],
+          timer,
+          mode,
+          currentScreen,
+          isOverlayShown,
+          isResumingBreak,
+        ]) => {
           // If session is paused (purpose is 'work' but not running), resume it
           if (timer.purpose === 'work' && !timer.isRunning) {
             return of(actions.unPauseFocusSession());
@@ -137,8 +111,17 @@ export class FocusModeEffects {
             // Bug #6726 fix: Don't pass pausedTaskId — the user already chose a new task
             return of(actions.skipBreak({ pausedTaskId: undefined }));
           }
-          // If no session active, start a new one (only from Main screen)
+          // No session active: auto-spawn only when the user opted in.
           if (timer.purpose === null && currentScreen === FocusScreen.Main) {
+            if (!cfg?.autoStartFocusOnPlay) {
+              return EMPTY;
+            }
+            // Bug #7384: respect isSkipPreparation only inside the overlay
+            // (preparation screen is overlay-bound). For the quiet auto-spawn
+            // path there's no overlay → no rocket → bypass the prep gate.
+            if (isOverlayShown && !cfg?.isSkipPreparation) {
+              return EMPTY;
+            }
             const strategy = this.strategyFactory.getStrategy(mode);
             const duration = strategy.initialSessionDuration;
             return of(
@@ -165,14 +148,12 @@ export class FocusModeEffects {
       skipWhileApplyingRemoteOps(),
       pairwise(),
       withLatestFrom(
-        this.store.select(selectFocusModeConfig),
         this.store.select(selectors.selectTimer),
         this.store.select(selectIsFocusModeEnabled),
       ),
       filter(
-        ([[prevTaskId, currTaskId], cfg, timer, isFocusModeEnabled]) =>
+        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled]) =>
           isFocusModeEnabled &&
-          !!cfg?.isSyncSessionWithTracking &&
           (timer.purpose === 'work' || timer.purpose === 'break') &&
           timer.isRunning &&
           !!prevTaskId &&
@@ -189,13 +170,11 @@ export class FocusModeEffects {
     this.actions$.pipe(
       ofType(actions.pauseFocusSession),
       withLatestFrom(
-        this.store.select(selectFocusModeConfig),
         this.store.select(selectors.selectTimer),
         this.taskService.currentTaskId$,
       ),
       filter(
-        ([action, cfg, timer, currentTaskId]) =>
-          !!cfg?.isSyncSessionWithTracking &&
+        ([action, timer, currentTaskId]) =>
           (timer.purpose === 'work' || timer.purpose === 'break') &&
           !!action.pausedTaskId &&
           !!currentTaskId,
@@ -216,10 +195,7 @@ export class FocusModeEffects {
         this.taskService.currentTaskId$,
       ),
       switchMap(([_action, cfg, timer, pausedTaskId, currentTaskId]) => {
-        if (
-          !cfg?.isSyncSessionWithTracking ||
-          (timer.purpose !== 'work' && timer.purpose !== 'break')
-        ) {
+        if (timer.purpose !== 'work' && timer.purpose !== 'break') {
           return EMPTY;
         }
         // Bug #6534 Fix: Clear _isResumingBreak flag when not resuming tracking during break.
@@ -248,18 +224,15 @@ export class FocusModeEffects {
     this.actions$.pipe(
       ofType(actions.startFocusSession),
       withLatestFrom(
-        this.store.select(selectFocusModeConfig),
         this.store.select(selectors.selectPausedTaskId),
         this.taskService.currentTaskId$,
         this.store.select(selectLastCurrentTask),
       ),
       filter(
-        ([_action, cfg, pausedTaskId, currentTaskId, lastCurrentTask]) =>
-          !!cfg?.isSyncSessionWithTracking &&
-          !currentTaskId &&
-          (!!pausedTaskId || !!lastCurrentTask),
+        ([_action, pausedTaskId, currentTaskId, lastCurrentTask]) =>
+          !currentTaskId && (!!pausedTaskId || !!lastCurrentTask),
       ),
-      switchMap(([_action, _cfg, pausedTaskId, _currentTaskId, lastCurrentTask]) => {
+      switchMap(([_action, pausedTaskId, _currentTaskId, lastCurrentTask]) => {
         // Prefer pausedTaskId, fall back to lastCurrentTask
         const taskIdToResume = pausedTaskId || lastCurrentTask?.id;
         if (!taskIdToResume) return EMPTY;
@@ -295,7 +268,6 @@ export class FocusModeEffects {
         ([timer, mode, _isOvertimeEnabled]) =>
           timer.purpose === 'work' &&
           !timer.isRunning &&
-          timer.duration > 0 &&
           timer.elapsed >= timer.duration &&
           mode !== FocusModeMode.Flowtime &&
           !_isOvertimeEnabled,
@@ -314,7 +286,7 @@ export class FocusModeEffects {
           (timer) =>
             timer.purpose === 'break' &&
             !timer.isRunning &&
-            timer.duration > 0 &&
+            timer.startedAt !== null &&
             timer.elapsed >= timer.duration,
         ),
         distinctUntilChanged(
@@ -354,7 +326,7 @@ export class FocusModeEffects {
         this.taskService.currentTaskId$,
       ),
       filter(([action, config, mode, taskId]) => {
-        if (!config?.isSyncSessionWithTracking || !config?.isPauseTrackingDuringBreak) {
+        if (!config?.isPauseTrackingDuringBreak) {
           return false;
         }
         if (!taskId) {
@@ -365,9 +337,7 @@ export class FocusModeEffects {
           return true;
         }
         // Bug #6510 fix: For automatic completion, only stop tracking if no break will start.
-        // When a break will start (auto or manual), tracking pause is deferred to break-start:
-        // - Auto: autoStartBreakOnSessionComplete$ (line 368)
-        // - Manual: _handleStartAfterSessionComplete() / startBreakManually()
+        // When a break will start, tracking pause is deferred to break-start (autoStartBreakOnSessionComplete$).
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakWillStart = strategy.shouldStartBreakAfterSession;
         return !breakWillStart;
@@ -396,7 +366,7 @@ export class FocusModeEffects {
         // Only for Pomodoro mode (since only Pomodoro increments cycles)
         if (mode !== FocusModeMode.Pomodoro) return false;
         const strategy = this.strategyFactory.getStrategy(mode);
-        return strategy.shouldStartBreakAfterSession && !config?.isManualBreakStart;
+        return strategy.shouldStartBreakAfterSession;
       }),
       switchMap(([_, mode, cycle, config, currentTaskId]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
@@ -430,6 +400,40 @@ export class FocusModeEffects {
         }
 
         return of(...actionsArr);
+      }),
+    ),
+  );
+
+  // Effect 3b: Offer Flowtime breaks when user explicitly ends their session
+  // Triggers on endFlowtimeSession — NOT pauseFocusSession (which is fired by
+  // sync-stop, idle, and the regular pause button)
+  offerFlowtimeBreakOnSessionEnd$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(actions.endFlowtimeSession),
+      withLatestFrom(
+        this.store.select(selectors.selectMode),
+        this.store.select(selectors.selectTimer),
+      ),
+      filter(([_action, mode, timer]) => {
+        if (mode !== FocusModeMode.Flowtime) return false;
+        if (timer.purpose !== 'work') return false;
+        return true;
+      }),
+      switchMap(([action, mode, timer]) => {
+        const strategy = this.strategyFactory.getStrategy(mode);
+        const breakInfo = strategy.getBreakDuration(timer.elapsed);
+
+        if (!strategy.shouldStartBreakAfterSession || !breakInfo) {
+          return [actions.completeFocusSession({ isManual: true })];
+        }
+
+        return [
+          actions.offerFlowtimeBreak({
+            duration: breakInfo.duration,
+            isLongBreak: breakInfo.isLong,
+            pausedTaskId: action.pausedTaskId,
+          }),
+        ];
       }),
     ),
   );
@@ -480,37 +484,6 @@ export class FocusModeEffects {
         ),
       ),
     { dispatch: false },
-  );
-
-  // Effect 5: Store pausedTaskId when session completes with manual break start
-  // Bug #5954 fix: Ensures task can be resumed when break is skipped/completed
-  // Bug #5974 fix: Store pausedTaskId regardless of isPauseTrackingDuringBreak setting
-  // This allows tracking to resume when user manually stops tracking before starting break
-  storePausedTaskOnManualBreakSession$ = createEffect(() =>
-    this.actions$.pipe(
-      ofType(actions.completeFocusSession),
-      withLatestFrom(
-        this.store.select(selectors.selectMode),
-        this.store.select(selectFocusModeConfig),
-        this.taskService.currentTaskId$,
-      ),
-      filter(([_, mode, config, currentTaskId]) => {
-        const strategy = this.strategyFactory.getStrategy(mode);
-        // Store pausedTaskId when manual break is enabled and there's a current task
-        // Note: We store regardless of isPauseTrackingDuringBreak because:
-        // - If isPauseTrackingDuringBreak=true: pausedTaskId is used to resume after break
-        // - If isPauseTrackingDuringBreak=false: pausedTaskId is used to resume if user
-        //   manually stopped tracking before starting the break (bug #5974)
-        return (
-          strategy.shouldStartBreakAfterSession &&
-          !!config?.isManualBreakStart &&
-          !!currentTaskId
-        );
-      }),
-      map(([_, _mode, _config, currentTaskId]) =>
-        actions.setPausedTaskId({ pausedTaskId: currentTaskId }),
-      ),
-    ),
   );
 
   // Break completion effects - split into separate concerns for better maintainability
@@ -619,19 +592,13 @@ export class FocusModeEffects {
     ),
   );
 
-  // Stop tracking when exiting break to planning (if sync enabled)
+  // Stop tracking when exiting break to planning
   // Without this, tracking continues running orphaned after the focus session is reset
   stopTrackingOnExitBreakToPlanning$ = createEffect(() =>
     this.actions$.pipe(
       ofType(actions.exitBreakToPlanning),
-      withLatestFrom(
-        this.store.select(selectFocusModeConfig),
-        this.taskService.currentTaskId$,
-      ),
-      filter(
-        ([_, config, currentTaskId]) =>
-          !!config?.isSyncSessionWithTracking && !!currentTaskId,
-      ),
+      withLatestFrom(this.taskService.currentTaskId$),
+      filter(([_, currentTaskId]) => !!currentTaskId),
       map(() => unsetCurrentTask()),
     ),
   );
@@ -650,7 +617,9 @@ export class FocusModeEffects {
   logFocusSession$ = createEffect(
     () =>
       this.actions$.pipe(
-        ofType(actions.completeFocusSession),
+        // Flowtime sessions are logged when the break is offered, even if the
+        // user declines the break and never starts it.
+        ofType(actions.completeFocusSession, actions.offerFlowtimeBreak),
         withLatestFrom(this.store.select(selectors.selectLastSessionDuration)),
         tap(([, duration]) => {
           if (duration > 0) {
@@ -816,362 +785,6 @@ export class FocusModeEffects {
         ),
       { dispatch: false },
     );
-
-  // Update banner when focus mode actions occur
-  // Action-based pattern preferred over selector-based (CLAUDE.md Section 8)
-  // Throttled to prevent excessive banner updates (timer ticks every 1s)
-  updateBanner$ = createEffect(
-    () =>
-      this.actions$.pipe(
-        ofType(
-          actions.tick,
-          actions.startFocusSession,
-          actions.pauseFocusSession,
-          actions.unPauseFocusSession,
-          actions.startBreak,
-          actions.skipBreak,
-          actions.completeBreak,
-          actions.completeFocusSession,
-          actions.cancelFocusSession,
-          actions.hideFocusOverlay,
-          actions.showFocusOverlay,
-        ),
-        // Throttle to prevent excessive banner updates (timer ticks every 1s)
-        // Use leading + trailing to ensure first and last updates both trigger
-        throttleTime(500, undefined, { leading: true, trailing: true }),
-        withLatestFrom(
-          this.store.select(selectors.selectIsSessionRunning),
-          this.store.select(selectors.selectIsBreakActive),
-          this.store.select(selectors.selectIsSessionCompleted),
-          this.store.select(selectors.selectIsSessionPaused),
-          this.store.select(selectors.selectMode),
-          this.store.select(selectors.selectCurrentCycle),
-          this.store.select(selectors.selectIsOverlayShown),
-          this.store.select(selectors.selectTimer),
-          this.store.select(selectFocusModeConfig),
-          this.store.select(selectIsFocusModeEnabled),
-          this.store.select(selectors.selectIsInOvertime),
-        ),
-        tap(
-          ([
-            _action,
-            isSessionRunning,
-            isOnBreak,
-            isSessionCompleted,
-            isSessionPaused,
-            mode,
-            cycle,
-            isOverlayShown,
-            timer,
-            focusModeConfig,
-            isFocusModeEnabled,
-            isInOvertime,
-          ]) => {
-            // Only show banner when overlay is hidden and focus mode feature is enabled
-            if (isOverlayShown || !isFocusModeEnabled) {
-              this.bannerService.dismiss(BannerId.FocusMode);
-              return;
-            }
-
-            const shouldShowBanner =
-              isSessionRunning || isOnBreak || isSessionCompleted || isSessionPaused;
-
-            // Check if break time is up (needed for both banner display and button actions)
-            const isBreakTimeUp =
-              timer.purpose === 'break' &&
-              !timer.isRunning &&
-              timer.duration > 0 &&
-              timer.elapsed >= timer.duration;
-
-            if (shouldShowBanner) {
-              // Determine banner message based on session type
-              let translationKey: string;
-              let icon: string;
-              let timer$;
-              let progress$;
-
-              if (isSessionCompleted) {
-                // Session is completed
-                translationKey =
-                  mode === FocusModeMode.Pomodoro
-                    ? T.F.FOCUS_MODE.POMODORO_SESSION_COMPLETED
-                    : T.F.FOCUS_MODE.SESSION_COMPLETED;
-                icon = 'check_circle';
-                timer$ = undefined; // No timer needed for completed state
-                progress$ = undefined; // No progress bar needed
-              } else if (isOnBreak) {
-                if (isBreakTimeUp) {
-                  // Break is done - time is up
-                  translationKey = T.F.POMODORO.BREAK_IS_DONE;
-                  icon = 'notifications';
-                  timer$ = undefined; // No timer needed for done state
-                  progress$ = undefined; // No progress bar needed
-                } else {
-                  // Break is still running
-                  translationKey =
-                    mode === FocusModeMode.Pomodoro
-                      ? T.F.FOCUS_MODE.B.POMODORO_BREAK_RUNNING
-                      : T.F.FOCUS_MODE.B.BREAK_RUNNING;
-                  icon = 'free_breakfast';
-                  timer$ = this.store.select(selectors.selectTimeRemaining);
-                  progress$ = this.store.select(selectors.selectProgress);
-                }
-              } else if (isInOvertime) {
-                // Work session in overtime — timer running past duration
-                translationKey = T.F.FOCUS_MODE.B.SESSION_OVERTIME;
-                icon = 'notifications';
-                timer$ = this.store.select(selectors.selectTimeElapsed);
-                progress$ = undefined;
-              } else {
-                // Work session is active
-                const isCountTimeUp = mode === FocusModeMode.Flowtime;
-                translationKey =
-                  mode === FocusModeMode.Pomodoro
-                    ? T.F.FOCUS_MODE.B.POMODORO_SESSION_RUNNING
-                    : T.F.FOCUS_MODE.B.SESSION_RUNNING;
-                icon = 'center_focus_strong';
-                timer$ = isCountTimeUp
-                  ? this.store.select(selectors.selectTimeElapsed)
-                  : this.store.select(selectors.selectTimeRemaining);
-                progress$ = isCountTimeUp
-                  ? undefined
-                  : this.store.select(selectors.selectProgress);
-              }
-
-              // Bug #5954 fix: For breaks, use cycle - 1 since cycle is incremented on session complete
-              // This ensures "Break #1" shows after "Session #1" instead of "Break #2"
-              const translateParams =
-                mode === FocusModeMode.Pomodoro
-                  ? { cycleNr: isOnBreak ? Math.max(1, (cycle || 1) - 1) : cycle || 1 }
-                  : undefined;
-
-              this.bannerService.open({
-                id: BannerId.FocusMode,
-                ico: icon,
-                msg: translationKey,
-                translateParams,
-                timer$,
-                progress$,
-                isKeepVisibleAfterAction: true,
-                isHideDismissBtn: true,
-                ...this._getBannerActions(
-                  timer,
-                  isOnBreak,
-                  isSessionCompleted,
-                  isBreakTimeUp,
-                  focusModeConfig,
-                ),
-              });
-            } else {
-              this.bannerService.dismiss(BannerId.FocusMode);
-            }
-          },
-        ),
-      ),
-    { dispatch: false },
-  );
-
-  /**
-   * Handles starting a new session after break time is up
-   */
-  private _handleStartAfterBreak(): void {
-    combineLatest([
-      this.store.select(selectors.selectMode),
-      this.store.select(selectors.selectPausedTaskId),
-      this.store.select(selectFocusModeConfig),
-    ])
-      .pipe(take(1))
-      .subscribe(([mode, pausedTaskId, config]) => {
-        const strategy = this.strategyFactory.getStrategy(mode);
-        // Skip break (with pausedTaskId to resume tracking)
-        this.store.dispatch(actions.skipBreak({ pausedTaskId }));
-        // Only manually start session if strategy doesn't auto-start
-        // (Pomodoro auto-starts via skipBreak$ effect)
-        if (!strategy.shouldAutoStartNextSession) {
-          this.store.dispatch(
-            actions.startFocusSession({
-              duration: strategy.initialSessionDuration,
-            }),
-          );
-        }
-      });
-  }
-
-  /**
-   * Handles starting a break or new session after session completion
-   */
-  private _handleStartAfterSessionComplete(
-    focusModeConfig: FocusModeConfig | undefined,
-  ): void {
-    combineLatest([
-      this.store.select(selectors.selectMode),
-      this.store.select(selectors.selectCurrentCycle),
-      this.store.select(selectors.selectPausedTaskId),
-    ])
-      .pipe(take(1))
-      .subscribe(([mode, cycle, pausedTaskId]) => {
-        const strategy = this.strategyFactory.getStrategy(mode);
-
-        // If manual break start is enabled and mode supports breaks, start a break
-        if (
-          focusModeConfig?.isManualBreakStart &&
-          strategy.shouldStartBreakAfterSession
-        ) {
-          // Bug #6044 fix: cycle is already correct after incrementCycle
-          // Cycle Adjustment needed, Cycle is 1 too high after incrementCycle
-          // we want to get the last session's cycle
-          // This matches the auto-start break logic to ensure consistent break timing
-          const breakInfo = strategy.getBreakDuration(getBreakCycle(cycle));
-          if (breakInfo) {
-            const currentTaskId = this.taskService.currentTaskId();
-            const shouldPauseTracking =
-              focusModeConfig?.isPauseTrackingDuringBreak && currentTaskId;
-
-            if (shouldPauseTracking) {
-              this.store.dispatch(unsetCurrentTask());
-            }
-
-            // Bug #5974 fix: If isPauseTrackingDuringBreak is false and user manually
-            // stopped tracking (pausedTaskId exists), resume tracking during break
-            const shouldResumeTracking =
-              !focusModeConfig?.isPauseTrackingDuringBreak &&
-              !currentTaskId &&
-              pausedTaskId;
-
-            if (shouldResumeTracking) {
-              this.store.dispatch(setCurrentTask({ id: pausedTaskId }));
-            }
-
-            this.store.dispatch(
-              actions.startBreak({
-                duration: breakInfo.duration,
-                isLongBreak: breakInfo.isLong,
-                pausedTaskId: shouldPauseTracking ? currentTaskId : undefined,
-              }),
-            );
-          }
-        } else {
-          // Otherwise start a new session
-          this.store.dispatch(
-            actions.startFocusSession({
-              duration: strategy.initialSessionDuration,
-            }),
-          );
-        }
-      });
-  }
-
-  /**
-   * Handles play/pause toggle for sessions and breaks
-   */
-  private _handlePlayPauseToggle(isPaused: boolean): void {
-    if (isPaused) {
-      this.store.dispatch(actions.unPauseFocusSession());
-    } else {
-      // Pass current task ID so it can be restored on resume
-      const currentTaskId = this.taskService.currentTaskId();
-      this.store.dispatch(actions.pauseFocusSession({ pausedTaskId: currentTaskId }));
-    }
-  }
-
-  /**
-   * Handles skipping the current break
-   */
-  private _handleSkipBreak(): void {
-    this.store
-      .select(selectors.selectPausedTaskId)
-      .pipe(take(1))
-      .subscribe((pausedTaskId) => {
-        this.store.dispatch(actions.skipBreak({ pausedTaskId }));
-      });
-  }
-
-  /**
-   * Handles ending the current session manually
-   */
-  private _handleEndSession(): void {
-    this.store.dispatch(actions.completeFocusSession({ isManual: true }));
-  }
-
-  /**
-   * Handles opening the focus overlay
-   */
-  private _handleOpenOverlay(): void {
-    this.store.dispatch(showFocusOverlay());
-  }
-
-  private _getBannerActions(
-    timer: TimerState,
-    isOnBreak: boolean,
-    isSessionCompleted: boolean,
-    isBreakTimeUp: boolean,
-    focusModeConfig: FocusModeConfig | undefined,
-  ): Pick<Banner, 'action' | 'action2' | 'action3'> {
-    const isPaused = !timer.isRunning && timer.purpose !== null;
-
-    // Show "Start" button when session completed OR break time is up
-    // Otherwise show play/pause button
-    const shouldShowStartButton = isSessionCompleted || isBreakTimeUp;
-
-    const playPauseAction = shouldShowStartButton
-      ? {
-          label: T.F.FOCUS_MODE.B.START,
-          icon: 'play_arrow',
-          fn: () => {
-            // When starting from break completion, first properly complete/skip the break
-            // to resume task tracking and clean up state
-            if (isBreakTimeUp) {
-              this._handleStartAfterBreak();
-            } else {
-              // Session completed - check if we should start a break or new session
-              this._handleStartAfterSessionComplete(focusModeConfig);
-            }
-          },
-        }
-      : {
-          label: isPaused ? T.F.FOCUS_MODE.B.RESUME : T.F.FOCUS_MODE.B.PAUSE,
-          icon: isPaused ? 'play_arrow' : 'pause',
-          fn: () => this._handlePlayPauseToggle(isPaused),
-        };
-
-    // End session button - complete for work, skip for break (while running)
-    // When session is completed (not break), show "End Focus Session" button
-    const endAction =
-      isSessionCompleted && !isBreakTimeUp
-        ? {
-            label: T.F.FOCUS_MODE.B.END_FOCUS_SESSION,
-            icon: 'done_all',
-            fn: () => {
-              this.store.dispatch(actions.cancelFocusSession());
-            },
-          }
-        : shouldShowStartButton
-          ? undefined
-          : isOnBreak
-            ? {
-                label: T.F.FOCUS_MODE.SKIP_BREAK,
-                icon: 'skip_next',
-                fn: () => this._handleSkipBreak(),
-              }
-            : {
-                label: T.F.FOCUS_MODE.B.END_SESSION,
-                icon: 'done_all',
-                fn: () => this._handleEndSession(),
-              };
-
-    // Open overlay button
-    const overlayAction = {
-      label: T.F.FOCUS_MODE.B.TO_FOCUS_OVERLAY,
-      icon: 'fullscreen',
-      fn: () => this._handleOpenOverlay(),
-    };
-
-    return {
-      action: playPauseAction,
-      action2: endAction,
-      action3: overlayAction,
-    };
-  }
 
   // Play ticking sound during focus sessions if enabled
   playTickSound$ = createEffect(

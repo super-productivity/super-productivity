@@ -21,9 +21,14 @@ export const getErrorTxt = (err: unknown): string => {
     return errAny[HANDLED_ERROR_PROP_STR];
   }
 
-  // Check direct message property (standard Error objects)
+  // Check direct message property (standard Error objects).
+  // Some structured errors (notably HttpNotOkAPIError after PR 5a) split
+  // the brief message and a parsed body excerpt to keep auto-log paths
+  // privacy-safe. Surface both for UI display when the longer detail
+  // exists alongside a primary message.
   if (typeof errAny.message === 'string' && errAny.message) {
-    return errAny.message;
+    const detail = typeof errAny.detail === 'string' ? errAny.detail : null;
+    return detail ? `${errAny.message} - ${detail}` : errAny.message;
   }
 
   // Check nested error.message (HttpErrorResponse pattern)

@@ -68,14 +68,21 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
         {
           key: 'includedTagsMatch',
           type: 'radio',
-          // Only meaningful with >=2 required tags
+          // Only meaningful with >=2 required tags.
           expressions: {
             hide: 'model.includedTagIds?.length < 2',
           },
+          // `defaultValue` lives at the field level — Formly's core extension
+          // reads `field.defaultValue`, not `field.props.defaultValue`, when
+          // populating the model. `resetOnHide` makes the default flow into
+          // the model when the field transitions hidden→visible. Without
+          // these, the field is shown with `undefined` and the `required`
+          // validator locks the Save button (#7380).
+          defaultValue: 'all',
+          resetOnHide: true,
           props: {
             label: T.F.BOARDS.FORM.TAGS_MATCH_MODE,
             required: true,
-            defaultValue: 'all',
             options: [
               { value: 'all', label: T.F.BOARDS.FORM.TAGS_MATCH_ALL },
               { value: 'any', label: T.F.BOARDS.FORM.TAGS_MATCH_ANY },
@@ -99,10 +106,11 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           expressions: {
             hide: 'model.excludedTagIds?.length < 2',
           },
+          defaultValue: 'any',
+          resetOnHide: true,
           props: {
             label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_MODE,
             required: true,
-            defaultValue: 'any',
             options: [
               { value: 'any', label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ANY },
               { value: 'all', label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ALL },
@@ -180,10 +188,11 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           expressions: {
             hide: '!model.sortBy',
           },
+          defaultValue: 'asc',
+          resetOnHide: true,
           props: {
             label: T.F.BOARDS.FORM.SORT_DIR,
             required: true,
-            defaultValue: 'asc',
             options: [
               { value: 'asc', label: T.F.BOARDS.FORM.SORT_DIR_ASC },
               { value: 'desc', label: T.F.BOARDS.FORM.SORT_DIR_DESC },

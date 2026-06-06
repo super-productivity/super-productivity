@@ -21,6 +21,16 @@ export class TaskAttachmentLinkDirective {
       const el = ev.target as HTMLElement;
       el.blur();
     }
+
+    if (!IS_ELECTRON && this._isLocalFileUrl(href)) {
+      ev.preventDefault();
+      this._snackService.open({
+        msg: T.F.ATTACHMENT.LOCAL_FILE_UNAVAILABLE,
+        type: 'ERROR',
+      });
+      return;
+    }
+
     if (IS_ELECTRON) {
       ev.preventDefault();
       const type = this.type();
@@ -39,6 +49,10 @@ export class TaskAttachmentLinkDirective {
     } else if (this.type() === 'LINK') {
       this._openExternalUrl(href);
     }
+  }
+
+  private _isLocalFileUrl(url: string): boolean {
+    return url.toLowerCase().startsWith('file://');
   }
 
   private _openExternalUrl(rawUrl: string): void {

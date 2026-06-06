@@ -2,6 +2,7 @@ import { WorkContext, WorkContextType } from '../../work-context/work-context.mo
 import { Dictionary, EntityState } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { resolveDisplayTagIds } from '../../tasks/util/resolve-display-tag-ids.util';
 
 export const getCompleteStateForWorkContext = (
   workContext: WorkContext,
@@ -69,13 +70,8 @@ const _filterIdsForTag = (state: EntityState<Task>, workContextId: string): stri
   (state.ids as string[]).filter((id) => {
     const t = state.entities[id];
     if (!t) return false;
-    if (t.parentId) {
-      const parent = state.entities[t.parentId];
-      return parent
-        ? parent.tagIds.includes(workContextId)
-        : t.tagIds.includes(workContextId);
-    }
-    return t.tagIds.includes(workContextId);
+    const parent = t.parentId ? state.entities[t.parentId] : undefined;
+    return resolveDisplayTagIds(t, parent).includes(workContextId);
   });
 
 const _limitStateToIds = (

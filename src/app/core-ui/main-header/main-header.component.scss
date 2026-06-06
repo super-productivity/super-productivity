@@ -136,6 +136,9 @@ button.isActive2 {
   margin-left: auto;
   display: flex;
   align-items: center;
+  // Keep the action group at its intrinsic width so a long title shrinks
+  // (it ellipsizes) instead of pushing these buttons off screen (#7477).
+  flex: 0 0 auto;
   gap: var(--header-nav-button-gap);
   min-width: 0;
 
@@ -143,6 +146,10 @@ button.isActive2 {
     margin-left: 0;
     margin-right: auto;
   }
+
+  // EXPERIMENT: vertical action strip styles live in src/styles.scss so they
+  // bypass Angular view encapsulation (and any containing-block surprises
+  // from this file). See `nav.action-nav-right` rules there.
 
   // Set 20px icon sizing for buttons outside counters-action-group
   // (add button, panel buttons, etc.)
@@ -157,10 +164,15 @@ button.isActive2 {
   }
 
   > button.sync-btn .mat-icon:not(.sync-state-ico) {
-    font-size: 23px;
-    width: 23px;
-    height: 23px;
-    line-height: 23px;
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center center;
+    backface-visibility: hidden;
   }
 }
 
@@ -191,6 +203,9 @@ page-title {
 
   &.isVisible {
     pointer-events: all;
+    border-radius: var(--card-border-radius);
+    background: var(--card-bg);
+    box-shadow: var(--whiteframe-shadow-2dp);
   }
 
   simple-counter-button {
@@ -266,6 +281,7 @@ page-title {
 .spin {
   animation: spin 1.5s linear infinite;
   will-change: transform;
+  transform-origin: center center;
 }
 
 @keyframes spin {
@@ -318,30 +334,5 @@ page-title {
   @media (forced-colors: active) {
     outline: 2px solid CanvasText;
     outline-offset: -2px;
-  }
-}
-
-.focus-btn-wrapper {
-  position: relative;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-
-  button {
-    margin: 0;
-  }
-
-  .focus-label {
-    position: absolute;
-    line-height: 1;
-    padding: var(--s-quarter) var(--s-half) 1px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-weight: bold;
-    border-radius: 8px;
-    pointer-events: none;
-    bottom: calc(var(--s) * -0.25);
-    background: var(--bg-lighter);
-    color: var(--text-color-most-intense);
   }
 }

@@ -54,8 +54,7 @@
   opacity: 1;
   transition: opacity var(--transition-standard);
   white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   text-wrap-mode: wrap;
   text-indent: 0;
   font-size: inherit;
@@ -106,7 +105,7 @@
   overflow: hidden;
   min-height: 20px;
   line-height: 1.5;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   white-space-collapse: preserve;
   border: none;
   text-wrap-mode: wrap;
@@ -143,7 +142,7 @@
   overflow: hidden;
   min-height: 20px;
   line-height: 1.5;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   white-space-collapse: preserve;
   border: none;
   text-wrap-mode: wrap;

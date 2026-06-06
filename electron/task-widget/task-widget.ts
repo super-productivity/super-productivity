@@ -1,9 +1,11 @@
 import { BrowserWindow, ipcMain, screen } from 'electron';
 import { join } from 'path';
 import { TaskCopy } from '../../src/app/features/tasks/task.model';
+import { TaskWidgetConfig } from '../../src/app/features/config/global-config.model';
 import { info } from 'electron-log/main';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { loadSimpleStoreAll, saveSimpleStore } from '../simple-store';
+import { IS_MAC } from '../common.const';
 
 let taskWidgetWin: BrowserWindow | null = null;
 let isTaskWidgetEnabled = false;
@@ -28,6 +30,12 @@ export const updateTaskWidgetEnabled = (isEnabled: boolean): void => {
   if (isEnabled && !taskWidgetWin && !isCreatingWindow) {
     initListeners();
     createTaskWidgetWindow().then(() => {
+      // Window creation is async; re-apply the cached opacity here because
+      // updateTaskWidgetOpacity() is a no-op while taskWidgetWin is still null,
+      // and on macOS BrowserWindow.setOpacity() defaults to 1 (no CSS fallback).
+      if (taskWidgetWin && !taskWidgetWin.isDestroyed()) {
+        updateTaskWidgetOpacity(currentOpacity);
+      }
       // Request current task state after window is ready
       const mainWindow = BrowserWindow.getAllWindows().find(
         (win) => win !== taskWidgetWin,
@@ -136,6 +144,12 @@ const createTaskWidgetWindow = async (): Promise<void> => {
   }
 
   isCreatingWindow = false;
+  // On macOS, transparent + frameless windows do not support native window
+  // dragging or edge resizing (see Electron's BrowserWindow docs: "Transparent
+  // windows are not resizable. Setting `resizable` to `true` may make a
+  // transparent window stop working on some platforms."). Use a solid window
+  // instead and rely on BrowserWindow.setOpacity() for the user-set opacity so
+  // the OS keeps native drag/resize behavior intact.
   taskWidgetWin = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
@@ -143,7 +157,8 @@ const createTaskWidgetWindow = async (): Promise<void> => {
     y: bounds.y,
     title: 'Super Productivity Task Widget',
     frame: false,
-    transparent: true,
+    transparent: !IS_MAC,
+    backgroundColor: IS_MAC ? '#00000000' : undefined,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: true,
@@ -154,9 +169,9 @@ const createTaskWidgetWindow = async (): Promise<void> => {
     minimizable: false,
     maximizable: false,
     closable: true, // Ensure window is closable
-    hasShadow: false, // Disable shadow with transparent windows
+    hasShadow: IS_MAC, // Mac: solid window can keep native shadow
     autoHideMenuBar: true,
-    roundedCorners: false, // Disable rounded corners for better compatibility
+    roundedCorners: IS_MAC, // Mac: rely on OS-native rounded corners
     webPreferences: {
       preload: join(__dirname, 'task-widget-preload.js'),
       contextIsolation: true,
@@ -364,9 +379,35 @@ export const updateTaskWidgetOpacity = (opacity: number): void => {
   if (!taskWidgetWin || taskWidgetWin.isDestroyed()) {
     return;
   }
-  // Send opacity to renderer as CSS variable (works on all platforms)
-  const cssOpacity = Math.max(0.1, Math.min(1, opacity / 100));
-  taskWidgetWin.webContents.send('update-opacity', cssOpacity);
+  const clamped = Math.max(0.1, Math.min(1, opacity / 100));
+  if (IS_MAC) {
+    // On Mac the window is solid (transparent: false), so opacity is applied
+    // at the window level rather than via CSS background alpha.
+    taskWidgetWin.setOpacity(clamped);
+  } else {
+    taskWidgetWin.webContents.send('update-opacity', clamped);
+  }
+};
+
+// Apply the per-instance task widget settings sent by the renderer.
+const applyTaskWidgetSettings = (cfg: TaskWidgetConfig | undefined): void => {
+  const isEnabled = !!cfg?.isEnabled;
+  updateTaskWidgetEnabled(isEnabled);
+  if (isEnabled) {
+    updateTaskWidgetOpacity(cfg?.opacity ?? 95);
+    updateTaskWidgetAlwaysShow(!!cfg?.isAlwaysShow);
+  } else {
+    updateTaskWidgetAlwaysShow(false);
+  }
+};
+
+let taskWidgetSettingsListenerRegistered = false;
+export const initTaskWidgetSettingsListener = (): void => {
+  if (taskWidgetSettingsListenerRegistered) return;
+  taskWidgetSettingsListenerRegistered = true;
+  ipcMain.on(IPC.UPDATE_TASK_WIDGET_SETTINGS, (_ev, cfg: TaskWidgetConfig) => {
+    applyTaskWidgetSettings(cfg);
+  });
 };
 
 const formatTime = (timeMs: number): string => {

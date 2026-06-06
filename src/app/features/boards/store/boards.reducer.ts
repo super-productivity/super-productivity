@@ -1,10 +1,11 @@
 import { createFeature, createReducer, on } from '@ngrx/store';
 import { BoardsActions } from './boards.actions';
-import { BoardCfg } from '../boards.model';
+import { BoardCfg, BoardPanelCfgTaskDoneState } from '../boards.model';
 import { DEFAULT_BOARDS } from '../boards.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { nanoid } from 'nanoid';
 import { sanitizePanelCfg } from '../boards.util';
+import { IN_PROGRESS_TAG } from '../../tag/tag.const';
 
 const sanitizeBoard = (board: BoardCfg): BoardCfg => ({
   ...board,
@@ -16,6 +17,22 @@ const sanitizeBoardsState = (state: BoardsState): BoardsState => ({
   boardCfgs: state.boardCfgs.map(sanitizeBoard),
 });
 
+// #7666: corrupted IndexedDB payloads were leaving `boardCfgs` or a board's
+// `panels` undefined. The crash happened inside the synchronous dispatch and
+// surfaced via RxJS reportUnhandledError, bypassing Angular's ErrorHandler —
+// so the app appeared "frozen" with no alert. Coerce arrays before any helper
+// runs so the load path can never throw on shape.
+const normalizeLoadedBoardsState = (state: BoardsState): BoardsState => {
+  const boardCfgs = Array.isArray(state?.boardCfgs) ? state.boardCfgs : [];
+  return {
+    ...state,
+    boardCfgs: boardCfgs.map((board) => ({
+      ...board,
+      panels: Array.isArray(board?.panels) ? board.panels : [],
+    })),
+  };
+};
+
 export const BOARDS_FEATURE_NAME = 'boards';
 
 export interface BoardsState {
@@ -24,6 +41,65 @@ export interface BoardsState {
 
 export const initialBoardsState: BoardsState = {
   boardCfgs: DEFAULT_BOARDS,
+};
+
+/**
+ * Fix for #7498: pre-existing default boards persisted to user state still
+ * have the buggy filters that make tasks vanish on done-toggle. We narrowly
+ * patch only panels still matching the original default IDs so customized
+ * panels are never touched. Idempotent: re-running is a no-op.
+ */
+const EISENHOWER_PANEL_IDS = new Set([
+  'URGENT_AND_IMPORTANT',
+  'NOT_URGENT_AND_IMPORTANT',
+  'URGENT_AND_NOT_IMPORTANT',
+  'NOT_URGENT_AND_NOT_IMPORTANT',
+]);
+
+export const fixBuggyDefaultBoardFilters = (boardsState: BoardsState): BoardsState => {
+  let changed = false;
+
+  const boardCfgs = boardsState.boardCfgs.map((board) => {
+    let boardChanged = false;
+
+    const panels = board.panels.map((panel) => {
+      // Eisenhower quadrants: revert taskDoneState UnDone → All so completed
+      // tasks remain visible (struck through) instead of vanishing — Eisenhower
+      // has no Done column.
+      if (
+        board.id === 'EISENHOWER_MATRIX' &&
+        EISENHOWER_PANEL_IDS.has(panel.id) &&
+        panel.taskDoneState === BoardPanelCfgTaskDoneState.UnDone
+      ) {
+        boardChanged = true;
+        return { ...panel, taskDoneState: BoardPanelCfgTaskDoneState.All };
+      }
+
+      // Kanban DONE column: drop the IN_PROGRESS_TAG exclusion so a completed
+      // task that still carries the tag actually lands here.
+      if (
+        board.id === 'KANBAN_DEFAULT' &&
+        panel.id === 'DONE' &&
+        panel.excludedTagIds?.includes(IN_PROGRESS_TAG.id)
+      ) {
+        boardChanged = true;
+        return {
+          ...panel,
+          excludedTagIds: panel.excludedTagIds.filter((id) => id !== IN_PROGRESS_TAG.id),
+        };
+      }
+
+      return panel;
+    });
+
+    if (boardChanged) {
+      changed = true;
+      return { ...board, panels };
+    }
+    return board;
+  });
+
+  return changed ? { ...boardsState, boardCfgs } : boardsState;
 };
 
 /**
@@ -58,7 +134,11 @@ export const boardsReducer = createReducer(
   // ------------
   on(loadAllData, (state, { appDataComplete }) =>
     appDataComplete.boards
-      ? sanitizeBoardsState(deduplicatePanelIds(appDataComplete.boards))
+      ? sanitizeBoardsState(
+          fixBuggyDefaultBoardFilters(
+            deduplicatePanelIds(normalizeLoadedBoardsState(appDataComplete.boards)),
+          ),
+        )
       : state,
   ),
 
@@ -120,6 +200,15 @@ export const boardsReducer = createReducer(
   //
   //   return state;
   // }),
+
+  on(BoardsActions.sortBoards, (state, { ids }) => {
+    const byId = new Map(state.boardCfgs.map((b) => [b.id, b]));
+    const ordered = ids.map((id) => byId.get(id)).filter((b): b is BoardCfg => !!b);
+    const seen = new Set(ids);
+    // Preserve boards missing from `ids` (e.g. stale dispatch from another client).
+    const tail = state.boardCfgs.filter((b) => !seen.has(b.id));
+    return { ...state, boardCfgs: [...ordered, ...tail] };
+  }),
 
   on(BoardsActions.updatePanelCfgTaskIds, (state, { panelId, taskIds }) => {
     let panelCfgToUpdate;

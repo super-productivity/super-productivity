@@ -1,6 +1,7 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { ProjectService } from './project.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { MatDialog } from '@angular/material/dialog';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { TaskState } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
@@ -18,11 +19,13 @@ import { WorkContextType } from '../work-context/work-context.model';
 import { T } from '../../t.const';
 import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { NoteState } from '../note/note.model';
+import { DateService } from '../../core/date/date.service';
 
 describe('ProjectService', () => {
   let service: ProjectService;
   let store: MockStore;
   let taskService: jasmine.SpyObj<TaskService>;
+  let snackService: jasmine.SpyObj<SnackService>;
   let workContextService: jasmine.SpyObj<WorkContextService>;
   let timeTrackingService: jasmine.SpyObj<TimeTrackingService>;
 
@@ -110,8 +113,10 @@ describe('ProjectService', () => {
             projects: {
               ids: ['project-1', 'project-2'],
               entities: {
-                project1: createProject({ id: 'project-1', title: 'Project 1' }),
-                project2: createProject({ id: 'project-2', title: 'Project 2' }),
+                /* eslint-disable @typescript-eslint/naming-convention */
+                'project-1': createProject({ id: 'project-1', title: 'Project 1' }),
+                'project-2': createProject({ id: 'project-2', title: 'Project 2' }),
+                /* eslint-enable @typescript-eslint/naming-convention */
               },
             },
           },
@@ -130,12 +135,26 @@ describe('ProjectService', () => {
           },
         },
         { provide: WorkContextService, useValue: workContextService },
-        { provide: SnackService, useValue: { open: () => {} } },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
         {
           provide: TaskRepeatCfgService,
           useValue: { getTaskRepeatCfgsWithLabels$: () => of([]) },
         },
         { provide: TimeTrackingService, useValue: timeTrackingService },
+        {
+          provide: DateService,
+          useValue: {
+            todayStr: () => '2026-01-05',
+            getStartOfNextDayDiffMs: () => 0,
+          },
+        },
+        {
+          provide: MatDialog,
+          useValue: jasmine.createSpyObj('MatDialog', ['open']),
+        },
       ],
     });
     workContextService.activeWorkContext$ = EMPTY;
@@ -145,6 +164,7 @@ describe('ProjectService', () => {
     });
     (timeTrackingService.state$ as any) = of({});
     service = TestBed.inject(ProjectService);
+    snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
     store = TestBed.inject(Store) as MockStore<any>;
     store.overrideSelector(selectTaskFeatureState, initialTaskState);
     store.overrideSelector(selectNoteFeatureState, initialNoteState);
@@ -166,13 +186,13 @@ describe('ProjectService', () => {
       );
     });
 
-    it('should throw an error if the template project is not found', fakeAsync(() => {
+    it('should throw an error if the template project is not found', async () => {
       spyOn(service, 'getByIdOnce$').and.returnValue(of(undefined as any));
-      service.duplicateProject('non-existing-project').catch((e) => {
-        expect(e.message).toBe('Template project not found');
-      });
-      tick();
-    }));
+
+      await expectAsync(
+        service.duplicateProject('non-existing-project'),
+      ).toBeRejectedWithError('Template project not found');
+    });
 
     it('should create a new project with copied settings', fakeAsync(() => {
       spyOn(service, 'getByIdOnce$').and.returnValue(
@@ -266,5 +286,71 @@ describe('ProjectService', () => {
       expect(addNoteCalls.length).toBe(1);
       expect((addNoteCalls[0][0] as any).note.isPinnedToToday).toBe(false);
     }));
+  });
+
+  describe('archive', () => {
+    it('dispatches archiveProject and opens a plain snack', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.archive('project-1');
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Archive Project');
+      expect(snackService.open).toHaveBeenCalledWith({
+        ico: 'archive',
+        msg: T.F.PROJECT.S.ARCHIVED,
+      });
+    });
+  });
+
+  describe('unarchive', () => {
+    it('dispatches unarchiveProject and shows a plain restore snack', async () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      await service.unarchive('project-1');
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Unarchive Project');
+      expect(snackService.open).toHaveBeenCalledWith({
+        ico: 'unarchive',
+        msg: T.F.PROJECT.S.UNARCHIVED,
+      });
+    });
+
+    describe('when project is still hidden from the menu', () => {
+      beforeEach(() => {
+        store.setState({
+          projects: {
+            ids: ['project-1'],
+            entities: {
+              /* eslint-disable @typescript-eslint/naming-convention */
+              'project-1': createProject({
+                id: 'project-1',
+                title: 'Hidden Project',
+                isHiddenFromMenu: true,
+              }),
+              /* eslint-enable @typescript-eslint/naming-convention */
+            },
+          },
+        });
+      });
+
+      it('should show the hidden-from-menu snack message', async () => {
+        await service.unarchive('project-1');
+        expect(snackService.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            ico: 'unarchive',
+            msg: T.F.PROJECT.S.UNARCHIVED_HIDDEN_FROM_MENU,
+            actionStr: T.F.PROJECT.S.SHOW_IN_MENU,
+          }),
+        );
+      });
+
+      it('should dispatch toggleHideFromMenu when the snack action is invoked', async () => {
+        const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+        await service.unarchive('project-1');
+        const callArgs = snackService.open.calls.mostRecent().args[0] as any;
+        dispatchSpy.calls.reset();
+        callArgs.actionFn();
+        const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+        expect(types).toContain('[Project] Toggle hide from menu');
+      });
+    });
   });
 });

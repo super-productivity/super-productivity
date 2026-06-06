@@ -14,7 +14,7 @@ import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import { getDiffInDays } from '../../util/get-diff-in-days';
-import { selectAllTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { selectActiveTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { Log } from '../../core/log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 
@@ -103,7 +103,7 @@ export class PlannerService {
   days$: Observable<PlannerDay[]> = this.daysToShow$.pipe(
     switchMap((daysToShow) =>
       combineLatest([
-        this._store.select(selectAllTaskRepeatCfgs),
+        this._store.select(selectActiveTaskRepeatCfgs),
         this._store.select(selectTodayTaskIds),
         this._calendarIntegrationService.calendarEvents$,
         this.allDueWithTimeTasks$,

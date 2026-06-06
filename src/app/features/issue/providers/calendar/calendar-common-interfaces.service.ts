@@ -15,6 +15,7 @@ import { ICalIssueReduced } from './calendar.model';
 import { ICAL_TYPE } from '../../issue.const';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { CALENDAR_POLL_INTERVAL } from './calendar.const';
+import { passesCalendarEventRegexFilter } from '../../../calendar-integration/calendar-event-regex-filter';
 
 @Injectable({
   providedIn: 'root',
@@ -71,18 +72,26 @@ export class CalendarCommonInterfacesService extends BaseIssueProviderService<Is
     const result = await firstValueFrom(
       this._getCfgOnce$(issueProviderId).pipe(
         switchMap((cfg) =>
-          this._calendarIntegrationService.requestEventsForSchedule$(cfg, true),
-        ),
-        map((calEvents) =>
-          calEvents
-            .filter((calEvent) =>
-              calEvent.title.toLowerCase().includes(query.toLowerCase()),
-            )
-            .map((calEvent) => ({
-              title: calEvent.title,
-              issueType: ICAL_TYPE,
-              issueData: calEvent,
-            })),
+          this._calendarIntegrationService.requestEventsForSchedule$(cfg, true).pipe(
+            map((calEvents) =>
+              calEvents
+                .filter((calEvent) =>
+                  passesCalendarEventRegexFilter(
+                    calEvent,
+                    cfg.filterIncludeRegex,
+                    cfg.filterExcludeRegex,
+                  ),
+                )
+                .filter((calEvent) =>
+                  calEvent.title.toLowerCase().includes(query.toLowerCase()),
+                )
+                .map((calEvent) => ({
+                  title: calEvent.title,
+                  issueType: ICAL_TYPE,
+                  issueData: calEvent,
+                })),
+            ),
+          ),
         ),
       ),
     );

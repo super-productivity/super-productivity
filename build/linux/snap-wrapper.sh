@@ -13,10 +13,10 @@
 # Same mechanism used by Signal Desktop and Mattermost Desktop snaps
 # (snapcrafters/signal-desktop, snapcrafters/mattermost-desktop).
 #
-# Non-Snap launches (AppImage, .deb, .rpm) hit the passthrough branch so
-# behavior for those targets is unchanged. The SNAP_NAME gate also protects
-# .deb/.rpm installs invoked via xdg-open from *another* snap (where $SNAP
-# leaks into the child env).
+# All Linux launches pass through this wrapper so the app can set a stable
+# WM_CLASS for desktop-file matching. Only our Snap on Wayland receives the
+# extra ozone flag. The SNAP_NAME gate protects .deb/.rpm installs invoked via
+# xdg-open from *another* snap (where $SNAP leaks into the child env).
 #
 # See docs/research/snap-wayland-gpu-fix-research.md §18.
 
@@ -33,17 +33,26 @@ else
   BIN_DIR=$(dirname "$SELF")
 fi
 BIN="$BIN_DIR/superproductivity-bin"
+# Must match linux.desktop.entry.StartupWMClass in electron-builder.yaml.
+APP_CLASS="superproductivity"
 
-# If the user already supplied --ozone-platform on argv, don't override.
-# Stop scanning at -- so positional args aren't misread as flags.
+# If the user already supplied --ozone-platform or --class on argv, don't
+# override. Stop scanning at -- so positional args aren't misread as flags.
+HAS_OZONE_PLATFORM=
+HAS_APP_CLASS=
 for arg in "$@"; do
   case "$arg" in
     --) break ;;
-    --ozone-platform=* | --ozone-platform) exec "$BIN" "$@" ;;
+    --ozone-platform=* | --ozone-platform) HAS_OZONE_PLATFORM=1 ;;
+    --class=* | --class) HAS_APP_CLASS=1 ;;
   esac
 done
 
-if [ -n "$IS_OUR_SNAP" ] && { [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; }; then
+if [ -z "$HAS_APP_CLASS" ]; then
+  set -- "--class=$APP_CLASS" "$@"
+fi
+
+if [ -n "$IS_OUR_SNAP" ] && [ -z "$HAS_OZONE_PLATFORM" ] && { [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; }; then
   exec "$BIN" --ozone-platform=x11 "$@"
 fi
 

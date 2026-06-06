@@ -2,6 +2,28 @@ import { inject, Injectable } from '@angular/core';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { ArchiveStoreService } from '../../op-log/persistence/archive-store.service';
 
+// Issue #7487: a malformed archive blob (missing/null `task` or `timeTracking`) on disk
+// crashes every reader of `archive.task.entities` / `archive.timeTracking.tag`. Repair
+// at the read boundary. `undefined` (nothing in DB) is preserved so callers' existing
+// `|| DEFAULT_ARCHIVE` fallbacks keep working.
+const normalizeArchiveModel = (
+  archive: ArchiveModel | undefined,
+): ArchiveModel | undefined => {
+  if (!archive) return archive;
+  const isTaskValid =
+    !!archive.task && Array.isArray(archive.task.ids) && !!archive.task.entities;
+  const isTimeTrackingValid =
+    !!archive.timeTracking &&
+    !!archive.timeTracking.project &&
+    !!archive.timeTracking.tag;
+  if (isTaskValid && isTimeTrackingValid) return archive;
+  return {
+    ...archive,
+    task: isTaskValid ? archive.task : { ids: [], entities: {} },
+    timeTracking: isTimeTrackingValid ? archive.timeTracking : { project: {}, tag: {} },
+  };
+};
+
 /**
  * Adapter for archive storage operations.
  *
@@ -29,7 +51,7 @@ export class ArchiveDbAdapter {
    * Loads archiveYoung data from SUP_OPS IndexedDB.
    */
   async loadArchiveYoung(): Promise<ArchiveModel | undefined> {
-    return this._archiveStore.loadArchiveYoung();
+    return normalizeArchiveModel(await this._archiveStore.loadArchiveYoung());
   }
 
   /**
@@ -43,7 +65,7 @@ export class ArchiveDbAdapter {
    * Loads archiveOld data from SUP_OPS IndexedDB.
    */
   async loadArchiveOld(): Promise<ArchiveModel | undefined> {
-    return this._archiveStore.loadArchiveOld();
+    return normalizeArchiveModel(await this._archiveStore.loadArchiveOld());
   }
 
   /**

@@ -639,6 +639,30 @@ describe('InlineMarkdownComponent', () => {
       expect(component.changed.emit).toHaveBeenCalledOnceWith('- [ ] ');
     });
 
+    it('should preserve default template content when toggling checklist (issue #7786)', () => {
+      // Arrange — task has no saved notes but a default template is visible
+      spyOn(component.changed, 'emit');
+      const defaultTemplate = '**How can I best achieve it now?**';
+      component.model = defaultTemplate;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — visible template preserved, checkbox appended below
+      const finalText = component.modelCopy();
+      expect(finalText).toContain(defaultTemplate);
+      expect(finalText).toContain('- [ ] ');
+      expect(component.changed.emit).toHaveBeenCalledTimes(1);
+    });
+
     it('should insert checklist item after cursor line, not at end', () => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second\n- [ ] Third';

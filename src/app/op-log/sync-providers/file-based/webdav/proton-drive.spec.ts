@@ -1,5 +1,5 @@
 import { ProtonDriveProvider } from './proton-drive';
-import { WebdavPrivateCfg } from './webdav.model';
+import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import { ProtonDrivePrivateCfg } from './proton-drive.model';
 import { MissingCredentialsSPError } from '../../../core/errors/sync-errors';
 
@@ -53,7 +53,7 @@ describe('ProtonDriveProvider', () => {
 
     it('should return false when the rclone remote name is missing', async () => {
       spyOn(provider.privateCfg, 'load').and.returnValue(
-        Promise.resolve({ syncFolderPath: 'x' } as unknown as WebdavPrivateCfg),
+        Promise.resolve({ rcloneRemoteName: '', syncFolderPath: 'x' }),
       );
       expect(await provider.isReady()).toBe(false);
     });
@@ -70,7 +70,7 @@ describe('ProtonDriveProvider', () => {
 
     it('should throw when the rclone remote name is missing', async () => {
       spyOn(provider.privateCfg, 'load').and.returnValue(
-        Promise.resolve({ syncFolderPath: 'x' } as unknown as WebdavPrivateCfg),
+        Promise.resolve({ rcloneRemoteName: '', syncFolderPath: 'x' }),
       );
       await expectAsync(provider.cfgOrErrorTest()).toBeRejectedWithError(
         MissingCredentialsSPError,
@@ -79,9 +79,7 @@ describe('ProtonDriveProvider', () => {
     });
 
     it('should ensure the rclone server and build a WebDAV cfg from its endpoint', async () => {
-      spyOn(provider.privateCfg, 'load').and.returnValue(
-        Promise.resolve(fullCfg as unknown as WebdavPrivateCfg),
-      );
+      spyOn(provider.privateCfg, 'load').and.returnValue(Promise.resolve(fullCfg));
       ensureServerSpy.and.returnValue(Promise.resolve(serveInfo));
 
       const result = await provider.cfgOrErrorTest();
@@ -99,9 +97,7 @@ describe('ProtonDriveProvider', () => {
     });
 
     it('should propagate an error returned by the rclone bridge', async () => {
-      spyOn(provider.privateCfg, 'load').and.returnValue(
-        Promise.resolve(fullCfg as unknown as WebdavPrivateCfg),
-      );
+      spyOn(provider.privateCfg, 'load').and.returnValue(Promise.resolve(fullCfg));
       const bridgeErr = new Error('rclone executable not found');
       ensureServerSpy.and.returnValue(Promise.resolve(bridgeErr));
 

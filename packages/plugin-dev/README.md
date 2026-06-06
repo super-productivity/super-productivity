@@ -72,7 +72,7 @@ my-plugin/
 ├── scripts/
 │   └── package.js       # Script to create plugin.zip
 └── dist/                # Build output
-    ├── plugin.js        # Compiled plugin code
+    ├── plugin.js        # Compiled plugin code (optional for iframe-only plugins)
     ├── manifest.json    # Copied manifest
     └── plugin.zip       # Packaged plugin
 ```
@@ -225,7 +225,8 @@ This creates `dist/plugin.zip` ready for distribution.
 Your plugin ZIP must contain:
 
 - `manifest.json` - Plugin metadata
-- `plugin.js` - Main plugin code
+- `plugin.js` - Main plugin code, unless this is an iframe-only plugin with `iFrame: true`
+  and `index.html`
 
 Optional files:
 

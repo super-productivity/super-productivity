@@ -3,7 +3,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { combineLatest, from, Observable, of } from 'rxjs';
 import { SyncConfig } from '../../features/config/global-config.model';
-import { switchMap, tap } from 'rxjs/operators';
+import { shareReplay, switchMap, tap } from 'rxjs/operators';
 import {
   CurrentProviderPrivateCfg,
   PrivateCfgByProviderId,
@@ -11,9 +11,10 @@ import {
 } from '../../op-log/sync-exports';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
-import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import { clearSessionKeyCache } from '@sp/sync-core';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncWrapperService } from './sync-wrapper.service';
+import { HAS_OFFICIAL_ONEDRIVE_CLIENT_ID } from './onedrive-auth-mode.const';
 
 // Maps sync providers to their corresponding form field in SyncConfig
 // Dropbox is null because it doesn't store settings in the form (uses OAuth)
@@ -23,13 +24,21 @@ const PROP_MAP_TO_FORM: Record<SyncProviderId, keyof SyncConfig | null> = {
   [SyncProviderId.SuperSync]: 'superSync',
   [SyncProviderId.Nextcloud]: 'nextcloud',
   [SyncProviderId.ProtonDrive]: 'protonDrive',
+  [SyncProviderId.OneDrive]: 'oneDrive',
   [SyncProviderId.Dropbox]: null,
 };
 
 // Ensures all required fields have empty string defaults to prevent undefined/null errors
 // when providers expect string values (e.g., WebDAV API calls fail with undefined URLs)
 // Fields that should never be logged, even in development
-const SENSITIVE_FIELDS = ['password', 'encryptKey', 'accessToken', 'refreshToken'];
+const SENSITIVE_FIELDS = [
+  'password',
+  'encryptKey',
+  'accessToken',
+  'refreshToken',
+  'loginName',
+  'userName',
+];
 
 /**
  * Redacts sensitive fields from an object for safe logging.
@@ -59,7 +68,7 @@ const redactSensitiveFields = (obj: unknown): unknown => {
 
 const PROVIDER_FIELD_DEFAULTS: Record<
   SyncProviderId,
-  Record<string, string | boolean>
+  Record<string, string | boolean | number>
 > = {
   [SyncProviderId.WebDAV]: {
     baseUrl: '',
@@ -79,6 +88,7 @@ const PROVIDER_FIELD_DEFAULTS: Record<
   },
   [SyncProviderId.Nextcloud]: {
     serverUrl: '',
+    loginName: '',
     userName: '',
     password: '',
     syncFolderPath: '',
@@ -95,6 +105,16 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     encryptKey: '',
   },
   [SyncProviderId.Dropbox]: {
+    encryptKey: '',
+  },
+  [SyncProviderId.OneDrive]: {
+    useCustomApp: !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+    clientId: '',
+    tenantId: 'common',
+    syncFolderPath: 'Super Productivity',
+    accessToken: '',
+    refreshToken: '',
+    tokenExpiresAt: 0,
     encryptKey: '',
   },
 };
@@ -177,6 +197,10 @@ export class SyncConfigService {
           ...DEFAULT_GLOBAL_CONFIG.sync.protonDrive,
           ...syncCfg?.protonDrive,
         },
+        oneDrive: {
+          ...DEFAULT_GLOBAL_CONFIG.sync.oneDrive,
+          ...syncCfg?.oneDrive,
+        },
       };
 
       // If no provider is active, return base config with empty encryption key
@@ -231,6 +255,7 @@ export class SyncConfigService {
         superSync: DEFAULT_GLOBAL_CONFIG.sync.superSync,
         nextcloud: DEFAULT_GLOBAL_CONFIG.sync.nextcloud,
         protonDrive: DEFAULT_GLOBAL_CONFIG.sync.protonDrive,
+        oneDrive: DEFAULT_GLOBAL_CONFIG.sync.oneDrive,
       };
 
       // Add current provider config if applicable
@@ -246,6 +271,11 @@ export class SyncConfigService {
       this._lastSettings = v;
       SyncLog.log('syncSettingsForm$', redactSensitiveFields(v));
     }),
+    // Cache the latest emission across all subscribers (refCount:false) so a
+    // dialog opened later from the header — when the settings page is not
+    // mounted — can replay without re-running combineLatest and re-fetching
+    // /assets/sync-config-default-override.json.
+    shareReplay({ bufferSize: 1, refCount: false }),
   );
 
   async updateEncryptionPassword(
@@ -294,20 +324,36 @@ export class SyncConfigService {
     this._lastSettings = newSettings;
 
     const providerId = newSettings.syncProvider as SyncProviderId | null;
+    type SyncPublicConfig = Omit<
+      SyncConfig,
+      | 'encryptKey'
+      | 'webDav'
+      | 'localFileSync'
+      | 'superSync'
+      | 'nextcloud'
+      | 'protonDrive'
+      | 'oneDrive'
+    >;
 
     // Split settings into public (global config) and private (credentials/secrets)
     // to maintain security boundaries - credentials never go to global config
-    /* eslint-disable @typescript-eslint/no-unused-vars */
-    const {
-      encryptKey,
-      webDav,
-      localFileSync,
-      superSync,
-      nextcloud,
-      protonDrive,
-      ...globalConfig
-    } = newSettings;
-    /* eslint-enable @typescript-eslint/no-unused-vars */
+    const superSync = newSettings.superSync;
+    // Only include optional booleans when explicitly set, so partial form
+    // updates don't silently overwrite prior true values with undefined.
+    let globalConfig: SyncPublicConfig = {
+      isEnabled: newSettings.isEnabled ?? false,
+      syncProvider: newSettings.syncProvider ?? null,
+      syncInterval: newSettings.syncInterval ?? 300000,
+      ...(newSettings.isEncryptionEnabled !== undefined
+        ? { isEncryptionEnabled: newSettings.isEncryptionEnabled }
+        : {}),
+      ...(newSettings.isCompressionEnabled !== undefined
+        ? { isCompressionEnabled: newSettings.isCompressionEnabled }
+        : {}),
+      ...(newSettings.isManualSyncOnly !== undefined
+        ? { isManualSyncOnly: newSettings.isManualSyncOnly }
+        : {}),
+    };
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {
       await this._updatePrivateConfig(providerId, newSettings);
@@ -326,10 +372,13 @@ export class SyncConfigService {
         (savedPrivateCfg as { isEncryptionEnabled?: boolean } | null)
           ?.isEncryptionEnabled ??
         false;
-      globalConfig.isEncryptionEnabled = isEncryptionEnabled;
+      globalConfig = {
+        ...globalConfig,
+        isEncryptionEnabled,
+      };
     }
 
-    this._globalConfigService.updateSection('sync', globalConfig);
+    this._globalConfigService.updateSection('sync', globalConfig as SyncConfig);
   }
 
   private async _updatePrivateConfig(
@@ -357,6 +406,12 @@ export class SyncConfigService {
     // Empty credentials should be cleared by disabling the provider, not by form state
     const nonEmptyFormValues = Object.entries(providerCfgAsRecord).reduce(
       (acc, [key, value]) => {
+        if (providerId === SyncProviderId.Nextcloud && key === 'loginName') {
+          if (value !== undefined && value !== null) {
+            acc[key] = typeof value === 'string' ? value : '';
+          }
+          return acc;
+        }
         // Only include values that are truthy OR explicitly false/0
         // Skip: undefined, null, empty string
         if (value !== undefined && value !== null && value !== '') {

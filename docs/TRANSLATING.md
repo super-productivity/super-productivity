@@ -16,6 +16,14 @@ Super Productivity uses JSON files for translations, located in `src/assets/i18n
 
 **English (`en.json`) is the fallback language.** If a translation is missing or empty, the app automatically displays the English text.
 
+### Suffixes for Inflected/Dative Forms (`_NTH`)
+
+Some keys have duplicates with an `_NTH` suffix (e.g., `ORD_FIRST` vs `ORD_FIRST_NTH`).
+
+- `ORD_FIRST` is used as a standalone option in the quick-setting menu (e.g., "first").
+- `ORD_FIRST_NTH` is used inside full sentences (e.g., dative/inflected form in German or other inflected languages like "Monthly on the first Monday").
+- In languages without inflection (like English), these values are identical.
+
 ### Empty Values Are Intentional
 
 When you see empty strings (`""`), this is **intentional** - it triggers the English fallback. Do not copy the English text into empty fields unless you're providing an actual translation.

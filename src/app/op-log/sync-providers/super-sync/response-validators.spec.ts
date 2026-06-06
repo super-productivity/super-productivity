@@ -67,6 +67,18 @@ describe('response-validators', () => {
       };
       expect(() => validateOpUploadResponse(response)).not.toThrow();
     });
+
+    it('should preserve forward-compatible extra response fields', () => {
+      const response = {
+        results: [],
+        latestSeq: 50,
+        deduplicated: true,
+      };
+
+      const validated = validateOpUploadResponse(response);
+
+      expect((validated as { deduplicated?: boolean }).deduplicated).toBe(true);
+    });
   });
 
   describe('validateOpDownloadResponse', () => {
@@ -85,10 +97,23 @@ describe('response-validators', () => {
         hasMore: true,
         latestSeq: 150,
         gapDetected: false,
+        latestSnapshotSeq: 120,
         snapshotVectorClock: { client1: 10 },
         serverTime: 1234567890,
       };
-      expect(() => validateOpDownloadResponse(response)).not.toThrow();
+      const validated = validateOpDownloadResponse(response);
+      expect(validated.latestSnapshotSeq).toBe(120);
+    });
+
+    it('should strip file-based snapshotState from passthrough fields', () => {
+      const validated = validateOpDownloadResponse({
+        ops: [],
+        hasMore: false,
+        latestSeq: 1,
+        snapshotState: { task: { ids: ['task-1'] } },
+      });
+
+      expect('snapshotState' in validated).toBeFalse();
     });
 
     it('should throw if not an object', () => {
@@ -187,7 +212,15 @@ describe('response-validators', () => {
 
     it('should accept response with restore points', () => {
       const response = {
-        restorePoints: [{ serverSeq: 100, type: 'SYNC_IMPORT', createdAt: '2024-01-01' }],
+        restorePoints: [
+          {
+            serverSeq: 100,
+            timestamp: 1234567890,
+            type: 'SYNC_IMPORT',
+            clientId: 'client-1',
+            description: 'Initial sync',
+          },
+        ],
       };
       expect(() => validateRestorePointsResponse(response)).not.toThrow();
     });

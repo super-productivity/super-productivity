@@ -161,6 +161,8 @@
   @for (project of allUnarchivedProjects(); track project.id) {
     <button
       mat-menu-item
+      role="menuitemcheckbox"
+      [attr.aria-checked]="!project.isHiddenFromMenu"
       (click)="toggleProjectVisibility(project.id)"
     >
       @if (!project.isHiddenFromMenu) {
@@ -168,7 +170,28 @@
       } @else {
         <mat-icon>visibility_off</mat-icon>
       }
-      <span>{{ project.title }}</span>
+      <mat-icon
+        class="nav-icon"
+        [class.nav-icon-emoji]="isSingleEmoji(project.icon || DEFAULT_PROJECT_ICON)"
+        >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
+      >
+      {{ project.title }}
+    </button>
+  }
+  @if (archivedProjectsCount() > 0) {
+    <mat-divider></mat-divider>
+    <button
+      mat-menu-item
+      (click)="goToArchivedProjects()"
+    >
+      <mat-icon>archive</mat-icon>
+      <span
+        [attr.aria-label]="`${(T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate)} (${archivedProjectsCount()})`"
+      >
+        {{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }} ({{
+          archivedProjectsCount()
+        }})
+      </span>
     </button>
   }
 </mat-menu>

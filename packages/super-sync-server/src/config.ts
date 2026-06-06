@@ -71,6 +71,11 @@ export interface ServerConfig {
   port: number;
   dataDir: string;
   /**
+   * Enables the batched upload implementation in SyncService.
+   * Default false for staged rollout.
+   */
+  batchUpload: boolean;
+  /**
    * Publicly reachable base URL used for links in emails.
    * Should point to the reverse-proxied address users can access.
    */
@@ -119,6 +124,7 @@ const DEFAULT_CORS_ORIGINS: CorsOrigin[] = [
 const DEFAULT_CONFIG: ServerConfig = {
   port: 1900,
   dataDir: './data',
+  batchUpload: false,
   publicUrl: 'http://localhost:1900',
   cors: {
     enabled: true,
@@ -161,6 +167,18 @@ export const loadConfigFromEnv = (
   } else {
     // Resolve default data dir relative to cwd
     config.dataDir = path.resolve(config.dataDir);
+  }
+
+  if (process.env.SUPERSYNC_BATCH_UPLOAD === 'true') {
+    if (process.env.SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE !== 'true') {
+      throw new Error(
+        'SUPERSYNC_BATCH_UPLOAD=true requires SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true. ' +
+          'Run `npm run migrate-payload-bytes` to backfill operation payload_bytes first.',
+      );
+    }
+    config.batchUpload = true;
+  } else if (process.env.SUPERSYNC_BATCH_UPLOAD !== undefined) {
+    config.batchUpload = false;
   }
 
   // Public URL (for email links)

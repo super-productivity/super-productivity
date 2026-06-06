@@ -16,17 +16,22 @@ export interface AddTaskBarState {
   remindOption: TaskReminderOptionId | null;
   attachments: TaskAttachment[];
   repeatQuickSetting: RepeatQuickSetting | null;
+  deadlineDate?: string | null;
+  deadlineTime?: string | null;
+  deadlineRemindOption?: TaskReminderOptionId | null;
 }
+const M = 60 * 1000;
+const H = 60 * M;
 export const ESTIMATE_OPTIONS = [
-  { label: '5m', value: '5m' },
-  { label: '10m', value: '10m' },
-  { label: '15m', value: '15m' },
-  { label: '30m', value: '30m' },
-  { label: '1h', value: '1h' },
-  { label: '2h', value: '2h' },
-  { label: '3h', value: '3h' },
-  { label: '4h', value: '4h' },
-  { label: '8h', value: '8h' },
+  { label: '5m', value: '5m', ms: 5 * M },
+  { label: '10m', value: '10m', ms: 10 * M },
+  { label: '15m', value: '15m', ms: 15 * M },
+  { label: '30m', value: '30m', ms: 30 * M },
+  { label: '1h', value: '1h', ms: 1 * H },
+  { label: '2h', value: '2h', ms: 2 * H },
+  { label: '3h', value: '3h', ms: 3 * H },
+  { label: '4h', value: '4h', ms: 4 * H },
+  { label: '8h', value: '8h', ms: 8 * H },
 ];
 
 export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
@@ -42,6 +47,9 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   remindOption: null,
   attachments: [],
   repeatQuickSetting: null,
+  deadlineDate: null,
+  deadlineTime: null,
+  deadlineRemindOption: null,
 };
 
 export const CHRONO_SUGGESTIONS: string[] = [

@@ -177,7 +177,7 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
       return true;
     }
 
-    return this._hasStartedRepeatedCountdown(simpleCounter);
+    return this._simpleCounterService.hasStartedCountdown(simpleCounter.id);
   }
 
   ngOnDestroy(): void {
@@ -215,10 +215,6 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
     }
 
     this._simpleCounterService.toggleCounter(c.id);
-  }
-
-  private _hasStartedRepeatedCountdown(simpleCounter: SimpleCounter): boolean {
-    return this._simpleCounterService.hasStartedCountdown(simpleCounter.id);
   }
 
   toggleCounter(): void {

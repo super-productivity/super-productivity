@@ -1,16 +1,15 @@
-:host {
-  display: block;
+@use '../collapsible-shared' as *;
+
+@include collapsible-shared;
+
+:host(.is-group) .collapsible-header {
+  padding: calc(var(--s) / 2) var(--s);
 }
 
 .collapsible-header {
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-
-  &:focus {
-    outline: none;
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 
   :host.isInline & {
@@ -24,27 +23,7 @@
 }
 
 .collapsible-title {
-  flex-grow: 1;
-
-  :host.isInline & {
-    //display: inline-block;
+  &.is-drag-handle {
+    cursor: move;
   }
-}
-
-.collapsible-expand-icon {
-  margin-right: var(--s);
-  transition: all var(--transition-standard);
-
-  :host.isExpanded & {
-    transform: rotate(180deg);
-  }
-}
-
-.collapsible-panel {
-  height: auto;
-  display: block;
-
-  // make sure we don't produce clunky animations
-  padding: 0 !important;
-  margin: 0 !important;
 }

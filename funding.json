@@ -1,0 +1,110 @@
+{
+  "$schema": "https://fundingjson.org/schema/v1.1.0.json",
+  "version": "v1.1.0",
+  "entity": {
+    "type": "individual",
+    "role": "maintainer",
+    "name": "Johannes Millan",
+    "email": "contact@super-productivity.com",
+    "description": "Johannes Millan is the creator and primary maintainer of Super Productivity, a mature MIT-licensed local-first task manager and time tracker. Maintained continuously since 2016, the project has 19k+ GitHub stars, 365+ releases, hundreds of contributors, and 90k+ Google Play installs at 4.8 stars across desktop (Windows, macOS, Linux), Android, and Web. Currently funded by 99 recurring GitHub Sponsors against a public goal of 500, which is not yet enough to support full-time maintenance.",
+    "webpageUrl": {
+      "url": "https://super-productivity.com",
+      "wellKnown": "https://super-productivity.com/.well-known/funding-manifest-urls"
+    }
+  },
+  "projects": [
+    {
+      "guid": "super-productivity",
+      "name": "Super Productivity",
+      "description": "A mature MIT-licensed local-first alternative to account-based productivity SaaS. Combines task planning, time tracking, timeboxing, Pomodoro, GitHub/GitLab/Gitea/Jira issue integrations, and optional user-controlled sync (Dropbox, WebDAV, local file) in one cross-platform app. No required account, no telemetry, no ads, no subscription, no vendor-controlled storage. Used by developers, freelancers, students, and focus-driven workers who need serious task and time tracking without being turned into the product. The native GitHub, GitLab, Gitea, and Jira integrations also make it a natural fit for open source maintainers managing their own issue queues and time. Coverage includes It's FOSS, OMG! Ubuntu!, FOSS Force, Lifehacker, How-To Geek, Android Police, and XDA Developers.",
+      "webpageUrl": {
+        "url": "https://super-productivity.com",
+        "wellKnown": "https://super-productivity.com/.well-known/funding-manifest-urls"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/super-productivity/super-productivity"
+      },
+      "licenses": ["spdx:MIT"],
+      "tags": [
+        "productivity",
+        "task-management",
+        "time-tracking",
+        "privacy",
+        "local-first",
+        "developer-tools",
+        "open-source",
+        "electron",
+        "angular"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/johannesjo",
+        "description": "GitHub Sponsors page for one-time and recurring support. Preferred channel for individuals."
+      },
+      {
+        "guid": "grants-email",
+        "type": "other",
+        "address": "contact@super-productivity.com",
+        "description": "Direct contact for grants, invoiced one-time support, and bank transfer arrangements."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "floss-fund-2026",
+        "status": "active",
+        "name": "FLOSS/fund 2026 maintenance grant",
+        "description": "One-time grant covering roughly 10 weeks of maintainer time across 2026, broken down as: ~4 weeks dependency and security updates across the Electron and Angular stack ($4,000); ~3 weeks cross-platform release work for Windows, macOS, Linux, Android, and Web, including sync reliability across Dropbox, WebDAV, and local-file backends ($3,000); ~2 weeks GitHub issue triage, contributor support, and user-facing documentation ($2,000); ~1 week continued mobile and desktop UX polish ($1,000).",
+        "amount": 10000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["github-sponsors", "grants-email"]
+      },
+      {
+        "guid": "sponsor-tier-3",
+        "status": "active",
+        "name": "A little something",
+        "description": "Recurring sponsorship at $3 per month.",
+        "amount": 3,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "sponsor-tier-5",
+        "status": "active",
+        "name": "Big Beer",
+        "description": "Recurring sponsorship at $5 per month.",
+        "amount": 5,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "sponsor-tier-10",
+        "status": "active",
+        "name": "Tasty Tortellini",
+        "description": "Recurring sponsorship at $10 per month.",
+        "amount": 10,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "sponsor-tier-30",
+        "status": "active",
+        "name": "Please do this full-time",
+        "description": "Recurring sponsorship at $30 per month, working towards making Super Productivity sustainable as a full-time project.",
+        "amount": 30,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      }
+    ],
+    "history": []
+  }
+}

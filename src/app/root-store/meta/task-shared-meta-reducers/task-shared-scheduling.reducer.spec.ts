@@ -426,6 +426,66 @@ describe('taskSharedSchedulingMetaReducer', () => {
       expect(updatedSubtask.dueDay).toBe(getDbDateStr());
     });
 
+    it('should use the action date when replayed after the day changed', () => {
+      const actionToday = '2024-06-14';
+      const replayToday = '2024-06-15';
+      const testState = createStateWithExistingTasks([], [], [], []);
+      testState[appStateFeatureKey] = {
+        ...testState[appStateFeatureKey],
+        todayStr: replayToday,
+      };
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueDay: undefined,
+      });
+      testState[TASK_FEATURE_NAME].ids.push('task1');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['task1'],
+        today: actionToday,
+        parentTaskMap: {},
+      });
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+      expect(updatedTask.dueDay).toBe(actionToday);
+      expect(updatedTask.dueDay).not.toBe(replayToday);
+    });
+
+    it('should use the action start-of-next-day offset when replayed after settings changed', () => {
+      const actionToday = '2024-06-14';
+      const actionOffset = 4 * 60 * 60 * 1000;
+      const scheduledAt = new Date(2024, 5, 15, 2, 0, 0, 0).getTime();
+      const testState = createStateWithExistingTasks([], [], [], []);
+      testState[appStateFeatureKey] = {
+        ...testState[appStateFeatureKey],
+        todayStr: actionToday,
+        startOfNextDayDiffMs: 0,
+      };
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueDay: undefined,
+        dueWithTime: scheduledAt,
+      });
+      testState[TASK_FEATURE_NAME].ids.push('task1');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['task1'],
+        today: actionToday,
+        startOfNextDayDiffMs: actionOffset,
+        parentTaskMap: {},
+      });
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+      expect(updatedTask.dueWithTime).toBe(scheduledAt);
+      expect(updatedTask.dueDay).toBe(actionToday);
+    });
+
     it('should remove tasks from planner days when adding to Today', () => {
       const testState = {
         ...createStateWithExistingTasks([], [], [], []),

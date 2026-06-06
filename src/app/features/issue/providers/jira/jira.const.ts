@@ -15,6 +15,8 @@ export const DEFAULT_JIRA_CFG: JiraCfg = {
   userName: null,
   password: null,
   usePAT: false,
+  allowFetchFallback: false,
+  altPublicLinkHost: null,
 
   searchJqlQuery: '',
 

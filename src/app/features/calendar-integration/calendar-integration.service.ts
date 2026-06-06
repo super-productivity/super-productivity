@@ -7,7 +7,6 @@ import {
   map,
   shareReplay,
   switchMap,
-  tap,
 } from 'rxjs/operators';
 import { getRelevantEventsForCalendarIntegrationFromIcal } from '../schedule/ical/get-relevant-events-from-ical';
 import {
@@ -28,7 +27,10 @@ import { getStartOfDayTimestamp } from '../../util/get-start-of-day-timestamp';
 import { getEndOfDayTimestamp } from '../../util/get-end-of-day-timestamp';
 import { CalendarIntegrationEvent } from './calendar-integration.model';
 import { fastArrayCompare } from '../../util/fast-array-compare';
-import { selectAllCalendarTaskEventIds } from '../tasks/store/task.selectors';
+import {
+  isCalendarIssueTask,
+  selectAllCalendarTaskEventIds,
+} from '../tasks/store/task.selectors';
 import { loadFromRealLs, saveToRealLs } from '../../core/persistence/local-storage';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { Store } from '@ngrx/store';
@@ -57,9 +59,12 @@ import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.serv
 import { selectEnabledIssueProviders } from '../issue/store/issue-provider.selectors';
 import { PluginSearchResult } from '../../plugins/issue-provider/plugin-issue-provider.model';
 import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
+import { passesCalendarEventRegexFilter } from './calendar-event-regex-filter';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
+const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
 const PLUGIN_CALENDAR_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 @Injectable({
@@ -72,40 +77,78 @@ export class CalendarIntegrationService {
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _pluginHttp = inject(PluginHttpService);
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
+  private _taskArchiveService = inject(TaskArchiveService);
   private _refreshTrigger$ = new Subject<void>();
 
-  calendarEvents$: Observable<ScheduleCalendarMapEntry[]> = merge(
-    // NOTE: we're using this rather than startWith since we want to use the freshest available cached value
-    defer(() => of(this._getCalProviderFromCache())),
-    combineLatest([
-      this._store
-        .select(selectCalendarProviders)
-        .pipe(distinctUntilChanged(fastArrayCompare)),
-      this._store.select(selectEnabledIssueProviders).pipe(
-        map((providers) =>
-          providers.filter(
-            (p): p is IssueProviderPluginType =>
-              isPluginIssueProvider(p.issueProviderKey) &&
-              this._pluginRegistry.getUseAgendaView(p.issueProviderKey),
-          ),
+  /**
+   * Event ids of every calendar task the user has already handled — both live tasks
+   * (`selectAllCalendarTaskEventIds`) and ones moved to the archive via "Finish Day",
+   * which leave the live NgRx state. The archive is re-read whenever the set of live
+   * calendar-task event ids actually changes (archiving a task removes its id from that
+   * set → emits here), so a completed-and-archived calendar event stays hidden from the
+   * schedule instead of re-surfacing as "not yet added" the next day (#7971).
+   */
+  private _allLinkedCalendarEventIds$: Observable<string[]> = this._store
+    .select(selectAllCalendarTaskEventIds)
+    .pipe(
+      // Gate the archive read on a real value change: selectAllCalendarTaskEventIds emits
+      // a new array reference on every task mutation (incl. the per-second time-tracking
+      // tick), and store.select only dedups by reference. Without this guard the
+      // full-archive load() below would run on each of those.
+      distinctUntilChanged(fastArrayCompare),
+      switchMap((activeIds) =>
+        from(this._taskArchiveService.load()).pipe(
+          map((archive) => {
+            const archivedEventIds = archive.ids
+              .map((id) => archive.entities[id])
+              .filter(isCalendarIssueTask)
+              .map((task) => task.issueId as string);
+            return [...activeIds, ...archivedEventIds];
+          }),
+          catchError(() => of(activeIds)),
         ),
-        distinctUntilChanged(fastArrayCompare),
       ),
-    ]).pipe(
-      switchMap(([icalProviders, pluginCalProviders]) => {
-        if (!icalProviders?.length && !pluginCalProviders?.length) {
-          return of([]) as Observable<ScheduleCalendarMapEntry[]>;
-        }
-        const minInterval = this._getCombinedRefreshInterval(
-          icalProviders,
-          pluginCalProviders,
-        );
-        return merge(timer(0, minInterval), this._refreshTrigger$).pipe(
-          switchMap(() => this._fetchAllCombined(icalProviders, pluginCalProviders)),
-        );
-      }),
+      distinctUntilChanged(fastArrayCompare),
+      // Cold field shared by the cache path and every poll/refresh cycle; share so the
+      // archive is loaded once per change instead of once per subscriber.
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+
+  calendarEvents$: Observable<ScheduleCalendarMapEntry[]> = combineLatest([
+    this._store
+      .select(selectCalendarProviders)
+      .pipe(distinctUntilChanged(fastArrayCompare)),
+    this._store.select(selectEnabledIssueProviders).pipe(
+      map((providers) =>
+        providers.filter(
+          (p): p is IssueProviderPluginType =>
+            isPluginIssueProvider(p.issueProviderKey) &&
+            this._pluginRegistry.getUseAgendaView(p.issueProviderKey),
+        ),
+      ),
+      distinctUntilChanged(fastArrayCompare),
     ),
-  ).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+  ]).pipe(
+    switchMap(([icalProviders, pluginCalProviders]) => {
+      if (!icalProviders?.length && !pluginCalProviders?.length) {
+        return of([]) as Observable<ScheduleCalendarMapEntry[]>;
+      }
+      const minInterval = this._getCombinedRefreshInterval(
+        icalProviders,
+        pluginCalProviders,
+      );
+      return merge(
+        // Emit from the raw cache immediately on subscription and provider changes.
+        this._getFilteredCalProviderFromCache$(icalProviders, pluginCalProviders).pipe(
+          first(),
+        ),
+        merge(timer(0, minInterval), this._refreshTrigger$).pipe(
+          switchMap(() => this._fetchAllCombined(icalProviders, pluginCalProviders)),
+        ),
+      );
+    }),
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
 
   triggerRefresh(): void {
     this._refreshTrigger$.next();
@@ -164,42 +207,103 @@ export class CalendarIntegrationService {
     }
 
     return forkJoin(allFetches).pipe(
-      switchMap((resultForProviders) =>
-        combineLatest([
-          this._store
-            .select(selectAllCalendarTaskEventIds)
-            .pipe(distinctUntilChanged(fastArrayCompare)),
-          this.skippedEventIds$.pipe(distinctUntilChanged(fastArrayCompare)),
-          this._hiddenEventsService.hiddenEventIds$.pipe(
-            distinctUntilChanged(fastArrayCompare),
-          ),
-        ]).pipe(
-          map(([allCalendarTaskEventIds, skippedEventIds, hiddenEventIds]) => {
-            const cachedByProviderId = this._groupCachedEventsByProvider(
-              this._getCalProviderFromCache(),
-            );
-            return resultForProviders.map(
-              ({ itemsForProvider, providerId, didError }) => {
-                const sourceItems: ScheduleFromCalendarEvent[] = didError
-                  ? (cachedByProviderId.get(providerId) ?? [])
-                  : (itemsForProvider as ScheduleFromCalendarEvent[]);
-                return {
-                  items: sourceItems.filter(
-                    (calEv) =>
-                      !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
-                      !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
-                      !matchesAnyCalendarEventId(calEv, hiddenEventIds),
-                  ),
-                } as ScheduleCalendarMapEntry;
-              },
-            );
+      switchMap((resultForProviders) => {
+        const cachedByProviderId = this._groupCachedEventsByProvider(
+          this._getCalProviderFromCache(),
+        );
+
+        // Build unfiltered entries first so the cache preserves raw fetch data.
+        // Regex filters are intentionally excluded here — they are view-level concerns
+        // and must not permanently remove events that could reappear if the filter changes.
+        const unfilteredEntries: ScheduleCalendarMapEntry[] = resultForProviders.map(
+          ({ itemsForProvider, providerId, didError }) => ({
+            items: didError
+              ? (cachedByProviderId.get(providerId) ?? [])
+              : (itemsForProvider as ScheduleFromCalendarEvent[]),
           }),
-        ),
-      ),
-      tap((val) => {
-        saveToRealLs(LS.CAL_EVENTS_CACHE, val);
+        );
+        saveToRealLs(LS.CAL_EVENTS_CACHE, unfilteredEntries);
+
+        return this._getViewFilteredCalendarEntries$(
+          unfilteredEntries,
+          icalProviders,
+          pluginCalProviders,
+        );
       }),
     );
+  }
+
+  private _getFilteredCalProviderFromCache$(
+    icalProviders: IssueProviderCalendar[],
+    pluginCalProviders: IssueProviderPluginType[],
+  ): Observable<ScheduleCalendarMapEntry[]> {
+    return defer(() =>
+      this._getViewFilteredCalendarEntries$(
+        this._getCalProviderFromCache(),
+        icalProviders,
+        pluginCalProviders,
+      ),
+    );
+  }
+
+  private _getViewFilteredCalendarEntries$(
+    entries: ScheduleCalendarMapEntry[],
+    icalProviders: IssueProviderCalendar[],
+    pluginCalProviders: IssueProviderPluginType[],
+  ): Observable<ScheduleCalendarMapEntry[]> {
+    const icalProviderMap = new Map(icalProviders.map((p) => [p.id, p]));
+    const activeProviderIds = new Set([
+      ...icalProviders.map((p) => p.id),
+      ...pluginCalProviders.map((p) => p.id),
+    ]);
+
+    return combineLatest([
+      this._allLinkedCalendarEventIds$,
+      this.skippedEventIds$.pipe(distinctUntilChanged(fastArrayCompare)),
+      this._hiddenEventsService.hiddenEventIds$.pipe(
+        distinctUntilChanged(fastArrayCompare),
+      ),
+    ]).pipe(
+      map(([allCalendarTaskEventIds, skippedEventIds, hiddenEventIds]) =>
+        this._filterCalendarEntriesForView(
+          entries,
+          activeProviderIds,
+          icalProviderMap,
+          allCalendarTaskEventIds,
+          skippedEventIds,
+          hiddenEventIds,
+        ),
+      ),
+    );
+  }
+
+  private _filterCalendarEntriesForView(
+    entries: ScheduleCalendarMapEntry[],
+    activeProviderIds: Set<string>,
+    icalProviderMap: Map<string, IssueProviderCalendar>,
+    allCalendarTaskEventIds: string[],
+    skippedEventIds: string[],
+    hiddenEventIds: string[],
+  ): ScheduleCalendarMapEntry[] {
+    return entries.map((entry) => ({
+      ...entry,
+      items: entry.items.filter((calEv) => {
+        if (!activeProviderIds.has(calEv.calProviderId)) {
+          return false;
+        }
+        const cfg = icalProviderMap.get(calEv.calProviderId);
+        return (
+          passesCalendarEventRegexFilter(
+            calEv,
+            cfg?.filterIncludeRegex,
+            cfg?.filterExcludeRegex,
+          ) &&
+          !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
+          !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
+          !matchesAnyCalendarEventId(calEv, hiddenEventIds)
+        );
+      }),
+    }));
   }
 
   private async _fetchPluginCalendarEvents(
@@ -333,6 +437,13 @@ export class CalendarIntegrationService {
             calProvider.icalUrl,
           ),
         ),
+        map((events) =>
+          events.map((ev) => ({
+            ...ev,
+            isReferenceCalendar: !!calProvider.isReferenceCalendar,
+            color: calProvider.color,
+          })),
+        ),
         catchError((err) => {
           Log.err(err);
           if (err instanceof NotIcalResponseError) {
@@ -363,7 +474,7 @@ export class CalendarIntegrationService {
   ): Observable<CalendarIntegrationEvent[]> {
     return this.requestEvents$(
       calProvider,
-      Date.now(),
+      Date.now() - ONE_WEEK,
       Date.now() + ONE_MONTHS,
       isForwardError,
     );
@@ -380,11 +491,11 @@ export class CalendarIntegrationService {
 
     return (
       cached
-        // filter out cached past entries
+        // filter out cached entries older than one week
         .map((provider) => ({
           ...provider,
           items: provider.items
-            .filter((item) => item.start + item.duration >= now)
+            .filter((item) => item.start + item.duration >= now - ONE_WEEK)
             // Backfill issueProviderKey for events cached before it became required
             .map((item) =>
               item.issueProviderKey ? item : { ...item, issueProviderKey: 'ICAL' },

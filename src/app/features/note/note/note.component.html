@@ -36,7 +36,6 @@
       class="bottom-controls handle-drag"
       [class.isOver]="note.imgUrl"
     >
-      <ng-content></ng-content>
       @if (note.projectId) {
         <button
           mat-icon-button
@@ -54,7 +53,7 @@
         <tag [tag]="projectTag"></tag>
       }
       <!--    <button mat-icon-button>-->
-      <!--      <mat-icon class="drag-handle-ico" svgIcon="drag_handle"></mat-icon>-->
+      <!--      <mat-icon class="drag-handle-ico">drag_handle</mat-icon>-->
       <!--    </button>-->
       <button
         [matMenuTriggerFor]="menu"
@@ -118,6 +117,11 @@
             (click)="moveNoteToProject(project.id)"
             mat-menu-item
           >
+            <mat-icon
+              [style.color]="project.theme.primary"
+              class="tag-ico"
+              >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
+            >
             {{ project.title }}
           </button>
         }

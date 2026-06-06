@@ -20,7 +20,9 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         includedTagIds: [IMPORTANT_TAG.id, URGENT_TAG.id],
         excludedTagIds: [],
         taskIds: [],
-        taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        // Show both done and undone tasks so the done-toggle (which only flips
+        // isDone) leaves the task visible — Eisenhower has no Done column. #7498
+        taskDoneState: BoardPanelCfgTaskDoneState.All,
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
@@ -31,7 +33,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         includedTagIds: [IMPORTANT_TAG.id],
         excludedTagIds: [URGENT_TAG.id],
         taskIds: [],
-        taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        taskDoneState: BoardPanelCfgTaskDoneState.All,
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
@@ -42,7 +44,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         includedTagIds: [URGENT_TAG.id],
         excludedTagIds: [IMPORTANT_TAG.id],
         taskIds: [],
-        taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        taskDoneState: BoardPanelCfgTaskDoneState.All,
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
@@ -53,7 +55,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         includedTagIds: [],
         excludedTagIds: [IMPORTANT_TAG.id, URGENT_TAG.id],
         taskIds: [],
-        taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        taskDoneState: BoardPanelCfgTaskDoneState.All,
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
@@ -92,7 +94,9 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         title: T.F.BOARDS.DEFAULT.DONE,
         taskDoneState: BoardPanelCfgTaskDoneState.Done,
         includedTagIds: [],
-        excludedTagIds: [IN_PROGRESS_TAG.id],
+        // Don't filter out completed tasks that still carry the in-progress
+        // tag — they should land here as soon as they're marked done. #7498
+        excludedTagIds: [],
         taskIds: [],
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,

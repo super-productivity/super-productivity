@@ -94,6 +94,7 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
           style: 'grid-column: 2;  grid-row: 61 / span 12',
           timeLeftInHours: 1,
           type: 'Task',
+          isBeyondBudget: undefined,
         },
         {
           data: {
@@ -111,9 +112,59 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
           style: 'grid-column: 2;  grid-row: 73 / span 6',
           timeLeftInHours: 0.5,
           type: 'Task',
+          isBeyondBudget: undefined,
         },
       ],
     } as any);
+  });
+
+  it('should preserve incomplete-fit indication on rendered events', () => {
+    const res = mapScheduleDaysToScheduleEvents(
+      [
+        fakeDay({
+          entries: [
+            fakeTaskEntry('OVER', {
+              start: new Date(2020, 0, 1, 9, 0).getTime(),
+              duration: H,
+              isBeyondBudget: true,
+            }),
+          ],
+        }),
+      ],
+      FH,
+    );
+
+    expect(res.eventsFlat[0].isBeyondBudget).toBe(true);
+  });
+
+  it('should set calendar badge day for beyond budget planned tasks', () => {
+    const res = mapScheduleDaysToScheduleEvents(
+      [
+        fakeDay({
+          dayDate: '2020-12-12',
+          beyondBudgetTasks: [
+            {
+              ...FAKE_TASK_ENTRY.data,
+              id: 'BEYOND',
+              title: 'Beyond budget',
+              timeEstimate: H,
+              plannedForDay: '2020-12-12',
+            } as TaskCopy,
+          ],
+        }),
+      ],
+      FH,
+    );
+
+    expect(res.beyondBudgetDays[0][0]).toEqual(
+      jasmine.objectContaining({
+        dayOfMonth: 12,
+        plannedForDay: '2020-12-12',
+        isBeyondBudget: true,
+        style: '',
+        type: SVEType.TaskPlannedForDay,
+      }),
+    );
   });
 
   it('should detect overlap for two zero-duration events at the same time', () => {

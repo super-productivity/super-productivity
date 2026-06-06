@@ -70,6 +70,7 @@ model Operation {
   entityType         String  @map("entity_type")
   entityId           String? @map("entity_id")
   payload            Json
+  payloadBytes       BigInt  @default(0) @map("payload_bytes")
   vectorClock        Json    @map("vector_clock")
   schemaVersion      Int     @map("schema_version")
   clientTimestamp    BigInt  @map("client_timestamp")
@@ -80,11 +81,10 @@ model Operation {
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, serverSeq])
-  @@index([userId, serverSeq])
-  @@index([userId, entityType, entityId])
+  @@index([userId, entityType, entityId, serverSeq])
   @@index([userId, clientId])
   @@index([userId, receivedAt])
-  @@index([userId, opType]) // Speeds up restore point listing (queries for SYNC_IMPORT/BACKUP_IMPORT ops)
+  // Restore-point opType lookups use a raw partial index in the 20260512000000 migration.
   @@map("operations")
 }
 
@@ -95,6 +95,8 @@ model UserSyncState {
   snapshotData          Bytes?  @map("snapshot_data")
   snapshotAt            BigInt? @map("snapshot_at")
   snapshotSchemaVersion Int?    @default(1) @map("snapshot_schema_version")
+  latestFullStateSeq         Int?   @map("latest_full_state_seq")
+  latestFullStateVectorClock Json?  @map("latest_full_state_vector_clock")
 
   user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -115,4 +117,3 @@ model SyncDevice {
   @@id([userId, clientId])
   @@map("sync_devices")
 }
-

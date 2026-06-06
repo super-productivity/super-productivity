@@ -54,6 +54,7 @@ export type WorkContextThemeCfg = Readonly<{
   backgroundImageDark?: string | null;
   backgroundImageLight?: string | null;
   backgroundOverlayOpacity?: number;
+  backgroundImageBlur?: number;
 }>;
 
 export enum WorkContextType {

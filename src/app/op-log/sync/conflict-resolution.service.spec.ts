@@ -10,6 +10,8 @@ import { ActionType, EntityConflict, OpType, Operation } from '../core/operation
 import { VectorClock, VectorClockComparison } from '../../core/util/vector-clock';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
+import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
+import { OperationLogEffects } from '../capture/operation-log.effects';
 
 describe('ConflictResolutionService', () => {
   let service: ConflictResolutionService;
@@ -19,6 +21,8 @@ describe('ConflictResolutionService', () => {
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
   let mockClientIdProvider: { loadClientId: jasmine.Spy };
+  let mockEntityRegistry: ReturnType<typeof buildEntityRegistry>;
+  let mockOperationLogEffects: jasmine.SpyObj<OperationLogEffects>;
 
   const TEST_CLIENT_ID = 'test-client-123';
 
@@ -60,11 +64,15 @@ describe('ConflictResolutionService', () => {
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepairCurrentState',
     ]);
+    mockOperationLogEffects = jasmine.createSpyObj('OperationLogEffects', [
+      'processDeferredActions',
+    ]);
     mockClientIdProvider = {
       loadClientId: jasmine
         .createSpy('loadClientId')
         .and.returnValue(Promise.resolve(TEST_CLIENT_ID)),
     };
+    mockEntityRegistry = buildEntityRegistry();
 
     TestBed.configureTestingModule({
       providers: [
@@ -74,13 +82,16 @@ describe('ConflictResolutionService', () => {
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: SnackService, useValue: mockSnackService },
         { provide: ValidateStateService, useValue: mockValidateStateService },
+        { provide: OperationLogEffects, useValue: mockOperationLogEffects },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: ENTITY_REGISTRY, useValue: mockEntityRegistry },
       ],
     });
     service = TestBed.inject(ConflictResolutionService);
 
     // Default mock behaviors
     mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+    mockOperationLogEffects.processDeferredActions.and.resolveTo();
     mockValidateStateService.validateAndRepairCurrentState.and.resolveTo(true);
     mockOpLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
     // By default, appendBatchSkipDuplicates writes all ops (no duplicates)
@@ -91,6 +102,35 @@ describe('ConflictResolutionService', () => {
         skippedCount: 0,
       }),
     );
+  });
+
+  describe('getCurrentEntityState', () => {
+    it('should use injected registry selector factory for ISSUE_PROVIDER', async () => {
+      const expectedEntity = { id: 'issue-provider-1' };
+      const selector = (_state: object): unknown => expectedEntity;
+      const selectorFactoryCalls: Array<[string, null]> = [];
+      const selectorFactory = (id: string, key: null): ((state: object) => unknown) => {
+        selectorFactoryCalls.push([id, key]);
+        return selector;
+      };
+
+      const issueProviderConfig = mockEntityRegistry.ISSUE_PROVIDER;
+      expect(issueProviderConfig).toBeDefined();
+      if (!issueProviderConfig) {
+        return;
+      }
+      issueProviderConfig.selectById = selectorFactory;
+      mockStore.select.and.returnValue(of(expectedEntity));
+
+      const result = await service.getCurrentEntityState(
+        'ISSUE_PROVIDER',
+        'issue-provider-1',
+      );
+
+      expect(result).toBe(expectedEntity);
+      expect(selectorFactoryCalls).toEqual([['issue-provider-1', null]]);
+      expect(mockStore.select.calls.mostRecent().args[0]).toBe(selector);
+    });
   });
 
   describe('isIdenticalConflict', () => {
@@ -1102,6 +1142,68 @@ describe('ConflictResolutionService', () => {
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-reminder']);
       });
 
+      // Regression test: PLUGIN_USER_DATA was previously registered as
+      // `'virtual'` and silently bypassed LWW. The migration to `'array'`
+      // (entity-registry.ts:325-330) wired it through the array branch;
+      // this test asserts the wiring actually fires for real conflicts.
+      it('should handle PLUGIN_USER_DATA entity conflicts', async () => {
+        const now = Date.now();
+        const conflicts: EntityConflict[] = [
+          {
+            entityType: 'PLUGIN_USER_DATA',
+            entityId: 'doc-mode',
+            localOps: [
+              {
+                id: 'local-plugin-data',
+                clientId: 'clientA',
+                actionType: '[Plugin] Upsert User Data' as ActionType,
+                opType: OpType.Update,
+                entityType: 'PLUGIN_USER_DATA',
+                entityId: 'doc-mode',
+                payload: { id: 'doc-mode', data: 'local-blob' },
+                vectorClock: { clientA: 1 },
+                timestamp: now - 500,
+                schemaVersion: 1,
+              },
+            ],
+            remoteOps: [
+              {
+                id: 'remote-plugin-data',
+                clientId: 'clientB',
+                actionType: '[Plugin] Upsert User Data' as ActionType,
+                opType: OpType.Update,
+                entityType: 'PLUGIN_USER_DATA',
+                entityId: 'doc-mode',
+                payload: { id: 'doc-mode', data: 'remote-blob' },
+                vectorClock: { clientB: 1 },
+                timestamp: now,
+                schemaVersion: 1,
+              },
+            ],
+            suggestedResolution: 'manual',
+          },
+        ];
+
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: conflicts[0].remoteOps,
+        });
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        // Remote wins (newer timestamp). Whole-blob LWW: this is the
+        // gap Stage A closes — fine for same-entity, lossy across
+        // different sub-keys of the same blob. The acceptance is in the
+        // re-bundling decision, not in this test.
+        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+          jasmine.arrayContaining([
+            jasmine.objectContaining({ id: 'remote-plugin-data' }),
+          ]),
+          'remote',
+          jasmine.any(Object),
+        );
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-plugin-data']);
+      });
+
       it('should handle mixed entity types in conflicts batch', async () => {
         const now = Date.now();
         const conflicts: EntityConflict[] = [
@@ -1209,6 +1311,7 @@ describe('ConflictResolutionService', () => {
       it('should return { localWinOpsCreated: 0 } when no conflicts', async () => {
         const result = await service.autoResolveConflictsLWW([]);
 
+        // Early-exit path: no validation runs.
         expect(result).toEqual({ localWinOpsCreated: 0 });
       });
 
@@ -1445,6 +1548,52 @@ describe('ConflictResolutionService', () => {
 
         // CRITICAL: mergeRemoteOpClocks must be called with applied remote ops
         expect(mockOpLogStore.mergeRemoteOpClocks).toHaveBeenCalledWith([remoteOp]);
+      });
+
+      it('should process deferred actions after merging remote clocks when caller holds lock', async () => {
+        const now = Date.now();
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const conflicts: EntityConflict[] = [
+          createConflict(
+            'task-1',
+            [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+            [remoteOp],
+          ),
+        ];
+        const callOrder: string[] = [];
+
+        mockOpLogStore.hasOp.and.resolveTo(false);
+        mockOperationApplier.applyOperations.and.callFake(async () => {
+          callOrder.push('applyOperations');
+          return { appliedOps: [remoteOp] };
+        });
+        mockOpLogStore.markApplied.and.callFake(async () => {
+          callOrder.push('markApplied');
+        });
+        mockOpLogStore.mergeRemoteOpClocks.and.callFake(async () => {
+          callOrder.push('mergeRemoteOpClocks');
+        });
+        mockOpLogStore.markRejected.and.resolveTo(undefined);
+        mockOperationLogEffects.processDeferredActions.and.callFake(async () => {
+          callOrder.push('processDeferredActions');
+        });
+
+        await service.autoResolveConflictsLWW(conflicts, [], {
+          callerHoldsOperationLogLock: true,
+        });
+
+        expect(mockOperationApplier.applyOperations).toHaveBeenCalledWith([remoteOp], {
+          skipDeferredLocalActions: true,
+        });
+        expect(mockOperationLogEffects.processDeferredActions).toHaveBeenCalledWith({
+          callerHoldsOperationLogLock: true,
+        });
+        expect(callOrder).toEqual([
+          'applyOperations',
+          'markApplied',
+          'mergeRemoteOpClocks',
+          'processDeferredActions',
+        ]);
       });
 
       it('should call mergeRemoteOpClocks for non-conflicting ops piggybacked through conflict resolution', async () => {
@@ -2938,7 +3087,11 @@ describe('ConflictResolutionService', () => {
       expect(result[0].actionType).toBe('test');
     });
 
-    it('should fall back to changing only actionType when base entity cannot be extracted', () => {
+    it('should return remote op unchanged when base entity cannot be extracted', () => {
+      // Rewriting actionType to LWW Update with an unmerged NgRx UPDATE payload
+      // would no-op at the consumer (lwwUpdateMetaReducer bails when entityData
+      // has no top-level id). The fallback now leaves the op alone instead of
+      // pretending to convert it.
       const conflict = createConflict(
         'task-1',
         [
@@ -2959,7 +3112,7 @@ describe('ConflictResolutionService', () => {
 
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
-      expect(result[0].actionType).toBe('[TASK] LWW Update');
+      expect(result[0].actionType).toBe('test');
       expect(result[0].payload).toEqual({
         task: { id: 'task-1', changes: { title: 'Updated' } },
       });
@@ -3022,8 +3175,8 @@ describe('ConflictResolutionService', () => {
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result.length).toBe(1);
-      expect(result[0].actionType).toBe('[TASK] LWW Update');
-      // Fallback: original payload preserved (no merged entity)
+      // Fallback returns the remote op unchanged — original actionType + payload preserved.
+      expect(result[0].actionType).toBe('test');
       expect(result[0].payload).toEqual({
         task: { id: 'task-1', changes: { title: 'Updated' } },
       });
@@ -3050,8 +3203,8 @@ describe('ConflictResolutionService', () => {
 
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
-      expect(result[0].actionType).toBe('[TASK] LWW Update');
-      // Original remote payload kept as-is when fallback triggers
+      // Fallback returns the remote op unchanged — original actionType + payload preserved.
+      expect(result[0].actionType).toBe('test');
       expect(result[0].payload).toEqual({
         task: { id: 'task-1', changes: { notes: 'New notes' } },
       });
@@ -3512,6 +3665,183 @@ describe('ConflictResolutionService', () => {
 
       expect(mockOpLogStore.markFailed).toHaveBeenCalled();
       expect(mockSnackService.open).toHaveBeenCalled();
+    });
+
+    // Issue #7700: the deferred-actions flush must run even on the apply-
+    // failure path. Pre-fix, replayOperationBatch's finally took care of
+    // this; with the fix, the host explicitly calls
+    // _processDeferredActionsAfterRemoteApply before the throw. If the
+    // failure path ever forgets to flush, deferred local actions linger
+    // in the buffer until the NEXT sync — surfacing as ghost ops with
+    // stale clocks. This test pins the flush.
+    it('should process deferred actions before throwing on failedOp (callerHoldsOperationLogLock=true)', async () => {
+      const localOp = createOpForBug('local-1', 'client-a', now - 1000);
+      const remoteOp = createOpForBug('remote-1', 'client-b', now);
+
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [localOp],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+      ];
+
+      const callOrder: string[] = [];
+      mockOperationApplier.applyOperations.and.callFake(async () => {
+        callOrder.push('applyOperations');
+        return {
+          appliedOps: [],
+          failedOp: { op: remoteOp, error: new Error('Apply failed for task-1') },
+        };
+      });
+      mockOpLogStore.markFailed.and.callFake(async () => {
+        callOrder.push('markFailed');
+      });
+      mockOperationLogEffects.processDeferredActions.and.callFake(async () => {
+        callOrder.push('processDeferredActions');
+      });
+
+      await expectAsync(
+        service.autoResolveConflictsLWW(conflicts, [], {
+          callerHoldsOperationLogLock: true,
+        }),
+      ).toBeRejectedWithError('Apply failed for task-1');
+
+      // Deferred flush must happen BEFORE the throw, and must thread the
+      // caller-holds-lock flag through so writeOperation skips the inner
+      // sp_op_log acquisition.
+      expect(mockOperationLogEffects.processDeferredActions).toHaveBeenCalledWith({
+        callerHoldsOperationLogLock: true,
+      });
+      expect(callOrder).toContain('processDeferredActions');
+      expect(callOrder.indexOf('processDeferredActions')).toBeGreaterThan(
+        callOrder.indexOf('applyOperations'),
+      );
+    });
+  });
+
+  describe('LWW Update payload always has top-level id (#7330)', () => {
+    // The lwwUpdateMetaReducer bails with "Entity data has no id" when an LWW
+    // Update payload lacks a top-level id. createLWWUpdateOp is the choke point
+    // for two of three LWW Update producers (_createLocalWinUpdateOp and the
+    // superseded-operation-resolver). Both pass the canonical entityId — so the
+    // payload should always carry it, even when entityState was malformed.
+
+    it('should backfill payload.id from entityId when entityState lacks id', () => {
+      const entityStateWithoutId = { title: 'Local winner', projectId: 'proj-1' };
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        entityStateWithoutId,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+    });
+
+    it('should overwrite a mismatched payload.id with the canonical entityId', () => {
+      const entityStateWithStaleId = {
+        id: 'wrong-id',
+        title: 'Local winner',
+      };
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        entityStateWithStaleId,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+    });
+
+    it('should handle non-object entityState by producing { id } payload', () => {
+      // Defensive: producers should never pass non-objects, but if they do
+      // we still want a usable payload rather than something the reducer rejects.
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        undefined,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+    });
+
+    it('should ensure _convertToLWWUpdatesIfNeeded merged payload has id even when base entity lacks id', () => {
+      // Edge case: a malformed local DELETE payload whose embedded entity
+      // somehow lacks an id (e.g. corruption). The merged LWW Update payload
+      // should still carry id from conflict.entityId.
+      const localClientId = 'client-a';
+      const remoteClientId = 'client-b';
+      const conflict: EntityConflict = {
+        entityType: 'TASK',
+        entityId: 'task-1',
+        suggestedResolution: 'manual',
+        localOps: [
+          {
+            id: 'local-del',
+            clientId: localClientId,
+            actionType: 'test' as ActionType,
+            opType: OpType.Delete,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { task: { title: 'No id here', projectId: 'proj-1' } },
+            vectorClock: { [localClientId]: 1 },
+            timestamp: Date.now() - 1000,
+            schemaVersion: 1,
+          },
+        ],
+        remoteOps: [
+          {
+            id: 'remote-upd',
+            clientId: remoteClientId,
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { task: { id: 'task-1', changes: { title: 'New title' } } },
+            vectorClock: { [remoteClientId]: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        ],
+      };
+
+      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+
+      expect(result.length).toBe(1);
+      expect(result[0].actionType).toBe('[TASK] LWW Update');
+      expect(result[0].payload.id).toBe('task-1');
+      expect(result[0].payload.title).toBe('New title');
+      expect(result[0].payload.projectId).toBe('proj-1');
+    });
+
+    // Singletons (GLOBAL_CONFIG, app-state, time-tracking) use entityId='*'
+    // as a sentinel. Injecting `id: '*'` into the payload would pollute the
+    // singleton feature state — which has no `id` field — when the consumer
+    // reducer spreads entityData into the feature state.
+    it('should NOT inject id when entityId is the singleton sentinel "*"', () => {
+      const singletonState = { sync: { syncProvider: null }, misc: { foo: 'bar' } };
+      const op = service.createLWWUpdateOp(
+        'GLOBAL_CONFIG',
+        '*',
+        singletonState,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect((op.payload as Record<string, unknown>)['id']).toBeUndefined();
+      // Original payload shape preserved (no synthetic field injected).
+      expect(op.payload).toEqual(singletonState);
     });
   });
 });

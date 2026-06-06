@@ -1,7 +1,7 @@
 import { globalShortcut, ipcMain } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { KeyboardConfig } from '../../src/app/features/config/keyboard-config.model';
-import { getWin } from '../main-window';
+import { getWin, setWasMaximizedBeforeHide } from '../main-window';
 import { showOrFocus } from '../various-shared';
 import { ensureIndicator } from '../indicator';
 import { getIsMinimizeToTray } from '../shared-state';
@@ -49,6 +49,7 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
               //   tray was successfully (re)created; otherwise minimize so a
               //   taskbar handle remains as a safety net. blur() is a Windows
               //   focus workaround (electron#20464) and a no-op elsewhere.
+              setWasMaximizedBeforeHide(mainWin.isMaximized());
               if (IS_MAC) {
                 mainWin.hide();
               } else if (getIsMinimizeToTray() && ensureIndicator()) {

@@ -11,11 +11,22 @@ services:
       - '55432:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
+    # Gate on supersync_db existing AND accepting queries from the app user.
+    # Plain `pg_isready -U supersync` returns OK as soon as postgres accepts
+    # connections to the default `postgres` database — but during first-run
+    # initdb the server briefly bounces while POSTGRES_DB is created, so
+    # supersync's `prisma db push` race-fails with P1001. Querying
+    # supersync_db directly closes that window.
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U supersync']
-      interval: 5s
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U supersync -d supersync_db && psql -U supersync -d supersync_db -c "SELECT 1" > /dev/null 2>&1',
+        ]
+      interval: 3s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 10s
 
   # SuperSync server for E2E testing
   # Start with: docker compose up -d supersync

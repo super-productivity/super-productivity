@@ -21,13 +21,19 @@ import { isOnline$ } from '../../util/is-online';
 import { LS } from '../persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DialogPleaseRateComponent } from '../../features/dialog-please-rate/dialog-please-rate.component';
-import { map, take } from 'rxjs/operators';
+import {
+  applyRateDialogResult,
+  loadRateDialogState,
+  saveRateDialogState,
+  shouldShowRateDialog,
+} from '../../features/dialog-please-rate/rate-dialog-state';
+import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
+import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import { selectEnabledIssueProviders } from '../../features/issue/store/issue-provider.selectors';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { GlobalConfigState } from '../../features/config/global-config.model';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { IpcRendererEvent } from 'electron';
 import { environment } from '../../../environments/environment';
@@ -37,11 +43,20 @@ import { alertDialog } from '../../util/native-dialogs';
 import { DataInitStateService } from '../data-init/data-init-state.service';
 import { OnboardingHintService } from '../../features/onboarding/onboarding-hint.service';
 import { LocalRestApiHandlerService } from '../electron/local-rest-api-handler.service';
+import { CustomThemeService } from '../theme/custom-theme.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
 /** Delay before running deferred initialization tasks (plugins, storage checks, etc.) */
 const DEFERRED_INIT_DELAY_MS = 1000;
+
+/**
+ * Cap on how long the persisted theme is allowed to block startup. Built-ins
+ * finish in <1 ms (no IDB read), normal user-theme reads land in 15-120 ms.
+ * Only a stalled IDB hits this timeout; we then fall through to default
+ * rendering so the splash screen can't hang forever on a corrupted store.
+ */
+const APPLY_THEME_TIMEOUT_MS = 500;
 
 @Injectable({
   providedIn: 'root',
@@ -66,6 +81,7 @@ export class StartupService {
   private _platformService = inject(CapacitorPlatformService);
   private _dataInitStateService = inject(DataInitStateService);
   private _injector = inject(Injector);
+  private _customThemeService = inject(CustomThemeService);
 
   constructor() {
     // Initialize electron error handler in an effect
@@ -104,6 +120,19 @@ export class StartupService {
     this._initBackups();
     this._requestPersistence();
 
+    // Apply the persisted custom theme before the deferred init / Electron
+    // ready notification, so the page doesn't briefly flash the default
+    // stylesheet. Worst-case adds one IDB read for user themes — guarded by
+    // a hard timeout so a corrupted/blocked IDB can't hang the splash.
+    try {
+      await Promise.race([
+        this._customThemeService.applyActiveTheme(),
+        new Promise<void>((resolve) => setTimeout(resolve, APPLY_THEME_TIMEOUT_MS)),
+      ]);
+    } catch (err) {
+      Log.err({ stage: 'apply-active-theme', error: (err as Error).message });
+    }
+
     // deferred init
     window.setTimeout(async () => {
       this._trackingReminderService.init();
@@ -111,6 +140,23 @@ export class StartupService {
       this._initOfflineBanner();
 
       const miscCfg = this._globalConfigService.misc();
+
+      // One-time migration for users syncing from a device that still
+      // wrote the theme into `globalConfig.misc.customTheme`. Brief flash
+      // of default → preferred is acceptable and only happens once.
+      // Wrapped because a failure here must not skip the productivity-tip
+      // snack and `_initPlugins` further down in this deferred-init body.
+      if (miscCfg?.customTheme) {
+        try {
+          await this._customThemeService.migrateLegacyCustomTheme(miscCfg.customTheme);
+        } catch (err) {
+          Log.err({
+            stage: 'migrate-legacy-custom-theme',
+            error: (err as Error).message,
+          });
+        }
+      }
+
       if (miscCfg?.isShowProductivityTipLonger && !this._isTourLikelyToBeShown()) {
         if (w.productivityTips && w.randomIndex !== undefined) {
           this._snackService.open({
@@ -133,14 +179,14 @@ export class StartupService {
 
     if (IS_ELECTRON) {
       this._injector.get(LocalRestApiHandlerService).init();
+
+      window.ea.on(IPC.TRANSFER_SETTINGS_REQUESTED, () =>
+        this._sendCurrentSettingsToElectronAfterDataLoad(),
+      );
+      this._sendCurrentSettingsToElectronAfterDataLoad();
+
       window.ea.informAboutAppReady();
       this._uiHelperService.initElectron();
-
-      window.ea.on(IPC.TRANSFER_SETTINGS_REQUESTED, () => {
-        window.ea.sendAppSettingsToElectron(
-          this._globalConfigService.cfg() as GlobalConfigState,
-        );
-      });
     } else {
       // WEB VERSION
       window.addEventListener('beforeunload', (e) => {
@@ -162,6 +208,15 @@ export class StartupService {
         this._chromeExtensionInterfaceService.init();
       }
     }
+  }
+
+  private _sendCurrentSettingsToElectronAfterDataLoad(): void {
+    this._dataInitStateService.isAllDataLoadedInitially$
+      .pipe(
+        take(1),
+        switchMap(() => this._globalConfigService.cfg$.pipe(take(1))),
+      )
+      .subscribe((cfg) => window.ea.sendAppSettingsToElectron(cfg));
   }
 
   private async _initBackups(): Promise<void> {
@@ -298,46 +353,48 @@ export class StartupService {
   }
 
   private _requestPersistence(): void {
-    if (navigator.storage) {
-      // try to avoid data-loss
-      Promise.all([navigator.storage.persisted()])
-        .then(([persisted]) => {
-          if (!persisted) {
-            return navigator.storage.persist().then((granted) => {
-              if (granted) {
-                Log.log('Persistent store granted');
-              }
-              // NOTE: we never show this warning for native mobile apps or Electron,
-              // because persistence is managed by the OS and not subject to browser eviction.
-              // Also suppress during active onboarding to avoid confusing first-time users.
-              else if (
-                !this._platformService.isNative &&
-                !IS_ELECTRON &&
-                !OnboardingHintService.isOnboardingInProgress()
-              ) {
-                const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
-                Log.warn('Persistence not allowed');
-                this._snackService.open({ msg });
-              }
-            });
-          } else {
-            Log.log('Persistence already allowed');
-            return;
-          }
-        })
-        .catch((e) => {
-          Log.log(e);
-          const err = e && e.toString ? e.toString() : 'UNKNOWN';
-          const msg = T.GLOBAL_SNACK.PERSISTENCE_ERROR;
-          this._snackService.open({
-            type: 'ERROR',
-            msg,
-            translateParams: {
-              err,
-            },
-          });
-        });
+    // A1 (#7925): always log the outcome so a #7892-style report carries the
+    // durability state of the WebView store. Snack gating below is unchanged.
+    const isNative = this._platformService.isNative;
+    if (!navigator.storage) {
+      Log.log('Persistence: navigator.storage unavailable', { isNative, IS_ELECTRON });
+      return;
     }
+    navigator.storage
+      .persisted()
+      .then((persisted) => {
+        if (persisted) {
+          Log.log('Persistence: already granted', { isNative, IS_ELECTRON });
+          return;
+        }
+        return navigator.storage.persist().then((granted) => {
+          Log.log('Persistence: persist() resolved', {
+            granted,
+            isNative,
+            IS_ELECTRON,
+          });
+          // Native + Electron persistence is OS-managed (not subject to browser
+          // eviction); also suppress during onboarding.
+          if (
+            !granted &&
+            !isNative &&
+            !IS_ELECTRON &&
+            !OnboardingHintService.isOnboardingInProgress()
+          ) {
+            Log.warn('Persistence not allowed');
+            this._snackService.open({ msg: T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED });
+          }
+        });
+      })
+      .catch((e) => {
+        Log.log('Persistence: error', { isNative, IS_ELECTRON, error: e });
+        const err = e && e.toString ? e.toString() : 'UNKNOWN';
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.GLOBAL_SNACK.PERSISTENCE_ERROR,
+          translateParams: { err },
+        });
+      });
   }
 
   private _checkAvailableStorage(): void {
@@ -365,17 +422,30 @@ export class StartupService {
   }
 
   private _handleAppStartRating(): void {
-    const appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
     const lastStartDay = localStorage.getItem(LS.APP_START_COUNT_LAST_START_DAY);
     const todayStr = getDbDateStr();
-    if (appStarts === 32 || appStarts === 96) {
-      this._matDialog.open(DialogPleaseRateComponent);
-      localStorage.setItem(LS.APP_START_COUNT, (appStarts + 1).toString());
-    }
+    let appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
     if (lastStartDay !== todayStr) {
-      localStorage.setItem(LS.APP_START_COUNT, (appStarts + 1).toString());
+      appStarts += 1;
+      localStorage.setItem(LS.APP_START_COUNT, appStarts.toString());
       localStorage.setItem(LS.APP_START_COUNT_LAST_START_DAY, todayStr);
     }
+
+    const state = loadRateDialogState();
+    if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
+      return;
+    }
+    this._matDialog
+      .open(DialogPleaseRateComponent)
+      .afterClosed()
+      .subscribe((result) => {
+        const next = applyRateDialogResult(
+          loadRateDialogState(),
+          result ?? null,
+          appStarts,
+        );
+        saveRateDialogState(next);
+      });
   }
 
   private async _initPlugins(): Promise<void> {

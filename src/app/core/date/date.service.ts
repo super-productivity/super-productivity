@@ -1,13 +1,23 @@
 import { Injectable } from '@angular/core';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 
 @Injectable({ providedIn: 'root' })
 export class DateService {
   private startOfNextDayDiff: number = 0;
 
-  setStartOfNextDayDiff(startOfNextDay: number): void {
-    const clamped = Math.max(0, Math.min(23, startOfNextDay || 0));
-    this.startOfNextDayDiff = clamped * 60 * 60 * 1000;
+  setStartOfNextDayDiff(
+    startOfNextDayTimeOrHour: string | number | undefined,
+    legacyStartOfNextDay?: number,
+  ): void {
+    const startOfNextDayTime =
+      typeof startOfNextDayTimeOrHour === 'string' ? startOfNextDayTimeOrHour : undefined;
+    const startOfNextDay =
+      typeof startOfNextDayTimeOrHour === 'number'
+        ? startOfNextDayTimeOrHour
+        : legacyStartOfNextDay;
+
+    this.startOfNextDayDiff = getStartOfNextDayDiffMs(startOfNextDayTime, startOfNextDay);
   }
 
   /**

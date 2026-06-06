@@ -8,6 +8,8 @@
     [style]="sideStyle()"
     class="side"
     @slideRightPanel
+    (@slideRightPanel.start)="isPanelAnimating.set(true)"
+    (@slideRightPanel.done)="isPanelAnimating.set(false)"
   >
     <div class="right-panel">
       <!-- Resize Handle -->

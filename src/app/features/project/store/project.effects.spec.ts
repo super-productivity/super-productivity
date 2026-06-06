@@ -13,6 +13,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { GlobalConfigState } from '../../config/global-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
+import { INBOX_PROJECT } from '../project.const';
 
 describe('ProjectEffects', () => {
   let effects: ProjectEffects;
@@ -61,7 +62,7 @@ describe('ProjectEffects', () => {
   });
 
   describe('deleteProjectRelatedData', () => {
-    it('should clear defaultProjectId when deleted project was the default', (done) => {
+    it('should reset defaultProjectId to the Inbox when deleted project was the default', (done) => {
       // Set up config where project-1 is the default
       globalConfigServiceMock.cfg.and.returnValue({
         ...DEFAULT_GLOBAL_CONFIG,
@@ -73,7 +74,7 @@ describe('ProjectEffects', () => {
 
       effects.deleteProjectRelatedData.subscribe(() => {
         expect(globalConfigServiceMock.updateSection).toHaveBeenCalledWith('tasks', {
-          defaultProjectId: null,
+          defaultProjectId: INBOX_PROJECT.id,
         });
         done();
       });

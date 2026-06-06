@@ -6,7 +6,7 @@
         (removed)="remove(modelItem.id)"
         [removable]="true"
       >
-        {{ modelItem.title }}
+        <tag [tag]="modelItem"></tag>
 
         <mat-icon
           [matTooltip]="T.G.REMOVE | translate"
@@ -50,7 +50,9 @@
     (optionSelected)="selected($event)"
   >
     @for (suggestion of filteredSuggestions | async; track suggestion.id) {
-      <mat-option [value]="suggestion.id">{{ suggestion.title }}</mat-option>
+      <mat-option [value]="suggestion.id">
+        <tag [tag]="suggestion"></tag>
+      </mat-option>
     }
   </mat-autocomplete>
 </mat-form-field>

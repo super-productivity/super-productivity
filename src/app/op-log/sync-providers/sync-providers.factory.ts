@@ -3,6 +3,7 @@ import { SyncProviderBase } from './provider.interface';
 import { DROPBOX_APP_KEY } from '../../imex/sync/dropbox/dropbox.const';
 import { IS_ELECTRON } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_ONEDRIVE_SUPPORTED } from '../../imex/sync/onedrive-auth-mode.const';
 import { environment } from '../../../environments/environment';
 
 let _providersPromise: Promise<SyncProviderBase<SyncProviderId>[]> | null = null;
@@ -32,49 +33,56 @@ export interface LocalFileSyncPicker {
 }
 
 const _createProviders = async (): Promise<SyncProviderBase<SyncProviderId>[]> => {
-  const [{ Dropbox }, { Webdav }, { SuperSyncProvider }, { NextcloudProvider }] =
-    await Promise.all([
-      import('./file-based/dropbox/dropbox'),
-      import('./file-based/webdav/webdav'),
-      import('./super-sync/super-sync'),
-      import('./file-based/webdav/nextcloud'),
-    ]);
+  const [
+    { createDropboxProvider },
+    { createWebdavProvider },
+    { createSuperSyncProvider },
+    { createNextcloudProvider },
+  ] = await Promise.all([
+    import('./file-based/dropbox/dropbox'),
+    import('./file-based/webdav/webdav'),
+    import('./super-sync/super-sync'),
+    import('./file-based/webdav/nextcloud'),
+  ]);
+
+  const extraPath = environment.production ? undefined : `/DEV`;
 
   const providers: SyncProviderBase<SyncProviderId>[] = [
-    new Dropbox({
+    createDropboxProvider({
       appKey: DROPBOX_APP_KEY,
       basePath: environment.production ? `/` : `/DEV/`,
     }) as SyncProviderBase<SyncProviderId>,
-    new Webdav(
-      environment.production ? undefined : `/DEV`,
-    ) as SyncProviderBase<SyncProviderId>,
-    new SuperSyncProvider(
-      environment.production ? undefined : `/DEV`,
-    ) as SyncProviderBase<SyncProviderId>,
-    new NextcloudProvider(
-      environment.production ? undefined : `/DEV`,
-    ) as SyncProviderBase<SyncProviderId>,
+    createWebdavProvider(extraPath) as SyncProviderBase<SyncProviderId>,
+    createSuperSyncProvider() as SyncProviderBase<SyncProviderId>,
+    createNextcloudProvider(extraPath) as SyncProviderBase<SyncProviderId>,
   ];
 
+  if (IS_ONEDRIVE_SUPPORTED) {
+    const { createOneDriveProvider } = await import('./file-based/onedrive/onedrive');
+    providers.push(
+      createOneDriveProvider({
+        devPath: extraPath,
+      }) as SyncProviderBase<SyncProviderId>,
+    );
+  }
+
   if (IS_ELECTRON) {
-    const { LocalFileSyncElectron } =
+    const { createLocalFileSyncElectron } =
       await import('./file-based/local-file/local-file-sync-electron');
-    providers.push(new LocalFileSyncElectron() as SyncProviderBase<SyncProviderId>);
+    providers.push(createLocalFileSyncElectron() as SyncProviderBase<SyncProviderId>);
 
     // Proton Drive bridges through a local `rclone serve webdav` process managed
     // by the Electron main process, so it is desktop-only.
     const { ProtonDriveProvider } = await import('./file-based/webdav/proton-drive');
     providers.push(
-      new ProtonDriveProvider(
-        environment.production ? undefined : `/DEV`,
-      ) as SyncProviderBase<SyncProviderId>,
+      new ProtonDriveProvider(extraPath) as SyncProviderBase<SyncProviderId>,
     );
   }
 
   if (IS_ANDROID_WEB_VIEW) {
-    const { LocalFileSyncAndroid } =
+    const { createLocalFileSyncAndroid } =
       await import('./file-based/local-file/local-file-sync-android');
-    providers.push(new LocalFileSyncAndroid() as SyncProviderBase<SyncProviderId>);
+    providers.push(createLocalFileSyncAndroid() as SyncProviderBase<SyncProviderId>);
   }
 
   return providers;

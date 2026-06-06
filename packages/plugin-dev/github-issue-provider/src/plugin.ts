@@ -18,6 +18,7 @@ interface GithubConfig {
   token?: string;
   filterUsername?: string;
   backlogQuery?: string;
+  includePullRequests?: boolean;
 }
 
 interface GithubUser {
@@ -145,6 +146,12 @@ PluginAPI.registerIssueProvider({
       required: false,
       advanced: true,
     },
+    {
+      key: 'includePullRequests',
+      type: 'checkbox' as const,
+      label: t('CFG.INCLUDE_PULL_REQUESTS'),
+      advanced: true,
+    },
   ],
 
   getHeaders(config: Record<string, unknown>): Record<string, string> {
@@ -165,10 +172,11 @@ PluginAPI.registerIssueProvider({
   ): Promise<PluginSearchResult[]> {
     const cfg = config as unknown as GithubConfig;
     const { owner, repo } = parseRepo(cfg);
-    // Ensure we only search issues (not PRs) unless user explicitly specifies
+    // Ensure we only search issues (not PRs) unless the user opted in via
+    // config or explicitly typed an is: filter in their search term.
     const hasTypeFilter =
       searchTerm.includes('is:issue') || searchTerm.includes('is:pull-request');
-    const typeFilter = hasTypeFilter ? '' : ' is:issue';
+    const typeFilter = hasTypeFilter || cfg.includePullRequests ? '' : ' is:issue';
     const q = encodeGithubQuery(`repo:${owner}/${repo}${typeFilter} ${searchTerm}`);
     const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
@@ -268,8 +276,14 @@ PluginAPI.registerIssueProvider({
   ): Promise<PluginSearchResult[]> {
     const cfg = config as unknown as GithubConfig;
     const { owner, repo } = parseRepo(cfg);
-    const query = cfg.backlogQuery || 'sort:updated state:open assignee:@me';
-    const q = encodeGithubQuery(`repo:${owner}/${repo} is:issue ${query}`);
+    // `assignee:@me` requires an authenticated request; without a token the
+    // GitHub Search API returns 422. Fall back to a token-less default so
+    // public-repo auto-import works without credentials.
+    const query =
+      cfg.backlogQuery ||
+      (cfg.token ? 'sort:updated state:open assignee:@me' : 'sort:updated state:open');
+    const typeFilter = cfg.includePullRequests ? '' : ' is:issue';
+    const q = encodeGithubQuery(`repo:${owner}/${repo}${typeFilter} ${query}`);
     const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
     return (response.items || []).map(mapSearchResult);
@@ -308,14 +322,20 @@ PluginAPI.registerIssueProvider({
         taskValue: unknown,
         ctx: { issueId: string; issueNumber?: number },
       ): string => {
+        const num = ctx.issueNumber ?? ctx.issueId;
         const str = taskValue as string;
-        const prefix = `#${ctx.issueNumber} `;
+        const prefix = `#${num} `;
         return str.startsWith(prefix) ? str.slice(prefix.length) : str;
       },
       toTaskValue: (
         issueValue: unknown,
         ctx: { issueId: string; issueNumber?: number },
-      ): string => `#${ctx.issueNumber} ${issueValue}`,
+      ): string => {
+        const num = ctx.issueNumber ?? ctx.issueId;
+        const str = issueValue as string;
+        const prefix = `#${num} `;
+        return str.startsWith(prefix) ? str : `${prefix}${str}`;
+      },
     },
     {
       taskField: 'notes',

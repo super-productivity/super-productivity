@@ -33,7 +33,7 @@ test('should not crash when a repeat config has an invalid startTime in the stor
   await taskPage.openTaskDetail(task);
   await page
     .locator('task-detail-item')
-    .filter({ has: page.locator('mat-icon[svgIcon="repeat"]') })
+    .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) })
     .click();
 
   const repeatDialog = page.locator('mat-dialog-container');
@@ -113,7 +113,7 @@ test('should not crash when a repeat config has an invalid startTime in the stor
     // hydrator replays it.
     const idbCorrupted = await page.evaluate(async (): Promise<boolean> => {
       return new Promise<boolean>((resolve) => {
-        const req = indexedDB.open('SUP_OPS', 5);
+        const req = indexedDB.open('SUP_OPS');
         req.onerror = () => resolve(false);
         req.onsuccess = () => {
           const db = req.result;

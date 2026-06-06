@@ -20,6 +20,7 @@ import { selectPlannerDayMap } from '../planner/store/planner.selectors';
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
+import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-calendar-providers.service';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
@@ -32,6 +33,7 @@ export class ScheduleService {
   private _dateService = inject(DateService);
   private _store = inject(Store);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
+  private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
   private _taskService = inject(TaskService);
 
   private _timelineTasks = toSignal(this._store.select(selectTimelineTasks));
@@ -125,7 +127,17 @@ export class ScheduleService {
     const taskRepeatCfgs = this._taskRepeatCfgs();
     const timelineCfg = this._timelineConfig();
     const plannerDayMap = this._plannerDayMap();
-    const calendarEvents = this._calendarEvents();
+    const hiddenProviderIds = this._hiddenCalendarProviders.hiddenProviderIds();
+    const calendarEvents = hiddenProviderIds.length
+      ? this._calendarEvents()
+          .map((entry) => ({
+            ...entry,
+            items: entry.items.filter(
+              (item) => !hiddenProviderIds.includes(item.calProviderId),
+            ),
+          }))
+          .filter((entry) => entry.items.length > 0)
+      : this._calendarEvents();
 
     return this.buildScheduleDays({
       now: params.contextNow,
@@ -182,6 +194,12 @@ export class ScheduleService {
     // Calendar events
     if (isCalendarEventData(ev)) {
       return this._dateService.todayStr(ev.data.start);
+    }
+
+    // Task view entries can carry the resolved day on the event itself, e.g. when
+    // excess tasks are mapped from dueDay without mutating the task data.
+    if (isTaskEventWithPlannedForDay(ev)) {
+      return ev.plannedForDay;
     }
 
     // Tasks with plannedForDay (TaskPlannedForDay, SplitTaskPlannedForDay, SplitTask, Task)
@@ -288,6 +306,16 @@ const isTaskWithPlannedForDay = (
   ev.data != null &&
   'plannedForDay' in ev.data &&
   typeof ev.data.plannedForDay === 'string';
+
+const isTaskEventWithPlannedForDay = (
+  ev: ScheduleEvent,
+): ev is ScheduleEvent & { plannedForDay: string } =>
+  (ev.type === SVEType.TaskPlannedForDay ||
+    ev.type === SVEType.SplitTaskPlannedForDay ||
+    ev.type === SVEType.SplitTask ||
+    ev.type === SVEType.ScheduledTask ||
+    ev.type === SVEType.Task) &&
+  typeof ev.plannedForDay === 'string';
 
 const isScheduledTaskWithRemindAt = (
   ev: ScheduleEvent,

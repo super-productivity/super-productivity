@@ -40,6 +40,10 @@ import {
   simpleCounterReducer,
 } from '../features/simple-counter/store/simple-counter.reducer';
 import { SimpleCounterEffects } from '../features/simple-counter/store/simple-counter.effects';
+import {
+  SECTION_FEATURE_NAME,
+  sectionReducer,
+} from '../features/section/store/section.reducer';
 import { TAG_FEATURE_NAME, tagReducer } from '../features/tag/store/tag.reducer';
 import { TagEffects } from '../features/tag/store/tag.effects';
 import {
@@ -66,7 +70,8 @@ import { AndroidFocusModeEffects } from '../features/android/store/android-focus
 import { AndroidForegroundTrackingEffects } from '../features/android/store/android-foreground-tracking.effects';
 import { AndroidSyncBridgeEffects } from '../features/android/store/android-sync-bridge.effects';
 import { MobileNotificationEffects } from '../features/mobile/store/mobile-notification.effects';
-import { IS_NATIVE_PLATFORM } from '../util/is-native-platform';
+import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from '../util/is-native-platform';
+import { IosBackgroundTrackingEffects } from '../features/ios/store/ios-background-tracking.effects';
 import { NextcloudDeckIssueEffects } from '../features/issue/providers/nextcloud-deck/nextcloud-deck-issue.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { TimeBlockSyncEffects } from '../features/calendar-integration/time-block/time-block-sync.effects';
@@ -137,6 +142,8 @@ import {
     StoreModule.forFeature(SIMPLE_COUNTER_FEATURE_NAME, simpleCounterReducer),
     EffectsModule.forFeature([SimpleCounterEffects]),
 
+    StoreModule.forFeature(SECTION_FEATURE_NAME, sectionReducer),
+
     StoreModule.forFeature(TAG_FEATURE_NAME, tagReducer),
     EffectsModule.forFeature([TagEffects]),
 
@@ -180,6 +187,7 @@ import {
           ]
         : []),
     ]),
+    EffectsModule.forFeature([...(IS_IOS_NATIVE ? [IosBackgroundTrackingEffects] : [])]),
     EffectsModule.forFeature([
       ...(IS_NATIVE_PLATFORM ? [MobileNotificationEffects] : []),
     ]),

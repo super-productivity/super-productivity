@@ -115,7 +115,7 @@ mat-dialog-content {
   height: auto;
   min-height: 38px;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 
@@ -131,7 +131,7 @@ mat-dialog-content {
 .deadline-actions button,
 .dialog-cancel-btn {
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 

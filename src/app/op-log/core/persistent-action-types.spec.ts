@@ -71,27 +71,5 @@ describe('Persistent Action Types Stability', () => {
     });
   });
 
-  /**
-   * Document the procedure for safely renaming actions.
-   */
-  describe('Action rename safety documentation', () => {
-    it('should document the safe rename procedure', () => {
-      // This test serves as documentation.
-      // When you need to rename a persistent action:
-      //
-      // 1. BEFORE renaming, add an alias in operation-converter.util.ts:
-      //    ACTION_TYPE_ALIASES['[Old] Action Name'] = '[New] Action Name';
-      //
-      // 2. Then rename the action in the action file
-      //
-      // 3. Update any tests that reference the action type
-      //
-      // 4. NEVER remove entries from ACTION_TYPE_ALIASES -
-      //    old operations may still reference the old name
-      //
-      // The alias ensures that when replaying old operations from the log,
-      // they get mapped to the current action name.
-      expect(true).toBe(true);
-    });
-  });
+  // Alias behavior itself is covered by operation-converter.util.spec.ts.
 });

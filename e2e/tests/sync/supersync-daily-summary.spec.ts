@@ -68,8 +68,10 @@ test.describe('@supersync Daily Summary Sync', () => {
       await expect(panel).toBeVisible();
 
       // 2. Click time item to open dialog
-      // Look for the item with the timer icon
-      const timeItem = panel.locator('task-detail-item:has(mat-icon:text("timer"))');
+      // Look for the item with the time-estimate icon
+      const timeItem = panel.locator(
+        'task-detail-item:has(mat-icon:text("hourglass_empty"))',
+      );
       await timeItem.click();
 
       // 3. Wait for dialog

@@ -90,43 +90,41 @@
     margin-left: var(--s);
     border-radius: var(--card-border-radius);
     overflow: hidden;
-    box-shadow: var(--whiteframe-shadow-2dp);
+    border: 1px solid var(--extra-border-color);
+    background: var(--bg-lighter);
   }
 
   .week-month-btn {
     border: none;
     border-radius: 0;
     transition: var(--transition-standard);
+    background: transparent;
+    color: var(--text-color);
+    box-shadow: none;
 
-    @include lightTheme() {
-      &.active {
-        background: var(--c-primary);
-        color: white;
-      }
+    &:hover:not(.active) {
+      background: var(--separator-color);
     }
 
-    @include darkTheme() {
-      background: var(--bg-lighter);
-      color: var(--text-color);
-
-      &:hover {
-        background: var(--dark8);
-      }
-
-      &.active {
-        background: var(--c-primary);
-        color: white;
-      }
+    &.active {
+      background: var(--c-primary);
+      color: white;
     }
 
     &:first-child {
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
-
-      @include darkTheme() {
-        border-right-color: var(--c-light-10);
-      }
+      border-right: 1px solid var(--extra-border-color);
     }
   }
+}
+
+.cal-color-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .main-controls {

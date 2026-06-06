@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { IS_ELECTRON, TRACKING_INTERVAL } from '../../app.constants';
-import { EMPTY, fromEvent, interval, merge, Observable } from 'rxjs';
+import { EMPTY, fromEvent, interval, merge, Observable, Subject } from 'rxjs';
 import { ipcResume$ } from '../ipc-events';
 import {
   debounceTime,
@@ -25,19 +25,12 @@ export class GlobalTrackingIntervalService {
 
   globalInterval$: Observable<number> = interval(TRACKING_INTERVAL).pipe(share());
   private _currentTrackingStart: number;
-  tick$: Observable<Tick> = this.globalInterval$.pipe(
-    map(() => {
-      const delta = Date.now() - this._currentTrackingStart;
-      this._currentTrackingStart = Date.now();
-      return {
-        duration: delta,
-        date: this._dateService.todayStr(),
-        timestamp: Date.now(),
-      };
-    }),
-    // important because we want the same interval for everyone
-    share(),
-  );
+  private _wakeUpTick$ = new Subject<Tick>();
+
+  tick$: Observable<Tick> = merge(
+    this.globalInterval$.pipe(map(() => this.consumeCurrentTick())),
+    this._wakeUpTick$,
+  ).pipe(share());
 
   todayDateStr$: Observable<string> = this._createTodayDateStrObservable();
 
@@ -57,6 +50,34 @@ export class GlobalTrackingIntervalService {
    */
   resetTrackingStart(): void {
     this._currentTrackingStart = Date.now();
+  }
+
+  consumeCurrentTick(): Tick {
+    const now = Date.now();
+    const delta = now - this._currentTrackingStart;
+    this._currentTrackingStart = now;
+    return {
+      duration: delta,
+      date: this._dateService.todayStr(),
+      timestamp: now,
+    };
+  }
+
+  triggerWakeUpTick(maxDurationMs?: number): Tick {
+    const now = Date.now();
+    const rawDelta = now - this._currentTrackingStart;
+    const clampedDelta =
+      typeof maxDurationMs === 'number'
+        ? Math.max(0, Math.min(rawDelta, maxDurationMs))
+        : Math.max(0, rawDelta);
+    this._currentTrackingStart = this._currentTrackingStart + clampedDelta;
+    const tick: Tick = {
+      duration: clampedDelta,
+      date: this._dateService.todayStr(),
+      timestamp: now,
+    };
+    this._wakeUpTick$.next(tick);
+    return tick;
   }
 
   private _createTodayDateStrObservable(): Observable<string> {

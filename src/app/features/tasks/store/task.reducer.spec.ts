@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { Task, TaskState } from '../task.model';
+import { Task, TaskDetailTargetPanel, TaskState } from '../task.model';
 import { initialTaskState, taskReducer } from './task.reducer';
 import * as fromActions from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -92,6 +92,46 @@ describe('Task Reducer', () => {
     });
   });
 
+  describe('setSelectedTask', () => {
+    it('should keep the selected task open when an explicit target panel is requested', () => {
+      const state: TaskState = {
+        ...stateWithTasks,
+        selectedTaskId: 'task1',
+        taskDetailTargetPanel: null,
+      };
+
+      const result = taskReducer(
+        state,
+        fromActions.setSelectedTask({
+          id: 'task1',
+          taskDetailTargetPanel: TaskDetailTargetPanel.Notes,
+        }),
+      );
+
+      expect(result.selectedTaskId).toBe('task1');
+      expect(result.taskDetailTargetPanel).toBe(TaskDetailTargetPanel.Notes);
+    });
+
+    it('should still toggle the selected task closed for the default target', () => {
+      const state: TaskState = {
+        ...stateWithTasks,
+        selectedTaskId: 'task1',
+        taskDetailTargetPanel: TaskDetailTargetPanel.Notes,
+      };
+
+      const result = taskReducer(
+        state,
+        fromActions.setSelectedTask({
+          id: 'task1',
+          taskDetailTargetPanel: TaskDetailTargetPanel.Default,
+        }),
+      );
+
+      expect(result.selectedTaskId).toBeNull();
+      expect(result.taskDetailTargetPanel).toBeNull();
+    });
+  });
+
   describe('Subtask operations', () => {
     it('should add a subtask to a parent task', () => {
       const newSubTask = createTask('subTask3');
@@ -103,6 +143,23 @@ describe('Task Reducer', () => {
 
       expect(state.entities['task1']!.subTaskIds).toContain('subTask3');
       expect(state.entities['subTask3']).toEqual({ ...newSubTask, parentId: 'task1' });
+    });
+
+    it('should not duplicate parent subTaskIds when addSubTask is replayed', () => {
+      const newSubTask = createTask('subTask3');
+      const action = fromActions.addSubTask({
+        task: newSubTask,
+        parentId: 'task1',
+      });
+
+      const stateAfterFirstAdd = taskReducer(stateWithTasks, action);
+      const stateAfterReplay = taskReducer(stateAfterFirstAdd, action);
+
+      expect(stateAfterReplay.entities['task1']!.subTaskIds).toEqual([
+        'subTask1',
+        'subTask2',
+        'subTask3',
+      ]);
     });
 
     it('should roll up the parent time estimate when adding a subtask with an estimate', () => {
@@ -990,6 +1047,27 @@ describe('Task Reducer', () => {
       const result = taskReducer(initialTaskState, loadAllData({ appDataComplete }));
 
       expect(result.entities['t1']!.timeSpentOnDay).toEqual({ '2026-04-01': 3600000 });
+    });
+  });
+
+  describe('loadAllData - subTaskIds normalization', () => {
+    it('should remove duplicate subTaskIds on load', () => {
+      const parent = createTask('parent', { subTaskIds: ['subTask', 'subTask'] });
+      const subTask = createTask('subTask', { parentId: 'parent' });
+      const appDataComplete = {
+        task: {
+          ids: ['parent', 'subTask'],
+          entities: { parent, subTask },
+          currentTaskId: null,
+          selectedTaskId: null,
+          lastCurrentTaskId: null,
+          isDataLoaded: false,
+        },
+      } as any;
+
+      const result = taskReducer(initialTaskState, loadAllData({ appDataComplete }));
+
+      expect(result.entities['parent']!.subTaskIds).toEqual(['subTask']);
     });
   });
 

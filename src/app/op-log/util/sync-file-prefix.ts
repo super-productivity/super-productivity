@@ -1,42 +1,37 @@
+import { createSyncFilePrefixHelpers } from '@sp/sync-core';
+import type { SyncFilePrefixParams, SyncFilePrefixParamsOutput } from '@sp/sync-core';
+import { OpLog } from '../../core/log';
 import { REMOTE_FILE_CONTENT_PREFIX } from '../sync-providers/provider.const';
 import { InvalidFilePrefixError } from '../core/errors/sync-errors';
 
-const PREFIX = REMOTE_FILE_CONTENT_PREFIX;
-const END_SEPERATOR = '__';
+export type { SyncFilePrefixParams, SyncFilePrefixParamsOutput };
 
-export interface SyncFilePrefixParams {
-  isCompress: boolean;
-  isEncrypt: boolean;
-  modelVersion: number;
-}
-export interface SyncFilePrefixParamsOutput {
-  isCompressed: boolean;
-  isEncrypted: boolean;
-  modelVersion: number;
-  cleanDataStr: string;
-}
+const syncFilePrefixHelpers = createSyncFilePrefixHelpers({
+  prefix: REMOTE_FILE_CONTENT_PREFIX,
+  createInvalidPrefixError: (details): Error => {
+    // Privacy-safe log: only structured details (lengths, separators,
+    // expected prefix), never the raw sync payload. The constructor of
+    // `AdditionalLogErrorBase` no longer logs at construction time (per
+    // the @sp/sync-providers privacy refactor), so the log call moved
+    // here — the only site that owns the bridge between the package
+    // helper's invalid-prefix detection and the app's OpLog history.
+    // The key names are inlined in the first-arg string so they survive
+    // any downstream serialization that stringifies args positionally.
+    OpLog.log(
+      `InvalidFilePrefixError (inputLength=${details.inputLength}, ` +
+        `expectedPrefix="${details.expectedPrefix}", ` +
+        `endSeparator="${details.endSeparator}")`,
+      {
+        expectedPrefix: details.expectedPrefix,
+        endSeparator: details.endSeparator,
+        inputLength: details.inputLength,
+      },
+    );
+    return new InvalidFilePrefixError(details);
+  },
+});
 
-export const getSyncFilePrefix = (cfg: SyncFilePrefixParams): string => {
-  const c = cfg.isCompress ? 'C' : '';
-  const e = cfg.isEncrypt ? 'E' : '';
-  return `${PREFIX}${c}${e}${cfg.modelVersion}${END_SEPERATOR}`;
-};
+export const getSyncFilePrefix = syncFilePrefixHelpers.getSyncFilePrefix;
 
-export const extractSyncFileStateFromPrefix = (
-  dataStr: string,
-): SyncFilePrefixParamsOutput => {
-  // Modified regex to match decimal numbers
-  const match = dataStr.match(
-    new RegExp(`^${PREFIX}(C)?(E)?(\\d+(?:\\.\\d+)?)${END_SEPERATOR}`),
-  );
-  if (!match) {
-    throw new InvalidFilePrefixError(dataStr);
-  }
-
-  return {
-    isCompressed: !!match[1],
-    isEncrypted: !!match[2],
-    modelVersion: parseFloat(match[3]), // Changed to parseFloat
-    cleanDataStr: dataStr.slice(match[0].length),
-  };
-};
+export const extractSyncFileStateFromPrefix =
+  syncFilePrefixHelpers.extractSyncFileStateFromPrefix;

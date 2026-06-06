@@ -52,6 +52,20 @@ h1 {
   margin-bottom: var(--s2);
 }
 
+.first-sync-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  font-weight: 500;
+  color: var(--palette-warn-500);
+  margin-bottom: var(--s2);
+
+  .warning-icon {
+    color: var(--palette-warn-500);
+    flex-shrink: 0;
+  }
+}
+
 .wrap-buttons {
   display: flex;
   gap: var(--s);

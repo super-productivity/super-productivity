@@ -1,9 +1,36 @@
 import {
+  CALENDAR_FORM_CFG_NEW,
   getEffectiveCheckInterval,
   LOCAL_FILE_CHECK_INTERVAL,
   DEFAULT_CALENDAR_CFG,
 } from './calendar.const';
 import { IssueProviderCalendar } from '../../issue.model';
+
+type CalendarRegexFilterKey = 'filterIncludeRegex' | 'filterExcludeRegex';
+type RegexValidatorExpression = (control: {
+  value: string | undefined | null;
+}) => boolean;
+type RegexValidatorField = {
+  key?: string;
+  validators?: {
+    validRegex?: {
+      expression?: RegexValidatorExpression;
+    };
+  };
+};
+
+const getRegexValidatorExpression = (
+  key: CalendarRegexFilterKey,
+): RegexValidatorExpression => {
+  const field = CALENDAR_FORM_CFG_NEW.items?.find(
+    (item) => (item as RegexValidatorField).key === key,
+  ) as RegexValidatorField | undefined;
+  const expression = field?.validators?.validRegex?.expression;
+  if (!expression) {
+    throw new Error(`Missing regex validator for ${key}`);
+  }
+  return expression;
+};
 
 describe('calendar.const', () => {
   describe('LOCAL_FILE_CHECK_INTERVAL', () => {
@@ -104,6 +131,24 @@ describe('calendar.const', () => {
       expect(getEffectiveCheckInterval(provider)).toBe(
         DEFAULT_CALENDAR_CFG.checkUpdatesEvery,
       );
+    });
+  });
+
+  describe('calendar regex filter validators', () => {
+    it('should accept normal include and exclude regexes', () => {
+      const includeValidator = getRegexValidatorExpression('filterIncludeRegex');
+      const excludeValidator = getRegexValidatorExpression('filterExcludeRegex');
+
+      expect(includeValidator({ value: 'Lunch|Meeting' })).toBe(true);
+      expect(excludeValidator({ value: '^Team.*(Meeting|Standup)$' })).toBe(true);
+    });
+
+    it('should reject unsafe regexes', () => {
+      const includeValidator = getRegexValidatorExpression('filterIncludeRegex');
+      const excludeValidator = getRegexValidatorExpression('filterExcludeRegex');
+
+      expect(includeValidator({ value: '^(a+)+$' })).toBe(false);
+      expect(excludeValidator({ value: '^(a|aa)+$' })).toBe(false);
     });
   });
 });

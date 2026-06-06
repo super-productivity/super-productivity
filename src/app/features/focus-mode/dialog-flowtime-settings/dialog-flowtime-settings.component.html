@@ -1,0 +1,27 @@
+<h2 mat-dialog-title>{{ T.F.FOCUS_MODE.FLOWTIME_SETTINGS | translate }}</h2>
+<mat-dialog-content>
+  <form [formGroup]="form">
+    <formly-form
+      [fields]="fields()"
+      [form]="form"
+      [model]="model()"
+      (modelChange)="model.set($event)"
+    ></formly-form>
+  </form>
+  <div class="dialog-actions">
+    <span class="spacer"></span>
+    <button
+      mat-button
+      (click)="close()"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
+    <button
+      mat-button
+      color="primary"
+      (click)="save()"
+    >
+      {{ T.G.SAVE | translate }}
+    </button>
+  </div>
+</mat-dialog-content>

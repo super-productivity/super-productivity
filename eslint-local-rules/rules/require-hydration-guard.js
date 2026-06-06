@@ -238,7 +238,7 @@ module.exports = {
      * We need to walk up through the array and combineLatest call to find the full chain.
      */
     const hasGuardInChain = (selectorNode) => {
-      const sourceCode = context.getSourceCode();
+      const sourceCode = context.sourceCode;
 
       // Walk up from selector to find the full pipe chain
       let current = selectorNode;

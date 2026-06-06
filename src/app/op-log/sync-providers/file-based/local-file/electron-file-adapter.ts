@@ -1,4 +1,4 @@
-import { FileAdapter } from './file-adapter.interface';
+import type { FileAdapter } from '@sp/sync-providers/file-based';
 import { ElectronAPI } from '../../../../../../electron/electronAPI';
 
 export class ElectronFileAdapter implements FileAdapter {

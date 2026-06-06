@@ -36,6 +36,7 @@ jobs:
         with:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: true #make accepting the android sdk license verbose
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
 
       - name: Get npm cache directory
         id: npm-cache-dir
@@ -115,13 +116,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare Google Play release notes
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+        run: npm run release-notes:prepare-play-store
+
       - name: Upload to Google Play Console
         if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
-        uses: r0adkll/upload-google-play@935ef9c68bb393a8e6116b1575626a7f5be3a7fb # v1.1.3
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.superproductivity.superproductivity
           releaseFiles: android/app/build/outputs/apk/play/release/*.apk
-          track: internal
+          tracks: internal
           status: completed
           inAppUpdatePriority: 2
+          whatsNewDirectory: build/generated-release-notes/play-store

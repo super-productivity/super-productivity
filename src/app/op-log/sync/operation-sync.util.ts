@@ -2,17 +2,24 @@ import { ActionType, OpType, Operation, SyncImportReason } from '../core/operati
 import {
   SyncProviderBase,
   OperationSyncCapable,
+  OperationSyncProviderMode,
   SyncOperation,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
 
-/** Provider IDs that use file-based operation sync (WebDAV, Dropbox, LocalFile, Nextcloud, ProtonDrive) */
+/** Provider IDs that use file-based operation sync (WebDAV, Dropbox, OneDrive, LocalFile, Nextcloud, ProtonDrive) */
 const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
   SyncProviderId.WebDAV,
   SyncProviderId.Dropbox,
+  SyncProviderId.OneDrive,
   SyncProviderId.LocalFile,
   SyncProviderId.Nextcloud,
   SyncProviderId.ProtonDrive,
+]);
+
+const OPERATION_SYNC_PROVIDER_MODES: Set<OperationSyncProviderMode> = new Set([
+  'superSyncOps',
+  'fileSnapshotOps',
 ]);
 
 /**
@@ -22,15 +29,19 @@ const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
 export const isOperationSyncCapable = (
   provider: SyncProviderBase<SyncProviderId>,
 ): provider is SyncProviderBase<SyncProviderId> & OperationSyncCapable => {
+  const providerMode = (provider as { providerMode?: OperationSyncProviderMode })
+    .providerMode;
   return (
     'supportsOperationSync' in provider &&
-    (provider as unknown as OperationSyncCapable).supportsOperationSync === true
+    (provider as unknown as OperationSyncCapable).supportsOperationSync === true &&
+    providerMode !== undefined &&
+    OPERATION_SYNC_PROVIDER_MODES.has(providerMode)
   );
 };
 
 /**
  * Type guard to check if a provider uses file-based operation sync.
- * File-based providers (WebDAV, Dropbox, LocalFile, Nextcloud, ProtonDrive) use file storage for sync.
+ * File-based providers (WebDAV, Dropbox, OneDrive, LocalFile, Nextcloud, ProtonDrive) use file storage for sync.
  */
 export const isFileBasedProvider = (
   provider: SyncProviderBase<SyncProviderId>,

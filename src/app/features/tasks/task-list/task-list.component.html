@@ -8,11 +8,15 @@
       class="expand-tasks-btn"
       mat-button
     >
-      <!--TODO translate -->
-      <em
-        >+ {{ isHideDone() ? doneTasksLength() + ' done ' : allTasksLength() }} sub
-        tasks</em
-      >
+      <em>
+        @if (isHideDone()) {
+          {{
+            T.F.TASK.CMP.SHOW_HIDDEN_DONE_SUB_TASKS | translate: { nr: doneTasksLength() }
+          }}
+        } @else {
+          {{ T.F.TASK.CMP.SHOW_HIDDEN_SUB_TASKS | translate: { nr: allTasksLength() } }}
+        }
+      </em>
       <mat-icon>expand_more</mat-icon>
     </button>
   </div>
@@ -24,7 +28,8 @@
   [cdkDropListSortingDisabled]="isSortingDisabled()"
   [cdkDropListEnterPredicate]="enterPredicate"
   [cdkDropListData]="dropModelDataForList()"
-  (cdkDropListDropped)="drop(filteredTasks(), $event)"
+  (cdkDropListDropped)="drop($event)"
+  [attr.data-list-id]="listId()"
   [@taskList]="
     (dropListService.isBlockAniAfterDrop$ | async) ? 'BLOCK' : filteredTasks()?.length
   "
@@ -41,6 +46,7 @@
       [cdkDragLockAxis]="isXs() ? 'y' : ''"
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY'"
       [cdkDragData]="task"
+      (pointerdown)="onDragPointerDown(task, $event)"
       (cdkDragStarted)="onDragStarted(task, $event)"
       (cdkDragEnded)="onDragEnded()"
     >

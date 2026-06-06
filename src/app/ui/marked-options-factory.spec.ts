@@ -12,8 +12,7 @@ import { marked } from 'marked';
 const parseWithFactory = (markdown: string): string => {
   marked.setOptions(marked.getDefaults());
   const options = markedOptionsFactory();
-  const renderer = { ...(options.renderer as any) };
-  marked.use({ renderer });
+  marked.setOptions(options);
   return marked.parse(markdown) as string;
 };
 
@@ -28,6 +27,7 @@ describe('markedOptionsFactory', () => {
     expect(options).toBeDefined();
     expect(options.renderer).toBeDefined();
     expect(options.gfm).toBe(true);
+    expect(options.breaks).toBe(true);
   });
 
   describe('checkbox renderer', () => {
@@ -393,6 +393,13 @@ describe('markedOptionsFactory', () => {
   });
 
   describe('paragraph renderer', () => {
+    it('should render soft line breaks in parsed markdown notes (issue #8054)', () => {
+      const html = parseWithFactory('1\n2\n3');
+
+      expect(html).toContain('1<br>2<br>3');
+      expect(html).not.toContain('1 2 3');
+    });
+
     it('should render simple paragraph', () => {
       const mockParser = {
         parseInline: (tokens: any[]) =>

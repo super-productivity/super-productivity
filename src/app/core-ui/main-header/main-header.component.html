@@ -4,7 +4,7 @@
 
     <nav class="action-nav-right">
       <div class="counters-action-group">
-        @if (isPlayButtonVisible()) {
+        @if (isTimeTrackingEnabled()) {
           <play-button
             [currentTask]="currentTask()"
             [currentTaskId]="currentTaskId()"
@@ -13,11 +13,12 @@
           ></play-button>
         }
 
-        <!-- Desktop: FocusMode button remains inline if enabled -->
+        <!-- Focus button: always inline on desktop; on mobile only while a
+             session/break is active, so the running countdown stays reachable. -->
+        @if (isFocusButtonVisible()) {
+          <focus-button></focus-button>
+        }
         @if (showDesktopButtons()) {
-          @if (isFocusModeEnabled() && !isXxxs()) {
-            <focus-button></focus-button>
-          }
           @for (
             simpleCounter of enabledSimpleCounters();
             track trackById($index, simpleCounter)
@@ -49,8 +50,8 @@
       @if (isSyncIconEnabled()) {
         <button
           class="sync-btn"
-          matTooltip="{{ T.MH.TRIGGER_SYNC | translate }}"
-          (click)="syncIsEnabledAndReady() ? sync() : setupSync()"
+          matTooltip="{{ syncTooltip() | translate }}"
+          (click)="onSyncButtonClick()"
           (longPress)="setupSync()"
           (contextmenu)="$event.preventDefault(); setupSync()"
           mat-icon-button
@@ -78,6 +79,7 @@
         </button>
       }
 
+      <plugin-work-context-header-btns></plugin-work-context-header-btns>
       <plugin-header-btns></plugin-header-btns>
 
       @if (isUserProfilesEnabled()) {

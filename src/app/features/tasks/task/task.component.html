@@ -2,6 +2,7 @@
 <swipe-block
   [isDone]="t.isDone"
   [canSwipe]="!taskTitleEditEl?.isEditing()"
+  (swipeStart)="onSwipeStart()"
   (swipeRight)="toggleTaskDone()"
   (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"
@@ -121,6 +122,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button
@@ -135,6 +145,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button
@@ -153,6 +172,15 @@
             <button
               (click)="scheduleTask()"
               [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+              [matTooltip]="
+                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+              "
+              matTooltipPosition="above"
+              [attr.aria-label]="
+                hasTimeConflict()
+                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+              "
               class="ico-btn schedule-btn"
               [color]="isOverdue() ? 'warn' : ''"
               mat-icon-button
@@ -292,7 +320,13 @@
             (click)="moveTaskToProject(project.id)"
             mat-menu-item
           >
-            {{ project.title }}
+            <select-option-row
+              [title]="project.title"
+              [icon]="project.icon"
+              [defaultIcon]="DEFAULT_PROJECT_ICON"
+              [color]="project.theme?.primary"
+              [folderPath]="projectFolderMap().get(project.id)"
+            ></select-option-row>
           </button>
         }
       }

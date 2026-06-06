@@ -7,7 +7,7 @@
   h2[mat-dialog-title] {
     display: flex;
     align-items: center;
-    word-break: break-word;
+    overflow-wrap: anywhere;
 
     mat-icon {
       flex-shrink: 0;

@@ -1,36 +1,30 @@
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
-import { createValidate } from 'typia';
+import type { IValidation } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
-import { DEFAULT_TASK, TaskState } from '../../features/tasks/task.model';
-import { OpLog } from '../../core/log';
+import { DEFAULT_TASK } from '../../features/tasks/task.model';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
-interface TestInterface {
-  globalConfig: {
-    misc: {
-      startOfNextDay: number;
-    };
-  };
-  optionalObj?: {
-    optionalProp?: string;
-    bool: boolean;
-  };
-  task?: TaskState;
-}
+const createTypiaError = (
+  path: string,
+  expected: string,
+  value?: unknown,
+): IValidation.IError => ({ path, expected, value }) as IValidation.IError;
 
 describe('autoFixTypiaErrors', () => {
-  const validate = createValidate<TestInterface>();
-
   let errSpy: jasmine.Spy;
+  let warnSpy: jasmine.Spy;
 
   beforeEach(() => {
-    // Spy on OpLog.err to prevent test output cluttering
-    errSpy = spyOn(OpLog, 'err').and.stub();
+    // Spy on sync logger methods to prevent test output cluttering.
+    errSpy = spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    warnSpy = spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
   });
 
   afterEach(() => {
     // Reset spies
     errSpy.calls.reset();
+    warnSpy.calls.reset();
   });
 
   it('should return data unchanged when no errors', () => {
@@ -47,9 +41,9 @@ describe('autoFixTypiaErrors', () => {
         },
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.globalConfig.misc.startOfNextDay', 'number', '111'),
+    ]);
     expect(result).toEqual({
       globalConfig: {
         misc: {
@@ -57,6 +51,28 @@ describe('autoFixTypiaErrors', () => {
         },
       },
     } as any);
+  });
+
+  it('should log auto-fixes without raw validation values', () => {
+    const d = {
+      globalConfig: {
+        misc: {
+          startOfNextDay: '4321',
+        },
+      },
+    } as any;
+
+    autoFixTypiaErrors(d, [
+      createTypiaError('$input.globalConfig.misc.startOfNextDay', 'number', '4321'),
+    ]);
+
+    const serializedLogArgs = JSON.stringify([
+      ...errSpy.calls.allArgs(),
+      ...warnSpy.calls.allArgs(),
+    ]);
+    expect(serializedLogArgs).toContain('valueStringLength');
+    expect(serializedLogArgs).toContain('replacementType');
+    expect(serializedLogArgs).not.toContain('4321');
   });
 
   it('should use defaults for globalConfig if no other value could be added', () => {
@@ -67,11 +83,11 @@ describe('autoFixTypiaErrors', () => {
         },
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.globalConfig.misc.startOfNextDay', 'number'),
+    ]);
     expect(result.globalConfig.misc.startOfNextDay).not.toEqual(111);
-    expect(result.globalConfig.misc.startOfNextDay).toEqual(0 as any);
+    expect(result.globalConfig.misc.startOfNextDay).toEqual(0);
   });
 
   it('should sanitize null to undefined if model requests it', () => {
@@ -85,9 +101,9 @@ describe('autoFixTypiaErrors', () => {
         optionalProp: null,
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.optionalObj.optionalProp', 'string | undefined', null),
+    ]);
     expect(result.globalConfig.misc.startOfNextDay).toEqual(111);
     expect((result as any).optionalObj.optionalProp).toEqual(undefined);
   });
@@ -103,9 +119,9 @@ describe('autoFixTypiaErrors', () => {
         bool: null,
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.optionalObj.bool', 'boolean', null),
+    ]);
     expect((result as any).optionalObj.bool).toEqual(false);
   });
 
@@ -130,10 +146,11 @@ describe('autoFixTypiaErrors', () => {
         ids: ['task-1'],
       },
     } as any;
-    const validateResult = validate(d);
-    expect(validateResult.success).toBe(false);
 
-    const result = autoFixTypiaErrors(d, (validateResult as any).errors);
+    const result = autoFixTypiaErrors(d, [
+      createTypiaError('$input.task.entities["task-1"].timeEstimate', 'number', '0'),
+      createTypiaError('$input.task.entities["task-1"].timeSpent', 'number', '0'),
+    ]);
 
     expect((result as any).task.entities['task-1'].timeEstimate).toEqual(0);
     expect((result as any).task.entities['task-1'].timeSpent).toEqual(0);
@@ -175,7 +192,214 @@ describe('autoFixTypiaErrors', () => {
       ],
     ).toBe(0);
     expect(errSpy).toHaveBeenCalledWith(
-      "Fixed: simpleCounter.entities['BpYFLFtlIGGgTNfZB-t2-'].countOnDay['2025-06-16'] from null to 0 for simpleCounter",
+      '[auto-fix-typia-errors] Applied validation auto-fix',
+      undefined,
+      jasmine.objectContaining({
+        path: "simpleCounter.entities['BpYFLFtlIGGgTNfZB-t2-'].countOnDay['2025-06-16']",
+        pathDepth: 5,
+        pathRoot: 'simpleCounter',
+        fix: 'simple-counter-countOnDay-null-to-zero',
+        valueType: 'null',
+        replacementType: 'number',
+      }),
     );
+  });
+
+  // Issue #7330: a partial LWW Update payload can recreate a task with
+  // required fields undefined. The meta-reducer is the primary fix; these
+  // rules ensure dataRepair can still recover any state that already
+  // contains such an entity (e.g. on disk from a prior corrupted session).
+  describe('issue #7330 — partial task entities from LWW recreate', () => {
+    it('should fix undefined task.title to ""', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["rpt_partial_2026-04-29"].title',
+          expected: 'string',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['rpt_partial_2026-04-29'],
+        entities: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'rpt_partial_2026-04-29': { id: 'rpt_partial_2026-04-29' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect((result as any).task.entities['rpt_partial_2026-04-29'].title).toBe('');
+    });
+
+    it('should fix undefined task.timeSpentOnDay to {}', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["rpt_partial_2026-04-29"].timeSpentOnDay',
+          expected: 'Readonly<TimeSpentOnDayCopy>',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['rpt_partial_2026-04-29'],
+        entities: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'rpt_partial_2026-04-29': { id: 'rpt_partial_2026-04-29' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect(
+        (result as any).task.entities['rpt_partial_2026-04-29'].timeSpentOnDay,
+      ).toEqual({});
+    });
+
+    it('should fix undefined task array fields (tagIds, subTaskIds, attachments) to []', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["t1"].tagIds',
+          expected: 'Array<string>',
+          value: undefined,
+        },
+        {
+          path: '$input.task.entities["t1"].subTaskIds',
+          expected: 'Array<string>',
+          value: undefined,
+        },
+        {
+          path: '$input.task.entities["t1"].attachments',
+          expected: 'Array<TaskAttachmentCopy>',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['t1'],
+        entities: {
+          t1: { id: 't1' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect((result as any).task.entities['t1'].tagIds).toEqual([]);
+      expect((result as any).task.entities['t1'].subTaskIds).toEqual([]);
+      expect((result as any).task.entities['t1'].attachments).toEqual([]);
+    });
+
+    it('should fall back to first available project when INBOX_PROJECT is missing', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["t1"].projectId',
+          expected: 'string',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['t1'],
+        entities: {
+          t1: { id: 't1' },
+        },
+      };
+      // Project state lacks INBOX_PROJECT but has another project
+      (mockData as any).project = {
+        ids: ['some-other-project'],
+        entities: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'some-other-project': { id: 'some-other-project' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect((result as any).task.entities['t1'].projectId).toBe('some-other-project');
+    });
+
+    it('should fix undefined task.projectId to INBOX_PROJECT id', () => {
+      const mockData = createAppDataCompleteMock();
+      const errors = [
+        {
+          path: '$input.task.entities["t1"].projectId',
+          expected: 'string',
+          value: undefined,
+        },
+      ];
+      (mockData as any).task = {
+        ids: ['t1'],
+        entities: {
+          t1: { id: 't1' },
+        },
+      };
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect((result as any).task.entities['t1'].projectId).toBe('INBOX_PROJECT');
+    });
+  });
+
+  // Discussion #8022: a Nextcloud-synced state imported from MS Todos had 84
+  // taskRepeatCfg entities with undefined `quickSetting` (required field) and
+  // a TODAY tag with undefined `created`. dataRepair couldn't repair them so
+  // post-sync validation looped on "State still invalid after repair".
+  describe('discussion #8022 — legacy entities missing required fields', () => {
+    it('should default undefined taskRepeatCfg.quickSetting to "CUSTOM"', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).taskRepeatCfg = {
+        ids: ['rpt1'],
+        entities: {
+          rpt1: { id: 'rpt1', title: 'imported' },
+        },
+      };
+      const errors = [
+        createTypiaError(
+          '$input.taskRepeatCfg.entities["rpt1"].quickSetting',
+          '("CUSTOM" | "DAILY" | "MONDAY_TO_FRIDAY" | ...)',
+          undefined,
+        ),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).taskRepeatCfg.entities.rpt1.quickSetting).toBe('CUSTOM');
+      expect(errSpy).toHaveBeenCalledWith(
+        '[auto-fix-typia-errors] Applied validation auto-fix',
+        undefined,
+        jasmine.objectContaining({
+          fix: 'task-repeat-cfg-quickSetting-undefined-to-custom',
+          pathRoot: 'taskRepeatCfg',
+        }),
+      );
+    });
+
+    it('should default undefined tag.created to a number timestamp', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['TODAY'],
+        entities: {
+          TODAY: { id: 'TODAY', title: 'Today', taskIds: [] },
+        },
+      };
+      const before = Date.now();
+      const errors = [
+        createTypiaError('$input.tag.entities.TODAY.created', 'number', undefined),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      const created = (result as any).tag.entities.TODAY.created;
+      expect(typeof created).toBe('number');
+      expect(created).toBeGreaterThanOrEqual(before);
+      expect(errSpy).toHaveBeenCalledWith(
+        '[auto-fix-typia-errors] Applied validation auto-fix',
+        undefined,
+        jasmine.objectContaining({
+          fix: 'tag-created-undefined-to-now',
+          pathRoot: 'tag',
+        }),
+      );
+    });
   });
 });

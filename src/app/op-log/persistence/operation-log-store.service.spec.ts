@@ -1,4 +1,6 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { IDBPDatabase, unwrap } from 'idb';
+import { forceCloseDatabase } from 'fake-indexeddb';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
@@ -16,12 +18,15 @@ import {
 } from '../../core/util/vector-clock';
 import { limitVectorClockSize, MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
+import { OpLogDbAdapter } from './op-log-db-adapter';
 import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
+import { SINGLETON_KEY, STORE_NAMES } from './db-keys.const';
 
 describe('OperationLogStoreService', () => {
   let service: OperationLogStoreService;
@@ -29,6 +34,7 @@ describe('OperationLogStoreService', () => {
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
     getOrGenerateClientId: () => Promise.resolve('testClient'),
+    clearCache: () => {},
   };
 
   // Helper to create test operations
@@ -87,6 +93,154 @@ describe('OperationLogStoreService', () => {
 
       // All should resolve without error
       await expectAsync(Promise.all(initPromises)).toBeResolved();
+    });
+  });
+
+  describe('init backend selection (Phase B3)', () => {
+    // Build a fresh service whose adapter comes from the given factory.
+    const freshServiceWith = (adapter: OpLogDbAdapter): OperationLogStoreService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+          { provide: OP_LOG_DB_ADAPTER_FACTORY, useValue: () => adapter },
+        ],
+      });
+      return TestBed.inject(OperationLogStoreService);
+    };
+
+    it('init()s a self-managing adapter (no adoptConnection) and opens NO IndexedDB', async () => {
+      // SQLite-style backend: self-manages its handle, creates its schema via
+      // init(), and never adopts a connection.
+      const initSpy = jasmine.createSpy('init').and.resolveTo(undefined);
+      const adapter = { init: initSpy } as unknown as OpLogDbAdapter;
+      const svc = freshServiceWith(adapter);
+      const openSpy = spyOn(
+        svc as unknown as { _openDbOnce: () => Promise<unknown> },
+        '_openDbOnce',
+      );
+
+      await svc.init();
+
+      expect(initSpy).toHaveBeenCalledTimes(1);
+      expect(openSpy).not.toHaveBeenCalled();
+      // No WebView IndexedDB connection is opened or cached on this path.
+      expect((svc as unknown as { _db: unknown })._db).toBeUndefined();
+    });
+
+    it('opens + adopts a connection for an adopt-connection (IndexedDB) adapter', async () => {
+      const initSpy = jasmine.createSpy('init').and.resolveTo(undefined);
+      const adoptSpy = jasmine.createSpy('adoptConnection');
+      const adapter = {
+        init: initSpy,
+        adoptConnection: adoptSpy,
+      } as unknown as OpLogDbAdapter;
+      const svc = freshServiceWith(adapter);
+      const fakeDb = { addEventListener: (): void => {} };
+      spyOn(
+        svc as unknown as { _openDbOnce: () => Promise<unknown> },
+        '_openDbOnce',
+      ).and.resolveTo(fakeDb);
+
+      await svc.init();
+
+      expect(adoptSpy).toHaveBeenCalledWith(fakeDb);
+      // The IndexedDB backend does NOT use the adapter's own init() (its schema
+      // comes from the IDB upgrade on the adopted connection).
+      expect(initSpy).not.toHaveBeenCalled();
+      expect((svc as unknown as { _db: unknown })._db).toBe(fakeDb);
+    });
+  });
+
+  describe('connection lifecycle handlers', () => {
+    // Open the connection through the lazy `_ensureInit()` path so `_initPromise`
+    // is genuinely populated (the `beforeEach` above uses a direct `init()`,
+    // which leaves it unset — making an `_initPromise` assertion vacuous).
+    const openViaLazyInit = async (): Promise<void> => {
+      (service as any)._db = undefined;
+      (service as any)._initPromise = undefined;
+      await service.getLastSeq();
+    };
+
+    it('closes the connection and clears cached state on versionchange, then reopens', async () => {
+      await openViaLazyInit();
+      expect((service as any)._db).toBeDefined();
+      expect((service as any)._initPromise).toBeDefined();
+
+      const raw = unwrap((service as any)._db as IDBPDatabase);
+      // fake-indexeddb's FakeEventTarget rejects native DOM `Event` (no
+      // `initialized` flag), so dispatch its own `IDBVersionChangeEvent`
+      // (installed globally by `fake-indexeddb/auto`) which derives from
+      // the polyfill's `FakeEvent`.
+      raw.dispatchEvent(
+        new IDBVersionChangeEvent('versionchange', { oldVersion: 1, newVersion: 2 }),
+      );
+
+      // The handler runs synchronously: cached state cleared and the
+      // connection actually closed (so it cannot block a schema upgrade).
+      expect((service as any)._db).toBeUndefined();
+      expect((service as any)._initPromise).toBeUndefined();
+      let txError: unknown;
+      try {
+        raw.transaction(STORE_NAMES.OPS, 'readonly');
+      } catch (e) {
+        txError = e;
+      }
+      expect((txError as DOMException | undefined)?.name).toBe('InvalidStateError');
+
+      // The next access transparently reopens the connection.
+      await expectAsync(service.getLastSeq()).toBeResolved();
+    });
+
+    it('clears cached state on the browser close event, then reopens', async () => {
+      await openViaLazyInit();
+
+      const raw = unwrap((service as any)._db as IDBPDatabase);
+      // Drive the spec-compliant forced-close path; fake-indexeddb fires a real
+      // `close` event through its internal pipeline (unlike dispatchEvent of a
+      // synthetic DOM Event, which its FakeEventTarget shim rejects). The cast
+      // works around an incorrect `(db: typeof FDBDatabase)` type declaration
+      // in fake-indexeddb's types.d.ts — the runtime expects an instance.
+      forceCloseDatabase(raw as unknown as Parameters<typeof forceCloseDatabase>[0]);
+      // Let queued tasks (connection bookkeeping) settle before reopening.
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect((service as any)._db).toBeUndefined();
+      expect((service as any)._initPromise).toBeUndefined();
+      await expectAsync(service.getLastSeq()).toBeResolved();
+    });
+  });
+
+  describe('unsynced/synced/rejected transitions', () => {
+    it('should expose unsynced, synced, and rejected transitions through service methods', async () => {
+      const port: Pick<
+        OperationLogStoreService,
+        'getUnsynced' | 'markSynced' | 'markRejected'
+      > = service;
+      const syncedOp = createTestOperation({ entityId: 'synced-task' });
+      const rejectedOp = createTestOperation({ entityId: 'rejected-task' });
+
+      await service.append(syncedOp);
+      await service.append(rejectedOp);
+
+      const initialUnsynced = await port.getUnsynced();
+      expect(initialUnsynced.map((entry) => entry.op.id)).toEqual([
+        syncedOp.id,
+        rejectedOp.id,
+      ]);
+
+      const syncedEntry = initialUnsynced.find((entry) => entry.op.id === syncedOp.id);
+      expect(syncedEntry).toBeDefined();
+      if (!syncedEntry) {
+        fail('Expected synced operation entry to exist');
+        return;
+      }
+
+      await port.markSynced([syncedEntry.seq]);
+      await port.markRejected([rejectedOp.id]);
+
+      expect(await port.getUnsynced()).toEqual([]);
     });
   });
 
@@ -1572,6 +1726,168 @@ describe('OperationLogStoreService', () => {
       expect(entry!.clock).toEqual({ clientA: 5 });
       expect(entry!.lastUpdate).toBeGreaterThanOrEqual(beforeTime);
       expect(entry!.lastUpdate).toBeLessThanOrEqual(afterTime);
+    });
+  });
+
+  describe('runDestructiveStateReplacement', () => {
+    const createArchive = (taskId: string): any => ({
+      task: {
+        ids: [taskId],
+        entities: { [taskId]: { id: taskId, title: taskId } },
+      },
+      timeTracking: { project: {}, tag: {} },
+      lastTimeTrackingFlush: 0,
+    });
+
+    it('should write archives in the same destructive replacement', async () => {
+      const archiveYoung = createArchive('young-task');
+      const archiveOld = createArchive('old-task');
+
+      await service.runDestructiveStateReplacement({
+        syncImportOp: createTestOperation({
+          opType: OpType.BackupImport,
+          entityType: 'ALL' as EntityType,
+          entityId: 'backup-import',
+          payload: { task: { ids: [], entities: {} } },
+        }),
+        snapshotEntityKeys: [],
+        archiveYoung,
+        archiveOld,
+      });
+
+      const db = (service as any).db;
+      const youngEntry = await db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
+      const oldEntry = await db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
+      expect(youngEntry.data).toEqual(archiveYoung);
+      expect(oldEntry.data).toEqual(archiveOld);
+    });
+
+    it('should roll back ops, state_cache, vector_clock, and archives when an archive write fails', async () => {
+      const priorOp = createTestOperation({ entityId: 'prior-task' });
+      const priorArchiveYoung = createArchive('prior-young');
+      const priorArchiveOld = createArchive('prior-old');
+      await service.append(priorOp);
+      await service.saveStateCache({
+        state: { sentinel: 'prior-state' },
+        lastAppliedOpSeq: 1,
+        vectorClock: { testClient: 1 },
+        compactedAt: Date.now(),
+      });
+      await service.setVectorClock({ testClient: 1 });
+
+      const db = (service as any).db;
+      await db.put(STORE_NAMES.ARCHIVE_YOUNG, {
+        id: SINGLETON_KEY,
+        data: priorArchiveYoung,
+        lastModified: 1,
+      });
+      await db.put(STORE_NAMES.ARCHIVE_OLD, {
+        id: SINGLETON_KEY,
+        data: priorArchiveOld,
+        lastModified: 1,
+      });
+
+      const realTransaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake((stores: any, mode: any) => {
+        const tx = realTransaction(stores, mode);
+        if (Array.isArray(stores) && stores.includes(STORE_NAMES.ARCHIVE_YOUNG)) {
+          const realObjectStore = tx.objectStore.bind(tx);
+          tx.objectStore = ((storeName: string) => {
+            const store = realObjectStore(storeName);
+            if (storeName === STORE_NAMES.ARCHIVE_YOUNG) {
+              store.put = async () => {
+                throw new Error('Simulated archive write failure');
+              };
+            }
+            return store;
+          }) as typeof tx.objectStore;
+        }
+        return tx;
+      });
+
+      await expectAsync(
+        service.runDestructiveStateReplacement({
+          syncImportOp: createTestOperation({
+            opType: OpType.BackupImport,
+            entityType: 'ALL' as EntityType,
+            entityId: 'backup-import',
+            payload: { sentinel: 'new-state' },
+            vectorClock: { newClient: 1 },
+          }),
+          snapshotEntityKeys: [],
+          archiveYoung: createArchive('new-young'),
+          archiveOld: createArchive('new-old'),
+        }),
+      ).toBeRejected();
+
+      const opsAfter = await service.getOpsAfterSeq(0);
+      expect(opsAfter.map((entry) => entry.op.id)).toEqual([priorOp.id]);
+      expect((await service.loadStateCache())!.state).toEqual({
+        sentinel: 'prior-state',
+      });
+      expect(await service.getVectorClock()).toEqual({ testClient: 1 });
+      expect((await db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY)).data).toEqual(
+        priorArchiveYoung,
+      );
+      expect((await db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY)).data).toEqual(
+        priorArchiveOld,
+      );
+    });
+
+    it('writes the rotated clientId into the client_id store and clears the cache', async () => {
+      const clearCacheSpy = spyOn(mockClientIdProvider, 'clearCache');
+
+      await service.runDestructiveStateReplacement({
+        syncImportOp: createTestOperation({
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+          clientId: 'rotatedClient',
+          vectorClock: { rotatedClient: 1 },
+          payload: { task: { ids: [], entities: {} } },
+        }),
+        snapshotEntityKeys: [],
+      });
+
+      const db = (service as any).db;
+      expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('rotatedClient');
+      // Cache-clear runs after a committed tx.done so the next clientId read
+      // sees the rotated value.
+      expect(clearCacheSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the client_id store and cache untouched when the destructive tx aborts', async () => {
+      const db = (service as any).db;
+      // Seed a prior clientId — the aborted put must roll back to this.
+      await db.put(STORE_NAMES.CLIENT_ID, 'priorClient', SINGLETON_KEY);
+      const clearCacheSpy = spyOn(mockClientIdProvider, 'clearCache');
+
+      const realTransaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake((stores: any, mode: any) => {
+        const tx = realTransaction(stores, mode);
+        if (Array.isArray(stores) && stores.includes(STORE_NAMES.OPS)) {
+          const opsStore = tx.objectStore(STORE_NAMES.OPS);
+          opsStore.add = async () => {
+            throw new Error('Simulated interrupt inside destructive tx');
+          };
+        }
+        return tx;
+      });
+
+      await expectAsync(
+        service.runDestructiveStateReplacement({
+          syncImportOp: createTestOperation({
+            opType: OpType.SyncImport,
+            entityType: 'ALL' as EntityType,
+            clientId: 'abortClient',
+            vectorClock: { abortClient: 1 },
+          }),
+          snapshotEntityKeys: [],
+        }),
+      ).toBeRejected();
+
+      expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('priorClient');
+      expect(clearCacheSpy).not.toHaveBeenCalled();
     });
   });
 

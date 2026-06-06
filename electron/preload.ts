@@ -7,6 +7,10 @@ import {
 } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
 import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
+import {
+  getDistChannel,
+  ElectronDistChannel,
+} from './shared-with-frontend/get-dist-channel';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
   PluginManifest,
@@ -52,6 +56,10 @@ const ea: ElectronAPI = {
     // NOTE: there is no proper way to unsubscribe apart from unsubscribing all
     ipcRenderer.on(channel, listener);
   },
+  // SYNC
+  // ----
+  getDistChannel: (): ElectronDistChannel | null => getDistChannel(),
+
   // INVOKE
   // ------
   getUserDataPath: () => _invoke('GET_PATH', 'userData') as Promise<string>,
@@ -88,7 +96,12 @@ const ea: ElectronAPI = {
     properties: string[];
     title?: string;
     defaultPath?: string;
+    filters?: { name: string; extensions: string[] }[];
   }) => _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
+
+  toFileUrl: (filePath: string) => ipcRenderer.invoke(IPC.TO_FILE_URL, filePath),
+  readLocalImageAsDataUrl: (filePathOrUrl: string) =>
+    _invoke('READ_LOCAL_IMAGE_AS_DATA_URL', filePathOrUrl) as Promise<string | null>,
   // STANDARD
   // --------
   setZoomFactor: (zoomFactor: number) => {
@@ -98,6 +111,7 @@ const ea: ElectronAPI = {
   isLinux: () => process.platform === 'linux',
   isGnomeDesktop,
   isMacOS: () => process.platform === 'darwin',
+  isAppleSilicon: () => process.platform === 'darwin' && process.arch === 'arm64',
   isSnap: () => process && process.env && !!process.env.SNAP,
   isFlatpak: () => process && process.env && !!process.env.FLATPAK_ID,
 
@@ -202,6 +216,7 @@ const ea: ElectronAPI = {
   sendAppSettingsToElectron: (globalCfg) =>
     _send('TRANSFER_SETTINGS_TO_ELECTRON', globalCfg),
   sendSettingsUpdate: (globalCfg) => _send('UPDATE_SETTINGS', globalCfg),
+  updateTaskWidgetSettings: (cfg) => _send('UPDATE_TASK_WIDGET_SETTINGS', cfg),
   updateTitleBarDarkMode: (isDarkMode: boolean) =>
     _send('UPDATE_TITLE_BAR_DARK_MODE', isDarkMode),
   registerGlobalShortcuts: (keyboardCfg) =>

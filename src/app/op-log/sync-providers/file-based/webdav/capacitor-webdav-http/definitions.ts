@@ -7,6 +7,13 @@ export interface WebDavHttpOptions {
   method: string;
   headers?: Record<string, string>;
   data?: string | null;
+  /**
+   * Forwarded from `NativeHttpRequestConfig.responseType`. The native plugin
+   * implementations return text-only today (matching the design intent of the
+   * `WebDavHttp` plugin — XML / multistatus must not be auto-parsed). If a
+   * future plugin implementation honors this field, callers can opt into
+   * `'json'` explicitly.
+   */
   responseType?: 'text' | 'json';
 }
 

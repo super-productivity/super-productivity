@@ -22,7 +22,7 @@ describe('BannerComponent', () => {
     it('should dismiss the banner and call fn when isKeepVisibleAfterAction is not set', () => {
       let actionCalled = false;
       const banner: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Test message',
         action: {
           label: 'Action',
@@ -43,7 +43,7 @@ describe('BannerComponent', () => {
     it('should NOT dismiss the banner when isKeepVisibleAfterAction is true', () => {
       let actionCalled = false;
       const banner: Banner = {
-        id: BannerId.FocusMode,
+        id: BannerId.TakeABreak,
         msg: 'Test message',
         action: {
           label: 'Action',

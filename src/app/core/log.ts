@@ -1,7 +1,6 @@
 // IMPORTANT: Log history is exportable and often shared in bug reports.
 // Never pass user-generated content (task titles, notes, project names, etc.)
 // to Log methods — use IDs and counts instead.
-import { environment } from '../../environments/environment';
 
 export enum LogLevel {
   CRITICAL = 0,
@@ -19,7 +18,10 @@ interface LogEntry {
   args: unknown[];
 }
 
-const LOG_LEVEL = environment.production ? LogLevel.VERBOSE : LogLevel.VERBOSE;
+// Always VERBOSE: exported logs keep the action-type/sync trace for debugging
+// user reports. Payloads are never logged (see header above / rule #9). For
+// deep local debugging call Log.setLevel(LogLevel.DEBUG) ad hoc.
+const LOG_LEVEL = LogLevel.VERBOSE;
 
 const MAX_DATA_LENGTH = 400;
 

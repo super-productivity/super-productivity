@@ -7,29 +7,27 @@ import * as fromSelectors from './planner.selectors';
 import { plannerFeatureKey, PlannerState } from './planner.reducer';
 import { Task, TaskState } from '../../tasks/task.model';
 import { TASK_FEATURE_NAME } from '../../tasks/store/task.reducer';
+import { PROJECT_FEATURE_NAME } from '../../project/store/project.reducer';
 import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+
+const DAY_DURATION_MS = 24 * 60 * 60 * 1000;
+
+// Helper to create a timestamp for a specific day at noon local time
+const getLocalNoon = (year: number, month: number, day: number): number => {
+  return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
+};
+
+// Helper to create a timestamp for a specific day at a given hour local time
+const getLocalTime = (year: number, month: number, day: number, hour: number): number => {
+  return new Date(year, month - 1, day, hour, 0, 0, 0).getTime();
+};
 
 // Helper to test getIcalEventsForDay logic
 // Since it's a private function, we test it through selectPlannerDays behavior
 // For now, we test the separation logic directly
 
 describe('Planner Selectors - All Day Events', () => {
-  // Helper to create a timestamp for a specific day at noon local time
-  const getLocalNoon = (year: number, month: number, day: number): number => {
-    return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
-  };
-
-  // Helper to create a timestamp for a specific day at a given hour local time
-  const getLocalTime = (
-    year: number,
-    month: number,
-    day: number,
-    hour: number,
-  ): number => {
-    return new Date(year, month - 1, day, hour, 0, 0, 0).getTime();
-  };
-
   // Replicate the getIcalEventsForDay logic for testing
   const getIcalEventsForDay = (
     calendarEvents: ScheduleCalendarMapEntry[],
@@ -51,9 +49,9 @@ describe('Planner Selectors - All Day Events', () => {
       icalMapEntry.items.forEach((calEv) => {
         const start = calEv.start;
         if (isSameDay(start, currentDayDate)) {
-          if (calEv.isAllDay) {
+          if (calEv.isAllDay || calEv.duration >= DAY_DURATION_MS) {
             // All-day events go to a separate list with full event data
-            allDayEvents.push({ ...calEv });
+            allDayEvents.push({ ...calEv, isAllDay: true });
           } else {
             const end = calEv.start + calEv.duration;
             timedEvents.push({
@@ -319,6 +317,12 @@ describe('Planner Selectors - All Day Events', () => {
 describe('Planner Selectors - selectPlannerDays', () => {
   const today = getDbDateStr();
 
+  // Helper to create a local timestamp for today at a specific hour
+  const todayAtHour = (hour: number): number => {
+    const [y, m, d] = today.split('-').map(Number);
+    return new Date(y, m - 1, d, hour, 0, 0, 0).getTime();
+  };
+
   const createMockTask = (overrides: Partial<Task> & { id: string }): Task => {
     const { id, ...rest } = overrides;
     return {
@@ -337,15 +341,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
     };
   };
 
-  const emptyTaskState: TaskState = {
-    ids: [],
-    entities: {},
-    currentTaskId: null,
-    selectedTaskId: null,
-    lastCurrentTaskId: null,
-    isDataLoaded: true,
-    taskDetailTargetPanel: null,
-  };
+  const createTasksMapFromTasksArray = (tasks: Task[]): Map<string, Task> =>
+    new Map(tasks.map((t) => [t.id, t]));
 
   const emptyPlannerState: PlannerState = {
     days: {},
@@ -369,13 +366,9 @@ describe('Planner Selectors - selectPlannerDays', () => {
   ) => fromSelectors.selectPlannerDays(dayDates, [], [], [], [], todayStr);
 
   it('should return a PlannerDay for each day date', () => {
+    const tasks = createTasksMapFromTasksArray([]);
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector(
-      emptyTaskState,
-      emptyPlannerState,
-      defaultScheduleConfig,
-      0,
-    );
+    const result = selector.projector(tasks, emptyPlannerState, defaultScheduleConfig, 0);
 
     expect(result.length).toBe(1);
     expect(result[0].dayDate).toBe(today);
@@ -385,18 +378,14 @@ describe('Planner Selectors - selectPlannerDays', () => {
   it('should include tasks from planner state for a non-today day', () => {
     const tomorrow = getDbDateStr(new Date(Date.now() + 86400000));
     const task = createMockTask({ id: 't1', title: 'Plan task' });
-    const taskState: TaskState = {
-      ...emptyTaskState,
-      ids: ['t1'],
-      entities: { t1: task },
-    };
     const plannerState: PlannerState = {
       ...emptyPlannerState,
       days: { [tomorrow]: ['t1'] },
     };
 
     const selector = fromSelectors.selectPlannerDays([tomorrow], [], [], [], [], today);
-    const result = selector.projector(taskState, plannerState, defaultScheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
 
     expect(result[0].tasks.length).toBe(1);
     expect(result[0].tasks[0].id).toBe('t1');
@@ -404,20 +393,11 @@ describe('Planner Selectors - selectPlannerDays', () => {
 
   it('should include unplanned today tasks passed to factory', () => {
     const task = createMockTask({ id: 't1', title: 'Today task' });
-    const taskState: TaskState = {
-      ...emptyTaskState,
-      ids: ['t1'],
-      entities: { t1: task },
-    };
 
     // Pass t1 as a todayListTaskId (unplanned since allPlannedTasks is empty)
     const selector = fromSelectors.selectPlannerDays([today], [], ['t1'], [], [], today);
-    const result = selector.projector(
-      taskState,
-      emptyPlannerState,
-      defaultScheduleConfig,
-      0,
-    );
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, emptyPlannerState, defaultScheduleConfig, 0);
 
     expect(result[0].tasks.length).toBe(1);
     expect(result[0].tasks[0].id).toBe('t1');
@@ -433,12 +413,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
       lunchBreakEnd: '13:00',
     };
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector(
-      emptyTaskState,
-      emptyPlannerState,
-      scheduleConfig,
-      0,
-    );
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
 
     // 8 hours = 28800000 ms
     expect(result[0].availableHours).toBe(28800000);
@@ -447,12 +423,8 @@ describe('Planner Selectors - selectPlannerDays', () => {
 
   it('should not set availableHours when schedule is disabled', () => {
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector(
-      emptyTaskState,
-      emptyPlannerState,
-      defaultScheduleConfig,
-      0,
-    );
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, defaultScheduleConfig, 0);
 
     expect(result[0].availableHours).toBeUndefined();
     expect(result[0].progressPercentage).toBeUndefined();
@@ -461,18 +433,14 @@ describe('Planner Selectors - selectPlannerDays', () => {
   it('should include additional days from planner state not in dayDates', () => {
     const tomorrow = getDbDateStr(new Date(Date.now() + 86400000));
     const task = createMockTask({ id: 't1' });
-    const taskState: TaskState = {
-      ...emptyTaskState,
-      ids: ['t1'],
-      entities: { t1: task },
-    };
     const plannerState: PlannerState = {
       ...emptyPlannerState,
       days: { [tomorrow]: ['t1'] },
     };
 
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector(taskState, plannerState, defaultScheduleConfig, 0);
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
 
     // Should include both today (from dayDates) and tomorrow (from planner state)
     expect(result.length).toBe(2);
@@ -488,14 +456,192 @@ describe('Planner Selectors - selectPlannerDays', () => {
     };
 
     const selector = createPlannerDaysSelector([today]);
-    const result = selector.projector(
-      emptyTaskState,
-      plannerState,
-      defaultScheduleConfig,
-      0,
-    );
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
 
     expect(result[0].tasks.length).toBe(0);
+  });
+
+  it('should include calendar event durations in timeEstimate for timed events', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    // Create a timed calendar event (2 hours = 7200000 ms)
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'timed-cal-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'Timed Meeting',
+            start: todayAtHour(10),
+            duration: 7200000, // 2 hours
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [],
+      calendarEvents,
+      [],
+      today,
+    );
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
+
+    // timeEstimate should include the timed event duration (7200000 ms = 2 hours)
+    expect(result[0].timeEstimate).toBe(7200000);
+    // availableHours = 8 hours = 28800000 ms
+    expect(result[0].availableHours).toBe(28800000);
+    // progressPercentage = (7200000 / 28800000) * 100 = 25%
+    expect(result[0].progressPercentage).toBe(25);
+  });
+
+  it('should NOT include all-day event durations in timeEstimate', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    // Create an all-day event (24 hours = 86400000 ms)
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'all-day-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'All Day Conference',
+            start: todayAtHour(12),
+            duration: 86400000, // 24 hours
+            isAllDay: true,
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [],
+      calendarEvents,
+      [],
+      today,
+    );
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
+
+    // timeEstimate should NOT include all-day events (they use raw 24h duration)
+    // so it should be 0 when there are no timed events
+    expect(result[0].timeEstimate).toBe(0);
+  });
+
+  it('should NOT include 24h calendar events without isAllDay in timeEstimate', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'duration-all-day-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'Provider All Day Event',
+            start: todayAtHour(0),
+            duration: DAY_DURATION_MS,
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [],
+      calendarEvents,
+      [],
+      today,
+    );
+    const tasks = createTasksMapFromTasksArray([]);
+    const result = selector.projector(tasks, emptyPlannerState, scheduleConfig, 0);
+
+    expect(result[0].timeEstimate).toBe(0);
+    expect(result[0].progressPercentage).toBe(0);
+    expect(result[0].scheduledIItems.length).toBe(0);
+    expect(result[0].allDayEvents.map((ev) => ev.id)).toEqual(['duration-all-day-event']);
+    expect(result[0].allDayEvents[0].isAllDay).toBe(true);
+  });
+
+  it('should combine task time estimates with calendar event durations', () => {
+    const scheduleConfig = {
+      isWorkStartEndEnabled: true,
+      workStart: '09:00',
+      workEnd: '17:00',
+      isLunchBreakEnabled: false,
+      lunchBreakStart: '12:00',
+      lunchBreakEnd: '13:00',
+    };
+
+    const task = createMockTask({
+      id: 't1',
+      title: 'Task with estimate',
+      timeEstimate: 3600000,
+    }); // 1 hour
+    const plannerState: PlannerState = {
+      ...emptyPlannerState,
+      days: { [today]: ['t1'] },
+    };
+
+    // Create a timed calendar event (2 hours = 7200000 ms)
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      {
+        items: [
+          {
+            id: 'timed-cal-event',
+            calProviderId: 'provider-1',
+            issueProviderKey: 'ICAL',
+            title: 'Timed Meeting',
+            start: todayAtHour(10),
+            duration: 7200000, // 2 hours
+          },
+        ],
+      },
+    ];
+
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      ['t1'],
+      calendarEvents,
+      [],
+      today,
+    );
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, plannerState, scheduleConfig, 0);
+
+    // timeEstimate = task (3600000) + timed event (7200000) = 10800000 ms = 3 hours
+    expect(result[0].timeEstimate).toBe(10800000);
   });
 });
 
@@ -596,6 +742,7 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
     [appStateFeatureKey]: { todayStr, startOfNextDayDiffMs: 0 },
     [TASK_FEATURE_NAME]: { ...mockTaskState, ...taskState },
     [plannerFeatureKey]: { ...mockPlannerState, ...plannerState },
+    [PROJECT_FEATURE_NAME]: { ids: [], entities: {} },
   });
 
   describe('selectAllTasksDueToday', () => {
@@ -689,6 +836,16 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
       expect(result.length).toBe(0);
     });
 
+    it('should handle missing entity references in planner days with empty task state gracefully', () => {
+      const mockState = createMockState(
+        { ids: [], entities: {} },
+        { days: { [today]: ['nonexistent'] } },
+      );
+
+      expect(() => fromSelectors.selectAllTasksDueToday(mockState)).not.toThrow();
+      expect(fromSelectors.selectAllTasksDueToday(mockState)).toEqual([]);
+    });
+
     it('should handle missing entity references in planner gracefully', () => {
       // Planner references a task that doesn't exist in taskState
       const mockState = createMockState(
@@ -699,21 +856,6 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
         {
           days: { [today]: ['nonExistentTask', 'taskDueToday'] },
         },
-      );
-
-      const result = fromSelectors.selectAllTasksDueToday(mockState);
-
-      expect(result.length).toBe(1);
-      expect(result[0].id).toBe('taskDueToday');
-    });
-
-    it('should handle missing entity references in taskState.ids gracefully', () => {
-      const mockState = createMockState(
-        {
-          ids: ['taskDueToday', 'nonExistentTask'],
-          entities: { taskDueToday: mockTasks.taskDueToday },
-        },
-        { days: {} },
       );
 
       const result = fromSelectors.selectAllTasksDueToday(mockState);
@@ -794,6 +936,7 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
           ...mockPlannerState,
           days: plannerDays,
         },
+        [PROJECT_FEATURE_NAME]: { ids: [], entities: {} },
       });
 
       it('should include dueWithTime task at 2 AM next day when offset extends today', () => {

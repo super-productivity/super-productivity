@@ -5,4 +5,6 @@ export interface GiteaCfg extends BaseIssueProviderCfg {
   host: string | null;
   token: string | null;
   scope: string | null;
+  filterLabels: string | null;
+  excludeLabels: string | null;
 }

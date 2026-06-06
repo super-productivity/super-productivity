@@ -32,6 +32,13 @@ export interface SuperSyncConfig {
   enableWebSocket?: boolean;
 }
 
+type SyncCompletionSnapshot = {
+  checkVisible: boolean;
+  spinnerVisible: boolean;
+  errorVisible: boolean;
+  unsyncedCount: number | null;
+};
+
 /**
  * Page object for SuperSync configuration and sync operations.
  * Used for E2E tests that verify multi-client sync via the super-sync-server.
@@ -331,7 +338,7 @@ export class SuperSyncPage extends BasePage {
     await this.page.waitForTimeout(1000);
 
     // Define locators for dialogs we might see
-    const configDialog = this.page.locator('dialog-sync-initial-cfg');
+    const configDialog = this.page.locator('dialog-sync-cfg');
     const passwordDialog = this.page.locator('dialog-enter-encryption-password');
     const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
 
@@ -770,8 +777,21 @@ export class SuperSyncPage extends BasePage {
           // Continue loop to re-check for dialogs
         }
 
-        // Final check for check icon
-        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+        // Final check for check icon — generous timeout because the inner
+        // race above already used the 30s budget, and on saturated CI runners
+        // the sync state icon can take noticeably longer to render. If the very
+        // first sync stalls entirely (a setup flake seen under parallel CI load),
+        // clear any leftover dialog and re-trigger sync once before giving up.
+        try {
+          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+        } catch {
+          console.log(
+            '[SuperSyncPage] Sync check icon not visible after 60s — re-triggering sync once',
+          );
+          await this._handleSyncDialogs(config.syncImportChoice === 'local');
+          await this.syncBtn.click();
+          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+        }
       }
     } else if (waitForInitialSync) {
       // Encryption is mandatory for SuperSync, so even when the caller doesn't
@@ -903,7 +923,7 @@ export class SuperSyncPage extends BasePage {
         }
 
         // Client B: legacy password dialog (dialog-enter-encryption-password vs
-        // dialog-sync-initial-cfg password prompt)
+        // dialog-sync-cfg password prompt)
         const legacyPwVisible = await passwordDialog.isVisible().catch(() => false);
         if (legacyPwVisible) {
           console.log('[SuperSyncPage] Password dialog — entering password');
@@ -1311,6 +1331,10 @@ export class SuperSyncPage extends BasePage {
     // Click the confirm button (mat-flat-button with color="primary")
     // In setup mode the button text is "Set Password", in full mode it's "Enable Encryption"
     const confirmBtn = dialog.locator('button[mat-flat-button][color="primary"]');
+    // Wait for [(ngModel)] propagation to flip [disabled]="!isPasswordValid"
+    // — fill() resolves before Angular CD ticks, so the click can otherwise
+    // burn the full retry window against a still-disabled button.
+    await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
     await confirmBtn.click();
 
     await this.page.waitForTimeout(500);
@@ -1625,6 +1649,99 @@ export class SuperSyncPage extends BasePage {
     return false;
   }
 
+  private async _getUnsyncedOperationCount(): Promise<number | null> {
+    return this.page
+      .evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('SUP_OPS');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+
+        try {
+          if (!db.objectStoreNames.contains('ops')) {
+            return null;
+          }
+
+          const entries = await new Promise<{ syncedAt?: number; rejectedAt?: number }[]>(
+            (resolve, reject) => {
+              const tx = db.transaction('ops', 'readonly');
+              const request = tx.objectStore('ops').getAll();
+              request.onsuccess = () =>
+                resolve(request.result as { syncedAt?: number; rejectedAt?: number }[]);
+              request.onerror = () => reject(request.error);
+              tx.onabort = () => reject(tx.error);
+            },
+          );
+
+          return entries.filter((entry) => !entry.syncedAt && !entry.rejectedAt).length;
+        } finally {
+          db.close();
+        }
+      })
+      .catch((err) => {
+        console.log(`[syncAndWait] Could not read SUP_OPS pending state: ${String(err)}`);
+        return null;
+      });
+  }
+
+  private async _getSyncCompletionSnapshot(): Promise<SyncCompletionSnapshot> {
+    const [checkVisible, spinnerVisible, errorVisible, unsyncedCount] = await Promise.all(
+      [
+        this.syncCheckIcon.isVisible().catch(() => false),
+        this.syncSpinner.isVisible().catch(() => false),
+        this.syncErrorIcon.isVisible().catch(() => false),
+        this._getUnsyncedOperationCount(),
+      ],
+    );
+
+    return { checkVisible, spinnerVisible, errorVisible, unsyncedCount };
+  }
+
+  private async _waitForSyncCompletion(options: {
+    timeout: number;
+    useLocal: boolean;
+  }): Promise<void> {
+    const startTime = Date.now();
+    let lastSnapshot: SyncCompletionSnapshot | undefined;
+
+    while (Date.now() - startTime < options.timeout) {
+      const handledDialog = await this._handleSyncDialogs(options.useLocal);
+      if (handledDialog) {
+        await this.page.waitForTimeout(500);
+        continue;
+      }
+
+      lastSnapshot = await this._getSyncCompletionSnapshot();
+
+      if (lastSnapshot.errorVisible) {
+        await this.page.waitForTimeout(500);
+        const handledErrorDialog = await this._handleSyncDialogs(options.useLocal);
+        if (handledErrorDialog) {
+          continue;
+        }
+        throw new Error('Sync failed with error state during syncAndWait()');
+      }
+
+      if (lastSnapshot.checkVisible) {
+        return;
+      }
+
+      if (!lastSnapshot.spinnerVisible && lastSnapshot.unsyncedCount === 0) {
+        console.log(
+          '[syncAndWait] Sync check icon not visible, but SUP_OPS has no pending operations',
+        );
+        return;
+      }
+
+      await this.page.waitForTimeout(250);
+    }
+
+    throw new Error(
+      `syncAndWait timed out waiting for completion indicator after ${options.timeout}ms. Last state: ${JSON.stringify(lastSnapshot)}`,
+    );
+  }
+
   /**
    * Trigger a manual sync and wait for it to complete, handling any dialogs that appear.
    * This is the main method to use for syncing in tests.
@@ -1764,8 +1881,8 @@ export class SuperSyncPage extends BasePage {
       // The sync may have ended with ERROR status and opened a dialog.
       await this._handleSyncDialogs(useLocal);
 
-      // Now wait for check icon to appear (whether spinner appeared or not)
-      await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+      // Now wait for sync to settle (whether spinner appeared or not)
+      await this._waitForSyncCompletion({ timeout: 10000, useLocal });
 
       // Post-sync dialog check: _promptSuperSyncEncryptionIfNeeded() runs AFTER
       // sync completes (check icon visible) and may open enable_encryption or
@@ -1786,7 +1903,7 @@ export class SuperSyncPage extends BasePage {
         if (reSpinner) {
           await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
         }
-        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+        await this._waitForSyncCompletion({ timeout: 10000, useLocal });
 
         // Check for another dialog after re-sync (e.g., enter_password after enable_encryption)
         await this.page.waitForTimeout(1500);
@@ -1802,8 +1919,38 @@ export class SuperSyncPage extends BasePage {
           if (reSpinner2) {
             await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
           }
-          await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+          await this._waitForSyncCompletion({ timeout: 10000, useLocal });
         }
+      }
+
+      // Flush trailing ops created *by* the just-completed sync. A sync can reach
+      // IN_SYNC and then its completion effects (e.g. TaskDueEffects.addAllDueToday,
+      // which re-plans the TODAY tag) dispatch an action captured as a NEW operation
+      // *after* the upload phase. In production a debounced auto-sync pushes it
+      // moments later; in e2e it can linger past the wait budget, so a single
+      // syncAndWait() leaves unsyncedCount > 0 even though the engine has nothing
+      // left to upload. Run a bounded set of extra cycles so callers observe a truly
+      // quiescent state. (supersync-cross-entity "Task with subtasks" flake)
+      for (let flush = 0; flush < 3; flush++) {
+        const pending = await this._getUnsyncedOperationCount();
+        if (pending === null || pending === 0) {
+          break;
+        }
+        // Don't paper over a genuine error state by re-syncing.
+        const hasError = await this.syncErrorIcon.isVisible().catch(() => false);
+        if (hasError) {
+          break;
+        }
+        console.log(
+          `[syncAndWait] ${pending} trailing op(s) remained after sync settled — ` +
+            `flushing (attempt ${flush + 1}/3).`,
+        );
+        await this._handleSyncDialogs(useLocal);
+        await this.syncBtn.click();
+        await this.syncSpinner
+          .waitFor({ state: 'visible', timeout: 2000 })
+          .catch(() => {});
+        await this._waitForSyncCompletion({ timeout: 10000, useLocal });
       }
     } finally {
       // Clean up the dialog handler
@@ -1915,20 +2062,29 @@ export class SuperSyncPage extends BasePage {
       'input[name="confirmPassword"]',
     );
 
-    await newPasswordInput.fill(newPassword);
-    await newPasswordInput.blur(); // Trigger ngModel update
-    await confirmPasswordInput.fill(newPassword);
-    await confirmPasswordInput.blur(); // Trigger ngModel update
-
-    // Wait for Angular to process form validation
-    await this.page.waitForTimeout(200);
-
     // Click the "Change Password" confirm button (mat-flat-button, not the "Disable Encryption" button which is mat-stroked-button)
     const confirmBtn = changePasswordDialog.locator(
       'button[mat-flat-button][color="warn"]',
     );
     await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
-    await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
+
+    // fill() can resolve before the OnPush dialog's [(ngModel)] two-way
+    // binding commits the value, intermittently leaving a field empty — or
+    // committed-but-with-the-form-validity-still-lagging — which leaves the
+    // confirm button disabled even though the fill itself succeeded. Re-fill
+    // both fields until the confirm button is actually enabled, folding the
+    // value-commit and validity waits together so a lagging button re-triggers
+    // a re-fill instead of failing the assertion.
+    await expect(async () => {
+      for (const input of [newPasswordInput, confirmPasswordInput]) {
+        if ((await input.inputValue()) !== newPassword) {
+          await input.fill(newPassword);
+          await input.blur(); // Trigger ngModel update
+        }
+      }
+      await expect(confirmBtn).toBeEnabled({ timeout: 1000 });
+    }).toPass({ timeout: 10000 });
+
     await confirmBtn.click();
 
     // Wait for the dialog to close (password change complete)

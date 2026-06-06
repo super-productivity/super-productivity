@@ -3,7 +3,7 @@ import { MatButtonModule, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FocusModeService } from '../focus-mode.service';
-import { FocusModeMode } from '../focus-mode.model';
+import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
 import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clock-string.pipe';
 import { Store } from '@ngrx/store';
 import {
@@ -12,6 +12,7 @@ import {
   pauseFocusSession,
   resetCycles,
   skipBreak,
+  startBreak,
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
 import { selectPausedTaskId } from '../store/focus-mode.selectors';
@@ -21,6 +22,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TaskTrackingInfoComponent } from '../task-tracking-info/task-tracking-info.component';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
+import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 @Component({
   selector: 'focus-mode-break',
@@ -56,13 +58,12 @@ export class FocusModeBreakComponent {
     return this.focusModeService.progress() || 0;
   });
 
-  readonly breakTypeLabel = computed(() =>
-    this.focusModeService.isBreakLong()
-      ? T.F.FOCUS_MODE.LONG_BREAK
-      : T.F.FOCUS_MODE.SHORT_BREAK,
-  );
-
   readonly isBreakPaused = computed(() => this.focusModeService.isSessionPaused());
+  readonly isBreakOffer = computed(
+    () =>
+      !this.focusModeService.isSessionRunning() &&
+      this.focusModeService.mainState() === FocusMainUIState.BreakOffer,
+  );
   readonly isPomodoro = computed(
     () => this.focusModeService.mode() === FocusModeMode.Pomodoro,
   );
@@ -88,7 +89,27 @@ export class FocusModeBreakComponent {
   }
 
   resumeBreak(): void {
-    this._store.dispatch(unPauseFocusSession());
+    if (this.isBreakOffer()) {
+      // Prefer the stored pausedTaskId for Flowtime break offers;
+      // fallback to the active current task only when no pausedTaskId exists.
+      const currentTaskId = this._taskService.currentTaskId();
+      const storePausedTaskId = this._pausedTaskId();
+      const pausedTaskId = storePausedTaskId ?? currentTaskId;
+      const config = this.focusModeService.focusModeConfig();
+      if (config?.isPauseTrackingDuringBreak) {
+        this._store.dispatch(unsetCurrentTask());
+      }
+
+      this._store.dispatch(
+        startBreak({
+          duration: this.focusModeService.sessionDuration(),
+          isLongBreak: this.focusModeService.isBreakLong(),
+          pausedTaskId,
+        }),
+      );
+    } else {
+      this._store.dispatch(unPauseFocusSession());
+    }
   }
 
   resetCycles(): void {

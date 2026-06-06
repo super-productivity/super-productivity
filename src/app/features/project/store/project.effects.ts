@@ -12,6 +12,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { T } from '../../../t.const';
 import { Project } from '../project.model';
+import { INBOX_PROJECT } from '../project.const';
 import { Observable } from 'rxjs';
 
 @Injectable()
@@ -37,9 +38,13 @@ export class ProjectEffects {
           if (!cfg) {
             return;
           }
-          // Clear defaultProjectId if the deleted project was the default
+          // Reset defaultProjectId to the Inbox if the deleted project was the
+          // default. (Inbox is the canonical "unset" target — see #7891; writing
+          // null would leave the settings dropdown blank now that "None" is hidden.)
           if (projectId === cfg.tasks.defaultProjectId) {
-            this._globalConfigService.updateSection('tasks', { defaultProjectId: null });
+            this._globalConfigService.updateSection('tasks', {
+              defaultProjectId: INBOX_PROJECT.id,
+            });
           }
           // Clear misc.defaultStartPage if it pointed at the deleted project,
           // otherwise users land on a dead route next app launch.

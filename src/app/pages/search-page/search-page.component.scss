@@ -33,7 +33,7 @@
       }
 
       &:hover {
-        background-color: rgba(0, 0, 0, 0.04) !important;
+        background-color: var(--state-hover) !important;
 
         .view-details-btn {
           opacity: 0.4;
@@ -63,7 +63,8 @@
               font-weight: 500;
             }
 
-            .task-archived {
+            .task-archived,
+            .task-done {
               text-decoration: line-through;
             }
 

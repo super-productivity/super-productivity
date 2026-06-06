@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -21,7 +27,6 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
 import { togglePluginPanel } from '../../layout/store/layout.actions';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter, map, startWith } from 'rxjs/operators';
-import { computed } from '@angular/core';
 import { BreakpointObserver } from '@angular/cdk/layout';
 
 @Component({
@@ -80,31 +85,35 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 
         <task-view-customizer-panel #customizerPanel></task-view-customizer-panel>
 
-        <!-- Issue Panel -->
-        <button
-          mat-mini-fab
-          color=""
-          class="e2e-toggle-issue-provider-panel"
-          [class.active]="isShowIssuePanel()"
-          [disabled]="!isRouteWithSidePanel()"
-          (click)="toggleIssuePanel()"
-          [matTooltip]="T.MH.TOGGLE_SHOW_ISSUE_PANEL | translate"
-        >
-          <mat-icon>webhook</mat-icon>
-        </button>
+        @if (isIssuesPanelEnabled()) {
+          <!-- Issue Panel -->
+          <button
+            mat-mini-fab
+            color=""
+            class="e2e-toggle-issue-provider-panel"
+            [class.active]="isShowIssuePanel()"
+            [disabled]="!isRouteWithSidePanel()"
+            (click)="toggleIssuePanel()"
+            [matTooltip]="T.MH.TOGGLE_SHOW_ISSUE_PANEL | translate"
+          >
+            <mat-icon>webhook</mat-icon>
+          </button>
+        }
 
-        <!-- Notes -->
-        <button
-          mat-mini-fab
-          color=""
-          class="e2e-toggle-notes-btn"
-          [class.active]="isShowNotes()"
-          [disabled]="!isRouteWithSidePanel()"
-          (click)="toggleNotes()"
-          [matTooltip]="T.MH.TOGGLE_SHOW_NOTES | translate"
-        >
-          <mat-icon>comment</mat-icon>
-        </button>
+        @if (isProjectNotesEnabled()) {
+          <!-- Notes -->
+          <button
+            mat-mini-fab
+            color=""
+            class="e2e-toggle-notes-btn"
+            [class.active]="isShowNotes()"
+            [disabled]="!isRouteWithSidePanel()"
+            (click)="toggleNotes()"
+            [matTooltip]="T.MH.TOGGLE_SHOW_NOTES | translate"
+          >
+            <mat-icon>comment</mat-icon>
+          </button>
+        }
       </div>
     </div>
   `,
@@ -168,6 +177,12 @@ export class MobileSidePanelMenuComponent {
   // Panel state signals
   readonly isShowNotes = computed(() => this.layoutService.isShowNotes());
   readonly isShowIssuePanel = computed(() => this.layoutService.isShowIssuePanel());
+  readonly isIssuesPanelEnabled = computed(
+    () => this._globalConfigService.appFeatures().isIssuesPanelEnabled,
+  );
+  readonly isProjectNotesEnabled = computed(
+    () => this._globalConfigService.appFeatures().isProjectNotesEnabled,
+  );
   readonly isShowTaskViewCustomizerPanel = computed(() =>
     this.layoutService.isShowTaskViewCustomizerPanel(),
   );

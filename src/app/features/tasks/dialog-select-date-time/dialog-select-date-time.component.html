@@ -10,6 +10,7 @@
       [ngModelOptions]="{ updateOn: 'blur' }"
       (ngModelChange)="onDateTimeChange($event)"
       #datepickerInput="ngModel"
+      #datepickerInputEl
     />
     <mat-datepicker-toggle
       matPrefix
@@ -28,6 +29,7 @@
       [ngModelOptions]="{ updateOn: 'blur' }"
       (ngModelChange)="onDateTimeChange($event)"
       #timepickerInput="ngModel"
+      #timepickerInputEl
     />
     <mat-timepicker-toggle
       matPrefix
@@ -47,10 +49,10 @@
   </button>
   <button
     mat-stroked-button
-    type="submit"
+    type="button"
     color="primary"
     [disabled]="!hasDateTime()"
-    [mat-dialog-close]="this.dateTime()?.getTime()"
+    (click)="onSaveClick()"
   >
     <mat-icon>save</mat-icon>{{ T.G.SAVE | translate }}
   </button>

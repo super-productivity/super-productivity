@@ -13,13 +13,52 @@ const config: CapacitorConfig = {
       smallIcon: 'ic_stat_sp',
     },
     Keyboard: {
-      // Default: resize body (Android)
-      resize: 'body',
-      resizeOnFullScreen: true,
+      // iOS-only: Android excludes @capacitor/keyboard via includePlugins below
+      // and uses JavaScriptInterface for keyboard visibility instead.
+      // 'native' resizes the WKWebView so 100vh fits above the keyboard.
+      resize: 'native',
+      // false is required when paired with @capawesome/capacitor-android-edge-
+      // to-edge-support; ignored on iOS where this key has no effect.
+      resizeOnFullScreen: false,
+    },
+    StatusBar: {
+      // iOS: overlay the status bar so content can sit beneath it.
+      // No-op on Android 15+ (targetSdk 36).
+      overlaysWebView: true,
+    },
+    SystemBars: {
+      // Disable Capacitor's built-in inset handling so the edge-to-edge plugin
+      // can own it. With targetSdk 36 (Android 16) edge-to-edge is mandatory,
+      // and the two layers both applying insets fight each other — visible
+      // as fixed-position elements scrolling with content when the IME is up.
+      insetsHandling: 'disable',
+    },
+    EdgeToEdge: {
+      // Initial status/navigation bar background color, shown before the theme
+      // service boots and calls EdgeToEdge.set{Status,Navigation}BarColor.
+      // Without this the plugin's overlay views default to transparent, so the
+      // bottom navigation/gesture area shows the bare window background. Dark to
+      // match the most common mobile theme (cf. the ios backgroundColor below).
+      statusBarColor: '#131314',
+      navigationBarColor: '#131314',
     },
   },
   android: {
-    adjustMarginsForEdgeToEdge: 'auto',
+    // Android keyboard visibility is handled by JavaScriptInterface. Keeping
+    // @capacitor/keyboard Android-side registers an unused insets callback
+    // that can crash in Keyboard$1.onEnd on some devices.
+    includePlugins: [
+      '@capacitor/browser',
+      '@capacitor/status-bar',
+      'capacitor-plugin-safe-area',
+      '@capacitor/app',
+      '@capacitor/filesystem',
+      '@capacitor/local-notifications',
+      '@capacitor/share',
+      '@capawesome/capacitor-android-dark-mode-support',
+      '@capawesome/capacitor-android-edge-to-edge-support',
+      '@capawesome/capacitor-background-task',
+    ],
   },
   ios: {
     // Content inset for safe areas (notch, home indicator)
@@ -31,18 +70,6 @@ const config: CapacitorConfig = {
     allowsLinkPreview: true,
     // Scroll behavior
     scrollEnabled: true,
-    // iOS-specific plugin overrides
-    plugins: {
-      StatusBar: {
-        overlaysWebView: true,
-      },
-      Keyboard: {
-        // Resize the native WebView when keyboard appears
-        // This shrinks the viewport so 100vh/100% automatically fits above keyboard
-        resize: 'native',
-        resizeOnFullScreen: true,
-      },
-    },
   },
 };
 

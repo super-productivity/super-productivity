@@ -29,10 +29,13 @@ describe('validateRule', () => {
     expect(validateRule('string')).toBe(false);
   });
 
-  it('should fail if name is missing or invalid', () => {
+  it('should fail if name is missing or not a string', () => {
     expect(validateRule({ ...validRule, name: undefined })).toBe(false);
-    expect(validateRule({ ...validRule, name: '' })).toBe(false);
     expect(validateRule({ ...validRule, name: 123 })).toBe(false);
+  });
+
+  it('should accept an empty name (matches what the UI and load path allow)', () => {
+    expect(validateRule({ ...validRule, name: '' })).toBe(true);
   });
 
   it('should fail if isEnabled is missing or invalid', () => {
@@ -94,6 +97,23 @@ describe('validateRule', () => {
     };
 
     expect(validateRule(rule)).toBe(true);
+  });
+
+  it('should validate the taskStarted/taskStopped triggers and removeTag action', () => {
+    expect(
+      validateRule({
+        ...validRule,
+        trigger: { type: 'taskStarted' },
+        actions: [{ type: 'addTag', value: 'in-progress' }],
+      }),
+    ).toBe(true);
+    expect(
+      validateRule({
+        ...validRule,
+        trigger: { type: 'taskStopped' },
+        actions: [{ type: 'removeTag', value: 'in-progress' }],
+      }),
+    ).toBe(true);
   });
 
   it('should validate regex-enabled title conditions', () => {

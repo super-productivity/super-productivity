@@ -5,7 +5,11 @@ import { testState, resetTestState } from './sync.service.test-state';
 
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', async () => {
-  const { testState: state } = await import('./sync.service.test-state');
+  const {
+    applyOperationSelect,
+    hasOperationUniqueConflict,
+    testState: state,
+  } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
 
   const createTxMock = () => ({
@@ -29,20 +33,49 @@ vi.mock('../src/db', async () => {
         state.operations.set(args.data.id, op);
         return op;
       }),
+      createMany: vi.fn().mockImplementation(async (args: any) => {
+        const rows = Array.isArray(args.data) ? args.data : [args.data];
+        let count = 0;
+
+        for (const row of rows) {
+          if (hasOperationUniqueConflict(state.operations, row)) {
+            if (args.skipDuplicates) {
+              continue;
+            }
+            throw new PrismaModule.PrismaClientKnownRequestError(
+              'Unique constraint failed',
+              { code: 'P2002', clientVersion: '5.0.0' },
+            );
+          }
+
+          state.operations.set(row.id, {
+            ...row,
+            receivedAt: row.receivedAt ?? BigInt(Date.now()),
+          });
+          count++;
+        }
+
+        return { count };
+      }),
       findFirst: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         if (args.where?.entityId && args.where?.entityType) {
+          state.entityConflictFindFirstCount++;
           const ops = Array.from(state.operations.values())
             .filter(
               (op: any) =>
                 op.userId === args.where.userId &&
                 op.entityId === args.where.entityId &&
-                op.entityType === args.where.entityType,
+                op.entityType === args.where.entityType &&
+                (args.where.clientId?.not === undefined ||
+                  op.clientId !== args.where.clientId.not),
             )
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-          return ops[0] || null;
+          return applyOperationSelect(ops[0], args.select) || null;
         }
         return null;
       }),
@@ -66,7 +99,9 @@ vi.mock('../src/db', async () => {
       }),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         return null;
       }),
@@ -91,6 +126,13 @@ vi.mock('../src/db', async () => {
             if (typeof value === 'object' && value !== null && 'increment' in value) {
               updated[key] =
                 (existing[key] || 0) + (value as { increment: number }).increment;
+            } else if (
+              typeof value === 'object' &&
+              value !== null &&
+              'decrement' in value
+            ) {
+              updated[key] =
+                (existing[key] || 0) - (value as { decrement: number }).decrement;
             } else {
               updated[key] = value;
             }
@@ -119,6 +161,66 @@ vi.mock('../src/db', async () => {
         return state.users.get(args.where.id) || null;
       }),
     },
+    // Upload transaction writes the storage counter atomically via $executeRaw.
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
+      const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      // Full-state op uploads aggregate prior vector clocks via $queryRaw.
+      if (sql.includes('jsonb_each_text(vector_clock)')) {
+        const [txUserId, beforeServerSeq] = params as [number, number];
+        const aggregate = new Map<string, number>();
+        for (const op of state.operations.values()) {
+          if ((op as any).userId !== txUserId) continue;
+          if ((op as any).serverSeq >= beforeServerSeq) continue;
+          const vc = (op as any).vectorClock;
+          if (!vc || typeof vc !== 'object') continue;
+          for (const [clientKey, rawVal] of Object.entries(
+            vc as Record<string, unknown>,
+          )) {
+            if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) continue;
+            const cur = aggregate.get(clientKey) ?? 0;
+            if (rawVal > cur) aggregate.set(clientKey, rawVal);
+          }
+        }
+        return Array.from(aggregate, ([client_id, max_counter]) => ({
+          client_id,
+          max_counter: BigInt(max_counter),
+        }));
+      }
+
+      const [userId, entityType, entityIdsSql] = params as [number, string, Prisma.Sql];
+      state.batchConflictQueryCount++;
+      if (!Array.isArray(entityIdsSql.values)) {
+        throw new Error(
+          'Expected batched conflict query entity IDs to be passed via Prisma.join(...)',
+        );
+      }
+      const batchEntityIds = new Set(
+        entityIdsSql.values.filter(
+          (entityId): entityId is string => typeof entityId === 'string',
+        ),
+      );
+      const latestByEntityId = new Map<string, any>();
+      const ops = Array.from(state.operations.values())
+        .filter(
+          (op: any) =>
+            op.userId === userId &&
+            op.entityType === entityType &&
+            batchEntityIds.has(op.entityId),
+        )
+        .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+
+      for (const op of ops) {
+        if (!op.entityId || latestByEntityId.has(op.entityId)) continue;
+        latestByEntityId.set(op.entityId, op);
+      }
+
+      return Array.from(latestByEntityId.values()).map((op: any) => ({
+        entityId: op.entityId,
+        clientId: op.clientId,
+        vectorClock: op.vectorClock,
+      }));
+    }),
   });
 
   return {
@@ -833,6 +935,39 @@ describe('Conflict Detection', () => {
       });
       const result = await service.uploadOps(userId, clientA, [op]);
       expect(result[0].accepted).toBe(true);
+    });
+
+    it('should batch latest-op lookups for multi-entity conflict detection', async () => {
+      const service = getSyncService();
+
+      const existingOp = createOp({
+        entityId: 'task-2',
+        clientId: clientB,
+        vectorClock: { [clientB]: 1 },
+      });
+      const existingResult = await service.uploadOps(userId, clientB, [existingOp]);
+      expect(existingResult[0].accepted).toBe(true);
+      const beforeMultiEntityFindFirstCount = testState.entityConflictFindFirstCount;
+
+      const multiEntityOp = createOp({
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2', 'task-3'],
+        clientId: clientA,
+        vectorClock: { [clientA]: 1 },
+      });
+
+      const result = await service.uploadOps(userId, clientA, [multiEntityOp]);
+
+      expect(testState.batchConflictQueryCount).toBeGreaterThan(0);
+      expect(testState.entityConflictFindFirstCount).toBe(
+        beforeMultiEntityFindFirstCount,
+      );
+      expect(result[0]).toMatchObject({
+        accepted: false,
+        errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+        existingClock: { [clientB]: 1 },
+      });
+      expect(result[0].error).toContain('TASK:task-2');
     });
   });
 });

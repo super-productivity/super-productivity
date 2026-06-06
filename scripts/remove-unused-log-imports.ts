@@ -21,7 +21,6 @@ const filesToFix = [
   'src/app/ui/duration/input-duration-formly/input-duration-formly.component.ts',
   'src/app/ui/inline-markdown/inline-markdown.component.ts',
   'src/app/util/is-touch-only.ts',
-  'src/app/util/watch-object.ts',
 ];
 
 function removeUnusedLogImport(filePath: string): void {

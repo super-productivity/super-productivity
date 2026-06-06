@@ -163,8 +163,9 @@ export const projectReducer = createReducer<ProjectState>(
     ),
   ),
 
-  on(archiveProject, (state, { id }) =>
-    projectAdapter.updateOne(
+  on(archiveProject, (state, { id }) => {
+    if (id === INBOX_PROJECT.id) return state;
+    return projectAdapter.updateOne(
       {
         id,
         changes: {
@@ -172,8 +173,8 @@ export const projectReducer = createReducer<ProjectState>(
         },
       },
       state,
-    ),
-  ),
+    );
+  }),
 
   on(unarchiveProject, (state, { id }) =>
     projectAdapter.updateOne(

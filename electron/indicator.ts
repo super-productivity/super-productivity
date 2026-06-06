@@ -1,14 +1,20 @@
-import { App, ipcMain, IpcMainEvent, Menu, nativeTheme, Tray } from 'electron';
+import {
+  App,
+  ipcMain,
+  IpcMainEvent,
+  Menu,
+  nativeImage,
+  nativeTheme,
+  Tray,
+} from 'electron';
 import { log } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import { getDistChannel } from './shared-with-frontend/get-dist-channel';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
-import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import { release } from 'os';
 import {
-  updateTaskWidgetAlwaysShow,
-  updateTaskWidgetEnabled,
-  updateTaskWidgetOpacity,
+  initTaskWidgetSettingsListener,
   updateTaskWidgetTask,
 } from './task-widget/task-widget';
 import { getWin } from './main-window';
@@ -71,10 +77,11 @@ const WINDOWS_TRAY_GUIDS = {
 } as const;
 
 const getWindowsTrayGuid = (): string => {
-  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+  const channel = getDistChannel();
+  if (channel === 'win-portable') {
     return WINDOWS_TRAY_GUIDS.portable;
   }
-  if ((process as NodeJS.Process & { windowsStore?: boolean }).windowsStore) {
+  if (channel === 'win-store') {
     return WINDOWS_TRAY_GUIDS.store;
   }
   return WINDOWS_TRAY_GUIDS.nsis;
@@ -101,11 +108,15 @@ export const initIndicator = ({
     forceDarkTray,
   };
   DIR = ICONS_FOLDER + 'indicator/';
+  // On macOS we always load the black (`-l`) icons and mark them as template
+  // images in getTrayImage(); the system auto-inverts them for the current
+  // menu bar appearance, so the static dark/light choice doesn't apply.
   shouldUseDarkColors =
-    forceDarkTray ||
-    IS_LINUX ||
-    (IS_WINDOWS && !isWindows11()) ||
-    nativeTheme.shouldUseDarkColors;
+    !IS_MAC &&
+    (forceDarkTray ||
+      IS_LINUX ||
+      (IS_WINDOWS && !isWindows11()) ||
+      nativeTheme.shouldUseDarkColors);
 
   _showApp = showApp;
   _quitApp = quitApp;
@@ -134,19 +145,20 @@ export const ensureIndicator = (): Tray | undefined => {
 const createTray = (): Tray => {
   const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
   const trayIconPath = DIR + `stopped${suf}`;
+  const trayIcon = getTrayImage(trayIconPath);
   let nextTray: Tray;
   if (IS_WINDOWS) {
     const guid = getWindowsTrayGuid();
     try {
-      nextTray = new Tray(trayIconPath, guid);
+      nextTray = new Tray(trayIcon, guid);
       log('Tray created on Windows with GUID:', guid);
     } catch (e) {
       log('Tray creation with GUID failed, retrying without GUID:', e);
-      nextTray = new Tray(trayIconPath);
+      nextTray = new Tray(trayIcon);
       log('Tray created on Windows without GUID');
     }
   } else {
-    nextTray = new Tray(trayIconPath);
+    nextTray = new Tray(trayIcon);
   }
   nextTray.setContextMenu(createContextMenu());
 
@@ -178,24 +190,9 @@ function initListeners(): void {
   }
   _isListenersInitialized = true;
 
-  let isTaskWidgetEnabled = false;
-  // Listen for settings updates to handle task widget enable/disable
-  ipcMain.on(IPC.UPDATE_SETTINGS, (ev, settings: GlobalConfigState) => {
-    const isTaskWidgetEnabledNew = settings?.taskWidget?.isEnabled || false;
-
-    if (isTaskWidgetEnabledNew !== isTaskWidgetEnabled) {
-      isTaskWidgetEnabled = isTaskWidgetEnabledNew;
-      updateTaskWidgetEnabled(isTaskWidgetEnabled);
-    }
-
-    if (isTaskWidgetEnabled) {
-      const opacity = settings?.taskWidget?.opacity ?? 95;
-      updateTaskWidgetOpacity(opacity);
-      updateTaskWidgetAlwaysShow(settings?.taskWidget?.isAlwaysShow || false);
-    } else {
-      updateTaskWidgetAlwaysShow(false);
-    }
-  });
+  // Task widget settings are per-instance (not synced) — handled via a
+  // dedicated IPC channel in task-widget.ts.
+  initTaskWidgetSettingsListener();
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
     if (_isRunning && tray) {
@@ -558,11 +555,35 @@ function getRunningIconPath(progress?: number): string {
 
 let curIco: string | undefined;
 
+// GNOME AppIndicator can fall back to a generic "three dots" icon for
+// sandboxed Electron apps when given only a file path. Passing a NativeImage
+// keeps the actual pixel data attached to the tray item.
+// On macOS we also need a NativeImage so we can mark it as a template image —
+// the system then inverts it for the current menu bar appearance (light/dark,
+// highlight state, accessibility), so it stays visible on any background.
+const getTrayImage = (icoPath: string): string | Electron.NativeImage => {
+  if (!IS_LINUX && !IS_MAC) {
+    return icoPath;
+  }
+
+  const image = nativeImage.createFromPath(icoPath);
+  if (image.isEmpty()) {
+    log('Tray icon NativeImage is empty, falling back to icon path:', icoPath);
+    return icoPath;
+  }
+
+  if (IS_MAC) {
+    image.setTemplateImage(true);
+  }
+
+  return image;
+};
+
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function setTrayIcon(tr: Tray, icoPath: string): void {
   if (icoPath !== curIco) {
     curIco = icoPath;
-    tr.setImage(icoPath);
+    tr.setImage(getTrayImage(icoPath));
   }
 }
 

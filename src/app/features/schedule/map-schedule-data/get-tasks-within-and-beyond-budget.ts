@@ -1,19 +1,16 @@
-import {
-  TaskWithoutReminder,
-  TaskWithPlannedForDayIndication,
-} from '../../tasks/task.model';
+import { TaskWithoutReminder } from '../../tasks/task.model';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 
-export const getTasksWithinAndBeyondBudget = (
-  tasks: TaskWithoutReminder[],
+export const getTasksWithinAndBeyondBudget = <T extends TaskWithoutReminder>(
+  tasks: T[],
   budget: number,
 ): {
-  beyond: (TaskWithPlannedForDayIndication | TaskWithoutReminder)[];
-  within: (TaskWithPlannedForDayIndication | TaskWithoutReminder)[];
+  beyond: T[];
+  within: T[];
   isSomeTimeLeftForLastOverBudget: boolean;
 } => {
-  const beyond: (TaskWithPlannedForDayIndication | TaskWithoutReminder)[] = [];
-  const within: (TaskWithPlannedForDayIndication | TaskWithoutReminder)[] = [];
+  const beyond: T[] = [];
+  const within: T[] = [];
 
   let remainingBudget = budget;
   let isOverBudget = false;

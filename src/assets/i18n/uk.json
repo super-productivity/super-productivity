@@ -194,10 +194,22 @@
       }
     },
     "D_RATE": {
-      "A_HOW": "Як і де оцінювати",
-      "BTN_DONT_BOTHER": "Не турбувати більше",
-      "TITLE": "🙈 Пробачте, будь ласка, але...",
-      "TXT": "Ви б дуже допомогли проекту, <strong>поставивши йому хорошу оцінку, якщо вам це подобається!</strong>"
+      "A_HOW": "Як оцінити",
+      "BTN_DONT_BOTHER": "Більше не запитувати",
+      "BTN_FEEDBACK": "Надіслати відгук",
+      "BTN_LATER": "Можливо, пізніше",
+      "BTN_RATE_APP_STORE": "Оцінити в App Store",
+      "BTN_RATE_PLAY_STORE": "Оцінити в Play Store",
+      "FEEDBACK_BACK": "Назад",
+      "FEEDBACK_CONTRIBUTE": "Зробити внесок у проєкт",
+      "FEEDBACK_CONTRIBUTE_DESC": "Код, дизайн, переклади тощо",
+      "FEEDBACK_PRIVATE": "Написати супровіднику",
+      "FEEDBACK_PRIVATE_DESC": "Надіслати приватне повідомлення",
+      "FEEDBACK_PUBLIC": "Написати в GitHub Discussions",
+      "FEEDBACK_PUBLIC_DESC": "Інші можуть побачити та відповісти",
+      "FEEDBACK_TITLE": "Як ви хочете допомогти?",
+      "TITLE": "Подобається Super Productivity?",
+      "TXT": "Це <strong>безкоштовний проєкт з відкритим кодом</strong>, створений ентузіастами — без відстеження й реклами. Оцінка або коротке повідомлення допомагає більшій кількості людей знайти його."
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {

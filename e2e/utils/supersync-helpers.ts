@@ -22,6 +22,12 @@ import {
   TASK_WAIT_TIMEOUT,
   UI_VISIBLE_TIMEOUT_SHORT,
 } from './e2e-constants';
+import {
+  assertNoRuntimeBrowserErrors,
+  attachPageErrorCollector,
+  installDevErrorDialogHandler,
+  type RuntimeBrowserError,
+} from './runtime-errors';
 
 /**
  * SuperSync server URL for E2E tests.
@@ -50,6 +56,7 @@ export interface SimulatedE2EClient {
   workView: WorkViewPage;
   sync: SuperSyncPage;
   clientName: string;
+  runtimeErrors: RuntimeBrowserError[];
 }
 
 /**
@@ -204,7 +211,9 @@ export const createSimulatedClient = async (
   baseURL: string,
   clientName: string,
   testPrefix: string,
+  options: { allowExampleTasks?: boolean } = {},
 ): Promise<SimulatedE2EClient> => {
+  const { allowExampleTasks = false } = options;
   // Use provided baseURL or fall back to localhost:4242 (Playwright fixture may be undefined)
   const effectiveBaseURL = baseURL || 'http://localhost:4242';
 
@@ -216,20 +225,21 @@ export const createSimulatedClient = async (
   });
 
   const page = await context.newPage();
+  const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
+  installDevErrorDialogHandler(page, `Client ${clientName}`);
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
-  await page.addInitScript(() => {
+  // Tests of the example-task sync gate opt back in via { allowExampleTasks: true }
+  // so first-run onboarding tasks are actually created.
+  await page.addInitScript((allowExamples) => {
     localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
     localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
     localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-  });
-
-  // Set up error logging
-  page.on('pageerror', (error) => {
-    console.error(`[Client ${clientName}] Page error:`, error.message);
-  });
+    if (!allowExamples) {
+      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+    }
+  }, allowExampleTasks);
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
@@ -278,6 +288,7 @@ export const createSimulatedClient = async (
     workView,
     sync,
     clientName,
+    runtimeErrors,
   };
 };
 
@@ -319,6 +330,10 @@ export const closeClient = async (client: SimulatedE2EClient): Promise<void> => 
       `[closeClient] Cleanup error (ignored): ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+
+  // Assert AFTER close so pageerrors emitted during teardown (Angular destroy
+  // hooks, late RxJS errors) are still captured before we throw.
+  assertNoRuntimeBrowserErrors(client.runtimeErrors, `Client ${client.clientName}`);
 };
 
 /**
@@ -720,6 +735,11 @@ export const stopTimeTracking = async (
   const pauseBtn = task.locator('button:has(mat-icon:has-text("pause"))');
   await pauseBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
   await pauseBtn.click();
+  await client.page.mouse.move(0, 0);
+  await task
+    .locator('task-hover-controls')
+    .waitFor({ state: 'detached', timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .catch(() => {});
 };
 
 // ============================================================================
@@ -759,7 +779,7 @@ export const getTaskTitles = async (client: SimulatedE2EClient): Promise<string[
  *
  * @param client - The simulated E2E client
  * @param taskName - The task name
- * @returns The time display text or null if not visible
+ * @returns The time display text or null if not present
  */
 export const getTaskTimeDisplay = async (
   client: SimulatedE2EClient,
@@ -767,10 +787,168 @@ export const getTaskTimeDisplay = async (
 ): Promise<string | null> => {
   const task = getTaskElement(client, taskName);
   const timeVal = task.locator('.time-wrapper .time-val').first();
-  if (await timeVal.isVisible()) {
+  if ((await timeVal.count()) > 0) {
     return timeVal.textContent();
   }
   return null;
+};
+
+/**
+ * Wait for a task's tracked time text to be present.
+ *
+ * The task row intentionally hides `.time-wrapper` while hover controls are mounted,
+ * so time-tracking assertions should read the rendered text instead of requiring
+ * visual visibility.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @param timeout - Maximum time to wait for non-empty time text
+ * @returns The trimmed time display text
+ */
+export const waitForTaskTimeDisplay = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+  timeout = UI_VISIBLE_TIMEOUT,
+): Promise<string> => {
+  await expect
+    .poll(
+      async () => {
+        const text = await getTaskTimeDisplay(client, taskName);
+        return text?.trim() ?? '';
+      },
+      {
+        timeout,
+        intervals: [250, 500, 1000],
+      },
+    )
+    .not.toBe('');
+
+  return (await getTaskTimeDisplay(client, taskName))!.trim();
+};
+
+/**
+ * Get a task's persisted timeSpent from the app state cache.
+ *
+ * This avoids relying on the task row's time label: sub-minute values render as
+ * "-" in the UI, and the label can be hidden while hover controls are mounted.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @returns The persisted timeSpent value in milliseconds, or null if not found
+ */
+export const getTaskTimeSpentFromState = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<number | null> =>
+  client.page.evaluate(async (name) => {
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null;
+
+    const getTimeSpentFromRootState = (state: Record<string, unknown>): number | null => {
+      const taskState = state.tasks ?? state.task;
+      if (!isRecord(taskState) || !isRecord(taskState.entities)) {
+        return null;
+      }
+
+      for (const task of Object.values(taskState.entities)) {
+        if (
+          isRecord(task) &&
+          typeof task.title === 'string' &&
+          task.title.includes(name)
+        ) {
+          return typeof task.timeSpent === 'number' ? task.timeSpent : 0;
+        }
+      }
+
+      return null;
+    };
+
+    type StoreSubscription = { unsubscribe: () => void };
+    type StoreLike = {
+      subscribe: (next: (state: unknown) => void) => StoreSubscription;
+    };
+
+    const helpers = (
+      window as unknown as {
+        __e2eTestHelpers?: {
+          store?: StoreLike;
+        };
+      }
+    ).__e2eTestHelpers;
+
+    if (helpers?.store) {
+      const liveState = await new Promise<Record<string, unknown> | null>((resolve) => {
+        let isDone = false;
+        const subscriptionRef: { current?: StoreSubscription } = {};
+        const finish = (state: unknown): void => {
+          if (isDone) {
+            return;
+          }
+          isDone = true;
+          window.setTimeout(() => subscriptionRef.current?.unsubscribe());
+          resolve(isRecord(state) ? state : null);
+        };
+
+        subscriptionRef.current = helpers.store.subscribe(finish);
+        window.setTimeout(() => finish(null), 1000);
+      });
+
+      if (liveState) {
+        const timeSpent = getTimeSpentFromRootState(liveState);
+        if (timeSpent !== null) {
+          return timeSpent;
+        }
+      }
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('SUP_OPS');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const stateCacheEntry = await new Promise<
+      { state?: Record<string, unknown> } | undefined
+    >((resolve, reject) => {
+      const tx = db.transaction('state_cache', 'readonly');
+      const store = tx.objectStore('state_cache');
+      const request = store.get('current');
+      request.onsuccess = () =>
+        resolve(
+          isRecord(request.result)
+            ? (request.result as { state?: Record<string, unknown> })
+            : undefined,
+        );
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+
+    return stateCacheEntry?.state
+      ? getTimeSpentFromRootState(stateCacheEntry.state)
+      : null;
+  }, taskName);
+
+/**
+ * Wait for a task's persisted timeSpent to be greater than zero.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @param timeout - Maximum time to wait for timeSpent
+ * @returns The persisted timeSpent value in milliseconds
+ */
+export const waitForTaskTimeSpent = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+  timeout = UI_VISIBLE_TIMEOUT,
+): Promise<number> => {
+  await expect
+    .poll(async () => (await getTaskTimeSpentFromState(client, taskName)) ?? 0, {
+      timeout,
+      intervals: [250, 500, 1000],
+    })
+    .toBeGreaterThan(0);
+
+  return (await getTaskTimeSpentFromState(client, taskName))!;
 };
 
 /**
@@ -962,8 +1140,8 @@ export const hasTaskInWorklog = async (
 ): Promise<boolean> => {
   // Only navigate if not already on worklog page
   const currentUrl = client.page.url();
-  if (!currentUrl.includes('/worklog')) {
-    await client.page.goto('/#/tag/TODAY/worklog');
+  if (!currentUrl.includes('/history')) {
+    await client.page.goto('/#/tag/TODAY/history');
     await client.page.waitForLoadState('networkidle');
     await client.page.waitForTimeout(UI_SETTLE_EXTENDED);
   }
@@ -1037,7 +1215,7 @@ export const getWorklogTaskCount = async (
   client: SimulatedE2EClient,
 ): Promise<number> => {
   // Navigate to worklog
-  await client.page.goto('/#/tag/TODAY/worklog');
+  await client.page.goto('/#/tag/TODAY/history');
   await client.page.waitForLoadState('networkidle');
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 

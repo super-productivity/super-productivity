@@ -390,4 +390,138 @@ describe('TagEffects', () => {
       });
     });
   });
+
+  /**
+   * Integration test for the resume-time conflict regression.
+   *
+   * Uses the REAL `HydrationStateService` instead of the spy, so the gate
+   * is exercised through the actual signal-based state machine. Proves the
+   * end-to-end chain: `openSyncWindow()` → `isInSyncWindow()` returns true
+   * → `skipDuringSyncWindow()` filters → `repairTodayTagConsistency$` is
+   * suppressed.
+   */
+  describe('resume-time conflict regression (real HydrationStateService)', () => {
+    let realHydration: HydrationStateService;
+    let realEffects: TagEffects;
+    let realStore: MockStore;
+
+    beforeEach(() => {
+      // Tear down the spy-based TestBed and rebuild with the real service.
+      TestBed.resetTestingModule();
+
+      const syncTriggerSpy = jasmine.createSpyObj('SyncTriggerService', [
+        'isInitialSyncDoneSync',
+      ]);
+      syncTriggerSpy.isInitialSyncDoneSync.and.returnValue(true);
+
+      const snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
+      const tagServiceSpy = jasmine.createSpyObj('TagService', ['updateTag']);
+      const workContextSpy = jasmine.createSpyObj('WorkContextService', [], {
+        activeWorkContextId: 'test-id',
+        activeWorkContextTypeAndId$: of({
+          activeType: WorkContextType.TAG,
+          activeId: 'test-id',
+        }),
+        mainListTasks$: of([]),
+      });
+      const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+      const translateSpy = jasmine.createSpyObj('TranslateService', ['instant']);
+      translateSpy.instant.and.returnValue('Today');
+      const plannerSpy = jasmine.createSpyObj('PlannerService', ['getSnackExtraStr']);
+      plannerSpy.getSnackExtraStr.and.returnValue(Promise.resolve(''));
+
+      TestBed.configureTestingModule({
+        providers: [
+          TagEffects,
+          provideMockActions(() => EMPTY),
+          provideMockStore({
+            selectors: [
+              { selector: selectTodayTagRepair, value: null },
+              { selector: selectTodayTaskIds, value: [] },
+              { selector: selectAllTasksDueToday, value: [] },
+            ],
+          }),
+          // Real HydrationStateService (providedIn: 'root', no spy)
+          HydrationStateService,
+          { provide: SyncTriggerService, useValue: syncTriggerSpy },
+          { provide: SnackService, useValue: snackServiceSpy },
+          { provide: TagService, useValue: tagServiceSpy },
+          { provide: WorkContextService, useValue: workContextSpy },
+          { provide: Router, useValue: routerSpy },
+          { provide: TranslateService, useValue: translateSpy },
+          { provide: PlannerService, useValue: plannerSpy },
+          { provide: LOCAL_ACTIONS, useValue: EMPTY },
+        ],
+      });
+
+      realEffects = TestBed.inject(TagEffects);
+      realStore = TestBed.inject(MockStore);
+      realHydration = TestBed.inject(HydrationStateService);
+
+      // Clean any stale state from a previous test
+      realHydration.endApplyingRemoteOps();
+      realHydration.clearPostSyncCooldown();
+      realHydration.closeSyncWindow();
+    });
+
+    afterEach(() => {
+      realHydration.closeSyncWindow();
+      realStore.resetSelectors();
+    });
+
+    it('suppresses repair while window is open, dispatches once closed', (done) => {
+      // Simulate the resume race: openSyncWindow() runs first (synchronously,
+      // from the SyncTriggerService constructor subscription), then the
+      // selectTodayTagRepair selector emits a needsRepair=true value.
+      realHydration.openSyncWindow();
+      expect(realHydration.isInSyncWindow()).toBeTrue();
+
+      realStore.overrideSelector(selectTodayTagRepair, {
+        needsRepair: true,
+        repairedTaskIds: ['stale-task-1', 'stale-task-2'],
+      });
+      realStore.refreshState();
+
+      let emittedDuringWindow = false;
+      const sub = realEffects.repairTodayTagConsistency$.subscribe(() => {
+        emittedDuringWindow = true;
+      });
+
+      // After 50ms with the window open, the effect must NOT have dispatched.
+      setTimeout(() => {
+        expect(emittedDuringWindow).toBeFalse();
+
+        // Now close the window (simulating the post-sync flow) and emit a
+        // fresh repair value — the effect should dispatch this time.
+        realHydration.closeSyncWindow();
+        expect(realHydration.isInSyncWindow()).toBeFalse();
+
+        let emittedAfterClose: ReturnType<typeof updateTag> | null = null;
+        sub.unsubscribe();
+        const sub2 = realEffects.repairTodayTagConsistency$.subscribe((action) => {
+          emittedAfterClose = action as ReturnType<typeof updateTag>;
+        });
+
+        realStore.overrideSelector(selectTodayTagRepair, {
+          needsRepair: true,
+          repairedTaskIds: ['fresh-task-1'],
+        });
+        realStore.refreshState();
+
+        setTimeout(() => {
+          expect(emittedAfterClose).toEqual(
+            updateTag({
+              tag: {
+                id: TODAY_TAG.id,
+                changes: { taskIds: ['fresh-task-1' as never] },
+              },
+              isSkipSnack: true,
+            }),
+          );
+          sub2.unsubscribe();
+          done();
+        }, 50);
+      }, 50);
+    });
+  });
 });

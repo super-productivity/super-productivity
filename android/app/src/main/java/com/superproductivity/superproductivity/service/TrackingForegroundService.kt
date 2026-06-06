@@ -41,6 +41,25 @@ class TrackingForegroundService : Service() {
         var isTracking: Boolean = false
             private set
 
+        // Marks the window between startForegroundService() and the first
+        // startForeground() inside onStartCommand(). A stop arriving in that
+        // window must NOT use stopService() — tearing down a start-foreground
+        // service before it promotes crashes the process with
+        // ForegroundServiceDidNotStartInTimeException (AOSP bringDownServiceLocked,
+        // fired while fgRequired is still true). JavaScriptInterface reads this to
+        // route such stops through onStartCommand (ACTION_STOP) instead.
+        @Volatile
+        var isStartPending: Boolean = false
+            private set
+
+        fun markStartPending() {
+            isStartPending = true
+        }
+
+        fun clearStartPending() {
+            isStartPending = false
+        }
+
         fun getElapsedMs(): Long {
             return if (isTracking && startTimestamp > 0) {
                 (System.currentTimeMillis() - startTimestamp) + accumulatedMs
@@ -71,11 +90,16 @@ class TrackingForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
 
-        // Every Context.startForegroundService() creates a per-call FGS token
-        // that must be answered with startForeground() within the system
-        // timeout, regardless of action or existing state. Satisfy it here so
-        // every branch below already has the contract honored.
-        ensureForegroundNotification()
+        // Android documents successful startForeground() as the safe path
+        // after startForegroundService(). Promote before handling actions so
+        // newly started services satisfy that contract.
+        if (!ensureForegroundNotification()) {
+            clearStartPending()
+            reportForegroundFailure()
+            stopAfterForegroundFailure(startId)
+            return START_NOT_STICKY
+        }
+        clearStartPending()
 
         when (intent?.action) {
             ACTION_START -> {
@@ -90,7 +114,11 @@ class TrackingForegroundService : Service() {
                 val title = intent.getStringExtra(EXTRA_TASK_TITLE) ?: "Task"
                 val timeSpentMs = intent.getLongExtra(EXTRA_TIME_SPENT, 0L)
 
-                startTracking(taskId, title, timeSpentMs)
+                if (!startTracking(taskId, title, timeSpentMs)) {
+                    reportForegroundFailure()
+                    stopAfterForegroundFailure(startId)
+                    return START_NOT_STICKY
+                }
             }
 
             ACTION_UPDATE -> {
@@ -121,9 +149,9 @@ class TrackingForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun ensureForegroundNotification() {
-        try {
-            val notification = if (isTracking && taskTitle.isNotEmpty()) {
+    private fun ensureForegroundNotification(): Boolean {
+        val notification = try {
+            if (isTracking && taskTitle.isNotEmpty()) {
                 TrackingNotificationHelper.buildNotification(
                     this,
                     taskTitle,
@@ -131,7 +159,7 @@ class TrackingForegroundService : Service() {
                 )
             } else {
                 // A content title is required on some OEM skins (notably Samsung
-                // One UI) — a title-less notification can render blank or cause
+                // One UI) - a title-less notification can render blank or cause
                 // startForeground() to throw IllegalArgumentException on a few
                 // Android 14 builds, which would re-trigger the FGS timeout.
                 androidx.core.app.NotificationCompat.Builder(
@@ -145,16 +173,11 @@ class TrackingForegroundService : Service() {
                     .setSilent(true)
                     .build()
             }
-            startForegroundSpecialUse(TrackingNotificationHelper.NOTIFICATION_ID, notification)
-        } catch (e: IllegalArgumentException) {
-            // Some Android 14 builds throw this from startForeground() when the
-            // notification lacks a content title. We set one above, but keep
-            // the guard so the FGS timeout path still short-circuits.
-            Log.e(TAG, "ensureForegroundNotification: invalid notification", e)
-        } catch (e: SecurityException) {
-            // Missing POST_NOTIFICATIONS or FGS type permission.
-            Log.e(TAG, "ensureForegroundNotification: missing permission", e)
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "ensureForegroundNotification: failed to build notification", e)
+            return false
         }
+        return startForegroundSpecialUse(TrackingNotificationHelper.NOTIFICATION_ID, notification)
     }
 
     private fun stopForegroundAndSelf() {
@@ -162,7 +185,25 @@ class TrackingForegroundService : Service() {
         stopSelf()
     }
 
-    private fun startTracking(taskId: String, title: String, timeSpentMs: Long) {
+    private fun stopAfterForegroundFailure(startId: Int) {
+        isTracking = false
+        handler.removeCallbacks(updateRunnable)
+        currentTaskId = null
+        startTimestamp = 0
+        accumulatedMs = 0
+        taskTitle = ""
+        stopSelf(startId)
+    }
+
+    private fun reportForegroundFailure() {
+        ForegroundServiceFailure.send(
+            this,
+            ForegroundServiceFailure.SERVICE_TRACKING,
+            ForegroundServiceFailure.REASON_PROMOTION_FAILED
+        )
+    }
+
+    private fun startTracking(taskId: String, title: String, timeSpentMs: Long): Boolean {
         Log.d(TAG, "Starting tracking: taskId=$taskId, title=$title, timeSpentMs=$timeSpentMs")
 
         currentTaskId = taskId
@@ -171,17 +212,17 @@ class TrackingForegroundService : Service() {
         startTimestamp = System.currentTimeMillis()
         isTracking = true
 
-        // Start foreground immediately to avoid ANR
-        val notification = TrackingNotificationHelper.buildNotification(
-            this,
-            taskTitle,
-            getElapsedMs()
-        )
-        startForegroundSpecialUse(TrackingNotificationHelper.NOTIFICATION_ID, notification)
+        // The foreground-service start token was already satisfied at the top
+        // of onStartCommand(). Replace the placeholder notification without
+        // risking a second startForeground() failure resetting tracking state.
+        if (!updateNotification()) {
+            return false
+        }
 
         // Start update loop
         handler.removeCallbacks(updateRunnable)
         handler.post(updateRunnable)
+        return true
     }
 
     private fun updateTimeSpent(timeSpentMs: Long) {
@@ -214,10 +255,10 @@ class TrackingForegroundService : Service() {
         stopSelf()
     }
 
-    private fun updateNotification() {
-        if (!isTracking) return
+    private fun updateNotification(): Boolean {
+        if (!isTracking) return true
 
-        try {
+        return try {
             val notification = TrackingNotificationHelper.buildNotification(
                 this,
                 taskTitle,
@@ -227,8 +268,10 @@ class TrackingForegroundService : Service() {
                 TrackingNotificationHelper.NOTIFICATION_ID,
                 notification
             )
-        } catch (e: SecurityException) {
-            Log.w(TAG, "No permission to post notification", e)
+            true
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Unable to update tracking notification", e)
+            false
         }
     }
 
@@ -238,12 +281,12 @@ class TrackingForegroundService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
         isTracking = false
+        // Heal a never-promoted start: if the service was created but torn down
+        // before onStartCommand cleared it, drop the stale flag so the next cold
+        // stop uses stopService() rather than needlessly re-spawning the service.
+        clearStartPending()
         handler.removeCallbacks(updateRunnable)
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        Log.d(TAG, "Task removed, stopping service")
-        stopTracking()
-    }
+    // Do not override onTaskRemoved — foreground service must survive app swipe (#7818).
 }

@@ -261,7 +261,7 @@ export class SyncPage extends BasePage {
    */
   async waitForSyncReady(): Promise<void> {
     // Wait for sync button to show the check icon (indicates provider is ready)
-    // The sync button shows sync_disabled when not ready, and check/done_all when ready
+    // The sync button shows a plain sync icon when not ready, and check/done_all when ready
     await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
   }
 
@@ -343,20 +343,35 @@ export class SyncPage extends BasePage {
     });
     await encryptionDialog.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Fill in the password fields directly by finding them within the dialog
-    const passwordInput = encryptionDialog.locator('input[type="password"]').first();
-    const confirmInput = encryptionDialog.locator('input[type="password"]').nth(1);
+    // Scope each input to its labelled mat-form-field. Targeting by nth-index on
+    // input[type="password"] within the dialog has been observed to leave the
+    // confirm field empty — likely because the visible-input order is not
+    // guaranteed during Angular's render cycle.
+    const passwordField = encryptionDialog
+      .locator('mat-form-field')
+      .filter({ has: this.page.locator('mat-label:has-text("Encryption Password")') });
+    const confirmField = encryptionDialog
+      .locator('mat-form-field')
+      .filter({ has: this.page.locator('mat-label:has-text("Confirm")') });
+    const passwordInput = passwordField.locator('input').first();
+    const confirmInput = confirmField.locator('input').first();
 
     // Fill password field
     await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
+    await passwordInput.click();
     await passwordInput.fill(password);
+    await expect(passwordInput).toHaveValue(password);
 
-    // Fill confirm password field
+    // Fill confirm password field. In CI, fill() has occasionally left focus on
+    // the first password field, duplicating the value there and leaving confirm
+    // empty. Insert through the focused confirm input and assert both values.
     await confirmInput.waitFor({ state: 'visible', timeout: 5000 });
-    await confirmInput.fill(password);
-
-    // Wait a moment for validation
-    await this.page.waitForTimeout(300);
+    await confirmInput.click();
+    await expect(confirmInput).toBeFocused();
+    await this.page.keyboard.press('ControlOrMeta+A');
+    await this.page.keyboard.insertText(password);
+    await expect(confirmInput).toHaveValue(password);
+    await expect(passwordInput).toHaveValue(password);
 
     // Click the "Enable Encryption" button in this dialog
     // It's the mat-flat-button with a lock icon

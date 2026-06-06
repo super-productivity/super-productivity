@@ -18,7 +18,9 @@ export type {
 } from '../core/types/sync-results.types';
 
 /**
- * Result of handling rejected operations.
+ * Result of handling rejected operations. Validation failure (if any during
+ * a nested download) is surfaced via the SyncSessionValidationService latch
+ * — the wrapper reads it once before deciding IN_SYNC vs ERROR. (#7330)
  */
 export interface RejectionHandlingResult {
   /** Number of merged ops created from conflict resolution (these need to be uploaded) */
@@ -212,7 +214,10 @@ export class RejectedOpsHandlerService {
       existingClock?: VectorClock;
     }>,
     downloadCallback: DownloadCallback,
-  ): Promise<{ mergedOpsCreated: number; retryExceededCount: number }> {
+  ): Promise<{
+    mergedOpsCreated: number;
+    retryExceededCount: number;
+  }> {
     let mergedOpsCreated = 0;
 
     // Check resolution attempt counts per entity to prevent infinite loops.
@@ -272,7 +277,10 @@ export class RejectedOpsHandlerService {
     }
 
     if (opsToResolve.length === 0) {
-      return { mergedOpsCreated: 0, retryExceededCount: opsExceededRetries.length };
+      return {
+        mergedOpsCreated: 0,
+        retryExceededCount: opsExceededRetries.length,
+      };
     }
 
     OpLog.normal(
@@ -281,7 +289,9 @@ export class RejectedOpsHandlerService {
     );
 
     try {
-      // Try to download new remote ops - if there are any, conflict detection will handle them
+      // Try to download new remote ops - if there are any, conflict detection will handle them.
+      // Validation failure (if any during the nested download) is on the
+      // session-validation latch — wrapper reads it. (#7330)
       const downloadResult = await downloadCallback();
 
       // Helper to check which ops are still pending, preserving existingClock from rejection
@@ -418,7 +428,10 @@ export class RejectedOpsHandlerService {
       throw e;
     }
 
-    return { mergedOpsCreated, retryExceededCount: opsExceededRetries.length };
+    return {
+      mergedOpsCreated,
+      retryExceededCount: opsExceededRetries.length,
+    };
   }
 
   private _getEntityKey(op: Operation): string {

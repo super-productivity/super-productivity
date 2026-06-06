@@ -35,9 +35,7 @@
 
   // to shrink the th col to a min
   td {
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
+    overflow-wrap: anywhere;
     hyphens: auto;
     padding-left: 0;
 

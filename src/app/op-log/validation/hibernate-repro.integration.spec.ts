@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 /**
  * Diagnostic harness for issue #7330 — "Sync conflict error on Windows after
  * hibernate". The goal is NOT to prove a preformed theory but to surface WHICH
@@ -167,7 +166,7 @@ describe('Hibernate repro — cross-model invariants (issue #7330)', () => {
 
       console.log('[S2]', { isValid, err });
       expect(isValid).toBe(false);
-      expect(err).toContain('tagId "ghost-tag"');
+      expect(err).toContain('tagId from task not existing');
     });
   });
 
@@ -198,7 +197,7 @@ describe('Hibernate repro — cross-model invariants (issue #7330)', () => {
 
       console.log('[S3]', { isValid, err });
       expect(isValid).toBe(false);
-      expect(err).toContain('projectId ghost-project');
+      expect(err).toContain('projectId from task not existing');
     });
   });
 
@@ -261,7 +260,7 @@ describe('Hibernate repro — cross-model invariants (issue #7330)', () => {
 
       console.log('[S6]', { isValid, err });
       expect(isValid).toBe(false);
-      expect(err).toContain('Missing task id ghost-task');
+      expect(err).toContain('Inconsistent Task State: Missing task id for tag');
     });
   });
 

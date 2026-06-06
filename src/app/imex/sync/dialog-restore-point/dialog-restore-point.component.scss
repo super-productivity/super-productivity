@@ -61,12 +61,18 @@
     border-color 0.15s;
 
   &:hover {
-    background: var(--hover-bg, rgba(0, 0, 0, 0.04));
+    // Migrated to state token: was `var(--hover-bg, rgba(0,0,0,0.04))`
+    // (the `--hover-bg` legacy var is never declared in this codebase) —
+    // now consumes `--state-hover`, mode-aware and theme-tunable.
+    background: var(--state-hover);
   }
 
   &.selected {
     border-color: var(--primary-color, #3f51b5);
-    background: var(--selected-bg, rgba(63, 81, 181, 0.08));
+    // Migrated to state token: was a brand-tinted overlay. Switching to
+    // `--state-selected` (ink-on-surface) is the convention for selected
+    // rows; the brand outline still differentiates this state visually.
+    background: var(--state-selected);
   }
 }
 

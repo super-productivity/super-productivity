@@ -28,6 +28,9 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
+import { GlobalConfigService } from '../features/config/global-config.service';
+import { signal } from '@angular/core';
+import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 describe('PluginBridgeService.setCounter()', () => {
@@ -53,9 +56,9 @@ describe('PluginBridgeService.setCounter()', () => {
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['allTasks$']);
     const projectServiceSpy = jasmine.createSpyObj('ProjectService', ['list$']);
     const tagServiceSpy = jasmine.createSpyObj('TagService', ['getTags$']);
-    const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [
-      'activeWorkContext$',
-    ]);
+    const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
+      activeWorkContext$: of(null),
+    });
     const dataInitServiceSpy = jasmine.createSpyObj('DataInitService', ['reInit']);
     dataInitServiceSpy.reInit.and.resolveTo();
 
@@ -107,6 +110,10 @@ describe('PluginBridgeService.setCounter()', () => {
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: dataInitServiceSpy },
+        {
+          provide: GlobalConfigService,
+          useValue: { cfg: signal(DEFAULT_GLOBAL_CONFIG) },
+        },
       ],
     });
 

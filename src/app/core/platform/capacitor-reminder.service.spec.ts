@@ -3,7 +3,11 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 import { CapacitorReminderService } from './capacitor-reminder.service';
 import { CapacitorPlatformService } from './capacitor-platform.service';
-import { CapacitorNotificationService } from './capacitor-notification.service';
+import {
+  CapacitorNotificationService,
+  REMINDER_ACTION_TYPE_ID,
+} from './capacitor-notification.service';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
 describe('CapacitorReminderService', () => {
   let service: CapacitorReminderService;
@@ -37,10 +41,12 @@ describe('CapacitorReminderService', () => {
       'ensurePermissions',
       'cancel',
       'cancelMultiple',
+      'registerReminderActions',
     ]);
     notificationServiceSpy.ensurePermissions.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.cancel.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.cancelMultiple.and.returnValue(Promise.resolve(true));
+    notificationServiceSpy.registerReminderActions.and.returnValue(Promise.resolve());
 
     TestBed.configureTestingModule({
       providers: [
@@ -82,6 +88,58 @@ describe('CapacitorReminderService', () => {
       });
       const nativeService = TestBed.inject(CapacitorReminderService);
       expect(nativeService.isAvailable).toBe(true);
+    });
+  });
+
+  describe('initialize', () => {
+    // initialize() branches solely on isIOS(); other platform fields are
+    // intentionally omitted to keep the mock honest about what's exercised.
+    const setupPlatform = (
+      platform: 'ios' | 'android' | 'web',
+    ): CapacitorReminderService => {
+      const platformSpy = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['hasCapability', 'isIOS'],
+        { platform },
+      );
+      platformSpy.isIOS.and.returnValue(platform === 'ios');
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          CapacitorReminderService,
+          provideMockStore(),
+          { provide: CapacitorPlatformService, useValue: platformSpy },
+          { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
+        ],
+      });
+      return TestBed.inject(CapacitorReminderService);
+    };
+
+    it('registers reminder action types on iOS', async () => {
+      const iosService = setupPlatform('ios');
+      await iosService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT request permissions eagerly on iOS (contextual prompt on first schedule)', async () => {
+      const iosService = setupPlatform('ios');
+      await iosService.initialize();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op on Android', async () => {
+      const androidService = setupPlatform('android');
+      await androidService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).not.toHaveBeenCalled();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op on web', async () => {
+      const webService = setupPlatform('web');
+      await webService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).not.toHaveBeenCalled();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
     });
   });
 
@@ -129,6 +187,56 @@ describe('CapacitorReminderService', () => {
     it('should return true on non-Android platforms', async () => {
       const result = await service.ensureExactAlarmPermission();
       expect(result).toBe(true);
+    });
+  });
+
+  describe('legacy Android WebView path (issue #7408)', () => {
+    let legacyService: CapacitorReminderService;
+    let checkExactAlarmSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      const nativePlatformSpy = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['hasCapability', 'isIOS'],
+        {
+          platform: 'android',
+          isNative: true,
+          isMobile: true,
+          capabilities: { scheduledNotifications: true },
+        },
+      );
+      checkExactAlarmSpy = spyOn(
+        LocalNotificationsWeb.prototype,
+        'checkExactNotificationSetting',
+      );
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          CapacitorReminderService,
+          provideMockStore(),
+          { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
+          { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
+          // Override the WebView discriminator via DI; `Capacitor.isNativePlatform()`
+          // is naturally false in the test environment, so the legacy-path
+          // condition `_isAndroidWebView && !Capacitor.isNativePlatform()` evaluates true.
+          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+        ],
+      });
+      legacyService = TestBed.inject(CapacitorReminderService);
+    });
+
+    it('ensurePermissions short-circuits without consulting Capacitor', async () => {
+      // The whole point of issue #7408: avoid the broken Web Notifications API
+      // fallback. We must NOT delegate to _notificationService here.
+      const result = await legacyService.ensurePermissions();
+      expect(result).toBe(true);
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('ensureExactAlarmPermission short-circuits without consulting Capacitor', async () => {
+      const result = await legacyService.ensureExactAlarmPermission();
+      expect(result).toBe(true);
+      expect(checkExactAlarmSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -210,6 +318,74 @@ describe('CapacitorReminderService', () => {
           notifications: [
             jasmine.objectContaining({
               sound: 'default',
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should include reminder actions for explicit iOS task reminders', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'TASK',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({
+              actionTypeId: REMINDER_ACTION_TYPE_ID,
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should include reminder actions and metadata for explicit iOS deadline reminders', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1_deadline',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'DEADLINE',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({
+              actionTypeId: REMINDER_ACTION_TYPE_ID,
+              extra: jasmine.objectContaining({
+                reminderId: 'task-1_deadline',
+                relatedId: 'task-1',
+                reminderType: 'DEADLINE',
+              }),
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should not include reminder actions for due-date notifications', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'DUE_DATE',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({
+              actionTypeId: undefined,
             }),
           ],
         }),

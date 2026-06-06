@@ -13,8 +13,11 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry failed tests to handle flakiness */
-  retries: process.env.CI ? 2 : 1,
+  /*
+   * Keep retries disabled so E2E failures expose determinism problems instead
+   * of being hidden by a later passing attempt.
+   */
+  retries: 0,
   // Reduce worker count to avoid resource contention causing flakiness
   // Lower worker count improves stability by reducing parallel execution stress
   workers:
@@ -71,6 +74,13 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:4242',
+
+    /*
+     * Pin the browser locale so navigator.language is deterministic across
+     * machines. The app's "System default" date/time locale follows
+     * navigator.language, and many tests assume en-GB (DD/MM/YYYY, 24h).
+     */
+    locale: 'en-GB',
 
     /* Configure downloads to go to test output directory, not ~/Downloads */
     downloadsPath: path.join(__dirname, '..', '.tmp', 'e2e-test-results', 'downloads'),

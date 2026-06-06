@@ -12,7 +12,7 @@ import { CompleteBackup } from '../sync-exports';
 export const DB_NAME = 'SUP_OPS';
 
 /** Current database schema version */
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 /** Object store names */
 export const STORE_NAMES = {
@@ -30,6 +30,8 @@ export const STORE_NAMES = {
   ARCHIVE_OLD: 'archive_old' as const,
   /** Profile data - stores complete backups for user profile switching */
   PROFILE_DATA: 'profile_data' as const,
+  /** Client ID - sync device identity (singleton, key = SINGLETON_KEY) */
+  CLIENT_ID: 'client_id' as const,
 } as const;
 
 /** Common key used for singleton entries */

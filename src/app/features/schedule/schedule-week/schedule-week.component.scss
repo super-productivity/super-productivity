@@ -25,10 +25,31 @@
       min-width: 100%;
 
       // Match grid-container column widths exactly
-      grid-template-columns: var(--schedule-time-width) repeat(
-          var(--nr-of-days),
-          minmax(var(--schedule-day-width), 1fr)
-        );
+      .week-header-dates {
+        grid-template-columns: var(--schedule-time-width) repeat(
+            var(--nr-of-days),
+            minmax(var(--schedule-day-width), 1fr)
+          );
+        width: fit-content;
+        min-width: 100%;
+      }
+
+      // Pin the corner cell above the sticky time column. Border on the
+      // right side of the *time* column instead of the left side of the
+      // first day, so it stays visible (sticky) when scrolling horizontally.
+      .filler {
+        position: sticky;
+        left: 0;
+        // Topmost element in the week-header's stacking context, so the
+        // corner stays in front of the day cells next to it.
+        z-index: 1;
+        @include extraBorder('-right');
+      }
+
+      // First day's left border is now drawn by .filler's right border.
+      .filler + .day {
+        border-left: 0;
+      }
     }
 
     .grid-container {
@@ -40,6 +61,40 @@
       // Force grid to size based on content, not container
       width: fit-content;
       min-width: 100%;
+    }
+
+    // Pin the time labels to the left edge while scrolling horizontally.
+    // The right border stays with the time column (sticky) instead of with
+    // the first day column (scrolls), so the divider remains visible.
+    .time-column-bg {
+      display: block;
+      grid-column: 1;
+      grid-row: 1 / -1;
+      position: sticky;
+      left: 0;
+      z-index: 4;
+      border-right: 1px solid var(--grid-color);
+      pointer-events: none;
+    }
+
+    // First day's left border is now drawn by .time-column-bg's right border.
+    // .row + .col selects the first .col in the grid (it sits right after the
+    // last .row in DOM order; subsequent .col follow other .col).
+    .row + .col {
+      border-left: 0;
+    }
+
+    .time {
+      position: sticky;
+      left: 0;
+      z-index: 5;
+    }
+
+    // The sticky time column only needs a background once the user has
+    // actually scrolled horizontally — that's when day content starts
+    // sliding under it.
+    &[data-hscrolled] .time-column-bg {
+      background: var(--bg-lighter);
     }
   }
 
@@ -119,24 +174,20 @@
 }
 
 .week-header {
-  display: grid;
-  grid-auto-flow: column;
-  // Use start alignment to match grid-container
-  place-content: start;
-  text-align: center;
-  grid-auto-columns: 1fr;
-  grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
-  // Ensure full width to match grid-container
+  --over-budget-badge-bg: var(--schedule-event-bg);
+
   width: 100%;
   box-sizing: border-box;
-
+  display: grid;
   position: sticky;
   top: 0;
   @include extraBorder('-bottom');
-  box-shadow: var(--whiteframe-shadow-1dp);
-  z-index: 10;
+  // Above the sticky time column (z-index 4–5) so it visually sits in front
+  // of it both at rest and while scrolling.
+  z-index: 12;
   color: var(--text-color);
   background: var(--bg-lighter);
+  box-shadow: var(--whiteframe-shadow-1dp);
 
   &.isInPanel {
     //border: 0;
@@ -145,9 +196,19 @@
     box-shadow: none;
     background: transparent;
     border: none;
+    --over-budget-badge-bg: var(--schedule-event-bg-in-side-panel);
 
-    * {
+    .day {
       border: none !important;
+    }
+
+    // Panel is a single, full-width day cell with centered content. Anchoring
+    // the badge absolutely to the right edge leaves a large gap from the
+    // centered date; let it flow as a centered flex child next to the date
+    // instead (the week-view multi-column layout keeps the absolute variant).
+    .over-budget-badge {
+      position: static;
+      transform: none;
     }
 
     .filler {
@@ -156,7 +217,32 @@
   }
 }
 
+.week-header-dates {
+  display: grid;
+  grid-auto-flow: column;
+  // Use start alignment to match grid-container
+  place-content: start;
+  text-align: center;
+  grid-auto-columns: 1fr;
+  grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 32px;
+
+  @include mq(xs, max) {
+    min-height: 22px;
+  }
+}
+
 .day {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-half);
+  min-width: 0;
+  padding: 0 var(--s-quarter);
+  box-sizing: border-box;
   line-height: 32px;
   font-size: 18px;
   @include extraBorder('-left');
@@ -165,17 +251,65 @@
     font-size: 14px;
     line-height: 20px;
   }
+
+  mat-icon {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 16px;
+  }
 }
 
 .day-num {
   font-weight: 600;
-  display: inline;
-  padding-right: 6px;
 }
 
 .day-day {
-  display: inline;
   font-weight: 100;
+}
+
+.over-budget-badge {
+  position: absolute;
+  top: 50%;
+  right: var(--s-half);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-quarter);
+  box-sizing: border-box;
+  max-width: calc(100% - var(--s-half));
+  height: calc(var(--s2) + var(--s-quarter));
+  min-width: calc(var(--s2) + var(--s-quarter));
+  padding: 0 var(--s-quarter);
+  overflow: hidden;
+  border: 1px solid var(--c-warn);
+  border-radius: var(--s2);
+  background: var(--over-budget-badge-bg);
+  color: var(--c-warn);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  @include mq(xs, max) {
+    right: var(--s-quarter);
+    font-size: 10px;
+  }
+}
+
+.over-budget-symbol {
+  font-weight: 900;
+}
+
+.over-budget-count {
+  font-weight: 700;
 }
 
 .time {
@@ -183,6 +317,9 @@
   align-self: end;
   font-size: 80%;
   position: relative;
+  // Pull the label up so its visual center sits on the hour line instead
+  // of sitting slightly below it.
+  top: -0.7em;
   color: var(--text-color-muted);
   padding-right: 6px;
   line-height: 1.2;
@@ -192,6 +329,12 @@
   &:first-of-type {
     height: 5px;
   }
+}
+
+// Background strip behind the time column. Only shown in horizontal-scroll mode
+// (see &[data-horizontal-scroll] above) where it becomes sticky-left.
+.time-column-bg {
+  display: none;
 }
 
 .col {
@@ -250,48 +393,6 @@
   background: var(--c-primary);
   color: var(--palette-primary-contrast-500);
   pointer-events: none;
-}
-
-.excess-entries {
-  z-index: 10;
-  position: sticky;
-  bottom: -2px;
-  max-height: 100px;
-  padding-bottom: 30px;
-  border-top: 4px solid var(--c-warn);
-  border: 2px solid var(--c-warn);
-  box-shadow: var(--whiteframe-shadow-6dp);
-  border-radius: var(--card-border-radius);
-  background: var(--bg);
-
-  @media (min-height: 1000px) {
-    max-height: 200px;
-  }
-
-  schedule-event {
-    margin: 5px;
-  }
-}
-
-.excess-entries-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--s);
-
-  @include mq(xs, max) {
-    padding: var(--s-half);
-  }
-
-  mat-icon {
-    font-size: 20px;
-    height: 20px;
-
-    @include mq(xs, max) {
-      font-size: 16px;
-      height: 16px;
-    }
-  }
 }
 
 .work-end,

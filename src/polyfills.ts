@@ -52,5 +52,9 @@ import './app/rxjs-to-promise.polyfill';
 
 // fix ical.js
 // @see https://github.com/mozilla-comm/ical.js/issues/329
-(window as any).ICAL = {};
-(window as any).global = window;
+const globalScope = globalThis as typeof globalThis & {
+  ICAL?: unknown;
+  global?: typeof globalThis;
+};
+globalScope.ICAL = {};
+globalScope.global = globalThis;

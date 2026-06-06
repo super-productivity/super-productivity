@@ -3,10 +3,10 @@
     <!-- -->
     @case ('REPEAT') {
       <mat-icon
-        svgIcon="repeat"
         class="ico"
         inline="true"
-      ></mat-icon>
+        >repeat</mat-icon
+      >
     }
     @case ('PLANNED_FOR_DAY') {
       <div class="day-of-month">{{ se().dayOfMonth }}</div>
@@ -62,27 +62,32 @@
 </div>
 <!-- -->
 
-<div class="title">
-  <!--  {{ se().data['plannedForDay'] }}-->
-  <!--  {{ scheduledClockStr }}-->
-  <!--  {{se().id}} __ {{se().data?.id}} __-->
-  <!-- -->
-
-  @if (
-    se().type === SVEType.SplitTaskContinuedLast ||
-    se().type === SVEType.SplitTaskContinued ||
-    se().type === SVEType.RepeatProjectionSplitContinued ||
-    se().type === SVEType.RepeatProjectionSplitContinuedLast
-  ) {
-    ...
+<div
+  #titleEl
+  class="title"
+>
+  <span class="title-text">
+    <!--  {{ se().data['plannedForDay'] }}-->
+    <!--  {{ scheduledClockStr }}-->
+    <!--  {{se().id}} __ {{se().data?.id}} __-->
     <!-- -->
-  } @else {
-    @if (titleHasLinks()) {
-      <span [innerHTML]="title() | renderLinks"></span>
+
+    @if (
+      se().type === SVEType.SplitTaskContinuedLast ||
+      se().type === SVEType.SplitTaskContinued ||
+      se().type === SVEType.RepeatProjectionSplitContinued ||
+      se().type === SVEType.RepeatProjectionSplitContinuedLast
+    ) {
+      ...
+      <!-- -->
     } @else {
-      {{ title() }}
+      @if (titleHasLinks()) {
+        <span [innerHTML]="title() | renderLinks"></span>
+      } @else {
+        {{ title() }}
+      }
     }
-  }
+  </span>
 </div>
 
 @if (task()) {
@@ -117,20 +122,22 @@
         {{ T.F.CALENDARS.CONTEXT_MENU.RESCHEDULE | translate }}
       </button>
     }
-    <button
-      mat-menu-item
-      (click)="createCalendarEventAsTask()"
-    >
-      <mat-icon>add</mat-icon>
-      {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
-    </button>
-    <button
-      mat-menu-item
-      (click)="hideCalendarEvent()"
-    >
-      <mat-icon>visibility_off</mat-icon>
-      {{ T.G.HIDE | translate }}
-    </button>
+    @if (!isReferenceCalendar()) {
+      <button
+        mat-menu-item
+        (click)="createCalendarEventAsTask()"
+      >
+        <mat-icon>add</mat-icon>
+        {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
+      </button>
+      <button
+        mat-menu-item
+        (click)="hideCalendarEvent()"
+      >
+        <mat-icon>visibility_off</mat-icon>
+        {{ T.G.HIDE | translate }}
+      </button>
+    }
     @if (isCalendarEventFromPlugin()) {
       <button
         mat-menu-item
@@ -146,6 +153,10 @@
 @if (isResizable()) {
   <div
     class="resize-handle"
+    [matTooltipPosition]="'above'"
+    [matTooltip]="beyondBudgetTooltip"
+    [matTooltipDisabled]="!se().isBeyondBudget"
+    [attr.aria-label]="se().isBeyondBudget ? beyondBudgetTooltip : null"
     (mousedown)="onResizeStart($event)"
     (touchstart)="onResizeStart($event)"
   >

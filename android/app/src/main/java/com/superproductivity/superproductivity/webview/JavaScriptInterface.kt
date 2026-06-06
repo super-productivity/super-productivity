@@ -3,7 +3,9 @@ package com.superproductivity.superproductivity.webview
 import android.app.Activity
 import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -15,6 +17,7 @@ import com.superproductivity.superproductivity.FullscreenActivity.Companion.WIND
 import com.superproductivity.superproductivity.app.LaunchDecider
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
+import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
@@ -23,6 +26,7 @@ import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.WidgetTaskQueue
+import org.json.JSONObject
 
 
 class JavaScriptInterface(
@@ -30,16 +34,43 @@ class JavaScriptInterface(
     private val webView: WebView,
 ) {
 
-    private inline fun safeCall(errorMsg: String, block: () -> Unit) {
+    private inline fun safeCall(
+        errorMsg: String,
+        foregroundService: String? = null,
+        block: () -> Unit
+    ) {
         try {
             block()
         } catch (e: Exception) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+            val isStartNotAllowed =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    e is ForegroundServiceStartNotAllowedException
+            if (isStartNotAllowed) {
                 Log.e(TAG, "$errorMsg - ForegroundService restrictions violated (Android 12+). App may be in background.", e)
             } else {
                 Log.e(TAG, errorMsg, e)
             }
+            foregroundService?.let {
+                emitForegroundServiceStartFailed(
+                    it,
+                    if (isStartNotAllowed) {
+                        ForegroundServiceFailure.REASON_START_NOT_ALLOWED
+                    } else {
+                        ForegroundServiceFailure.REASON_PROMOTION_FAILED
+                    }
+                )
+            }
         }
+    }
+
+    private fun emitForegroundServiceStartFailed(service: String, reason: String) {
+        val payload = "{service:${JSONObject.quote(service)},reason:${JSONObject.quote(reason)}}"
+        val subjectPath = "${FN_PREFIX}onForegroundServiceStartFailed${'$'}"
+        callJavaScriptFunction(
+            "if(window.$WINDOW_INTERFACE_PROPERTY && " +
+                "$subjectPath) " +
+                "$subjectPath.next($payload)"
+        )
     }
 
     @Suppress("unused")
@@ -62,29 +93,36 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun saveToDb(requestId: String, key: String, value: String) {
         (activity.application as App).keyValStore.set(key, value)
-        callJavaScriptFunction(FN_PREFIX + "saveToDbCallback('" + requestId + "')")
+        callJavaScriptFunction(FN_PREFIX + "saveToDbCallback(" + JSONObject.quote(requestId) + ")")
     }
 
+    // #7925: quote every arg so a stored value with ' / \ / newlines / </script>
+    // can't break out of the JS literal. (JSON.stringify does not escape
+    // apostrophes — pre-fix, a backup blob with one silently corrupted the load.)
     @Suppress("unused")
     @JavascriptInterface
     fun loadFromDb(requestId: String, key: String) {
         val r = (activity.application as App).keyValStore.get(key, "")
-        // NOTE: ' are important as otherwise the json messes up
-        callJavaScriptFunction(FN_PREFIX + "loadFromDbCallback('" + requestId + "', '" + key + "', '" + r + "')")
+        callJavaScriptFunction(
+            FN_PREFIX + "loadFromDbCallback(" +
+                JSONObject.quote(requestId) + ", " +
+                JSONObject.quote(key) + ", " +
+                JSONObject.quote(r) + ")"
+        )
     }
 
     @Suppress("unused")
     @JavascriptInterface
     fun removeFromDb(requestId: String, key: String) {
         (activity.application as App).keyValStore.set(key, null)
-        callJavaScriptFunction(FN_PREFIX + "removeFromDbCallback('" + requestId + "')")
+        callJavaScriptFunction(FN_PREFIX + "removeFromDbCallback(" + JSONObject.quote(requestId) + ")")
     }
 
     @Suppress("unused")
     @JavascriptInterface
     fun clearDb(requestId: String) {
         (activity.application as App).keyValStore.clearAll(activity)
-        callJavaScriptFunction(FN_PREFIX + "clearDbCallback('" + requestId + "')")
+        callJavaScriptFunction(FN_PREFIX + "clearDbCallback(" + JSONObject.quote(requestId) + ")")
     }
 
     @Suppress("unused")
@@ -100,14 +138,23 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun startTrackingService(taskId: String, taskTitle: String, timeSpentMs: Long) {
-        safeCall("Failed to start tracking service") {
+        safeCall(
+            "Failed to start tracking service",
+            ForegroundServiceFailure.SERVICE_TRACKING
+        ) {
             val intent = Intent(activity, TrackingForegroundService::class.java).apply {
                 action = TrackingForegroundService.ACTION_START
                 putExtra(TrackingForegroundService.EXTRA_TASK_ID, taskId)
                 putExtra(TrackingForegroundService.EXTRA_TASK_TITLE, taskTitle)
                 putExtra(TrackingForegroundService.EXTRA_TIME_SPENT, timeSpentMs)
             }
-            ContextCompat.startForegroundService(activity, intent)
+            TrackingForegroundService.markStartPending()
+            try {
+                ContextCompat.startForegroundService(activity, intent)
+            } catch (e: Exception) {
+                TrackingForegroundService.clearStartPending()
+                throw e
+            }
         }
     }
 
@@ -116,7 +163,29 @@ class JavaScriptInterface(
     fun stopTrackingService() {
         safeCall("Failed to stop tracking service") {
             val intent = Intent(activity, TrackingForegroundService::class.java)
-            activity.stopService(intent)
+            if (TrackingForegroundService.isStartPending || TrackingForegroundService.isTracking) {
+                // A startForegroundService() may still be promoting: stopping via
+                // stopService() now could tear it down before startForeground()
+                // runs and crash with ForegroundServiceDidNotStartInTimeException.
+                // Routing as ACTION_STOP through onStartCommand lets it promote
+                // first, then stop cleanly.
+                intent.action = TrackingForegroundService.ACTION_STOP
+                try {
+                    activity.startService(intent)
+                } catch (e: IllegalStateException) {
+                    // App is in the background: startService() is disallowed here.
+                    // Only fall back to stopService() if no start is still pending
+                    // — stopping a not-yet-promoted service would re-trigger the
+                    // same crash. If a start IS pending, leave it: the pending
+                    // start promotes and a later foreground sync stops it cleanly.
+                    Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
+                    if (!TrackingForegroundService.isStartPending) {
+                        activity.stopService(Intent(activity, TrackingForegroundService::class.java))
+                    }
+                }
+            } else {
+                activity.stopService(intent)
+            }
         }
     }
 
@@ -155,7 +224,10 @@ class JavaScriptInterface(
         isPaused: Boolean,
         taskTitle: String?
     ) {
-        safeCall("Failed to start focus mode service") {
+        safeCall(
+            "Failed to start focus mode service",
+            ForegroundServiceFailure.SERVICE_FOCUS_MODE
+        ) {
             val intent = Intent(activity, FocusModeForegroundService::class.java).apply {
                 action = FocusModeForegroundService.ACTION_START
                 putExtra(FocusModeForegroundService.EXTRA_TITLE, title)
@@ -165,7 +237,13 @@ class JavaScriptInterface(
                 putExtra(FocusModeForegroundService.EXTRA_IS_BREAK, isBreak)
                 putExtra(FocusModeForegroundService.EXTRA_IS_PAUSED, isPaused)
             }
-            ContextCompat.startForegroundService(activity, intent)
+            FocusModeForegroundService.markStartPending()
+            try {
+                ContextCompat.startForegroundService(activity, intent)
+            } catch (e: Exception) {
+                FocusModeForegroundService.clearStartPending()
+                throw e
+            }
         }
     }
 
@@ -174,7 +252,29 @@ class JavaScriptInterface(
     fun stopFocusModeService() {
         safeCall("Failed to stop focus mode service") {
             val intent = Intent(activity, FocusModeForegroundService::class.java)
-            activity.stopService(intent)
+            if (FocusModeForegroundService.isStartPending || FocusModeForegroundService.isRunning) {
+                // A startForegroundService() may still be promoting: stopping via
+                // stopService() now could tear it down before startForeground()
+                // runs and crash with ForegroundServiceDidNotStartInTimeException.
+                // Routing as ACTION_STOP through onStartCommand lets it promote
+                // first, then stop cleanly.
+                intent.action = FocusModeForegroundService.ACTION_STOP
+                try {
+                    activity.startService(intent)
+                } catch (e: IllegalStateException) {
+                    // App is in the background: startService() is disallowed here.
+                    // Only fall back to stopService() if no start is still pending
+                    // — stopping a not-yet-promoted service would re-trigger the
+                    // same crash. If a start IS pending, leave it: the pending
+                    // start promotes and a later foreground sync stops it cleanly.
+                    Log.d(TAG, "stopFocusModeService: app backgrounded, falling back to stopService()", e)
+                    if (!FocusModeForegroundService.isStartPending) {
+                        activity.stopService(Intent(activity, FocusModeForegroundService::class.java))
+                    }
+                }
+            } else {
+                activity.stopService(intent)
+            }
         }
     }
 
@@ -191,6 +291,26 @@ class JavaScriptInterface(
                 putExtra(FocusModeForegroundService.EXTRA_TASK_TITLE, taskTitle)
             }
             activity.startService(intent)
+        }
+    }
+
+    /**
+     * Read back the live focus-mode session so the WebView can recover it after
+     * being recreated (app reopened from recents). Returns "null" when no focus
+     * session is running. Intentionally omits the task title — no user content
+     * crosses the bridge here; the Angular store re-derives it (#7855).
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getFocusModeElapsed(): String {
+        return if (FocusModeForegroundService.isRunning) {
+            val durationMs = FocusModeForegroundService.durationMs
+            val remainingMs = FocusModeForegroundService.liveRemainingMs()
+            val isBreak = FocusModeForegroundService.isBreak
+            val isPaused = FocusModeForegroundService.isPaused
+            """{"durationMs":$durationMs,"remainingMs":$remainingMs,"isBreak":$isBreak,"isPaused":$isPaused}"""
+        } else {
+            "null"
         }
     }
 
@@ -334,6 +454,23 @@ class JavaScriptInterface(
         safeCall("Failed to clear SuperSync credentials") {
             BackgroundSyncCredentialStore.clear(activity)
             SyncReminderScheduler.cancel(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun openAppNotificationSettings() {
+        safeCall("Failed to open notification settings") {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${activity.packageName}")
+                }
+            }
+            activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 

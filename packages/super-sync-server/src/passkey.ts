@@ -17,6 +17,7 @@ import { sendPasskeyRecoveryEmail } from './email';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv } from './config';
 import { VERIFICATION_TOKEN_EXPIRY_MS, MAX_VERIFICATION_RESEND_COUNT } from './auth';
+import { authCache } from './auth-cache';
 
 // Constants
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
@@ -273,7 +274,11 @@ export const verifyRegistration = async (
         where: { email: email.toLowerCase() },
       });
       if (user && user.isVerified === 0) {
+        // AUTH_CACHE_INVALIDATION: bracket the delete pre + post, matching every
+        // other user-delete site, so the convention stays uniformly auditable.
+        authCache.invalidate(user.id);
         await prisma.user.delete({ where: { id: user.id } });
+        authCache.invalidate(user.id);
         Logger.info(`Cleaned up failed passkey registration (ID: ${user.id})`);
       }
       throw new Error('Failed to send verification email. Please try again later.');
@@ -587,6 +592,9 @@ export const completePasskeyRecovery = async (
   const credentialIdBase64url = Buffer.from(credentialInfo.id).toString('utf-8');
   const credentialIdRawBytes = Buffer.from(credentialIdBase64url, 'base64url');
 
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(user.id);
+
   // Delete old passkeys and create new one, clear recovery token, invalidate sessions
   await prisma.$transaction(async (tx) => {
     await tx.passkey.deleteMany({ where: { userId: user.id } });
@@ -612,6 +620,8 @@ export const completePasskeyRecovery = async (
       },
     });
   });
+  // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
+  authCache.invalidate(user.id);
 
   Logger.info(`Passkey recovery completed (ID: ${user.id})`);
 

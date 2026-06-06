@@ -5,6 +5,9 @@ import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
+import { TODAY_TAG } from '../../features/tag/tag.const';
+import { DateService } from '../date/date.service';
+import { isTodayWithOffset } from '../../util/is-today.util';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -34,6 +37,14 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
  * via `POST /tasks` with `parentId` — see `_handleCreateTask`.
  */
 const REJECTED_TASK_FIELDS = ['parentId', 'subTaskIds'] as const;
+
+/**
+ * Fields a subtask inherits from its parent at the reducer (`addSubTask`
+ * forces `tagIds: []` and `projectId = parent.projectId`). Reject them on
+ * subtask create so callers don't get a 201 with values different from what
+ * they sent.
+ */
+const SUBTASK_INHERITED_FIELDS = ['projectId', 'tagIds'] as const;
 
 const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
   const result: Record<string, unknown> = {};
@@ -101,6 +112,20 @@ const createSuccessResponse = (
 
 type TaskSource = 'active' | 'archived' | 'all';
 
+const isValidTimestamp = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && new Date(value).getTime() > 0;
+
+const isTaskInToday = (
+  task: Task,
+  todayStr: string,
+  startOfNextDayDiffMs: number,
+): boolean => {
+  if (isValidTimestamp(task.dueWithTime)) {
+    return isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs);
+  }
+  return task.dueDay === todayStr;
+};
+
 @Injectable({
   providedIn: 'root',
 })
@@ -109,6 +134,7 @@ export class LocalRestApiHandlerService {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
+  private readonly _dateService = inject(DateService);
   private _isInitialized = false;
 
   init(): void {
@@ -285,7 +311,11 @@ export class LocalRestApiHandlerService {
       filtered = filtered.filter((t) => t.projectId === projectId);
     }
 
-    if (tagId) {
+    if (tagId === TODAY_TAG.id) {
+      const todayStr = this._dateService.todayStr();
+      const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+      filtered = filtered.filter((t) => isTaskInToday(t, todayStr, startOfNextDayDiffMs));
+    } else if (tagId) {
       filtered = filtered.filter((t) => t.tagIds.includes(tagId));
     }
 
@@ -328,6 +358,16 @@ export class LocalRestApiHandlerService {
           400,
           'INVALID_INPUT',
           'parentId must be a non-empty string',
+        );
+      }
+
+      const inherited = SUBTASK_INHERITED_FIELDS.find((field) => field in body);
+      if (inherited) {
+        return createErrorResponse(
+          requestId,
+          400,
+          'UNSUPPORTED_FIELD',
+          `${inherited} cannot be set when creating a subtask — it's inherited from the parent`,
         );
       }
 

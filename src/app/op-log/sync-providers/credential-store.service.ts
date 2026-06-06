@@ -1,4 +1,8 @@
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
+import type {
+  CredentialChangeHandler,
+  SyncCredentialStorePort,
+} from '@sp/sync-providers/credential-store';
 import { SyncProviderId, PRIVATE_CFG_PREFIX } from './provider.const';
 import { PrivateCfgByProviderId } from '../core/types/sync.types';
 import { SyncLog } from '../../core/log';
@@ -30,10 +34,8 @@ interface SyncCredentialsDb extends DBSchema {
 /**
  * Callback type for configuration change notifications.
  */
-export type CredentialChangeCallback<PID extends SyncProviderId> = (data: {
-  providerId: PID;
-  privateCfg: PrivateCfgByProviderId<PID>;
-}) => void;
+export type CredentialChangeCallback<PID extends SyncProviderId> =
+  CredentialChangeHandler<PID, PrivateCfgByProviderId<PID>>;
 
 /**
  * Store for managing sync provider credentials.
@@ -52,7 +54,9 @@ export type CredentialChangeCallback<PID extends SyncProviderId> = (data: {
  * Credentials are stored with keys: `PRIVATE_CFG_PREFIX + providerId`
  * (e.g., `__sp_cred_Dropbox`)
  */
-export class SyncCredentialStore<PID extends SyncProviderId> {
+export class SyncCredentialStore<
+  PID extends SyncProviderId,
+> implements SyncCredentialStorePort<PID, PrivateCfgByProviderId<PID>> {
   private static readonly L = 'SyncCredentialStore';
 
   private readonly _dbKey: string;
@@ -105,6 +109,24 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
 
       if (loadedConfig) {
         this._privateCfgInMemory = loadedConfig;
+        // Diagnostic: surface encryptKey state on every fresh disk load.
+        // The pair `(encryptKey=[empty], isEncryptionEnabled=true)` is the
+        // smoking-gun signature for a silent credential drop that bounces a
+        // long-offline client into the destructive force-overwrite recovery.
+        // Length-only redaction is intentional — never log the key itself.
+        const cfgWithEncryption = loadedConfig as {
+          encryptKey?: string;
+          isEncryptionEnabled?: boolean;
+        };
+        const encryptKeyInfo = cfgWithEncryption?.encryptKey
+          ? `[length=${cfgWithEncryption.encryptKey.length}]`
+          : '[empty]';
+        SyncLog.normal(
+          `${SyncCredentialStore.L}.load() loaded from disk`,
+          this._providerId,
+          `encryptKey=${encryptKeyInfo}`,
+          `isEncryptionEnabled=${cfgWithEncryption?.isEncryptionEnabled === true}`,
+        );
       }
 
       return loadedConfig ?? null;

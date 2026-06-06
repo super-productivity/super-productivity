@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { FileBasedSyncAdapterService } from './file-based-sync-adapter.service';
 import { SyncProviderId } from '../provider.const';
 import {
-  SyncProviderServiceInterface,
+  FileSyncProvider,
   OperationSyncCapable,
   SyncOperation,
 } from '../provider.interface';
@@ -21,7 +21,7 @@ import { StateSnapshotService } from '../../backup/state-snapshot.service';
 
 describe('FileBasedSyncAdapterService', () => {
   let service: FileBasedSyncAdapterService;
-  let mockProvider: jasmine.SpyObj<SyncProviderServiceInterface<SyncProviderId>>;
+  let mockProvider: jasmine.SpyObj<FileSyncProvider<SyncProviderId>>;
   let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let adapter: OperationSyncCapable;
@@ -1653,7 +1653,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.gapDetected).toBeFalsy();
     });
 
-    it('should detect gap when mixed old/new ops and oldestOpSyncVersion > sinceSeq', async () => {
+    it('should disable gap detection when the oldest op has no sync version', async () => {
       // First op has sv=undefined (old), second has sv=3 — oldestOpSyncVersion from first = undefined
       // This tests backward compat: if head op lacks sv, gap detection is disabled
       const maxOps = FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;

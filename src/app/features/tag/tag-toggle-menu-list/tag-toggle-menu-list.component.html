@@ -16,26 +16,15 @@
           (keydown)="onTagMenuKeydown($event, tag.id)"
           mat-menu-item
         >
-          @if (task().tagIds.includes(tag.id)) {
-            <mat-icon>check_box</mat-icon>
-          } @else {
-            <mat-icon>check_box_outline_blank</mat-icon>
-          }
-          @if (tag.icon && tag.isEmojiIcon) {
-            <span
-              matMenuItemIcon
-              [style.color]="tag.color || tag.theme.primary"
-              class="tag-ico tag-ico-emoji"
-              >{{ tag.icon }}</span
-            >
-          } @else {
-            <mat-icon
-              [style.color]="tag.color || tag.theme.primary"
-              class="tag-ico"
-              >{{ tag.icon || 'label' }}</mat-icon
-            >
-          }
-          {{ tag.title }}
+          <select-option-row
+            [title]="tag.title"
+            [icon]="tag.icon"
+            defaultIcon="label"
+            [color]="tag.color || tag.theme?.primary"
+            [isSelected]="task().tagIds.includes(tag.id)"
+            [showCheckbox]="true"
+            [folderPath]="tagFolderMap().get(tag.id)"
+          ></select-option-row>
         </button>
       }
     </div>

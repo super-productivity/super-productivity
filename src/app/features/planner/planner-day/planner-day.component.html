@@ -37,6 +37,7 @@
     class="normal-tasks-items"
     cdkDropList
     [cdkDropListData]="day.dayDate"
+    [cdkDropListAutoScrollStep]="8"
     (cdkDropListDropped)="drop('TODO', day.tasks, $event)"
   >
     @for (task of day.tasks; track task.id) {
@@ -95,6 +96,7 @@
     cdkDropList
     cdkDropListSortingDisabled
     [cdkDropListData]="day.dayDate"
+    [cdkDropListAutoScrollStep]="8"
     (cdkDropListDropped)="drop('SCHEDULED', day.scheduledIItems, $event)"
   >
     @for (scheduledItem of day.scheduledIItems; track scheduledItem.id) {

@@ -3,7 +3,39 @@ import {
   MenuTreeState,
   MenuTreeTreeNode,
 } from '../../features/menu-tree/store/menu-tree.model';
-import { OpLog } from '../../core/log';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+
+const KNOWN_MENU_TREE_KINDS = new Set<string>(Object.values(MenuTreeKind));
+
+const getNodeKindForLog = (kind: unknown): string =>
+  typeof kind === 'string' && KNOWN_MENU_TREE_KINDS.has(kind) ? kind : 'unknown';
+
+const logOrphanedReferenceRemoval = (
+  treeType: 'projectTree' | 'tagTree',
+  referenceType: 'project' | 'tag',
+  referenceId: string,
+): void => {
+  OP_LOG_SYNC_LOGGER.log('[repair-menu-tree] Removed orphaned reference', {
+    treeType,
+    referenceType,
+    referenceId,
+  });
+};
+
+const logInvalidNodeRemoval = (
+  treeType: 'projectTree' | 'tagTree',
+  node: MenuTreeTreeNode,
+): void => {
+  OP_LOG_SYNC_LOGGER.warn('[repair-menu-tree] Removed invalid node', {
+    treeType,
+    nodeKind: getNodeKindForLog(node.k),
+    hasNodeId: typeof node.id === 'string',
+    childCount:
+      node.k === MenuTreeKind.FOLDER && Array.isArray(node.children)
+        ? node.children.length
+        : undefined,
+  });
+};
 
 /**
  * Repairs menuTree by removing orphaned project/tag references
@@ -17,7 +49,7 @@ export const repairMenuTree = (
   validProjectIds: Set<string>,
   validTagIds: Set<string>,
 ): MenuTreeState => {
-  OpLog.log('Repairing menuTree - removing orphaned references');
+  OP_LOG_SYNC_LOGGER.log('[repair-menu-tree] Repairing orphaned references');
 
   /**
    * Recursively filters tree nodes, removing orphaned project/tag references
@@ -41,18 +73,18 @@ export const repairMenuTree = (
         if (validProjectIds.has(node.id)) {
           filtered.push(node);
         } else {
-          OpLog.log(`Removing orphaned project reference ${node.id} from ${treeType}`);
+          logOrphanedReferenceRemoval(treeType, 'project', node.id);
         }
       } else if (treeType === 'tagTree' && node.k === MenuTreeKind.TAG) {
         // Keep tag only if it exists
         if (validTagIds.has(node.id)) {
           filtered.push(node);
         } else {
-          OpLog.log(`Removing orphaned tag reference ${node.id} from ${treeType}`);
+          logOrphanedReferenceRemoval(treeType, 'tag', node.id);
         }
       } else {
         // kind mismatch or unknown
-        OpLog.warn(`Removing invalid node from ${treeType}:`, node);
+        logInvalidNodeRemoval(treeType, node);
       }
     }
 

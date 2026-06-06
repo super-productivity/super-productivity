@@ -27,6 +27,8 @@ import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-int
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
+import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 describe('IssueService', () => {
   let service: IssueService;
@@ -40,6 +42,8 @@ describe('IssueService', () => {
   let translateServiceSpy: jasmine.SpyObj<TranslateService>;
   let globalProgressBarServiceSpy: jasmine.SpyObj<GlobalProgressBarService>;
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
+  let pluginAdapterSpy: jasmine.SpyObj<PluginIssueProviderAdapterService>;
+  let pluginRegistrySpy: jasmine.SpyObj<PluginIssueProviderRegistryService>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -73,6 +77,7 @@ describe('IssueService', () => {
       'moveToCurrentWorkContext',
       'add',
       'addAndSchedule',
+      'addSubTaskTo',
       'restoreTask',
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
@@ -90,7 +95,8 @@ describe('IssueService', () => {
     calendarIntegrationServiceSpy = jasmine.createSpyObj('CalendarIntegrationService', [
       'skipCalendarEvent',
     ]);
-    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    storeSpy.pipe.and.returnValue(of([]));
     translateServiceSpy = jasmine.createSpyObj('TranslateService', ['instant']);
     globalProgressBarServiceSpy = jasmine.createSpyObj('GlobalProgressBarService', [
       'countUp',
@@ -99,6 +105,18 @@ describe('IssueService', () => {
     navigateToTaskServiceSpy = jasmine.createSpyObj('NavigateToTaskService', [
       'navigate',
     ]);
+    pluginAdapterSpy = jasmine.createSpyObj('PluginIssueProviderAdapterService', [
+      'getAddTaskData',
+      'getAddTaskDataForCfg',
+    ]);
+    pluginRegistrySpy = jasmine.createSpyObj('PluginIssueProviderRegistryService', [
+      'hasProvider',
+      'getIcon',
+      'getName',
+      'getIssueStrings',
+      'getPollIntervalMs',
+    ]);
+    pluginRegistrySpy.hasProvider.and.returnValue(false);
 
     // Default mock return values - use 'as any' to bypass strict type checking
     issueProviderServiceSpy.getCfgOnce$.and.returnValue(
@@ -152,6 +170,8 @@ describe('IssueService', () => {
           provide: CalendarCommonInterfacesService,
           useValue: mockCommonInterfaceService,
         },
+        { provide: PluginIssueProviderAdapterService, useValue: pluginAdapterSpy },
+        { provide: PluginIssueProviderRegistryService, useValue: pluginRegistrySpy },
       ],
     });
     service = TestBed.inject(IssueService);
@@ -342,6 +362,82 @@ describe('IssueService', () => {
       expect(taskData.tagIds).toEqual(['tag-1', 'tag-2']);
     });
 
+    it('should merge provider tagIds with default tags', async () => {
+      setupForNewTask();
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+        tagIds: ['remote-tag'],
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['default-tag', 'remote-tag']);
+    });
+
+    it('should use plugin add task data with cfg so mapped tags are imported', async () => {
+      const pluginIssue = {
+        id: 'PLUGIN-1',
+        title: 'Plugin Issue',
+        labels: ['bug'],
+      };
+      pluginRegistrySpy.hasProvider.and.callFake((key) => key === 'plugin:test');
+      pluginAdapterSpy.getAddTaskDataForCfg.and.returnValue({
+        title: 'Plugin Issue',
+        tagIds: ['remote-tag'],
+        issueLastSyncedValues: { labels: ['bug'] },
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          id: 'plugin-provider-1',
+          issueProviderKey: 'plugin:test',
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag'],
+          pluginConfig: { twoWaySync: { tagIds: 'both' } },
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: pluginIssue as any,
+        issueProviderId: 'plugin-provider-1',
+        issueProviderKey: 'plugin:test' as any,
+      });
+
+      expect(pluginAdapterSpy.getAddTaskDataForCfg).toHaveBeenCalledWith(
+        pluginIssue as any,
+        jasmine.objectContaining({ issueProviderKey: 'plugin:test' }),
+      );
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['default-tag', 'remote-tag']);
+      expect(taskData.issueLastSyncedValues).toEqual({ labels: ['bug'] });
+    });
+
     it('should set defaultNote when provider adapter does not set notes', async () => {
       setupForNewTask();
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(
@@ -398,6 +494,100 @@ describe('IssueService', () => {
       const addCall = taskServiceSpy.add.calls.mostRecent();
       const taskData = addCall.args[2] as Partial<Task>;
       expect(taskData.notes).toBe('Provider-set notes');
+    });
+  });
+
+  describe('addTaskFromIssue - CalDAV sub-task / archived-parent path', () => {
+    const caldavIssue = {
+      id: 'child-uid',
+      title: 'Child Task',
+      related_to: 'parent-uid',
+    };
+    let caldavServiceMock: jasmine.SpyObj<CaldavCommonInterfacesService>;
+
+    beforeEach(() => {
+      caldavServiceMock = service.ISSUE_SERVICE_MAP[
+        'CALDAV'
+      ] as jasmine.SpyObj<CaldavCommonInterfacesService>;
+      (caldavServiceMock as any).getAddTaskData = () => ({
+        title: 'Child Task',
+        related_to: 'parent-uid',
+      });
+      (caldavServiceMock as any).getSubTasks = jasmine
+        .createSpy('getSubTasks')
+        .and.resolveTo([]);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({ defaultProjectId: 'proj-1', defaultTagIds: [] } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+        configurable: true,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+        configurable: true,
+      });
+    });
+
+    it('should add child as a top-level task when parent is archived', async () => {
+      // child-uid: not in SP → returns null (so it gets added fresh)
+      // parent-uid: in archive → _tryAddSubTask returns undefined → fallback to top-level
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.callFake(async (id: string) => {
+        if (id === 'parent-uid') {
+          return {
+            task: { id: 'parent-task-id', parentId: null } as any,
+            subTasks: null,
+            isFromArchive: true,
+          };
+        }
+        return null;
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    });
+
+    it('should add child as top-level task when parent is not in SP yet', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    });
+
+    it('should call addSubTaskTo once per child even when provider returns duplicates', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('parent-task-id');
+      taskServiceSpy.addSubTaskTo.and.returnValue('sub-id');
+
+      // Provider returns the same child twice (malformed data).
+      // _addSubTasks iterates the list verbatim, so addSubTaskTo fires once per entry.
+      // The duplicate-prevention guard is at the addTaskFromIssue level (checkForTaskWithIssueEverywhere),
+      // not inside _addSubTasks — this test documents the current expected call count.
+      const duplicate = { id: 'child-uid', title: 'Child Task' };
+      (caldavServiceMock as any).getSubTasks = jasmine
+        .createSpy('getSubTasks')
+        .and.resolveTo([duplicate, duplicate]);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: { id: 'parent-uid', title: 'Parent Task' } as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -39,6 +39,7 @@
                 <div
                   class="task-title"
                   [class.task-archived]="item.isArchiveTask"
+                  [class.task-done]="item.isDone"
                   [class.task-subtask]="!!item.parentTitle"
                 >
                   {{ item?.title }}

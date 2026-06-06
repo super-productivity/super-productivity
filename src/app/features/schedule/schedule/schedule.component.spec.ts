@@ -8,10 +8,14 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { DateAdapter } from '@angular/material/core';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { ScheduleDay } from '../schedule.model';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 describe('ScheduleComponent', () => {
   let component: ScheduleComponent;
@@ -22,7 +26,7 @@ describe('ScheduleComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
-
+  let mockCalendarEventActionsService: jasmine.SpyObj<CalendarEventActionsService>;
   beforeEach(async () => {
     // Create mock services
     mockTaskService = jasmine.createSpyObj('TaskService', ['currentTaskId']);
@@ -65,6 +69,18 @@ describe('ScheduleComponent', () => {
     (mockScheduleService as any).scheduleRefreshTick = signal(0);
 
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockCalendarEventActionsService = jasmine.createSpyObj(
+      'CalendarEventActionsService',
+      [
+        'hasEventUrl',
+        'isPluginEvent',
+        'openEventLink',
+        'reschedule',
+        'createAsTask',
+        'hideForever',
+        'deleteEvent',
+      ],
+    );
 
     mockGlobalTrackingIntervalService = jasmine.createSpyObj(
       'GlobalTrackingIntervalService',
@@ -82,11 +98,15 @@ describe('ScheduleComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ScheduleComponent, TranslateModule.forRoot()],
       providers: [
-        provideMockStore({ initialState: {} }),
+        provideMockStore({ initialState: { issueProvider: { ids: [], entities: {} } } }),
         { provide: TaskService, useValue: mockTaskService },
         { provide: LayoutService, useValue: mockLayoutService },
         { provide: ScheduleService, useValue: mockScheduleService },
         { provide: MatDialog, useValue: mockMatDialog },
+        {
+          provide: CalendarEventActionsService,
+          useValue: mockCalendarEventActionsService,
+        },
         {
           provide: GlobalTrackingIntervalService,
           useValue: mockGlobalTrackingIntervalService,
@@ -522,6 +542,36 @@ describe('ScheduleComponent', () => {
     });
   });
 
+  describe('monthEvents computed', () => {
+    it('should include beyond-budget task events for the month view', () => {
+      const beyondBudgetTask = {
+        id: 'beyond-budget-task',
+        title: 'Beyond budget task',
+        timeEstimate: 30 * 60 * 1000,
+        timeSpent: 0,
+        subTaskIds: [],
+        dueDay: '2026-01-20',
+      } as unknown as ScheduleDay['beyondBudgetTasks'][number];
+      const scheduleDays: ScheduleDay[] = [
+        {
+          dayDate: '2026-01-20',
+          entries: [],
+          beyondBudgetTasks: [beyondBudgetTask],
+          isToday: true,
+        },
+      ];
+      mockScheduleService.createScheduleDaysWithContext.and.returnValue(scheduleDays);
+      component['_selectedDate'].set(new Date(2026, 0, 20));
+
+      const result = component.monthEvents();
+
+      expect(result.map((event) => event.id)).toContain('beyond-budget-task');
+      expect(
+        result.find((event) => event.id === 'beyond-budget-task')?.plannedForDay,
+      ).toBe('2026-01-20');
+    });
+  });
+
   describe('currentTimeRow computed', () => {
     it('should return null when not viewing today', () => {
       // Arrange - view a future range that doesn't contain today
@@ -696,6 +746,64 @@ describe('ScheduleComponent', () => {
       expect(SCHEDULE_CONSTANTS.HORIZONTAL_SCROLL_THRESHOLD).toBe(1900);
       // The result depends on actual window width vs threshold
       expect(typeof shouldScroll).toBe('boolean');
+    });
+  });
+
+  describe('showCalFilterBtn computed', () => {
+    const makeProvider = (id: string): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: 'ICAL',
+      icalUrl: `https://example.com/${id}.ics`,
+    });
+
+    beforeEach(() => {
+      localStorage.removeItem('SUP_HIDDEN_CALENDAR_PROVIDER_IDS');
+      const hidden = TestBed.inject(HiddenCalendarProvidersService);
+      hidden.setHidden([]);
+    });
+
+    // overrideSelector mutates the selector itself, so always reset to avoid
+    // leaking provider lists into unrelated tests later in the file.
+    afterEach(() => {
+      TestBed.inject(MockStore).resetSelectors();
+    });
+
+    it('should be false when no providers are enabled', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(false);
+    });
+
+    it('should be false with a single visible provider', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, [makeProvider('only')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(false);
+    });
+
+    it('should be true when the only enabled provider is hidden (C2 regression)', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, [makeProvider('only')]);
+      store.refreshState();
+      const hidden = TestBed.inject(HiddenCalendarProvidersService);
+      hidden.setHidden(['only']);
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(true);
+    });
+
+    it('should be true with multiple enabled providers', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectCalendarProviders, [
+        makeProvider('a'),
+        makeProvider('b'),
+      ]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(true);
     });
   });
 

@@ -61,3 +61,19 @@ input {
     visibility: visible;
   }
 }
+
+// Right-anchor inside the planner's time-remaining cell so the expanding
+// input grows leftward and isn't clipped by planner-day's overflow:hidden.
+:host-context(.planner-time-remaining-shared) {
+  input {
+    left: auto;
+    right: calc(var(--s-half) * -1);
+    transform: translateY(-50%) scaleX(0);
+    transform-origin: right center;
+  }
+
+  &:hover input,
+  input:focus {
+    transform: translateY(-50%) scaleX(1);
+  }
+}

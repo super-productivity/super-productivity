@@ -1,3 +1,4 @@
+import { NOOP_SYNC_LOGGER } from '@sp/sync-core';
 import { OpLog } from '../../core/log';
 import { DecompressError } from '../core/errors/sync-errors';
 import {
@@ -9,6 +10,7 @@ import {
 describe('compression-handler', () => {
   beforeEach(() => {
     spyOn(OpLog, 'err').and.stub();
+    spyOn(OpLog, 'log').and.stub();
     spyOn(console, 'log').and.stub();
   });
 
@@ -44,6 +46,45 @@ describe('compression-handler', () => {
       await expectAsync(decompressGzipFromString(invalidGzip)).toBeRejectedWithError(
         DecompressError,
       );
+    });
+
+    it('logs only sanitized error metadata on decompression failure', async () => {
+      (OpLog.err as jasmine.Spy).calls.reset();
+      const invalidGzip = btoa('not gzip data');
+
+      await expectAsync(decompressGzipFromString(invalidGzip)).toBeRejectedWithError(
+        DecompressError,
+      );
+
+      expect(OpLog.err).toHaveBeenCalledOnceWith(
+        '[compression-handler] gzip decompression failed',
+        jasmine.objectContaining({ name: jasmine.any(String) }),
+        {
+          inputLength: invalidGzip.length,
+          sanitizedInputLength: invalidGzip.length,
+        },
+      );
+      expect((OpLog.err as jasmine.Spy).calls.mostRecent().args[1] instanceof Error)
+        .withContext('logged error identity must be sanitized')
+        .toBeFalse();
+      const additionalLogText = (OpLog.log as jasmine.Spy).calls
+        .allArgs()
+        .flat()
+        .join('\n');
+      expect(additionalLogText).not.toContain('not gzip data');
+    });
+
+    it('preserves DecompressError when the injected logger throws', async () => {
+      const throwingLogger = {
+        ...NOOP_SYNC_LOGGER,
+        err: () => {
+          throw new Error('logger failed');
+        },
+      };
+
+      await expectAsync(
+        decompressGzipFromString(btoa('not gzip data'), throwingLogger),
+      ).toBeRejectedWithError(DecompressError);
     });
 
     // Issue #6581: decompressGzipFromString should sanitize base64 input

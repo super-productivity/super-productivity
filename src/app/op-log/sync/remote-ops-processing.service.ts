@@ -1,4 +1,5 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
+import { applyRemoteOperations } from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ConflictResult,
@@ -11,6 +12,7 @@ import { OpLog } from '../../core/log';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { VectorClockService } from './vector-clock.service';
 import {
   MAX_VERSION_SKIP,
@@ -24,6 +26,7 @@ import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
+import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -46,6 +49,7 @@ export class RemoteOpsProcessingService {
   private operationApplier = inject(OperationApplierService);
   private conflictResolutionService = inject(ConflictResolutionService);
   private validateStateService = inject(ValidateStateService);
+  private sessionValidation = inject(SyncSessionValidationService);
   private vectorClockService = inject(VectorClockService);
   private schemaMigrationService = inject(SchemaMigrationService);
   private snackService = inject(SnackService);
@@ -53,6 +57,7 @@ export class RemoteOpsProcessingService {
   private compactionService = inject(OperationLogCompactionService);
   private syncImportFilterService = inject(SyncImportFilterService);
   private writeFlushService = inject(OperationWriteFlushService);
+  private injector = inject(Injector);
 
   /** Flag to show newer version warning only once per session */
   private _hasWarnedNewerVersionThisSession = false;
@@ -86,6 +91,11 @@ export class RemoteOpsProcessingService {
     filteringImport?: Operation;
     isLocalUnsyncedImport: boolean;
   }> {
+    // Validation failure surfaces via the SyncSessionValidationService latch
+    // (#7330). `validateAfterSync` and the conflict-resolution validation path
+    // both flip the latch on failure; the sync wrapper reads it once before
+    // deciding IN_SYNC vs ERROR. No need to thread the boolean through this
+    // return shape.
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Schema Migration (Receiver-Side)
     // Migrate ops from older schema versions to current version.
@@ -331,11 +341,13 @@ export class RemoteOpsProcessingService {
           `RemoteOpsProcessingService: Detected ${conflicts.length} conflicts. Auto-resolving with LWW.`,
           conflicts,
         );
-        // Auto-resolve conflicts using Last-Write-Wins strategy
-        // Piggyback non-conflicting ops so they're applied with resolved conflicts
+        // Auto-resolve conflicts using Last-Write-Wins strategy.
+        // Piggyback non-conflicting ops so they're applied with resolved conflicts.
+        // Validation failure is surfaced via the session-validation latch.
         const lwwResult = await this.conflictResolutionService.autoResolveConflictsLWW(
           conflicts,
           nonConflicting,
+          { callerHoldsOperationLogLock: true },
         );
         localWinOpsCreated = lwwResult.localWinOpsCreated;
         return;
@@ -369,102 +381,69 @@ export class RemoteOpsProcessingService {
    * If crash occurs between steps 2-3, ops may be re-applied (idempotent).
    *
    * @param ops - Non-conflicting operations to apply
-   * @param callerHoldsLock - If true, skip lock acquisition in repair operation.
-   *        Pass true when calling from within the sp_op_log lock.
+   * @param callerHoldsLock - If true, deferred local actions reuse the caller's
+   *        sp_op_log lock after remote clocks are merged.
    * @throws Re-throws if application fails (ops marked as failed first)
    */
   async applyNonConflictingOps(
     ops: Operation[],
     callerHoldsLock: boolean = false,
   ): Promise<void> {
-    // Map op ID to seq for marking partial success
-    const opIdToSeq = new Map<string, number>();
+    await this._logFullStateApplyDiagnostics(ops);
 
-    // Atomically filter and append ops in a single transaction (issue #6343).
-    // This eliminates the TOCTOU race between filterNewOps() and appendBatch()
-    // that caused persistent "Duplicate operation detected" errors.
-    const opsToApply = await this._filterAndAppendOps(ops, opIdToSeq);
+    // Mirror autoResolveConflictsLWW: wrap apply in try/finally so deferred
+    // local actions are flushed whether the apply succeeded or threw.
+    // Without this, an apply-time throw (e.g. dispatcher error inside the
+    // wrapped operationApplier.applyOperations) would leave buffered actions
+    // to leak into the next sync window with stale clocks. (#7700)
+    let didApplyRemoteOps = false;
+    try {
+      // Core owns the generic crash-safety ordering. Angular diagnostics,
+      // validation, and user notifications stay in this service.
+      const result = await applyRemoteOperations({
+        ops,
+        store: this.opLogStore,
+        applier: {
+          applyOperations: (opsToApply) =>
+            this.operationApplier.applyOperations(opsToApply, {
+              skipDeferredLocalActions: true,
+            }),
+        },
+        isFullStateOperation: this._isFullStateOperation,
+      });
 
-    // Apply only NON-duplicate ops to NgRx store
-    if (opsToApply.length > 0) {
-      const result = await this.operationApplier.applyOperations(opsToApply);
+      didApplyRemoteOps = result.appendedOps.length > 0;
 
-      // Mark successfully applied ops
-      const appliedSeqs = result.appliedOps
-        .map((op) => opIdToSeq.get(op.id))
-        .filter((seq): seq is number => seq !== undefined);
-
-      if (appliedSeqs.length > 0) {
-        await this.opLogStore.markApplied(appliedSeqs);
-
-        // CRITICAL: Merge remote ops' vector clocks into local clock.
-        // This ensures subsequent local operations have clocks that "dominate"
-        // the remote ops (GREATER_THAN instead of CONCURRENT).
-        // Without this, ops created after a SYNC_IMPORT would be incorrectly
-        // filtered by SyncImportFilterService as "invalidated by import".
-        await this.opLogStore.mergeRemoteOpClocks(result.appliedOps);
-
-        // Check if a full-state op was applied, and clear older full-state ops
-        const appliedFullStateOp = result.appliedOps.find(
-          (op) =>
-            op.opType === OpType.SyncImport ||
-            op.opType === OpType.BackupImport ||
-            op.opType === OpType.Repair,
+      if (result.skippedCount > 0) {
+        OpLog.verbose(
+          `RemoteOpsProcessingService: Skipping ${result.skippedCount} duplicate op(s)`,
         );
-        if (appliedFullStateOp) {
-          // CRITICAL FIX: Clear older full-state ops AFTER successfully storing the new one.
-          // This prevents the scenario where:
-          // 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
-          // 2. Client B uploads new SYNC_IMPORT with its own minimal clock
-          // 3. Client A downloads and stores B's SYNC_IMPORT
-          // 4. Without clearing, getLatestFullStateOpEntry might return X's old import
-          //    (if it has a higher UUIDv7 timestamp)
-          // 5. New operations appear CONCURRENT with X's import and get filtered
-          //
-          // We clear AFTER storing (not before) to ensure crash safety.
-          // We exclude the newly stored full-state op IDs so we don't delete what we just added.
-          const newFullStateOpIds = result.appliedOps
-            .filter(
-              (op) =>
-                op.opType === OpType.SyncImport ||
-                op.opType === OpType.BackupImport ||
-                op.opType === OpType.Repair,
-            )
-            .map((op) => op.id);
-          const clearedCount =
-            await this.opLogStore.clearFullStateOpsExcept(newFullStateOpIds);
-          if (clearedCount > 0) {
-            OpLog.normal(
-              `RemoteOpsProcessingService: Cleared ${clearedCount} old full-state op(s) after applying new one.`,
-            );
-          }
-        }
+      }
 
+      if (result.clearedFullStateOpCount > 0) {
         OpLog.normal(
-          `RemoteOpsProcessingService: Applied and marked ${appliedSeqs.length} remote ops`,
+          `RemoteOpsProcessingService: Cleared ${result.clearedFullStateOpCount} old full-state op(s) after applying new one.`,
+        );
+      }
+
+      if (result.appliedSeqs.length > 0) {
+        OpLog.normal(
+          `RemoteOpsProcessingService: Applied and marked ${result.appliedSeqs.length} remote ops`,
         );
       }
 
       // Handle partial failure
       if (result.failedOp) {
-        // Find all ops that weren't applied (failed op + remaining ops)
-        const failedOpIndex = opsToApply.findIndex(
-          (op) => op.id === result.failedOp!.op.id,
-        );
-        const failedOps = opsToApply.slice(failedOpIndex);
-        const failedOpIds = failedOps.map((op) => op.id);
-
         OpLog.err(
           `RemoteOpsProcessingService: ${result.appliedOps.length} ops applied before failure. ` +
-            `Marking ${failedOpIds.length} ops as failed.`,
+            `Marking ${result.failedOpIds.length} ops as failed.`,
           result.failedOp.error,
         );
-        await this.opLogStore.markFailed(failedOpIds);
 
-        // Run validation after partial failure to detect/repair any state inconsistencies
-        await this.validateStateService.validateAndRepairCurrentState(
+        await this._validateAndFlagSession(
           'partial-apply-failure',
-          { callerHoldsLock },
+          callerHoldsLock,
+          'RemoteOpsProcessingService: State validation failed after partial apply failure',
         );
 
         this.snackService.open({
@@ -472,52 +451,68 @@ export class RemoteOpsProcessingService {
           msg: T.F.SYNC.S.PARTIAL_APPLY_FAILURE,
         });
 
-        // Re-throw if it's a SyncStateCorruptedError, otherwise wrap it
+        // Re-throw if it's a SyncStateCorruptedError, otherwise wrap it.
+        // The deferred-actions flush in the finally below runs before the
+        // throw propagates.
         throw result.failedOp.error;
+      }
+    } finally {
+      if (didApplyRemoteOps) {
+        await processDeferredActionsAfterRemoteApply(this.injector, callerHoldsLock);
       }
     }
   }
 
-  /**
-   * Atomically filters out already-applied ops and appends new ones to the store.
-   * Uses appendBatchSkipDuplicates() to check and insert within a single IndexedDB
-   * transaction, eliminating the TOCTOU race condition (issue #6343).
-   *
-   * @param ops - Operations to filter and potentially append
-   * @param opIdToSeq - Map to populate with op ID -> sequence number mappings
-   * @returns The operations that were actually appended (after filtering)
-   */
-  private async _filterAndAppendOps(
-    ops: Operation[],
-    opIdToSeq: Map<string, number>,
-  ): Promise<Operation[]> {
-    // DIAGNOSTIC: Check if any full-state ops will be applied
-    const fullStateOps = ops.filter(
-      (op) =>
-        op.opType === OpType.SyncImport ||
-        op.opType === OpType.BackupImport ||
-        op.opType === OpType.Repair,
+  private _isFullStateOperation(op: Operation): boolean {
+    return (
+      op.opType === OpType.SyncImport ||
+      op.opType === OpType.BackupImport ||
+      op.opType === OpType.Repair
     );
-    if (fullStateOps.length > 0) {
-      OpLog.log(
-        `RemoteOpsProcessingService: APPLYING FULL-STATE OP(s): ${fullStateOps.map((op) => `${op.opType} from ${op.clientId}`).join(', ')}`,
-      );
+  }
+
+  /**
+   * Logs receiver state before full-state remote ops land. This diagnostic is
+   * app-side because it reads SP's operation store and uses exportable app logs.
+   */
+  private async _logFullStateApplyDiagnostics(ops: Operation[]): Promise<void> {
+    const fullStateOps = ops.filter(this._isFullStateOperation);
+    if (fullStateOps.length === 0) {
+      return;
     }
 
-    // Atomically check-and-insert within a single transaction (issue #6343).
-    // Duplicates are silently skipped rather than causing ConstraintError.
-    const result = await this.opLogStore.appendBatchSkipDuplicates(ops, 'remote', {
-      pendingApply: true,
-    });
-
-    if (result.skippedCount > 0) {
-      OpLog.verbose(
-        `RemoteOpsProcessingService: Skipping ${result.skippedCount} duplicate op(s)`,
-      );
-    }
-
-    result.writtenOps.forEach((op, i) => opIdToSeq.set(op.id, result.seqs[i]));
-    return result.writtenOps;
+    // Snapshot the receiver's prior clock and unsynced-op tally before the
+    // batch lands. After append, the receiver's state advances and we can no
+    // longer reconstruct what was about to be wiped. Captures both the prior
+    // vector clock (whose entries the SYNC_IMPORT will collapse) and the
+    // count of local unsynced user work that the SyncImportFilter will then
+    // discard — that count answers the "post-import edits failed to upload
+    // vs. dropped by the filter" question on the next incident.
+    const priorClock = await this.opLogStore.getVectorClock();
+    const priorUnsynced = await this.opLogStore.getUnsynced();
+    const priorUnsyncedByOpType = priorUnsynced.reduce<Record<string, number>>(
+      (acc, entry) => {
+        const key = entry.op.opType;
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    OpLog.log(
+      `RemoteOpsProcessingService: APPLYING FULL-STATE OP(s): ${fullStateOps.map((op) => `${op.opType} from ${op.clientId}`).join(', ')}`,
+      {
+        incoming: fullStateOps.map((op) => ({
+          opType: op.opType,
+          clientId: op.clientId,
+          syncImportReason: op.syncImportReason ?? null,
+          vectorClock: op.vectorClock,
+        })),
+        priorClock: priorClock ?? null,
+        priorClockSize: priorClock ? Object.keys(priorClock).length : 0,
+        priorUnsyncedCount: priorUnsynced.length,
+        priorUnsyncedByOpType,
+      },
+    );
   }
 
   /**
@@ -608,21 +603,39 @@ export class RemoteOpsProcessingService {
    *
    * @param callerHoldsLock - If true, skip lock acquisition in repair operation.
    *        Pass true when calling from within the sp_op_log lock.
+   * @returns `true` if state is valid (or was successfully repaired), `false`
+   *          otherwise. On failure the SyncSessionValidationService latch is
+   *          flipped so the wrapper can refuse to claim IN_SYNC (#7330).
    */
-  async validateAfterSync(callerHoldsLock: boolean = false): Promise<void> {
-    // FIX #6571: Check and surface validation result.
-    // Previously, the boolean return was discarded — validation failures
-    // were invisible and sync reported IN_SYNC despite invalid state.
-    const isValid = await this.validateStateService.validateAndRepairCurrentState(
+  async validateAfterSync(callerHoldsLock: boolean = false): Promise<boolean> {
+    return await this._validateAndFlagSession(
       'sync',
+      callerHoldsLock,
+      'RemoteOpsProcessingService: State validation failed after sync',
+      T.F.SYNC.S.SYNC_VALIDATION_FAILED,
+    );
+  }
+
+  private async _validateAndFlagSession(
+    context: 'sync' | 'partial-apply-failure',
+    callerHoldsLock: boolean,
+    errorMessage: string,
+    snackMessage?: string,
+  ): Promise<boolean> {
+    const isValid = await this.validateStateService.validateAndRepairCurrentState(
+      context,
       { callerHoldsLock },
     );
     if (!isValid) {
-      OpLog.err('RemoteOpsProcessingService: State validation failed after sync');
-      this.snackService.open({
-        type: 'ERROR',
-        msg: T.F.SYNC.S.SYNC_VALIDATION_FAILED,
-      });
+      OpLog.err(errorMessage);
+      this.sessionValidation.setFailed();
+      if (snackMessage) {
+        this.snackService.open({
+          type: 'ERROR',
+          msg: snackMessage,
+        });
+      }
     }
+    return isValid;
   }
 }

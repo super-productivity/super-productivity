@@ -1,11 +1,19 @@
 import { SyncProviderId } from '../../provider.const';
-import { WebdavBaseProvider } from './webdav-base-provider';
-import { WebdavPrivateCfg } from './webdav.model';
+import {
+  PROVIDER_ID_WEBDAV,
+  WebdavBaseProvider,
+  type WebdavBaseDeps,
+  type WebdavPrivateCfg,
+} from '@sp/sync-providers/webdav';
 import { MissingCredentialsSPError } from '../../../core/errors/sync-errors';
 import { ProtonDrivePrivateCfg } from './proton-drive.model';
 import { SyncCredentialStore } from '../../credential-store.service';
 import { IS_ELECTRON } from '../../../../app.constants';
 import type { ElectronAPI } from '../../../../../../electron/electronAPI';
+import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
+import { APP_PROVIDER_PLATFORM_INFO } from '../../platform/app-provider-platform-info';
+import { APP_WEB_FETCH } from '../../platform/app-web-fetch';
+import { APP_WEBDAV_NATIVE_HTTP } from './capacitor-webdav-http/app-webdav-native-http';
 
 const getElectronApi = (): ElectronAPI => {
   const maybeWindow = window as Window & { ea?: ElectronAPI };
@@ -30,15 +38,28 @@ const getElectronApi = (): ElectronAPI => {
  * separation and UI distinction — casts are safe because at runtime these are
  * just string values (same approach as NextcloudProvider).
  */
-export class ProtonDriveProvider extends WebdavBaseProvider<SyncProviderId.WebDAV> {
-  override readonly id = SyncProviderId.ProtonDrive as unknown as SyncProviderId.WebDAV;
+export class ProtonDriveProvider extends WebdavBaseProvider<
+  typeof PROVIDER_ID_WEBDAV,
+  ProtonDrivePrivateCfg
+> {
+  override readonly id =
+    SyncProviderId.ProtonDrive as unknown as typeof PROVIDER_ID_WEBDAV;
 
   constructor(extraPath?: string) {
-    super(extraPath);
-    // Separate credential store keyed by SyncProviderId.ProtonDrive
-    this.privateCfg = new SyncCredentialStore(
-      SyncProviderId.ProtonDrive as unknown as SyncProviderId.WebDAV,
-    );
+    const deps: WebdavBaseDeps<typeof PROVIDER_ID_WEBDAV, ProtonDrivePrivateCfg> = {
+      logger: OP_LOG_SYNC_LOGGER,
+      platformInfo: APP_PROVIDER_PLATFORM_INFO,
+      webFetch: APP_WEB_FETCH,
+      nativeHttp: APP_WEBDAV_NATIVE_HTTP,
+      // Separate credential store keyed by SyncProviderId.ProtonDrive.
+      credentialStore: new SyncCredentialStore(
+        SyncProviderId.ProtonDrive,
+      ) as unknown as WebdavBaseDeps<
+        typeof PROVIDER_ID_WEBDAV,
+        ProtonDrivePrivateCfg
+      >['credentialStore'],
+    };
+    super(deps, extraPath);
   }
 
   protected override get logLabel(): string {
@@ -51,7 +72,7 @@ export class ProtonDriveProvider extends WebdavBaseProvider<SyncProviderId.WebDA
    * (which would blank userName/password) with a deliberate no-op.
    * See the contract on SyncProviderBase.clearAuthCredentials.
    */
-  override clearAuthCredentials(): Promise<void> {
+  clearAuthCredentials(): Promise<void> {
     return Promise.resolve();
   }
 
