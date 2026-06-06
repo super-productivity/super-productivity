@@ -20,7 +20,11 @@ import {
   ProjectCompletionInfo,
   ProjectService,
 } from '../../features/project/project.service';
-import { getProjectCompletionStats } from '../../features/project/project-completion-stats.util';
+import { Project } from '../../features/project/project.model';
+import {
+  getProjectCompletionStats,
+  ProjectCompletionStats,
+} from '../../features/project/project-completion-stats.util';
 import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
 import { DialogCompleteResolveTasksComponent } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
 import { SectionService } from '../../features/section/section.service';
@@ -205,14 +209,10 @@ export class WorkContextMenuComponent implements OnInit {
     // so every downstream effect (issue sync, reminders, repeat-cfg) and
     // per-entity conflict detection fires naturally. Completion itself is then a
     // plain single-entity project flag flip.
-    let statsInfo = info;
-    if (resolution === 'inbox') {
-      await this._projectService.moveTasksToInbox(info.topLevelTasksWithUnfinishedWork);
-    } else if (resolution === 'markDone') {
-      await this._projectService.markTasksDone(info.unfinishedTasks);
-    }
+    await this._applyResolution(resolution, info);
 
     // Recompute after resolution so the stats reflect the final task list.
+    let statsInfo = info;
     if (resolution) {
       const refreshed = await this._getCompletionInfoOrNotify();
       if (!refreshed) {
@@ -238,6 +238,21 @@ export class WorkContextMenuComponent implements OnInit {
       await this._router.navigateByUrl('/');
     }
 
+    this._openCelebrationDialog(project, stats);
+  }
+
+  private async _applyResolution(
+    resolution: 'inbox' | 'markDone' | undefined,
+    info: ProjectCompletionInfo,
+  ): Promise<void> {
+    if (resolution === 'inbox') {
+      await this._projectService.moveTasksToInbox(info.topLevelTasksWithUnfinishedWork);
+    } else if (resolution === 'markDone') {
+      await this._projectService.markTasksDone(info.unfinishedTasks);
+    }
+  }
+
+  private _openCelebrationDialog(project: Project, stats: ProjectCompletionStats): void {
     // Fullscreen sizing lives in the .project-complete-fullscreen-dialog
     // panelClass (handles dvh + mobile safe-areas); don't duplicate it here.
     this._matDialog.open(DialogProjectCompleteComponent, {

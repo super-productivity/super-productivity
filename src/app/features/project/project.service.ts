@@ -61,6 +61,46 @@ export interface ProjectCompletionInfo {
   topLevelTasksWithUnfinishedWork: Task[];
 }
 
+/**
+ * Depth-first flatten of a task tree into a flat list (each parent immediately
+ * before its subtasks), de-duplicated via a shared `seen` set so a task reached
+ * from more than one parent is included only once.
+ */
+const flattenTaskTree = (
+  topLevelTasks: Task[],
+  entities: Record<string, Task | undefined>,
+): Task[] => {
+  const result: Task[] = [];
+  const seen = new Set<string>();
+  const visit = (task: Task): void => {
+    if (seen.has(task.id)) {
+      return;
+    }
+    seen.add(task.id);
+    result.push(task);
+    (task.subTaskIds ?? []).forEach((subId) => {
+      const sub = entities[subId];
+      if (sub) {
+        visit(sub);
+      }
+    });
+  };
+  topLevelTasks.forEach(visit);
+  return result;
+};
+
+/** True if the task itself or any of its (live) subtasks is still unfinished. */
+const hasUnfinishedWork = (
+  task: Task,
+  unfinishedTaskIds: Set<string>,
+  entities: Record<string, Task | undefined>,
+): boolean =>
+  unfinishedTaskIds.has(task.id) ||
+  (task.subTaskIds ?? []).some((subId) => {
+    const sub = entities[subId];
+    return !!sub && hasUnfinishedWork(sub, unfinishedTaskIds, entities);
+  });
+
 @Injectable({
   providedIn: 'root',
 })
@@ -236,7 +276,6 @@ export class ProjectService {
    * can still be moved or marked done from the live store.
    */
   async getCompletionInfo(projectId: string): Promise<ProjectCompletionInfo> {
-    const taskState = await firstValueFrom(this._store$.select(selectTaskFeatureState));
     const project = await firstValueFrom(this.getByIdOnce$(projectId));
     if (!project) {
       return {
@@ -246,14 +285,23 @@ export class ProjectService {
         topLevelTasksWithUnfinishedWork: [],
       };
     }
-    const ids = [...(project?.taskIds ?? []), ...(project?.backlogTaskIds ?? [])];
+    const stats = await this._getCompletionStatsTasks(projectId, project);
+    const resolvable = await this._getResolvableTasks(project);
+    return { ...stats, ...resolvable };
+  }
+
+  /**
+   * Stats lists for the celebration: count live AND archived project tasks, so
+   * work the user archived earlier still counts toward the finished total.
+   */
+  private async _getCompletionStatsTasks(
+    projectId: string,
+    project: Project,
+  ): Promise<Pick<ProjectCompletionInfo, 'topLevelTasks' | 'allTasks'>> {
+    const ids = [...(project.taskIds ?? []), ...(project.backlogTaskIds ?? [])];
     const idSet = new Set(ids);
-    const activeTopLevelTasks = ids
-      .map((id) => taskState.entities[id])
-      .filter((t): t is Task => !!t);
     const projectTasks = await this._taskService.getAllTasksForProject(projectId);
     const projectTaskById = new Map(projectTasks.map((task) => [task.id, task]));
-    const projectTaskEntities = Object.fromEntries(projectTaskById);
     const topLevelTasks = [
       ...ids,
       ...projectTasks
@@ -262,49 +310,31 @@ export class ProjectService {
     ]
       .map((id) => projectTaskById.get(id))
       .filter((t): t is Task => !!t);
-    const collectTaskAndSubTasks = (
-      task: Task,
-      allTasks: Task[],
-      seen: Set<string>,
-      entities: Record<string, Task | undefined>,
-    ): void => {
-      if (seen.has(task.id)) {
-        return;
-      }
-      seen.add(task.id);
-      allTasks.push(task);
-      (task.subTaskIds ?? []).forEach((subId) => {
-        const sub = entities[subId];
-        if (sub) {
-          collectTaskAndSubTasks(sub, allTasks, seen, entities);
-        }
-      });
-    };
-    const allTasks: Task[] = [];
-    const seenTaskIds = new Set<string>();
-    topLevelTasks.forEach((t) => {
-      collectTaskAndSubTasks(t, allTasks, seenTaskIds, projectTaskEntities);
-    });
+    const allTasks = flattenTaskTree(topLevelTasks, Object.fromEntries(projectTaskById));
+    return { topLevelTasks, allTasks };
+  }
 
-    const activeAllTasks: Task[] = [];
-    const seenActiveTaskIds = new Set<string>();
-    activeTopLevelTasks.forEach((t) => {
-      collectTaskAndSubTasks(t, activeAllTasks, seenActiveTaskIds, taskState.entities);
-    });
+  /**
+   * Resolvable lists for the unfinished-task prompt: only LIVE tasks can still
+   * be moved or marked done, so the archive is intentionally ignored here.
+   */
+  private async _getResolvableTasks(
+    project: Project,
+  ): Promise<
+    Pick<ProjectCompletionInfo, 'unfinishedTasks' | 'topLevelTasksWithUnfinishedWork'>
+  > {
+    const taskState = await firstValueFrom(this._store$.select(selectTaskFeatureState));
+    const ids = [...(project.taskIds ?? []), ...(project.backlogTaskIds ?? [])];
+    const activeTopLevelTasks = ids
+      .map((id) => taskState.entities[id])
+      .filter((t): t is Task => !!t);
+    const activeAllTasks = flattenTaskTree(activeTopLevelTasks, taskState.entities);
     const unfinishedTasks = activeAllTasks.filter((t) => !t.isDone);
     const unfinishedTaskIds = new Set(unfinishedTasks.map((t) => t.id));
-    const hasUnfinishedWork = (task: Task): boolean =>
-      unfinishedTaskIds.has(task.id) ||
-      (task.subTaskIds ?? []).some((subId) => {
-        const subTask = taskState.entities[subId];
-        return !!subTask && hasUnfinishedWork(subTask);
-      });
     return {
-      topLevelTasks,
-      allTasks,
       unfinishedTasks,
       topLevelTasksWithUnfinishedWork: activeTopLevelTasks.filter((t) =>
-        hasUnfinishedWork(t),
+        hasUnfinishedWork(t, unfinishedTaskIds, taskState.entities),
       ),
     };
   }
