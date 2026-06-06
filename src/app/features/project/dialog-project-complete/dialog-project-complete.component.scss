@@ -6,6 +6,12 @@
 }
 
 .complete-overlay {
+  --project-complete-primary-color: var(
+    --project-complete-primary,
+    var(--palette-primary-500)
+  );
+  --project-complete-accent-color: var(--project-complete-accent, var(--c-accent));
+
   position: relative;
   display: flex;
   width: 100%;
@@ -13,17 +19,55 @@
   min-height: 0;
   overflow: hidden;
   color: var(--text-color-most-intense);
-  background: var(--bg-lightest);
+  background: var(--bg);
 
-  @supports (background: color-mix(in srgb, black 50%, white)) {
+  &::before {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    pointer-events: none;
     background:
-      linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--c-accent) 12%, var(--bg-lightest)),
-        var(--bg-lightest) 42%
+      radial-gradient(
+        ellipse 120% 80% at 0% -10%,
+        color-mix(in srgb, var(--project-complete-primary-color) 28%, transparent) 0%,
+        transparent 65%
       ),
-      var(--bg-lightest);
+      radial-gradient(
+        ellipse 90% 70% at 100% 100%,
+        color-mix(in srgb, var(--project-complete-accent-color) 18%, transparent) 0%,
+        transparent 60%
+      );
+    content: '';
   }
+
+  &.is-disable-background-tint::before {
+    display: none;
+  }
+}
+
+.project-bg-image,
+.project-bg-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.project-bg-image {
+  width: 100%;
+  height: 100%;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed;
+
+  &.is-blurred {
+    transform: scale(1.12);
+  }
+}
+
+.project-bg-overlay {
+  background-color: var(--c-bg-overlay);
 }
 
 .confetti-canvas {
@@ -79,15 +123,23 @@
   width: 104px;
   height: 104px;
   margin-bottom: var(--s2);
-  color: var(--c-accent);
+  color: var(--project-complete-accent-color);
   background: var(--bg-lightest);
   border: 1px solid var(--extra-border-color);
   border-radius: 50%;
   box-shadow: var(--whiteframe-shadow-4dp);
 
   @supports (background: color-mix(in srgb, black 50%, white)) {
-    background: color-mix(in srgb, var(--c-accent) 18%, var(--bg-lightest));
-    border-color: color-mix(in srgb, var(--c-accent) 34%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--project-complete-accent-color) 18%,
+      var(--bg-lightest)
+    );
+    border-color: color-mix(
+      in srgb,
+      var(--project-complete-accent-color) 34%,
+      transparent
+    );
   }
 
   mat-icon {
@@ -133,7 +185,11 @@
   border-radius: 8px;
 
   @supports (background: color-mix(in srgb, black 50%, white)) {
-    background: color-mix(in srgb, var(--bg-lightest) 86%, var(--c-accent));
+    background: color-mix(
+      in srgb,
+      var(--bg-lightest) 86%,
+      var(--project-complete-accent-color)
+    );
   }
 }
 

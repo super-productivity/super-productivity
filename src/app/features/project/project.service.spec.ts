@@ -3,7 +3,7 @@ import { ProjectService } from './project.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
-import { TaskState } from '../tasks/task.model';
+import { Task, TaskState } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
 import { Store, StoreModule } from '@ngrx/store';
 import { createProject } from './project.test-helper';
@@ -92,6 +92,7 @@ describe('ProjectService', () => {
       'moveToProject',
       'setDone',
       'setUnDone',
+      'getAllTasksForProject',
     ]);
     taskService.createNewTaskWithDefaults.and.callFake(() => {
       taskCounter++;
@@ -100,6 +101,13 @@ describe('ProjectService', () => {
         title: `New Task ${taskCounter}`,
       });
     });
+    taskService.getAllTasksForProject.and.callFake((projectId: string) =>
+      Promise.resolve(
+        Object.values(initialTaskState.entities).filter(
+          (task): task is Task => task?.projectId === projectId,
+        ),
+      ),
+    );
     workContextService = jasmine.createSpyObj('WorkContextService', [
       'getWorkContextById$',
       'onWorkContextChange$',
@@ -459,6 +467,56 @@ describe('ProjectService', () => {
       store.refreshState();
       const info = await service.getCompletionInfo('project-1');
       expect(info.unfinishedTasks.map((t) => t.id)).toEqual(['sub-task-1', 'task-2']);
+      expect(info.topLevelTasksWithUnfinishedWork.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+    });
+
+    it('includes archived project tasks in stats lists without resolving them as unfinished work', async () => {
+      const archivedParent = createTask({
+        id: 'archived-task',
+        title: 'Archived Task',
+        projectId: 'project-1',
+        isDone: true,
+        subTaskIds: ['archived-sub-task'],
+      });
+      const archivedSubTask = createTask({
+        id: 'archived-sub-task',
+        title: 'Archived Sub Task',
+        projectId: 'project-1',
+        parentId: 'archived-task',
+        isDone: false,
+      });
+      taskService.getAllTasksForProject.and.returnValue(
+        Promise.resolve([
+          initialTaskState.entities['task-1']!,
+          initialTaskState.entities['sub-task-1']!,
+          initialTaskState.entities['task-2']!,
+          archivedParent,
+          archivedSubTask,
+        ]),
+      );
+
+      const info = await service.getCompletionInfo('project-1');
+
+      expect(info.topLevelTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+        'archived-task',
+      ]);
+      expect(info.allTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'sub-task-1',
+        'task-2',
+        'archived-task',
+        'archived-sub-task',
+      ]);
+      expect(info.unfinishedTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'sub-task-1',
+        'task-2',
+      ]);
       expect(info.topLevelTasksWithUnfinishedWork.map((t) => t.id)).toEqual([
         'task-1',
         'task-2',

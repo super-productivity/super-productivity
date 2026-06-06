@@ -1,4 +1,22 @@
-<section class="complete-overlay">
+<section
+  class="complete-overlay"
+  [class.is-disable-background-tint]="isDisableBackgroundTint()"
+  [style.--project-complete-primary]="projectPrimaryColor()"
+  [style.--project-complete-accent]="projectAccentColor()"
+>
+  @if (resolvedBgImage(); as bgImage) {
+    <div
+      class="project-bg-image"
+      [class.is-blurred]="backgroundImageBlur() > 0"
+      [style.background]="'url(' + bgImage + ')'"
+      [style.filter]="backgroundImageBlurFilter()"
+    ></div>
+    <div
+      class="project-bg-overlay"
+      [style.opacity]="backgroundOverlayOpacity()"
+    ></div>
+  }
+
   <canvas
     #confettiCanvas
     class="confetti-canvas"

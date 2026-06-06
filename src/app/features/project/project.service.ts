@@ -205,22 +205,41 @@ export class ProjectService {
   }
 
   /**
-   * Tasks of a project for the completion flow. `topLevelTasks` are the parent
-   * tasks (taskIds + backlogTaskIds); `allTasks` also includes their subtasks
-   * (for worked-day stats). Completing only sets a flag, so all of these stay
-   * live in the store — no archive lookup needed.
+   * Tasks of a project for the completion flow. Stats include live and archived
+   * project tasks, while unfinished resolution only considers active tasks that
+   * can still be moved or marked done from the live store.
    */
   async getCompletionInfo(projectId: string): Promise<ProjectCompletionInfo> {
     const taskState = await firstValueFrom(this._store$.select(selectTaskFeatureState));
     const project = await firstValueFrom(this.getByIdOnce$(projectId));
+    if (!project) {
+      return {
+        topLevelTasks: [],
+        allTasks: [],
+        unfinishedTasks: [],
+        topLevelTasksWithUnfinishedWork: [],
+      };
+    }
     const ids = [...(project?.taskIds ?? []), ...(project?.backlogTaskIds ?? [])];
-    const topLevelTasks = ids
+    const activeTopLevelTasks = ids
       .map((id) => taskState.entities[id])
+      .filter((t): t is Task => !!t);
+    const projectTasks = await this._taskService.getAllTasksForProject(projectId);
+    const projectTaskById = new Map(projectTasks.map((task) => [task.id, task]));
+    const projectTaskEntities = Object.fromEntries(projectTaskById);
+    const topLevelTasks = [
+      ...ids,
+      ...projectTasks
+        .filter((task) => !task.parentId && !ids.includes(task.id))
+        .map((task) => task.id),
+    ]
+      .map((id) => projectTaskById.get(id))
       .filter((t): t is Task => !!t);
     const collectTaskAndSubTasks = (
       task: Task,
       allTasks: Task[],
       seen: Set<string>,
+      entities: Record<string, Task | undefined>,
     ): void => {
       if (seen.has(task.id)) {
         return;
@@ -228,18 +247,24 @@ export class ProjectService {
       seen.add(task.id);
       allTasks.push(task);
       (task.subTaskIds ?? []).forEach((subId) => {
-        const sub = taskState.entities[subId];
+        const sub = entities[subId];
         if (sub) {
-          collectTaskAndSubTasks(sub, allTasks, seen);
+          collectTaskAndSubTasks(sub, allTasks, seen, entities);
         }
       });
     };
     const allTasks: Task[] = [];
     const seenTaskIds = new Set<string>();
     topLevelTasks.forEach((t) => {
-      collectTaskAndSubTasks(t, allTasks, seenTaskIds);
+      collectTaskAndSubTasks(t, allTasks, seenTaskIds, projectTaskEntities);
     });
-    const unfinishedTasks = allTasks.filter((t) => !t.isDone);
+
+    const activeAllTasks: Task[] = [];
+    const seenActiveTaskIds = new Set<string>();
+    activeTopLevelTasks.forEach((t) => {
+      collectTaskAndSubTasks(t, activeAllTasks, seenActiveTaskIds, taskState.entities);
+    });
+    const unfinishedTasks = activeAllTasks.filter((t) => !t.isDone);
     const unfinishedTaskIds = new Set(unfinishedTasks.map((t) => t.id));
     const hasUnfinishedWork = (task: Task): boolean =>
       unfinishedTaskIds.has(task.id) ||
@@ -251,7 +276,9 @@ export class ProjectService {
       topLevelTasks,
       allTasks,
       unfinishedTasks,
-      topLevelTasksWithUnfinishedWork: topLevelTasks.filter((t) => hasUnfinishedWork(t)),
+      topLevelTasksWithUnfinishedWork: activeTopLevelTasks.filter((t) =>
+        hasUnfinishedWork(t),
+      ),
     };
   }
 

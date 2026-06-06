@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { WritableSignal, signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -10,6 +11,7 @@ import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { createProject } from '../project.test-helper';
 import { ProjectService } from '../project.service';
+import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 
 describe('DialogProjectCompleteComponent', () => {
   let fixture: ComponentFixture<DialogProjectCompleteComponent>;
@@ -19,22 +21,38 @@ describe('DialogProjectCompleteComponent', () => {
   let projectService: jasmine.SpyObj<ProjectService>;
   let router: Router;
   let misc: { isDisableCelebration?: boolean; isDisableAnimations?: boolean };
+  let isDarkTheme: WritableSignal<boolean>;
 
-  const data: DialogProjectCompleteData = {
-    project: createProject({ id: 'project-1', title: 'Completed Project' }),
-    stats: {
-      nrOfTasksDone: 2,
-      nrOfTasksTotal: 2,
-      timeSpent: 0,
-      nrOfDaysWorked: 0,
-      startedOn: null,
-      doneOn: new Date(2026, 5, 5).getTime(),
-      durationDays: 0,
-    },
-  };
+  let data: DialogProjectCompleteData;
 
   beforeEach(() => {
     misc = { isDisableCelebration: false, isDisableAnimations: false };
+    isDarkTheme = signal(false);
+    data = {
+      project: createProject({
+        id: 'project-1',
+        title: 'Completed Project',
+        theme: {
+          primary: '#123456',
+          accent: '#abcdef',
+          backgroundImageLight:
+            'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+          backgroundImageDark:
+            'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+          backgroundOverlayOpacity: 65,
+          backgroundImageBlur: 4,
+        },
+      }),
+      stats: {
+        nrOfTasksDone: 2,
+        nrOfTasksTotal: 2,
+        timeSpent: 0,
+        nrOfDaysWorked: 0,
+        startedOn: null,
+        doneOn: new Date(2026, 5, 5).getTime(),
+        durationDays: 0,
+      },
+    };
     confettiService = jasmine.createSpyObj('ConfettiService', ['createConfettiOnCanvas']);
     confettiService.createConfettiOnCanvas.and.returnValue(Promise.resolve());
     dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
@@ -49,6 +67,7 @@ describe('DialogProjectCompleteComponent', () => {
         { provide: ConfettiService, useValue: confettiService },
         { provide: GlobalConfigService, useValue: { misc: () => misc } },
         { provide: ProjectService, useValue: projectService },
+        { provide: GlobalThemeService, useValue: { isDarkTheme } },
       ],
     });
 
@@ -75,6 +94,23 @@ describe('DialogProjectCompleteComponent', () => {
     await fixture.whenStable();
 
     expect(confettiService.createConfettiOnCanvas).not.toHaveBeenCalled();
+  });
+
+  it('uses the completed project background image and theme values', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const nativeElement = fixture.nativeElement as HTMLElement;
+    const overlay = nativeElement.querySelector('.complete-overlay') as HTMLElement;
+    const bgImage = nativeElement.querySelector('.project-bg-image') as HTMLElement;
+    const bgOverlay = nativeElement.querySelector('.project-bg-overlay') as HTMLElement;
+
+    expect(overlay.style.getPropertyValue('--project-complete-primary')).toBe('#123456');
+    expect(overlay.style.getPropertyValue('--project-complete-accent')).toBe('#abcdef');
+    expect(bgImage.style.background).toContain('data:image/gif');
+    expect(bgImage.style.filter).toBe('blur(4px)');
+    expect(bgImage.classList).toContain('is-blurred');
+    expect(bgOverlay.style.opacity).toBe('0.65');
   });
 
   it('closes the dialog', () => {
