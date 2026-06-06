@@ -64,6 +64,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/google-calendar-provider',
   'assets/bundled-plugins/caldav-calendar-provider',
   'assets/bundled-plugins/doc-mode',
+  'assets/bundled-plugins/markdown-notes',
 ] as const;
 
 @Injectable({

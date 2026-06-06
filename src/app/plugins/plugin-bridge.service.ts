@@ -101,6 +101,7 @@ import {
 } from '../features/simple-counter/store/simple-counter.actions';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
+import { MenuTreeService } from '../features/menu-tree/menu-tree.service';
 
 /**
  * PluginBridge acts as an intermediary layer between plugins and the main application services.
@@ -136,6 +137,7 @@ export class PluginBridgeService implements OnDestroy {
   private _pluginHttpService = inject(PluginHttpService);
   private _pluginOAuthBridge = inject(PluginOAuthBridgeService);
   private _dataInitService = inject(DataInitService);
+  private _menuTreeService = inject(MenuTreeService);
   private _globalConfigService = inject(GlobalConfigService);
 
   // Track header buttons registered by plugins
@@ -666,6 +668,7 @@ export class PluginBridgeService implements OnDestroy {
       };
     });
 
+    const projectFolderMap = this._menuTreeService.projectFolderMap();
     const projects: Record<string, ProjectCopy> = {};
     const rawProjects = (projectState?.entities ?? {}) as Record<
       string,
@@ -676,6 +679,7 @@ export class PluginBridgeService implements OnDestroy {
       if (!p) continue;
       const safe = { ...p };
       delete (safe as { issueIntegrationCfgs?: unknown }).issueIntegrationCfgs;
+      safe.folderPath = projectFolderMap.get(id) ?? null;
       projects[id] = safe as ProjectCopy;
     }
 
@@ -871,7 +875,11 @@ export class PluginBridgeService implements OnDestroy {
    */
   async getAllProjects(): Promise<ProjectCopy[]> {
     const projects = await this._projectService.list$.pipe(first()).toPromise();
-    return projects || [];
+    const projectFolderMap = this._menuTreeService.projectFolderMap();
+    return (projects || []).map((project) => ({
+      ...project,
+      folderPath: projectFolderMap.get(project.id) ?? null,
+    }));
   }
 
   /**

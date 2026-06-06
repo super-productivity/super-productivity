@@ -1,0 +1,24 @@
+{
+  "id": "markdown-notes",
+  "manifestVersion": 1,
+  "name": "Markdown Notes",
+  "version": "0.1.0",
+  "description": "Read-only markdown notes from a local folder, Obsidian-style.",
+  "author": "Super Productivity",
+  "homepage": "https://github.com/super-productivity/super-productivity",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/super-productivity/super-productivity.git"
+  },
+  "minSupVersion": "10.0.0",
+  "permissions": ["nodeExecution", "getAllProjects"],
+  "nodeScriptConfig": {
+    "timeout": 30000,
+    "memoryLimit": "256MB"
+  },
+  "iFrame": true,
+  "sidePanel": true,
+  "isSkipMenuEntry": true,
+  "hooks": [],
+  "icon": "icon.svg"
+}
