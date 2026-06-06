@@ -27,7 +27,6 @@ import {
   addProject,
   addProjects,
   archiveProject,
-  completeProject,
   loadProjects,
   moveAllProjectBacklogTasksToRegularList,
   moveProjectTaskDownInBacklogList,
@@ -192,23 +191,8 @@ export const projectReducer = createReducer<ProjectState>(
     ),
   ),
 
-  // Completing a project marks it done AND archives it (hide from active menu).
-  // isDone stays distinct from isArchived so a finish ≠ a quiet shelve.
-  on(completeProject, (state, { id, doneOn }) => {
-    if (id === INBOX_PROJECT.id) return state;
-    return projectAdapter.updateOne(
-      {
-        id,
-        changes: {
-          isDone: true,
-          doneOn,
-          isArchived: true,
-        },
-      },
-      state,
-    );
-  }),
-
+  // Reopen reverts a completed project (set via the atomic
+  // TaskSharedActions.completeProject meta-reducer) back to active.
   on(reopenProject, (state, { id }) =>
     projectAdapter.updateOne(
       {

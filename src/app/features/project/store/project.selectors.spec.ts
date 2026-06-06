@@ -2,8 +2,6 @@ import {
   selectArchivedProjects,
   selectArchivedProjectIds,
   selectArrayOfArchivedProjectIds,
-  selectCompletedProjects,
-  selectPlainArchivedProjects,
 } from './project.selectors';
 import { Project } from '../project.model';
 
@@ -15,18 +13,6 @@ describe('project.selectors (completion)', () => {
     p({ id: 'archived', isArchived: true, isDone: false }),
     p({ id: 'done', isArchived: true, isDone: true }),
   ];
-
-  it('selectCompletedProjects returns only isDone projects', () => {
-    expect(selectCompletedProjects.projector(projects).map((x) => x.id)).toEqual([
-      'done',
-    ]);
-  });
-
-  it('selectPlainArchivedProjects excludes completed projects', () => {
-    expect(selectPlainArchivedProjects.projector(projects).map((x) => x.id)).toEqual([
-      'archived',
-    ]);
-  });
 
   // REGRESSION (multi-review CRITICAL): completing a project sets isArchived, so
   // it MUST remain in selectArchivedProjects — that selector feeds

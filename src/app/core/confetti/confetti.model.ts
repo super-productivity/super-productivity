@@ -1,7 +1,6 @@
 export interface ConfettiConfig {
   particleCount?: number;
   angle?: number;
-  angel?: number;
   spread?: number;
   startVelocity?: number;
   decay?: number;

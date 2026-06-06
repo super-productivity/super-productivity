@@ -135,7 +135,6 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.PROJECT_UPDATE_ADVANCED_CFG]: 'PC',
   [ActionType.PROJECT_ARCHIVE]: 'PX',
   [ActionType.PROJECT_UNARCHIVE]: 'PR',
-  [ActionType.PROJECT_COMPLETE]: 'PCO',
   [ActionType.PROJECT_REOPEN]: 'PRO',
   [ActionType.PROJECT_TOGGLE_HIDE]: 'PH',
   [ActionType.PROJECT_MOVE_TASK_IN_BACKLOG]: 'PM',
