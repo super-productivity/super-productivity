@@ -3,6 +3,7 @@ import { fakeEntityStateFromArray } from '../../../util/fake-entity-state-from-a
 import { Project } from '../project.model';
 import {
   archiveProject,
+  completeProject,
   moveProjectTaskInBacklogList,
   moveProjectTaskToBacklogList,
   moveProjectTaskToRegularList,
@@ -564,15 +565,64 @@ describe('projectReducer', () => {
     });
   });
 
-  describe('reopenProject', () => {
-    it('should clear isDone, doneOn and isArchived', () => {
-      // Completion is applied via the atomic TaskSharedActions.completeProject
-      // meta-reducer; here we start from an already-completed project.
+  describe('completeProject', () => {
+    it('should set isDone, doneOn and isArchived together', () => {
       const s = fakeEntityStateFromArray([
-        { id: 'P1', isArchived: true, isDone: true, doneOn: 999 },
+        { id: 'P1', isArchived: false, isDone: false },
+        { id: 'P2', isArchived: false, isDone: false },
       ] as Partial<Project>[]);
 
-      const reopened = projectReducer(s as any, reopenProject({ id: 'P1' }) as any);
+      const r = projectReducer(
+        s as any,
+        completeProject({ id: 'P1', doneOn: 1234 }) as any,
+      );
+      expect((r.entities as any).P1.isDone).toBeTrue();
+      expect((r.entities as any).P1.doneOn).toBe(1234);
+      // Completing auto-archives → hides from the active menu.
+      expect((r.entities as any).P1.isArchived).toBeTrue();
+    });
+
+    it('should not affect other projects', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: false, isDone: false },
+        { id: 'P2', isArchived: false, isDone: false },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(s as any, completeProject({ id: 'P1', doneOn: 1 }) as any);
+      expect((r.entities as any).P2.isDone).toBeFalse();
+      expect((r.entities as any).P2.isArchived).toBeFalse();
+    });
+
+    it('should never complete INBOX_PROJECT', () => {
+      const s = fakeEntityStateFromArray([
+        { id: INBOX_PROJECT.id, isArchived: false, isDone: false },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(
+        s as any,
+        completeProject({ id: INBOX_PROJECT.id, doneOn: 1 }) as any,
+      );
+      expect((r.entities as any)[INBOX_PROJECT.id].isDone).toBeFalse();
+      expect((r.entities as any)[INBOX_PROJECT.id].isArchived).toBeFalse();
+    });
+  });
+
+  describe('reopenProject', () => {
+    it('should clear isDone, doneOn and isArchived (round-trip from complete)', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', isArchived: false, isDone: false },
+      ] as Partial<Project>[]);
+
+      const completed = projectReducer(
+        s as any,
+        completeProject({ id: 'P1', doneOn: 999 }) as any,
+      );
+      expect((completed.entities as any).P1.isDone).toBeTrue();
+
+      const reopened = projectReducer(
+        completed as any,
+        reopenProject({ id: 'P1' }) as any,
+      );
       expect((reopened.entities as any).P1.isDone).toBeFalse();
       expect((reopened.entities as any).P1.doneOn).toBeNull();
       // Reopen also un-archives → returns to the active menu.

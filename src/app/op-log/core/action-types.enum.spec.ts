@@ -48,9 +48,6 @@ describe('ActionType enum', () => {
       expect(ActionType.TASK_SHARED_PLAN_DEADLINE_FOR_TODAY).toBe(
         '[Task Shared] planDeadlineTasksForToday',
       );
-      expect(ActionType.TASK_SHARED_COMPLETE_PROJECT).toBe(
-        '[Task Shared] completeProject',
-      );
     });
 
     it('should have correct Tag action types', () => {

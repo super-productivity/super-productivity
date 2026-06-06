@@ -21,6 +21,7 @@ import { WorkContextService } from '../work-context/work-context.service';
 import {
   addProject,
   archiveProject,
+  completeProject,
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
@@ -31,7 +32,7 @@ import {
   updateProjectOrder,
 } from './store/project.actions';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { DEFAULT_PROJECT } from './project.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from './project.const';
 import {
   selectArchivedProjects,
   selectProjectById,
@@ -58,11 +59,6 @@ export interface ProjectCompletionInfo {
   allTasks: Task[];
   unfinishedTasks: Task[];
   topLevelTasksWithUnfinishedWork: Task[];
-}
-
-export interface ProjectCompletionResolution {
-  taskIdsToMarkDone?: string[];
-  topLevelTaskIdsToMoveToInbox?: string[];
 }
 
 @Injectable({
@@ -181,21 +177,40 @@ export class ProjectService {
     );
   }
 
-  complete(
-    projectId: string,
-    doneOn: number,
-    resolution: ProjectCompletionResolution = {},
-  ): void {
-    // No undo affordance: completion resolves tasks (move-to-inbox / mark-done),
-    // which reopen cannot fully restore. The fullscreen celebration is the
-    // feedback; reactivation lives on the archived-projects page.
-    this._store$.dispatch(
-      TaskSharedActions.completeProject({
-        id: projectId,
-        doneOn,
-        ...resolution,
-      }),
-    );
+  complete(projectId: string, doneOn: number): void {
+    // Single-entity flag flip. Unfinished-task resolution (move-to-inbox /
+    // mark-done) is dispatched separately as normal per-task actions before
+    // this call — see moveTasksToInbox / markTasksDone and the completion flow
+    // in work-context-menu. No undo affordance: that resolution can't be fully
+    // restored by reopen, so the fullscreen celebration is the feedback and
+    // reactivation lives on the archived-projects page.
+    this._store$.dispatch(completeProject({ id: projectId, doneOn }));
+  }
+
+  /**
+   * Carry unfinished work forward into the Inbox before completing a project.
+   * Uses the normal per-task move action so every downstream effect (issue
+   * sync, reminders, repeat-cfg) and per-entity conflict detection fires
+   * naturally. A move re-opens a done task (it left the completed project).
+   * The trailing flush is the bulk-dispatch guard (sync-model Rule #6).
+   */
+  async moveTasksToInbox(tasks: Task[]): Promise<void> {
+    for (const task of tasks) {
+      const withSubTasks = await firstValueFrom(
+        this._taskService.getByIdWithSubTaskData$(task.id),
+      );
+      this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
+      if (task.isDone) {
+        this._taskService.setUnDone(task.id);
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  /** Mark a project's unfinished tasks done via the normal per-task action. */
+  async markTasksDone(tasks: Task[]): Promise<void> {
+    tasks.forEach((task) => this._taskService.setDone(task.id));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   reopen(projectId: string, project?: Pick<Project, 'isHiddenFromMenu'>): void {

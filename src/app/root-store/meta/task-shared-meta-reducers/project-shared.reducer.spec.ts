@@ -22,7 +22,6 @@ import {
   TaskRepeatCfg,
   TaskRepeatCfgState,
 } from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
-import { INBOX_PROJECT } from '../../../features/project/project.const';
 
 const createMockTaskRepeatCfg = (
   overrides: Partial<TaskRepeatCfg> = {},
@@ -413,123 +412,6 @@ describe('projectSharedMetaReducer', () => {
         mockReducer,
         testState,
       );
-    });
-  });
-
-  describe('completeProject action', () => {
-    const doneOn = new Date(2026, 5, 5, 12, 0, 0).getTime();
-
-    it('should complete and archive the project while marking unfinished tasks done', () => {
-      const testState = createStateWithExistingTasks(['task1', 'task2'], [], [], []);
-      testState[TASK_FEATURE_NAME].currentTaskId = 'task1';
-
-      const action = TaskSharedActions.completeProject({
-        id: 'project1',
-        doneOn,
-        taskIdsToMarkDone: ['task1', 'task2'],
-      });
-
-      metaReducer(testState, action);
-      const updatedState = mockReducer.calls.mostRecent().args[0];
-
-      expect(updatedState[PROJECT_FEATURE_NAME].entities.project1).toEqual(
-        jasmine.objectContaining({
-          isDone: true,
-          doneOn,
-          isArchived: true,
-        }),
-      );
-      expect(updatedState[TASK_FEATURE_NAME].entities.task1).toEqual(
-        jasmine.objectContaining({ isDone: true, doneOn }),
-      );
-      expect(updatedState[TASK_FEATURE_NAME].entities.task2).toEqual(
-        jasmine.objectContaining({ isDone: true, doneOn }),
-      );
-      expect(updatedState[TASK_FEATURE_NAME].currentTaskId).toBeNull();
-      expect(updatedState[TASK_FEATURE_NAME].lastCurrentTaskId).toBe('task1');
-    });
-
-    it('should move unresolved top-level task trees to Inbox before completing', () => {
-      const testState = createStateWithExistingTasks(['task1'], [], [], []);
-      testState[PROJECT_FEATURE_NAME].ids = ['project1', INBOX_PROJECT.id];
-      testState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id] = {
-        ...INBOX_PROJECT,
-        taskIds: [],
-        backlogTaskIds: [],
-      };
-      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
-        id: 'task1',
-        projectId: 'project1',
-        isDone: true,
-        doneOn: 1,
-        subTaskIds: ['sub1'],
-      });
-      testState[TASK_FEATURE_NAME].entities.sub1 = createMockTask({
-        id: 'sub1',
-        projectId: 'project1',
-        parentId: 'task1',
-        isDone: false,
-        subTaskIds: [],
-      });
-      testState[TASK_FEATURE_NAME].ids = ['task1', 'sub1'];
-
-      const action = TaskSharedActions.completeProject({
-        id: 'project1',
-        doneOn,
-        topLevelTaskIdsToMoveToInbox: ['task1'],
-      });
-
-      metaReducer(testState, action);
-      const updatedState = mockReducer.calls.mostRecent().args[0];
-
-      expect(updatedState[PROJECT_FEATURE_NAME].entities.project1.taskIds).toEqual([]);
-      expect(
-        updatedState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id].taskIds,
-      ).toEqual(['task1']);
-      expect(updatedState[TASK_FEATURE_NAME].entities.task1).toEqual(
-        jasmine.objectContaining({
-          projectId: INBOX_PROJECT.id,
-          isDone: false,
-          doneOn: undefined,
-        }),
-      );
-      expect(updatedState[TASK_FEATURE_NAME].entities.sub1).toEqual(
-        jasmine.objectContaining({ projectId: INBOX_PROJECT.id }),
-      );
-      expect(updatedState[PROJECT_FEATURE_NAME].entities.project1.isDone).toBeTrue();
-      expect(updatedState[PROJECT_FEATURE_NAME].entities.project1.isArchived).toBeTrue();
-    });
-
-    it('should never complete the Inbox project', () => {
-      const testState = {
-        ...baseState,
-        [PROJECT_FEATURE_NAME]: {
-          ids: [INBOX_PROJECT.id],
-          entities: {
-            [INBOX_PROJECT.id]: {
-              ...INBOX_PROJECT,
-              isArchived: false,
-              isDone: false,
-            },
-          },
-        },
-      } as RootState;
-
-      const action = TaskSharedActions.completeProject({
-        id: INBOX_PROJECT.id,
-        doneOn,
-        taskIdsToMarkDone: ['task1'],
-      });
-
-      metaReducer(testState, action);
-      const updatedState = mockReducer.calls.mostRecent().args[0];
-
-      expect(
-        updatedState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id].isDone,
-      ).toBeFalse();
-      expect(
-        updatedState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id].isArchived,
-      ).toBeFalse();
     });
   });
 

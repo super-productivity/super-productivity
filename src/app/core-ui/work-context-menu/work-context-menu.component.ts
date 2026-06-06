@@ -228,23 +228,21 @@ export class WorkContextMenuComponent implements OnInit {
       }
     }
 
-    const doneOn = this._dateService.getLogicalTodayDate().getTime();
-    this._projectService.complete(
-      this.contextId,
-      doneOn,
-      resolution === 'inbox'
-        ? {
-            topLevelTaskIdsToMoveToInbox: currentInfo.topLevelTasksWithUnfinishedWork.map(
-              (task) => task.id,
-            ),
-          }
-        : resolution === 'markDone'
-          ? { taskIdsToMarkDone: currentInfo.unfinishedTasks.map((task) => task.id) }
-          : {},
-    );
+    // Resolve unfinished work via the normal per-task actions BEFORE completing,
+    // so every downstream effect (issue sync, reminders, repeat-cfg) and
+    // per-entity conflict detection fires naturally. Completion itself is then a
+    // plain single-entity project flag flip.
+    if (resolution === 'inbox') {
+      await this._projectService.moveTasksToInbox(
+        currentInfo.topLevelTasksWithUnfinishedWork,
+      );
+    } else if (resolution === 'markDone') {
+      await this._projectService.markTasksDone(currentInfo.unfinishedTasks);
+    }
 
-    // Recompute after completion so the stats reflect moved/done task resolution.
+    // Recompute after resolution so the stats reflect the final task list.
     const finalInfo = await this._projectService.getCompletionInfo(this.contextId);
+    const doneOn = this._dateService.getLogicalTodayDate().getTime();
     const stats = getProjectCompletionStats(
       finalInfo.topLevelTasks,
       finalInfo.allTasks,
@@ -252,6 +250,7 @@ export class WorkContextMenuComponent implements OnInit {
     );
 
     const activeId = this._workContextService.activeWorkContextId;
+    this._projectService.complete(this.contextId, doneOn);
 
     // Navigate away BEFORE opening the celebration: MatDialog's closeOnNavigation
     // (default true) would otherwise dismiss the dialog the moment we leave the

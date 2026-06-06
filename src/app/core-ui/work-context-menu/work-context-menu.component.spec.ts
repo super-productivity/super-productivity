@@ -43,6 +43,8 @@ describe('WorkContextMenuComponent', () => {
       'complete',
       'reopen',
       'getCompletionInfo',
+      'moveTasksToInbox',
+      'markTasksDone',
       'getByIdOnce$',
       'getByIdLive$',
     ]);
@@ -58,6 +60,8 @@ describe('WorkContextMenuComponent', () => {
         topLevelTasksWithUnfinishedWork: [],
       }),
     );
+    mockProjectService.moveTasksToInbox.and.returnValue(Promise.resolve());
+    mockProjectService.markTasksDone.and.returnValue(Promise.resolve());
     mockProjectService.getByIdLive$.and.returnValue(
       of({ id: 'project-123', title: 'Demo project' } as any),
     );
@@ -125,7 +129,6 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
-        {},
       );
       expect(router.navigateByUrl).toHaveBeenCalledWith('/');
     });
@@ -141,11 +144,10 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
       resolveResult$ = of('inbox');
       await component.completeProject();
-      expect(mockProjectService.complete).toHaveBeenCalledWith(
-        'project-123',
-        logicalDoneOn,
-        { topLevelTaskIdsToMoveToInbox: ['t1'] },
+      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledWith(
+        undoneInfo.topLevelTasksWithUnfinishedWork,
       );
+      expect(mockProjectService.complete).toHaveBeenCalled();
     });
 
     it('uses refreshed unfinished work after final confirmation', async () => {
@@ -164,10 +166,8 @@ describe('WorkContextMenuComponent', () => {
 
       await component.completeProject();
 
-      expect(mockProjectService.complete).toHaveBeenCalledWith(
-        'project-123',
-        logicalDoneOn,
-        { topLevelTaskIdsToMoveToInbox: ['t2'] },
+      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledWith(
+        refreshedInfo.topLevelTasksWithUnfinishedWork,
       );
     });
 
@@ -175,11 +175,10 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
       resolveResult$ = of('markDone');
       await component.completeProject();
-      expect(mockProjectService.complete).toHaveBeenCalledWith(
-        'project-123',
-        logicalDoneOn,
-        { taskIdsToMarkDone: ['t1'] },
+      expect(mockProjectService.markTasksDone).toHaveBeenCalledWith(
+        undoneInfo.unfinishedTasks,
       );
+      expect(mockProjectService.complete).toHaveBeenCalled();
     });
 
     it('does not move unfinished tasks when Inbox is chosen but confirmation is cancelled', async () => {

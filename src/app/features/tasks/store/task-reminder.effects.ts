@@ -331,32 +331,4 @@ export class TaskReminderEffects {
         ),
       { dispatch: false },
     );
-
-  // Completing a project marks its unfinished tasks done inside the meta-reducer
-  // (no per-task updateTask action), so unscheduleDoneTask$'s native-reminder
-  // cancellation is bypassed for them. Cancel the native Android reminders for the
-  // force-completed tasks so they don't fire after completion. Local-only: emits
-  // no synced ops — done tasks are already filtered from reminders$ on all
-  // platforms; only the OS-scheduled Android notification needs explicit removal.
-  // Uses the injection token + filter for testability (see effects above).
-  cancelNativeRemindersOnProjectComplete$ = createEffect(
-    () =>
-      this._localActions$.pipe(
-        ofType(TaskSharedActions.completeProject),
-        filter(() => this._isAndroidWebView),
-        tap(({ taskIdsToMarkDone }) => {
-          (taskIdsToMarkDone ?? []).forEach((id) => {
-            try {
-              androidInterface.cancelNativeReminder?.(generateNotificationId(id));
-              androidInterface.cancelNativeReminder?.(
-                generateNotificationId(id + '_deadline'),
-              );
-            } catch (e) {
-              console.error('Failed to cancel native reminder:', e);
-            }
-          });
-        }),
-      ),
-    { dispatch: false },
-  );
 }

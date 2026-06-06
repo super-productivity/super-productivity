@@ -88,6 +88,10 @@ describe('ProjectService', () => {
     taskService = jasmine.createSpyObj('TaskService', [
       'add',
       'createNewTaskWithDefaults',
+      'getByIdWithSubTaskData$',
+      'moveToProject',
+      'setDone',
+      'setUnDone',
       'getAllTasksForProject',
     ]);
     taskService.createNewTaskWithDefaults.and.callFake(() => {
@@ -363,13 +367,13 @@ describe('ProjectService', () => {
   });
 
   describe('complete', () => {
-    it('dispatches the atomic task-shared completeProject action', () => {
+    it('dispatches the plain completeProject project action', () => {
       const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
       service.complete('project-1', 12345);
       const completeAction = dispatchSpy.calls
         .allArgs()
         .map((args: any) => args[0])
-        .find((a: any) => a?.type === '[Task Shared] completeProject');
+        .find((a: any) => a?.type === '[Project] Complete Project');
       expect(completeAction).toBeTruthy();
       expect(completeAction.id).toBe('project-1');
       expect(completeAction.doneOn).toBe(12345);
@@ -378,28 +382,6 @@ describe('ProjectService', () => {
     it('does not show an undo snack (completion is not reversible)', () => {
       service.complete('project-1', 1);
       expect(snackService.open).not.toHaveBeenCalled();
-    });
-
-    it('forwards the mark-done resolution to the atomic action', () => {
-      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
-      service.complete('project-1', 1, { taskIdsToMarkDone: ['t1', 't2'] });
-      const completeAction = dispatchSpy.calls
-        .allArgs()
-        .map((args: any) => args[0])
-        .find((a: any) => a?.type === '[Task Shared] completeProject');
-      expect(completeAction.taskIdsToMarkDone).toEqual(['t1', 't2']);
-      expect(completeAction.topLevelTaskIdsToMoveToInbox).toBeUndefined();
-    });
-
-    it('forwards the move-to-inbox resolution to the atomic action', () => {
-      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
-      service.complete('project-1', 1, { topLevelTaskIdsToMoveToInbox: ['t3'] });
-      const completeAction = dispatchSpy.calls
-        .allArgs()
-        .map((args: any) => args[0])
-        .find((a: any) => a?.type === '[Task Shared] completeProject');
-      expect(completeAction.topLevelTaskIdsToMoveToInbox).toEqual(['t3']);
-      expect(completeAction.taskIdsToMarkDone).toBeUndefined();
     });
   });
 
@@ -528,6 +510,36 @@ describe('ProjectService', () => {
         'task-1',
         'task-2',
       ]);
+    });
+  });
+
+  describe('resolve unfinished completion tasks', () => {
+    it('moves top-level task trees with unfinished work to the Inbox', async () => {
+      const task = { ...initialTaskState.entities['task-1']!, isDone: true };
+      const taskWithSubTasks = {
+        ...task,
+        subTasks: [initialTaskState.entities['sub-task-1']!],
+      };
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskWithSubTasks as any));
+
+      await service.moveTasksToInbox([task]);
+
+      expect(taskService.getByIdWithSubTaskData$).toHaveBeenCalledWith('task-1');
+      expect(taskService.moveToProject).toHaveBeenCalledWith(
+        taskWithSubTasks as any,
+        'INBOX_PROJECT',
+      );
+      expect(taskService.setUnDone).toHaveBeenCalledWith('task-1');
+    });
+
+    it('marks every unfinished task done, including subtasks', async () => {
+      const parent = initialTaskState.entities['task-1']!;
+      const subTask = initialTaskState.entities['sub-task-1']!;
+
+      await service.markTasksDone([parent, subTask]);
+
+      expect(taskService.setDone).toHaveBeenCalledWith('task-1');
+      expect(taskService.setDone).toHaveBeenCalledWith('sub-task-1');
     });
   });
 });
