@@ -1,11 +1,15 @@
 <h2 mat-dialog-title>{{ T.MH.COMPLETE_PROJECT | translate }}</h2>
 
 <mat-dialog-content>
-  <p
-    [innerHTML]="
-      T.F.PROJECT.COMPLETE.RESOLVE.MSG | translate: { title: data.title, nr: data.nr }
-    "
-  ></p>
+  <p>
+    <strong>{{ data.title }}</strong>
+    {{
+      (data.nr === 1
+        ? T.F.PROJECT.COMPLETE.RESOLVE.MSG_ONE
+        : T.F.PROJECT.COMPLETE.RESOLVE.MSG
+      ) | translate: { nr: data.nr }
+    }}
+  </p>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

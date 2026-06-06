@@ -691,16 +691,15 @@ export class ProjectPage extends BasePage {
 
     // Ensure the Projects group is expanded
     const projectsGroupBtn = projectsTree.locator('nav-item button').first();
-    await projectsGroupBtn.waitFor({ state: 'visible', timeout: 5000 });
-    if ((await projectsGroupBtn.getAttribute('aria-expanded')) !== 'true') {
-      await projectsGroupBtn.click();
-      await this.page.waitForTimeout(500);
-    }
-
     const projectTreeItem = projectsTree
       .locator('[role="treeitem"]')
       .filter({ hasText: fullProjectName })
       .first();
+    await projectsGroupBtn.waitFor({ state: 'visible', timeout: 5000 });
+    if ((await projectsGroupBtn.getAttribute('aria-expanded')) !== 'true') {
+      await projectsGroupBtn.click();
+    }
+
     await projectTreeItem.waitFor({ state: 'visible', timeout: 5000 });
     await projectTreeItem.click({ button: 'right' });
 

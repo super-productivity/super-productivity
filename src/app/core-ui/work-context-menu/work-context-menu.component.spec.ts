@@ -349,16 +349,19 @@ describe('WorkContextMenuComponent', () => {
       } as any);
     });
 
-    it('renders Complete (not Archive) for a non-archived project', () => {
+    it('renders both Archive and Complete for a non-archived project', async () => {
       mockProjectService.getByIdLive$.and.returnValue(
         of({ id: 'project-123', isArchived: false } as any),
       );
       fixture.detectChanges();
 
       expect(menuButtonByIcon('unarchive')).toBeNull();
-      // Archive was removed from the menu — Complete is the single retire path.
-      expect(menuButtonByIcon('archive')).toBeNull();
+      expect(menuButtonByIcon('archive')).toBeTruthy();
       expect(menuButtonByIcon('check_circle')).toBeTruthy();
+
+      menuButtonByIcon('archive')!.click();
+      await fixture.whenStable();
+      expect(mockProjectService.archive).toHaveBeenCalledWith('project-123');
     });
   });
 });

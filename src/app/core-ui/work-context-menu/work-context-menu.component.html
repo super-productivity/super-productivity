@@ -94,6 +94,13 @@
     </button>
   } @else {
     <button
+      (click)="archiveProject()"
+      mat-menu-item
+    >
+      <mat-icon>archive</mat-icon>
+      <span class="text">{{ T.MH.ARCHIVE_PROJECT | translate }}</span>
+    </button>
+    <button
       (click)="completeProject()"
       mat-menu-item
     >

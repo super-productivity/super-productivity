@@ -926,8 +926,10 @@
         "UNDO": "Undo",
         "COMPLETED_ON": "Completed {{date}}",
         "REOPEN": "Reopen",
+        "NOTICE": "This project is completed.",
         "RESOLVE": {
-          "MSG": "<strong>{{title}}</strong> still has {{nr}} unfinished task(s). What should happen to them?",
+          "MSG": "still has {{nr}} unfinished tasks. What should happen to them?",
+          "MSG_ONE": "still has {{nr}} unfinished task. What should happen to it?",
           "MOVE_TO_INBOX": "Move to Inbox",
           "MARK_DONE": "Mark as done"
         },
