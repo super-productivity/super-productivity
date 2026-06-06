@@ -26,6 +26,10 @@ import {
 import { MatDialog } from '@angular/material/dialog';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import { expandInOnlyAnimation } from '../../../ui/animations/expand.ani';
+import {
+  ChecklistProgress,
+  getChecklistProgress,
+} from '../../markdown-checklist/get-checklist-progress';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { concatMap, first, tap } from 'rxjs/operators';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
@@ -246,6 +250,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const t = this.task();
     return (t.timeEstimate && (t.timeSpent / t.timeEstimate) * 100) || 0;
   });
+
+  // Checklist progress derived from markdown checklist in task notes (null = no checklist)
+  checklistProgress = computed<ChecklistProgress | null>(() =>
+    getChecklistProgress(this.task().notes),
+  );
 
   isShowRemoveFromToday = computed(() => {
     return (

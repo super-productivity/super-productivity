@@ -1672,6 +1672,7 @@
         "ADD_SUB_TASK": "Add subtask",
         "ADD_TO_MY_DAY": "Add to Today",
         "ADD_TO_PROJECT": "Add to a project",
+        "CHECKLIST_PROGRESS": "Checklist: {{done}} of {{total}} done",
         "CLEAR_ESTIMATE": "Clear estimate",
         "CONVERT_TO_PARENT_TASK": "Convert to parent task",
         "CUSTOM_ESTIMATE": "Custom…",
