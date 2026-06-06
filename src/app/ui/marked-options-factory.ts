@@ -153,7 +153,7 @@ export const markedOptionsFactory = (): MarkedOptions => {
   const options: MarkedOptions = {
     renderer,
     gfm: true,
-    breaks: false,
+    breaks: true,
     pedantic: false,
   };
 
