@@ -1,0 +1,1 @@
+Unified Quick History and Worklog into one History view. Added parent folder context for projects and tags. Fixed custom weekday repeat settings, project icon colors, hidden selections after filtering, calendar due banners, regional date formats, board tasks from sidebar-hidden projects, frequency translations, and preserving edits during sync/repeat/deadline handling.

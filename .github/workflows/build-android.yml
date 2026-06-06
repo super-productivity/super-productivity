@@ -36,6 +36,7 @@ jobs:
         with:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: true #make accepting the android sdk license verbose
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
 
       - name: Get npm cache directory
         id: npm-cache-dir

@@ -535,4 +535,87 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       // which only happens after repeatCfgInitial is set
     }));
   });
+
+  describe('isWeekdaySelectionInvalid (issue #8025)', () => {
+    const baseCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      monday: false,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+    };
+
+    it('should be true for a CUSTOM weekly config with no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(true);
+    });
+
+    it('should be false once at least one weekday is selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        wednesday: true,
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should be false for non-weekly cycles even with no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'MONTHLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should be false for non-CUSTOM quick settings (e.g. DAILY)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'DAILY',
+        repeatCycle: 'WEEKLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should block direct save when a CUSTOM weekly config has no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+      });
+
+      component.save();
+
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+  });
 });

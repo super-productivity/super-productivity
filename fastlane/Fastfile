@@ -70,6 +70,11 @@ def deliver_options(extra)
     run_precheck_before_submit: false,
     submission_information: {
       add_id_info_uses_idfa: false,
+      # The app only relies on exempt encryption (HTTPS/standard OS crypto), so
+      # it does not use non-exempt encryption. Without this, App Store Connect
+      # rejects the submission with "Export compliance is required to submit".
+      # Mirrors ITSAppUsesNonExemptEncryption=false in ios/App/App/Info.plist.
+      export_compliance_uses_encryption: false,
     },
     # Non-interactive: skip the HTML report confirmation prompt.
     force: true,

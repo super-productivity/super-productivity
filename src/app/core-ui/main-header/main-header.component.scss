@@ -203,6 +203,9 @@ page-title {
 
   &.isVisible {
     pointer-events: all;
+    border-radius: var(--card-border-radius);
+    background: var(--card-bg);
+    box-shadow: var(--whiteframe-shadow-2dp);
   }
 
   simple-counter-button {

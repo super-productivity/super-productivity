@@ -1923,7 +1923,8 @@
         "WAIT_FOR_COMPLETION_DESCRIPTION": "Prevents multiple pending recurring tasks from piling up. The next instance will only be created once the current task is completed",
         "WEDNESDAY": "Wednesday",
         "WEEK_OF_MONTH": "Week of month",
-        "WEEKDAY": "Weekday"
+        "WEEKDAY": "Weekday",
+        "WEEKDAY_REQUIRED": "Select at least one weekday"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Could not open repeat config dialog. You can configure it from the task menu."
     },
