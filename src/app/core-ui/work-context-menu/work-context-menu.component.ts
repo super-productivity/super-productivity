@@ -180,46 +180,24 @@ export class WorkContextMenuComponent implements OnInit {
       return;
     }
 
-    let info: ProjectCompletionInfo;
-    try {
-      info = await this._projectService.getCompletionInfo(this.contextId);
-    } catch (err) {
-      console.error(err);
-      this._snackService.open({ type: 'ERROR', msg: T.F.PROJECT.COMPLETE.ERROR });
+    const info = await this._getCompletionInfoOrNotify();
+    if (!info) {
       return;
     }
 
     let resolution: 'inbox' | 'markDone' | undefined;
     // Auto-archiving would otherwise bury live, undone work — ask first.
     if (info.unfinishedTasks.length) {
-      resolution = await firstValueFrom(
-        this._matDialog
-          .open(DialogCompleteResolveTasksComponent, {
-            restoreFocus: true,
-            data: { title: project.title, nr: info.unfinishedTasks.length },
-          })
-          .afterClosed(),
+      resolution = await this._promptResolveUnfinishedTasks(
+        project.title,
+        info.unfinishedTasks.length,
       );
       if (!resolution) {
         return;
       }
     }
 
-    const isConfirmed = await firstValueFrom(
-      this._matDialog
-        .open(DialogConfirmComponent, {
-          restoreFocus: true,
-          data: {
-            title: T.F.PROJECT.COMPLETE.CONFIRM.TITLE,
-            titleIcon: 'check_circle',
-            message: T.F.PROJECT.COMPLETE.CONFIRM.MSG,
-            translateParams: { title: project.title },
-            okTxt: T.MH.COMPLETE_PROJECT,
-          },
-        })
-        .afterClosed(),
-    );
-    if (!isConfirmed) {
+    if (!(await this._confirmCompletion(project.title))) {
       return;
     }
 
@@ -236,13 +214,11 @@ export class WorkContextMenuComponent implements OnInit {
 
     // Recompute after resolution so the stats reflect the final task list.
     if (resolution) {
-      try {
-        statsInfo = await this._projectService.getCompletionInfo(this.contextId);
-      } catch (err) {
-        console.error(err);
-        this._snackService.open({ type: 'ERROR', msg: T.F.PROJECT.COMPLETE.ERROR });
+      const refreshed = await this._getCompletionInfoOrNotify();
+      if (!refreshed) {
         return;
       }
+      statsInfo = refreshed;
     }
 
     const doneOn = this._dateService.getLogicalTodayDate().getTime();
@@ -270,6 +246,47 @@ export class WorkContextMenuComponent implements OnInit {
       ariaLabelledBy: 'project-complete-title',
       data: { project, stats },
     });
+  }
+
+  private async _getCompletionInfoOrNotify(): Promise<ProjectCompletionInfo | null> {
+    try {
+      return await this._projectService.getCompletionInfo(this.contextId);
+    } catch (err) {
+      console.error(err);
+      this._snackService.open({ type: 'ERROR', msg: T.F.PROJECT.COMPLETE.ERROR });
+      return null;
+    }
+  }
+
+  private _promptResolveUnfinishedTasks(
+    title: string,
+    nr: number,
+  ): Promise<'inbox' | 'markDone' | undefined> {
+    return firstValueFrom(
+      this._matDialog
+        .open(DialogCompleteResolveTasksComponent, {
+          restoreFocus: true,
+          data: { title, nr },
+        })
+        .afterClosed(),
+    );
+  }
+
+  private _confirmCompletion(title: string): Promise<boolean> {
+    return firstValueFrom(
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          restoreFocus: true,
+          data: {
+            title: T.F.PROJECT.COMPLETE.CONFIRM.TITLE,
+            titleIcon: 'check_circle',
+            message: T.F.PROJECT.COMPLETE.CONFIRM.MSG,
+            translateParams: { title },
+            okTxt: T.MH.COMPLETE_PROJECT,
+          },
+        })
+        .afterClosed(),
+    );
   }
 
   async restoreProject(): Promise<void> {

@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  OnDestroy,
   ViewChild,
   computed,
   effect,
@@ -18,11 +19,12 @@ import { T } from '../../../t.const';
 import { Project } from '../project.model';
 import { ProjectCompletionStats } from '../project-completion-stats.util';
 import { ConfettiService } from '../../../core/confetti/confetti.service';
+import { ConfettiInstance } from '../../../core/confetti/confetti.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { MatTooltip } from '@angular/material/tooltip';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
-import { IS_ELECTRON } from '../../../app.constants';
+import { resolveBgImageToDataUrl } from '../../../core/theme/resolve-bg-image-to-data-url.util';
 import { normalizeBackgroundImageBlur } from '../../work-context/work-context.const';
 
 export interface DialogProjectCompleteData {
@@ -45,7 +47,7 @@ export interface DialogProjectCompleteData {
     MsToStringPipe,
   ],
 })
-export class DialogProjectCompleteComponent implements AfterViewInit {
+export class DialogProjectCompleteComponent implements AfterViewInit, OnDestroy {
   private readonly _matDialogRef =
     inject<MatDialogRef<DialogProjectCompleteComponent>>(MatDialogRef);
   private readonly _confettiService = inject(ConfettiService);
@@ -78,6 +80,7 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
     );
   });
   private _bgResolveRequestId = 0;
+  private _confettiInstance?: ConfettiInstance;
 
   @ViewChild('confettiCanvas')
   private readonly _confettiCanvas?: ElementRef<HTMLCanvasElement>;
@@ -86,33 +89,12 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
     effect(() => {
       const bgImage = this._backgroundImage();
       const currentRequestId = ++this._bgResolveRequestId;
-      if (!bgImage) {
-        this.resolvedBgImage.set(null);
-        return;
-      }
-
-      if (!IS_ELECTRON || !bgImage.startsWith('file://')) {
-        this.resolvedBgImage.set(bgImage);
-        return;
-      }
-
-      const readLocalImageAsDataUrl = window.ea?.readLocalImageAsDataUrl;
-      if (!readLocalImageAsDataUrl) {
-        this.resolvedBgImage.set(null);
-        return;
-      }
-
-      readLocalImageAsDataUrl(bgImage)
-        .then((dataUrl) => {
-          if (currentRequestId === this._bgResolveRequestId) {
-            this.resolvedBgImage.set(dataUrl || null);
-          }
-        })
-        .catch(() => {
-          if (currentRequestId === this._bgResolveRequestId) {
-            this.resolvedBgImage.set(null);
-          }
-        });
+      void resolveBgImageToDataUrl(bgImage).then((resolved) => {
+        // Ignore stale resolutions when the source changed mid-read.
+        if (currentRequestId === this._bgResolveRequestId) {
+          this.resolvedBgImage.set(resolved);
+        }
+      });
     });
   }
 
@@ -126,13 +108,19 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
     if (!canvas) {
       return;
     }
-    await this._confettiService.createConfettiOnCanvas(canvas, {
+    this._confettiInstance = await this._confettiService.createConfettiOnCanvas(canvas, {
       particleCount: 160,
       startVelocity: 45,
       spread: 360,
       ticks: 320,
       origin: { x: 0.5, y: 0.35 },
     });
+  }
+
+  ngOnDestroy(): void {
+    // Tear down the confetti rAF loop + resize listener if the dialog closes
+    // before the ~5s animation finishes (otherwise it draws to a detached canvas).
+    this._confettiInstance?.reset();
   }
 
   close(): void {

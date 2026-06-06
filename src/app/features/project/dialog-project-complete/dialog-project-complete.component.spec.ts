@@ -51,7 +51,7 @@ describe('DialogProjectCompleteComponent', () => {
       },
     };
     confettiService = jasmine.createSpyObj('ConfettiService', ['createConfettiOnCanvas']);
-    confettiService.createConfettiOnCanvas.and.returnValue(Promise.resolve());
+    confettiService.createConfettiOnCanvas.and.returnValue(Promise.resolve(undefined));
     dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
 
     TestBed.configureTestingModule({
@@ -92,6 +92,9 @@ describe('DialogProjectCompleteComponent', () => {
   it('uses the completed project background image and theme values', async () => {
     fixture.detectChanges();
     await fixture.whenStable();
+    // Background image now resolves asynchronously; flush the resolved signal
+    // into the DOM before asserting.
+    fixture.detectChanges();
 
     const nativeElement = fixture.nativeElement as HTMLElement;
     const overlay = nativeElement.querySelector('.complete-overlay') as HTMLElement;

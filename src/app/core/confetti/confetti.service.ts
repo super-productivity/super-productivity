@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { ConfettiConfig } from './confetti.model';
+import { ConfettiConfig, ConfettiInstance } from './confetti.model';
 
 @Injectable({
   providedIn: 'root',
@@ -21,20 +21,26 @@ export class ConfettiService {
   async createConfettiOnCanvas(
     canvas: HTMLCanvasElement,
     props: ConfettiConfig,
-  ): Promise<void> {
+  ): Promise<ConfettiInstance | undefined> {
     if (this._isDisabled()) {
-      return;
+      return undefined;
     }
 
     const confettiModule = await import('canvas-confetti');
-    const confetti = confettiModule.default.create(canvas, {
+    const confetti: ConfettiInstance = confettiModule.default.create(canvas, {
       resize: true,
     });
-    await confetti({ disableForReducedMotion: true, ...props });
+    // Fire without awaiting completion so the caller keeps the handle and can
+    // reset() to tear down the rAF loop + window resize listener if the dialog
+    // closes before the ~5s animation finishes.
+    void confetti({ disableForReducedMotion: true, ...props });
+    return confetti;
   }
 
   private _isDisabled(): boolean {
     const misc = this._configService.misc();
+    // Honor the OS "reduce motion" setting for every confetti caller (not just
+    // the in-app animations toggle) — intentional, app-wide a11y behavior.
     return (
       !!misc?.isDisableAnimations ||
       !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
