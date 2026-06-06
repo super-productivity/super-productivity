@@ -155,16 +155,17 @@ describe('WorkContextMenuComponent', () => {
       );
     });
 
-    it('uses refreshed unfinished work after final confirmation', async () => {
+    it('resolves using the initially captured info, not a re-fetch', async () => {
       const refreshedInfo = {
         topLevelTasks: [{ id: 't2', isDone: false } as any],
         allTasks: [{ id: 't2', isDone: false } as any],
         unfinishedTasks: [{ id: 't2', isDone: false } as any],
         topLevelTasksWithUnfinishedWork: [{ id: 't2', isDone: false } as any],
       };
+      // First call gates the resolve prompt; the second (post-resolution) only
+      // feeds the celebration stats — it must NOT change which tasks get resolved.
       mockProjectService.getCompletionInfo.and.returnValues(
         Promise.resolve(undoneInfo),
-        Promise.resolve(refreshedInfo),
         Promise.resolve(refreshedInfo),
       );
       resolveResult$ = of('inbox');
@@ -172,8 +173,36 @@ describe('WorkContextMenuComponent', () => {
       await component.completeProject();
 
       expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledWith(
-        refreshedInfo.topLevelTasksWithUnfinishedWork,
+        undoneInfo.topLevelTasksWithUnfinishedWork,
       );
+    });
+
+    it('recomputes completion info after resolving so stats reflect the final list', async () => {
+      mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
+      resolveResult$ = of('markDone');
+
+      await component.completeProject();
+
+      // Once to gate the prompt, once after resolution for the stats.
+      expect(mockProjectService.getCompletionInfo).toHaveBeenCalledTimes(2);
+    });
+
+    it('fetches completion info only once when there is no unfinished work', async () => {
+      await component.completeProject();
+      expect(mockProjectService.getCompletionInfo).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows an error and aborts when completion info cannot be loaded', async () => {
+      spyOn(console, 'error');
+      const snackSpy = spyOn(TestBed.inject(SnackService), 'open');
+      mockProjectService.getCompletionInfo.and.returnValue(
+        Promise.reject(new Error('archive load failed')),
+      );
+
+      await component.completeProject();
+
+      expect(mockProjectService.complete).not.toHaveBeenCalled();
+      expect(snackSpy).toHaveBeenCalled();
     });
 
     it('marks all unfinished tasks done when chosen, then completes', async () => {
@@ -253,10 +282,6 @@ describe('WorkContextMenuComponent', () => {
         jasmine.objectContaining({
           panelClass: 'project-complete-fullscreen-dialog',
           ariaLabelledBy: 'project-complete-title',
-          width: '100vw',
-          height: '100vh',
-          maxWidth: '100vw',
-          maxHeight: '100vh',
         }),
       );
     });

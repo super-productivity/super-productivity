@@ -32,7 +32,6 @@ describe('DialogProjectCompleteComponent', () => {
         title: 'Completed Project',
         theme: {
           primary: '#123456',
-          accent: '#abcdef',
           backgroundImageLight:
             'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
           backgroundImageDark:
@@ -100,7 +99,6 @@ describe('DialogProjectCompleteComponent', () => {
     const bgOverlay = nativeElement.querySelector('.project-bg-overlay') as HTMLElement;
 
     expect(overlay.style.getPropertyValue('--project-complete-primary')).toBe('#123456');
-    expect(overlay.style.getPropertyValue('--project-complete-accent')).toBe('');
     expect(bgImage.style.background).toContain('data:image/gif');
     expect(bgImage.style.filter).toBe('blur(4px)');
     expect(bgImage.classList).toContain('is-blurred');

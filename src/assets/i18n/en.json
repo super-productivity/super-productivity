@@ -926,6 +926,7 @@
         "COMPLETED_ON": "Completed {{date}}",
         "REOPEN": "Reopen",
         "NOTICE": "This project is completed.",
+        "ERROR": "Could not complete project. Please try again.",
         "RESOLVE": {
           "MSG": "still has {{nr}} unfinished tasks. What should happen to them?",
           "MSG_ONE": "still has {{nr}} unfinished task. What should happen to it?",

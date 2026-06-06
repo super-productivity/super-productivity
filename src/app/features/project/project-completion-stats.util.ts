@@ -1,4 +1,6 @@
 import { Task } from '../tasks/task.model';
+import { getDiffInDays } from '../../util/get-diff-in-days';
+import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 
 export interface ProjectCompletionStats {
   nrOfTasksDone: number;
@@ -12,22 +14,6 @@ export interface ProjectCompletionStats {
   /** Calendar days from first worked day to completion, inclusive (0 if never worked). */
   durationDays: number;
 }
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-const _toLocalMidnight = (ms: number): number => {
-  const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-};
-
-// timeSpentOnDay keys are 'YYYY-MM-DD'. Parse as LOCAL midnight — `new
-// Date('YYYY-MM-DD')` is UTC midnight, which shifts the calendar day in
-// non-UTC zones and would skew the duration math.
-const _parseDayStr = (dayStr: string): number => {
-  const [y, m, d] = dayStr.split('-').map(Number);
-  return new Date(y, m - 1, d).getTime();
-};
 
 /**
  * Live completion stats for the celebration + trophy view.
@@ -62,11 +48,12 @@ export const getProjectCompletionStats = (
   });
   const sortedDays = Array.from(workedDays).sort();
   const nrOfDaysWorked = sortedDays.length;
-  const startedOn = nrOfDaysWorked ? _parseDayStr(sortedDays[0]) : null;
+  // timeSpentOnDay keys are 'YYYY-MM-DD'. dateStrToUtcDate parses them as LOCAL
+  // midnight (avoids the UTC-midnight day-shift in non-UTC zones); getDiffInDays
+  // rounds the calendar-day delta (DST-safe).
+  const startedOn = nrOfDaysWorked ? dateStrToUtcDate(sortedDays[0]).getTime() : null;
   const durationDays =
-    startedOn !== null
-      ? Math.round((_toLocalMidnight(doneOn) - startedOn) / MS_PER_DAY) + 1
-      : 0;
+    startedOn !== null ? getDiffInDays(new Date(startedOn), new Date(doneOn)) + 1 : 0;
 
   return {
     nrOfTasksDone,

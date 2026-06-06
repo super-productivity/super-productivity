@@ -16,7 +16,10 @@ import { first, map } from 'rxjs/operators';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { Router, RouterLink, RouterModule } from '@angular/router';
 
-import { ProjectService } from '../../features/project/project.service';
+import {
+  ProjectCompletionInfo,
+  ProjectService,
+} from '../../features/project/project.service';
 import { getProjectCompletionStats } from '../../features/project/project-completion-stats.util';
 import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
 import { DialogCompleteResolveTasksComponent } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
@@ -177,7 +180,14 @@ export class WorkContextMenuComponent implements OnInit {
       return;
     }
 
-    const info = await this._projectService.getCompletionInfo(this.contextId);
+    let info: ProjectCompletionInfo;
+    try {
+      info = await this._projectService.getCompletionInfo(this.contextId);
+    } catch (err) {
+      console.error(err);
+      this._snackService.open({ type: 'ERROR', msg: T.F.PROJECT.COMPLETE.ERROR });
+      return;
+    }
 
     let resolution: 'inbox' | 'markDone' | undefined;
     // Auto-archiving would otherwise bury live, undone work — ask first.
@@ -213,39 +223,32 @@ export class WorkContextMenuComponent implements OnInit {
       return;
     }
 
-    const currentInfo = await this._projectService.getCompletionInfo(this.contextId);
-    if (!resolution && currentInfo.unfinishedTasks.length) {
-      resolution = await firstValueFrom(
-        this._matDialog
-          .open(DialogCompleteResolveTasksComponent, {
-            restoreFocus: true,
-            data: { title: project.title, nr: currentInfo.unfinishedTasks.length },
-          })
-          .afterClosed(),
-      );
-      if (!resolution) {
-        return;
-      }
-    }
-
     // Resolve unfinished work via the normal per-task actions BEFORE completing,
     // so every downstream effect (issue sync, reminders, repeat-cfg) and
     // per-entity conflict detection fires naturally. Completion itself is then a
     // plain single-entity project flag flip.
+    let statsInfo = info;
     if (resolution === 'inbox') {
-      await this._projectService.moveTasksToInbox(
-        currentInfo.topLevelTasksWithUnfinishedWork,
-      );
+      await this._projectService.moveTasksToInbox(info.topLevelTasksWithUnfinishedWork);
     } else if (resolution === 'markDone') {
-      await this._projectService.markTasksDone(currentInfo.unfinishedTasks);
+      await this._projectService.markTasksDone(info.unfinishedTasks);
     }
 
     // Recompute after resolution so the stats reflect the final task list.
-    const finalInfo = await this._projectService.getCompletionInfo(this.contextId);
+    if (resolution) {
+      try {
+        statsInfo = await this._projectService.getCompletionInfo(this.contextId);
+      } catch (err) {
+        console.error(err);
+        this._snackService.open({ type: 'ERROR', msg: T.F.PROJECT.COMPLETE.ERROR });
+        return;
+      }
+    }
+
     const doneOn = this._dateService.getLogicalTodayDate().getTime();
     const stats = getProjectCompletionStats(
-      finalInfo.topLevelTasks,
-      finalInfo.allTasks,
+      statsInfo.topLevelTasks,
+      statsInfo.allTasks,
       doneOn,
     );
 
@@ -259,14 +262,12 @@ export class WorkContextMenuComponent implements OnInit {
       await this._router.navigateByUrl('/');
     }
 
+    // Fullscreen sizing lives in the .project-complete-fullscreen-dialog
+    // panelClass (handles dvh + mobile safe-areas); don't duplicate it here.
     this._matDialog.open(DialogProjectCompleteComponent, {
       restoreFocus: true,
       panelClass: 'project-complete-fullscreen-dialog',
       ariaLabelledBy: 'project-complete-title',
-      width: '100vw',
-      height: '100vh',
-      maxWidth: '100vw',
-      maxHeight: '100vh',
       data: { project, stats },
     });
   }

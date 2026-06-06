@@ -247,6 +247,7 @@ export class ProjectService {
       };
     }
     const ids = [...(project?.taskIds ?? []), ...(project?.backlogTaskIds ?? [])];
+    const idSet = new Set(ids);
     const activeTopLevelTasks = ids
       .map((id) => taskState.entities[id])
       .filter((t): t is Task => !!t);
@@ -256,7 +257,7 @@ export class ProjectService {
     const topLevelTasks = [
       ...ids,
       ...projectTasks
-        .filter((task) => !task.parentId && !ids.includes(task.id))
+        .filter((task) => !task.parentId && !idSet.has(task.id))
         .map((task) => task.id),
     ]
       .map((id) => projectTaskById.get(id))
