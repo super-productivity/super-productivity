@@ -501,4 +501,29 @@ describe('SearchPageComponent', () => {
     tick(150); // combineLatest debounce
     expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
   }));
+
+  it('should update folder path reactively for ARCHIVED tasks when projectFolderMap changes after init', fakeAsync(() => {
+    const archiveTask = createTask({
+      id: 'archived-1',
+      title: 'Old Task',
+      projectId: 'proj-1',
+    });
+    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    projectList$.next([createProject({ id: 'proj-1', title: 'My Project' })]);
+
+    // Recreate component so the new archive promise is used
+    fixture = TestBed.createComponent(SearchPageComponent);
+    component = fixture.componentInstance;
+    initAndFlush();
+    typeAndFlush('Old');
+
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].isArchiveTask).toBe(true);
+    expect(latestResults[0].ctx.title).toBe('My Project');
+
+    projectFolderMapSignal.set(new Map([['proj-1', 'Folder 1 › Subfolder A']]));
+    fixture.detectChanges();
+    tick(150); // combineLatest debounce
+    expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
+  }));
 });
