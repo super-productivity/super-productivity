@@ -58,9 +58,11 @@
   justify-content: center;
   min-height: 0;
   overflow: auto;
-  gap: 28px;
-  padding: calc(var(--safe-area-top, 0px) + 56px) calc(var(--safe-area-right, 0px) + 24px)
-    calc(var(--safe-area-bottom, 0px) + 40px) calc(var(--safe-area-left, 0px) + 24px);
+  gap: var(--s4);
+  padding: calc(var(--safe-area-top, 0px) + var(--s7))
+    calc(var(--safe-area-right, 0px) + var(--s3))
+    calc(var(--safe-area-bottom, 0px) + var(--s5))
+    calc(var(--safe-area-left, 0px) + var(--s3));
 }
 
 .hero {
@@ -76,7 +78,7 @@
   place-items: center;
   width: 104px;
   height: 104px;
-  margin-bottom: 20px;
+  margin-bottom: var(--s2);
   color: var(--c-accent);
   background: var(--bg-lightest);
   border: 1px solid var(--extra-border-color);
@@ -105,7 +107,7 @@
 
 .project-title {
   max-width: 100%;
-  margin: 12px 0 0;
+  margin: calc(var(--s) + var(--s-half)) 0 0;
   color: var(--text-color-more-intense);
   font-size: 20px;
   font-weight: 600;
@@ -116,7 +118,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(144px, 1fr));
   width: min(720px, 100%);
-  gap: 12px;
+  gap: calc(var(--s) + var(--s-half));
 }
 
 .stat {
@@ -125,7 +127,7 @@
   align-items: center;
   justify-content: center;
   min-height: 112px;
-  padding: 16px;
+  padding: var(--s2);
   background: var(--bg-lightest);
   border: 1px solid var(--extra-border-color);
   border-radius: 8px;
@@ -145,7 +147,7 @@
 }
 
 .stat-label {
-  margin-top: 8px;
+  margin-top: var(--s);
   color: var(--text-color-muted);
   font-size: 13px;
   line-height: 1.3;
@@ -167,14 +169,14 @@
   text-align: center;
   font-size: 13px;
   line-height: 1.4;
-  margin: 8px 0 0;
+  margin: var(--s) 0 0;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 12px;
+  gap: calc(var(--s) + var(--s-half));
 
   button {
     min-width: 164px;
@@ -189,16 +191,17 @@
 
   .celebration-content {
     justify-content: flex-start;
-    gap: 20px;
-    padding: calc(var(--safe-area-top, 0px) + 72px)
-      calc(var(--safe-area-right, 0px) + 16px) calc(var(--safe-area-bottom, 0px) + 24px)
-      calc(var(--safe-area-left, 0px) + 16px);
+    gap: calc(var(--s2) + var(--s-half));
+    padding: calc(var(--safe-area-top, 0px) + var(--s9))
+      calc(var(--safe-area-right, 0px) + var(--s2))
+      calc(var(--safe-area-bottom, 0px) + var(--s3))
+      calc(var(--safe-area-left, 0px) + var(--s2));
   }
 
   .trophy {
     width: 84px;
     height: 84px;
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
 
     mat-icon {
       width: 46px;
