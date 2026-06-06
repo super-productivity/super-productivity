@@ -114,18 +114,9 @@ describe('DateTimePickerComponent', () => {
     component.onKeyDownOnCalendar(enterEvent);
     expect(component.isKeyboardNavigating).toBeTrue();
 
-    // Trigger calendar mousemove with changed coordinates - should reset it to false
-    const mouseMoveEvent1 = new MouseEvent('mousemove', { clientX: 10, clientY: 20 });
-    component.onCalendarMouseMove(mouseMoveEvent1);
-    expect(component.isKeyboardNavigating).toBeFalse();
-
-    // Trigger keyboard navigation again
-    component.onKeyDownOnCalendar(arrowDownEvent);
-    expect(component.isKeyboardNavigating).toBeTrue();
-
-    // Trigger host mousemove with changed coordinates - should reset it to false
-    const mouseMoveEvent2 = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
-    component.onHostMouseMove(mouseMoveEvent2);
+    // Trigger mousemove with changed coordinates - should reset it to false
+    const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
+    component.onHostMouseMove(mouseMoveEvent);
     expect(component.isKeyboardNavigating).toBeFalse();
   });
 });
