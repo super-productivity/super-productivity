@@ -627,3 +627,66 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
     });
   });
 });
+
+describe('TaskReminderEffects - cancelNativeRemindersOnProjectComplete$ filter', () => {
+  let actions$: Observable<Action>;
+  let effects: TaskReminderEffects;
+
+  const baseProviders = (isAndroid: boolean): unknown[] => [
+    TaskReminderEffects,
+    provideMockActions(() => actions$),
+    { provide: SnackService, useValue: jasmine.createSpyObj('SnackService', ['open']) },
+    {
+      provide: TaskService,
+      useValue: jasmine.createSpyObj('TaskService', ['getByIdOnce$']),
+    },
+    { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+    {
+      provide: LocaleDatePipe,
+      useValue: jasmine.createSpyObj('LocaleDatePipe', ['transform']),
+    },
+    { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: isAndroid },
+  ];
+
+  it('passes the completeProject action through when on Android', (done) => {
+    TestBed.configureTestingModule({ providers: baseProviders(true) });
+    effects = TestBed.inject(TaskReminderEffects);
+    const action = TaskSharedActions.completeProject({
+      id: 'project-1',
+      doneOn: Date.now(),
+      taskIdsToMarkDone: ['task-1', 'task-2'],
+    });
+    actions$ = of(action);
+
+    effects.cancelNativeRemindersOnProjectComplete$.subscribe({
+      next: (emittedAction) => {
+        expect(emittedAction).toBe(action);
+        done();
+      },
+      error: done.fail,
+    });
+  });
+
+  it('filters out the action when not on Android', (done) => {
+    TestBed.configureTestingModule({ providers: baseProviders(false) });
+    effects = TestBed.inject(TaskReminderEffects);
+    actions$ = of(
+      TaskSharedActions.completeProject({
+        id: 'project-1',
+        doneOn: Date.now(),
+        taskIdsToMarkDone: ['task-1'],
+      }),
+    );
+
+    let emitted = false;
+    effects.cancelNativeRemindersOnProjectComplete$.subscribe({
+      next: () => {
+        emitted = true;
+      },
+      complete: () => {
+        expect(emitted).toBe(false);
+        done();
+      },
+    });
+  });
+});
