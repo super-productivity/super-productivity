@@ -532,6 +532,18 @@ describe('ProjectService', () => {
       expect(taskService.setUnDone).toHaveBeenCalledWith('task-1');
     });
 
+    it('does not re-open an unfinished task moved to the Inbox', async () => {
+      const task = { ...initialTaskState.entities['task-1']!, isDone: false };
+      taskService.getByIdWithSubTaskData$.and.returnValue(
+        of({ ...task, subTasks: [] } as any),
+      );
+
+      await service.moveTasksToInbox([task]);
+
+      expect(taskService.moveToProject).toHaveBeenCalled();
+      expect(taskService.setUnDone).not.toHaveBeenCalled();
+    });
+
     it('marks every unfinished task done, including subtasks', async () => {
       const parent = initialTaskState.entities['task-1']!;
       const subTask = initialTaskState.entities['sub-task-1']!;
@@ -540,6 +552,8 @@ describe('ProjectService', () => {
 
       expect(taskService.setDone).toHaveBeenCalledWith('task-1');
       expect(taskService.setDone).toHaveBeenCalledWith('sub-task-1');
+      // Exactly the passed set — no dropped or double-dispatched tasks.
+      expect(taskService.setDone).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -148,6 +148,11 @@ describe('WorkContextMenuComponent', () => {
         undoneInfo.topLevelTasksWithUnfinishedWork,
       );
       expect(mockProjectService.complete).toHaveBeenCalled();
+      // Resolution must run BEFORE the flag flip, else the project is archived
+      // while its unfinished tasks are still attached.
+      expect(mockProjectService.moveTasksToInbox).toHaveBeenCalledBefore(
+        mockProjectService.complete,
+      );
     });
 
     it('uses refreshed unfinished work after final confirmation', async () => {
@@ -179,6 +184,10 @@ describe('WorkContextMenuComponent', () => {
         undoneInfo.unfinishedTasks,
       );
       expect(mockProjectService.complete).toHaveBeenCalled();
+      // Resolution must run BEFORE the flag flip.
+      expect(mockProjectService.markTasksDone).toHaveBeenCalledBefore(
+        mockProjectService.complete,
+      );
     });
 
     it('does not move unfinished tasks when Inbox is chosen but confirmation is cancelled', async () => {
