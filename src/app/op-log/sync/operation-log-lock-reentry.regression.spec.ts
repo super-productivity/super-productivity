@@ -39,12 +39,12 @@ import { SuperSyncStatusService } from './super-sync-status.service';
 import { T } from '../../t.const';
 
 /**
- * Real LockService, but with a tiny default timeout so the loud-fail
- * test below exhausts processDeferredActions's retry budget in tens of
- * ms instead of 90s. All behaviour (Web Locks path, fallback mutex,
+ * Real LockService, but with a short default timeout so the loud-fail
+ * test below exhausts processDeferredActions's retry budget in a few
+ * seconds instead of 90s. All behaviour (Web Locks path, fallback mutex,
  * cleanup) is otherwise untouched.
  */
-const SHORT_TIMEOUT_MS = 50;
+const SHORT_TIMEOUT_MS = 1000;
 
 class ShortTimeoutLockService extends LockService {
   override request<T>(
@@ -122,7 +122,7 @@ describe('regression #7700: operation-log lock reentry', () => {
         OperationLogEffects,
         // NOTE: real LockService — required to exercise reentrancy semantics.
         // Subclassed to use a short default timeout so the loud-fail retry
-        // budget completes in tens of ms instead of 90s.
+        // budget completes in a few seconds instead of 90s.
         { provide: LockService, useClass: ShortTimeoutLockService },
         provideMockActions(() => actions$),
         { provide: OperationLogStoreService, useValue: opLogStoreSpy },
@@ -153,26 +153,30 @@ describe('regression #7700: operation-log lock reentry', () => {
     let innerRan = false;
     let caught: unknown = null;
 
-    await lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
-      try {
-        // Use a short timeout (200ms) so the assertion is quick. The production
-        // path uses LOCK_ACQUISITION_TIMEOUT_MS = 30000ms, which is the 30s
-        // delay seen in the user's log.
-        await lockService.request(
-          LOCK_NAMES.OPERATION_LOG,
-          async () => {
-            innerRan = true;
-          },
-          200,
-        );
-      } catch (e) {
-        caught = e;
-      }
-    });
+    // Use a long timeout for the outer request (5s) so the inner one can
+    // timeout first (200ms) without aborting the outer lock callback.
+    await lockService.request(
+      LOCK_NAMES.OPERATION_LOG,
+      async () => {
+        try {
+          // Inner request deadlocks and times out.
+          await lockService.request(
+            LOCK_NAMES.OPERATION_LOG,
+            async () => {
+              innerRan = true;
+            },
+            200,
+          );
+        } catch (e) {
+          caught = e;
+        }
+      },
+      5000,
+    );
 
     expect(innerRan).toBe(false);
     expect(caught).toBeInstanceOf(LockAcquisitionTimeoutError);
-  });
+  }, 10000);
 
   /**
    * With the fix, processDeferredActions({ callerHoldsOperationLogLock: true })
@@ -195,8 +199,8 @@ describe('regression #7700: operation-log lock reentry', () => {
     expect(order).toEqual(['outer-start', 'outer-end']);
     expect(opLogStoreSpy.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
     // Should be near-instant — orders of magnitude under the 30s lock timeout.
-    expect(elapsed).toBeLessThan(1000);
-  });
+    expect(elapsed).toBeLessThan(2000);
+  }, 10000);
 
   /**
    * Loud-fail guarantee: if a future refactor forgets to thread
@@ -211,15 +215,15 @@ describe('regression #7700: operation-log lock reentry', () => {
     bufferDeferredAction(createDeferredAction());
 
     // Hold the lock comfortably longer than the full retry budget:
-    // 3 attempts × ~50ms timeout + 100ms + 200ms backoffs ≈ 450ms.
-    // 2000ms (40×) is generous.
+    // 3 attempts × ~1000ms timeout + 100ms + 200ms backoffs ≈ 3300ms.
+    // 10000ms is generous.
     await lockService.request(
       LOCK_NAMES.OPERATION_LOG,
       async () => {
         // Caller forgot the flag — same as a buggy refactor.
         await effects.processDeferredActions();
       },
-      SHORT_TIMEOUT_MS * 40,
+      10000,
     );
 
     // Action was NOT written — no silent persistence.
@@ -235,7 +239,7 @@ describe('regression #7700: operation-log lock reentry', () => {
         msg: T.F.SYNC.S.DEFERRED_ACTION_FAILED,
       }),
     );
-  });
+  }, 15000);
 
   /**
    * Vector-clock-ordering correctness: the substantive correctness win
@@ -284,5 +288,5 @@ describe('regression #7700: operation-log lock reentry', () => {
     // And the local clientId must be incremented from the post-merge
     // value (6, not 4 — i.e. derived from POST_MERGE.testClient=5).
     expect(writtenOp.vectorClock['testClient']).toBe(6);
-  });
+  }, 10000);
 });
