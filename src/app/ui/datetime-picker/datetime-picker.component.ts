@@ -254,15 +254,6 @@ export class DateTimePickerComponent implements AfterViewInit {
     this.quickAccessClick.emit(val);
   }
 
-  onYearSelected(): void {
-    const cal = this.calendar();
-    if (cal) {
-      setTimeout(() => {
-        cal.currentView = 'month';
-      });
-    }
-  }
-
   private _lastMouseCoords: { x: number; y: number } | null = null;
 
   ngAfterViewInit(): void {
