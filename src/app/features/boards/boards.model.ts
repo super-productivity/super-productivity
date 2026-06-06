@@ -20,14 +20,13 @@ export type BoardSortField = 'dueDate' | 'created' | 'title' | 'timeEstimate';
 export type BoardMatchMode = 'all' | 'any';
 
 export interface BoardSrcCfg {
-  // projectId?: string;
   includedTagIds: string[];
   excludedTagIds: string[];
   // Absent = 'all' (today's behavior): all required tags must match.
   includedTagsMatch?: BoardMatchMode;
   // Absent = 'any' (today's behavior): exclude on any match.
   excludedTagsMatch?: BoardMatchMode;
-  projectId?: string;
+  projectIds: string[];
   taskDoneState: BoardPanelCfgTaskDoneState;
   scheduledState: BoardPanelCfgScheduledState;
   isParentTasksOnly: boolean;

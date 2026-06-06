@@ -19,6 +19,17 @@ const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
 export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   const out: BoardPanelCfg = { ...panel };
 
+  // Migrate legacy `projectId` → `projectIds`.
+  if ((out as any).projectId !== undefined && out.projectIds === undefined) {
+    out.projectIds = [(out as any).projectId || ''];
+    delete (out as any).projectId;
+  }
+  // Ensure `projectIds` is always an array (e.g. if loaded from older client
+  // that didn't run this migration yet).
+  if (!Array.isArray(out.projectIds)) {
+    out.projectIds = [''];
+  }
+
   if (out.sortByDue === 'asc' || out.sortByDue === 'desc') {
     out.sortBy = 'dueDate';
     out.sortDir = out.sortByDue;

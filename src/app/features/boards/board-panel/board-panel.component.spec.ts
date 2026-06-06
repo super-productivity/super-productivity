@@ -37,7 +37,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     includedTagIds: [],
     excludedTagIds: [],
     isParentTasksOnly: false,
-    projectId: undefined,
+    projectIds: [''],
   };
 
   const mockTasks: TaskCopy[] = [
@@ -184,7 +184,7 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
     includedTagIds: [],
     excludedTagIds: [],
     isParentTasksOnly: false,
-    projectId: undefined,
+    projectIds: [''],
   };
 
   const mockTasks: TaskCopy[] = [
@@ -390,6 +390,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -412,6 +413,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -437,6 +439,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -458,6 +461,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -481,6 +485,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
         sortBy: 'title',
       } as BoardPanelCfg);
       fixture.detectChanges();
@@ -503,6 +508,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
         sortBy: 'timeEstimate',
         sortDir: 'desc',
       } as BoardPanelCfg);
@@ -524,6 +530,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -541,6 +548,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
         sortBy: 'title',
       } as BoardPanelCfg);
       fixture.detectChanges();
@@ -561,6 +569,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -579,6 +588,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -598,6 +608,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -616,6 +627,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         taskDoneState: 1,
         scheduledState: 1,
         isParentTasksOnly: false,
+        projectIds: [''],
       } as BoardPanelCfg);
       fixture.detectChanges();
 
@@ -731,6 +743,7 @@ describe('BoardPanelComponent - drop()', () => {
       taskDoneState: 1,
       scheduledState: 1,
       isParentTasksOnly: false,
+      projectIds: [''],
       sortBy: 'title',
     } as BoardPanelCfg;
     fixture.componentRef.setInput('panelCfg', panelCfg);
@@ -765,6 +778,7 @@ describe('BoardPanelComponent - drop()', () => {
       taskDoneState: 1,
       scheduledState: 1,
       isParentTasksOnly: false,
+      projectIds: [''],
     } as BoardPanelCfg;
     fixture.componentRef.setInput('panelCfg', panelCfg);
     fixture.detectChanges();
@@ -794,6 +808,7 @@ describe('BoardPanelComponent - drop()', () => {
       taskDoneState: 1,
       scheduledState: 1,
       isParentTasksOnly: false,
+      projectIds: [''],
     } as BoardPanelCfg;
     fixture.componentRef.setInput('panelCfg', panelCfg);
     fixture.detectChanges();

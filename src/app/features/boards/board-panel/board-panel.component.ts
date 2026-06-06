@@ -131,6 +131,7 @@ export class BoardPanelComponent {
   additionalTaskFields = computed(() => {
     const panelCfg = this.panelCfg();
     const tagsToAdd = this.tagsToAddForInlineCreate();
+    const firstProjectId = panelCfg.projectIds?.find((id) => id !== '');
 
     return {
       ...(tagsToAdd.length ? { tagIds: tagsToAdd } : {}),
@@ -140,9 +141,7 @@ export class BoardPanelComponent {
       ...(panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.UnDone
         ? { isDone: false }
         : {}),
-      ...(panelCfg.projectId && panelCfg.projectId.length
-        ? { projectId: panelCfg.projectId }
-        : {}),
+      ...(firstProjectId ? { projectId: firstProjectId } : {}),
       // TODO scheduledState
     };
   });
@@ -181,9 +180,13 @@ export class BoardPanelComponent {
         isTaskIncluded = isTaskIncluded && !task.isDone;
       }
 
-      if (panelCfg.projectId) {
+      if (
+        panelCfg.projectIds &&
+        panelCfg.projectIds.length > 0 &&
+        !panelCfg.projectIds.includes('')
+      ) {
         // TODO check parentId case thoroughly
-        isTaskIncluded = isTaskIncluded && task.projectId === panelCfg.projectId;
+        isTaskIncluded = isTaskIncluded && panelCfg.projectIds.includes(task.projectId);
       }
 
       if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
@@ -259,7 +262,13 @@ export class BoardPanelComponent {
       updates.isDone = false;
     }
 
-    if (panelCfg.projectId?.length && task.projectId !== panelCfg.projectId) {
+    const firstProjectId = panelCfg.projectIds?.find((id) => id !== '');
+    if (
+      firstProjectId &&
+      panelCfg.projectIds.length > 0 &&
+      !panelCfg.projectIds.includes('') &&
+      !panelCfg.projectIds.includes(task.projectId)
+    ) {
       const taskWithSubTasks = await this.store
         .pipe(
           select(selectTaskByIdWithSubTaskData, { id: task.parentId || task.id }),
@@ -270,7 +279,7 @@ export class BoardPanelComponent {
       this.store.dispatch(
         TaskSharedActions.moveToOtherProject({
           task: taskWithSubTasks,
-          targetProjectId: panelCfg.projectId,
+          targetProjectId: firstProjectId,
         }),
       );
     }
