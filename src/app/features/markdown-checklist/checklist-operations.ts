@@ -10,7 +10,7 @@
 // Matches a GFM task-list item line, e.g. "- [ ] foo", "- [x] bar", "  - [] baz".
 // Kept in sync with the checkbox the marked renderer produces (see
 // marked-options-factory.ts `renderer.listitem`).
-const CHECKLIST_ITEM_RE = /^(\s*)- \[[ xX]?\]/;
+const CHECKLIST_ITEM_RE = /^\s*- \[[ xX]?\]/;
 const CHECKED_ITEM_RE = /^\s*- \[[xX]\]/;
 
 export const isChecklistItemLine = (line: string): boolean =>
@@ -65,6 +65,8 @@ export const moveChecklistItem = (
 
   const count = slots.length;
   if (
+    !Number.isInteger(fromIndex) ||
+    !Number.isInteger(toIndex) ||
     fromIndex < 0 ||
     toIndex < 0 ||
     fromIndex >= count ||

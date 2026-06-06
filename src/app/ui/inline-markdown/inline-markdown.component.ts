@@ -114,6 +114,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly T = T;
   private _hideOverFlowTimeout: number | undefined;
   private _dragFromIndex: number | null = null;
+  private _dragOverEl: HTMLElement | null = null;
 
   constructor() {
     this.resizeParsedToFit();
@@ -250,10 +251,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (this._dragFromIndex === null) {
       return;
     }
-    const wrapper = (ev.target as HTMLElement)?.closest?.('.checkbox-wrapper');
+    const wrapper = (ev.target as HTMLElement)?.closest?.(
+      '.checkbox-wrapper',
+    ) as HTMLElement | null;
     if (wrapper) {
-      // Allow dropping onto another checklist item.
+      // Allow dropping onto another checklist item and highlight the target row.
       ev.preventDefault();
+      this._setDragOverEl(wrapper);
     }
   }
 
@@ -265,7 +269,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       '.checkbox-wrapper',
     ) as HTMLElement | null;
     const fromIndex = this._dragFromIndex;
-    this._dragFromIndex = null;
+    this._resetDragState();
     if (!wrapper) {
       return;
     }
@@ -277,7 +281,21 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   onChecklistDragEnd(): void {
+    this._resetDragState();
+  }
+
+  private _setDragOverEl(el: HTMLElement | null): void {
+    if (this._dragOverEl === el) {
+      return;
+    }
+    this._dragOverEl?.classList.remove('drag-over');
+    el?.classList.add('drag-over');
+    this._dragOverEl = el;
+  }
+
+  private _resetDragState(): void {
     this._dragFromIndex = null;
+    this._setDragOverEl(null);
   }
 
   private _applyChecklistTransform(transform: (notes: string) => string): void {
@@ -288,8 +306,8 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (next === current) {
       return;
     }
+    // The `model` setter syncs `modelCopy` and re-resolves the rendered markdown.
     this.model = next;
-    this.modelCopy.set(next);
     if (textareaEl) {
       textareaEl.nativeElement.value = next;
     }

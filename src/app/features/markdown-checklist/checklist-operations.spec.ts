@@ -85,5 +85,12 @@ describe('checklist-operations', () => {
       expect(moveChecklistItem(notes, 0, 5)).toBe(notes);
       expect(moveChecklistItem(notes, -1, 0)).toBe(notes);
     });
+
+    it('should return input unchanged for NaN / non-integer indices', () => {
+      const notes = '- [ ] a\n- [ ] b\n- [ ] c';
+      expect(moveChecklistItem(notes, NaN, 1)).toBe(notes);
+      expect(moveChecklistItem(notes, 0, NaN)).toBe(notes);
+      expect(moveChecklistItem(notes, 0.5, 2)).toBe(notes);
+    });
   });
 });

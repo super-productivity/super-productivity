@@ -1576,4 +1576,67 @@ describe('InlineMarkdownComponent', () => {
       expect(component.changed.emit).not.toHaveBeenCalled();
     });
   });
+
+  describe('checklist actions', () => {
+    const makeWrapper = (checkIndex: number): HTMLElement => {
+      const el = document.createElement('li');
+      el.className = 'checkbox-wrapper';
+      el.dataset['checkIndex'] = String(checkIndex);
+      return el;
+    };
+    const dragEvent = (target: HTMLElement): DragEvent =>
+      ({
+        target,
+        preventDefault: jasmine.createSpy('preventDefault'),
+        dataTransfer: { setData: jasmine.createSpy('setData'), effectAllowed: '' },
+      }) as unknown as DragEvent;
+
+    beforeEach(() => {
+      component.model = '- [ ] a\n- [x] b\n- [ ] c';
+      fixture.detectChanges();
+      spyOn(component.changed, 'emit');
+    });
+
+    it('checkAll should check every item and emit', () => {
+      component.checkAllChecklistItems();
+      expect(component.changed.emit).toHaveBeenCalledWith('- [x] a\n- [x] b\n- [x] c');
+    });
+
+    it('uncheckAll should uncheck every item and emit', () => {
+      component.uncheckAllChecklistItems();
+      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] a\n- [ ] b\n- [ ] c');
+    });
+
+    it('clearCompleted should drop checked items and emit', () => {
+      component.clearCompletedChecklistItems();
+      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] a\n- [ ] c');
+    });
+
+    it('should not emit when a bulk action is a no-op', () => {
+      component.model = '- [ ] a\n- [ ] b';
+      fixture.detectChanges();
+      component.uncheckAllChecklistItems();
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('drag-and-drop should reorder items and emit', () => {
+      component.onChecklistDragStart(dragEvent(makeWrapper(0)));
+      component.onChecklistDrop(dragEvent(makeWrapper(2)));
+      expect(component.changed.emit).toHaveBeenCalledWith('- [x] b\n- [ ] c\n- [ ] a');
+    });
+
+    it('should highlight the drop target during dragover and clear on dragend', () => {
+      const over = makeWrapper(1);
+      component.onChecklistDragStart(dragEvent(makeWrapper(0)));
+      component.onChecklistDragOver(dragEvent(over));
+      expect(over.classList.contains('drag-over')).toBe(true);
+      component.onChecklistDragEnd();
+      expect(over.classList.contains('drag-over')).toBe(false);
+    });
+
+    it('drop without a prior dragstart should be ignored', () => {
+      component.onChecklistDrop(dragEvent(makeWrapper(1)));
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -142,5 +142,11 @@
     &:active {
       cursor: grabbing;
     }
+
+    // Highlight the row the dragged item will be dropped onto.
+    &.drag-over {
+      border-radius: var(--card-border-radius);
+      box-shadow: inset 0 0 0 2px var(--c-accent);
+    }
   }
 }
