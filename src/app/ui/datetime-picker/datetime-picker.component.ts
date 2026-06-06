@@ -98,11 +98,9 @@ export class DateTimePickerComponent implements AfterViewInit {
         }
 
         const sub = cal.stateChanges.subscribe(() => {
-          if (cal.currentView !== this._lastView) {
-            this._lastView = cal.currentView;
-            if (cal.currentView !== 'month') {
-              this.pickerSelectedDate = cal.activeDate;
-            }
+          this._lastView = cal.currentView;
+          if (cal.currentView !== 'month') {
+            this.pickerSelectedDate = cal.activeDate;
           }
           this._cdr.markForCheck();
         });

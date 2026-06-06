@@ -46,29 +46,27 @@ import { TranslateService } from '@ngx-translate/core';
 
         <div class="mat-calendar-spacer"></div>
 
-        @if (calendar.currentView !== 'year') {
-          <button
-            mat-icon-button
-            type="button"
-            class="mat-calendar-previous-button"
-            [disabled]="!previousEnabled()"
-            (click)="previousClicked()"
-            [attr.aria-label]="prevButtonLabel"
-          >
-            <mat-icon>chevron_left</mat-icon>
-          </button>
+        <button
+          mat-icon-button
+          type="button"
+          class="mat-calendar-previous-button"
+          [disabled]="!previousEnabled()"
+          (click)="previousClicked()"
+          [attr.aria-label]="prevButtonLabel"
+        >
+          <mat-icon>chevron_left</mat-icon>
+        </button>
 
-          <button
-            mat-icon-button
-            type="button"
-            class="mat-calendar-next-button"
-            [disabled]="!nextEnabled()"
-            (click)="nextClicked()"
-            [attr.aria-label]="nextButtonLabel"
-          >
-            <mat-icon>chevron_right</mat-icon>
-          </button>
-        }
+        <button
+          mat-icon-button
+          type="button"
+          class="mat-calendar-next-button"
+          [disabled]="!nextEnabled()"
+          (click)="nextClicked()"
+          [attr.aria-label]="nextButtonLabel"
+        >
+          <mat-icon>chevron_right</mat-icon>
+        </button>
       </div>
     </div>
   `,
@@ -168,12 +166,7 @@ export class DateTimePickerHeaderComponent<D> {
         1,
       );
     } else if (this.calendar.currentView === 'year') {
-      const prevYear = this._dateAdapter.addCalendarYears(activeDate, -1);
-      this.calendar.activeDate = this._dateAdapter.createDate(
-        this._dateAdapter.getYear(prevYear),
-        0,
-        1,
-      );
+      this.calendar.activeDate = this._dateAdapter.addCalendarYears(activeDate, -1);
     } else {
       this.calendar.activeDate = this._dateAdapter.addCalendarYears(activeDate, -24);
     }
@@ -189,12 +182,7 @@ export class DateTimePickerHeaderComponent<D> {
         1,
       );
     } else if (this.calendar.currentView === 'year') {
-      const nextYear = this._dateAdapter.addCalendarYears(activeDate, 1);
-      this.calendar.activeDate = this._dateAdapter.createDate(
-        this._dateAdapter.getYear(nextYear),
-        0,
-        1,
-      );
+      this.calendar.activeDate = this._dateAdapter.addCalendarYears(activeDate, 1);
     } else {
       this.calendar.activeDate = this._dateAdapter.addCalendarYears(activeDate, 24);
     }
