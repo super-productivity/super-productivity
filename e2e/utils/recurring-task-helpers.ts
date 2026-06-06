@@ -71,9 +71,26 @@ export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<v
   const calendar = scheduleDialog.locator('mat-calendar');
   await expect(calendar).toBeVisible({ timeout: 5000 });
 
-  const [dayStr] = ddmmyyyy.split('/');
+  const [dayStr, monthStr, yearStr] = ddmmyyyy.split('/');
   const day = parseInt(dayStr, 10);
+  const month = parseInt(monthStr, 10) - 1; // 0-indexed
+  const year = parseInt(yearStr, 10);
 
+  // Navigate to correct year
+  await scheduleDialog.locator('.sp-year-button').click();
+  const yearCell = scheduleDialog
+    .locator('.mat-calendar-body-cell')
+    .filter({ hasText: new RegExp(`^\\s*${year}\\s*$`) })
+    .first();
+  await expect(yearCell).toBeVisible({ timeout: 5000 });
+  await yearCell.click();
+
+  // Navigate to correct month
+  const monthCell = scheduleDialog.locator('.mat-calendar-body-cell').nth(month);
+  await expect(monthCell).toBeVisible({ timeout: 5000 });
+  await monthCell.click();
+
+  // Select day
   const dayCell = scheduleDialog
     .locator('.mat-calendar-body-cell')
     .filter({ hasText: new RegExp(`^\\s*${day}\\s*$`) })
@@ -88,6 +105,56 @@ export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<v
   });
   await scheduleSubmitBtn.click();
   await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+};
+
+/** Switch the recurring-config quick-setting select (e.g. Daily → Mon-Fri). */
+export const setRecurQuickSetting = async (
+  page: Page,
+  optionLabel: RegExp,
+): Promise<void> => {
+  const dialog = page.locator(DIALOG_CONTAINER);
+  await dialog.locator('mat-select').first().click();
+  const option = page.locator('mat-option').filter({ hasText: optionLabel });
+  await expect(option).toBeVisible({ timeout: 5000 });
+  await option.click();
+};
+
+/** Click Save in the recurring-config dialog and wait for it to close. */
+export const saveRecurDialog = async (page: Page): Promise<void> => {
+  const dialog = page.locator(DIALOG_CONTAINER);
+  const saveBtn = dialog.getByRole('button', { name: /Save/i });
+  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
+  await saveBtn.click();
+  await dialog.waitFor({ state: 'hidden', timeout: 10000 });
+};
+
+/**
+ * Navigate to a SPA hash route reliably. Playwright's page.goto only mutates the
+ * URL fragment for hash routes, and Angular's router occasionally drops that
+ * hashchange when goto lands mid-bootstrap — leaving the previous view mounted
+ * (e.g. the work-view stays on "Today" instead of switching to the Inbox
+ * project) and sometimes rewriting the fragment back to the old route. When the
+ * expected marker doesn't render, hop through about:blank so the next goto is a
+ * cross-document load that bootstraps the app fresh on the target URL and reads
+ * the fragment on init.
+ */
+export const gotoHashRoute = async (
+  page: Page,
+  route: string,
+  marker: Locator,
+): Promise<void> => {
+  await page.goto(route);
+  await page.waitForLoadState('networkidle');
+  const landed = await marker
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!landed) {
+    await page.goto('about:blank');
+    await page.goto(route);
+    await page.waitForLoadState('networkidle');
+    await expect(marker).toBeVisible({ timeout: 15000 });
+  }
 };
 
 /** Switch the recurring-config quick-setting select (e.g. Daily → Mon-Fri). */
