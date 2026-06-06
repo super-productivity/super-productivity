@@ -43,8 +43,6 @@ describe('WorkContextMenuComponent', () => {
       'complete',
       'reopen',
       'getCompletionInfo',
-      'moveTasksToInbox',
-      'markTasksDone',
       'getByIdOnce$',
       'getByIdLive$',
     ]);
@@ -60,8 +58,6 @@ describe('WorkContextMenuComponent', () => {
         topLevelTasksWithUnfinishedWork: [],
       }),
     );
-    mockProjectService.moveTasksToInbox.and.returnValue(Promise.resolve());
-    mockProjectService.markTasksDone.and.returnValue(Promise.resolve());
     mockProjectService.getByIdLive$.and.returnValue(
       of({ id: 'project-123', title: 'Demo project' } as any),
     );
@@ -129,7 +125,6 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
-        jasmine.objectContaining({ id: 'project-123', title: 'Demo project' }),
         {},
       );
       expect(router.navigateByUrl).toHaveBeenCalledWith('/');
@@ -146,11 +141,9 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
       resolveResult$ = of('inbox');
       await component.completeProject();
-      expect(mockProjectService.moveTasksToInbox).not.toHaveBeenCalled();
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
-        jasmine.anything(),
         { topLevelTaskIdsToMoveToInbox: ['t1'] },
       );
     });
@@ -174,7 +167,6 @@ describe('WorkContextMenuComponent', () => {
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
-        jasmine.anything(),
         { topLevelTaskIdsToMoveToInbox: ['t2'] },
       );
     });
@@ -183,11 +175,9 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getCompletionInfo.and.returnValue(Promise.resolve(undoneInfo));
       resolveResult$ = of('markDone');
       await component.completeProject();
-      expect(mockProjectService.markTasksDone).not.toHaveBeenCalled();
       expect(mockProjectService.complete).toHaveBeenCalledWith(
         'project-123',
         logicalDoneOn,
-        jasmine.anything(),
         { taskIdsToMarkDone: ['t1'] },
       );
     });
@@ -199,8 +189,6 @@ describe('WorkContextMenuComponent', () => {
 
       await component.completeProject();
 
-      expect(mockProjectService.moveTasksToInbox).not.toHaveBeenCalled();
-      expect(mockProjectService.markTasksDone).not.toHaveBeenCalled();
       expect(mockProjectService.complete).not.toHaveBeenCalled();
       expect(
         mockMatDialog.open.calls
@@ -216,8 +204,6 @@ describe('WorkContextMenuComponent', () => {
 
       await component.completeProject();
 
-      expect(mockProjectService.moveTasksToInbox).not.toHaveBeenCalled();
-      expect(mockProjectService.markTasksDone).not.toHaveBeenCalled();
       expect(mockProjectService.complete).not.toHaveBeenCalled();
       expect(
         mockMatDialog.open.calls

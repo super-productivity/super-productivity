@@ -21,7 +21,6 @@ import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { MatTooltip } from '@angular/material/tooltip';
-import { ProjectService } from '../project.service';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 import { IS_ELECTRON } from '../../../app.constants';
 import { normalizeBackgroundImageBlur } from '../../work-context/work-context.const';
@@ -51,7 +50,6 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
     inject<MatDialogRef<DialogProjectCompleteComponent>>(MatDialogRef);
   private readonly _confettiService = inject(ConfettiService);
   private readonly _configService = inject(GlobalConfigService);
-  private readonly _projectService = inject(ProjectService);
   private readonly _globalThemeService = inject(GlobalThemeService);
 
   readonly data = inject<DialogProjectCompleteData>(MAT_DIALOG_DATA);
@@ -139,10 +137,5 @@ export class DialogProjectCompleteComponent implements AfterViewInit {
 
   close(): void {
     this._matDialogRef.close();
-  }
-
-  undo(): void {
-    this._matDialogRef.close();
-    this._projectService.reopen(this.data.project.id, this.data.project);
   }
 }

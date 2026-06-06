@@ -923,7 +923,6 @@
         "MSG": "Are you sure you want to delete the project \"{{title}}\"?"
       },
       "COMPLETE": {
-        "UNDO": "Undo",
         "COMPLETED_ON": "Completed {{date}}",
         "REOPEN": "Reopen",
         "NOTICE": "This project is completed.",
@@ -978,7 +977,6 @@
       },
       "S": {
         "ARCHIVED": "Archived Project",
-        "COMPLETED": "Project completed",
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the sidebar.",
         "DELETED": "Deleted Project",
         "REOPENED": "Project reopened",

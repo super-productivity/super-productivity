@@ -11,7 +11,6 @@ import {
 import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { createProject } from '../project.test-helper';
-import { ProjectService } from '../project.service';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 
 describe('DialogProjectCompleteComponent', () => {
@@ -19,7 +18,6 @@ describe('DialogProjectCompleteComponent', () => {
   let component: DialogProjectCompleteComponent;
   let confettiService: jasmine.SpyObj<ConfettiService>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<DialogProjectCompleteComponent>>;
-  let projectService: jasmine.SpyObj<ProjectService>;
   let misc: { isDisableCelebration?: boolean; isDisableAnimations?: boolean };
   let isDarkTheme: WritableSignal<boolean>;
 
@@ -56,7 +54,6 @@ describe('DialogProjectCompleteComponent', () => {
     confettiService = jasmine.createSpyObj('ConfettiService', ['createConfettiOnCanvas']);
     confettiService.createConfettiOnCanvas.and.returnValue(Promise.resolve());
     dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
-    projectService = jasmine.createSpyObj('ProjectService', ['reopen']);
 
     TestBed.configureTestingModule({
       imports: [DialogProjectCompleteComponent, TranslateModule.forRoot()],
@@ -66,7 +63,6 @@ describe('DialogProjectCompleteComponent', () => {
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: ConfettiService, useValue: confettiService },
         { provide: GlobalConfigService, useValue: { misc: () => misc } },
-        { provide: ProjectService, useValue: projectService },
         { provide: GlobalThemeService, useValue: { isDarkTheme } },
       ],
     });
@@ -117,18 +113,11 @@ describe('DialogProjectCompleteComponent', () => {
     expect(dialogRef.close).toHaveBeenCalled();
   });
 
-  it('renders only reopen and close actions', () => {
+  it('renders only a close action', () => {
     fixture.detectChanges();
 
     const actionButtons = fixture.debugElement.queryAll(By.css('.actions button'));
 
-    expect(actionButtons.length).toBe(2);
-  });
-
-  it('closes and reopens the project from Reopen', () => {
-    component.undo();
-
-    expect(dialogRef.close).toHaveBeenCalled();
-    expect(projectService.reopen).toHaveBeenCalledWith('project-1', data.project);
+    expect(actionButtons.length).toBe(1);
   });
 });

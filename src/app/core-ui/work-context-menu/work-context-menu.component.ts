@@ -153,6 +153,7 @@ export class WorkContextMenuComponent implements OnInit {
           restoreFocus: true,
           data: {
             message: T.F.PROJECT.D_CONFIRM_ARCHIVE.MSG,
+            translateParams: { title: project.title },
             okTxt: T.F.PROJECT.D_CONFIRM_ARCHIVE.OK,
           },
         })
@@ -231,7 +232,6 @@ export class WorkContextMenuComponent implements OnInit {
     this._projectService.complete(
       this.contextId,
       doneOn,
-      project,
       resolution === 'inbox'
         ? {
             topLevelTaskIdsToMoveToInbox: currentInfo.topLevelTasksWithUnfinishedWork.map(

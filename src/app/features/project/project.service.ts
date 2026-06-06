@@ -31,7 +31,7 @@ import {
   updateProjectOrder,
 } from './store/project.actions';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { DEFAULT_PROJECT, INBOX_PROJECT } from './project.const';
+import { DEFAULT_PROJECT } from './project.const';
 import {
   selectArchivedProjects,
   selectProjectById,
@@ -184,9 +184,11 @@ export class ProjectService {
   complete(
     projectId: string,
     doneOn: number,
-    project?: Pick<Project, 'isHiddenFromMenu'>,
     resolution: ProjectCompletionResolution = {},
   ): void {
+    // No undo affordance: completion resolves tasks (move-to-inbox / mark-done),
+    // which reopen cannot fully restore. The fullscreen celebration is the
+    // feedback; reactivation lives on the archived-projects page.
     this._store$.dispatch(
       TaskSharedActions.completeProject({
         id: projectId,
@@ -194,12 +196,6 @@ export class ProjectService {
         ...resolution,
       }),
     );
-    this._snackService.open({
-      ico: 'celebration',
-      msg: T.F.PROJECT.S.COMPLETED,
-      actionStr: T.F.PROJECT.COMPLETE.UNDO,
-      actionFn: () => this.reopen(projectId, project),
-    });
   }
 
   reopen(projectId: string, project?: Pick<Project, 'isHiddenFromMenu'>): void {
@@ -295,28 +291,6 @@ export class ProjectService {
         hasUnfinishedWork(t),
       ),
     };
-  }
-
-  /**
-   * Move tasks to the Inbox one by one, then yield a microtask so the rapid
-   * dispatches settle before the caller continues (bulk-dispatch rule).
-   */
-  async moveTasksToInbox(tasks: Task[]): Promise<void> {
-    for (const task of tasks) {
-      const withSubTasks = await firstValueFrom(
-        this._taskService.getByIdWithSubTaskData$(task.id),
-      );
-      this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
-      if (task.isDone) {
-        this._taskService.setUnDone(task.id);
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-
-  async markTasksDone(tasks: Task[]): Promise<void> {
-    tasks.forEach((task) => this._taskService.setDone(task.id));
-    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   getByIdOnce$(id: string): Observable<Project | undefined> {
