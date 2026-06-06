@@ -204,13 +204,8 @@ page-title {
   &.isVisible {
     pointer-events: all;
     border-radius: var(--card-border-radius);
-    background: var(--c-light-70);
+    background: var(--card-bg);
     box-shadow: var(--whiteframe-shadow-2dp);
-    backdrop-filter: blur(4px);
-
-    @include darkTheme() {
-      background: var(--c-dark-40);
-    }
   }
 
   simple-counter-button {
