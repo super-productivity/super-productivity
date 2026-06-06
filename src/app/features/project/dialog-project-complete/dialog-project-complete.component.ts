@@ -81,6 +81,7 @@ export class DialogProjectCompleteComponent implements AfterViewInit, OnDestroy 
   });
   private _bgResolveRequestId = 0;
   private _confettiInstance?: ConfettiInstance;
+  private _isDestroyed = false;
 
   @ViewChild('confettiCanvas')
   private readonly _confettiCanvas?: ElementRef<HTMLCanvasElement>;
@@ -108,18 +109,26 @@ export class DialogProjectCompleteComponent implements AfterViewInit, OnDestroy 
     if (!canvas) {
       return;
     }
-    this._confettiInstance = await this._confettiService.createConfettiOnCanvas(canvas, {
+    const instance = await this._confettiService.createConfettiOnCanvas(canvas, {
       particleCount: 160,
       startVelocity: 45,
       spread: 360,
       ticks: 320,
       origin: { x: 0.5, y: 0.35 },
     });
+    // The dialog may have closed while the confetti module was still loading —
+    // tear the instance down right away instead of leaking its rAF loop.
+    if (this._isDestroyed) {
+      instance?.reset();
+      return;
+    }
+    this._confettiInstance = instance;
   }
 
   ngOnDestroy(): void {
     // Tear down the confetti rAF loop + resize listener if the dialog closes
     // before the ~5s animation finishes (otherwise it draws to a detached canvas).
+    this._isDestroyed = true;
     this._confettiInstance?.reset();
   }
 

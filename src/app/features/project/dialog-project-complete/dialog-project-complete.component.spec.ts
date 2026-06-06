@@ -9,6 +9,7 @@ import {
   DialogProjectCompleteData,
 } from './dialog-project-complete.component';
 import { ConfettiService } from '../../../core/confetti/confetti.service';
+import { ConfettiInstance } from '../../../core/confetti/confetti.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { createProject } from '../project.test-helper';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
@@ -87,6 +88,20 @@ describe('DialogProjectCompleteComponent', () => {
     await fixture.whenStable();
 
     expect(confettiService.createConfettiOnCanvas).not.toHaveBeenCalled();
+  });
+
+  it('resets confetti that finishes loading after the dialog is destroyed', async () => {
+    const resetSpy = jasmine.createSpy('reset');
+    const instance: ConfettiInstance = Object.assign(() => Promise.resolve(), {
+      reset: resetSpy,
+    });
+    confettiService.createConfettiOnCanvas.and.returnValue(Promise.resolve(instance));
+
+    fixture.detectChanges(); // kicks off ngAfterViewInit's async confetti load
+    component.ngOnDestroy(); // dialog closed before the load resolves
+    await fixture.whenStable();
+
+    expect(resetSpy).toHaveBeenCalled();
   });
 
   it('uses the completed project background image and theme values', async () => {
