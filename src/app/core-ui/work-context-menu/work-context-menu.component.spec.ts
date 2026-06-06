@@ -38,7 +38,6 @@ describe('WorkContextMenuComponent', () => {
 
   beforeEach(() => {
     mockProjectService = jasmine.createSpyObj('ProjectService', [
-      'archive',
       'unarchive',
       'complete',
       'reopen',
@@ -368,19 +367,16 @@ describe('WorkContextMenuComponent', () => {
       } as any);
     });
 
-    it('renders both Archive and Complete for a non-archived project', async () => {
+    it('renders Complete but not Archive for a non-archived project', async () => {
       mockProjectService.getByIdLive$.and.returnValue(
         of({ id: 'project-123', isArchived: false } as any),
       );
       fixture.detectChanges();
 
+      // Archive was collapsed into Complete — it's the single retire path.
       expect(menuButtonByIcon('unarchive')).toBeNull();
-      expect(menuButtonByIcon('archive')).toBeTruthy();
+      expect(menuButtonByIcon('archive')).toBeNull();
       expect(menuButtonByIcon('check_circle')).toBeTruthy();
-
-      menuButtonByIcon('archive')!.click();
-      await fixture.whenStable();
-      expect(mockProjectService.archive).toHaveBeenCalledWith('project-123');
     });
   });
 });
