@@ -5,7 +5,7 @@ const TASK_TITLE = 'task task-title';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const DAY_ROW = 'history .week-row';
+const HISTORY_DAY_TOGGLE = 'history .week-row .day-toggle';
 
 test.describe.serial('Finish Day Quick History', () => {
   test('should create task, mark as done, finish day and view in quick history', async ({
@@ -49,20 +49,25 @@ test.describe.serial('Finish Day Quick History', () => {
     // Click Save and go home
     const saveBtn = page.locator(SAVE_AND_GO_HOME_BTN);
     await saveBtn.waitFor({ state: 'visible' });
-    await saveBtn.click();
+    await Promise.all([
+      page.waitForURL(/#\/tag\/TODAY\/tasks/, { timeout: 15000 }),
+      saveBtn.click(),
+    ]);
 
-    // Wait for navigation back to work view after the archive/save flow settles.
-    await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
+    // Wait for the archive/save flow to settle on Today before navigating away.
+    await expect(page.locator('task-list').first()).toBeVisible();
 
-    // Navigate directly to the legacy Quick History route
-    await page.goto('/#/tag/TODAY/quick-history');
-    await page.waitForURL(/#\/tag\/TODAY\/quick-history/);
-    await page.waitForSelector('history', { state: 'visible' });
+    // Navigate directly to the canonical History route. Legacy route coverage lives
+    // in the navigation specs; this flow only needs archived task visibility.
+    await page.goto('/#/tag/TODAY/history');
+    await expect(page).toHaveURL(/#\/tag\/TODAY\/history/);
+    await expect(page.locator('history')).toBeVisible();
 
     // Expand the day row to reveal its tasks
-    const dayRow = page.locator(DAY_ROW).first();
-    await dayRow.waitFor({ state: 'visible' });
-    await dayRow.click();
+    const dayToggle = page.locator(HISTORY_DAY_TOGGLE).first();
+    await expect(dayToggle).toBeVisible();
+    await dayToggle.click();
+    await expect(dayToggle).toHaveAttribute('aria-expanded', 'true');
 
     // Confirm the task appears in the expanded day's task table
     const tableTaskTitle = page
