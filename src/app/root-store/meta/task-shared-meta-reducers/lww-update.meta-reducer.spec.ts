@@ -1146,6 +1146,30 @@ describe('lwwUpdateMetaReducer', () => {
       // State should be passed through unchanged
       expect(mockReducer).toHaveBeenCalledWith(state, action);
     });
+
+    it('should strip isLocalRestApiExternalAccessEnabled from GLOBAL_CONFIG LWW Update', () => {
+      const state = createMockStateWithSingletons();
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: {
+          isDisableAnimations: true,
+          isLocalRestApiExternalAccessEnabled: true, // ← remote device had this enabled
+        },
+        meta: { isPersistent: true, entityType: 'GLOBAL_CONFIG', isRemote: true },
+      };
+
+      reducer(state, action);
+
+      expect(mockReducer).toHaveBeenCalled();
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as Record<string, unknown>;
+      const misc = globalConfig['misc'] as Record<string, unknown>;
+      expect(misc['isDisableAnimations']).toBe(true);
+      expect(misc['isLocalRestApiExternalAccessEnabled']).toBeUndefined();
+    });
   });
 
   describe('null/undefined state', () => {

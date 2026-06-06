@@ -116,6 +116,10 @@ const MAX_LISTEN_RETRIES = 5;
 let listenRetryCount = 0;
 let isStarting = false;
 
+// Drain state — set by stopServer() when there are in-flight IPC requests.
+// handleResponse() notifies this callback each time a pending request settles.
+let drainCallback: (() => void) | null = null;
+
 const pendingRequests = new Map<
   string,
   {
@@ -204,6 +208,7 @@ const handleResponse = (_event: unknown, payload: LocalRestApiResponsePayload): 
   clearTimeout(pending.timeout);
   pendingRequests.delete(payload.requestId);
   pending.resolve(payload);
+  drainCallback?.();
 };
 
 export const isAllowedHost = (host: string): boolean => {
@@ -449,28 +454,47 @@ const stopServer = (): void => {
 
   isStopping = true;
 
-  // Cancel all in-flight renderer round-trips: clear their timeouts and reject
-  // their promises so the handleHttpRequest coroutines don't stay suspended.
-  for (const { timeout, reject: rejectPending } of pendingRequests.values()) {
-    clearTimeout(timeout);
-    rejectPending(new Error('Server stopped'));
+  const doClose = (): void => {
+    // Close keep-alive connections so server.close() resolves promptly.
+    server?.closeAllConnections();
+    server?.close((stopError) => {
+      isStopping = false;
+      isListening = false;
+      if (stopError) {
+        warn('[local-rest-api] Failed to stop server', stopError);
+      } else {
+        log('[local-rest-api] Server stopped');
+      }
+      reconcile();
+    });
+  };
+
+  if (pendingRequests.size === 0) {
+    doClose();
+    return;
   }
-  pendingRequests.clear();
 
-  // Close keep-alive connections immediately so server.close() resolves promptly.
-  server.closeAllConnections();
-  server.close((stopError) => {
-    isStopping = false;
-    isListening = false;
-
-    if (stopError) {
-      warn('[local-rest-api] Failed to stop server', stopError);
-    } else {
-      log('[local-rest-api] Server stopped');
+  // There are in-flight IPC round-trips. Drain them before closing connections so
+  // the renderer can commit its mutation and the HTTP client receives a proper
+  // response. The per-request timeout (LOCAL_REST_API_TIMEOUT_MS) already bounds
+  // each request; we add a safety-valve timeout here in case something leaks.
+  const drainTimeoutId = setTimeout(() => {
+    drainCallback = null;
+    for (const { timeout, reject: rejectPending } of pendingRequests.values()) {
+      clearTimeout(timeout);
+      rejectPending(new Error('Server stopped'));
     }
+    pendingRequests.clear();
+    doClose();
+  }, LOCAL_REST_API_TIMEOUT_MS);
 
-    reconcile();
-  });
+  drainCallback = (): void => {
+    if (pendingRequests.size === 0) {
+      clearTimeout(drainTimeoutId);
+      drainCallback = null;
+      doClose();
+    }
+  };
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {

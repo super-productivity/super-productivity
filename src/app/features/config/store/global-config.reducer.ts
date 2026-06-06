@@ -205,10 +205,6 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.misc,
         ...appDataComplete.globalConfig.misc,
         ...normalizeStartOfNextDayConfig(appDataComplete.globalConfig.misc ?? {}),
-        // External-access binding requires explicit per-device consent — never propagate
-        // via sync, as it would silently expose an unauthenticated API on other machines.
-        isLocalRestApiExternalAccessEnabled:
-          oldState.misc.isLocalRestApiExternalAccessEnabled ?? false,
       },
     };
 
