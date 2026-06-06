@@ -28,6 +28,7 @@ import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from 'src/app/core-ui/layout/layout.service';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
 import { ActivatedRoute } from '@angular/router';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 
 @Component({
   selector: 'notes',
@@ -54,6 +55,7 @@ export class NotesComponent implements OnInit {
   private _destroyRef = inject(DestroyRef);
 
   private _focusToken?: object;
+  private _focusNoteTimeout?: number;
 
   T: typeof T = T;
   isElementWasAdded: boolean = false;
@@ -101,13 +103,23 @@ export class NotesComponent implements OnInit {
       }
     }
 
-    this._destroyRef.onDestroy(() => (this._focusToken = undefined));
+    this._destroyRef.onDestroy(() => {
+      this._focusToken = undefined;
+      window.clearTimeout(this._focusNoteTimeout);
+    });
 
     this._activatedRoute.queryParams
-      .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe((params) => {
-        if (params.focusItem) {
-          this._focusNote(params.focusItem);
+      .pipe(
+        map((params) => params.focusItem),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this._destroyRef),
+      )
+      .subscribe((focusItem) => {
+        if (focusItem) {
+          this._focusNote(focusItem);
+        } else {
+          this._focusToken = undefined;
+          window.clearTimeout(this._focusNoteTimeout);
         }
       });
   }
@@ -118,6 +130,7 @@ export class NotesComponent implements OnInit {
     const timeout = 4000;
     const token = {};
     this._focusToken = token;
+    window.clearTimeout(this._focusNoteTimeout);
 
     const tryFocus = (): void => {
       if (this._focusToken !== token) {
@@ -133,7 +146,7 @@ export class NotesComponent implements OnInit {
           }
         }, 3000);
       } else if (Date.now() - startTime < timeout) {
-        setTimeout(tryFocus, 100);
+        this._focusNoteTimeout = window.setTimeout(tryFocus, 100);
       }
     };
     tryFocus();
