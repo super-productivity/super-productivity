@@ -68,7 +68,7 @@ import { SectionService } from './features/section/section.service';
 import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
 import { TODAY_TAG } from './features/tag/tag.const';
 import { normalizeBackgroundImageBlur } from './features/work-context/work-context.const';
-import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
+import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
@@ -468,16 +468,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const entity = isForProject
       ? await firstValueFrom(this._projectService.getByIdOnce$(contextId))
       : await firstValueFrom(this._tagService.getTagById$(contextId).pipe(first()));
+    if (!entity) {
+      return;
+    }
 
-    const { DialogWorkContextSettingsComponent } =
-      await import('./features/work-context/dialog-work-context-settings/dialog-work-context-settings.component');
-    this._matDialog.open(DialogWorkContextSettingsComponent, {
-      restoreFocus: true,
-      backdropClass: 'cdk-overlay-transparent-backdrop',
-      data: {
-        isProject: isForProject,
-        entity,
-      } as WorkContextSettingsDialogData,
+    await openWorkContextSettingsDialog(this._matDialog, {
+      isProject: isForProject,
+      entity,
     });
   }
 

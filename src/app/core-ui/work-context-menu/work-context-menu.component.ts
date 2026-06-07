@@ -31,7 +31,7 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TaskWithSubTasks } from '../../features/tasks/task.model';
 import { firstValueFrom, Observable, of } from 'rxjs';
 import { AsyncPipe } from '@angular/common';
-import type { WorkContextSettingsDialogData } from '../../features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
+import { openWorkContextSettingsDialog } from '../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 
 @Component({
   selector: 'work-context-menu',
@@ -306,16 +306,13 @@ export class WorkContextMenuComponent implements OnInit {
         : await firstValueFrom(
             this._tagService.getTagById$(this.contextId).pipe(first()),
           );
+      if (!entity) {
+        throw new Error(`Unable to find work context ${this.contextId}`);
+      }
 
-      const { DialogWorkContextSettingsComponent } =
-        await import('../../features/work-context/dialog-work-context-settings/dialog-work-context-settings.component');
-      this._matDialog.open(DialogWorkContextSettingsComponent, {
-        restoreFocus: true,
-        backdropClass: 'cdk-overlay-transparent-backdrop',
-        data: {
-          isProject: this.isForProject,
-          entity,
-        } as WorkContextSettingsDialogData,
+      await openWorkContextSettingsDialog(this._matDialog, {
+        isProject: this.isForProject,
+        entity,
       });
     } catch (err) {
       this._snackService.open({
