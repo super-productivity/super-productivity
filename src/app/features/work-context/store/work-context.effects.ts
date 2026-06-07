@@ -57,6 +57,7 @@ export class WorkContextEffects {
       skipWhileApplyingRemoteOps(),
       filter(
         (url) =>
+          !!url.match(/(all-tasks)$/) ||
           !!url.match(/(schedule)$/) ||
           !!url.match(/(planner)$/) ||
           !!url.match(/(boards)$/),

@@ -14,6 +14,7 @@ import { filter, map } from 'rxjs/operators';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
 import { TaskViewCustomizerService } from '../../../features/task-view-customizer/task-view-customizer.service';
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
+import { AllTasksFilterPanelComponent } from '../../../features/all-tasks-page/all-tasks-filter-panel.component';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
 
@@ -31,6 +32,7 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
     MatMenuTrigger,
     WorkContextMenuComponent,
     TaskViewCustomizerPanelComponent,
+    AllTasksFilterPanelComponent,
     TranslatePipe,
   ],
   template: `
@@ -43,8 +45,8 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
       >
         {{ displayTitle() }}
       </div>
-      @if (!isXxxs() && !isSpecialSection()) {
-        <div class="page-title-actions">
+      <div class="page-title-actions">
+        @if (!isXxxs() && !isSpecialSection() && !isAllTasks()) {
           <button
             [mat-menu-trigger-for]="activeWorkContextMenu"
             [matTooltip]="T.MH.PROJECT_MENU | translate"
@@ -53,7 +55,27 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
           >
             <mat-icon>more_vert</mat-icon>
           </button>
-          @if (isWorkViewPage()) {
+        }
+        @if (isWorkViewPage()) {
+          @if (isAllTasks()) {
+            <button
+              class="task-filter-btn"
+              [class.isCustomized]="taskViewCustomizerService.isCustomized()"
+              [matMenuTriggerFor]="allTasksFilterPanel.filterMenu"
+              mat-icon-button
+              matTooltip="{{
+                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
+              }} {{
+                kb.toggleTaskViewCustomizerPanel
+                  ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
+                  : ''
+              }}"
+            >
+              <mat-icon>filter_list</mat-icon>
+            </button>
+
+            <all-tasks-filter-panel #allTasksFilterPanel></all-tasks-filter-panel>
+          } @else {
             <button
               class="task-filter-btn"
               [class.isCustomized]="taskViewCustomizerService.isCustomized()"
@@ -72,8 +94,8 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
 
             <task-view-customizer-panel #customizerPanel></task-view-customizer-panel>
           }
-        </div>
-      }
+        }
+      </div>
       <mat-menu #activeWorkContextMenu="matMenu">
         <ng-template matMenuContent>
           <work-context-menu
@@ -196,6 +218,7 @@ export class PageTitleComponent {
   // Order is irrelevant — patterns are mutually exclusive end-anchors.
   private static readonly _ROUTE_TITLE_KEYS: ReadonlyArray<readonly [RegExp, string]> = [
     [/schedule$/, T.MH.SCHEDULE],
+    [/all-tasks$/, T.MH.ALL_TASKS],
     [/planner$/, T.MH.PLANNER],
     [/boards$/, T.MH.BOARDS],
     [/habits$/, T.MH.HABITS],
@@ -210,8 +233,11 @@ export class PageTitleComponent {
     () => PageTitleComponent._ROUTE_TITLE_KEYS.find(([re]) => re.test(this._url()))?.[1],
   );
 
-  isSpecialSection = computed(() => !!this._routeTitleKey());
-  isWorkViewPage = computed(() => /tasks$/.test(this._url()));
+  isSpecialSection = computed(
+    () => !!this._routeTitleKey() && this._routeTitleKey() !== T.MH.ALL_TASKS,
+  );
+  isAllTasks = computed(() => /all-tasks$/.test(this._url()));
+  isWorkViewPage = computed(() => /tasks$/.test(this._url()) || this.isAllTasks());
 
   displayTitle = computed(() => {
     const key = this._routeTitleKey();

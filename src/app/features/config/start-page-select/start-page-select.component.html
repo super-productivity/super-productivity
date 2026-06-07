@@ -17,6 +17,11 @@
     }}</mat-option>
   }
 
+  @if (appFeatures().isAllTasksEnabled) {
+    <mat-option [value]="DefaultStartPage.AllTasks">{{
+      T.MH.ALL_TASKS | translate
+    }}</mat-option>
+  }
   @if (appFeatures().isPlannerEnabled) {
     <mat-option [value]="DefaultStartPage.Planner">{{
       T.MH.PLANNER | translate

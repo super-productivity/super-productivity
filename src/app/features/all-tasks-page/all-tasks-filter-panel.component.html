@@ -1,6 +1,5 @@
-<!-- TODO remove copypasting -->
 <mat-menu
-  #customizerMenu="matMenu"
+  #filterMenu="matMenu"
   class="customizer-menu"
 >
   <!-- Sort By -->
@@ -34,7 +33,7 @@
   <!-- Filter By -->
   <button
     mat-menu-item
-    [matMenuTriggerFor]="filterMenu"
+    [matMenuTriggerFor]="filterByMenu"
   >
     <mat-icon>filter_alt</mat-icon>
     <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_BY | translate }}</span>
@@ -81,20 +80,6 @@
       </span>
     </button>
   }
-
-  <mat-divider></mat-divider>
-
-  <button
-    mat-menu-item
-    (click)="customizerService.saveSort()"
-    [disabled]="customizerService.selectedSort().type === DEFAULT.sort.type"
-  >
-    <span class="menu-item-content">
-      <mat-icon class="check-icon">save</mat-icon>
-
-      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SAVE_SORT | translate }}</span>
-    </span>
-  </button>
 </mat-menu>
 
 <!-- Group submenu -->
@@ -115,8 +100,8 @@
   }
 </mat-menu>
 
-<!-- Filter submenu -->
-<mat-menu #filterMenu="matMenu">
+<!-- Filter By submenu -->
+<mat-menu #filterByMenu="matMenu">
   <button
     mat-menu-item
     (click)="onFilterSelect(DEFAULT.filter)"
@@ -143,22 +128,21 @@
     </span>
   </button>
 
-  @if (!isInProjectContext()) {
-    <button
-      mat-menu-item
-      [matMenuTriggerFor]="filterProjectMenu"
-      [class.active]="
-        customizerService.selectedFilter().type === OPTIONS.filter.types.project
-      "
-    >
-      <span class="menu-item-content">
-        <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT | translate }}</span>
-        @if (customizerService.selectedFilter().type === OPTIONS.filter.types.project) {
-          <mat-icon class="check-icon">check</mat-icon>
-        }
-      </span>
-    </button>
-  }
+  <!-- Project filter with checkboxes (All Tasks specific) -->
+  <button
+    mat-menu-item
+    [matMenuTriggerFor]="filterProjectMenu"
+    [class.active]="
+      customizerService.selectedFilter().type === OPTIONS.filter.types.project
+    "
+  >
+    <span class="menu-item-content">
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT | translate }}</span>
+      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.project) {
+        <mat-icon class="check-icon">check</mat-icon>
+      }
+    </span>
+  </button>
 
   <button
     mat-menu-item
@@ -265,7 +249,7 @@
   </div>
 </mat-menu>
 
-<!-- Filter: Project submenu -->
+<!-- Filter: Project submenu (checkbox-based) -->
 <mat-menu #filterProjectMenu="matMenu">
   <div
     class="menu-input-wrapper"
@@ -277,17 +261,32 @@
     >
       <input
         matInput
-        [ngModel]="
-          customizerService.selectedFilter().preset &&
-          customizerService.selectedFilter().type === OPTIONS.filter.types.project
-            ? customizerService.selectedFilter().preset
-            : ''
-        "
-        (ngModelChange)="onFilterInputChange(OPTIONS.filter.types.project, $event)"
+        [ngModel]="projectSearch()"
+        (ngModelChange)="projectSearch.set($event)"
         [placeholder]="T.F.TASK_VIEW.CUSTOMIZER.ENTER_PROJECT | translate"
-        (keydown.enter)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
       />
     </mat-form-field>
+  </div>
+  <div
+    class="project-list-wrapper"
+    (click)="$event.stopPropagation()"
+  >
+    @for (project of filteredProjects(); track project.id) {
+      <button
+        mat-menu-item
+        (click)="toggleProject(project.id)"
+      >
+        <mat-icon>
+          {{
+            selectedProjectIds().includes(project.id)
+              ? 'check_box'
+              : 'check_box_outline_blank'
+          }}
+        </mat-icon>
+        <span>{{ project.title }}</span>
+      </button>
+    }
   </div>
 </mat-menu>
 

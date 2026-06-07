@@ -35,6 +35,14 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       },
     },
     {
+      key: 'isAllTasksEnabled',
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.ALL_TASKS,
+        icon: 'all_inbox',
+      },
+    },
+    {
       key: 'isPlannerEnabled',
       type: 'slide-toggle',
       templateOptions: {

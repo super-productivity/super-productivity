@@ -6,9 +6,11 @@ import {
   forwardRef,
   inject,
   input,
+  NgZone,
   OnDestroy,
   viewChild,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { DropListModelSource, Task, TaskCopy, TaskWithSubTasks } from '../task.model';
 import { TaskService } from '../task.service';
 import { expandFadeFastAnimation } from '../../../ui/animations/expand.ani';
@@ -31,7 +33,10 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { WorkContextService } from '../../work-context/work-context.service';
 import { Store } from '@ngrx/store';
 import { moveItemBeforeItem } from '../../../util/move-item-before-item';
-import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
+import {
+  DragPointer,
+  DropListService,
+} from '../../../core-ui/drop-list/drop-list.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { IssueService } from '../../issue/issue.service';
 import { SearchResultItem } from '../../issue/issue.model';
@@ -46,6 +51,11 @@ import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedu
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { DateService } from '../../../core/date/date.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
+import { lsGetJSON, lsSetJSON } from '../../../util/ls-util';
+import { AllTasksOrderService } from '../../all-tasks-page/all-tasks-order.service';
+import { canConvertTaskToSubTask } from '../util/can-convert-task-to-sub-task';
+import { TODAY_TAG } from '../../tag/tag.const';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -76,7 +86,6 @@ const PARENT_ALLOWED_LISTS = ['DONE', 'UNDONE', 'OVERDUE', 'BACKLOG', 'ADD_TASK_
 export interface DropModelDataForList {
   listId: TaskListId;
   listModelId: ListModelId;
-  allTasks: TaskWithSubTasks[];
   filteredTasks: TaskWithSubTasks[];
 }
 
@@ -105,6 +114,9 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   private _dateService = inject(DateService);
+  private _router = inject(Router);
+  private _allTasksOrderService = inject(AllTasksOrderService);
+  private _ngZone = inject(NgZone);
   dropListService = inject(DropListService);
   private _layoutService = inject(LayoutService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
@@ -130,7 +142,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     return {
       listId: this.listId(),
       listModelId: this.listModelId(),
-      allTasks: this.tasks(),
       filteredTasks: this.filteredTasks(),
     };
   });
@@ -152,6 +163,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   allTasksLength = computed(() => this.tasks()?.length ?? 0);
 
   readonly dropList = viewChild(CdkDropList);
+  private _clearDragPointerTracking: (() => void) | undefined;
 
   T: typeof T = T;
 
@@ -160,20 +172,61 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    this._clearDragPointerTracking?.();
     this.dropListService.unregisterDropList(this.dropList()!);
     this._scheduleExternalDragService.setActiveTask(null);
+    this.dropListService.setActiveDragPointer(null);
   }
 
   trackByFn(i: number, task: Task): string {
     return task.id;
   }
 
+  onDragPointerDown(task: TaskWithSubTasks, event: PointerEvent): void {
+    // Seed the pointer position so subtask -> parent-list drags can hit-test
+    // the source subtask list before the first pointermove (see
+    // _pointerSubTaskList). A plain tap that never becomes a drag leaves this
+    // value stale, but it's inert: it's only read inside the subtask branch of
+    // enterPredicate during an active drag, and the next real subtask drag
+    // reseeds it here on its own pointerdown.
+    if (task.parentId) {
+      this.dropListService.setActiveDragPointer({ x: event.clientX, y: event.clientY });
+    }
+  }
+
   onDragStarted(task: TaskWithSubTasks, event: CdkDragStart): void {
     this._scheduleExternalDragService.setActiveTask(task, event.source._dragRef);
+    if (task.parentId) {
+      // Runs synchronously before CDK's `_startReceiving` pass, so the
+      // top-level lists get their geometry cached even though the pointer is
+      // still over the source subtask list (see markSubTaskDragStarting).
+      this.dropListService.markSubTaskDragStarting();
+      this._startDragPointerTracking();
+    }
   }
 
   onDragEnded(): void {
+    this._clearDragPointerTracking?.();
     this._scheduleExternalDragService.setActiveTask(null);
+    this.dropListService.setActiveDragPointer(null);
+  }
+
+  private _startDragPointerTracking(): void {
+    this._clearDragPointerTracking?.();
+    this._ngZone.runOutsideAngular(() => {
+      const updatePointer = (event: PointerEvent): void => {
+        this.dropListService.setActiveDragPointer({
+          x: event.clientX,
+          y: event.clientY,
+        });
+      };
+      window.addEventListener('pointermove', updatePointer, { passive: true });
+      this._clearDragPointerTracking = (): void => {
+        window.removeEventListener('pointermove', updatePointer);
+        this.dropListService.setActiveDragPointer(null);
+        this._clearDragPointerTracking = undefined;
+      };
+    });
   }
 
   enterPredicate = (drag: CdkDrag, drop: CdkDropList): boolean => {
@@ -191,34 +244,57 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       const isToTopLevelList = targetModelId === 'DONE' || targetModelId === 'UNDONE';
 
       if (isToTopLevelList) {
-        // Check if subtask is appearing as a top-level item in the target list
-        // by checking if its parent is NOT in the target list's tasks
-        const targetTasks: TaskWithSubTasks[] = drop.data.allTasks || [];
-        const parentInTargetList = targetTasks.some((t) => t.id === task.parentId);
-
-        // If parent is NOT in the target list, subtask appears as top-level, allow move
-        if (!parentInTargetList) {
-          return true;
+        // Accept during the drag-start window so CDK caches this list's
+        // geometry (see markSubTaskDragStarting).
+        if (
+          drag.dropContainer?.data?.listId === 'SUB' &&
+          !this.dropListService.isSubTaskDragStarting()
+        ) {
+          const overList = this._pointerSubTaskList();
+          const sourceModelId = drag.dropContainer?.data?.listModelId;
+          // Keep the drag inside a subtask list (reject this top-level list)
+          // while the pointer is over the SOURCE list — anywhere, so in-list
+          // sorting keeps routing to the subtask list — or over an actual row
+          // of a foreign list (the user is re-parenting). Over a foreign list's
+          // trailing padding (the dead-band just above the next parent task),
+          // fall through so the subtask converts to a main task there.
+          if (
+            overList &&
+            (overList.listModelId === sourceModelId || overList.isOverRow)
+          ) {
+            return false;
+          }
         }
-        // Parent is in the list, so this subtask should stay nested under parent
-        return false;
+        return true;
       }
 
       // Subtasks may drop into another subtask list (listId === 'SUB' with a
       // task id as listModelId). Reject section drop-lists (listId === 'PARENT'
       // with a non-reserved id) — section.taskIds is parent-only.
       if (targetListId === 'SUB' && !PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+        // Only claim the drop while the pointer is over an actual row of THIS
+        // list. Over its trailing padding, fall through so the enclosing
+        // top-level list can convert the subtask to a main task instead of this
+        // list greedily re-parenting it (see _pointerSubTaskList).
+        const overList = this._pointerSubTaskList();
+        if (overList && overList.listModelId === targetModelId && !overList.isOverRow) {
+          return false;
+        }
         return true;
       }
       return false;
     }
 
-    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS or to sections (parent-level
-    // lists with a non-reserved id). Subtask drop-lists (listId === 'SUB') are
-    // rejected so a top-level task can't be nested into another task's subtree.
+    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS, to sections (parent-level
+    // lists with a non-reserved id), or to a task's subtask list if the dragged
+    // task is not itself already a parent.
     const srcModelId = drag.dropContainer?.data?.listModelId;
     const srcListIdRaw = drag.dropContainer?.data?.listId;
     const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
+
+    if (targetListId === 'SUB') {
+      return targetModelId !== task.id && canConvertTaskToSubTask(task);
+    }
 
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
       // Reject section → BACKLOG: _move() dispatches `removeTaskFromSection`
@@ -238,8 +314,87 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     return true;
   };
 
+  /**
+   * Resolves which subtask list (if any) the drag pointer is currently over,
+   * and whether it sits over an actual subtask *row* rather than the list's
+   * empty leading/trailing padding.
+   *
+   * CDK excludes the source list from normal sibling enter-resolution, so we
+   * hit-test the live pointer ourselves to keep the enclosing top-level list
+   * from stealing in-list sorting. The row distinction matters for the
+   * dead-band just above a parent task: an expanded neighbour's subtask-list
+   * box (and its padding) overshoots below its last row, and because subtask
+   * lists are resolved before the top-level list (sibling order), a pointer
+   * aimed at "the slot above the next parent" would be greedily claimed by
+   * that neighbour and re-parent the subtask. Treating only a real row (or the
+   * leading pad, below) as "inside" lets that TRAILING padding convert to a
+   * main task instead.
+   *
+   * The strip BETWEEN a parent's header and its first subtask row is split in
+   * two by the drag-drop padding (see task-list.component.scss): the inner
+   * part lives *inside* `.task-list-inner` (the SUB list's own top padding) and
+   * the outer part is the `.sub-tasks` wrapper margin *outside* it. Both should
+   * claim the drop as a first-child re-parent rather than fall through to the
+   * top-level list — so the first branch reports the leading pad as
+   * `isOverRow: true` (pointer above the first row), and the `.sub-tasks`
+   * wrapper fallback covers the outer margin. The source SUB then blocks the
+   * top-level list, keeping in-list sort intact.
+   */
+  private _pointerSubTaskList(): { listModelId: string; isOverRow: boolean } | null {
+    const pointer = this.dropListService.activeDragPointer();
+    if (!pointer) {
+      return null;
+    }
+    // Memoised per pointer position: CDK consults several connected lists'
+    // enterPredicates per pointer move, each hit-testing the same coords (see
+    // DropListService.hitTestPointerSubTaskList).
+    return this.dropListService.hitTestPointerSubTaskList(pointer.x, pointer.y, () =>
+      this._computePointerSubTaskList(pointer),
+    );
+  }
+
+  private _computePointerSubTaskList(
+    pointer: DragPointer,
+  ): { listModelId: string; isOverRow: boolean } | null {
+    const element = document.elementFromPoint(pointer.x, pointer.y);
+    if (!element) {
+      return null;
+    }
+    const listEl = element.closest<HTMLElement>('.task-list-inner');
+    if (listEl?.dataset['listId'] === 'SUB') {
+      const listModelId = listEl.dataset['id'] ?? '';
+      // A `task` ancestor only counts as a row of *this* list — the enclosing
+      // parent task is also a `task`, but its nearest list is the top-level one.
+      const rowEl = element.closest('task');
+      if (!!rowEl && rowEl.closest('.task-list-inner') === listEl) {
+        return { listModelId, isOverRow: true };
+      }
+      // Not over a row → the pointer is in this SUB list's own drag-drop
+      // padding (inside the cdkDropList rect). The LEADING pad (above the first
+      // row) is the same first-child re-parent strip the `.sub-tasks` fallback
+      // claims, so report it as a row; the TRAILING pad stays a convert-to-main
+      // dead-band (see method doc).
+      const firstRow = listEl.querySelector<HTMLElement>(':scope > task');
+      const isLeadingPad = !!firstRow && pointer.y < firstRow.getBoundingClientRect().top;
+      return { listModelId, isOverRow: isLeadingPad };
+    }
+    // Leading-strip fallback: the `.sub-tasks` wrapper extends visually above
+    // the cdkDropList element. Each wrapper holds exactly one SUB list (the
+    // two-level nesting cap is enforced by `canApplyConvertToSubTask`), so
+    // the descendant query is unambiguous.
+    const wrapper = element.closest<HTMLElement>('.sub-tasks');
+    if (wrapper) {
+      const subListEl = wrapper.querySelector<HTMLElement>(
+        '.task-list-inner[data-list-id="SUB"]',
+      );
+      if (subListEl) {
+        return { listModelId: subListEl.dataset['id'] ?? '', isOverRow: true };
+      }
+    }
+    return null;
+  }
+
   async drop(
-    srcFilteredTasks: TaskWithSubTasks[],
     ev: CdkDragDrop<
       DropModelDataForList,
       DropModelDataForList | string,
@@ -275,47 +430,49 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     const newIds =
       targetTask && targetTask.id !== draggedTask.id
         ? (() => {
-            const currentDraggedIndex = targetListData.filteredTasks.findIndex(
-              (t) => t.id === draggedTask.id,
+          const currentDraggedIndex = targetListData.filteredTasks.findIndex(
+            (t) => t.id === draggedTask.id,
+          );
+          const currentTargetIndex = targetListData.filteredTasks.findIndex(
+            (t) => t.id === targetTask.id,
+          );
+
+          // If dragging from a different list or new item, use target index
+          const isDraggingDown =
+            currentDraggedIndex !== -1 && currentDraggedIndex < currentTargetIndex;
+
+          if (isDraggingDown) {
+            // When dragging down, place AFTER the target item
+            const filtered = targetListData.filteredTasks.filter(
+              (t) => t.id !== draggedTask.id,
             );
-            const currentTargetIndex = targetListData.filteredTasks.findIndex(
+            const targetIndexInFiltered = filtered.findIndex(
               (t) => t.id === targetTask.id,
             );
-
-            // If dragging from a different list or new item, use target index
-            const isDraggingDown =
-              currentDraggedIndex !== -1 && currentDraggedIndex < currentTargetIndex;
-
-            if (isDraggingDown) {
-              // When dragging down, place AFTER the target item
-              const filtered = targetListData.filteredTasks.filter(
-                (t) => t.id !== draggedTask.id,
-              );
-              const targetIndexInFiltered = filtered.findIndex(
-                (t) => t.id === targetTask.id,
-              );
-              const result = [...filtered];
-              result.splice(targetIndexInFiltered + 1, 0, draggedTask);
-              return result;
-            } else {
-              // When dragging up or from another list, place BEFORE the target item
-              return [
-                ...moveItemBeforeItem(
-                  targetListData.filteredTasks,
-                  draggedTask,
-                  targetTask as TaskWithSubTasks,
-                ),
-              ];
-            }
-          })()
+            const result = [...filtered];
+            result.splice(targetIndexInFiltered + 1, 0, draggedTask);
+            return result;
+          } else {
+            // When dragging up or from another list, place BEFORE the target item
+            return [
+              ...moveItemBeforeItem(
+                targetListData.filteredTasks,
+                draggedTask,
+                targetTask as TaskWithSubTasks,
+              ),
+            ];
+          }
+        })()
         : [
-            ...targetListData.filteredTasks.filter((t) => t.id !== draggedTask.id),
-            draggedTask,
-          ];
+          ...targetListData.filteredTasks.filter((t) => t.id !== draggedTask.id),
+          draggedTask,
+        ];
+    // Log ids only — task objects carry user titles/notes and the log history
+    // is exportable (see core/log rule: never log user content).
     TaskLog.log(srcListData.listModelId, '=>', targetListData.listModelId, {
-      targetTask,
-      draggedTask,
-      newIds,
+      targetTaskId: targetTask?.id,
+      draggedTaskId: draggedTask.id,
+      newIds: newIds.map((t) => t.id),
     });
 
     this.dropListService.blockAniTrigger$.next();
@@ -326,6 +483,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       srcListData.listId,
       targetListData.listId,
       newIds.map((p) => p.id),
+      draggedTask as TaskWithSubTasks,
     );
 
     this._taskViewCustomizerService.setSort(DEFAULT_OPTIONS.sort);
@@ -353,6 +511,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     srcListId: TaskListId,
     targetListId: TaskListId,
     newOrderedIds: string[],
+    draggedTask?: TaskWithSubTasks,
   ): void {
     const isSrcRegularList = src === 'DONE' || src === 'UNDONE';
     const isTargetRegularList = target === 'DONE' || target === 'UNDONE';
@@ -363,140 +522,200 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
-    if (workContextId) {
-      // Section drop-lists are PARENT-level lists whose listModelId is a
-      // section id (anything that isn't one of the reserved keywords).
-      // Subtask drop-lists (listId === 'SUB') also use non-reserved
-      // listModelIds (parent task ids) — those must NOT be treated as
-      // sections, otherwise a subtask drag would dispatch addTaskToSection
-      // instead of moveSubTask.
-      const targetIsSection = targetListId === 'PARENT' && !RESERVED_LIST_IDS.has(target);
-      const srcIsSection = srcListId === 'PARENT' && !RESERVED_LIST_IDS.has(src);
+    // All-tasks page: save ordering to localStorage instead of dispatching
+    // store actions, since there's no active work context to save against.
+    if (/all-tasks/.test(this._router.url)) {
+      this._saveAllTasksOrder(taskId, src, target, newOrderedIds);
 
-      if (targetIsSection) {
+      if (
+        srcListId === 'SUB' &&
+        targetListId === 'PARENT' &&
+        (target === 'DONE' || target === 'UNDONE')
+      ) {
         const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        // Pass the source section explicitly so replay is deterministic.
-        // `null` means the task wasn't in a section before the drag.
-        const sourceSectionId = srcIsSection ? (src as string) : null;
-        this._sectionService.addTaskToSection(
-          target as string,
-          taskId,
-          afterTaskId,
-          sourceSectionId,
+        this._store.dispatch(
+          TaskSharedActions.convertToMainTask({
+            task: draggedTask ?? ({ id: taskId, parentId: src } as TaskWithSubTasks),
+            isPlanForToday: this._workContextService.activeWorkContextId === TODAY_TAG.id,
+            afterTaskId,
+            isDone: target === 'DONE',
+          }),
         );
         return;
       }
-      if (srcIsSection) {
-        // Dragged out of a section into the no-section area. Single op:
-        // section-shared meta-reducer strips section membership AND
-        // repositions in workContext.taskIds so the task lands at the
-        // dropped slot atomically (no partial-replay window).
-        //
-        // `afterTaskId` is computed from `newOrderedIds` (the visible
-        // no-section bucket) but is then applied against the FULL
-        // workContext.taskIds list — `moveItemAfterAnchor` preserves the
-        // relative order of all unmoved items, so any sectioned tasks
-        // interleaved before the anchor stay where they are and the
-        // displayed no-section order is correct.
+
+      if (srcListId === 'PARENT' && targetListId === 'SUB') {
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._store.dispatch(
+          TaskSharedActions.convertToSubTask({
+            taskId,
+            targetParentId: target as string,
+            afterTaskId,
+          }),
+        );
+        return;
+      }
+
+      if (workContextId) {
+        // Section drop-lists are PARENT-level lists whose listModelId is a
+        // section id (anything that isn't one of the reserved keywords).
+        // Subtask drop-lists (listId === 'SUB') also use non-reserved
+        // listModelIds (parent task ids) — those must NOT be treated as
+        // sections, otherwise a subtask drag would dispatch addTaskToSection
+        // instead of moveSubTask.
+        const targetIsSection = targetListId === 'PARENT' && !RESERVED_LIST_IDS.has(target);
+        const srcIsSection = srcListId === 'PARENT' && !RESERVED_LIST_IDS.has(src);
+
+        if (targetIsSection) {
+          const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+          // Pass the source section explicitly so replay is deterministic.
+          // `null` means the task wasn't in a section before the drag.
+          const sourceSectionId = srcIsSection ? (src as string) : null;
+          this._sectionService.addTaskToSection(
+            target as string,
+            taskId,
+            afterTaskId,
+            sourceSectionId,
+          );
+          return;
+        }
+        if (srcIsSection) {
+          // Dragged out of a section into the no-section area. Single op:
+          // section-shared meta-reducer strips section membership AND
+          // repositions in workContext.taskIds so the task lands at the
+          // dropped slot atomically (no partial-replay window).
+          //
+          // `afterTaskId` is computed from `newOrderedIds` (the visible
+          // no-section bucket) but is then applied against the FULL
+          // workContext.taskIds list — `moveItemAfterAnchor` preserves the
+          // relative order of all unmoved items, so any sectioned tasks
+          // interleaved before the anchor stay where they are and the
+          // displayed no-section order is correct.
+          const workContextType = this._workContextService
+            .activeWorkContextType as WorkContextType;
+          const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+          this._sectionService.removeTaskFromSection(
+            src as string,
+            taskId,
+            workContextId,
+            workContextType,
+            afterTaskId,
+          );
+          return;
+        }
+      }
+
+      if (isSrcRegularList && isTargetRegularList) {
+        // move inside today
         const workContextType = this._workContextService
           .activeWorkContextType as WorkContextType;
         const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._sectionService.removeTaskFromSection(
-          src as string,
-          taskId,
-          workContextId,
-          workContextType,
-          afterTaskId,
-        );
-        return;
-      }
-    }
-
-    if (isSrcRegularList && isTargetRegularList) {
-      // move inside today
-      const workContextType = this._workContextService
-        .activeWorkContextType as WorkContextType;
-      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-      this._store.dispatch(
-        moveTaskInTodayList({
-          taskId,
-          afterTaskId,
-          src,
-          target,
-          workContextId,
-          workContextType,
-        }),
-      );
-    } else if (target === 'OVERDUE') {
-      // Cannot drop into OVERDUE list
-      return;
-    } else if (src === 'OVERDUE' && !isTargetRegularList) {
-      // OVERDUE tasks can only be moved to UNDONE or DONE, not BACKLOG or subtask lists
-      return;
-    } else if (src === 'OVERDUE' && isTargetRegularList) {
-      const workContextType = this._workContextService
-        .activeWorkContextType as WorkContextType;
-      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-      this._store.dispatch(
-        TaskSharedActions.planTasksForToday({
-          taskIds: [taskId],
-          today: this._dateService.todayStr(),
-          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-        }),
-      );
-      this._store.dispatch(
-        moveTaskInTodayList({
-          taskId,
-          afterTaskId,
-          src,
-          target,
-          workContextId,
-          workContextType,
-        }),
-      );
-      if (target === 'DONE') {
         this._store.dispatch(
-          TaskSharedActions.updateTask({
-            task: { id: taskId, changes: { isDone: true } },
+          moveTaskInTodayList({
+            taskId,
+            afterTaskId,
+            src,
+            target,
+            workContextId,
+            workContextType,
           }),
         );
+      } else if (target === 'OVERDUE') {
+        // Cannot drop into OVERDUE list
+        return;
+      } else if (src === 'OVERDUE' && !isTargetRegularList) {
+        // OVERDUE tasks can only be moved to UNDONE or DONE, not BACKLOG or subtask lists
+        return;
+      } else if (src === 'OVERDUE' && isTargetRegularList) {
+        const workContextType = this._workContextService
+          .activeWorkContextType as WorkContextType;
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._store.dispatch(
+          TaskSharedActions.planTasksForToday({
+            taskIds: [taskId],
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          }),
+        );
+        this._store.dispatch(
+          moveTaskInTodayList({
+            taskId,
+            afterTaskId,
+            src,
+            target,
+            workContextId,
+            workContextType,
+          }),
+        );
+        if (target === 'DONE') {
+          this._store.dispatch(
+            TaskSharedActions.updateTask({
+              task: { id: taskId, changes: { isDone: true } },
+            }),
+          );
+        }
+      } else if (src === 'BACKLOG' && target === 'BACKLOG') {
+        // move inside backlog
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._store.dispatch(
+          moveProjectTaskInBacklogList({ taskId, afterTaskId, workContextId }),
+        );
+      } else if (src === 'BACKLOG' && isTargetRegularList) {
+        // move from backlog to today
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._store.dispatch(
+          moveProjectTaskToRegularList({
+            taskId,
+            afterTaskId,
+            src,
+            target,
+            workContextId,
+          }),
+        );
+      } else if (isSrcRegularList && target === 'BACKLOG') {
+        // move from today to backlog
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._store.dispatch(
+          moveProjectTaskToBacklogList({ taskId, afterTaskId, workContextId }),
+        );
+      } else {
+        // move sub task
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._store.dispatch(
+          moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, afterTaskId }),
+        );
       }
-    } else if (src === 'BACKLOG' && target === 'BACKLOG') {
-      // move inside backlog
-      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-      this._store.dispatch(
-        moveProjectTaskInBacklogList({ taskId, afterTaskId, workContextId }),
-      );
-    } else if (src === 'BACKLOG' && isTargetRegularList) {
-      // move from backlog to today
-      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-      this._store.dispatch(
-        moveProjectTaskToRegularList({
-          taskId,
-          afterTaskId,
-          src,
-          target,
-          workContextId,
-        }),
-      );
-    } else if (isSrcRegularList && target === 'BACKLOG') {
-      // move from today to backlog
-      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-      this._store.dispatch(
-        moveProjectTaskToBacklogList({ taskId, afterTaskId, workContextId }),
-      );
-    } else {
-      // move sub task
-      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-      this._store.dispatch(
-        moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, afterTaskId }),
-      );
     }
+
+  private _saveAllTasksOrder(
+      taskId: string,
+      src: string,
+      target: string,
+      newOrderedIds: string[],
+  ): void {
+      let undoneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_UNDONE, []);
+      let doneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_DONE, []);
+
+      if (src === 'UNDONE') {
+      undoneOrder = undoneOrder.filter((id) => id !== taskId);
+    } else if (src === 'DONE') {
+      doneOrder = doneOrder.filter((id) => id !== taskId);
+    }
+
+    if (target === 'UNDONE') {
+      undoneOrder = newOrderedIds;
+    } else if (target === 'DONE') {
+      doneOrder = newOrderedIds;
+    }
+
+    lsSetJSON(LS.ALL_TASKS_TASK_IDS_UNDONE, undoneOrder);
+    lsSetJSON(LS.ALL_TASKS_TASK_IDS_DONE, doneOrder);
+    this._allTasksOrderService.notifyOrderChanged();
   }
 
-  expandDoneTasks(): void {
-    const pid = this.parentId();
-    if (!pid) {
+    expandDoneTasks(): void {
+      const pid = this.parentId();
+      if (!pid) {
       throw new Error('Parent ID is undefined');
     }
 
@@ -504,4 +723,4 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // note this might be executed from the task detail panel, where this is not possible
     this._taskService.focusTaskIfPossible(pid);
   }
-}
+  }

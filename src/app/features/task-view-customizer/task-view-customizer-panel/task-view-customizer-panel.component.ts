@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  ViewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -11,6 +17,9 @@ import { MatDividerModule } from '@angular/material/divider';
 import { TaskViewCustomizerService } from '../task-view-customizer.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { WorkContextService } from '../../work-context/work-context.service';
+import { WorkContextType } from '../../work-context/work-context.model';
 import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
@@ -46,6 +55,7 @@ import { TaskViewCustomizerMenuItemComponent } from './menu-item/menu-item.compo
 })
 export class TaskViewCustomizerPanelComponent {
   customizerService = inject(TaskViewCustomizerService);
+  private _workContextService = inject(WorkContextService);
 
   @ViewChild('customizerMenu', { static: false })
   menu!: MatMenu;
@@ -55,6 +65,11 @@ export class TaskViewCustomizerPanelComponent {
   readonly OPTIONS = OPTIONS;
   readonly PRESETS = PRESETS;
   readonly FILTER_COMMON = FILTER_COMMON;
+
+  private _activeCtx = toSignal(this._workContextService.activeWorkContextTypeAndId$);
+  isInProjectContext = computed(
+    () => this._activeCtx()?.activeType === WorkContextType.PROJECT,
+  );
 
   onFilterSelect(filter: FilterOption): void {
     this.customizerService.setFilter(filter);
