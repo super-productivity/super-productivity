@@ -337,4 +337,28 @@ describe('TaskComponent shortcut handling', () => {
 
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
+
+  it('adds a sibling subtask on regular Enter when editing a subtask', () => {
+    fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Existing subtask',
+      wasChanged: false,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+  });
+
+  it('does NOT add a subtask on regular Enter when editing a top-level task', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask('Top-level task'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Top-level task',
+      wasChanged: false,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
 });

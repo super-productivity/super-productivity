@@ -726,7 +726,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       this._taskService.update(this.task().id, { title: newVal });
     }
 
-    if (submitTrigger === 'modEnter') {
+    if (
+      submitTrigger === 'modEnter' ||
+      (submitTrigger === 'enter' && this.task().parentId)
+    ) {
       this._addSubTaskOrFocusEmpty(newVal);
       return;
     }
