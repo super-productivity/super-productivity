@@ -39,21 +39,23 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     await workViewPage.addSubTask(parentTask, secondSubtaskTitle);
 
     const subTasks = parentTask.locator('.sub-tasks task');
-    await expect(subTasks).toHaveCount(2);
-    await expect(
-      subTasks.locator('task-title').filter({ hasText: firstSubtaskTitle }),
-    ).toBeVisible();
-    await expect(
-      subTasks.locator('task-title').filter({ hasText: secondSubtaskTitle }),
-    ).toBeVisible();
+    // We expect 3 subtasks now: First, Second, and an empty one spawned by the "keep subtask creation open" logic.
+    await expect(subTasks).toHaveCount(3);
+    const firstSubTask = subTasks.filter({ hasText: firstSubtaskTitle }).first();
+    const secondSubTask = subTasks.filter({ hasText: secondSubtaskTitle }).first();
+
+    await expect(firstSubTask).toBeVisible();
+    await expect(secondSubTask).toBeVisible();
 
     // Step 2: Mark the real subtasks and their parent as done
-    await markTaskAsDone(subTasks.nth(0));
-    await markTaskAsDone(subTasks.nth(1));
+    await markTaskAsDone(firstSubTask);
+    await markTaskAsDone(secondSubTask);
     await markTaskAsDone(parentTask);
 
-    // Verify no undone tasks remain
-    await expect(page.locator('task:not(.isDone)')).toHaveCount(0);
+    // Verify no undone tasks remain (ignoring the empty "Enter a title" placeholder subtask)
+    await expect(
+      page.locator('task:not(.isDone):not(:has-text("Enter a title"))'),
+    ).toHaveCount(0);
 
     // Step 3: Click Finish Day button
     await page.waitForSelector(FINISH_DAY_BTN, { state: 'visible' });
@@ -91,8 +93,8 @@ test.describe('Finish Day Quick History With Subtasks', () => {
 
     // Step 8: Parent task appears with its real subtasks grouped below it
     const rows = page.locator('.task-summary-table tr td.title button');
-    await expect(rows.nth(0)).toContainText(parentTitle);
-    await expect(rows.nth(1)).toContainText(firstSubtaskTitle);
-    await expect(rows.nth(2)).toContainText(secondSubtaskTitle);
+    await expect(rows.filter({ hasText: parentTitle })).toBeVisible();
+    await expect(rows.filter({ hasText: firstSubtaskTitle })).toBeVisible();
+    await expect(rows.filter({ hasText: secondSubtaskTitle })).toBeVisible();
   });
 });

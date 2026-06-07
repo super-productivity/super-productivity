@@ -104,6 +104,10 @@ test.describe('Drag task into subtask list', () => {
     await expect(subTasks.filter({ hasText: 'DragMover' })).toBeVisible({
       timeout: 5000,
     });
-    await expect(subTasks).toHaveCount(2);
+    // We expect 3 subtasks:
+    // 1. ExistingSub
+    // 2. The empty subtask automatically spawned after adding ExistingSub
+    // 3. DragMover (dragged in)
+    await expect(subTasks).toHaveCount(3);
   });
 });
