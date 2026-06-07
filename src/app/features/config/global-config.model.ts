@@ -176,6 +176,8 @@ export interface LocalFileSyncConfig {
 
 export type LocalBackupConfig = Readonly<{
   isEnabled: boolean;
+  /** Desktop only. Optional for persisted data created before this setting existed. */
+  maxBackupFiles?: number | null;
 }>;
 
 /**

@@ -1,7 +1,7 @@
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { EMPTY, interval, merge, Observable } from 'rxjs';
+import { EMPTY, firstValueFrom, interval, merge, Observable } from 'rxjs';
 import { LocalBackupConfig } from '../../features/config/global-config.model';
 import { debounceTime, map, switchMap, tap } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
@@ -21,6 +21,7 @@ import {
   selectBestBackupStr,
   summarizeBackupStr,
 } from './backup-ring.util';
+import { DEFAULT_MAX_BACKUP_FILES } from '../../../../electron/shared-with-frontend/backup-file-cleanup.util';
 import { SnackService } from '../../core/snack/snack.service';
 import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
@@ -208,7 +209,7 @@ export class LocalBackupService {
     if (IS_ELECTRON) {
       // Electron has its own rotated, timestamped chain — no ring or A3 guard
       // needed (the bug class A3 protects against doesn't apply).
-      window.ea.backupAppData(data);
+      await this._backupElectron(data);
     }
     if (IS_ANDROID_WEB_VIEW) {
       await this._backupAndroid(data);
@@ -216,6 +217,14 @@ export class LocalBackupService {
     if (this._platformService.isIOS()) {
       await this._backupIOS(data);
     }
+  }
+
+  private async _backupElectron(data: AppDataComplete): Promise<void> {
+    const cfg = await firstValueFrom(this._cfg$);
+    window.ea.backupAppData({
+      data,
+      maxBackupFiles: cfg.maxBackupFiles ?? DEFAULT_MAX_BACKUP_FILES,
+    });
   }
 
   // A3 (#7925) pure predicate — kept on its own so the threshold logic is
