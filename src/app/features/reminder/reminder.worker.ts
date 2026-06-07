@@ -7,12 +7,24 @@ import { Log } from '../../core/log';
 const CHECK_INTERVAL_DURATION = 10000;
 let cancelCheckInterval: (() => void) | undefined;
 
-addEventListener('message', ({ data }) => {
-  // Log.log('REMINDER WORKER', data);
-  reInitCheckInterval(data);
-});
+interface ReminderWorkerUpdate {
+  reminders: ReminderCopy[];
+  isCheckImmediately?: boolean;
+}
 
-const reInitCheckInterval = (reminders: ReminderCopy[]): void => {
+addEventListener(
+  'message',
+  ({ data }: MessageEvent<ReminderCopy[] | ReminderWorkerUpdate>) => {
+    const reminders = Array.isArray(data) ? data : data.reminders;
+    // Log.log('REMINDER WORKER', reminders);
+    reInitCheckInterval(reminders, !Array.isArray(data) && !!data.isCheckImmediately);
+  },
+);
+
+const reInitCheckInterval = (
+  reminders: ReminderCopy[],
+  isCheckImmediately: boolean = false,
+): void => {
   if (cancelCheckInterval) {
     cancelCheckInterval();
     cancelCheckInterval = undefined;
@@ -21,25 +33,33 @@ const reInitCheckInterval = (reminders: ReminderCopy[]): void => {
     return;
   }
 
+  if (isCheckImmediately) {
+    checkAndPostDueReminders(reminders);
+  }
+
   cancelCheckInterval = lazySetInterval(() => {
-    const dueReminders = getDueReminders(reminders);
-    if (dueReminders.length) {
-      const oldest = dueReminders[0];
-
-      const remindersToSend =
-        oldest.type === 'TASK'
-          ? dueReminders.filter((r) => r.type === 'TASK')
-          : // NOTE: for notes we just send the oldest due reminder
-            [oldest];
-
-      postMessage(remindersToSend);
-      Log.log('Worker postMessage', {
-        count: remindersToSend.length,
-        ids: remindersToSend.map((r) => r.id),
-        type: remindersToSend[0]?.type,
-      });
-    }
+    checkAndPostDueReminders(reminders);
   }, CHECK_INTERVAL_DURATION);
+};
+
+const checkAndPostDueReminders = (reminders: ReminderCopy[]): void => {
+  const dueReminders = getDueReminders(reminders);
+  if (dueReminders.length) {
+    const oldest = dueReminders[0];
+
+    const remindersToSend =
+      oldest.type === 'TASK'
+        ? dueReminders.filter((r) => r.type === 'TASK')
+        : // NOTE: for notes we just send the oldest due reminder
+          [oldest];
+
+    postMessage(remindersToSend);
+    Log.log('Worker postMessage', {
+      count: remindersToSend.length,
+      ids: remindersToSend.map((r) => r.id),
+      type: remindersToSend[0]?.type,
+    });
+  }
 };
 
 const getDueReminders = (reminders: ReminderCopy[]): ReminderCopy[] => {

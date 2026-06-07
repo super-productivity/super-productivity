@@ -3,7 +3,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { combineLatest, Observable, Subject } from 'rxjs';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { T } from '../../t.const';
-import { distinctUntilChanged, filter, map, skipUntil } from 'rxjs/operators';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { Log } from '../../core/log';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -21,6 +21,11 @@ interface WorkerReminder {
   remindAt: number;
   title: string;
   type: 'TASK';
+}
+
+interface WorkerReminderUpdate {
+  reminders: WorkerReminder[];
+  isCheckImmediately: true;
 }
 
 interface LegacyReminder {
@@ -44,15 +49,12 @@ export class ReminderService {
   private _onRemindersActive$: Subject<TaskWithReminderData[]> = new Subject<
     TaskWithReminderData[]
   >();
-  onRemindersActive$: Observable<TaskWithReminderData[]> = this._onRemindersActive$.pipe(
-    skipUntil(
-      this._imexMetaService.isDataImportInProgress$.pipe(
-        filter((isInProgress) => !isInProgress),
-      ),
-    ),
-  );
+  onRemindersActive$: Observable<TaskWithReminderData[]> =
+    this._onRemindersActive$.asObservable();
 
   private _w: Worker;
+  private _isDataImportInProgress: boolean = false;
+  private _latestWorkerReminders: WorkerReminder[] = [];
 
   constructor() {
     if (typeof (Worker as unknown) === 'undefined') {
@@ -64,6 +66,17 @@ export class ReminderService {
       name: 'reminder',
       type: 'module',
     });
+
+    this._imexMetaService.isDataImportInProgress$
+      .pipe(distinctUntilChanged())
+      .subscribe((isInProgress) => {
+        const wasInProgress = this._isDataImportInProgress;
+        this._isDataImportInProgress = isInProgress;
+
+        if (wasInProgress && !isInProgress) {
+          this._requestImmediateReminderCheck();
+        }
+      });
   }
 
   init(): void {
@@ -177,6 +190,11 @@ export class ReminderService {
     const reminders = msg.data as WorkerReminder[];
     Log.log(`ReminderService: Worker activated ${reminders.length} reminder(s)`);
 
+    if (this._isDataImportInProgress) {
+      Log.log('ReminderService: data import active, delaying reminder dialog check');
+      return;
+    }
+
     if (this._globalConfigService.cfg()?.reminder?.disableReminders) {
       Log.log('ReminderService: reminders are disabled, not sending to UI');
       return;
@@ -221,8 +239,26 @@ export class ReminderService {
     }
   }
 
-  private _updateRemindersInWorker(reminders: WorkerReminder[]): void {
-    this._w.postMessage(reminders);
+  private _requestImmediateReminderCheck(): void {
+    if (this._latestWorkerReminders.length === 0) {
+      return;
+    }
+
+    Log.log('ReminderService: data import finished, rechecking reminders', {
+      count: this._latestWorkerReminders.length,
+    });
+    this._updateRemindersInWorker(this._latestWorkerReminders, true);
+  }
+
+  private _updateRemindersInWorker(
+    reminders: WorkerReminder[],
+    isCheckImmediately: boolean = false,
+  ): void {
+    this._latestWorkerReminders = reminders;
+    const msg: WorkerReminder[] | WorkerReminderUpdate = isCheckImmediately
+      ? { reminders, isCheckImmediately: true }
+      : reminders;
+    this._w.postMessage(msg);
   }
 
   private _handleError(err: unknown): void {

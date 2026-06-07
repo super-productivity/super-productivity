@@ -5,7 +5,7 @@ import { ReminderService } from './reminder.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { GlobalConfigService } from '../config/global-config.service';
-import { TaskWithReminder } from '../tasks/task.model';
+import { TaskWithReminder, TaskWithReminderData } from '../tasks/task.model';
 import { selectAllTasksWithReminder } from '../tasks/store/task.selectors';
 
 describe('ReminderService', () => {
@@ -278,6 +278,11 @@ describe('ReminderService', () => {
   });
 
   describe('onRemindersActive$', () => {
+    const getWorkerMessageHandler = (): ((event: MessageEvent) => void) =>
+      mockWorker.addEventListener.calls
+        .allArgs()
+        .find((args) => args[0] === 'message')?.[1] as (event: MessageEvent) => void;
+
     it('should emit when worker sends message and reminders are enabled', (done) => {
       const globalConfigService = TestBed.inject(
         GlobalConfigService,
@@ -289,9 +294,7 @@ describe('ReminderService', () => {
       service.init();
 
       // Get the message handler
-      const messageHandler = mockWorker.addEventListener.calls
-        .allArgs()
-        .find((args) => args[0] === 'message')?.[1] as (event: MessageEvent) => void;
+      const messageHandler = getWorkerMessageHandler();
 
       service.onRemindersActive$.subscribe((reminders) => {
         expect(reminders.length).toBe(1);
@@ -319,9 +322,7 @@ describe('ReminderService', () => {
       service.onRemindersActive$.subscribe((v) => emittedValues.push(v));
 
       // Get the message handler
-      const messageHandler = mockWorker.addEventListener.calls
-        .allArgs()
-        .find((args) => args[0] === 'message')?.[1] as (event: MessageEvent) => void;
+      const messageHandler = getWorkerMessageHandler();
 
       // Simulate worker message
       messageHandler({
@@ -340,9 +341,7 @@ describe('ReminderService', () => {
       service.onRemindersActive$.subscribe((v) => emittedValues.push(v));
 
       // Get the message handler
-      const messageHandler = mockWorker.addEventListener.calls
-        .allArgs()
-        .find((args) => args[0] === 'message')?.[1] as (event: MessageEvent) => void;
+      const messageHandler = getWorkerMessageHandler();
 
       // Simulate worker message while import is in progress
       messageHandler({
@@ -350,6 +349,77 @@ describe('ReminderService', () => {
       } as MessageEvent);
 
       expect(emittedValues.length).toBe(0);
+    });
+
+    it('should skip emissions while data import starts after subscription', () => {
+      service.init();
+
+      const emittedValues: unknown[] = [];
+      service.onRemindersActive$.subscribe((v) => emittedValues.push(v));
+
+      isDataImportInProgressSubject.next(true);
+
+      const messageHandler = getWorkerMessageHandler();
+
+      messageHandler({
+        data: [{ id: 'task1', remindAt: 1000, title: 'Test', type: 'TASK' }],
+      } as MessageEvent);
+
+      expect(emittedValues.length).toBe(0);
+    });
+
+    it('should request an immediate worker check when data import finishes', () => {
+      isDataImportInProgressSubject.next(true);
+
+      service.init();
+
+      const importedTask = {
+        id: 'task1',
+        remindAt: 1000,
+        title: 'Imported Task',
+        isDone: false,
+      } as TaskWithReminder;
+
+      tasksWithReminderSubject.next([importedTask]);
+
+      const expectedWorkerReminders = [
+        { id: 'task1', remindAt: 1000, title: 'Imported Task', type: 'TASK' },
+      ];
+
+      expect(mockWorker.postMessage).toHaveBeenCalledWith(expectedWorkerReminders);
+
+      isDataImportInProgressSubject.next(false);
+
+      expect(mockWorker.postMessage).toHaveBeenCalledWith({
+        reminders: expectedWorkerReminders,
+        isCheckImmediately: true,
+      });
+    });
+
+    it('should emit the reminder returned by the immediate post-import check', () => {
+      isDataImportInProgressSubject.next(true);
+
+      service.init();
+
+      const emittedValues: TaskWithReminderData[][] = [];
+      service.onRemindersActive$.subscribe((v) =>
+        emittedValues.push(v as TaskWithReminderData[]),
+      );
+
+      const messageHandler = getWorkerMessageHandler();
+      const reminderMsg = {
+        data: [{ id: 'task1', remindAt: 1000, title: 'Imported Task', type: 'TASK' }],
+      } as MessageEvent;
+
+      messageHandler(reminderMsg);
+      expect(emittedValues.length).toBe(0);
+
+      isDataImportInProgressSubject.next(false);
+      messageHandler(reminderMsg);
+
+      expect(emittedValues.length).toBe(1);
+      expect(emittedValues[0][0].id).toBe('task1');
+      expect(emittedValues[0][0].title).toBe('Imported Task');
     });
   });
 

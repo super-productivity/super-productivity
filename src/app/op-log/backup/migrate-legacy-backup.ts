@@ -94,6 +94,9 @@ export const migrateLegacyBackup = (
   // === Migration 4: plannedAt → dueWithTime, remove TODAY_TAG from tagIds ===
   data = _migration4TaskDateTimeFields(data);
 
+  // === Legacy reminders: reminders[] + task.reminderId → task.remindAt ===
+  data = _migrationLegacyTaskReminders(data);
+
   // === Migration 4.1: Remove TODAY_TAG from task repeat configs ===
   data = _migration41RepeatCfgTodayTag(data);
 
@@ -590,6 +593,58 @@ function _migrateTasksForMigration4(taskState: any): void {
       task.tagIds = task.tagIds.filter((v: string) => v !== TODAY_TAG.id);
     }
   }
+}
+
+function _migrationLegacyTaskReminders(data: Record<string, any>): Record<string, any> {
+  if (!Array.isArray(data.reminders) || !data.task?.entities) {
+    return data;
+  }
+
+  for (const reminder of data.reminders) {
+    if (
+      reminder?.type !== 'TASK' ||
+      typeof reminder.remindAt !== 'number' ||
+      typeof reminder.id !== 'string'
+    ) {
+      continue;
+    }
+
+    const task = _findTaskForLegacyReminder(data.task, reminder);
+    if (!task || task.isDone) {
+      continue;
+    }
+
+    task.remindAt = reminder.remindAt;
+    if (task.reminderId) {
+      delete task.reminderId;
+    }
+  }
+
+  data.reminders = [];
+  return data;
+}
+
+function _findTaskForLegacyReminder(
+  taskState: Record<string, any>,
+  reminder: Record<string, any>,
+): Record<string, any> | null {
+  const taskByRelatedId =
+    typeof reminder.relatedId === 'string'
+      ? taskState.entities[reminder.relatedId]
+      : null;
+
+  if (taskByRelatedId) {
+    return taskByRelatedId;
+  }
+
+  for (const taskId of taskState.ids || []) {
+    const task = taskState.entities[taskId];
+    if (task?.reminderId === reminder.id) {
+      return task;
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
