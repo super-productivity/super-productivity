@@ -18,7 +18,7 @@ import { Task, TaskWithReminderData } from '../task.model';
 import { TaskService } from '../task.service';
 import { BehaviorSubject, combineLatest, Observable, of, Subscription } from 'rxjs';
 import { ReminderService } from '../../reminder/reminder.service';
-import { first, map, switchMap, takeWhile } from 'rxjs/operators';
+import { distinctUntilChanged, first, map, switchMap, takeWhile } from 'rxjs/operators';
 import { T } from '../../../t.const';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
 import { getTomorrow } from '../../../util/get-tomorrow';
@@ -173,6 +173,25 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         switchMap((taskIds) =>
           taskIds.length ? this._taskService.getByIdsLive$(taskIds) : of([] as Task[]),
         ),
+        // getByIdsLive$ emits a fresh array on every task mutation app-wide; only
+        // reconcile when something we care about on the watched tasks changes.
+        distinctUntilChanged((prev, curr) => {
+          if (prev.length !== curr.length) {
+            return false;
+          }
+          return prev.every((p, i) => {
+            const c = curr[i];
+            if (!p || !c) {
+              return p === c;
+            }
+            return (
+              p.id === c.id &&
+              p.isDone === c.isDone &&
+              p.remindAt === c.remindAt &&
+              p.deadlineRemindAt === c.deadlineRemindAt
+            );
+          });
+        }),
       )
       .subscribe((tasks) => this._reconcileWithStore(tasks));
     this._subs.add(this._storeReconcileSub);
