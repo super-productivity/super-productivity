@@ -88,8 +88,8 @@ export class TagEditComponent {
   inputVal = signal<string>('');
   tagSuggestions = computed(() =>
     this.isShowMyDayTag()
-      ? this._tagService.tagsSortedForUI()
-      : this._tagService.tagsNoMyDayAndNoListSorted(),
+      ? this._tagService.tagsInTreeOrder()
+      : this._tagService.tagsNoMyDayAndNoListInTreeOrder(),
   );
 
   constructor() {

@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { firstValueFrom, Observable, of } from 'rxjs';
+import { combineLatest, firstValueFrom, Observable, of } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { Project } from './project.model';
 import { select, Store } from '@ngrx/store';
@@ -51,6 +51,8 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DateService } from '../../core/date/date.service';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
+import { MenuTreeService } from '../menu-tree/menu-tree.service';
+import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selectors';
 
 @Injectable({
   providedIn: 'root',
@@ -65,9 +67,18 @@ export class ProjectService {
   private readonly _matDialog = inject(MatDialog);
   private readonly _dateService = inject(DateService);
   private readonly _snackService = inject(SnackService);
+  private readonly _menuTreeService = inject(MenuTreeService);
 
   list$: Observable<Project[]> = this._store$.pipe(select(selectUnarchivedProjects));
   list = toSignal(this.list$, { initialValue: [] });
+
+  listInTreeOrder$: Observable<Project[]> = combineLatest([
+    this.list$,
+    this._store$.pipe(select(selectMenuTreeProjectTree)),
+  ]).pipe(
+    map(([projects]) => this._menuTreeService.buildProjectListInTreeOrder(projects)),
+  );
+  listInTreeOrder = toSignal(this.listInTreeOrder$, { initialValue: [] });
 
   listSorted$: Observable<Project[]> = this.list$.pipe(
     map((projects) => sortByTitle(projects)),
@@ -79,6 +90,11 @@ export class ProjectService {
     map((projects) => projects.filter((p) => !p.isArchived && !p.isHiddenFromMenu)),
   );
   listSortedForUI = toSignal(this.listSortedForUI$, { initialValue: [] });
+
+  listInTreeOrderForUI$: Observable<Project[]> = this.listInTreeOrder$.pipe(
+    map((projects) => projects.filter((p) => !p.isArchived && !p.isHiddenFromMenu)),
+  );
+  listInTreeOrderForUI = toSignal(this.listInTreeOrderForUI$, { initialValue: [] });
 
   archived$: Observable<Project[]> = this._store$.pipe(select(selectArchivedProjects));
 
@@ -103,6 +119,15 @@ export class ProjectService {
   getProjectsWithoutIdSorted$(projectId: string | null): Observable<Project[]> {
     return this.getProjectsWithoutId$(projectId).pipe(
       map((projects) => sortByTitle(projects)),
+    );
+  }
+
+  getProjectsWithoutIdInTreeOrder$(projectId: string | null): Observable<Project[]> {
+    return combineLatest([
+      this.getProjectsWithoutId$(projectId),
+      this._store$.pipe(select(selectMenuTreeProjectTree)),
+    ]).pipe(
+      map(([projects]) => this._menuTreeService.buildProjectListInTreeOrder(projects)),
     );
   }
 

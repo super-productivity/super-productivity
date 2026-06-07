@@ -115,7 +115,7 @@ describe('TaskComponent shortcut handling', () => {
         {
           provide: ProjectService,
           useValue: jasmine.createSpyObj('ProjectService', [
-            'getProjectsWithoutId$',
+            'getProjectsWithoutIdInTreeOrder$',
             'moveTaskToBacklog',
             'moveTaskToTodayList',
             'getByIdOnce$',
