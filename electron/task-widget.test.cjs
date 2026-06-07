@@ -9,6 +9,18 @@ const originalModuleLoad = Module._load;
 const taskWidgetModulePath = path.resolve(__dirname, 'task-widget/task-widget.ts');
 
 let createdWindows = [];
+let loadSimpleStoreAllImpl;
+
+const createDeferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+};
 
 class FakeWebContents {
   on() {}
@@ -24,6 +36,7 @@ class FakeBrowserWindow {
   constructor() {
     this._visible = false;
     this.showCount = 0;
+    this.showInactiveCount = 0;
     this.hideCount = 0;
     this._handlers = new Map();
     this.webContents = new FakeWebContents();
@@ -60,6 +73,10 @@ class FakeBrowserWindow {
     this._visible = true;
     this.showCount += 1;
   }
+  showInactive() {
+    this._visible = true;
+    this.showInactiveCount += 1;
+  }
   hide() {
     this._visible = false;
     this.hideCount += 1;
@@ -85,7 +102,7 @@ const installMocks = () => {
     }
     if (request.endsWith('simple-store')) {
       return {
-        loadSimpleStoreAll: async () => ({}),
+        loadSimpleStoreAll: () => loadSimpleStoreAllImpl(),
         saveSimpleStore: () => {},
       };
     }
@@ -105,6 +122,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test.beforeEach(() => {
   createdWindows = [];
+  loadSimpleStoreAllImpl = async () => ({});
   installMocks();
 });
 
@@ -129,7 +147,7 @@ test('toggleTaskWidgetVisibility shows the widget when it is enabled but hidden'
 
   mod.toggleTaskWidgetVisibility();
   assert.equal(win.isVisible(), true, 'toggle should show the hidden widget');
-  assert.equal(win.showCount, 1);
+  assert.equal(win.showInactiveCount, 1);
 });
 
 test('toggleTaskWidgetVisibility hides the widget when it is enabled and visible', async () => {
@@ -209,6 +227,56 @@ test('disabling clears the sticky flag even when the widget window is absent', (
     false,
     'disabling clears the flag regardless of whether the window exists',
   );
+});
+
+test('disabling while async creation is pending prevents the widget window from being created', async () => {
+  const storeLoad = createDeferred();
+  loadSimpleStoreAllImpl = () => storeLoad.promise;
+  const mod = loadModule();
+
+  mod.updateTaskWidgetEnabled(true);
+  mod.updateTaskWidgetEnabled(false);
+
+  storeLoad.resolve({});
+  await flush();
+
+  assert.equal(
+    createdWindows.length,
+    0,
+    'disabling before persisted bounds load resolves should cancel window creation',
+  );
+});
+
+test('shortcut reveal while async creation is pending shows the widget after creation completes', async () => {
+  const storeLoad = createDeferred();
+  loadSimpleStoreAllImpl = () => storeLoad.promise;
+  const mod = loadModule();
+
+  mod.updateTaskWidgetEnabled(true);
+  mod.toggleTaskWidgetVisibility();
+
+  storeLoad.resolve({});
+  await flush();
+
+  assert.equal(createdWindows.length, 1, 'only the initial in-flight creation is reused');
+  assert.equal(
+    createdWindows[0].isVisible(),
+    true,
+    'pending shortcut reveal should show the window once it exists',
+  );
+});
+
+test('shortcut reveal uses showInactive so the current app keeps focus', async () => {
+  const mod = loadModule();
+  mod.updateTaskWidgetEnabled(true);
+  await flush();
+
+  const win = createdWindows[0];
+  mod.toggleTaskWidgetVisibility();
+
+  assert.equal(win.showInactiveCount, 1);
+  assert.equal(win.showCount, 0);
+  assert.equal(win.isVisible(), true, 'widget should still become visible');
 });
 
 test('the closed event clears the sticky flag so it does not outlive the window', async () => {

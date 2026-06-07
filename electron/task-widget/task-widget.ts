@@ -26,24 +26,28 @@ let currentFocusSessionTime = 0;
 let initTimeoutId: NodeJS.Timeout | null = null;
 let currentOpacity = 95;
 let listenersRegistered = false;
-let isCreatingWindow = false;
+let taskWidgetCreationPromise: Promise<void> | null = null;
+let taskWidgetCreationGeneration = 0;
+let pendingShowAfterCreate = false;
+let pendingShowAfterCreateInactive = false;
 
 const TASK_WIDGET_BOUNDS_KEY = 'taskWidgetBounds';
 const LEGACY_BOUNDS_KEY = 'overlayBounds';
 let boundsDebounceTimer: NodeJS.Timeout | null = null;
 
+type ShowTaskWidgetOptions = Readonly<{
+  inactive?: boolean;
+}>;
+
 export const updateTaskWidgetEnabled = (isEnabled: boolean): void => {
   isTaskWidgetEnabled = isEnabled;
 
   if (!isEnabled) {
-    // Clear regardless of whether the window currently exists: disabling can
-    // happen while taskWidgetWin is null (closed by the OS, or mid async
-    // re-create), in which case the destroyTaskWidget() reset below is skipped
-    // and a stale flag would leak into the next enable.
-    isUserForcedVisible = false;
+    destroyTaskWidget();
+    return;
   }
 
-  if (isEnabled && !taskWidgetWin && !isCreatingWindow) {
+  if (!taskWidgetWin && !taskWidgetCreationPromise) {
     initListeners();
     createTaskWidgetWindow().then(() => {
       // Window creation is async; re-apply the cached opacity here because
@@ -60,9 +64,14 @@ export const updateTaskWidgetEnabled = (isEnabled: boolean): void => {
         mainWindow.webContents.send(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET);
       }
     });
-  } else if (!isEnabled && taskWidgetWin) {
-    destroyTaskWidget();
   }
+};
+
+const clearPendingTaskWidgetCreation = (): void => {
+  taskWidgetCreationGeneration += 1;
+  taskWidgetCreationPromise = null;
+  pendingShowAfterCreate = false;
+  pendingShowAfterCreateInactive = false;
 };
 
 export const destroyTaskWidget = (): void => {
@@ -80,8 +89,8 @@ export const destroyTaskWidget = (): void => {
 
   // Disable task widget to prevent close event prevention
   isTaskWidgetEnabled = false;
-  isCreatingWindow = false;
   isUserForcedVisible = false;
+  clearPendingTaskWidgetCreation();
 
   // Remove IPC listeners
   ipcMain.removeAllListeners('task-widget-show-main-window');
@@ -114,11 +123,34 @@ export const destroyTaskWidget = (): void => {
   }
 };
 
-const createTaskWidgetWindow = async (): Promise<void> => {
-  if (taskWidgetWin || isCreatingWindow) {
+const createTaskWidgetWindow = (): Promise<void> => {
+  if (taskWidgetWin) {
+    return Promise.resolve();
+  }
+
+  if (taskWidgetCreationPromise) {
+    return taskWidgetCreationPromise;
+  }
+
+  const creationGeneration = taskWidgetCreationGeneration;
+  const nextCreationPromise = createTaskWidgetWindowForGeneration(
+    creationGeneration,
+  ).finally(() => {
+    if (taskWidgetCreationPromise === nextCreationPromise) {
+      taskWidgetCreationPromise = null;
+    }
+  });
+
+  taskWidgetCreationPromise = nextCreationPromise;
+  return nextCreationPromise;
+};
+
+const createTaskWidgetWindowForGeneration = async (
+  creationGeneration: number,
+): Promise<void> => {
+  if (taskWidgetWin) {
     return;
   }
-  isCreatingWindow = true;
 
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth } = primaryDisplay.workAreaSize;
@@ -160,7 +192,14 @@ const createTaskWidgetWindow = async (): Promise<void> => {
     // Use defaults (file may not exist on first run)
   }
 
-  isCreatingWindow = false;
+  if (
+    taskWidgetWin ||
+    !isTaskWidgetEnabled ||
+    creationGeneration !== taskWidgetCreationGeneration
+  ) {
+    return;
+  }
+
   // On macOS, transparent + frameless windows do not support native window
   // dragging or edge resizing (see Electron's BrowserWindow docs: "Transparent
   // windows are not resizable. Setting `resizable` to `true` may make a
@@ -253,9 +292,30 @@ const createTaskWidgetWindow = async (): Promise<void> => {
 
   // Update initial state
   updateTaskWidgetContent();
+
+  updateTaskWidgetOpacity(currentOpacity);
+
+  if (pendingShowAfterCreate) {
+    const showInactive = pendingShowAfterCreateInactive;
+    pendingShowAfterCreate = false;
+    pendingShowAfterCreateInactive = false;
+    showTaskWidgetWindow({ inactive: showInactive });
+  }
 };
 
-export const showTaskWidget = (): void => {
+const showTaskWidgetWindow = (options: ShowTaskWidgetOptions = {}): void => {
+  if (!taskWidgetWin || taskWidgetWin.isDestroyed()) {
+    return;
+  }
+
+  if (options.inactive) {
+    taskWidgetWin.showInactive();
+  } else {
+    taskWidgetWin.show();
+  }
+};
+
+export const showTaskWidget = (options: ShowTaskWidgetOptions = {}): void => {
   if (!isTaskWidgetEnabled) {
     return;
   }
@@ -263,12 +323,9 @@ export const showTaskWidget = (): void => {
   // Recreate task widget if it was accidentally closed
   if (!taskWidgetWin) {
     info('Task widget window was destroyed, recreating');
-    createTaskWidgetWindow().then(() => {
-      if (taskWidgetWin && !taskWidgetWin.isDestroyed()) {
-        updateTaskWidgetOpacity(currentOpacity);
-        taskWidgetWin.show();
-      }
-    });
+    pendingShowAfterCreate = true;
+    pendingShowAfterCreateInactive = pendingShowAfterCreateInactive || !!options.inactive;
+    createTaskWidgetWindow();
     return;
   }
 
@@ -279,7 +336,7 @@ export const showTaskWidget = (): void => {
   // Only show if not already visible
   if (!taskWidgetWin.isVisible()) {
     info('Showing task widget');
-    taskWidgetWin.show();
+    showTaskWidgetWindow(options);
   } else {
     info('Task widget already visible');
   }
@@ -323,7 +380,7 @@ export const toggleTaskWidgetVisibility = (): void => {
   }
 
   isUserForcedVisible = true;
-  showTaskWidget();
+  showTaskWidget({ inactive: true });
 };
 
 const initListeners = (): void => {
