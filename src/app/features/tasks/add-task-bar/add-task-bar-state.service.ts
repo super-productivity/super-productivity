@@ -36,6 +36,7 @@ export class AddTaskBarStateService {
       ...state,
       date,
       time: time !== undefined ? this._normTime(time) : state.time,
+      isDateExplicitlyCleared: date ? false : state.isDateExplicitlyCleared,
     }));
   }
 
@@ -103,7 +104,12 @@ export class AddTaskBarStateService {
   }
 
   clearDate(cleanedInputTxt?: string): void {
-    this._taskInputState.update((state) => ({ ...state, date: null, time: null }));
+    this._taskInputState.update((state) => ({
+      ...state,
+      date: null,
+      time: null,
+      isDateExplicitlyCleared: true,
+    }));
     if (cleanedInputTxt !== undefined) {
       this.inputTxt.set(cleanedInputTxt);
     }

@@ -9,6 +9,7 @@ export interface AddTaskBarState {
   tagIdsFromTxt: string[];
   date: string | null;
   time: string | null;
+  isDateExplicitlyCleared?: boolean;
   spent: TimeSpentOnDay | null;
   estimate: number | null;
   newTagTitles: string[];
@@ -40,6 +41,7 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   tagIdsFromTxt: [],
   date: null,
   time: null,
+  isDateExplicitlyCleared: false,
   spent: null,
   estimate: null,
   newTagTitles: [],
