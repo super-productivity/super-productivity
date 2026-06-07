@@ -233,6 +233,11 @@ class WebViewCompatibilityCheckerTest {
     }
 
     @Test
+    fun `knownWebViewPackages includes Vanadium System WebView`() {
+        assertTrue(WebViewCompatibilityChecker.knownWebViewPackages().contains("app.vanadium.webview"))
+    }
+
+    @Test
     fun `blockScreenConfig uses init-failure copy and gated app-info action when provider details exist`() {
         val config = WebViewCompatibilityChecker.blockScreenConfig(
             source = VersionSource.INIT_FAILURE,
