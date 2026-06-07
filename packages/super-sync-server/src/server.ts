@@ -103,6 +103,13 @@ export const sanitizeRequestUrlForLog = (rawUrl: string): string => {
   }
 };
 
+export const createListenOptions = (
+  config: Pick<ServerConfig, 'port' | 'host'>,
+): { port: number; host: string } => ({
+  port: config.port,
+  host: config.host,
+});
+
 const generatePrivacyHtml = (privacy?: PrivacyConfig): void => {
   const publicDir = path.join(__dirname, '../../public');
   const templatePath = path.join(publicDir, 'privacy.template.html');
@@ -312,10 +319,7 @@ export const createServer = (
       getWsConnectionService().startHeartbeat();
 
       try {
-        const address = await fastifyServer.listen({
-          port: fullConfig.port,
-          host: '0.0.0.0',
-        });
+        const address = await fastifyServer.listen(createListenOptions(fullConfig));
         Logger.info(`Server started on ${address}`);
         return address;
       } catch (err) {
