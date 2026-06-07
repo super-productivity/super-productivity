@@ -21,6 +21,7 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { updateGlobalConfigSection } from '../../features/config/store/global-config.actions';
 
 describe('OperationLogEffects', () => {
   let effects: OperationLogEffects;
@@ -321,6 +322,57 @@ describe('OperationLogEffects', () => {
           expect(operation.payload).toEqual({
             actionPayload: { title: 'Updated Title', done: true },
             entityChanges: jasmine.any(Array),
+          });
+          done();
+        },
+      });
+    });
+
+    it('should not persist sync updates that only change local schedule settings', (done) => {
+      const action = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: {
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+        },
+      });
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOperationCaptureService.dequeue).toHaveBeenCalled();
+          expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+          expect(mockImmediateUploadService.trigger).not.toHaveBeenCalled();
+          done();
+        },
+      });
+    });
+
+    it('should strip local schedule settings from persisted sync updates', (done) => {
+      const action = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: {
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: true,
+        },
+      });
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          const operation =
+            mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
+
+          expect(operation.actionType).toBe(ActionType.GLOBAL_CONFIG_UPDATE_SECTION);
+          expect(operation.payload).toEqual({
+            actionPayload: {
+              sectionKey: 'sync',
+              sectionCfg: {
+                isCompressionEnabled: true,
+              },
+            },
+            entityChanges: [],
           });
           done();
         },

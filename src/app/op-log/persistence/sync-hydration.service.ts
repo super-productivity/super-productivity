@@ -24,6 +24,7 @@ import { T } from '../../t.const';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/normalize-start-of-next-day-config';
+import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
 
 /**
  * Handles hydration after remote sync downloads.
@@ -84,7 +85,10 @@ export class SyncHydrationService {
       const currentSyncConfig = await firstValueFrom(this.store.select(selectSyncConfig));
       const localOnlySettings = {
         isEnabled: currentSyncConfig.isEnabled,
+        isEncryptionEnabled: currentSyncConfig.isEncryptionEnabled,
         syncProvider: currentSyncConfig.syncProvider,
+        syncInterval: currentSyncConfig.syncInterval,
+        isManualSyncOnly: currentSyncConfig.isManualSyncOnly,
       };
 
       // 1. Write archives to IndexedDB if they were included in the downloaded data.
@@ -117,7 +121,7 @@ export class SyncHydrationService {
         ? { ...dbData, ...downloadedMainModelData }
         : dbData;
 
-      const syncedData = this._stripLocalOnlySettings(mergedData);
+      const syncedData = stripLocalOnlySyncSettingsFromAppData(mergedData);
       OpLog.normal(
         'SyncHydrationService: Loaded synced data',
         downloadedMainModelData
@@ -310,42 +314,5 @@ export class SyncHydrationService {
       OpLog.err('SyncHydrationService: Error during hydrateFromRemoteSync', e);
       throw e;
     }
-  }
-
-  /**
-   * Strips local-only settings from synced data to prevent them from being
-   * overwritten by remote data. These settings should remain local to each client.
-   *
-   * Currently strips:
-   * - globalConfig.sync.syncProvider: Each client chooses its own sync provider
-   */
-  private _stripLocalOnlySettings(data: unknown): unknown {
-    if (!data || typeof data !== 'object') {
-      return data;
-    }
-
-    const typedData = data as Record<string, unknown>;
-    if (!typedData['globalConfig']) {
-      return data;
-    }
-
-    const globalConfig = typedData['globalConfig'] as Record<string, unknown>;
-    if (!globalConfig['sync']) {
-      return data;
-    }
-
-    const sync = globalConfig['sync'] as Record<string, unknown>;
-
-    // Return data with syncProvider nulled out
-    return {
-      ...typedData,
-      globalConfig: {
-        ...globalConfig,
-        sync: {
-          ...sync,
-          syncProvider: null, // Local-only setting, don't overwrite from remote
-        },
-      },
-    };
   }
 }

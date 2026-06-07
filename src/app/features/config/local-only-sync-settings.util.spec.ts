@@ -1,0 +1,50 @@
+import {
+  stripLocalOnlySyncScheduleSettings,
+  stripLocalOnlySyncSettingsFromAppData,
+} from './local-only-sync-settings.util';
+import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
+
+describe('local-only sync settings utils', () => {
+  it('should strip sync schedule settings from a sync config object', () => {
+    const result = stripLocalOnlySyncScheduleSettings({
+      syncInterval: 300000,
+      isManualSyncOnly: true,
+      isCompressionEnabled: true,
+    }) as Record<string, unknown>;
+
+    expect(result).toEqual({
+      isCompressionEnabled: true,
+    });
+  });
+
+  it('should strip local-only sync settings from app data', () => {
+    const result = stripLocalOnlySyncSettingsFromAppData({
+      globalConfig: {
+        sync: {
+          syncProvider: SyncProviderId.WebDAV,
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: true,
+        },
+        misc: { isDisableAnimations: true },
+      },
+      task: { ids: [] },
+    }) as Record<string, unknown>;
+
+    const globalConfig = result['globalConfig'] as Record<string, unknown>;
+    const sync = globalConfig['sync'] as Record<string, unknown>;
+
+    expect(sync['syncProvider']).toBeNull();
+    expect(sync['syncInterval']).toBeUndefined();
+    expect(sync['isManualSyncOnly']).toBeUndefined();
+    expect(sync['isCompressionEnabled']).toBe(true);
+    expect(globalConfig['misc']).toEqual({ isDisableAnimations: true });
+    expect(result['task']).toEqual({ ids: [] });
+  });
+
+  it('should leave data without globalConfig.sync unchanged by reference', () => {
+    const data = { task: { ids: [] } };
+
+    expect(stripLocalOnlySyncSettingsFromAppData(data)).toBe(data);
+  });
+});

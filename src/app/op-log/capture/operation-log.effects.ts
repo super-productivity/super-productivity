@@ -31,10 +31,38 @@ import { ImmediateUploadService } from '../sync/immediate-upload.service';
 import { getDeferredActions, isDeferredAction } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { SuperSyncStatusService } from '../sync/super-sync-status.service';
+import { stripLocalOnlySyncScheduleSettings } from '../../features/config/local-only-sync-settings.util';
 
 interface WriteOperationOptions {
   callerHoldsOperationLogLock?: boolean;
 }
+
+const sanitizeLocalOnlySyncSettings = (
+  action: PersistentAction,
+  actionPayload: Record<string, unknown>,
+): Record<string, unknown> | null => {
+  if (
+    action.type !== ActionType.GLOBAL_CONFIG_UPDATE_SECTION ||
+    actionPayload['sectionKey'] !== 'sync' ||
+    typeof actionPayload['sectionCfg'] !== 'object' ||
+    actionPayload['sectionCfg'] === null
+  ) {
+    return actionPayload;
+  }
+
+  const sanitizedSectionCfg = stripLocalOnlySyncScheduleSettings(
+    actionPayload['sectionCfg'] as Record<string, unknown>,
+  );
+
+  if (Object.keys(sanitizedSectionCfg).length === 0) {
+    return null;
+  }
+
+  return {
+    ...actionPayload,
+    sectionCfg: sanitizedSectionCfg,
+  };
+};
 
 /**
  * NgRx Effects for persisting application state changes as operations to the
@@ -182,11 +210,18 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // enqueueing — there's no matching queue entry to dequeue.
         const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
 
-        const actionPayload = this.addReplayDateFieldsToActionPayload(
+        const actionPayload = sanitizeLocalOnlySyncSettings(
           action,
-          rawActionPayload,
-          operationTimestamp,
+          this.addReplayDateFieldsToActionPayload(
+            action,
+            rawActionPayload,
+            operationTimestamp,
+          ),
         );
+
+        if (!actionPayload) {
+          return;
+        }
 
         // Create multi-entity payload with action payload and computed changes
         const multiEntityPayload: MultiEntityPayload = {

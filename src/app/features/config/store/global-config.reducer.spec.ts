@@ -17,6 +17,7 @@ import {
   selectIsFocusModeEnabled,
   selectTimelineWorkStartEndHours,
 } from './global-config.reducer';
+import { updateGlobalConfigSection } from './global-config.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { GlobalConfigState } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
@@ -444,13 +445,14 @@ describe('GlobalConfigReducer', () => {
       expect(result.misc.startOfNextDayTime).toBe('00:00');
     });
 
-    it('should update other sync config properties while preserving syncProvider', () => {
+    it('should update shared sync config properties while preserving local-only ones', () => {
       const oldState: GlobalConfigState = {
         ...initialGlobalConfigState,
         sync: {
           ...initialGlobalConfigState.sync,
           syncProvider: SyncProviderId.SuperSync,
           syncInterval: 300000,
+          isManualSyncOnly: true,
         },
       };
 
@@ -460,6 +462,7 @@ describe('GlobalConfigReducer', () => {
           ...initialGlobalConfigState.sync,
           syncProvider: null,
           syncInterval: 600000,
+          isManualSyncOnly: false,
           isCompressionEnabled: true,
         },
       };
@@ -471,10 +474,11 @@ describe('GlobalConfigReducer', () => {
         }),
       );
 
-      // syncProvider preserved
+      // Local-only settings preserved
       expect(result.sync.syncProvider).toBe(SyncProviderId.SuperSync);
-      // Other sync settings updated
-      expect(result.sync.syncInterval).toBe(600000);
+      expect(result.sync.syncInterval).toBe(300000);
+      expect(result.sync.isManualSyncOnly).toBe(true);
+      // Shared sync settings updated
       expect(result.sync.isCompressionEnabled).toBe(true);
     });
 
@@ -593,6 +597,62 @@ describe('GlobalConfigReducer', () => {
       });
     });
 
+    describe('local-only sync schedule settings preservation', () => {
+      it('should use sync schedule settings from snapshot on initial load', () => {
+        const snapshotConfig: GlobalConfigState = {
+          ...initialGlobalConfigState,
+          sync: {
+            ...initialGlobalConfigState.sync,
+            syncProvider: SyncProviderId.WebDAV,
+            syncInterval: 600000,
+            isManualSyncOnly: true,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+          }),
+        );
+
+        expect(result.sync.syncInterval).toBe(600000);
+        expect(result.sync.isManualSyncOnly).toBe(true);
+      });
+
+      it('should preserve local sync schedule settings during sync hydration', () => {
+        const oldState: GlobalConfigState = {
+          ...initialGlobalConfigState,
+          sync: {
+            ...initialGlobalConfigState.sync,
+            syncProvider: SyncProviderId.WebDAV,
+            syncInterval: 300000,
+            isManualSyncOnly: true,
+          },
+        };
+
+        const syncedConfig: GlobalConfigState = {
+          ...initialGlobalConfigState,
+          sync: {
+            ...initialGlobalConfigState.sync,
+            syncProvider: null,
+            syncInterval: 600000,
+            isManualSyncOnly: false,
+          },
+        };
+
+        const result = globalConfigReducer(
+          oldState,
+          loadAllData({
+            appDataComplete: { globalConfig: syncedConfig } as AppDataComplete,
+          }),
+        );
+
+        expect(result.sync.syncInterval).toBe(300000);
+        expect(result.sync.isManualSyncOnly).toBe(true);
+      });
+    });
+
     describe('focusMode migration: isSyncSessionWithTracking → autoStartFocusOnPlay', () => {
       // Real persisted JSON never carries `autoStartFocusOnPlay` (it didn't
       // exist pre-rework). Constructing the fixture as an Object.assign so the
@@ -707,6 +767,95 @@ describe('GlobalConfigReducer', () => {
         // Migration must NOT have backfilled — the prototype key is not "owned".
         expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
       });
+    });
+  });
+
+  describe('updateGlobalConfigSection action', () => {
+    it('should update sync schedule settings for local actions', () => {
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        updateGlobalConfigSection({
+          sectionKey: 'sync',
+          sectionCfg: {
+            syncInterval: 600000,
+            isManualSyncOnly: true,
+          },
+        }),
+      );
+
+      expect(result.sync.syncInterval).toBe(600000);
+      expect(result.sync.isManualSyncOnly).toBe(true);
+    });
+
+    it('should preserve local-only sync settings for remote sync section updates', () => {
+      const oldState: GlobalConfigState = {
+        ...initialGlobalConfigState,
+        sync: {
+          ...initialGlobalConfigState.sync,
+          isEnabled: true,
+          syncProvider: SyncProviderId.WebDAV,
+          isEncryptionEnabled: true,
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: false,
+        },
+      };
+      const remoteAction = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: {
+          isEnabled: false,
+          syncProvider: SyncProviderId.LocalFile,
+          isEncryptionEnabled: false,
+          syncInterval: 600000,
+          isManualSyncOnly: false,
+          isCompressionEnabled: true,
+        },
+      });
+      const remoteReplayAction = {
+        ...remoteAction,
+        meta: {
+          ...remoteAction.meta,
+          isRemote: true,
+        },
+      };
+
+      const result = globalConfigReducer(oldState, remoteReplayAction);
+
+      expect(result.sync.isEnabled).toBe(true);
+      expect(result.sync.syncProvider).toBe(SyncProviderId.WebDAV);
+      expect(result.sync.isEncryptionEnabled).toBe(true);
+      expect(result.sync.syncInterval).toBe(300000);
+      expect(result.sync.isManualSyncOnly).toBe(true);
+      expect(result.sync.isCompressionEnabled).toBe(true);
+    });
+
+    it('should update shared sync settings for remote sync section updates', () => {
+      const remoteAction = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: {
+          isCompressionEnabled: true,
+        },
+      });
+      const remoteReplayAction = {
+        ...remoteAction,
+        meta: {
+          ...remoteAction.meta,
+          isRemote: true,
+        },
+      };
+
+      const result = globalConfigReducer(
+        {
+          ...initialGlobalConfigState,
+          sync: {
+            ...initialGlobalConfigState.sync,
+            syncProvider: SyncProviderId.WebDAV,
+          },
+        },
+        remoteReplayAction,
+      );
+
+      expect(result.sync.isCompressionEnabled).toBe(true);
     });
   });
 
