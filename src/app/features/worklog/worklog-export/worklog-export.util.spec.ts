@@ -1,6 +1,6 @@
 import { WorkStartEnd } from 'src/app/features/work-context/work-context.model';
 import { WorklogGrouping } from '../worklog.model';
-import { createRows } from './worklog-export.util';
+import { createRows, formatRows } from './worklog-export.util';
 import { DEFAULT_TASK, WorklogTask } from '../../tasks/task.model';
 import { DEFAULT_PROJECT } from '../../project/project.const';
 import { DEFAULT_TAG } from '../../tag/tag.const';
@@ -371,6 +371,35 @@ describe('createRows', () => {
       expect(rows[1].dates).toEqual([dateKey1]);
       expect(rows[2].titlesWithSub).toEqual([taskId2]);
       expect(rows[2].dates).toEqual([dateKey2]);
+    });
+
+    it('should not repeat day-level start and end times for each task row', () => {
+      const rows = createRows(
+        createWorklogData({
+          tasks: [task1, task2],
+          workTimes,
+        }),
+        WorklogGrouping.WORKLOG,
+      );
+
+      expect(rows.length).toBe(3);
+      expect(rows.map((row) => row.workStart)).toEqual([0, 0, 0]);
+      expect(rows.map((row) => row.workEnd)).toEqual([0, 0, 0]);
+
+      const formattedRows = formatRows(rows, {
+        roundWorkTimeTo: null,
+        roundStartTimeTo: null,
+        roundEndTimeTo: null,
+        separateTasksBy: ' | ',
+        cols: ['DATE', 'START', 'END', 'TIME_CLOCK', 'TITLES_INCLUDING_SUB'],
+        groupBy: WorklogGrouping.WORKLOG,
+      });
+
+      expect(formattedRows.map((row) => row.slice(0, 3))).toEqual([
+        [dateKey1, ' - ', ' - '],
+        [dateKey1, ' - ', ' - '],
+        [dateKey2, ' - ', ' - '],
+      ]);
     });
   });
 });

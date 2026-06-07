@@ -176,8 +176,10 @@ const handleWorklogGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
         dates: [day],
         timeEstimate: task.subTaskIds.length > 0 ? 0 : task.timeEstimate,
         timeSpent: task.subTaskIds.length > 0 ? 0 : task.timeSpentOnDay[day],
-        workStart: data.workTimes.start[day],
-        workEnd: data.workTimes.end[day],
+        // Worklog rows are task/day rows. The stored start/end values are day-level
+        // work-context boundaries, so repeating them here would imply task session times.
+        workStart: 0,
+        workEnd: 0,
         ...taskFields,
       };
     });
