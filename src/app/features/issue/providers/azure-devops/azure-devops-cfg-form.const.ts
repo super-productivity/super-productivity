@@ -11,25 +11,18 @@ export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg>
       key: 'host',
       type: 'input',
       templateOptions: {
-        label: 'Host (Organization URL)',
+        label: T.F.AZURE_DEVOPS.FORM.HOST,
         placeholder: 'https://dev.azure.com/your-org',
+        description: T.F.AZURE_DEVOPS.FORM.HOST_DESCRIPTION,
         required: true,
         type: 'url',
-      },
-    },
-    {
-      key: 'organization',
-      type: 'input',
-      templateOptions: {
-        label: 'Organization',
-        required: true,
       },
     },
     {
       key: 'project',
       type: 'input',
       templateOptions: {
-        label: 'Project',
+        label: T.F.AZURE_DEVOPS.FORM.PROJECT,
         required: true,
       },
     },
@@ -37,7 +30,7 @@ export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg>
       key: 'token',
       type: 'input',
       templateOptions: {
-        label: 'Personal Access Token',
+        label: T.F.AZURE_DEVOPS.FORM.TOKEN,
         required: true,
         type: 'password',
       },
@@ -53,11 +46,14 @@ export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg>
           defaultValue: 'assigned-to-me',
           templateOptions: {
             required: true,
-            label: 'Scope (Auto Import only)',
+            label: T.F.AZURE_DEVOPS.FORM.SCOPE,
             options: [
-              { value: 'all', label: 'All' },
-              { value: 'created-by-me', label: 'Created by me' },
-              { value: 'assigned-to-me', label: 'Assigned to me' },
+              { value: 'all', label: T.F.AZURE_DEVOPS.FORM.SCOPE_ALL },
+              { value: 'created-by-me', label: T.F.AZURE_DEVOPS.FORM.SCOPE_CREATED },
+              {
+                value: 'assigned-to-me',
+                label: T.F.AZURE_DEVOPS.FORM.SCOPE_ASSIGNED,
+              },
             ],
           },
         },
