@@ -199,9 +199,14 @@ export class ActivityHeatmapComponent {
     let maxTasks = 0;
     let maxTime = 0;
     const taskCountPerDay = new Map<string, Set<string>>();
+    const parentTaskIds = new Set<string>(
+      tasks.flatMap((task) => (task.parentId ? [task.parentId] : [])),
+    );
     tasks.forEach((task) => {
       // Skip parent tasks — their timeSpentOnDay aggregates subtask time
-      if (task.subTaskIds && task.subTaskIds.length > 0) return;
+      if ((task.subTaskIds && task.subTaskIds.length > 0) || parentTaskIds.has(task.id)) {
+        return;
+      }
       if (task.timeSpentOnDay) {
         Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
           const dateYear = parseInt(dateStr.substring(0, 4), 10);
