@@ -812,6 +812,201 @@ END:VCALENDAR</cal:calendar-data>
     });
   });
 
+  // Issue #7492 follow-up: an expanded RRULE occurrence (`#occ=<ms>` id) maps
+  // back to the shared master `.ics`. Write paths must NOT silently mutate the
+  // whole series, and getById must report the occurrence's own time.
+  describe('per-occurrence write safety (issue #7492)', () => {
+    const cfg = {
+      serverUrl: 'https://cloud.example.com',
+      username: 'user',
+      password: 'pass',
+      writeCalendarId: '/dav/calendars/user/default/',
+    };
+    const calHref = '/dav/calendars/user/default/';
+    const eventHref = '/dav/calendars/user/default/weekly.ics';
+    const occId = (ms: number): string => `${calHref}::${eventHref}#occ=${ms}`;
+    const masterId = `${calHref}::${eventHref}`;
+
+    const timedMaster = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:weekly-uid',
+      'DTSTART:20260105T100000Z',
+      'DTEND:20260105T110000Z',
+      'RRULE:FREQ=WEEKLY;COUNT=4',
+      'SUMMARY:Weekly Standup',
+      'LAST-MODIFIED:20260101T090000Z',
+      'SEQUENCE:0',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const allDayMaster = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:weekly-allday-uid',
+      'DTSTART;VALUE=DATE:20260105',
+      'DTEND;VALUE=DATE:20260106',
+      'RRULE:FREQ=WEEKLY;COUNT=4',
+      'SUMMARY:Weekly Holiday',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    let mockHttp: any;
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn().mockResolvedValue(timedMaster),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+        request: vi.fn(),
+      };
+    });
+
+    it('updateIssue refuses a single occurrence and writes nothing', async () => {
+      const err: any = await definition.updateIssue!(
+        occId(Date.parse('2026-01-12T10:00:00Z')),
+        { summary: 'Changed' },
+        cfg as any,
+        mockHttp as any,
+      )
+        .then(() => null)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(String(err.message)).toMatch(/single occurrence/i);
+      // Marker tells the host's two-way sync this is an expected limitation, not
+      // a failure, so editing the task stays silent (issue #7492).
+      expect(err.isExpectedSyncSkip).toBe(true);
+      // Guard runs before any network I/O — the master is never touched.
+      expect(mockHttp.get).not.toHaveBeenCalled();
+      expect(mockHttp.put).not.toHaveBeenCalled();
+    });
+
+    it('deleteIssue refuses a single occurrence and deletes nothing', async () => {
+      const err: any = await definition.deleteIssue!(
+        occId(Date.parse('2026-01-12T10:00:00Z')),
+        cfg as any,
+        mockHttp as any,
+      )
+        .then(() => null)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(String(err.message)).toMatch(/single occurrence/i);
+      expect(err.isExpectedSyncSkip).toBe(true);
+      expect(mockHttp.delete).not.toHaveBeenCalled();
+    });
+
+    it('updateIssue still writes a non-occurrence (no #occ=) event', async () => {
+      await definition.updateIssue!(
+        masterId,
+        { summary: 'Changed' },
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('getById re-anchors a timed occurrence to its own start/end', async () => {
+      const occMs = Date.parse('2026-01-19T10:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119T100000Z');
+      expect(issue.end).toBe('20260119T110000Z');
+      // Must NOT collapse onto the master's first (Jan 5) instance.
+      expect(issue.start).not.toBe('20260105T100000Z');
+      // And it round-trips through the two-way-sync extractor to the right instant.
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_dateTime).toBe('2026-01-19T10:00:00.000Z');
+      expect(vals.duration_ms).toBe(60 * 60 * 1000);
+    });
+
+    it('getById re-anchors an all-day occurrence to its own date', async () => {
+      mockHttp.get = vi.fn().mockResolvedValue(allDayMaster);
+      // ical.js represents an all-day occurrence as local midnight, matching
+      // the value the expander stamps into the id.
+      const occMs = new Date(2026, 0, 19).getTime();
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119');
+      expect(issue.startParams).toBe('VALUE=DATE');
+      expect(issue.end).toBe('20260120');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_date).toBe('2026-01-19');
+    });
+
+    it('getById returns the master start for a non-occurrence id', async () => {
+      const issue: any = await definition.getById!(masterId, cfg as any, mockHttp as any);
+      expect(issue.start).toBe('20260105T100000Z');
+    });
+
+    it('getById re-anchors a TZID-master occurrence to the right instant', async () => {
+      const tzidMaster = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:weekly-tzid-uid',
+        'DTSTART;TZID=America/New_York:20260105T090000',
+        'DTEND;TZID=America/New_York:20260105T100000',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'SUMMARY:Weekly NY Standup',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      mockHttp.get = vi.fn().mockResolvedValue(tzidMaster);
+      // Jan 19 2026 09:00 in America/New_York (EST, UTC-5) = 14:00Z.
+      const occMs = Date.parse('2026-01-19T14:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      // The occurrence instant is preserved as UTC, regardless of the runner's TZ.
+      expect(issue.start).toBe('20260119T140000Z');
+      expect(issue.end).toBe('20260119T150000Z');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_dateTime).toBe('2026-01-19T14:00:00.000Z');
+      // Duration comes from the TZID-resolved master (09:00->10:00 = 1h), not a
+      // timezone-skewed value.
+      expect(vals.duration_ms).toBe(60 * 60 * 1000);
+    });
+
+    it('getById re-anchors a floating-time master occurrence and preserves duration', async () => {
+      const floatingMaster = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:weekly-floating-uid',
+        'DTSTART:20260105T090000',
+        'DTEND:20260105T103000',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'SUMMARY:Weekly Floating Standup',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      mockHttp.get = vi.fn().mockResolvedValue(floatingMaster);
+      const occMs = Date.parse('2026-01-19T09:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119T090000Z');
+      expect(issue.end).toBe('20260119T103000Z');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.duration_ms).toBe(90 * 60 * 1000);
+    });
+  });
+
   describe('timeBlock.upsertEvent', () => {
     const cfg = {
       serverUrl: 'https://dav.example.com/',

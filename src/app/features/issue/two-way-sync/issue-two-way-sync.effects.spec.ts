@@ -710,6 +710,48 @@ describe('IssueTwoWaySyncEffects', () => {
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
+
+    it('should NOT show a snack when push rejects with an expected sync-skip marker (#7492)', fakeAsync(() => {
+      // The marker normally originates from a provider's updateIssue (e.g. a
+      // single recurring CalDAV occurrence); injected here via fetchIssue, which
+      // surfaces through the same push-pipe catch.
+      const expectedSkip = Object.assign(new Error('single occurrence'), {
+        isExpectedSyncSkip: true,
+      });
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.rejectWith(expectedSkip),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+
+      tick();
+
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
   });
 
   describe('pushTagChangesAfterTagDelete$', () => {
@@ -892,6 +934,38 @@ describe('IssueTwoWaySyncEffects', () => {
       expect(snackServiceSpy.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'ERROR' }),
       );
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should NOT show a snack when delete rejects with an expected sync-skip marker (#7492)', fakeAsync(() => {
+      const expectedSkip = Object.assign(new Error('single occurrence'), {
+        isExpectedSyncSkip: true,
+      });
+      const deleteIssueSpy = jasmine
+        .createSpy('deleteIssue')
+        .and.rejectWith(expectedSkip);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+
+      tick();
+
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
