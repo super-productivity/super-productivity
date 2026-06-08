@@ -36,6 +36,21 @@ describe('sanitizePanelCfg', () => {
     expect(out.projectIds).toEqual(['']);
   });
 
+  it('migrates legacy projectId even if projectIds is already defaulted to [""]', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      projectIds: [''],
+      projectId: 'p1',
+    } as any);
+    expect(out.projectIds).toEqual(['p1']);
+    expect('projectId' in out).toBe(false);
+  });
+
+  it('canonicalizes projectIds containing "" to just [""]', () => {
+    const out = sanitizePanelCfg({ ...basePanel, projectIds: ['', 'p1', 'p2'] } as any);
+    expect(out.projectIds).toEqual(['']);
+  });
+
   it('migrates sortByDue=asc to sortBy=dueDate/asc and drops sortByDue', () => {
     const out = sanitizePanelCfg({ ...basePanel, sortByDue: 'asc' } as any);
     expect(out.sortBy).toBe('dueDate');
