@@ -94,10 +94,22 @@ export class MobileNotificationEffects {
         timer(DELAY_PERMISSIONS).pipe(
           tap(async () => {
             try {
-              const hasPermission = await this._reminderService.ensurePermissions();
-              Log.log('MobileEffects: initial permission check', { hasPermission });
-              if (!hasPermission) {
+              // Read the permission STATE without prompting. The OS dialog is
+              // requested lazily on the first real schedule (see
+              // CapacitorReminderService.initialize()), which yields better grant
+              // rates than an unprompted launch-time prompt. Only nag here when
+              // the user has *explicitly* denied — 'prompt' means we simply
+              // haven't asked yet, so stay silent and let the lazy prompt run
+              // when a reminder actually needs scheduling. (#8120)
+              const permissionState = await this._reminderService.getPermissionState();
+              Log.log('MobileEffects: initial permission check', { permissionState });
+              if (permissionState === 'denied') {
                 this._notifyPermissionIssue();
+                return;
+              }
+              if (permissionState !== 'granted') {
+                // Not asked yet — defer the prompt and the exact-alarm check
+                // until a notification actually needs scheduling.
                 return;
               }
               // Check exact alarm permission separately (Android 12+)

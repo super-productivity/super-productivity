@@ -100,6 +100,108 @@ describe('MobileNotificationEffects', () => {
     });
   });
 
+  describe('on native platform — askPermissionsIfNotGiven$ (startup, #8120)', () => {
+    let reminderServiceSpy: jasmine.SpyObj<CapacitorReminderService>;
+    let snackServiceSpy: jasmine.SpyObj<SnackService>;
+
+    // Mirrors DELAY_PERMISSIONS in the effects file.
+    const DELAY_PERMISSIONS_MS = 2000;
+
+    const setup = (platform: 'ios' | 'android' = 'ios'): void => {
+      reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
+        'getPermissionState',
+        'ensureExactAlarmPermission',
+        'ensurePermissions',
+        'scheduleReminder',
+        'cancelReminder',
+      ]);
+      reminderServiceSpy.ensureExactAlarmPermission.and.resolveTo(true);
+      reminderServiceSpy.scheduleReminder.and.resolveTo();
+      reminderServiceSpy.cancelReminder.and.resolveTo();
+
+      snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
+
+      platformService = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['isIOS', 'isAndroid'],
+        { platform, isNative: true },
+      );
+
+      TestBed.configureTestingModule({
+        imports: [EffectsModule.forRoot([])],
+        providers: [
+          MobileNotificationEffects,
+          provideMockStore({
+            initialState: {},
+            selectors: [
+              { selector: selectAllTasksWithReminder, value: [] },
+              { selector: selectAllTasksWithDeadlineReminder, value: [] },
+              { selector: selectUndoneTasksWithDueDayNoReminder, value: [] },
+            ],
+          }),
+          { provide: SnackService, useValue: snackServiceSpy },
+          { provide: CapacitorReminderService, useValue: reminderServiceSpy },
+          { provide: CapacitorPlatformService, useValue: platformService },
+          { provide: GlobalConfigService, useValue: { cfg$: NEVER } },
+        ],
+      });
+      effects = TestBed.inject(MobileNotificationEffects);
+    };
+
+    const runStartup = (): void => {
+      (effects.askPermissionsIfNotGiven$ as unknown as Observable<unknown>).subscribe();
+      tick(DELAY_PERMISSIONS_MS + 1);
+    };
+
+    it('stays silent and does NOT prompt when permission was never requested (prompt)', fakeAsync(() => {
+      setup('ios');
+      reminderServiceSpy.getPermissionState.and.resolveTo('prompt');
+      runStartup();
+
+      expect(reminderServiceSpy.getPermissionState).toHaveBeenCalled();
+      // The OS prompt must be deferred to the first real schedule.
+      expect(reminderServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+      expect(reminderServiceSpy.ensureExactAlarmPermission).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+    }));
+
+    it('does not prompt for the prompt-with-rationale state either', fakeAsync(() => {
+      setup('android');
+      reminderServiceSpy.getPermissionState.and.resolveTo('prompt-with-rationale');
+      runStartup();
+
+      expect(reminderServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+    }));
+
+    it('warns once when permission is explicitly denied', fakeAsync(() => {
+      setup('ios');
+      reminderServiceSpy.getPermissionState.and.resolveTo('denied');
+      runStartup();
+
+      expect(snackServiceSpy.open).toHaveBeenCalledTimes(1);
+      expect(reminderServiceSpy.ensureExactAlarmPermission).not.toHaveBeenCalled();
+    }));
+
+    it('checks exact alarm permission when notifications are granted', fakeAsync(() => {
+      setup('android');
+      reminderServiceSpy.getPermissionState.and.resolveTo('granted');
+      runStartup();
+
+      expect(reminderServiceSpy.ensureExactAlarmPermission).toHaveBeenCalledTimes(1);
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+    }));
+
+    it('warns when granted but exact alarm permission is denied', fakeAsync(() => {
+      setup('android');
+      reminderServiceSpy.getPermissionState.and.resolveTo('granted');
+      reminderServiceSpy.ensureExactAlarmPermission.and.resolveTo(false);
+      runStartup();
+
+      expect(snackServiceSpy.open).toHaveBeenCalledTimes(1);
+    }));
+  });
+
   describe('on native platform — disableReminders gating', () => {
     let reminderServiceSpy: jasmine.SpyObj<CapacitorReminderService>;
     let cfg$: BehaviorSubject<TestCfg>;
