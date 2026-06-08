@@ -55,7 +55,6 @@ const createTag = (overrides: Partial<Tag> = {}): Tag =>
   }) as Tag;
 
 describe('SearchPageComponent', () => {
-  console.log('DEBUG NoteService:', NoteService);
   let fixture: ComponentFixture<SearchPageComponent>;
   let component: SearchPageComponent;
 

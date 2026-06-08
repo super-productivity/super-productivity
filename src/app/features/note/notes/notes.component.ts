@@ -125,6 +125,9 @@ export class NotesComponent implements OnInit {
   }
 
   private _focusNote(noteId: string): void {
+    document.querySelectorAll('.highlight-searched-item').forEach((el) => {
+      el.classList.remove('highlight-searched-item');
+    });
     const id = `n-${noteId}`;
     const startTime = Date.now();
     const timeout = 4000;
@@ -141,9 +144,7 @@ export class NotesComponent implements OnInit {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('highlight-searched-item');
         setTimeout(() => {
-          if (this._focusToken === token) {
-            el.classList.remove('highlight-searched-item');
-          }
+          el.classList.remove('highlight-searched-item');
         }, 3000);
       } else if (Date.now() - startTime < timeout) {
         this._focusNoteTimeout = window.setTimeout(tryFocus, 100);
