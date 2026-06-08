@@ -26,7 +26,10 @@ import {
   ProjectCompletionStats,
 } from '../../features/project/project-completion-stats.util';
 import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
-import { DialogCompleteResolveTasksComponent } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
+import {
+  DialogCompleteResolveTasksComponent,
+  ResolveUnfinishedTasksChoice,
+} from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
 import { SectionService } from '../../features/section/section.service';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { MatMenuItem } from '@angular/material/menu';
@@ -160,7 +163,7 @@ export class WorkContextMenuComponent implements OnInit {
       return;
     }
 
-    let resolution: 'inbox' | 'markDone' | undefined;
+    let resolution: ResolveUnfinishedTasksChoice | undefined;
     // Auto-archiving would otherwise bury live, undone work — ask first.
     if (info.unfinishedTasks.length) {
       resolution = await this._promptResolveUnfinishedTasks(
@@ -213,7 +216,7 @@ export class WorkContextMenuComponent implements OnInit {
   }
 
   private async _applyResolution(
-    resolution: 'inbox' | 'markDone' | undefined,
+    resolution: ResolveUnfinishedTasksChoice | undefined,
     info: ProjectCompletionInfo,
   ): Promise<void> {
     if (resolution === 'inbox') {
@@ -247,7 +250,7 @@ export class WorkContextMenuComponent implements OnInit {
   private _promptResolveUnfinishedTasks(
     title: string,
     nr: number,
-  ): Promise<'inbox' | 'markDone' | undefined> {
+  ): Promise<ResolveUnfinishedTasksChoice | undefined> {
     return firstValueFrom(
       this._matDialog
         .open(DialogCompleteResolveTasksComponent, {

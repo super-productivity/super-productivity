@@ -300,19 +300,6 @@ describe('ProjectService', () => {
     }));
   });
 
-  describe('archive', () => {
-    it('dispatches archiveProject and opens a plain snack', () => {
-      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
-      service.archive('project-1');
-      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
-      expect(types).toContain('[Project] Archive Project');
-      expect(snackService.open).toHaveBeenCalledWith({
-        ico: 'archive',
-        msg: T.F.PROJECT.S.ARCHIVED,
-      });
-    });
-  });
-
   describe('unarchive', () => {
     it('dispatches unarchiveProject and shows a plain restore snack', async () => {
       const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();

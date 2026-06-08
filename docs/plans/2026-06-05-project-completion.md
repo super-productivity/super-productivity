@@ -6,6 +6,9 @@
 
 > **Revision 2026-06-06 — completion is decoupled from task resolution (Option C).**
 > A later iteration made completion one **atomic** multi-entity op (`completeProject` `Batch`) that marked/moved unfinished tasks inside the project-shared meta-reducer. That bypassed the normal per-task actions, so it needed a new cross-stack `affectedEntities` conflict-detection feature (~1,565 LOC + a Prisma migration) plus dedicated `completeProject` listeners in the reminder / issue-sync / time-block / repeat-cfg effects — and it still didn't give a reversible undo (`reopenProject` clears project flags only). We **reverted all of it** and kept the **simple** mechanic below: resolve via the normal per-task actions, then a plain single-entity `completeProject` flag flip. See **[ARCHITECTURE-DECISIONS.md #5](../../ARCHITECTURE-DECISIONS.md)** for the full rationale; atomic implementation preserved at commit `0893a86162`.
+
+> **Deviations from the plan below (as shipped).** Two pieces sketched in the sections that follow were dropped as unnecessary: (1) the `selectCompletedProjects` / `selectPlainArchivedProjects` selectors were never added — the trophy page reads `isDone` inline off `selectArchivedProjectsSortedByTitle`; (2) there is **no celebration effect** — the confetti dialog opens directly from the `completeProject()` click handler in `work-context-menu.component.ts`, which is inherently local, so a replayed/remote op can't pop it (the Rule #1 concern the planned effect guarded against never arises). Treat selector/effect references below as historical design intent, not the shipped shape.
+
 **Scope:** Give projects a rewarding "done" state. The **append/merge** half ("fold a project's tasks into another") was split out to issue **#8032** after review (YAGNI-adjacent + materially heavier than first scoped).
 
 ## Problem
@@ -42,14 +45,14 @@ The first draft assumed completing→auto-archiving would run the `ArchiveOperat
 
 ## Resolved decisions
 
-| # | Decision | Resolution |
-| --- | --- | --- |
-| Q1 | Auto-archive on complete | **Yes** — `completeProject` also sets `isArchived: true` ("complete and out of the way"). This is a flag flip only — menu-hiding, **no** task cleanup (see correction above). |
-| Q2 | Unfinished tasks | **Prompt** (a plain confirm), default **Move to Inbox** with the count shown; plus "Mark them done" / "Cancel". |
-| Q3 | Stats live vs. snapshot | **Compute live** — no `completionStats` field. The "mandatory snapshot" reason was based on the false archive premise. |
-| Q4 | Completion surface | **Split:** `DialogConfirm` for the unfinished-task resolve step, then a **separate** celebration component. |
-| Q5 | Trophy view | **No new page.** Add a "Completed on X" badge + live stats + **Reopen** to completed rows of the existing archived-projects page, and improve that page. |
-| Q6 | Append/merge | **Deferred → #8032.** |
+| #   | Decision                 | Resolution                                                                                                                                                                    |
+| --- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | Auto-archive on complete | **Yes** — `completeProject` also sets `isArchived: true` ("complete and out of the way"). This is a flag flip only — menu-hiding, **no** task cleanup (see correction above). |
+| Q2  | Unfinished tasks         | **Prompt** (a plain confirm), default **Move to Inbox** with the count shown; plus "Mark them done" / "Cancel".                                                               |
+| Q3  | Stats live vs. snapshot  | **Compute live** — no `completionStats` field. The "mandatory snapshot" reason was based on the false archive premise.                                                        |
+| Q4  | Completion surface       | **Split:** `DialogConfirm` for the unfinished-task resolve step, then a **separate** celebration component.                                                                   |
+| Q5  | Trophy view              | **No new page.** Add a "Completed on X" badge + live stats + **Reopen** to completed rows of the existing archived-projects page, and improve that page.                      |
+| Q6  | Append/merge             | **Deferred → #8032.**                                                                                                                                                         |
 
 ### Done vs. Archived — selector wiring (review-critical)
 
@@ -166,14 +169,14 @@ Completed projects already land on `/archived-projects` (they're `isArchived`). 
 
 ## Key files
 
-| Area | File |
-| --- | --- |
-| Model / defaults | `src/app/features/project/project.model.ts`, `project.const.ts` |
-| Actions / reducer / selectors | `src/app/features/project/store/project.actions.ts`, `project.reducer.ts`, `project.selectors.ts`; `action-types.enum.ts` |
-| Service | `src/app/features/project/project.service.ts` |
-| Context menu / trigger | `src/app/core-ui/work-context-menu/work-context-menu.component.{ts,html}` |
-| Trophy page | `src/app/pages/archived-projects-page/` (enhance) |
-| Reward | `src/app/core/confetti/confetti.service.ts`; ref `features/focus-mode/focus-mode-session-done/`, `pages/daily-summary/` |
-| Stats | `src/app/features/tasks/store/task.reducer.util.ts` (rollup caveat), `features/time-tracking/time-tracking.model.ts`, `features/worklog/util/get-time-spent-for-day.util.ts` |
-| Resolve dialog | `src/app/ui/dialog-confirm/dialog-confirm.component.ts` |
-| Append/merge (deferred) | issue **#8032** |
+| Area                          | File                                                                                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model / defaults              | `src/app/features/project/project.model.ts`, `project.const.ts`                                                                                                              |
+| Actions / reducer / selectors | `src/app/features/project/store/project.actions.ts`, `project.reducer.ts`, `project.selectors.ts`; `action-types.enum.ts`                                                    |
+| Service                       | `src/app/features/project/project.service.ts`                                                                                                                                |
+| Context menu / trigger        | `src/app/core-ui/work-context-menu/work-context-menu.component.{ts,html}`                                                                                                    |
+| Trophy page                   | `src/app/pages/archived-projects-page/` (enhance)                                                                                                                            |
+| Reward                        | `src/app/core/confetti/confetti.service.ts`; ref `features/focus-mode/focus-mode-session-done/`, `pages/daily-summary/`                                                      |
+| Stats                         | `src/app/features/tasks/store/task.reducer.util.ts` (rollup caveat), `features/time-tracking/time-tracking.model.ts`, `features/worklog/util/get-time-spent-for-day.util.ts` |
+| Resolve dialog                | `src/app/ui/dialog-confirm/dialog-confirm.component.ts`                                                                                                                      |
+| Append/merge (deferred)       | issue **#8032**                                                                                                                                                              |

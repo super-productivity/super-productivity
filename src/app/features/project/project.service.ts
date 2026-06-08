@@ -20,7 +20,6 @@ import { Task, TaskState } from '../tasks/task.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import {
   addProject,
-  archiveProject,
   completeProject,
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
@@ -191,14 +190,6 @@ export class ProjectService {
     );
   }
 
-  archive(projectId: string): void {
-    this._store$.dispatch(archiveProject({ id: projectId }));
-    this._snackService.open({
-      ico: 'archive',
-      msg: T.F.PROJECT.S.ARCHIVED,
-    });
-  }
-
   async unarchive(projectId: string): Promise<void> {
     const project = await firstValueFrom(this.getByIdOnce$(projectId));
     this._store$.dispatch(unarchiveProject({ id: projectId }));
@@ -231,7 +222,8 @@ export class ProjectService {
    * Carry unfinished work forward into the Inbox before completing a project.
    * Uses the normal per-task move action so every downstream effect (issue
    * sync, reminders, repeat-cfg) and per-entity conflict detection fires
-   * naturally. A move re-opens a done task (it left the completed project).
+   * naturally. Done tasks are explicitly re-opened (setUnDone) so carried-over
+   * work is actionable again in the Inbox — the move itself keeps isDone.
    * The trailing flush is the bulk-dispatch guard (sync-model Rule #6).
    */
   async moveTasksToInbox(tasks: Task[]): Promise<void> {
