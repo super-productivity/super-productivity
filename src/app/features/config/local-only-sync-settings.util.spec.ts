@@ -1,4 +1,5 @@
 import {
+  applyLocalOnlySyncSettingsToAppData,
   stripLocalOnlySyncScheduleSettings,
   stripLocalOnlySyncSettingsFromAppData,
 } from './local-only-sync-settings.util';
@@ -46,5 +47,36 @@ describe('local-only sync settings utils', () => {
     const data = { task: { ids: [] } };
 
     expect(stripLocalOnlySyncSettingsFromAppData(data)).toBe(data);
+  });
+
+  it('should apply local-only sync settings to app data', () => {
+    const result = applyLocalOnlySyncSettingsToAppData(
+      {
+        globalConfig: {
+          sync: {
+            syncProvider: SyncProviderId.Dropbox,
+            syncInterval: 600000,
+            isManualSyncOnly: false,
+            isCompressionEnabled: true,
+          },
+        },
+      },
+      {
+        isEnabled: true,
+        isEncryptionEnabled: false,
+        syncProvider: SyncProviderId.WebDAV,
+        syncInterval: 300000,
+        isManualSyncOnly: true,
+      },
+    ) as Record<string, unknown>;
+
+    const globalConfig = result['globalConfig'] as Record<string, unknown>;
+    const sync = globalConfig['sync'] as Record<string, unknown>;
+
+    expect(sync['isEnabled']).toBe(true);
+    expect(sync['syncProvider']).toBe(SyncProviderId.WebDAV);
+    expect(sync['syncInterval']).toBe(300000);
+    expect(sync['isManualSyncOnly']).toBe(true);
+    expect(sync['isCompressionEnabled']).toBe(true);
   });
 });

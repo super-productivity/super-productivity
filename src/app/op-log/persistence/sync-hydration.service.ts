@@ -24,7 +24,10 @@ import { T } from '../../t.const';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/normalize-start-of-next-day-config';
-import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
+import {
+  applyLocalOnlySyncSettingsToAppData,
+  stripLocalOnlySyncSettingsFromAppData,
+} from '../../features/config/local-only-sync-settings.util';
 
 /**
  * Handles hydration after remote sync downloads.
@@ -122,6 +125,10 @@ export class SyncHydrationService {
         : dbData;
 
       const syncedData = stripLocalOnlySyncSettingsFromAppData(mergedData);
+      const locallyReplayableSyncedData = applyLocalOnlySyncSettingsToAppData(
+        syncedData,
+        localOnlySettings,
+      );
       OpLog.normal(
         'SyncHydrationService: Loaded synced data',
         downloadedMainModelData
@@ -175,7 +182,7 @@ export class SyncHydrationService {
           actionType: ActionType.LOAD_ALL_DATA,
           opType: OpType.SyncImport,
           entityType: 'ALL',
-          payload: syncedData,
+          payload: locallyReplayableSyncedData,
           clientId: clientId,
           vectorClock: newClock,
           timestamp: Date.now(),
@@ -228,7 +235,7 @@ export class SyncHydrationService {
       // can refuse IN_SYNC. Without this, snapshot hydration would silently
       // accept corrupt remote data — a gap not covered by validateAfterSync
       // since this path bypasses processRemoteOps entirely. (#7330)
-      const downloadedAppData = syncedData as AppDataComplete;
+      const downloadedAppData = locallyReplayableSyncedData as AppDataComplete;
       const normalizedGlobalConfig = normalizeGlobalConfigStartOfNextDay(
         downloadedAppData.globalConfig,
       );
@@ -251,23 +258,6 @@ export class SyncHydrationService {
           { error: validationResult.error },
         );
         this.sessionValidation.setFailed();
-      }
-
-      // 7b. Restore local-only sync settings into dataToLoad
-      // This ensures the snapshot and NgRx state have the correct local settings,
-      // not the ones from remote data. Without this, isEnabled could be set to false
-      // if another client had sync disabled, causing sync to appear disabled on reload.
-      if (dataToLoad.globalConfig?.sync) {
-        dataToLoad = {
-          ...dataToLoad,
-          globalConfig: {
-            ...dataToLoad.globalConfig,
-            sync: {
-              ...dataToLoad.globalConfig.sync,
-              ...localOnlySettings,
-            },
-          },
-        };
       }
 
       // 8. Determine the working clock to use.

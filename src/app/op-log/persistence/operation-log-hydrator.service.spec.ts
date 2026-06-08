@@ -30,6 +30,7 @@ import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
+import { SyncProviderId } from '../sync-providers/provider.const';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -696,6 +697,38 @@ describe('OperationLogHydratorService', () => {
           loadAllDataSequence,
           `mergeRemoteOpClocks (seq ${mergeClockSequence}) should be called BEFORE ` +
             `loadAllData (seq ${loadAllDataSequence}) in no-snapshot branch`,
+        );
+      });
+
+      it('should preserve local sync settings when replaying SYNC_IMPORT without state cache', async () => {
+        const syncImportPayload = {
+          task: {},
+          project: {},
+          globalConfig: {
+            sync: {
+              syncProvider: SyncProviderId.WebDAV,
+              isEnabled: true,
+              isEncryptionEnabled: true,
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+              isCompressionEnabled: true,
+            },
+          },
+        };
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+          payload: syncImportPayload,
+          entityType: 'ALL',
+        });
+
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(
+          Promise.resolve([createMockEntry(1, syncImportOp)]),
+        );
+
+        await service.hydrateStore();
+
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          loadAllData({ appDataComplete: syncImportPayload as any }),
         );
       });
 

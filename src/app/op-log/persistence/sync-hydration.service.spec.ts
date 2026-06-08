@@ -225,7 +225,7 @@ describe('SyncHydrationService', () => {
       expect(vectorClock['remoteClient']).toBe(100);
     });
 
-    it('should strip local-only settings from globalConfig.sync', async () => {
+    it('should persist local-only settings in local SYNC_IMPORT payload for replay', async () => {
       const downloadedData = {
         task: {},
         globalConfig: {
@@ -245,9 +245,13 @@ describe('SyncHydrationService', () => {
       const payload = appendCall.args[0].payload as Record<string, unknown>;
       const globalConfig = payload['globalConfig'] as Record<string, unknown>;
       const sync = globalConfig['sync'] as Record<string, unknown>;
-      expect(sync['syncProvider']).toBeNull();
-      expect(sync['syncInterval']).toBeUndefined();
-      expect(sync['isManualSyncOnly']).toBeUndefined();
+      expect(sync['isEnabled']).toBe(defaultLocalSyncConfig.isEnabled);
+      expect(sync['isEncryptionEnabled']).toBe(
+        defaultLocalSyncConfig.isEncryptionEnabled,
+      );
+      expect(sync['syncProvider']).toBe(defaultLocalSyncConfig.syncProvider);
+      expect(sync['syncInterval']).toBe(defaultLocalSyncConfig.syncInterval);
+      expect(sync['isManualSyncOnly']).toBe(defaultLocalSyncConfig.isManualSyncOnly);
       expect(sync['someOther']).toBe('setting');
       expect(globalConfig['otherSetting']).toBe('value');
     });
@@ -535,7 +539,7 @@ describe('SyncHydrationService', () => {
       expect(mockOpLogStore.append).toHaveBeenCalled();
     });
 
-    it('should preserve synced globalConfig properties while stripping local-only sync settings', async () => {
+    it('should preserve synced globalConfig properties while overlaying local-only sync settings', async () => {
       const downloadedData = {
         globalConfig: {
           lang: 'de',
@@ -556,9 +560,10 @@ describe('SyncHydrationService', () => {
       expect(globalConfig['lang']).toBe('de');
       expect(globalConfig['theme']).toBe('dark');
       const sync = globalConfig['sync'] as Record<string, unknown>;
-      expect(sync['syncInterval']).toBeUndefined();
-      expect(sync['isEnabled']).toBe(true);
-      expect(sync['syncProvider']).toBeNull();
+      expect(sync['isEnabled']).toBe(defaultLocalSyncConfig.isEnabled);
+      expect(sync['syncProvider']).toBe(defaultLocalSyncConfig.syncProvider);
+      expect(sync['syncInterval']).toBe(defaultLocalSyncConfig.syncInterval);
+      expect(sync['isManualSyncOnly']).toBe(defaultLocalSyncConfig.isManualSyncOnly);
     });
   });
 
@@ -674,7 +679,7 @@ describe('SyncHydrationService', () => {
       expect(sync['isManualSyncOnly']).toBe(true);
     });
 
-    it('should keep local sync schedule settings out of the SYNC_IMPORT payload', async () => {
+    it('should keep local sync schedule settings in the local SYNC_IMPORT payload', async () => {
       mockStore.select.and.returnValue(
         of({
           ...DEFAULT_GLOBAL_CONFIG.sync,
@@ -703,9 +708,9 @@ describe('SyncHydrationService', () => {
       const globalConfig = payload['globalConfig'] as Record<string, unknown>;
       const sync = globalConfig['sync'] as Record<string, unknown>;
 
-      expect(sync['syncProvider']).toBeNull();
-      expect(sync['syncInterval']).toBeUndefined();
-      expect(sync['isManualSyncOnly']).toBeUndefined();
+      expect(sync['syncProvider']).toBe(SyncProviderId.WebDAV);
+      expect(sync['syncInterval']).toBe(300000);
+      expect(sync['isManualSyncOnly']).toBe(true);
     });
 
     it('should preserve local isEnabled when remote has it enabled', async () => {

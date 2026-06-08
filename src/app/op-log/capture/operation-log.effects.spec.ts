@@ -328,7 +328,7 @@ describe('OperationLogEffects', () => {
       });
     });
 
-    it('should not persist sync updates that only change local schedule settings', (done) => {
+    it('should persist sync updates that only change local schedule settings for local replay', (done) => {
       const action = updateGlobalConfigSection({
         sectionKey: 'sync',
         sectionCfg: {
@@ -341,14 +341,29 @@ describe('OperationLogEffects', () => {
       effects.persistOperation$.subscribe({
         complete: () => {
           expect(mockOperationCaptureService.dequeue).toHaveBeenCalled();
-          expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
-          expect(mockImmediateUploadService.trigger).not.toHaveBeenCalled();
+          expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+              payload: {
+                actionPayload: {
+                  sectionKey: 'sync',
+                  sectionCfg: {
+                    syncInterval: 300000,
+                    isManualSyncOnly: true,
+                  },
+                },
+                entityChanges: [],
+              },
+            }),
+            'local',
+          );
+          expect(mockImmediateUploadService.trigger).toHaveBeenCalled();
           done();
         },
       });
     });
 
-    it('should strip local schedule settings from persisted sync updates', (done) => {
+    it('should keep local schedule settings in persisted sync updates', (done) => {
       const action = updateGlobalConfigSection({
         sectionKey: 'sync',
         sectionCfg: {
@@ -369,6 +384,8 @@ describe('OperationLogEffects', () => {
             actionPayload: {
               sectionKey: 'sync',
               sectionCfg: {
+                syncInterval: 300000,
+                isManualSyncOnly: true,
                 isCompressionEnabled: true,
               },
             },

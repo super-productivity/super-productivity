@@ -177,6 +177,65 @@ describe('OperationLogUploadService', () => {
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1, 2]);
       });
 
+      it('should strip local sync schedule settings from regular config ops before upload', async () => {
+        const entry = createMockEntry(1, 'op-1', 'client-1');
+        entry.op.actionType = ActionType.GLOBAL_CONFIG_UPDATE_SECTION;
+        entry.op.entityType = 'GLOBAL_CONFIG';
+        entry.op.payload = {
+          actionPayload: {
+            sectionKey: 'sync',
+            sectionCfg: {
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+              isCompressionEnabled: true,
+            },
+          },
+          entityChanges: [],
+        };
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+        mockApiProvider.uploadOps.and.returnValue(
+          Promise.resolve({
+            results: [{ opId: 'op-1', accepted: true }],
+            latestSeq: 1,
+            newOps: [],
+          }),
+        );
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const uploadedOps = mockApiProvider.uploadOps.calls.mostRecent().args[0];
+        const payload = uploadedOps[0].payload as {
+          actionPayload: { sectionCfg: Record<string, unknown> };
+        };
+
+        expect(payload.actionPayload.sectionCfg).toEqual({
+          isCompressionEnabled: true,
+        });
+      });
+
+      it('should not upload regular config ops that only contain local sync schedule settings', async () => {
+        const entry = createMockEntry(1, 'op-1', 'client-1');
+        entry.op.actionType = ActionType.GLOBAL_CONFIG_UPDATE_SECTION;
+        entry.op.entityType = 'GLOBAL_CONFIG';
+        entry.op.payload = {
+          actionPayload: {
+            sectionKey: 'sync',
+            sectionCfg: {
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+            },
+          },
+          entityChanges: [],
+        };
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
+        expect(result.uploadedCount).toBe(1);
+      });
+
       it('should update last server seq after upload', async () => {
         mockOpLogStore.getUnsynced.and.returnValue(
           Promise.resolve([createMockEntry(1, 'op-1', 'client-1')]),
@@ -984,6 +1043,38 @@ describe('OperationLogUploadService', () => {
           'BACKUP_IMPORT', // snapshotOpType
           undefined, // syncImportReason
         );
+      });
+
+      it('should strip local-only sync settings from full-state snapshot uploads', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        entry.op.payload = {
+          task: { ids: [], entities: {} },
+          globalConfig: {
+            sync: {
+              isEnabled: true,
+              isEncryptionEnabled: true,
+              syncProvider: SyncProviderId.WebDAV,
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+              isCompressionEnabled: true,
+            },
+          },
+        };
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const uploadedState = mockApiProvider.uploadSnapshot.calls.mostRecent()
+          .args[0] as Record<string, unknown>;
+        const globalConfig = uploadedState['globalConfig'] as Record<string, unknown>;
+        const sync = globalConfig['sync'] as Record<string, unknown>;
+
+        expect(sync['syncProvider']).toBeNull();
+        expect(sync['syncInterval']).toBeUndefined();
+        expect(sync['isManualSyncOnly']).toBeUndefined();
+        expect(sync['isEnabled']).toBe(true);
+        expect(sync['isEncryptionEnabled']).toBe(true);
+        expect(sync['isCompressionEnabled']).toBe(true);
       });
 
       /**
