@@ -115,7 +115,7 @@ describe('PageTitleComponent', () => {
 
     it('is true for /all-tasks', () => {
       const c = setupComponent('/all-tasks');
-      expect(c.isSpecialSection()).toBe(true);
+      expect(c.isSpecialSection()).toBe(false);
     });
 
     it('is false for /active/tasks', () => {

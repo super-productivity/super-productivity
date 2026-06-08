@@ -1,16 +1,13 @@
-import { Locator, Page } from '@playwright/test';
+import { Page } from '@playwright/test';
 
 import { expect, test } from '../../fixtures/test.fixture';
 import { WorkViewPage } from '../../pages/work-view.page';
 
-import { ProjectPage} from '../../pages';
+import { ProjectPage } from '../../pages';
 
 test.describe('All Tasks Page', () => {
-
   //add 1 task to Today
-  const addTaskToday = async (
-    workViewPage: WorkViewPage,
-  ): Promise<void> => {
+  const addTaskToday = async (workViewPage: WorkViewPage): Promise<void> => {
     await workViewPage.waitForTaskList();
     await workViewPage.addTask('E2E I 10m');
   };
@@ -33,9 +30,7 @@ test.describe('All Tasks Page', () => {
     await page.keyboard.press('Escape');
   };
 
-  const openProjectFilter = async (
-    page: Page,
-  ): Promise<void> => {
+  const openProjectFilter = async (page: Page): Promise<void> => {
     // Open filter menu
     await page.locator('.task-filter-btn').first().click();
     await page.getByRole('menuitem', { name: 'Filter By' }).click();
@@ -77,7 +72,6 @@ test.describe('All Tasks Page', () => {
     await expect(taskA.first()).toBeVisible();
     await expect(taskB.first()).toBeVisible();
   });
-
 
   //test if filter works for 1 project and then 1 project and Inbox
   test('should filter tasks by multi-select project', async ({

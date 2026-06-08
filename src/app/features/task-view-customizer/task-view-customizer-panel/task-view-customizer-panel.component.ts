@@ -2,7 +2,10 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
+  Input,
+  signal,
   ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -20,6 +23,9 @@ import { T } from 'src/app/t.const';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { Store } from '@ngrx/store';
+import { selectAllProjects } from '../../project/store/project.selectors';
+import { Project } from '../../project/project.model';
 import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
@@ -56,9 +62,13 @@ import { TaskViewCustomizerMenuItemComponent } from './menu-item/menu-item.compo
 export class TaskViewCustomizerPanelComponent {
   customizerService = inject(TaskViewCustomizerService);
   private _workContextService = inject(WorkContextService);
+  private _store = inject(Store);
 
   @ViewChild('customizerMenu', { static: false })
   menu!: MatMenu;
+
+  @Input() multiSelectProject = false;
+  @Input() showSaveSort = true;
 
   readonly T = T;
   readonly DEFAULT = DEFAULT_OPTIONS;
@@ -70,6 +80,60 @@ export class TaskViewCustomizerPanelComponent {
   isInProjectContext = computed(
     () => this._activeCtx()?.activeType === WorkContextType.PROJECT,
   );
+
+  // Multi-select project filter
+  allProjects = toSignal(this._store.select(selectAllProjects), {
+    initialValue: [] as Project[],
+  });
+
+  projectSearch = signal('');
+  selectedProjectIds = signal<string[]>([]);
+
+  filteredProjects = computed(() => {
+    const search = this.projectSearch().toLowerCase();
+    return this.allProjects().filter((p) => p.title.toLowerCase().includes(search));
+  });
+
+  private _syncFilter = effect(() => {
+    if (!this.multiSelectProject) return;
+    const filter = this.customizerService.selectedFilter();
+    if (filter.type === OPTIONS.filter.types.project) {
+      try {
+        const parsed = JSON.parse(filter.preset ?? '');
+        if (Array.isArray(parsed)) {
+          this.selectedProjectIds.set(parsed);
+          return;
+        }
+      } catch {
+        /* single-value preset */
+      }
+    }
+    this.selectedProjectIds.set([]);
+    this.projectSearch.set('');
+  });
+
+  toggleProject(projectId: string): void {
+    const newIds = this.selectedProjectIds().includes(projectId)
+      ? this.selectedProjectIds().filter((id) => id !== projectId)
+      : [...this.selectedProjectIds(), projectId];
+
+    this.selectedProjectIds.set(newIds);
+
+    if (newIds.length === 0) {
+      this.customizerService.setFilter(DEFAULT_OPTIONS.filter);
+      return;
+    }
+
+    const projectFilter = OPTIONS.filter.list.find(
+      (x) => x.type === OPTIONS.filter.types.project,
+    );
+    if (projectFilter) {
+      this.customizerService.setFilter({
+        ...projectFilter,
+        preset: JSON.stringify(newIds),
+      });
+    }
+  }
 
   onFilterSelect(filter: FilterOption): void {
     this.customizerService.setFilter(filter);

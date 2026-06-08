@@ -97,7 +97,12 @@ export class TaskViewCustomizerService {
       .pipe(takeUntilDestroyed())
       .subscribe(({ activeId, activeType }) => {
         if (this._contextKeyOverride) return;
-        this._applyContext(`${activeType}:${activeId}`);
+        this._currentContextKey = `${activeType}:${activeId}`;
+        const stored = this._stateByContext[this._currentContextKey];
+        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+        this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
+        this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
+        this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
       });
 
     effect(() => {
@@ -118,24 +123,24 @@ export class TaskViewCustomizerService {
   setContextKeyOverride(key: string | null): void {
     this._contextKeyOverride = key;
     if (key) {
-      this._applyContext(key);
+      this._currentContextKey = key;
+      const stored = this._stateByContext[key];
+      this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+      this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, null));
+      this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
+      this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
     } else {
       const activeType = this._workContextService.activeWorkContextType;
       const activeId = this._workContextService.activeWorkContextId;
       if (activeType && activeId) {
-        this._applyContext(`${activeType}:${activeId}`);
+        this._currentContextKey = `${activeType}:${activeId}`;
+        const stored = this._stateByContext[this._currentContextKey];
+        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+        this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
+        this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
+        this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
       }
     }
-  }
-
-  private _applyContext(key: string | null): void {
-    if (!key) return;
-    this._currentContextKey = key;
-    const stored = this._stateByContext[key];
-    this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
-    this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, null));
-    this.selectedFilter.set(stored?.filter ?? DEFAULT_OPTIONS.filter);
-    this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
   }
 
   toggleGroupExpansion(groupId: string): void {
@@ -449,8 +454,8 @@ export class TaskViewCustomizerService {
             (task.deadlineWithTime
               ? getDbDateStr(task.deadlineWithTime)
               : this._translateService.instant(
-                T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE,
-              ));
+                  T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE,
+                ));
           acc[key] = acc[key] || [];
           acc[key].push(task);
         }

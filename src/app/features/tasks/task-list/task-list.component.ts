@@ -10,7 +10,6 @@ import {
   OnDestroy,
   viewChild,
 } from '@angular/core';
-import { Router } from '@angular/router';
 import { DropListModelSource, Task, TaskCopy, TaskWithSubTasks } from '../task.model';
 import { TaskService } from '../task.service';
 import { expandFadeFastAnimation } from '../../../ui/animations/expand.ani';
@@ -51,9 +50,7 @@ import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedu
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { DateService } from '../../../core/date/date.service';
-import { LS } from '../../../core/persistence/storage-keys.const';
-import { lsGetJSON, lsSetJSON } from '../../../util/ls-util';
-import { AllTasksOrderService } from '../../all-tasks-page/all-tasks-order.service';
+
 import { canConvertTaskToSubTask } from '../util/can-convert-task-to-sub-task';
 import { TODAY_TAG } from '../../tag/tag.const';
 
@@ -114,8 +111,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   private _dateService = inject(DateService);
-  private _router = inject(Router);
-  private _allTasksOrderService = inject(AllTasksOrderService);
   private _ngZone = inject(NgZone);
   dropListService = inject(DropListService);
   private _layoutService = inject(LayoutService);
@@ -430,43 +425,43 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     const newIds =
       targetTask && targetTask.id !== draggedTask.id
         ? (() => {
-          const currentDraggedIndex = targetListData.filteredTasks.findIndex(
-            (t) => t.id === draggedTask.id,
-          );
-          const currentTargetIndex = targetListData.filteredTasks.findIndex(
-            (t) => t.id === targetTask.id,
-          );
-
-          // If dragging from a different list or new item, use target index
-          const isDraggingDown =
-            currentDraggedIndex !== -1 && currentDraggedIndex < currentTargetIndex;
-
-          if (isDraggingDown) {
-            // When dragging down, place AFTER the target item
-            const filtered = targetListData.filteredTasks.filter(
-              (t) => t.id !== draggedTask.id,
+            const currentDraggedIndex = targetListData.filteredTasks.findIndex(
+              (t) => t.id === draggedTask.id,
             );
-            const targetIndexInFiltered = filtered.findIndex(
+            const currentTargetIndex = targetListData.filteredTasks.findIndex(
               (t) => t.id === targetTask.id,
             );
-            const result = [...filtered];
-            result.splice(targetIndexInFiltered + 1, 0, draggedTask);
-            return result;
-          } else {
-            // When dragging up or from another list, place BEFORE the target item
-            return [
-              ...moveItemBeforeItem(
-                targetListData.filteredTasks,
-                draggedTask,
-                targetTask as TaskWithSubTasks,
-              ),
-            ];
-          }
-        })()
+
+            // If dragging from a different list or new item, use target index
+            const isDraggingDown =
+              currentDraggedIndex !== -1 && currentDraggedIndex < currentTargetIndex;
+
+            if (isDraggingDown) {
+              // When dragging down, place AFTER the target item
+              const filtered = targetListData.filteredTasks.filter(
+                (t) => t.id !== draggedTask.id,
+              );
+              const targetIndexInFiltered = filtered.findIndex(
+                (t) => t.id === targetTask.id,
+              );
+              const result = [...filtered];
+              result.splice(targetIndexInFiltered + 1, 0, draggedTask);
+              return result;
+            } else {
+              // When dragging up or from another list, place BEFORE the target item
+              return [
+                ...moveItemBeforeItem(
+                  targetListData.filteredTasks,
+                  draggedTask,
+                  targetTask as TaskWithSubTasks,
+                ),
+              ];
+            }
+          })()
         : [
-          ...targetListData.filteredTasks.filter((t) => t.id !== draggedTask.id),
-          draggedTask,
-        ];
+            ...targetListData.filteredTasks.filter((t) => t.id !== draggedTask.id),
+            draggedTask,
+          ];
     // Log ids only — task objects carry user titles/notes and the log history
     // is exportable (see core/log rule: never log user content).
     TaskLog.log(srcListData.listModelId, '=>', targetListData.listModelId, {
@@ -519,13 +514,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     // Handle LATER_TODAY - prevent any moves to or from this list
     if (src === 'LATER_TODAY' || target === 'LATER_TODAY') {
-      return;
-    }
-
-    // All-tasks page: save ordering to localStorage instead of dispatching
-    // store actions, since there's no active work context to save against.
-    if (/all-tasks/.test(this._router.url)) {
-      this._saveAllTasksOrder(taskId, src, target, newOrderedIds);
       return;
     }
 
@@ -698,31 +686,5 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     this._taskService.showSubTasks(pid);
     // note this might be executed from the task detail panel, where this is not possible
     this._taskService.focusTaskIfPossible(pid);
-  }
-
-    private _saveAllTasksOrder(
-    taskId: string,
-    src: string,
-    target: string,
-    newOrderedIds: string[],
-  ): void {
-    let undoneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_UNDONE, []);
-    let doneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_DONE, []);
-
-    if (src === 'UNDONE') {
-      undoneOrder = undoneOrder.filter((id) => id !== taskId);
-    } else if (src === 'DONE') {
-      doneOrder = doneOrder.filter((id) => id !== taskId);
-    }
-
-    if (target === 'UNDONE') {
-      undoneOrder = newOrderedIds;
-    } else if (target === 'DONE') {
-      doneOrder = newOrderedIds;
-    }
-
-    lsSetJSON(LS.ALL_TASKS_TASK_IDS_UNDONE, undoneOrder);
-    lsSetJSON(LS.ALL_TASKS_TASK_IDS_DONE, doneOrder);
-    this._allTasksOrderService.notifyOrderChanged();
   }
 }

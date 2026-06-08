@@ -14,7 +14,6 @@ import { filter, map } from 'rxjs/operators';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
 import { TaskViewCustomizerService } from '../../../features/task-view-customizer/task-view-customizer.service';
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
-import { AllTasksFilterPanelComponent } from '../../../features/all-tasks-page/all-tasks-filter-panel.component';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
 
@@ -32,7 +31,6 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
     MatMenuTrigger,
     WorkContextMenuComponent,
     TaskViewCustomizerPanelComponent,
-    AllTasksFilterPanelComponent,
     TranslatePipe,
   ],
   template: `
@@ -61,7 +59,7 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
             <button
               class="task-filter-btn"
               [class.isCustomized]="taskViewCustomizerService.isCustomized()"
-              [matMenuTriggerFor]="allTasksFilterPanel.filterMenu"
+              [matMenuTriggerFor]="allTasksPanel.menu"
               mat-icon-button
               matTooltip="{{
                 T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
@@ -74,7 +72,11 @@ import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
               <mat-icon>filter_list</mat-icon>
             </button>
 
-            <all-tasks-filter-panel #allTasksFilterPanel></all-tasks-filter-panel>
+            <task-view-customizer-panel
+              #allTasksPanel
+              [multiSelectProject]="true"
+              [showSaveSort]="false"
+            ></task-view-customizer-panel>
           } @else {
             <button
               class="task-filter-btn"

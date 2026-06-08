@@ -237,8 +237,8 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       switchMap(({ activeType, activeId }) =>
         activeType === 'PROJECT'
           ? this._store.select(selectTaskRepeatCfgsByProjectId, {
-            projectId: activeId,
-          })
+              projectId: activeId,
+            })
           : this._store.select(selectTaskRepeatCfgsByTagId, { tagId: activeId }),
       ),
     ),
