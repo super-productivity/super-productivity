@@ -313,7 +313,8 @@ export class CapacitorReminderService {
 
   /**
    * Ensure notification permissions are granted.
-   * Also handles Android 12+ exact alarm permissions.
+   * Android exact-alarm permission is checked separately once notification
+   * permission is available.
    */
   async ensurePermissions(): Promise<boolean> {
     if (!this.isAvailable) {
@@ -335,10 +336,10 @@ export class CapacitorReminderService {
       return false;
     }
 
-    // Note: exact alarm permission is checked once at startup via
-    // askPermissionsIfNotGiven$ in mobile-notification.effects.ts.
-    // We intentionally do NOT check it here to avoid repeatedly
-    // opening the Android settings page on every scheduling cycle.
+    // Note: exact alarm permission is checked once by MobileNotificationEffects
+    // after notification permission is actually available. We intentionally do
+    // NOT check it here to avoid repeatedly opening the Android settings page
+    // on every scheduling cycle.
 
     return true;
   }

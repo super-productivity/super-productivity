@@ -72,6 +72,7 @@ export class MobileNotificationEffects {
   private _scheduledDeadlineIds = new Set<string>();
   // Track pre-scheduled recurring reminder IDs (the predicted task instance IDs)
   private _scheduledRepeatReminderIds = new Set<string>();
+  private _exactAlarmPermissionCheckPromise?: Promise<void>;
 
   // Narrowed cfg slice so the scheduling effects only re-run on reminder-config
   // changes, not on every unrelated global-config edit (theme, sync, etc.).
@@ -112,15 +113,7 @@ export class MobileNotificationEffects {
                 // until a notification actually needs scheduling.
                 return;
               }
-              // Check exact alarm permission separately (Android 12+)
-              const hasExactAlarm =
-                await this._reminderService.ensureExactAlarmPermission();
-              if (!hasExactAlarm) {
-                this._snackService.open({
-                  type: 'ERROR',
-                  msg: T.NOTIFICATION.EXACT_ALARM_DENIED,
-                });
-              }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
             } catch (error) {
               Log.err(error);
               this._notifyPermissionIssue(error?.toString());
@@ -200,6 +193,7 @@ export class MobileNotificationEffects {
                 this._notifyPermissionIssue();
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               // Schedule each reminder using the platform-appropriate method
               for (const task of tasksWithReminders) {
@@ -317,6 +311,7 @@ export class MobileNotificationEffects {
                 this._notifyPermissionIssue();
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               for (const occ of upcoming) {
                 await this._reminderService.scheduleReminder({
@@ -397,6 +392,7 @@ export class MobileNotificationEffects {
               if (!hasPermission) {
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               const now = Date.now();
               for (const task of tasks) {
@@ -486,6 +482,7 @@ export class MobileNotificationEffects {
               if (!hasPermission) {
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               const now = Date.now();
               for (const task of tasks) {
@@ -598,6 +595,34 @@ export class MobileNotificationEffects {
     }
 
     return result;
+  }
+
+  private _warnIfExactAlarmPermissionDeniedOnce(): Promise<void> {
+    if (!this._platformService.isAndroid()) {
+      return Promise.resolve();
+    }
+
+    this._exactAlarmPermissionCheckPromise =
+      this._exactAlarmPermissionCheckPromise ||
+      this._reminderService
+        .ensureExactAlarmPermission()
+        .then((hasExactAlarm) => {
+          if (!hasExactAlarm) {
+            this._snackService.open({
+              type: 'ERROR',
+              msg: T.NOTIFICATION.EXACT_ALARM_DENIED,
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          Log.warn('MobileEffects: exact alarm permission check failed', error);
+          this._snackService.open({
+            type: 'ERROR',
+            msg: T.NOTIFICATION.EXACT_ALARM_DENIED,
+          });
+        });
+
+    return this._exactAlarmPermissionCheckPromise;
   }
 
   private _notifyPermissionIssue(message?: string): void {
