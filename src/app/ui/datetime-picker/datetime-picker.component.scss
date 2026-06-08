@@ -52,11 +52,6 @@
       padding: 0 !important;
     }
 
-    // Hide period button arrow and style period button hover
-    .mat-calendar-arrow {
-      display: none !important;
-    }
-
     .mat-calendar-period-button {
       cursor: pointer !important;
       transition: background-color var(--transition-duration-s) ease;
@@ -64,30 +59,6 @@
       &:hover {
         background-color: var(--calendar-hover-bg) !important;
         border-radius: var(--card-border-radius) !important;
-      }
-    }
-
-    .sp-month-button,
-    .sp-year-button {
-      padding-left: 4px !important;
-      padding-right: 4px !important;
-      min-width: 0 !important;
-      margin: 0 !important;
-    }
-
-    .sp-drop-icon {
-      font-size: 18px !important;
-      width: 18px !important;
-      height: 18px !important;
-      vertical-align: middle !important;
-      line-height: 18px !important;
-
-      &.sp-drop-icon-left {
-        margin-right: 2px !important;
-      }
-
-      &.sp-drop-icon-right {
-        margin-left: 2px !important;
       }
     }
 

@@ -31,7 +31,11 @@
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "Press enter again to save",
     "SWITCH_TO_YEAR_VIEW": "Choose month",
-    "SWITCH_TO_MULTI_YEAR_VIEW": "Choose year"
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Choose year",
+    "PREVIOUS_YEAR": "Previous year",
+    "NEXT_YEAR": "Next year",
+    "PREVIOUS_24_YEARS": "Previous 24 years",
+    "NEXT_24_YEARS": "Next 24 years"
   },
   "DIALOG_LOGS": {
     "COPY": "Copy",
