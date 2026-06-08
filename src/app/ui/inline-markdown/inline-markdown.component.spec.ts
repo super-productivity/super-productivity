@@ -688,6 +688,51 @@ describe('InlineMarkdownComponent', () => {
       expect(component.changed.emit).toHaveBeenCalledTimes(1);
     });
 
+    it('should replace the unmodified default template with a fresh checklist', () => {
+      // Arrange — only the (replaceable) default template is shown, untouched
+      spyOn(component.changed, 'emit');
+      const template = '**How can I best achieve it now?**';
+      component.model = template;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn(component, 'defaultText').and.returnValue(template);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — template replaced, not appended to
+      expect(component.modelCopy()).toBe('- [ ] ');
+      expect(component.changed.emit).toHaveBeenCalledOnceWith('- [ ] ');
+    });
+
+    it('should append (not replace) once the default template has been edited', () => {
+      // Arrange — default text is replaceable, but the user already typed into it
+      spyOn(component.changed, 'emit');
+      const template = '**How can I best achieve it now?**';
+      component.model = template + ' typed';
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn(component, 'defaultText').and.returnValue(template);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — edited content preserved, checkbox appended below
+      expect(component.modelCopy()).toBe(template + ' typed\n- [ ] ');
+    });
+
     it('should insert checklist item after cursor line, not at end', () => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second\n- [ ] Third';

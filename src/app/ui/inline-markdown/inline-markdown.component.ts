@@ -75,6 +75,11 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly isShowControls = input<boolean>(false);
   readonly isShowChecklistToggle = input<boolean>(false);
   readonly isDefaultText = input<boolean>(false);
+  // The default/placeholder text currently shown when there are no real notes.
+  // When set and still unmodified, the checklist button REPLACES it with a fresh
+  // checklist instead of appending below it (see toggleChecklistMode). Callers
+  // only pass this for throwaway default text, never for user content (#7786).
+  readonly defaultText = input<string>('');
   readonly placeholderTxt = input<string | undefined>(undefined);
   readonly taskId = input<string | undefined>(undefined);
 
@@ -427,7 +432,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     const INSERT_TEXT = '\n- [ ] ';
 
-    if (this.isDefaultText() && !currentText) {
+    // Replace the field with a fresh checklist when it shows only default text:
+    // either nothing at all, or the unmodified default template. We never reach
+    // here with user-typed content because `currentText` reflects the live
+    // textarea value, so any edit breaks the equality check below.
+    const defaultText = this.defaultText();
+    const isUnmodifiedDefault =
+      !!defaultText && currentText.trim() === defaultText.trim();
+
+    if (this.isDefaultText() && (!currentText || isUnmodifiedDefault)) {
       const newValue = '- [ ] ';
       this.model = newValue;
       this.isChecklistMode.set(true);

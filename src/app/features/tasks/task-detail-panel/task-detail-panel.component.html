@@ -234,6 +234,7 @@
         [isShowControls]="true"
         [isShowChecklistToggle]="true"
         [isDefaultText]="!task().notes"
+        [defaultText]="isStockNotesTemplate() ? defaultTaskNotes() : ''"
         [model]="task().notes || defaultTaskNotes()"
         [taskId]="task().id"
       ></inline-markdown>
