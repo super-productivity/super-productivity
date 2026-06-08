@@ -231,19 +231,19 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
     if (hasModifier && ev.shiftKey && ev.code === 'Digit8') {
       ev.preventDefault();
-      this.onApplyBulletList();
+      this.onApplyBulletList(true);
       return;
     }
 
     if (hasModifier && ev.shiftKey && ev.code === 'Digit7') {
       ev.preventDefault();
-      this.onApplyNumberedList();
+      this.onApplyNumberedList(true);
       return;
     }
 
     if (hasModifier && ev.shiftKey && ev.code === 'Digit9') {
       ev.preventDefault();
-      this.onApplyQuote();
+      this.onApplyQuote(true);
       return;
     }
     const result = handleListKeydown(
@@ -365,16 +365,16 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     );
   }
 
-  onApplyQuote(): void {
-    this._applyTransformWithArgs(applyQuote);
+  onApplyQuote(isKeyboard = false): void {
+    this._applyTransformWithArgs(applyQuote, isKeyboard);
   }
 
-  onApplyBulletList(): void {
-    this._applyTransformWithArgs(applyBulletList);
+  onApplyBulletList(isKeyboard = false): void {
+    this._applyTransformWithArgs(applyBulletList, isKeyboard);
   }
 
-  onApplyNumberedList(): void {
-    this._applyTransformWithArgs(applyNumberedList);
+  onApplyNumberedList(isKeyboard = false): void {
+    this._applyTransformWithArgs(applyNumberedList, isKeyboard);
   }
 
   onApplyTaskList(): void {
@@ -403,6 +403,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
   private _applyTransformWithArgs(
     transformFn: (text: string, start: number, end: number) => TextTransformResult,
+    isKeyboard = false,
   ): void {
     const textarea = this.textareaEl()?.nativeElement;
     if (!textarea) {
@@ -418,7 +419,11 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     // Wait for Angular to update the DOM after ngModel change before restoring selection
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+      if (!isKeyboard) {
+        textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+      } else {
+        textarea.setSelectionRange(result.selectionEnd, result.selectionEnd);
+      }
     });
   }
 }
