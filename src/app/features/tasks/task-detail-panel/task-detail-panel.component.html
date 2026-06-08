@@ -275,6 +275,8 @@
           <div class="add-btn-wrapper">
             <button
               (click)="addAttachment()"
+              [matTooltip]="pasteImageHintKey | translate"
+              matTooltipPosition="above"
               mat-button
             >
               <mat-icon>add</mat-icon>
@@ -290,8 +292,10 @@
       (collapseParent)="collapseParent()"
       (editActionTriggered)="addAttachment()"
       (keyPress)="onItemKeyPress($event)"
+      [matTooltip]="pasteImageHintKey | translate"
       [inputIcon]="'add'"
       class="input-item"
+      matTooltipPosition="above"
     >
       <ng-container input-title>
         <mat-icon>attachment</mat-icon>

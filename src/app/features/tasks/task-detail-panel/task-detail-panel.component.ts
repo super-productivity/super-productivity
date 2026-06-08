@@ -84,6 +84,7 @@ import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
 import { clipboardHasText } from '../../../util/clipboard-has-text';
 import { checkKeyCombo } from '../../../util/check-key-combo';
+import { IS_MAC } from '../../../util/is-mac';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
 
@@ -146,6 +147,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   ShowSubTasksMode = HideSubTasksMode;
   T = T;
   ICAL_TYPE = ICAL_TYPE;
+  pasteImageHintKey = IS_MAC
+    ? T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT_MAC
+    : T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT;
 
   // Panel state signals grouped together
   panelState = {
