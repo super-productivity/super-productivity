@@ -1622,8 +1622,6 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",
-        "PASTE_IMAGE_HINT": "Ctrl+V to paste image",
-        "PASTE_IMAGE_HINT_MAC": "Cmd+V to paste image",
         "PASTED_IMAGE_TITLE": "Pasted image",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Links & Files ({{nr}})",

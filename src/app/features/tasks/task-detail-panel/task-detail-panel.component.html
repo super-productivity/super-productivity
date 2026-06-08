@@ -280,9 +280,6 @@
               <mat-icon>add</mat-icon>
               <span>{{ T.F.TASK.ADDITIONAL_INFO.ADD_ATTACHMENT | translate }}</span>
             </button>
-            @if (!IS_TOUCH_PRIMARY) {
-              <span class="paste-hint">{{ pasteImageHintKey | translate }}</span>
-            }
           </div>
         </div>
       </ng-container>
@@ -302,9 +299,6 @@
       </ng-container>
       <ng-container input-value></ng-container>
     </task-detail-item>
-    @if (!IS_TOUCH_PRIMARY) {
-      <span class="paste-hint">{{ pasteImageHintKey | translate }}</span>
-    }
   }
   @if (!task().parentId && !task().issueId) {
     <task-detail-item
