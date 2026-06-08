@@ -303,11 +303,15 @@ export class DialogFlowtimeSettingsComponent {
       breakRules.length === 0 ||
       breakRules.every(
         (rule: FlowtimeBreakRuleInMinutes) =>
-          rule.minDuration == null &&
-          rule.maxDuration == null &&
-          rule.breakDuration == null,
+          this._isBlankFormValue(rule.minDuration) &&
+          this._isBlankFormValue(rule.maxDuration) &&
+          this._isBlankFormValue(rule.breakDuration),
       )
     );
+  }
+
+  private _isBlankFormValue(value: unknown): boolean {
+    return value == null || value === '';
   }
 
   private _toBreakRulesInMinutes(

@@ -101,6 +101,30 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(component.model().breakRules).toEqual(initialRules);
   });
 
+  it('should keep rule fields when Formly emits blank strings while restoring the rule section', () => {
+    const initialRules = component.model().breakRules;
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: '' as unknown as number,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
   describe('save()', () => {
     it('should convert minutes back to ms and save the config', () => {
       component.save();
