@@ -58,7 +58,7 @@ export class CustomSoundStorageService {
       );
     }
     if (file.type && !file.type.startsWith('audio/')) {
-      throw new Error('Unsupported format. Use MP3, WAV, or OGG.');
+      throw new Error('Unsupported audio file format.');
     }
     const arrayBuffer = await file.arrayBuffer();
     const id = slugify(file.name);
