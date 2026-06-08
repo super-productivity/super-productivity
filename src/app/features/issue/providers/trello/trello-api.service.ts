@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Observable, throwError, of } from 'rxjs';
+import { forkJoin, Observable, throwError, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { TrelloCfg } from './trello.model';
 import { SnackService } from '../../../../core/snack/snack.service';
@@ -47,6 +47,20 @@ const DEFAULT_ATTACHMENT_FIELDS = [
   'idMember',
 ].join(',');
 const DEFAULT_MEMBER_FIELDS = ['fullName', 'username', 'avatarUrl'].join(',');
+const BOARD_LIST_FIELDS = 'name,id';
+const BOARD_LIST_PARAMS = {
+  filter: 'open',
+  fields: BOARD_LIST_FIELDS,
+} as const;
+
+interface TrelloBoardResponse {
+  id: string;
+  name: string;
+}
+
+interface TrelloOrganizationResponse {
+  id: string;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -125,12 +139,47 @@ export class TrelloApiService {
     );
   }
 
-  // list all projects from user
-  getBoards$(cfg: TrelloCfg): Observable<any> {
-    return this._request$('/members/me/boards', cfg, {
-      filter: 'open',
-      fields: 'name,id',
-    });
+  getBoards$(cfg: TrelloCfg): Observable<TrelloBoardResponse[]> {
+    return this._request$<TrelloBoardResponse[]>(
+      '/members/me/boards',
+      cfg,
+      BOARD_LIST_PARAMS,
+    ).pipe(
+      switchMap((memberBoards) =>
+        this._requestRaw$<TrelloOrganizationResponse[]>(
+          '/members/me/organizations',
+          cfg,
+          {
+            fields: 'id',
+          },
+        ).pipe(
+          catchError(() => of<TrelloOrganizationResponse[]>([])),
+          switchMap((organizations) => {
+            const organizationIds = Array.from(
+              new Set((organizations || []).map((organization) => organization.id)),
+            ).filter(Boolean);
+
+            if (organizationIds.length === 0) {
+              return of(this._mergeUniqueBoards(memberBoards));
+            }
+
+            return forkJoin(
+              organizationIds.map((organizationId) =>
+                this._requestRaw$<TrelloBoardResponse[]>(
+                  `/organizations/${organizationId}/boards`,
+                  cfg,
+                  BOARD_LIST_PARAMS,
+                ).pipe(catchError(() => of<TrelloBoardResponse[]>([]))),
+              ),
+            ).pipe(
+              map((organizationBoards) =>
+                this._mergeUniqueBoards([...memberBoards, ...organizationBoards.flat()]),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   getCurrentMemberId$(username: string, cfg: TrelloCfg): Observable<string> {
@@ -215,13 +264,34 @@ export class TrelloApiService {
     cfg: TrelloCfg,
     params?: Record<string, unknown>,
   ): Observable<T> {
+    return this._requestRaw$<T>(path, cfg, params).pipe(
+      catchError((err) => this._handleError$(err)),
+    );
+  }
+
+  private _requestRaw$<T>(
+    path: string,
+    cfg: TrelloCfg,
+    params?: Record<string, unknown>,
+  ): Observable<T> {
     this._checkSettings(cfg);
     const httpParams = this._createParams(cfg, params);
-    return this._http
-      .get<T>(`${BASE_URL}${path}`, {
-        params: httpParams,
-      })
-      .pipe(catchError((err) => this._handleError$(err)));
+    return this._http.get<T>(`${BASE_URL}${path}`, {
+      params: httpParams,
+    });
+  }
+
+  private _mergeUniqueBoards(boards: TrelloBoardResponse[] = []): TrelloBoardResponse[] {
+    const boardsById = new Map<string, TrelloBoardResponse>();
+
+    boards.forEach((board) => {
+      if (!board?.id || boardsById.has(board.id)) {
+        return;
+      }
+      boardsById.set(board.id, board);
+    });
+
+    return Array.from(boardsById.values());
   }
 
   private _createParams(cfg: TrelloCfg, params?: Record<string, unknown>): HttpParams {
