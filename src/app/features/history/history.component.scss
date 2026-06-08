@@ -8,6 +8,12 @@
   margin-top: var(--s4);
 }
 
+.task-status-filter {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 var(--s3);
+}
+
 .year {
   border-top: 1px dashed var(--separator-color);
 

@@ -1,10 +1,23 @@
-@if (worklogData(); as wData) {
+@if (filteredWorklogData(); as wData) {
   <div [@fadeInSlow]>
     <h1 class="mat-headline-5 total-time">
       {{ T.F.WORKLOG.CMP.TOTAL_TIME | translate }} <br /><strong>{{
         wData.totalTimeSpent | msToString
       }}</strong>
     </h1>
+    <div class="task-status-filter">
+      <mat-button-toggle-group
+        [attr.aria-label]="T.F.WORKLOG.CMP.STATUS_FILTER | translate"
+        [value]="selectedStatusFilter()"
+        (change)="setStatusFilter($event)"
+      >
+        @for (option of statusFilterOptions; track option.value) {
+          <mat-button-toggle [value]="option.value">
+            {{ option.label | translate }}
+          </mat-button-toggle>
+        }
+      </mat-button-toggle-group>
+    </div>
     <div class="years">
       @for (year of wData.worklog | keyvalue: sortWorklogItems; track year.key) {
         <div class="year">

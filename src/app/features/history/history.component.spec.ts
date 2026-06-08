@@ -168,4 +168,35 @@ describe('HistoryComponent', () => {
 
     expect(dayLabels).toEqual(['Wed 1.', 'Thu 2.', 'Fri 3.']);
   });
+
+  it('filters worklog display data by task completion status', () => {
+    const tasks = [
+      createTaskForDate('2025-01-01', 120000, true, 'done-task'),
+      createTaskForDate('2025-01-01', 60000, false, 'undone-task'),
+    ];
+
+    worklogData$.next(
+      mapArchiveToWorklog(
+        {
+          ids: tasks.map((task) => task.id),
+          entities: tasks.reduce(
+            (entities, task) => ({ ...entities, [task.id]: task }),
+            {},
+          ),
+        },
+        [],
+        { workStart: {}, workEnd: {} },
+        1,
+        'en-US',
+      ),
+    );
+    fixture.componentInstance.selectedStatusFilter.set('DONE');
+
+    const filtered = fixture.componentInstance.filteredWorklogData();
+    const filteredDay = filtered?.worklog[2025].ent[1].ent[1];
+
+    expect(filtered?.totalTimeSpent).toBe(120000);
+    expect(filteredDay?.timeSpent).toBe(120000);
+    expect(filteredDay?.logEntries.map((entry) => entry.task.id)).toEqual(['done-task']);
+  });
 });

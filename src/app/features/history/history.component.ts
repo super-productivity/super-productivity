@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { SimpleCounter } from '../simple-counter/simple-counter.model';
@@ -33,6 +40,15 @@ import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-task-row.component';
 import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.component';
+import {
+  filterWorklogByTaskStatus,
+  WorklogTaskStatusFilter,
+} from '../worklog/util/filter-worklog-entries-by-status.util';
+import {
+  MatButtonToggle,
+  MatButtonToggleChange,
+  MatButtonToggleGroup,
+} from '@angular/material/button-toggle';
 
 @Component({
   selector: 'history',
@@ -53,6 +69,8 @@ import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.com
     TranslatePipe,
     WorklogTaskRowComponent,
     HistoryDayMetaComponent,
+    MatButtonToggleGroup,
+    MatButtonToggle,
   ],
 })
 export class HistoryComponent {
@@ -71,6 +89,21 @@ export class HistoryComponent {
 
   T: typeof T = T;
   readonly worklogData = toSignal(this._worklogService.worklogData$);
+  readonly selectedStatusFilter = signal<WorklogTaskStatusFilter>('ALL');
+  readonly filteredWorklogData = computed(() => {
+    const worklogData = this.worklogData();
+    return worklogData
+      ? filterWorklogByTaskStatus(worklogData, this.selectedStatusFilter())
+      : undefined;
+  });
+  readonly statusFilterOptions: {
+    value: WorklogTaskStatusFilter;
+    label: string;
+  }[] = [
+    { value: 'ALL', label: T.F.WORKLOG.CMP.STATUS_FILTER_ALL },
+    { value: 'DONE', label: T.F.WORKLOG.CMP.STATUS_FILTER_DONE },
+    { value: 'UNDONE', label: T.F.WORKLOG.CMP.STATUS_FILTER_UNDONE },
+  ];
   readonly enabledSimpleCounters = toSignal(
     this._simpleCounterService.enabledSimpleCounters$,
     { initialValue: [] as SimpleCounter[] },
@@ -115,6 +148,10 @@ export class HistoryComponent {
         rangeEnd,
       },
     });
+  }
+
+  setStatusFilter(ev: MatButtonToggleChange): void {
+    this.selectedStatusFilter.set(ev.value as WorklogTaskStatusFilter);
   }
 
   viewTaskDetails(task: Task): void {
