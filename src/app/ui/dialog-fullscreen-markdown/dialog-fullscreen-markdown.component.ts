@@ -47,6 +47,7 @@ import {
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { isChecklistItemLine } from '../../features/markdown-checklist/checklist-operations';
 import { HISTORY_STATE } from 'src/app/app.constants';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
 import { IS_IOS } from 'src/app/util/is-ios';
@@ -265,8 +266,11 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     const checkIndex = Array.from(allCheckboxes || []).findIndex((el) => el === targetEl);
     if (checkIndex !== -1 && this.data.content) {
       const allLines = this.data.content.split('\n');
+      // Match only real task-list lines (same predicate the checklist helpers use)
+      // so the Nth rendered checkbox maps to the Nth checklist line. A loose
+      // `includes('- [')` also counts link bullets/prose, desyncing the toggle.
       const todoAllLinesIndexes = allLines
-        .map((line, index) => (line.includes('- [') ? index : null))
+        .map((line, index) => (isChecklistItemLine(line) ? index : null))
         .filter((i) => i !== null);
 
       const itemIndex = todoAllLinesIndexes[checkIndex];

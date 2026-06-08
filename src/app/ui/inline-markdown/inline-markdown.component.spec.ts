@@ -377,6 +377,30 @@ describe('InlineMarkdownComponent', () => {
       // Assert
       expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n- [ ] Task 2');
     });
+
+    it('should toggle the right item when a non-task "- [" bullet precedes it', () => {
+      // Regression: a markdown link bullet contains "- [" but is NOT a checklist
+      // item. The old loose filter counted it, shifting the source index so the
+      // real item's checkbox toggled the wrong line (i.e. did nothing).
+      component.model = '- [Open docs](https://example.com)\n- [ ] Real task';
+      fixture.detectChanges();
+
+      // Only the real task renders a checkbox-wrapper; the link bullet does not.
+      const wrapper = document.createElement('li');
+      wrapper.className = 'checkbox-wrapper';
+      wrapper.innerHTML =
+        '<span class="checkbox material-icons">check_box_outline_blank</span>' +
+        '<span class="checkbox-label">Real task</span>';
+      mockPreviewEl.element.nativeElement.appendChild(wrapper);
+
+      // Act
+      component['_handleCheckboxClick'](wrapper);
+
+      // Assert - the real task is toggled, the link bullet is left untouched
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        '- [Open docs](https://example.com)\n- [x] Real task',
+      );
+    });
   });
 
   describe('clickPreview', () => {
