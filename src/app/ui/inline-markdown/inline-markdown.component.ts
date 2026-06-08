@@ -27,9 +27,9 @@ import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
 import {
-  isChecklistItemLine,
   removeCheckedChecklistItems,
   setAllChecklistItemsChecked,
+  toggleChecklistItemAtIndex,
 } from '../../features/markdown-checklist/checklist-operations';
 import { T } from '../../t.const';
 import { fadeInAnimation } from '../animations/fade.ani';
@@ -589,34 +589,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _handleCheckboxClick(targetEl: HTMLElement): void {
     const allCheckboxes =
       this.previewEl()?.element.nativeElement.querySelectorAll('.checkbox-wrapper');
-
     const checkIndex = Array.from(allCheckboxes || []).findIndex((el) => el === targetEl);
-    if (checkIndex !== -1 && this._model) {
-      const allLines = this._model.split('\n');
-      // Match only real task-list lines (same predicate the checklist helpers use)
-      // so the Nth rendered checkbox maps to the Nth checklist line. A loose
-      // `includes('- [')` also counts link bullets/prose, desyncing the toggle.
-      const todoAllLinesIndexes = allLines
-        .map((line, index) => (isChecklistItemLine(line) ? index : null))
-        .filter((i) => i !== null);
-
-      // Find all to-do items in the markdown string
-      // Log.log(checkIndex, todoAllLinesIndexes, allLines);
-
-      const itemIndex = todoAllLinesIndexes[checkIndex];
-      if (typeof itemIndex === 'number' && itemIndex > -1) {
-        const item = allLines[itemIndex];
-        allLines[itemIndex] = item.includes('[ ]')
-          ? item.replace('[ ]', '[x]').replace('[]', '[x]')
-          : item.replace('[x]', '[ ]');
-        this.modelCopy.set(allLines.join('\n'));
-
-        // Update the markdown string
-        if (this.modelCopy() !== this.model) {
-          this.model = this.modelCopy() || '';
-          this.changed.emit(this.modelCopy() as string);
-        }
-      }
+    if (checkIndex === -1 || !this._model) {
+      return;
+    }
+    const next = toggleChecklistItemAtIndex(this._model, checkIndex);
+    if (next !== this._model) {
+      this.modelCopy.set(next);
+      this.model = next;
+      this.changed.emit(next);
     }
   }
 

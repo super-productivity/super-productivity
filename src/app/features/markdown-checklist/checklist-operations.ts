@@ -7,10 +7,13 @@
  * (prose, headings, blank lines) are always preserved in place.
  */
 
-// Matches a GFM task-list item line, e.g. "- [ ] foo", "- [x] bar", "  - [] baz".
-// Kept in sync with the checkbox the marked renderer produces (see
-// marked-options-factory.ts `renderer.listitem`).
-const CHECKLIST_ITEM_RE = /^\s*- \[[ xX]?\]/;
+// Matches a GFM task-list item line, e.g. "- [ ] foo", "- [x] bar", "  - [X] baz".
+// The bracket must contain a marker (space, x, or X) — marked only renders a
+// checkbox for those, NOT for "- []" — so this stays in sync with what
+// marked-options-factory.ts `renderer.listitem` produces. This is the single
+// source of truth for "is this line a checklist item" across the feature
+// (toggle, bulk actions, progress badge, is-markdown-checklist).
+const CHECKLIST_ITEM_RE = /^\s*- \[[ xX]\]/;
 const CHECKED_ITEM_RE = /^\s*- \[[xX]\]/;
 
 export const isChecklistItemLine = (line: string): boolean =>
@@ -42,3 +45,31 @@ export const removeCheckedChecklistItems = (notes: string): string =>
     .split('\n')
     .filter((line) => !isCheckedItemLine(line))
     .join('\n');
+
+/**
+ * Toggles the checked state of the Nth checklist item (0-based, in document
+ * order — matching the rendered checkbox order). Non-item lines are skipped and
+ * preserved. Out-of-range/invalid indices return the input unchanged. Only the
+ * checkbox marker is rewritten, so item text (which may itself contain "[ ]") is
+ * never touched, and uppercase "[X]" is handled.
+ */
+export const toggleChecklistItemAtIndex = (notes: string, nthItem: number): string => {
+  if (!Number.isInteger(nthItem) || nthItem < 0) {
+    return notes;
+  }
+  const lines = notes.split('\n');
+  let seen = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (!isChecklistItemLine(lines[i])) {
+      continue;
+    }
+    seen++;
+    if (seen === nthItem) {
+      lines[i] = isCheckedItemLine(lines[i])
+        ? lines[i].replace(/- \[[xX]\]/, '- [ ]')
+        : lines[i].replace('- [ ]', '- [x]');
+      return lines.join('\n');
+    }
+  }
+  return notes;
+};

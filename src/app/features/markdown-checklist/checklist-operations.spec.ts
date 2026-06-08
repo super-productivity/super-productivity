@@ -3,6 +3,7 @@ import {
   isCheckedItemLine,
   removeCheckedChecklistItems,
   setAllChecklistItemsChecked,
+  toggleChecklistItemAtIndex,
 } from './checklist-operations';
 
 describe('checklist-operations', () => {
@@ -12,13 +13,14 @@ describe('checklist-operations', () => {
       expect(isChecklistItemLine('- [x] foo')).toBe(true);
       expect(isChecklistItemLine('- [X] foo')).toBe(true);
       expect(isChecklistItemLine('  - [ ] indented')).toBe(true);
-      expect(isChecklistItemLine('- [] no space')).toBe(true);
     });
 
-    it('should not match prose or plain bullets', () => {
+    it('should not match prose, plain bullets, or empty brackets', () => {
       expect(isChecklistItemLine('just text')).toBe(false);
       expect(isChecklistItemLine('- plain bullet')).toBe(false);
       expect(isChecklistItemLine('')).toBe(false);
+      // marked does NOT render "- []" (empty brackets) as a checkbox
+      expect(isChecklistItemLine('- [] no marker')).toBe(false);
     });
   });
 
@@ -58,6 +60,39 @@ describe('checklist-operations', () => {
     it('should keep prose lines', () => {
       const notes = 'Title\n- [x] done\n- [ ] todo';
       expect(removeCheckedChecklistItems(notes)).toBe('Title\n- [ ] todo');
+    });
+  });
+
+  describe('toggleChecklistItemAtIndex', () => {
+    it('should check an unchecked item', () => {
+      expect(toggleChecklistItemAtIndex('- [ ] a\n- [ ] b', 1)).toBe('- [ ] a\n- [x] b');
+    });
+
+    it('should uncheck a checked item', () => {
+      expect(toggleChecklistItemAtIndex('- [x] a\n- [ ] b', 0)).toBe('- [ ] a\n- [ ] b');
+    });
+
+    it('should uncheck an uppercase [X] item', () => {
+      // the old in-component toggle only matched lowercase [x] and left [X] stuck
+      expect(toggleChecklistItemAtIndex('- [X] a', 0)).toBe('- [ ] a');
+    });
+
+    it('should only flip the checkbox marker, not "[ ]" inside the item text', () => {
+      expect(toggleChecklistItemAtIndex('- [x] fix the [ ] placeholder', 0)).toBe(
+        '- [ ] fix the [ ] placeholder',
+      );
+    });
+
+    it('should map the Nth item past interleaved prose and blank lines', () => {
+      const notes = 'Intro\n- [ ] a\n\nmid\n- [ ] b';
+      expect(toggleChecklistItemAtIndex(notes, 1)).toBe('Intro\n- [ ] a\n\nmid\n- [x] b');
+    });
+
+    it('should return the input unchanged for out-of-range or invalid indices', () => {
+      const notes = '- [ ] a\n- [ ] b';
+      expect(toggleChecklistItemAtIndex(notes, 5)).toBe(notes);
+      expect(toggleChecklistItemAtIndex(notes, -1)).toBe(notes);
+      expect(toggleChecklistItemAtIndex(notes, NaN)).toBe(notes);
     });
   });
 });
