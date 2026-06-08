@@ -173,7 +173,18 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     if (!cfg) throw new Error('No config service available');
 
     const keys = cfg.keyboard;
-    if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) this.collapseParent();
+    if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) {
+      this.collapseParent();
+    } else if (checkKeyCombo(ev, keys.taskAddSubTask)) {
+      // Opening the panel auto-focuses a detail item, so focus is inside the
+      // panel rather than on a <task> row. The global task-shortcut handler
+      // can't resolve a focused task in that state and drops the shortcut, so
+      // handle add-subtask here. stopPropagation prevents the document-level
+      // handler from adding a second subtask when focus is on an in-panel row.
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.addSubTask();
+    }
   }
 
   // Parent task data
@@ -590,6 +601,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   addSubTask(): void {
     const task = this.task();
+    // focusTaskById (called by addSubTaskTo) focuses the new sub-task's title
+    // for editing, falling back to the focusable copy when the in-panel one is
+    // inside the collapsed sub-task section.
     this.taskService.addSubTaskTo(task.parentId || task.id);
   }
 

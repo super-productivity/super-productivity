@@ -13,6 +13,11 @@ export interface ProjectBasicCfg {
   title: string;
   // TODO remove maybe
   isArchived?: boolean;
+  // Completed projects are a celebrated finish; completing also sets isArchived
+  // (so the project hides from the active menu), but isDone stays distinct so a
+  // finish can be told apart from a quietly-shelved archive.
+  isDone?: boolean;
+  doneOn?: number | null;
   isHiddenFromMenu?: boolean;
   isEnableBacklog?: boolean;
   taskIds: string[];

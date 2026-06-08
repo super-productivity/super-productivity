@@ -942,6 +942,32 @@
       "D_DELETE": {
         "MSG": "Are you sure you want to delete the project \"{{title}}\"?"
       },
+      "COMPLETE": {
+        "COMPLETED_ON": "Completed {{date}}",
+        "REOPEN": "Reopen",
+        "NOTICE": "This project is completed.",
+        "ERROR": "Could not complete project. Please try again.",
+        "RESOLVE": {
+          "MSG": "still has {{nr}} unfinished tasks. What should happen to them?",
+          "MSG_ONE": "still has {{nr}} unfinished task. What should happen to it?",
+          "MOVE_TO_INBOX": "Move to Inbox",
+          "MARK_DONE": "Mark as done"
+        },
+        "CONFIRM": {
+          "TITLE": "Complete project?",
+          "MSG": "Complete <strong>{{title}}</strong> and move it to archived projects?"
+        },
+        "CELEBRATION": {
+          "TITLE": "Project complete!",
+          "STARTED": "Started",
+          "FINISHED": "Finished",
+          "DURATION": "Completed in {{nr}} days",
+          "TASKS_DONE": "Tasks completed",
+          "TIME_SPENT": "Time tracked",
+          "DAYS_WORKED": "Days worked",
+          "DONE_BTN": "Close"
+        }
+      },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Enable Project Backlog",
         "L_IS_HIDDEN_FROM_MENU": "Hide project from sidebar",
@@ -974,6 +1000,7 @@
         "ARCHIVED": "Archived Project",
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the sidebar.",
         "DELETED": "Deleted Project",
+        "REOPENED": "Project reopened",
         "SHOW_IN_MENU": "Show in sidebar",
         "UNARCHIVED": "Project restored",
         "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the sidebar",
@@ -1283,7 +1310,8 @@
         "RECOMMEND_SERVER": "Recommended: Accept the server data to stay in sync with the other device.",
         "TITLE": "Sync Conflict Detected",
         "USE_LOCAL": "Use My Data",
-        "USE_REMOTE": "Use Server Data"
+        "USE_REMOTE": "Use Server Data",
+        "USE_REMOTE_CONFIRM": "This replaces this device's data with the server's and discards {{count}} local change(s). Continue?"
       },
       "FORM": {
         "BTN_CHANGE_PASSWORD": "Change Password",
@@ -1508,6 +1536,7 @@
         "LOCAL_CHANGES_DISCARDED": "{{count}} local change(s) discarded - item(s) were deleted on another device",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} unsaved local change(s) discarded - sync downloaded newer data",
         "LOCAL_DATA_REPLACE_CANCELLED": "Sync cancelled. Your local data has been preserved.",
+        "LOCAL_DATA_REPLACE_UNDO": "Your local data was replaced with the server's data.",
         "LOCK_TIMEOUT_ERROR": "Sync timed out waiting for a previous operation to finish. Please try again.",
         "LWW_CONFLICTS_AUTO_RESOLVED": "Sync conflicts auto-resolved: {{localWins}} local win(s), {{remoteWins}} remote win(s)",
         "MIGRATION_FAILED": "Some sync data could not be migrated and was skipped. This may indicate data corruption or a bug.",
@@ -1520,6 +1549,7 @@
         "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
         "REMOTE_DATA_TOO_OLD": "Remote data is too old to be processed. Please update your remote app.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
+        "RESTORE_ENCRYPTED": "Restoring from server history isn't available when end-to-end encryption is enabled. The server can't read your encrypted data to reconstruct an earlier point.",
         "RESTORE_ERROR": "Failed to restore data",
         "RESTORE_SUCCESS": "Data restored successfully",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Could not migrate data to server - local data validation failed. Please try importing a backup.",
@@ -2595,6 +2625,7 @@
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
     "ARCHIVE_PROJECT": "Archive project",
+    "COMPLETE_PROJECT": "Complete project",
     "DELETE_PROJECT": "Delete project",
     "DELETE_TAG": "Delete tag",
     "DISABLE_FEATURE": "Disable feature",

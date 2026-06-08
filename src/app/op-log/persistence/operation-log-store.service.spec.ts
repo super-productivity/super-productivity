@@ -1553,13 +1553,16 @@ describe('OperationLogStoreService', () => {
     it('should save and load import backup', async () => {
       const state = { tasks: ['task1', 'task2'], projects: [] };
 
-      await service.saveImportBackup(state);
+      const savedAt = await service.saveImportBackup(state);
 
       const backup = await service.loadImportBackup();
       expect(backup).not.toBeNull();
       expect(backup!.state).toEqual(state);
       expect(backup!.savedAt).toBeDefined();
       expect(typeof backup!.savedAt).toBe('number');
+      // The returned token is the provenance value persisted in the slot, so
+      // callers can later confirm the backup hasn't been replaced. (#8107)
+      expect(savedAt).toBe(backup!.savedAt);
     });
 
     it('should return null when no backup exists', async () => {

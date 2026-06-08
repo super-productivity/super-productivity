@@ -107,6 +107,26 @@ export class DialogSyncImportConflictComponent {
         return;
       }
     }
+    // Guard the destructive choice when it discards local work: accepting the
+    // server import (USE_REMOTE) replaces this device's state and drops pending
+    // local changes. The dialog frames the server as "recommended", so require
+    // an explicit confirmation rather than letting a misclick silently wipe data
+    // the user can't tell is newer than the server's. (#8107)
+    if (
+      result === 'USE_REMOTE' &&
+      this.isIncomingImport &&
+      this.data.filteredOpCount > 0
+    ) {
+      const confirmed = confirmDialog(
+        this._translateService.instant(
+          T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE_CONFIRM,
+          { count: this.data.filteredOpCount },
+        ),
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
     this._matDialogRef.close(result || 'CANCEL');
   }
 }

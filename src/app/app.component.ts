@@ -30,6 +30,7 @@ import { LS } from './core/persistence/storage-keys.const';
 import { BannerId } from './core/banner/banner.model';
 import { T } from './t.const';
 import { GlobalThemeService } from './core/theme/global-theme.service';
+import { resolveBgImageToDataUrl } from './core/theme/resolve-bg-image-to-data-url.util';
 import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
@@ -282,33 +283,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     effect(() => {
       const bgImage = this._globalThemeService.backgroundImg();
       const currentRequestId = ++bgResolveRequestId;
-      if (!bgImage) {
-        this.resolvedBgImage.set(null);
-        return;
-      }
-
-      if (!IS_ELECTRON || !bgImage.startsWith('file://')) {
-        this.resolvedBgImage.set(bgImage);
-        return;
-      }
-
-      const readLocalImageAsDataUrl = window.ea?.readLocalImageAsDataUrl;
-      if (!readLocalImageAsDataUrl) {
-        this.resolvedBgImage.set(null);
-        return;
-      }
-
-      readLocalImageAsDataUrl(bgImage)
-        .then((dataUrl) => {
-          if (currentRequestId === bgResolveRequestId) {
-            this.resolvedBgImage.set(dataUrl || null);
-          }
-        })
-        .catch(() => {
-          if (currentRequestId === bgResolveRequestId) {
-            this.resolvedBgImage.set(null);
-          }
-        });
+      void resolveBgImageToDataUrl(bgImage).then((resolved) => {
+        // Ignore stale resolutions when the source changed mid-read.
+        if (currentRequestId === bgResolveRequestId) {
+          this.resolvedBgImage.set(resolved);
+        }
+      });
     });
 
     this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$

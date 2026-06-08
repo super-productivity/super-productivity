@@ -9,13 +9,14 @@ import { ProjectService } from '../../features/project/project.service';
 import { Project } from '../../features/project/project.model';
 import { selectArchivedProjectsSortedByTitle } from '../../features/project/store/project.selectors';
 
-const makeProject = (id: string, title: string): Project =>
+const makeProject = (id: string, title: string, over: Partial<Project> = {}): Project =>
   ({
     id,
     title,
     isArchived: true,
     isHiddenFromMenu: false,
     theme: { primary: '#fff' },
+    ...over,
   }) as unknown as Project;
 
 describe('ArchivedProjectsPageComponent', () => {
@@ -24,7 +25,7 @@ describe('ArchivedProjectsPageComponent', () => {
   let projectService: jasmine.SpyObj<ProjectService>;
 
   const setUp = async (projects: Project[]): Promise<void> => {
-    projectService = jasmine.createSpyObj('ProjectService', ['unarchive']);
+    projectService = jasmine.createSpyObj('ProjectService', ['unarchive', 'reopen']);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -89,5 +90,13 @@ describe('ArchivedProjectsPageComponent', () => {
     const btn = fixture.debugElement.query(By.css('.project-row button'));
     btn.nativeElement.click();
     expect(projectService.unarchive).toHaveBeenCalledWith('p-a');
+  });
+
+  it('calls ProjectService.reopen for completed projects', async () => {
+    const project = makeProject('p-a', 'Alpha', { isDone: true, doneOn: 1234 });
+    await setUp([project]);
+    const btn = fixture.debugElement.query(By.css('.project-row button'));
+    btn.nativeElement.click();
+    expect(projectService.reopen).toHaveBeenCalledWith('p-a', project);
   });
 });
