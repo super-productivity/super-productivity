@@ -16,6 +16,7 @@ import {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
+  WebDavNativeRequestError,
 } from '../src/errors';
 
 describe('AdditionalLogErrorBase', () => {
@@ -173,6 +174,7 @@ describe('Error class identity (single definition per class)', () => {
       ['PotentialCorsError', PotentialCorsError],
       ['RemoteFileChangedUnexpectedly', RemoteFileChangedUnexpectedly],
       ['NetworkUnavailableSPError', NetworkUnavailableSPError],
+      ['WebDavNativeRequestError', WebDavNativeRequestError],
     ];
 
   it.each(ERROR_CLASSES)('%s is an Error subclass', (_name, ErrCtor) => {
@@ -201,6 +203,8 @@ describe('Error class identity (single definition per class)', () => {
       instance = new TooManyRequestsAPIError({ status: 429 });
     } else if (ErrCtor === PotentialCorsError) {
       instance = new PotentialCorsError('https://example.test');
+    } else if (ErrCtor === WebDavNativeRequestError) {
+      instance = new WebDavNativeRequestError('Native request failed');
     } else {
       instance = new (ErrCtor as new (...a: never[]) => Error)();
     }
@@ -211,5 +215,10 @@ describe('Error class identity (single definition per class)', () => {
     const err = new EmptyRemoteBodySPError('empty body');
     expect(err).toBeInstanceOf(InvalidDataSPError);
     expect(err).toBeInstanceOf(Error);
+  });
+
+  it('WebDavNativeRequestError preserves native error code for catch-site classification', () => {
+    const err = new WebDavNativeRequestError('Network error', 'NETWORK_ERROR');
+    expect(err.code).toBe('NETWORK_ERROR');
   });
 });

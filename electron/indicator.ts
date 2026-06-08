@@ -142,6 +142,12 @@ export const ensureIndicator = (): Tray | undefined => {
   return tray;
 };
 
+export const refreshIndicator = (): void => {
+  if (tray) {
+    syncTray(tray);
+  }
+};
+
 const createTray = (): Tray => {
   const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
   const trayIconPath = DIR + `stopped${suf}`;
@@ -431,6 +437,7 @@ const syncTray = (tr: Tray): void => {
       tr.setToolTip('');
     }
   }
+  _lastTrayMsg = trayMsg;
 
   if (_lastCurrentTask?.title && !_lastIsFocusModeEnabled) {
     const progress = _lastCurrentTask.timeEstimate
@@ -497,8 +504,7 @@ function createIndicatorMessage(
       return timeStr;
     }
 
-    // Fallback if no countdown is supposed to be shown, but we have a running task
-    return getProgressMessage(task.timeSpent);
+    return task.title;
   }
 
   return '';

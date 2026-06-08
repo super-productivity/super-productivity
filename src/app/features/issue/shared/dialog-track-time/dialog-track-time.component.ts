@@ -109,6 +109,7 @@ export class DialogTrackTimeComponent implements OnDestroy {
     isChecked: boolean;
   };
   timeSpentToday: number;
+  timeSpentYesterday: number;
   timeSpentLoggedDelta: number;
   activityId: number = 1;
 
@@ -132,6 +133,10 @@ export class DialogTrackTimeComponent implements OnDestroy {
     this.comment = this.data.task.parentId ? this.data.task.title : '';
     this.timeSpentToday =
       this.data.task.timeSpentOnDay?.[this._dateService.todayStr()] ?? 0;
+    const yesterday = this._dateService.getLogicalTodayDate();
+    yesterday.setDate(yesterday.getDate() - 1);
+    this.timeSpentYesterday =
+      this.data.task.timeSpentOnDay?.[this._dateService.todayStr(yesterday)] ?? 0;
     this.timeSpentLoggedDelta = Math.max(0, this.data.task.timeSpent - this.timeLogged);
 
     if (this.data.timeLoggedUpdate$) {
@@ -223,6 +228,8 @@ export class DialogTrackTimeComponent implements OnDestroy {
         return this.data.task.timeSpent;
       case JiraWorklogExportDefaultTime.TimeToday:
         return this.timeSpentToday;
+      case JiraWorklogExportDefaultTime.TimeYesterday:
+        return this.timeSpentYesterday;
       case JiraWorklogExportDefaultTime.AllTimeMinusLogged:
         return this.timeSpentLoggedDelta;
     }

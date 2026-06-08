@@ -16,9 +16,9 @@ import {
 } from '@angular/material/dialog';
 import { Task, TaskWithReminderData } from '../task.model';
 import { TaskService } from '../task.service';
-import { BehaviorSubject, combineLatest, Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, combineLatest, Observable, of, Subscription } from 'rxjs';
 import { ReminderService } from '../../reminder/reminder.service';
-import { first, map, switchMap, takeWhile } from 'rxjs/operators';
+import { distinctUntilChanged, first, map, switchMap, takeWhile } from 'rxjs/operators';
 import { T } from '../../../t.const';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
 import { getTomorrow } from '../../../util/get-tomorrow';
@@ -130,9 +130,18 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _subs: Subscription = new Subscription();
   // Track dismissed reminder IDs to prevent stale data from worker re-triggering them
   private _dismissedReminderIds = new Set<string>();
+  // Reminders we have observed as still-valid in the store at least once. We only
+  // auto-dismiss a reminder that was confirmed present and then disappeared (e.g.
+  // cleared/completed/deleted on another device and synced in). A reminder that is
+  // already absent at open time is never confirmed, so it is never dropped — this
+  // preserves the open-time relaxation that fixed the worker/store snapshot race.
+  private _confirmedPresentIds = new Set<string>();
   // Stored separately so it can be cancelled eagerly when the dialog begins closing,
   // preventing race conditions where a worker tick updates a mid-animation dialog.
   private _onRemindersActiveSub: Subscription = Subscription.EMPTY;
+  // Cancelled eagerly on close for the same reason as _onRemindersActiveSub: a store
+  // emission mid-animation must not reconcile a dialog that is being torn down.
+  private _storeReconcileSub: Subscription = Subscription.EMPTY;
 
   constructor() {
     this._onRemindersActiveSub = this._reminderService.onRemindersActive$.subscribe(
@@ -153,6 +162,40 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       },
     );
     this._subs.add(this._onRemindersActiveSub);
+
+    // Watch the live store so reminders that disappear while the dialog is open —
+    // e.g. dismissed, completed or deleted on another device and then synced in —
+    // are removed from the list and the dialog is closed once nothing is left.
+    // The worker only ever signals reminders that ARE active, never that one is
+    // gone, so without this a synced-away reminder would keep the dialog open.
+    this._storeReconcileSub = this.taskIds$
+      .pipe(
+        switchMap((taskIds) =>
+          taskIds.length ? this._taskService.getByIdsLive$(taskIds) : of([] as Task[]),
+        ),
+        // getByIdsLive$ emits a fresh array on every task mutation app-wide; only
+        // reconcile when something we care about on the watched tasks changes.
+        distinctUntilChanged((prev, curr) => {
+          if (prev.length !== curr.length) {
+            return false;
+          }
+          return prev.every((p, i) => {
+            const c = curr[i];
+            if (!p || !c) {
+              return p === c;
+            }
+            return (
+              p.id === c.id &&
+              p.isDone === c.isDone &&
+              p.remindAt === c.remindAt &&
+              p.deadlineRemindAt === c.deadlineRemindAt
+            );
+          });
+        }),
+      )
+      .subscribe((tasks) => this._reconcileWithStore(tasks));
+    this._subs.add(this._storeReconcileSub);
+
     this._subs.add(
       this.isMultiple$.subscribe((isMultiple) => (this.isMultiple = isMultiple)),
     );
@@ -426,6 +469,57 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._finalizeBulkAction();
   }
 
+  private _reconcileWithStore(tasks: Task[]): void {
+    const taskById = new Map(
+      tasks.filter((task): task is Task => !!task).map((task) => [task.id, task]),
+    );
+    const currentIds = this.taskIds$.getValue();
+
+    const isReminderStillValid = (id: string): boolean => {
+      const task = taskById.get(id);
+      if (!task || task.isDone) {
+        return false;
+      }
+      // A reminder is still "present" as long as its timestamp exists; clearing it
+      // (unschedule / dismiss / remove deadline) is what marks it as gone. We do not
+      // treat a future-rescheduled timestamp as gone — that reminder still exists and
+      // the worker will fire it again later.
+      const remindAt = this._deadlineReminderTaskIds.has(id)
+        ? task.deadlineRemindAt
+        : task.remindAt;
+      return typeof remindAt === 'number';
+    };
+
+    // Confirm presence first so a later disappearance can be detected. A reminder
+    // that is absent on the very first pass (worker snapshot briefly ahead of the
+    // store) is never confirmed here and therefore never auto-dismissed.
+    currentIds.forEach((id) => {
+      if (isReminderStillValid(id)) {
+        this._confirmedPresentIds.add(id);
+      }
+    });
+
+    const goneIds = currentIds.filter(
+      (id) => this._confirmedPresentIds.has(id) && !isReminderStillValid(id),
+    );
+    if (goneIds.length === 0) {
+      return;
+    }
+
+    // Mark as dismissed so a worker tick cannot re-add them and ngOnDestroy does not
+    // re-clear an already-cleared deadline reminder.
+    goneIds.forEach((id) => this._dismissedReminderIds.add(id));
+    const remainingIds = currentIds.filter((id) => !goneIds.includes(id));
+    if (remainingIds.length === 0) {
+      this._close();
+    } else {
+      this.isAllDeadline = remainingIds.every((id) =>
+        this._deadlineReminderTaskIds.has(id),
+      );
+      this.taskIds$.next(remainingIds);
+    }
+  }
+
   private _clearDeadlineReminder(task: TaskWithReminderData): void {
     this._store.dispatch(
       TaskSharedActions.clearDeadlineReminder({
@@ -438,9 +532,11 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     if (this._matDialogRef.getState() !== MatDialogState.OPEN) {
       return;
     }
-    // Stop listening for new reminders immediately so a worker tick during the
-    // close animation cannot update the view while it is being torn down.
+    // Stop listening for new reminders and store changes immediately so a worker
+    // tick or store emission during the close animation cannot update the view
+    // while it is being torn down.
     this._onRemindersActiveSub.unsubscribe();
+    this._storeReconcileSub.unsubscribe();
     this._menuTriggers().forEach((trigger) => {
       trigger.closeMenu();
     });

@@ -76,6 +76,27 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
     key: keyof BoardPanelCfg,
   ): FormlyFieldConfig => fields.find((f) => f.key === key)!;
 
+  it('uses translation keys for board modal labels (#8070)', () => {
+    const fields = panelFieldGroup();
+    const scheduledState = fieldByKey(fields, 'scheduledState');
+    const project = fieldByKey(fields, 'projectId');
+    const isParentTasksOnly = fieldByKey(fields, 'isParentTasksOnly');
+
+    expect(scheduledState.props?.label).toBe('F.BOARDS.FORM.SCHEDULED_STATE');
+    expect(
+      (scheduledState.props?.options as { label: string }[]).map(
+        (option) => option.label,
+      ),
+    ).toEqual([
+      'F.BOARDS.FORM.SCHEDULED_STATE_ALL',
+      'F.BOARDS.FORM.SCHEDULED_STATE_SCHEDULED',
+      'F.BOARDS.FORM.SCHEDULED_STATE_NOT_SCHEDULED',
+    ]);
+    expect(project.props?.label).toBe('F.BOARDS.FORM.PROJECT');
+    expect(project.props?.nullLabel).toBe('F.BOARDS.FORM.PROJECT_ALL');
+    expect(isParentTasksOnly.props?.label).toBe('F.BOARDS.FORM.ONLY_PARENT_TASKS');
+  });
+
   it('starts valid for the URGENT_AND_IMPORTANT panel (2 included tags)', () => {
     const { form, model } = buildPanelForm(eisenhowerPanel(0));
     expect(form.valid).toBe(true);

@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { planSnapshotHydration } from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import { BackupService } from '../backup/backup.service';
 import { FULL_STATE_OP_TYPES } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import {
@@ -106,6 +107,7 @@ import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
 export class OperationLogSyncService {
   private store = inject(Store);
   private opLogStore = inject(OperationLogStoreService);
+  private backupService = inject(BackupService);
   private uploadService = inject(OperationLogUploadService);
   private downloadService = inject(OperationLogDownloadService);
   private snackService = inject(SnackService);
@@ -910,6 +912,24 @@ export class OperationLogSyncService {
       'OperationLogSyncService: Force downloading remote state - clearing local import and unsynced ops.',
     );
 
+    // Safety net (#8107): snapshot current local state before we destroy it, so an
+    // unintended "Use Server Data" — which can roll the user back to a stale server
+    // snapshot — is reversible via the Undo affordance shown on success below.
+    // Fail-safe: if the backup can't be written, abort rather than wipe without a
+    // recovery point (mirrors BackupService._persistImportToOperationLog).
+    let backupSavedAt: number;
+    try {
+      backupSavedAt = await this.backupService.captureImportBackup();
+    } catch (e) {
+      OpLog.warn(
+        'OperationLogSyncService: Pre-replace safety backup failed; aborting force download.',
+        { name: (e as Error | undefined)?.name },
+      );
+      throw new Error(
+        'Pre-replace safety backup failed; aborting to preserve local state.',
+      );
+    }
+
     // IMPORTANT: Clear local full-state ops (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)
     // This is critical - if the user chose USE_REMOTE, we must not filter incoming
     // ops against the local import that we're discarding.
@@ -990,6 +1010,7 @@ export class OperationLogSyncService {
       OpLog.normal(
         'OperationLogSyncService: Force download snapshot hydration complete.',
       );
+      this._showRestorePreviousDataSnack(backupSavedAt);
       return;
     }
 
@@ -1036,6 +1057,39 @@ export class OperationLogSyncService {
     OpLog.normal(
       `OperationLogSyncService: Force download complete. Processed ${result.newOps.length} ops.`,
     );
+    this._showRestorePreviousDataSnack(backupSavedAt);
+  }
+
+  /**
+   * Shows a non-blocking snack after a destructive "Use Server Data" replace,
+   * offering to restore the local snapshot captured before the wipe — making the
+   * otherwise-irreversible replace reversible.
+   *
+   * WARNING type (honest framing of a data-replacement + provides a dismiss
+   * control) and no auto-dismiss timer (duration: 0) so the undo isn't lost to a
+   * timeout. (#8107)
+   */
+  private _showRestorePreviousDataSnack(backupSavedAt: number): void {
+    this.snackService.open({
+      type: 'WARNING',
+      msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_UNDO,
+      actionStr: T.G.UNDO,
+      actionFn: async (): Promise<void> => {
+        try {
+          const didRestore = await this.backupService.restoreImportBackup(backupSavedAt);
+          this.snackService.open({
+            type: didRestore ? 'SUCCESS' : 'ERROR',
+            msg: didRestore ? T.F.SYNC.S.RESTORE_SUCCESS : T.F.SYNC.S.RESTORE_ERROR,
+          });
+        } catch (e) {
+          OpLog.err('OperationLogSyncService: Failed to restore pre-replace backup', {
+            name: (e as Error | undefined)?.name,
+          });
+          this.snackService.open({ type: 'ERROR', msg: T.F.SYNC.S.RESTORE_ERROR });
+        }
+      },
+      config: { duration: 0 },
+    });
   }
 
   /**

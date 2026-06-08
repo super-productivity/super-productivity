@@ -8,6 +8,7 @@ import {
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
+  WebDavNativeRequestError,
 } from '../../errors';
 import { errorMeta } from '../../log/error-meta';
 import { WebDavHttpHeader, WebDavHttpStatus } from './webdav.const';
@@ -168,10 +169,23 @@ export class WebDavHttpAdapter {
         throw e;
       }
 
+      const nativeErrorCode = WebDavHttpAdapter._readErrorCode(e);
       this._deps.logger.critical(
         `${WebDavHttpAdapter.L}.request() error`,
-        errorMeta(e, { url: scrubbedUrl, method: options.method }),
+        errorMeta(e, {
+          ...(nativeErrorCode !== undefined ? { errorCode: nativeErrorCode } : {}),
+          url: scrubbedUrl,
+          method: options.method,
+        }),
       );
+
+      if (this._deps.platformInfo.isNativePlatform) {
+        throw new WebDavNativeRequestError(
+          this._formatNativeErrorMessage(e),
+          nativeErrorCode,
+        );
+      }
+
       // Create a fake Response object for the error
       const errorResponse = new Response(`HTTP error for ${scrubbedUrl}`, {
         status: WebDavHttpStatus.INTERNAL_SERVER_ERROR,
@@ -218,6 +232,34 @@ export class WebDavHttpAdapter {
     }
   }
 
+  private _formatNativeErrorMessage(error: unknown): string {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : typeof error === 'string' && error
+          ? error
+          : 'Native WebDAV request failed';
+    return WebDavHttpAdapter._redactUrlParts(message);
+  }
+
+  private static _readErrorCode(error: unknown): string | number | undefined {
+    const rawCode = (error as { code?: unknown } | null)?.code;
+    return typeof rawCode === 'string' || typeof rawCode === 'number'
+      ? rawCode
+      : undefined;
+  }
+
+  private static _redactUrlParts(message: string): string {
+    return message.replace(/https?:\/\/[^\s"'<>]+/gi, (rawUrl) => {
+      try {
+        const url = new URL(rawUrl);
+        return `${url.protocol}//${url.host}`;
+      } catch {
+        return '[redacted-url]';
+      }
+    });
+  }
+
   /**
    * Serialize the allowlisted cache-relevant headers (case-insensitive) into a
    * compact, log-safe string like `etag=W/"a1"; age=3; x-cache=HIT`. Returns
@@ -258,7 +300,7 @@ export class WebDavHttpAdapter {
     }
 
     if (status === WebDavHttpStatus.UNAUTHORIZED) {
-      throw new AuthFailSPError();
+      throw new AuthFailSPError('Authentication failed (HTTP 401)');
     }
 
     if (status === WebDavHttpStatus.NOT_FOUND) {

@@ -31,6 +31,8 @@ serviceAccount:
 supersync:
   # -- Application listening port
   port: 1900
+  # -- Application bind address. Use "::" for IPv6-only deployments.
+  host: "0.0.0.0"
   # -- Node.js environment
   nodeEnv: production
   # -- REQUIRED: Public URL of the sync server (e.g. https://sync.example.com)

@@ -1,1 +1,1 @@
-export { errorMeta, urlPathOnly } from './log/error-meta';
+export { errorMeta, urlHostOnly, urlPathOnly } from './log/error-meta';

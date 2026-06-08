@@ -13,6 +13,7 @@ import { MatFormField, MatLabel, MatSuffix } from '@angular/material/form-field'
 import { MatInput } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { DatePipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { selectArchivedProjectsSortedByTitle } from '../../features/project/store/project.selectors';
 import { ProjectService } from '../../features/project/project.service';
@@ -36,6 +37,7 @@ import { T } from '../../t.const';
     MatSuffix,
     FormsModule,
     RouterLink,
+    DatePipe,
     TranslatePipe,
   ],
 })
@@ -61,5 +63,9 @@ export class ArchivedProjectsPageComponent {
 
   unarchive(project: Project): void {
     this._projectService.unarchive(project.id);
+  }
+
+  reopen(project: Project): void {
+    this._projectService.reopen(project.id, project);
   }
 }

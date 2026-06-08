@@ -112,6 +112,31 @@ describe('InlineMarkdownComponent', () => {
     });
   });
 
+  describe('long note wrapping', () => {
+    it('should wrap long words while editing and previewing notes', fakeAsync(() => {
+      const longToken = 'AVeryLongUnbrokenWordThatShouldWrapInsideTheEditor';
+      component.model = `[${longToken}](https://example.com/${longToken})`;
+      component['isShowEdit'].set(true);
+      fixture.detectChanges();
+      tick();
+
+      const textarea = fixture.nativeElement.querySelector(
+        'textarea.markdown-unparsed',
+      ) as HTMLTextAreaElement;
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      const previewLink = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed a',
+      ) as HTMLAnchorElement;
+
+      expect(window.getComputedStyle(textarea).overflowWrap).toBe('anywhere');
+      expect(window.getComputedStyle(textarea).whiteSpace).toBe('pre-wrap');
+      expect(window.getComputedStyle(preview).overflowWrap).toBe('anywhere');
+      expect(window.getComputedStyle(previewLink).overflowWrap).toBe('anywhere');
+    }));
+  });
+
   describe('ngOnDestroy', () => {
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange

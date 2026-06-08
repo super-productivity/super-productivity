@@ -96,6 +96,7 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
     kbField('taskOpenNotesPanel', T.GCF.KEYBOARD.TASK_OPEN_NOTES_PANEL),
     kbField('taskOpenEstimationDialog', T.GCF.KEYBOARD.TASK_OPEN_ESTIMATION_DIALOG),
     kbField('taskSchedule', T.GCF.KEYBOARD.TASK_SCHEDULE),
+    kbField('taskScheduleDeadline', T.GCF.KEYBOARD.TASK_SCHEDULE_DEADLINE),
     kbField('taskUnschedule', T.GCF.KEYBOARD.TASK_UNSCHEDULE),
     kbField('taskToggleDone', T.GCF.KEYBOARD.TASK_TOGGLE_DONE),
     kbField('taskAddSubTask', T.GCF.KEYBOARD.TASK_ADD_SUB_TASK),

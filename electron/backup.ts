@@ -12,8 +12,13 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import * as path from 'path';
 import { error, log } from 'electron-log/main';
-import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
+import type { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
+import type { AppDataComplete } from '../src/app/op-log/model/model-config';
 import { getBackupTimestamp } from './shared-with-frontend/get-backup-timestamp';
+import {
+  DEFAULT_MAX_BACKUP_FILES,
+  selectBackupFilesToDelete,
+} from './shared-with-frontend/backup-file-cleanup.util';
 
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
 export const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
@@ -63,75 +68,60 @@ export function initBackupAdapter(): void {
   });
 }
 
+interface BackupDataArgs {
+  data: AppDataCompleteLegacy | AppDataComplete;
+  maxBackupFiles?: number | null;
+}
+
+const isBackupDataArgs = (arg: unknown): arg is BackupDataArgs =>
+  !!arg &&
+  typeof arg === 'object' &&
+  'data' in arg &&
+  typeof (arg as { data?: unknown }).data === 'object';
+
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function backupData(ev: IpcMainEvent, data: AppDataCompleteLegacy): void {
+function backupData(
+  ev: IpcMainEvent,
+  dataOrArgs: AppDataCompleteLegacy | BackupDataArgs,
+): void {
   if (!existsSync(BACKUP_DIR)) {
     mkdirSync(BACKUP_DIR);
   }
   const filePath = `${BACKUP_DIR}/${getBackupTimestamp()}.json`;
+  const data = isBackupDataArgs(dataOrArgs) ? dataOrArgs.data : dataOrArgs;
+  const maxBackupFiles = isBackupDataArgs(dataOrArgs)
+    ? dataOrArgs.maxBackupFiles
+    : DEFAULT_MAX_BACKUP_FILES;
 
   try {
     const backup = JSON.stringify(data);
     writeFileSync(filePath, backup);
-    cleanupOldBackups();
+    cleanupOldBackups(maxBackupFiles);
   } catch (e) {
     log('Error while backing up');
     error(e);
   }
 }
 
-const KEEP_RECENT = 30;
-const KEEP_DAILY_DAYS = 21;
-
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function cleanupOldBackups(): void {
+function cleanupOldBackups(maxBackupFiles?: number | null): void {
   if (!existsSync(BACKUP_DIR)) {
     return;
   }
 
   try {
     const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
-    if (files.length <= KEEP_RECENT) {
-      return;
-    }
-
     const filesWithMtime = files.map((fileName) => {
       const filePath = path.join(BACKUP_DIR, fileName);
       return { fileName, filePath, mtime: statSync(filePath).mtime.getTime() };
     });
 
-    // Sort newest first
-    filesWithMtime.sort((a, b) => b.mtime - a.mtime);
-
-    // Always keep the most recent backups
-    const keep = new Set<string>();
-    for (let i = 0; i < Math.min(KEEP_RECENT, filesWithMtime.length); i++) {
-      keep.add(filesWithMtime[i].fileName);
-    }
-
-    // Keep the last backup of each day for the past N days
-    const now = new Date();
-    for (let d = 0; d < KEEP_DAILY_DAYS; d++) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - d);
-      const datePrefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
-      // Find the latest backup for this day (already sorted newest first)
-      const dayBackup = filesWithMtime.find((f) => f.fileName.startsWith(datePrefix));
-      if (dayBackup) {
-        keep.add(dayBackup.fileName);
-      }
-    }
-
-    // Delete everything not in the keep set
-    for (const file of filesWithMtime) {
-      if (!keep.has(file.fileName)) {
-        try {
-          unlinkSync(file.filePath);
-        } catch (e) {
-          log(`Error deleting backup file ${file.fileName}`);
-          error(e);
-        }
+    for (const file of selectBackupFilesToDelete(filesWithMtime, maxBackupFiles)) {
+      try {
+        unlinkSync(file.filePath);
+      } catch (e) {
+        log(`Error deleting backup file ${file.fileName}`);
+        error(e);
       }
     }
   } catch (e) {
