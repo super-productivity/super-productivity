@@ -89,7 +89,9 @@
       <mat-card-subtitle>
         <span>v{{ plugin.manifest.version }}</span>
         @if (getPluginAuthor(plugin); as author) {
-          <span class="plugin-author">by {{ author }}</span>
+          <span class="plugin-author">
+            {{ T.PLUGINS.AUTHORED_BY | translate: { author } }}
+          </span>
         }
         @if (isPluginLoading(plugin)) {
           <mat-chip color="accent">

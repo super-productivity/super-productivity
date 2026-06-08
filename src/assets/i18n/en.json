@@ -2784,6 +2784,7 @@
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",
     "ALREADY_INITIALIZED": "Plugin is already initialized",
+    "AUTHORED_BY": "by {{author}}",
     "CANCEL": "Cancel",
     "CAPABILITIES": {
       "ACCESS_FILES": "Access and modify files on your system",
