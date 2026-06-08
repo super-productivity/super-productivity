@@ -21,7 +21,11 @@
         {{ selectedProject()?.icon || DEFAULT_PROJECT_ICON }}
       </mat-icon>
     }
-    <span>{{ selectedProject()?.title }}</span>
+    @if (isDefaultInboxProject(selectedProject())) {
+      <span>{{ T.G.INBOX_PROJECT_TITLE | translate }}</span>
+    } @else {
+      <span>{{ selectedProject()?.title }}</span>
+    }
   </button>
 
   @if (!isHideDueBtn()) {
@@ -193,7 +197,11 @@
       (click)="stateService.updateProjectId(project.id)"
     >
       <select-option-row
-        [title]="project.title"
+        [title]="
+          isDefaultInboxProject(project)
+            ? (T.G.INBOX_PROJECT_TITLE | translate)
+            : project.title
+        "
         [icon]="project.icon"
         [defaultIcon]="DEFAULT_PROJECT_ICON"
         [color]="project.theme?.primary"
