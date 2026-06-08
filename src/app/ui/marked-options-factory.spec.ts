@@ -101,7 +101,7 @@ describe('markedOptionsFactory', () => {
       expect(result).toContain('undone');
       expect(result).toContain('check_box_outline_blank');
       expect(result).toContain('Task item');
-      expect(result).toContain('</span> Task item');
+      expect(result).toContain('<span class="checkbox-label">Task item</span>');
     });
 
     it('should render checked task list item with checkbox', () => {
@@ -116,7 +116,7 @@ describe('markedOptionsFactory', () => {
       expect(result).toContain('check_box');
       expect(result).not.toContain('check_box_outline_blank');
       expect(result).toContain('Completed task');
-      expect(result).toContain('</span> Completed task');
+      expect(result).toContain('<span class="checkbox-label">Completed task</span>');
     });
 
     it('should handle undefined checked value as unchecked', () => {
@@ -136,7 +136,9 @@ describe('markedOptionsFactory', () => {
         task: true,
         checked: false,
       } as any);
-      expect(result).toMatch(/<\/span> Spaced item<\/li>/);
+      expect(result).toMatch(
+        /<\/span> <span class="checkbox-label">Spaced item<\/span><\/li>/,
+      );
     });
 
     // Tests for gapped and nested lists (issue #6244)

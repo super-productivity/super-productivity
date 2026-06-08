@@ -452,6 +452,7 @@ describe('InlineMarkdownComponent', () => {
       checkbox2.className = 'checkbox material-icons';
       checkbox2.textContent = 'check_box_outline_blank';
       const textSpan2 = document.createElement('span');
+      textSpan2.className = 'checkbox-label';
       textSpan2.textContent = 'Task 2';
       wrapper2.appendChild(checkbox2);
       wrapper2.appendChild(textSpan2);
@@ -469,7 +470,7 @@ describe('InlineMarkdownComponent', () => {
       expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n- [x] Task 2');
     });
 
-    it('should toggle checkbox when clicking directly on the checkbox-wrapper element', () => {
+    it('should NOT toggle when clicking the empty row area, only open the editor', () => {
       // Arrange
       component.model = '- [ ] Task 1';
       fixture.detectChanges();
@@ -479,19 +480,24 @@ describe('InlineMarkdownComponent', () => {
       const checkbox1 = document.createElement('span');
       checkbox1.className = 'checkbox material-icons';
       checkbox1.textContent = 'check_box_outline_blank';
+      const label1 = document.createElement('span');
+      label1.className = 'checkbox-label';
+      label1.textContent = 'Task 1';
       wrapper1.appendChild(checkbox1);
-      wrapper1.appendChild(document.createTextNode('Task 1'));
+      wrapper1.appendChild(label1);
 
       mockPreviewEl.element.nativeElement.appendChild(wrapper1);
+      spyOn<any>(component, '_toggleShowEdit');
 
-      // Act - simulate clicking directly on the wrapper
+      // Act - click the wrapper itself (the dead space beside the label)
       const mockEvent = {
         target: wrapper1,
       } as unknown as MouseEvent;
       component.clickPreview(mockEvent);
 
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith('- [x] Task 1');
+      // Assert - no toggle, editor opens instead
+      expect(component.changed.emit).not.toHaveBeenCalled();
+      expect(component['_toggleShowEdit']).toHaveBeenCalled();
     });
 
     it('should not toggle checkbox when clicking on a link', () => {

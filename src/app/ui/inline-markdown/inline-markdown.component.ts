@@ -297,15 +297,16 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   clickPreview($event: MouseEvent): void {
-    if (($event.target as HTMLElement).tagName === 'A') {
+    const target = $event.target as HTMLElement;
+    if (target.tagName === 'A') {
       // Let links work normally
       return;
     }
 
-    // Check if click is anywhere inside a checkbox-wrapper (text or checkbox icon)
-    const wrapper = ($event.target as HTMLElement).closest(
-      '.checkbox-wrapper',
-    ) as HTMLElement;
+    // Only the checkbox icon and the item's text label toggle the item. Clicks
+    // on the empty rest of the row fall through to opening the editor.
+    const hit = target.closest('.checkbox, .checkbox-label') as HTMLElement | null;
+    const wrapper = hit?.closest('.checkbox-wrapper') as HTMLElement | null;
     if (wrapper) {
       this._handleCheckboxClick(wrapper);
     } else {
