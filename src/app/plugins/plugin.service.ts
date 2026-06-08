@@ -501,7 +501,8 @@ export class PluginService implements OnDestroy {
       return null;
     }
 
-    // Load the plugin
+    // Load the plugin (nodeExecution authorization is registered in _fireOnReady,
+    // the common chokepoint for all load paths — see GHSA-78rv-m663-4fph).
     this._setPluginState(pluginId, {
       ...currentState,
       status: 'loading',
@@ -603,6 +604,12 @@ export class PluginService implements OnDestroy {
       return;
     }
     if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
+      // SECURITY: authorize this plugin for Node execution in the main process
+      // BEFORE the first node call (the ping). This is the single chokepoint for
+      // every load path (startup, manual activation, zip upload), and reaching
+      // onReady for a nodeExecution plugin means activation already verified
+      // consent. See GHSA-78rv-m663-4fph.
+      await this._setNodeExecutionGrant(instance.manifest.id, true);
       await this._pingNodeBridge(instance.manifest);
     }
     await this._pluginRunner.triggerReady(instance.manifest.id);
@@ -1538,6 +1545,14 @@ export class PluginService implements OnDestroy {
     this._pluginHooks.unregisterPluginHooks(pluginId);
     this._pluginI18nService.unloadPluginTranslations(pluginId);
     this._pluginRunner.unloadPlugin(pluginId);
+
+    // SECURITY: revoke the main-process nodeExecution grant on teardown, so a
+    // disabled/uninstalled plugin cannot run Node for the rest of the session.
+    // Best-effort and fire-and-forget (teardown is synchronous); revoking by id
+    // is a no-op for plugins that never held a grant. See GHSA-78rv-m663-4fph.
+    void this._setNodeExecutionGrant(pluginId, false).catch((e) =>
+      PluginLog.err(`Failed to revoke nodeExecution grant for ${pluginId}`, e),
+    );
   }
 
   unloadPlugin(pluginId: string): boolean {
@@ -1673,6 +1688,23 @@ export class PluginService implements OnDestroy {
     } catch (error) {
       PluginLog.err(`Failed to reload uploaded plugin ${pluginId}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Register (or revoke) a plugin's nodeExecution grant with the Electron main
+   * process, so the main process authorizes Node execution from its own state
+   * rather than the per-call manifest the renderer passes (CWE-501). The full
+   * rationale (and the "defense in depth, not a hard boundary" caveat) lives on
+   * the executor — see electron/plugin-node-executor.ts and GHSA-78rv-m663-4fph.
+   * No-op outside Electron.
+   */
+  private async _setNodeExecutionGrant(
+    pluginId: string,
+    isGranted: boolean,
+  ): Promise<void> {
+    if (IS_ELECTRON) {
+      await window.ea.pluginSetNodeConsent(pluginId, isGranted);
     }
   }
 

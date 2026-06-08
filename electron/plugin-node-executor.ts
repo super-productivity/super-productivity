@@ -12,11 +12,40 @@ const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const MAX_TIMEOUT = 300000; // 5 minutes
 
 class PluginNodeExecutor {
+  /**
+   * Authoritative set of plugin IDs the renderer has registered as having
+   * user-granted nodeExecution consent. Held in the main process so node
+   * execution is authorized from our own state — NOT from the manifest the
+   * renderer passes on each call, which a compromised/XSS'd renderer could
+   * forge ({ permissions: ['nodeExecution'] }). See GHSA-78rv-m663-4fph.
+   *
+   * In-memory by design: it resets on app restart and the renderer re-registers
+   * each consented plugin when it re-activates it on boot.
+   */
+  private readonly grantedPlugins = new Set<string>();
+
   constructor() {
     this.setupIpcHandler();
   }
 
   private setupIpcHandler(): void {
+    // Trusted out-of-band channel: the renderer registers (or revokes) a
+    // plugin's nodeExecution grant here, separately from the exec call, after
+    // it has verified user consent.
+    ipcMain.handle(
+      IPC.PLUGIN_SET_NODE_CONSENT,
+      (_event, pluginId: string, isGranted: boolean) => {
+        if (typeof pluginId !== 'string' || !pluginId) {
+          throw new Error('Invalid pluginId');
+        }
+        if (isGranted) {
+          this.grantedPlugins.add(pluginId);
+        } else {
+          this.grantedPlugins.delete(pluginId);
+        }
+      },
+    );
+
     ipcMain.handle(
       IPC.PLUGIN_EXEC_NODE_SCRIPT,
       async (
@@ -30,7 +59,13 @@ class PluginNodeExecutor {
           throw new Error('No window found for event sender');
         }
 
-        // Check permissions
+        // SECURITY: authorize from main-process-held state, not the per-call
+        // manifest the renderer supplies (the renderer-supplied manifest is not
+        // trustworthy — CWE-501). The manifest check is kept only as a secondary
+        // sanity gate. See GHSA-78rv-m663-4fph.
+        if (!this.grantedPlugins.has(pluginId)) {
+          throw new Error('Plugin is not authorized for nodeExecution');
+        }
         if (!manifest.permissions?.includes('nodeExecution')) {
           throw new Error('Plugin does not have nodeExecution permission');
         }

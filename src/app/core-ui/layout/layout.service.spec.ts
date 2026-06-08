@@ -73,15 +73,19 @@ describe('LayoutService', () => {
     });
 
     afterEach(() => {
-      // Restore the native getter: the tests below clobber document.activeElement
-      // via Object.defineProperty. Without this, the static override leaks into
-      // other specs in the shared Karma session (e.g. TaskService.focusTaskById
-      // then reads a stale activeElement and its focus assertions fail). Mirrors
-      // the cleanup already done in task-shortcut.service.spec.
-      delete (document as unknown as { activeElement?: unknown }).activeElement;
+      // These tests shadow the native document.activeElement getter with an own
+      // data property via Object.defineProperty. Delete it so the prototype
+      // accessor shows through again; otherwise a stale activeElement leaks into
+      // later specs (e.g. TaskService.focusTaskById reads the clobbered value).
+      Reflect.deleteProperty(document, 'activeElement');
       if (mockTaskElement && mockTaskElement.parentNode) {
         mockTaskElement.parentNode.removeChild(mockTaskElement);
       }
+      // Restore the native activeElement getter — the tests below shadow it with
+      // a static own property via Object.defineProperty, which otherwise leaks
+      // into later specs and freezes document.activeElement (e.g. breaking
+      // task.service focusTaskById, which reads the real activeElement).
+      delete (document as unknown as { activeElement?: unknown }).activeElement;
     });
 
     it('should store focused task element when showing add task bar', () => {

@@ -232,6 +232,11 @@ export interface ElectronAPI {
     request: PluginNodeScriptRequest,
   ): Promise<PluginNodeScriptResult>;
 
+  // Register/revoke a plugin's nodeExecution grant with the main process so the
+  // executor authorizes from its own state, not the per-call manifest.
+  // See GHSA-78rv-m663-4fph.
+  pluginSetNodeConsent(pluginId: string, isGranted: boolean): Promise<void>;
+
   // Plugin OAuth
   pluginOAuthPrepare(): Promise<{ port: number }>;
   pluginOAuthStart(url: string): void;

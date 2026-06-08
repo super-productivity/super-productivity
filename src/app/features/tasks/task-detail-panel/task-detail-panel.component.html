@@ -213,14 +213,13 @@
         <mat-icon>checklist</mat-icon>
         Checklist
         <!-- -->
-      } @else {
-        @if (task().notes) {
-          <mat-icon>chat</mat-icon>
-        }
-        @if (!task().notes) {
-          <mat-icon>chat_bubble_outline</mat-icon>
-        }
+      } @else if (task().notes) {
+        <mat-icon>chat</mat-icon>
         <span>{{ T.F.TASK.ADDITIONAL_INFO.NOTES | translate }}</span>
+      } @else {
+        <!-- No content yet: hint that this section can hold a note or a checklist -->
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <span>{{ T.F.TASK.ADDITIONAL_INFO.NOTES_OR_CHECKLIST | translate }}</span>
       }
     </ng-container>
 
@@ -234,6 +233,7 @@
         [isShowControls]="true"
         [isShowChecklistToggle]="true"
         [isDefaultText]="!task().notes"
+        [defaultText]="isStockNotesTemplate() ? defaultTaskNotes() : ''"
         [model]="task().notes || defaultTaskNotes()"
         [taskId]="task().id"
       ></inline-markdown>

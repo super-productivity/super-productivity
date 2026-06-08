@@ -47,6 +47,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { devError } from '../../../util/dev-error';
 import { IS_MOBILE } from '../../../util/is-mobile';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -282,6 +283,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     const tasks = this._globalConfigService.tasks();
     return tasks?.notesTemplate || '';
   });
+
+  // True only for the app's generic stock template (not a user-customized one).
+  // Used to let the checklist button replace the shown default text with a fresh
+  // checklist; customized templates are treated as real content and preserved.
+  isStockNotesTemplate = computed(
+    () => this.defaultTaskNotes() === DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate,
+  );
 
   // Local attachments computed signal
   localAttachments = computed(() => {

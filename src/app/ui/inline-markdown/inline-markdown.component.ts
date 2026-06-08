@@ -19,11 +19,19 @@ import { FormsModule } from '@angular/forms';
 import { MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
+import { TranslatePipe } from '@ngx-translate/core';
 import { MarkdownComponent } from 'ngx-markdown';
 import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
+import {
+  removeCheckedChecklistItems,
+  setAllChecklistItemsChecked,
+  toggleChecklistItemAtIndex,
+} from '../../features/markdown-checklist/checklist-operations';
+import { T } from '../../t.const';
 import { fadeInAnimation } from '../animations/fade.ani';
 import { DialogFullscreenMarkdownComponent } from '../dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
@@ -46,6 +54,10 @@ const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
     MatIconButton,
     MatTooltip,
     MatIcon,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+    TranslatePipe,
     ResolveClipboardImagesDirective,
   ],
 })
@@ -64,6 +76,11 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly isShowControls = input<boolean>(false);
   readonly isShowChecklistToggle = input<boolean>(false);
   readonly isDefaultText = input<boolean>(false);
+  // The default/placeholder text currently shown when there are no real notes.
+  // When set and still unmodified, the checklist button REPLACES it with a fresh
+  // checklist instead of appending below it (see toggleChecklistMode). Callers
+  // only pass this for throwaway default text, never for user content (#7786).
+  readonly defaultText = input<string>('');
   readonly placeholderTxt = input<string | undefined>(undefined);
   readonly taskId = input<string | undefined>(undefined);
 
@@ -89,6 +106,17 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   });
 
   isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
+
+  // True when the current notes are a markdown checklist — gates the checklist
+  // bulk actions (check all / uncheck all / clear completed) in the UI.
+  isCurrentlyChecklist = computed(
+    () =>
+      this.isShowChecklistToggle() &&
+      this.isMarkdownFormattingEnabled() &&
+      isMarkdownChecklist(this.modelCopy() || ''),
+  );
+
+  readonly T = T;
   private _hideOverFlowTimeout: number | undefined;
 
   constructor() {
@@ -178,6 +206,35 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     this.isChecklistMode.set(!this.isChecklistMode());
   }
 
+  checkAllChecklistItems(): void {
+    this._applyChecklistTransform((notes) => setAllChecklistItemsChecked(notes, true));
+  }
+
+  uncheckAllChecklistItems(): void {
+    this._applyChecklistTransform((notes) => setAllChecklistItemsChecked(notes, false));
+  }
+
+  clearCompletedChecklistItems(): void {
+    this._applyChecklistTransform(removeCheckedChecklistItems);
+  }
+
+  private _applyChecklistTransform(transform: (notes: string) => string): void {
+    // Read the freshest content: the textarea when editing, else the model.
+    const textareaEl = this.textareaEl();
+    const current = textareaEl ? textareaEl.nativeElement.value : this._model || '';
+    const next = transform(current);
+    if (next === current) {
+      return;
+    }
+    // The `model` setter syncs `modelCopy` and re-resolves the rendered markdown.
+    this.model = next;
+    if (textareaEl) {
+      textareaEl.nativeElement.value = next;
+    }
+    this.changed.emit(next);
+    window.setTimeout(() => this.resizeParsedToFit());
+  }
+
   keypressHandler(ev: KeyboardEvent): void {
     this.resizeTextareaToFit();
 
@@ -241,15 +298,16 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   clickPreview($event: MouseEvent): void {
-    if (($event.target as HTMLElement).tagName === 'A') {
+    const target = $event.target as HTMLElement;
+    if (target.tagName === 'A') {
       // Let links work normally
       return;
     }
 
-    // Check if click is anywhere inside a checkbox-wrapper (text or checkbox icon)
-    const wrapper = ($event.target as HTMLElement).closest(
-      '.checkbox-wrapper',
-    ) as HTMLElement;
+    // Only the checkbox icon and the item's text label toggle the item. Clicks
+    // on the empty rest of the row fall through to opening the editor.
+    const hit = target.closest('.checkbox, .checkbox-label') as HTMLElement | null;
+    const wrapper = hit?.closest('.checkbox-wrapper') as HTMLElement | null;
     if (wrapper) {
       this._handleCheckboxClick(wrapper);
     } else {
@@ -376,7 +434,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     const INSERT_TEXT = '\n- [ ] ';
 
-    if (this.isDefaultText() && !currentText) {
+    // Replace the field with a fresh checklist when it shows only default text:
+    // either nothing at all, or the unmodified default template. We never reach
+    // here with user-typed content because `currentText` reflects the live
+    // textarea value, so any edit breaks the equality check below.
+    const defaultText = this.defaultText();
+    const isUnmodifiedDefault =
+      !!defaultText && currentText.trim() === defaultText.trim();
+
+    if (this.isDefaultText() && (!currentText || isUnmodifiedDefault)) {
       const newValue = '- [ ] ';
       this.model = newValue;
       this.isChecklistMode.set(true);
@@ -523,31 +589,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _handleCheckboxClick(targetEl: HTMLElement): void {
     const allCheckboxes =
       this.previewEl()?.element.nativeElement.querySelectorAll('.checkbox-wrapper');
-
     const checkIndex = Array.from(allCheckboxes || []).findIndex((el) => el === targetEl);
-    if (checkIndex !== -1 && this._model) {
-      const allLines = this._model.split('\n');
-      const todoAllLinesIndexes = allLines
-        .map((line, index) => (line.includes('- [') ? index : null))
-        .filter((i) => i !== null);
-
-      // Find all to-do items in the markdown string
-      // Log.log(checkIndex, todoAllLinesIndexes, allLines);
-
-      const itemIndex = todoAllLinesIndexes[checkIndex];
-      if (typeof itemIndex === 'number' && itemIndex > -1) {
-        const item = allLines[itemIndex];
-        allLines[itemIndex] = item.includes('[ ]')
-          ? item.replace('[ ]', '[x]').replace('[]', '[x]')
-          : item.replace('[x]', '[ ]');
-        this.modelCopy.set(allLines.join('\n'));
-
-        // Update the markdown string
-        if (this.modelCopy() !== this.model) {
-          this.model = this.modelCopy() || '';
-          this.changed.emit(this.modelCopy() as string);
-        }
-      }
+    if (checkIndex === -1 || !this._model) {
+      return;
+    }
+    const next = toggleChecklistItemAtIndex(this._model, checkIndex);
+    if (next !== this._model) {
+      this.modelCopy.set(next);
+      this.model = next;
+      this.changed.emit(next);
     }
   }
 
