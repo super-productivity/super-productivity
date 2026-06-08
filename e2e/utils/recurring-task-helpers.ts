@@ -45,17 +45,7 @@ export const openRecurDialogFromProjection = async (
 };
 
 /**
- * Set the recurring "Start date" by typing into the matInput. The input parses
- * the locale's display format (en-GB → "DD/MM/YYYY") on blur, which is more
- * robust than driving the calendar overlay across Material versions.
- *
- * Flake guard: the Material datepicker input intermittently drops the typed
- * value while the dialog is still binding/animating. On blur the (dateChange)
- * handler clears `innerValue` whenever the field hasn't yet parsed to a valid
- * date, and the one-way `[ngModel]="innerValue()"` binding then re-renders the
- * input as empty (`toHaveValue("")`). The previous guard wrapped only the
- * fill — so the value still vanished on the Tab-triggered blur. Retry the WHOLE
- * type-and-commit cycle (fill + Tab) until the committed value sticks.
+ * Set the recurring "Start date" by using the calendar datepicker.
  */
 export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
   const dialog = page.locator(DIALOG_CONTAINER).first();
@@ -77,7 +67,6 @@ export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<v
   const year = parseInt(yearStr, 10);
 
   // Navigate to correct year
-  await scheduleDialog.locator('.mat-calendar-period-button').click();
   await scheduleDialog.locator('.mat-calendar-period-button').click();
   const yearCell = scheduleDialog
     .locator('.mat-calendar-body-cell')

@@ -179,9 +179,7 @@ export class DialogEditTaskRepeatCfgComponent {
           showQuickAccess: true,
           targetDay: currentCfg.startDate || undefined,
           targetTime: hasValidTime ? currentCfg.startTime : undefined,
-          minDate: currentCfg.startDate
-            ? dateStrToUtcDate(currentCfg.startDate)
-            : undefined,
+          minDate: undefined,
         },
       })
       .afterClosed()
