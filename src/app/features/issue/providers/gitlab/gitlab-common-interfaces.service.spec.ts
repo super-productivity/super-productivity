@@ -15,6 +15,7 @@ import { IssueProviderGitlab } from '../../issue.model';
 
 const ISSUE_PROVIDER_ID = 'gitlab-provider-1';
 const ISSUE_ID = 'project/repo#42';
+const ISSUE_BODY = 'body';
 const BASE_UPDATED_AT = '2026-01-08T03:29:14.653Z';
 const LATER_COMMENT_AT = '2026-01-08T03:29:14.717Z';
 const NEWER_UPDATED_AT = '2026-01-08T03:30:00.000Z';
@@ -38,9 +39,9 @@ const USER: GitlabOriginalUser = {
   web_url: '',
 };
 
-const makeComment = (createdAt: string): GitlabOriginalComment => ({
+const makeComment = (createdAt: string, body = 'comment'): GitlabOriginalComment => ({
   id: 1,
-  body: 'comment',
+  body,
   attachment: '',
   author: USER,
   created_at: createdAt,
@@ -55,12 +56,13 @@ const makeComment = (createdAt: string): GitlabOriginalComment => ({
 const makeIssue = (
   updatedAt: string,
   comments: GitlabOriginalComment[] = [],
+  body = ISSUE_BODY,
 ): GitlabIssue => ({
   html_url: 'https://gitlab.example.com/project/repo/-/issues/42',
   number: 42,
   state: 'open',
   title: 'GitLab issue',
-  body: 'body',
+  body,
   user: USER,
   labels: [],
   assignee: USER,
@@ -150,9 +152,11 @@ describe('GitlabCommonInterfacesService', () => {
       expect(result).toBeNull();
     });
 
-    it('flags an update when issue.updated_at is newer than the task baseline', async () => {
+    it('flags a new GitLab comment as an update when issue.updated_at is bumped', async () => {
       const issueLastUpdated = new Date(BASE_UPDATED_AT).getTime();
-      gitlabApiService.getById$.and.returnValue(of(makeIssue(NEWER_UPDATED_AT)));
+      gitlabApiService.getById$.and.returnValue(
+        of(makeIssue(NEWER_UPDATED_AT, [makeComment(NEWER_UPDATED_AT, 'new comment')])),
+      );
 
       const result = await service.getFreshDataForIssueTask(makeTask(issueLastUpdated));
 
@@ -160,6 +164,9 @@ describe('GitlabCommonInterfacesService', () => {
       expect(result?.taskChanges.issueLastUpdated).toBe(
         new Date(NEWER_UPDATED_AT).getTime(),
       );
+      const issue = result?.issue as GitlabIssue;
+      expect(issue.body).toBe(ISSUE_BODY);
+      expect(issue.commentsNr).toBe(1);
       expect(result?.issueTitle).toBe('#42 GitLab issue');
     });
   });
