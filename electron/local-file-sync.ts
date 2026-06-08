@@ -94,7 +94,7 @@ export const initLocalFileSyncAdapter = (): void => {
         return getRev(filePath);
       } catch (e) {
         error('Local file sync save failed', getSafeErrorMeta(e));
-        return e instanceof Error ? e : new Error(String(e));
+        return createSafeIpcError(IPC.FILE_SYNC_SAVE, e);
       }
     },
   );
@@ -125,7 +125,7 @@ export const initLocalFileSyncAdapter = (): void => {
         };
       } catch (e) {
         error('Local file sync load failed', getSafeErrorMeta(e));
-        return e instanceof Error ? e : new Error(String(e));
+        return createSafeIpcError(IPC.FILE_SYNC_LOAD, e);
       }
     },
   );
@@ -146,7 +146,7 @@ export const initLocalFileSyncAdapter = (): void => {
         return;
       } catch (e) {
         error('Local file sync remove failed', getSafeErrorMeta(e));
-        return e instanceof Error ? e : new Error(String(e));
+        return createSafeIpcError(IPC.FILE_SYNC_REMOVE, e);
       }
     },
   );
@@ -174,7 +174,7 @@ export const initLocalFileSyncAdapter = (): void => {
             'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
           );
         }
-        return e instanceof Error ? e : new Error(String(e));
+        return createSafeIpcError(IPC.CHECK_DIR_EXISTS, e);
       }
     },
   );
@@ -198,7 +198,7 @@ export const initLocalFileSyncAdapter = (): void => {
             'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
           );
         }
-        return e instanceof Error ? e : new Error(String(e));
+        return createSafeIpcError(IPC.FILE_SYNC_LIST_FILES, e);
       }
     },
   );
@@ -274,4 +274,19 @@ const getSafeErrorMeta = (
       : undefined;
 
   return errorCode === undefined ? { errorName } : { errorName, errorCode };
+};
+
+const createSafeIpcError = (operation: IPC, e: unknown): Error => {
+  const { errorName, errorCode } = getSafeErrorMeta(e);
+  const codeMessagePart = errorCode === undefined ? '' : ` (code: ${errorCode})`;
+  const safeError = new Error(`${operation} failed: ${errorName}${codeMessagePart}`, {
+    cause: { name: errorName, code: errorCode },
+  }) as Error & { code?: string | number };
+  safeError.name = errorName;
+  if (errorCode !== undefined) {
+    safeError.code = errorCode;
+  }
+  delete safeError.stack;
+
+  return safeError;
 };
