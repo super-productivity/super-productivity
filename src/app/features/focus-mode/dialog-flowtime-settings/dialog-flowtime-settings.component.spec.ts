@@ -65,6 +65,16 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(model.breakRules![0].breakDuration).toBe(5); // 300000 / 60000
   });
 
+  it('should keep mode-specific settings when fields are hidden', () => {
+    const fields = component.fields();
+
+    expect(fields.find((field) => field.key === 'breakMode')?.resetOnHide).toBe(false);
+    expect(fields.find((field) => field.key === 'breakPercentage')?.resetOnHide).toBe(
+      false,
+    );
+    expect(fields.find((field) => field.key === 'breakRules')?.resetOnHide).toBe(false);
+  });
+
   describe('save()', () => {
     it('should convert minutes back to ms and save the config', () => {
       component.save();

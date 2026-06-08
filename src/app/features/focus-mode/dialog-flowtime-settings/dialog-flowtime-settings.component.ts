@@ -91,6 +91,7 @@ export class DialogFlowtimeSettingsComponent {
     {
       key: 'breakMode',
       type: 'select',
+      resetOnHide: false,
       expressions: {
         hide: (field: FormlyFieldConfig) => !field.parent?.model?.isBreakEnabled,
       },
@@ -111,6 +112,7 @@ export class DialogFlowtimeSettingsComponent {
     {
       key: 'breakPercentage',
       type: 'input',
+      resetOnHide: false,
       expressions: {
         hide: (field: FormlyFieldConfig) =>
           !field.parent?.model?.isBreakEnabled ||
@@ -129,6 +131,7 @@ export class DialogFlowtimeSettingsComponent {
       key: 'breakRules',
       description: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULES_DESC,
       type: 'repeat',
+      resetOnHide: false,
       expressions: {
         hide: (field: FormlyFieldConfig) =>
           !field.parent?.model?.isBreakEnabled ||
