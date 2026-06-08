@@ -2,7 +2,12 @@ import { PluginAPI } from './plugin-api';
 import { PluginBaseCfg } from './plugin-api.model';
 import { PluginBridgeService } from './plugin-bridge.service';
 import { Log } from '../core/log';
-import { BatchUpdateRequest, DialogCfg, NotifyCfg } from '@super-productivity/plugin-api';
+import {
+  BatchUpdateRequest,
+  DialogCfg,
+  DialogResult,
+  NotifyCfg,
+} from '@super-productivity/plugin-api';
 
 describe('PluginAPI', () => {
   let pluginAPI: PluginAPI;
@@ -14,7 +19,7 @@ describe('PluginAPI', () => {
     getAppState: () => Promise<unknown>;
     reInitData: () => Promise<void>;
     notify: () => Promise<void>;
-    openDialog: () => Promise<void>;
+    openDialog: (dialogCfg: DialogCfg) => Promise<DialogResult>;
     batchUpdateForProject: () => Promise<unknown>;
   }>;
 
@@ -114,6 +119,21 @@ describe('PluginAPI', () => {
       pluginAPI.dispatchAction(action);
 
       expect(dispatchActionSpy).toHaveBeenCalledOnceWith(action);
+    });
+  });
+
+  describe('openDialog()', () => {
+    it('delegates to the bridge and returns the selected dialog result', async () => {
+      const dialogCfg: DialogCfg = {
+        htmlContent: '<p>Continue?</p>',
+        buttons: [{ label: 'Continue' }],
+      };
+      mockBridge.openDialog.and.resolveTo('Continue');
+
+      const result = await pluginAPI.openDialog(dialogCfg);
+
+      expect(result).toBe('Continue');
+      expect(mockBridge.openDialog).toHaveBeenCalledOnceWith(dialogCfg);
     });
   });
 

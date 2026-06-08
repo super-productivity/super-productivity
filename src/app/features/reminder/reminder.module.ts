@@ -188,6 +188,7 @@ export class ReminderModule {
         } else {
           this._matDialog.open(DialogViewTaskRemindersComponent, {
             restoreFocus: true,
+            disableClose: true,
             data: {
               reminders,
             },

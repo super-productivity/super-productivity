@@ -10,6 +10,7 @@ import { getStartPageUrlPath } from '../config/default-start-page.util';
 import { selectIsOverlayShown } from '../focus-mode/store/focus-mode.selectors';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
+import { LayoutService } from '../../core-ui/layout/layout.service';
 
 /**
  * Implements Android back-button behavior for top-level (bottom-nav) destinations
@@ -24,9 +25,9 @@ import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
  * History-backed overlays (side-nav, task-detail, notes, fullscreen-markdown)
  * and non-top-level pages (context sub-pages, settings, search, …) keep their
  * existing `window.history.back()` behavior so back still closes overlays and
- * navigates up. Focus mode is store-backed and is closed directly. A plain
- * modal dialog (no history state) is dismissed directly so back closes it
- * rather than minimizing the app underneath it.
+ * navigates up. Focus mode and layout popups are store-backed and are closed
+ * directly. A plain modal dialog (no history state) is dismissed directly so
+ * back closes it rather than minimizing the app underneath it.
  */
 @Injectable({ providedIn: 'root' })
 export class AndroidBackButtonService {
@@ -34,6 +35,7 @@ export class AndroidBackButtonService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _store = inject(Store);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _layoutService = inject(LayoutService);
 
   private readonly _isFocusOverlayShown = this._store.selectSignal(selectIsOverlayShown);
   private readonly _allProjects = this._store.selectSignal(selectAllProjects);
@@ -65,7 +67,13 @@ export class AndroidBackButtonService {
       return;
     }
 
-    // 4. Not a top-level destination (context sub-page, settings, search, …)
+    // 4. Store-backed layout popups do not push history state or open a
+    //    MatDialog, so close them before falling through to navigation/exit.
+    if (this._closeStoreBackedPopup()) {
+      return;
+    }
+
+    // 5. Not a top-level destination (context sub-page, settings, search, …)
     //    → navigate up via the history stack as before.
     const currentUrl = this._router.url;
     if (!this._isTopLevelDestination(currentUrl)) {
@@ -77,7 +85,7 @@ export class AndroidBackButtonService {
       return;
     }
 
-    // 5. A top-level destination → pop to the start destination, or exit if
+    // 6. A top-level destination → pop to the start destination, or exit if
     //    already there.
     const startUrl = this._getStartPageUrl();
     if (this._pathOf(currentUrl) === this._pathOf(startUrl)) {
@@ -85,6 +93,20 @@ export class AndroidBackButtonService {
     } else {
       this._router.navigateByUrl(startUrl, { replaceUrl: true });
     }
+  }
+
+  private _closeStoreBackedPopup(): boolean {
+    if (this._layoutService.isShowAddTaskBar()) {
+      this._layoutService.hideAddTaskBar();
+      return true;
+    }
+
+    if (this._layoutService.isShowIssuePanel()) {
+      this._layoutService.hideAddTaskPanel();
+      return true;
+    }
+
+    return false;
   }
 
   private _isHistoryOverlayOpen(): boolean {

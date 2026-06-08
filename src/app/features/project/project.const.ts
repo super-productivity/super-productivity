@@ -11,6 +11,8 @@ export const _MISSING_PROJECT_ = 'missing project';
 export const DEFAULT_PROJECT: Project = {
   isHiddenFromMenu: false,
   isArchived: false,
+  isDone: false,
+  doneOn: null,
   isEnableBacklog: false,
   backlogTaskIds: [],
   noteIds: [],

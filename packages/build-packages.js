@@ -100,6 +100,7 @@ async function getPlugins() {
 
         // Read manifest.json to check for additional files (e.g., config schema)
         const files = ['manifest.json', 'plugin.js', 'icon.svg'];
+        const requiredFiles = [...files];
         // manifest.json may live at the root or inside src/
         const manifestCandidates = [
           path.join(pluginPath, 'manifest.json'),
@@ -112,9 +113,16 @@ async function getPlugins() {
             manifestRead = true;
             if (manifest.iFrame !== false) {
               files.push('index.html');
+              requiredFiles.push('index.html');
             }
             if (manifest.jsonSchemaCfg) {
               files.push(manifest.jsonSchemaCfg);
+              requiredFiles.push(manifest.jsonSchemaCfg);
+            }
+            if (manifest.i18n?.languages) {
+              for (const lang of manifest.i18n.languages) {
+                requiredFiles.push(`i18n/${lang}.json`);
+              }
             }
             break;
           } catch {
@@ -124,6 +132,7 @@ async function getPlugins() {
         if (!manifestRead) {
           // No manifest.json found — assume index.html is needed
           files.push('index.html');
+          requiredFiles.push('index.html');
         }
 
         plugins.push({
@@ -131,6 +140,7 @@ async function getPlugins() {
           path: `packages/plugin-dev/${entry.name}`,
           buildCommand: hasRealBuildScript ? 'npm run build' : undefined,
           files,
+          requiredFiles,
           sourcePath: hasRealBuildScript ? 'dist' : undefined,
         });
       } catch (e) {

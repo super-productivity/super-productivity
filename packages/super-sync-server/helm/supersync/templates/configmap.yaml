@@ -6,6 +6,7 @@ metadata:
     {{- include "supersync.labels" . | nindent 4 }}
 data:
   PORT: {{ .Values.supersync.port | quote }}
+  HOST: {{ .Values.supersync.host | quote }}
   NODE_ENV: {{ .Values.supersync.nodeEnv | quote }}
   {{- if .Values.supersync.publicUrl }}
   PUBLIC_URL: {{ .Values.supersync.publicUrl | quote }}

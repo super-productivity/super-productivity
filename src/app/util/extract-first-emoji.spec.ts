@@ -58,6 +58,17 @@ describe('extractFirstEmoji', () => {
     expect(extractFirstEmoji('0️⃣ zero')).toBe('0️⃣');
   });
 
+  it('should handle misc technical symbol emojis', () => {
+    expect(extractFirstEmoji('⏩ fast forward')).toBe('⏩');
+    expect(extractFirstEmoji('⏪ rewind')).toBe('⏪');
+    expect(extractFirstEmoji('⏫ up')).toBe('⏫');
+    expect(extractFirstEmoji('⏬ down')).toBe('⏬');
+    expect(extractFirstEmoji('⏰ alarm')).toBe('⏰');
+    expect(extractFirstEmoji('⌚ watch')).toBe('⌚');
+    expect(extractFirstEmoji('⏳ hourglass')).toBe('⏳');
+    expect(extractFirstEmoji('⌛ done')).toBe('⌛');
+  });
+
   it('should handle ZWJ emojis with skin tone', () => {
     expect(extractFirstEmoji('👩🏽‍💻 developer')).toBe('👩🏽‍💻');
   });
@@ -128,6 +139,17 @@ describe('isSingleEmoji', () => {
     expect(isSingleEmoji('0️⃣')).toBe(true);
   });
 
+  it('should return true for misc technical symbol emojis', () => {
+    expect(isSingleEmoji('⏩')).toBe(true);
+    expect(isSingleEmoji('⏪')).toBe(true);
+    expect(isSingleEmoji('⏫')).toBe(true);
+    expect(isSingleEmoji('⏬')).toBe(true);
+    expect(isSingleEmoji('⏰')).toBe(true);
+    expect(isSingleEmoji('⌚')).toBe(true);
+    expect(isSingleEmoji('⏳')).toBe(true);
+    expect(isSingleEmoji('⌛')).toBe(true);
+  });
+
   it('should return true for ZWJ emojis with skin tone', () => {
     expect(isSingleEmoji('👩🏽‍💻')).toBe(true);
   });
@@ -179,6 +201,12 @@ describe('containsEmoji', () => {
 
   it('should detect keycap emojis in mixed text', () => {
     expect(containsEmoji('Press #️⃣ to continue')).toBe(true);
+  });
+
+  it('should detect misc technical symbol emojis in mixed text', () => {
+    expect(containsEmoji('Use ⏩ to skip')).toBe(true);
+    expect(containsEmoji('Alarm ⏰')).toBe(true);
+    expect(containsEmoji('Waiting ⏳')).toBe(true);
   });
 
   it('should handle null/undefined gracefully', () => {

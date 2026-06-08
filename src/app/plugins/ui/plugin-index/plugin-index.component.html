@@ -67,6 +67,8 @@
       <iframe
         #iframe
         [src]="iframeSrc()"
+        data-plugin-iframe
+        [attr.data-plugin-id]="pluginId()"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
         class="plugin-iframe"
         [class.hidden]="isLoading()"

@@ -238,6 +238,7 @@ export class PluginHooksEffects {
 
           // Dispatch hook to notify plugins
           this.pluginService.dispatchHook(PluginHooks.LANGUAGE_CHANGE, {
+            code: newLanguage,
             newLanguage,
           });
         }),

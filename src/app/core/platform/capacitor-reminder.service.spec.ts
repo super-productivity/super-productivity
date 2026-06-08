@@ -39,11 +39,13 @@ describe('CapacitorReminderService', () => {
 
     notificationServiceSpy = jasmine.createSpyObj('CapacitorNotificationService', [
       'ensurePermissions',
+      'getPermissionState',
       'cancel',
       'cancelMultiple',
       'registerReminderActions',
     ]);
     notificationServiceSpy.ensurePermissions.and.returnValue(Promise.resolve(true));
+    notificationServiceSpy.getPermissionState.and.returnValue(Promise.resolve('granted'));
     notificationServiceSpy.cancel.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.cancelMultiple.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.registerReminderActions.and.returnValue(Promise.resolve());
@@ -183,6 +185,14 @@ describe('CapacitorReminderService', () => {
     });
   });
 
+  describe('getPermissionState', () => {
+    it("should return 'denied' when not available, without prompting", async () => {
+      const result = await service.getPermissionState();
+      expect(result).toBe('denied');
+      expect(notificationServiceSpy.getPermissionState).not.toHaveBeenCalled();
+    });
+  });
+
   describe('ensureExactAlarmPermission', () => {
     it('should return true on non-Android platforms', async () => {
       const result = await service.ensureExactAlarmPermission();
@@ -237,6 +247,14 @@ describe('CapacitorReminderService', () => {
       const result = await legacyService.ensureExactAlarmPermission();
       expect(result).toBe(true);
       expect(checkExactAlarmSpy).not.toHaveBeenCalled();
+    });
+
+    it("getPermissionState reports 'granted' without consulting Capacitor", async () => {
+      // Same #7408 reasoning as ensurePermissions: the upfront check is broken
+      // in the legacy WebView, so we trust the OS to gate at fire time.
+      const result = await legacyService.getPermissionState();
+      expect(result).toBe('granted');
+      expect(notificationServiceSpy.getPermissionState).not.toHaveBeenCalled();
     });
   });
 
@@ -301,6 +319,16 @@ describe('CapacitorReminderService', () => {
     it('should call notificationService.ensurePermissions when ensuring permissions', async () => {
       await nativeService.ensurePermissions();
       expect(notificationServiceSpy.ensurePermissions).toHaveBeenCalled();
+    });
+
+    it('getPermissionState delegates to notificationService (no prompt) on native', async () => {
+      notificationServiceSpy.getPermissionState.and.returnValue(
+        Promise.resolve('denied'),
+      );
+      const result = await nativeService.getPermissionState();
+      expect(result).toBe('denied');
+      expect(notificationServiceSpy.getPermissionState).toHaveBeenCalledTimes(1);
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
     });
 
     it('should include sound property when scheduling on iOS', async () => {

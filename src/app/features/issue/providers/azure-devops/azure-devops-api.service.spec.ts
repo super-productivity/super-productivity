@@ -63,6 +63,22 @@ describe('AzureDevOpsApiService', () => {
       req.flush({ workItems: [] });
     });
 
+    it('should use the configured host directly for self-hosted Azure DevOps Server URLs (#7672)', () => {
+      const cfg: AzureDevOpsCfg = {
+        ...mockCfg,
+        host: 'https://ado.example.com/tfs/DefaultCollection',
+        organization: null,
+      };
+
+      service.searchIssues$('test', cfg).subscribe();
+
+      const req = httpMock.expectOne(
+        `${cfg.host}/${cfg.project}/_apis/wit/wiql?api-version=6.0`,
+      );
+
+      req.flush({ workItems: [] });
+    });
+
     it('should map search results correctly including ticket type', () => {
       const searchTerm = 'test';
       service.searchIssues$(searchTerm, mockCfg).subscribe((issues) => {
@@ -103,6 +119,23 @@ describe('AzureDevOpsApiService', () => {
 
       const req = httpMock.expectOne(
         `${mockCfg.host}/_apis/connectionData?api-version=5.1-preview`,
+      );
+      expect(req.request.method).toBe('GET');
+
+      req.flush({ authenticatedUser: { providerDisplayName: 'Test User' } });
+    });
+
+    it('should not require organization when host already contains the collection path (#7672)', () => {
+      const cfg: AzureDevOpsCfg = {
+        ...mockCfg,
+        host: 'https://ado.example.com/tfs/DefaultCollection',
+        organization: null,
+      };
+
+      service.getCurrentUser$(cfg).subscribe();
+
+      const req = httpMock.expectOne(
+        `${cfg.host}/_apis/connectionData?api-version=5.1-preview`,
       );
       expect(req.request.method).toBe('GET');
 

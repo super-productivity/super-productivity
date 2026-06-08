@@ -594,8 +594,10 @@ export const handleEnterKey = (
 
 /**
  * Handle Tab key to indent a list line by 2 spaces.
- * Only acts when cursor is at line start (position 0) or at prefix end with no content.
- * Returns null if conditions are not met (caller should not preventDefault).
+ * Acts whenever the (collapsed) cursor sits on a list line, regardless of the
+ * cursor column, so pressing Tab while typing an item indents it instead of
+ * moving focus out of the editor. Returns null for multi-char selections or
+ * non-list lines (caller should not preventDefault).
  */
 export const handleTabKey = (
   text: string,
@@ -607,16 +609,7 @@ export const handleTabKey = (
   }
   const { start: lineStart, end: lineEnd } = getLineRange(text, selectionStart);
   const currentLine = text.substring(lineStart, lineEnd);
-  const match = currentLine.match(LIST_PREFIX_REGEX);
-  if (!match) {
-    return null;
-  }
-  const [, whitespace, prefix, content] = match;
-  const prefixLen = whitespace.length + prefix.length;
-  const cursorInLine = selectionStart - lineStart;
-  const atLineStart = cursorInLine === 0;
-  const atEmptyPrefixEnd = cursorInLine === prefixLen && content.trim().length === 0;
-  if (!atLineStart && !atEmptyPrefixEnd) {
+  if (!currentLine.match(LIST_PREFIX_REGEX)) {
     return null;
   }
   const indent = '  ';

@@ -5,6 +5,7 @@ export {
   PluginBaseCfg,
   DialogButtonCfg,
   DialogCfg,
+  DialogResult,
   NotifyCfg,
   PluginManifest,
   PluginHookHandler,

@@ -53,10 +53,10 @@ export class TaskPage extends BasePage {
    */
   async markTaskAsDone(task: Locator): Promise<void> {
     await task.waitFor({ state: 'visible' });
+    // `data-task-id` is only bound on the <task> host. Wrapper components such
+    // as <planner-task> (Boards) render the same done-toggle but expose no id,
+    // so the done-confirmation strategy is chosen based on its presence.
     const taskId = await task.getAttribute('data-task-id');
-    if (!taskId) {
-      throw new Error('Unable to wait for done state: task is missing data-task-id');
-    }
     await task.hover();
 
     // Give hover effects time to settle
@@ -66,20 +66,29 @@ export class TaskPage extends BasePage {
     await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
     await doneBtn.click();
 
-    // The done animation can briefly render old and new rows with the same id.
-    await this.page.waitForFunction(
-      (id) => {
-        const matchingTasks = Array.from(document.querySelectorAll('task')).filter(
-          (el) => el.getAttribute('data-task-id') === id,
-        );
-        return (
-          matchingTasks.length > 0 &&
-          matchingTasks.every((el) => el.classList.contains('isDone'))
-        );
-      },
-      taskId,
-      { timeout: 10000 },
-    );
+    if (taskId) {
+      // <task> rows: the done animation can briefly render old and new rows
+      // with the same id, so wait until every matching row reflects done.
+      await this.page.waitForFunction(
+        (id) => {
+          const matchingTasks = Array.from(document.querySelectorAll('task')).filter(
+            (el) => el.getAttribute('data-task-id') === id,
+          );
+          return (
+            matchingTasks.length > 0 &&
+            matchingTasks.every((el) => el.classList.contains('isDone'))
+          );
+        },
+        taskId,
+        { timeout: 10000 },
+      );
+    } else {
+      // Wrappers like <planner-task> (Boards) can relocate the task to another
+      // panel on done (e.g. IN_PROGRESS → DONE), detaching this locator — so a
+      // done-state assertion here is unreliable. Let the toggle's 200ms
+      // animation and state change settle; callers assert the resulting panel.
+      await this.page.waitForTimeout(300);
+    }
     await waitForAngularStability(this.page);
   }
 

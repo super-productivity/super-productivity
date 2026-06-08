@@ -1,5 +1,10 @@
 import { fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
-import { Subject } from 'rxjs';
+import { EntityState } from '@ngrx/entity';
+import { firstValueFrom, Observable, of, Subject } from 'rxjs';
+import { TODAY_TAG } from '../../features/tag/tag.const';
+import { Task } from '../../features/tasks/task.model';
+import { createTask } from '../../features/tasks/task.test-helper';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import { T } from '../../t.const';
 import {
   DailySummaryComponent,
@@ -15,6 +20,24 @@ const callFinishDayForGood = (
       _finishDayForGood: (cb?: () => void) => Promise<void>;
     }
   )._finishDayForGood.call(receiver, cb);
+
+const callGetDailySummaryTasksFlat = (
+  receiver: DailySummaryComponent,
+  dayStr: string,
+): Observable<Task[]> =>
+  (
+    DailySummaryComponent.prototype as unknown as {
+      _getDailySummaryTasksFlat$: (dayStr: string) => Observable<Task[]>;
+    }
+  )._getDailySummaryTasksFlat$.call(receiver, dayStr);
+
+const buildTaskState = (tasks: Task[]): EntityState<Task> => ({
+  ids: tasks.map((task) => task.id),
+  entities: tasks.reduce<Record<string, Task>>((acc, task) => {
+    acc[task.id] = task;
+    return acc;
+  }, {}),
+});
 
 const buildFinishDayForGoodReceiver = (
   sync: () => Promise<unknown>,
@@ -57,6 +80,59 @@ const buildFinishDayForGoodReceiver = (
 };
 
 describe('DailySummaryComponent', () => {
+  describe('_getDailySummaryTasksFlat$()', () => {
+    it('should exclude future recurring task instances from the finish day summary', async () => {
+      const dayStr = '2026-01-15';
+      const todayDoneOn = new Date('2026-01-15T12:00:00').getTime();
+      const todayRecurringTask = createTask({
+        id: 'today-repeat',
+        title: 'Repeat today',
+        dueDay: dayStr,
+        repeatCfgId: 'repeat-1',
+        isDone: true,
+        doneOn: todayDoneOn,
+      });
+      const futureRecurringTask = createTask({
+        id: 'future-repeat',
+        title: 'Repeat future',
+        dueDay: '2026-01-19',
+        repeatCfgId: 'repeat-1',
+      });
+      const receiver = Object.assign(Object.create(DailySummaryComponent.prototype), {
+        isIncludeYesterday: false,
+        isArchiveLoaded: {
+          set: jasmine.createSpy('setArchiveLoaded'),
+        },
+        _taskService: {
+          taskFeatureState$: of(
+            buildTaskState([todayRecurringTask, futureRecurringTask]),
+          ),
+        },
+        workContextService: {
+          activeWorkContextTypeAndId$: of({
+            activeId: TODAY_TAG.id,
+            activeType: WorkContextType.TAG,
+          }),
+        },
+        _taskArchiveService: {
+          load: jasmine.createSpy('loadArchive').and.resolveTo(buildTaskState([])),
+        },
+        _worklogService: {
+          archiveUpdateManualTrigger$: new Subject<void>(),
+        },
+        _dateService: {
+          isToday: jasmine
+            .createSpy('isToday')
+            .and.callFake((timestamp: number) => timestamp === todayDoneOn),
+        },
+      }) as DailySummaryComponent;
+
+      const tasks = await firstValueFrom(callGetDailySummaryTasksFlat(receiver, dayStr));
+
+      expect(tasks.map((task) => task.id)).toEqual(['today-repeat']);
+    });
+  });
+
   describe('finishDay()', () => {
     it('should wait for sync to complete before archiving tasks', async () => {
       const syncDone$ = new Subject<void>();

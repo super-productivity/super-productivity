@@ -242,14 +242,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
 
   readonly style = computed(() => {
     const { overlap, style } = this.se();
-    // Arbitrarily chosen value that controls width reduction of this component
-    // whenever the underlying event duration overlaps with others
-    const overlapReductionFactor = 0.75;
     return (
       (!this.isMonthView() && !this.isDragPreview() && overlap
-        ? // eslint-disable-next-line no-mixed-operators -- conflicts with prettier formatting
-          `margin-left: ${100 - 100 * Math.pow(overlapReductionFactor, overlap.offset)}%; ` +
-          `width: calc(${Math.pow(overlapReductionFactor, overlap.count) * 100}% - var(--margin-right)); ` +
+        ? `margin-left: calc(${overlap.offset * (100 / overlap.count)}% + var(--margin-left)); ` +
+          `width: calc(${100 / overlap.count}% - var(--margin-left) - var(--margin-right)); ` +
           // Content inside the event element can spill out when the width is limited enough
           'overflow: hidden !important; '
         : '') + style
