@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { HttpClient, HttpHeaders, HttpParams, HttpRequest } from '@angular/common/http';
 import { RedmineCfg } from './redmine.model';
-import { catchError, filter, map } from 'rxjs/operators';
+import { catchError, filter, map, switchMap } from 'rxjs/operators';
 import { forkJoin, Observable, of, throwError } from 'rxjs';
 import { throwHandledError } from '../../../../util/throw-handled-error';
 import { T } from '../../../../t.const';
@@ -12,6 +12,7 @@ import {
   RedmineActivityResult,
   RedmineIssue,
   RedmineIssueResult,
+  RedmineIssueStatusOptions,
   RedmineSearchResult,
   RedmineSearchResultItem,
   RedmineTimeEntriesResult,
@@ -36,48 +37,32 @@ export class RedmineApiService {
   private _http = inject(HttpClient);
 
   searchIssuesInProject$(query: string, cfg: RedmineCfg): Observable<SearchResultItem[]> {
-    const textSearch$: Observable<SearchResultItem[]> = this._sendRequest$(
-      {
-        url: `${cfg.host}${this._projectScopePath(cfg)}/search.json`,
-        params: ParamsBuilder.create()
-          .withLimit(100)
-          .withQuery(query)
-          .onlyIssues(true)
-          .openIssues(true)
-          .build(),
-      },
-      cfg,
-    ).pipe(
-      map((res: RedmineSearchResult) => {
-        return res
-          ? res.results.map((item: RedmineSearchResultItem) =>
-              mapRedmineSearchResultItemToSearchResult(item),
-            )
-          : [];
-      }),
-    );
-
-    // Redmine's search API only does full text search and does not match issue ids,
-    // so for numeric queries (e.g. "1234" or "#1234") we additionally try to fetch
-    // the issue by its id and merge it into the results.
+    const searchResults$ = this._searchTextIssuesInProject$(query, cfg);
     const idMatch = query.trim().match(ISSUE_ID_QUERY_RGX);
-    if (!idMatch) {
-      return textSearch$;
+
+    if (!idMatch && !queryHasNonAscii(query)) {
+      return searchResults$;
     }
 
-    const issueId = Number(idMatch[1]);
-    return forkJoin([
-      this._getIssueByIdInProject$(issueId, cfg).pipe(catchError(() => of(null))),
-      textSearch$,
-    ]).pipe(
-      map(([issueById, textResults]) =>
-        issueById
-          ? [
-              mapRedmineIssueToSearchResult(issueById),
-              ...textResults.filter((result) => result.issueData.id !== issueId),
-            ]
-          : textResults,
-      ),
+    const issueById$: Observable<RedmineIssue | null> = idMatch
+      ? this._getIssueByIdInProject$(Number(idMatch[1]), cfg).pipe(
+          catchError(() => of(null)),
+        )
+      : of(null);
+
+    return forkJoin([issueById$, searchResults$]).pipe(
+      switchMap(([issueById, searchResults]) => {
+        const resultsWithId = issueById
+          ? mergeSearchResults([mapRedmineIssueToSearchResult(issueById)], searchResults)
+          : searchResults;
+
+        return queryHasNonAscii(query) && resultsWithId.length === 0
+          ? this._searchIssuesBySubjectInProject$(query, cfg).pipe(
+              map((subjectResults) => mergeSearchResults(resultsWithId, subjectResults)),
+              catchError(() => of(resultsWithId)),
+            )
+          : of(resultsWithId);
+      }),
     );
   }
 
@@ -99,7 +84,7 @@ export class RedmineApiService {
         url: `${cfg.host}${this._projectScopePath(cfg)}/issues.json`,
         params: ParamsBuilder.create()
           .withParam('issue_id', String(issueId))
-          .withState('*')
+          .withState(RedmineIssueStatusOptions.all)
           .withLimit(1)
           .build(),
       },
@@ -189,6 +174,60 @@ export class RedmineApiService {
     );
   }
 
+  private _searchTextIssuesInProject$(
+    query: string,
+    cfg: RedmineCfg,
+  ): Observable<SearchResultItem[]> {
+    return this._sendRequest$(
+      {
+        url: `${cfg.host}${this._projectScopePath(cfg)}/search.json`,
+        params: ParamsBuilder.create()
+          .withLimit(100)
+          .withQuery(query)
+          .onlyIssues(true)
+          .openIssues(true)
+          .build(),
+      },
+      cfg,
+    ).pipe(
+      map((res: RedmineSearchResult) => {
+        return res
+          ? res.results.map((item: RedmineSearchResultItem) =>
+              mapRedmineSearchResultItemToSearchResult(item),
+            )
+          : [];
+      }),
+    );
+  }
+
+  private _searchIssuesBySubjectInProject$(
+    query: string,
+    cfg: RedmineCfg,
+  ): Observable<SearchResultItem[]> {
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+      return of([]);
+    }
+
+    return this._sendRequest$(
+      {
+        url: `${cfg.host}${this._projectScopePath(cfg)}/issues.json`,
+        params: ParamsBuilder.create()
+          .withLimit(100)
+          .withState(RedmineIssueStatusOptions.open)
+          .withSubjectContains(trimmedQuery)
+          .build(),
+      },
+      cfg,
+      { isSkipErrorHandling: true },
+    ).pipe(
+      map((res: RedmineIssueResult) =>
+        (res?.issues ?? []).map((issue) => mapRedmineIssueToSearchResult(issue)),
+      ),
+    );
+  }
+
   // Returns the project URL segment to prefix scoped endpoints with: `/projects/<id>` when a
   // project is configured, or '' when it is not. An empty segment makes requests hit Redmine's
   // instance-wide endpoints (`/search.json`, `/issues.json`), so a single connection can search
@@ -266,6 +305,37 @@ export class RedmineApiService {
   }
 }
 
+const queryHasNonAscii = (query: string): boolean => /[^\u0000-\u007F]/.test(query);
+
+const getIssueId = (item: SearchResultItem): number | string | undefined => {
+  return item.issueData?.id;
+};
+
+const mergeSearchResults = (
+  ...resultGroups: SearchResultItem[][]
+): SearchResultItem[] => {
+  const seenIssueIds = new Set<number | string>();
+  const mergedResults: SearchResultItem[] = [];
+
+  for (const resultGroup of resultGroups) {
+    for (const item of resultGroup) {
+      const issueId = getIssueId(item);
+
+      if (issueId !== undefined && issueId !== null) {
+        if (seenIssueIds.has(issueId)) {
+          continue;
+        }
+
+        seenIssueIds.add(issueId);
+      }
+
+      mergedResults.push(item);
+    }
+  }
+
+  return mergedResults;
+};
+
 class ParamsBuilder {
   params: any = {};
 
@@ -300,6 +370,14 @@ class ParamsBuilder {
 
   withQuery(query: string): ParamsBuilder {
     this.params['q'] = query;
+    return this;
+  }
+
+  withSubjectContains(query: string): ParamsBuilder {
+    this.params['set_filter'] = '1';
+    this.params['f[]'] = 'subject';
+    this.params['op[subject]'] = '~';
+    this.params['v[subject][]'] = query;
     return this;
   }
 
