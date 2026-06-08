@@ -1,0 +1,19 @@
+{
+  "PLUGIN": {
+    "NAME": "Aufgaben von gestern",
+    "DESCRIPTION": "Zeigt alle Aufgaben an, an denen du gestern gearbeitet hast, inklusive der jeweils erfassten Zeit."
+  },
+  "SHORTCUT": {
+    "SHOW_YESTERDAY_TASKS": "Aufgaben von gestern anzeigen"
+  },
+  "DATE": {
+    "YESTERDAY": "Gestern",
+    "DAYS_AGO": "vor {{count}} Tagen"
+  },
+  "MESSAGES": {
+    "LOADING_TASKS": "Aufgaben werden geladen...",
+    "NO_RECENT_TASKS_FOUND": "Keine aktuellen Aufgaben gefunden",
+    "NO_TASKS_LAST_30_DAYS": "In den letzten 30 Tagen wurden keine Aufgaben erfasst.",
+    "ERROR_LOADING_TASKS": "Fehler beim Laden der Aufgaben. Bitte versuche es erneut."
+  }
+}

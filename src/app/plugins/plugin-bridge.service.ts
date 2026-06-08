@@ -85,6 +85,8 @@ import { createPluginSyncAdapter } from './issue-provider/plugin-sync-adapter.se
 import { PluginOAuthBridgeService } from './oauth/plugin-oauth-bridge.service';
 import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
+import { PluginI18nService } from './plugin-i18n.service';
+import { formatDateForPlugin } from './plugin-i18n-date.util';
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
@@ -102,6 +104,8 @@ import {
 } from '../features/simple-counter/store/simple-counter.actions';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
+
+type PluginDateFormat = 'short' | 'medium' | 'long' | 'time' | 'datetime';
 
 /**
  * PluginBridge acts as an intermediary layer between plugins and the main application services.
@@ -247,6 +251,9 @@ export class PluginBridgeService implements OnDestroy {
     startOAuthFlow: (config: OAuthFlowConfig) => Promise<OAuthTokenResult>;
     getOAuthToken: () => Promise<string | null>;
     clearOAuthToken: () => Promise<void>;
+    translate: (key: string, params?: Record<string, string | number>) => string;
+    formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
+    getCurrentLanguage: () => string;
     log: ReturnType<typeof Log.withContext>;
   } {
     return {
@@ -335,6 +342,18 @@ export class PluginBridgeService implements OnDestroy {
         ),
       clearOAuthToken: (): Promise<void> =>
         this._pluginOAuthBridge.clearOAuthTokens(pluginId),
+
+      // i18n
+      translate: (key: string, params?: Record<string, string | number>): string =>
+        this._injector.get(PluginI18nService).translate(pluginId, key, params),
+      formatDate: (date: Date | string | number, format: PluginDateFormat): string =>
+        formatDateForPlugin(
+          date,
+          format,
+          this._injector.get(PluginI18nService).getCurrentLanguage(),
+        ),
+      getCurrentLanguage: (): string =>
+        this._injector.get(PluginI18nService).getCurrentLanguage(),
 
       // Logging
       log: Log.withContext(`${pluginId}`),
