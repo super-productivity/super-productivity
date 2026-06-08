@@ -1125,6 +1125,7 @@
       "START": "Work Start"
     },
     "SEARCH_BAR": {
+      "INCLUDE_COMPLETED": "Include completed and archived tasks",
       "INFO": "Start typing to search for tasks or notes",
       "NO_RESULTS": "No tasks or notes found matching your search",
       "PLACEHOLDER": "Search for task, task notes or project notes"

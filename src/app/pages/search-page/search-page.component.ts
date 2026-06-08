@@ -38,6 +38,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DialogViewArchivedTaskComponent } from '../../features/tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { Log } from '../../core/log';
 import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
+import { MatCheckbox } from '@angular/material/checkbox';
 
 const MAX_RESULTS = 50;
 
@@ -59,6 +60,7 @@ const MAX_RESULTS = 50;
     MatListItem,
     MatFormField,
     MatLabel,
+    MatCheckbox,
   ],
 })
 export class SearchPageComponent implements OnInit {
@@ -76,6 +78,7 @@ export class SearchPageComponent implements OnInit {
 
   T: typeof T = T;
   searchForm: UntypedFormControl = new UntypedFormControl('');
+  includeCompletedForm: UntypedFormControl = new UntypedFormControl(false);
   filteredResults$: Observable<SearchItem[]> = new Observable();
 
   private _cachedArchiveItems: SearchItem[] | null = null;
@@ -279,10 +282,13 @@ export class SearchPageComponent implements OnInit {
     this.filteredResults$ = combineLatest([
       this._searchableItems$,
       this.searchForm.valueChanges.pipe(startWith('')),
+      this.includeCompletedForm.valueChanges.pipe(startWith(false)),
     ]).pipe(
       debounceTime(150),
-      filter(([searchableItems, searchTerm]) => typeof searchTerm === 'string'),
-      map(([searchableItems, searchTerm]) => this._filter(searchableItems, searchTerm)),
+      filter(([, searchTerm]) => typeof searchTerm === 'string'),
+      map(([searchableItems, searchTerm, includeCompleted]) =>
+        this._filter(searchableItems, searchTerm, !!includeCompleted),
+      ),
     );
 
     // Focus the input after view init
@@ -291,14 +297,20 @@ export class SearchPageComponent implements OnInit {
     }, 100);
   }
 
-  private _filter(searchableItems: SearchItem[], searchTerm: string): SearchItem[] {
+  private _filter(
+    searchableItems: SearchItem[],
+    searchTerm: string,
+    includeCompleted: boolean,
+  ): SearchItem[] {
     if (!searchTerm.trim()) {
       return [];
     }
 
     const lowerSearchTerm = searchTerm.toLowerCase();
-    const result = searchableItems.filter((task) =>
-      task.searchText.includes(lowerSearchTerm),
+    const result = searchableItems.filter(
+      (task) =>
+        (includeCompleted || (!task.isDone && !task.isArchiveTask)) &&
+        task.searchText.includes(lowerSearchTerm),
     );
 
     return result.slice(0, MAX_RESULTS);
