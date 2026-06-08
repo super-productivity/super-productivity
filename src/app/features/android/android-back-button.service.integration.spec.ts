@@ -11,6 +11,7 @@ import { DefaultStartPage } from '../config/default-start-page.const';
 import { selectIsOverlayShown } from '../focus-mode/store/focus-mode.selectors';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { TODAY_TAG } from '../tag/tag.const';
+import { LayoutService } from '../../core-ui/layout/layout.service';
 
 /**
  * Integration test that exercises the decision logic against the REAL Angular
@@ -66,6 +67,15 @@ describe('AndroidBackButtonService integration with real Router (#7972)', () => 
           },
         },
         { provide: MatDialog, useValue: { openDialogs: [] } },
+        {
+          provide: LayoutService,
+          useValue: {
+            isShowAddTaskBar: () => false,
+            isShowIssuePanel: () => false,
+            hideAddTaskBar: jasmine.createSpy('hideAddTaskBar'),
+            hideAddTaskPanel: jasmine.createSpy('hideAddTaskPanel'),
+          },
+        },
       ],
     });
 

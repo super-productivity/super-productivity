@@ -365,6 +365,12 @@ export type CustomCfgSection =
   | 'OPENPROJECT_CFG'
   | 'CLIPBOARD_IMAGES_CFG';
 
+export interface ConfigSectionAction {
+  label: string;
+  icon?: string;
+  onClick: () => void | Promise<void>;
+}
+
 // Intermediate model
 export interface ConfigFormSection<FormModel> {
   title: string;
@@ -373,6 +379,7 @@ export interface ConfigFormSection<FormModel> {
   helpArr?: { h?: string; p: string; p2?: string; p3?: string; p4?: string }[];
   customSection?: CustomCfgSection;
   items?: LimitedFormlyFieldConfig<FormModel>[];
+  actions?: ConfigSectionAction[];
   isElectronOnly?: boolean;
   isHideForAndroidApp?: boolean;
 }

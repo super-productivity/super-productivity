@@ -328,3 +328,97 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
     expect(item.elementRef.nativeElement.focus).not.toHaveBeenCalled();
   }));
 });
+
+/**
+ * Coverage for adding a sub-task while the detail panel is open. When focus is
+ * inside the panel the global task-shortcut handler can't resolve a focused
+ * task, so the panel routes the add-subtask shortcut itself. Focusing the new
+ * sub-task is handled by TaskService.focusTaskById (covered separately).
+ */
+describe('TaskDetailPanelComponent add sub-task', () => {
+  let component: TaskDetailPanelComponent;
+  let addSubTaskToSpy: jasmine.Spy;
+
+  const keydown = (key: string, target: HTMLElement): KeyboardEvent => {
+    const ev = new KeyboardEvent('keydown', {
+      key,
+      code: `Key${key.toUpperCase()}`,
+      bubbles: true,
+    });
+    Object.defineProperty(ev, 'target', { value: target, configurable: true });
+    return ev;
+  };
+
+  beforeEach(async () => {
+    addSubTaskToSpy = jasmine.createSpy('addSubTaskTo').and.returnValue('new-sub-id');
+
+    await TestBed.configureTestingModule({
+      imports: [TaskDetailPanelComponent],
+      providers: [
+        {
+          provide: TaskService,
+          useValue: {
+            taskDetailPanelTargetPanel$: EMPTY,
+            selectedTaskId: () => undefined,
+            getByIdWithSubTaskData$: () => of(null),
+            update: () => undefined,
+            setSelectedId: () => undefined,
+            focusTaskIfPossible: () => undefined,
+            addSubTaskTo: addSubTaskToSpy,
+            focusTaskById: () => undefined,
+          },
+        },
+        { provide: TaskAttachmentService, useValue: {} },
+        { provide: ClipboardImageService, useValue: {} },
+        { provide: LayoutService, useValue: {} },
+        {
+          provide: GlobalConfigService,
+          useValue: { cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }) },
+        },
+        { provide: IssueService, useValue: { getById$: () => of(null) } },
+        {
+          provide: TaskRepeatCfgService,
+          useValue: { getTaskRepeatCfgByIdAllowUndefined$: () => of(null) },
+        },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
+        { provide: MatDialog, useValue: {} },
+        { provide: Store, useValue: { select: () => EMPTY, dispatch: () => undefined } },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+      ],
+    })
+      .overrideComponent(TaskDetailPanelComponent, {
+        set: { template: '', imports: [], schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .compileComponents();
+
+    const fixture = TestBed.createComponent(TaskDetailPanelComponent);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('task', fakeTask('P'));
+    fixture.detectChanges();
+  });
+
+  it('adds a sub-task to the shown task', () => {
+    component.addSubTask();
+    expect(addSubTaskToSpy).toHaveBeenCalledWith('P');
+  });
+
+  it('routes the add-subtask shortcut to addSubTask (with prevent/stopPropagation)', () => {
+    spyOn(component, 'addSubTask');
+    const ev = keydown('a', document.createElement('div'));
+    const preventSpy = spyOn(ev, 'preventDefault');
+    const stopSpy = spyOn(ev, 'stopPropagation');
+
+    component.onKeydown(ev);
+
+    expect(component.addSubTask).toHaveBeenCalled();
+    expect(preventSpy).toHaveBeenCalled();
+    expect(stopSpy).toHaveBeenCalled();
+  });
+
+  it('does not route the shortcut while typing in an input', () => {
+    spyOn(component, 'addSubTask');
+    component.onKeydown(keydown('a', document.createElement('textarea')));
+    expect(component.addSubTask).not.toHaveBeenCalled();
+  });
+});

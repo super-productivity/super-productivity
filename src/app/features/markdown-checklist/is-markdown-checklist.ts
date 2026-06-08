@@ -1,4 +1,5 @@
 import { Log } from '../../core/log';
+import { isChecklistItemLine } from './checklist-operations';
 
 /*
 we want to match:
@@ -22,9 +23,7 @@ export const isMarkdownChecklist = (text: string): boolean => {
       return false;
     }
 
-    const items = lines.filter(
-      (it) => it.trim().startsWith('- [x]') || it.trim().startsWith('- [ ]'),
-    );
+    const items = lines.filter((it) => isChecklistItemLine(it));
     return items.length === lines.length || items.length >= 2;
   } catch (e) {
     Log.err('Checklist parsing failed');

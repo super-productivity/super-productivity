@@ -28,12 +28,13 @@ const makeCalendarScheduleEvent = (isReferenceCalendar: boolean): ScheduleEvent 
   } as any,
 });
 
-const makeTaskScheduleEvent = (): ScheduleEvent => ({
+const makeTaskScheduleEvent = (overlap?: ScheduleEvent['overlap']): ScheduleEvent => ({
   id: 'task-1',
   type: SVEType.Task,
-  style: '',
+  style: 'grid-column: 2;  grid-row: 121 / span 12',
   startHours: 10,
   timeLeftInHours: 1,
+  overlap,
   data: { id: 'task-1', title: 'Task', timeEstimate: 3600000 } as any,
 });
 
@@ -144,6 +145,34 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
       fixture.detectChanges();
 
       expect(component.isResizable()).toBe(false);
+    });
+  });
+
+  describe('style', () => {
+    it('should render overlapping events in equal-width lanes', () => {
+      fixture.componentRef.setInput(
+        'event',
+        makeTaskScheduleEvent({ count: 2, offset: 1 }),
+      );
+      fixture.detectChanges();
+
+      expect(component.style()).toBe(
+        'margin-left: calc(50% + var(--margin-left)); ' +
+          'width: calc(50% - var(--margin-left) - var(--margin-right)); ' +
+          'overflow: hidden !important; ' +
+          'grid-column: 2;  grid-row: 121 / span 12',
+      );
+    });
+
+    it('should not lane events in month view', () => {
+      fixture.componentRef.setInput(
+        'event',
+        makeTaskScheduleEvent({ count: 2, offset: 1 }),
+      );
+      fixture.componentRef.setInput('isMonthView', true);
+      fixture.detectChanges();
+
+      expect(component.style()).toBe('grid-column: 2;  grid-row: 121 / span 12');
     });
   });
 });

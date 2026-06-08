@@ -48,7 +48,10 @@ export const download = async (
     // Use native dialog for snap to avoid AppArmor permission issues
     const result = await window.ea.saveFileDialog(filename, stringData);
     if (result.success && result.path) {
-      Log.log('File saved to:', result.path);
+      Log.log('File saved via native dialog', {
+        isSnap: true,
+        hasPath: true,
+      });
       return { isSnap: true, path: result.path };
     }
     return { isSnap: true };
@@ -82,7 +85,10 @@ const saveStringAsFile = async (
     encoding: Encoding.UTF8,
     recursive: true,
   });
-  Log.log(r);
+  Log.log('File saved via Capacitor filesystem fallback', {
+    directory: Directory.Documents,
+    hasUri: !!r.uri,
+  });
   return r;
 };
 

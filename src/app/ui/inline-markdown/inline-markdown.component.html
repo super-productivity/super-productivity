@@ -42,13 +42,46 @@
     @if (isShowChecklistToggle() && isMarkdownFormattingEnabled()) {
       <!--  -->
       <button
-        [matTooltip]="'Add checklist item'"
+        [matTooltip]="T.F.TASK.ADDITIONAL_INFO.ADD_CHECKLIST_ITEM | translate"
         (mousedown)="$event.preventDefault()"
         (click)="toggleChecklistMode($event)"
         mat-icon-button
       >
         <mat-icon>checklist</mat-icon>
       </button>
+    }
+    @if (isCurrentlyChecklist()) {
+      <button
+        [matTooltip]="T.F.TASK.ADDITIONAL_INFO.CHECKLIST_ACTIONS | translate"
+        [matMenuTriggerFor]="checklistMenu"
+        (mousedown)="$event.preventDefault()"
+        mat-icon-button
+      >
+        <mat-icon>playlist_add_check</mat-icon>
+      </button>
+      <mat-menu #checklistMenu="matMenu">
+        <button
+          (click)="checkAllChecklistItems()"
+          mat-menu-item
+        >
+          <mat-icon>done_all</mat-icon>
+          {{ T.F.TASK.ADDITIONAL_INFO.CHECK_ALL | translate }}
+        </button>
+        <button
+          (click)="uncheckAllChecklistItems()"
+          mat-menu-item
+        >
+          <mat-icon>remove_done</mat-icon>
+          {{ T.F.TASK.ADDITIONAL_INFO.UNCHECK_ALL | translate }}
+        </button>
+        <button
+          (click)="clearCompletedChecklistItems()"
+          mat-menu-item
+        >
+          <mat-icon>delete_sweep</mat-icon>
+          {{ T.F.TASK.ADDITIONAL_INFO.CLEAR_COMPLETED | translate }}
+        </button>
+      </mat-menu>
     }
     <button
       [matTooltip]="'Open in fullscreen'"

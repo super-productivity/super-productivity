@@ -47,6 +47,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { devError } from '../../../util/dev-error';
 import { IS_MOBILE } from '../../../util/is-mobile';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -173,7 +174,18 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     if (!cfg) throw new Error('No config service available');
 
     const keys = cfg.keyboard;
-    if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) this.collapseParent();
+    if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) {
+      this.collapseParent();
+    } else if (checkKeyCombo(ev, keys.taskAddSubTask)) {
+      // Opening the panel auto-focuses a detail item, so focus is inside the
+      // panel rather than on a <task> row. The global task-shortcut handler
+      // can't resolve a focused task in that state and drops the shortcut, so
+      // handle add-subtask here. stopPropagation prevents the document-level
+      // handler from adding a second subtask when focus is on an in-panel row.
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.addSubTask();
+    }
   }
 
   // Parent task data
@@ -271,6 +283,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     const tasks = this._globalConfigService.tasks();
     return tasks?.notesTemplate || '';
   });
+
+  // True only for the app's generic stock template (not a user-customized one).
+  // Used to let the checklist button replace the shown default text with a fresh
+  // checklist; customized templates are treated as real content and preserved.
+  isStockNotesTemplate = computed(
+    () => this.defaultTaskNotes() === DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate,
+  );
 
   // Local attachments computed signal
   localAttachments = computed(() => {
@@ -590,6 +609,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   addSubTask(): void {
     const task = this.task();
+    // focusTaskById (called by addSubTaskTo) focuses the new sub-task's title
+    // for editing, falling back to the focusable copy when the in-panel one is
+    // inside the collapsed sub-task section.
     this.taskService.addSubTaskTo(task.parentId || task.id);
   }
 

@@ -221,6 +221,27 @@
             </button>
           }
 
+          <!-- Stands in for the notes icon; like it, yields to the close (X) button -->
+          @if (!isShowCloseButton() && checklistProgress(); as cp) {
+            <button
+              (click)="openNotesPanel()"
+              [matTooltip]="
+                T.F.TASK.CMP.CHECKLIST_PROGRESS
+                  | translate: { done: cp.done, total: cp.total }
+              "
+              [attr.aria-label]="
+                T.F.TASK.CMP.CHECKLIST_PROGRESS
+                  | translate: { done: cp.done, total: cp.total }
+              "
+              [class.isComplete]="cp.done === cp.total"
+              class="ico-btn checklist-progress-btn"
+              mat-icon-button
+            >
+              <mat-icon>{{ cp.done === cp.total ? 'check_box' : 'checklist' }}</mat-icon>
+              <div class="checklist-progress-badge">{{ cp.done }}/{{ cp.total }}</div>
+            </button>
+          }
+
           <div>
             @if (isShowToggleButton()) {
               <button

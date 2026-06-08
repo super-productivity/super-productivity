@@ -789,12 +789,19 @@ export class TaskService {
         // the parent's sub-task list). Focusing the panel copy preserves the
         // user's current context (parent stays selected) and on mobile lands
         // on a visible input rather than the main-list copy that the panel
-        // overlays (#7120).
+        // overlays (#7120). Fall back to an earlier copy when the last one
+        // can't take focus — e.g. the side panel's sub-task section is
+        // collapsed, so its copy is in the DOM but not focusable.
         const allEls = document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(taskId)}`);
-        const taskElement = allEls[allEls.length - 1];
+        let taskElement: HTMLElement | undefined;
+        for (let i = allEls.length - 1; i >= 0; i--) {
+          allEls[i].focus();
+          if (document.activeElement === allEls[i]) {
+            taskElement = allEls[i];
+            break;
+          }
+        }
         if (!taskElement) return;
-
-        taskElement.focus();
 
         if (shouldStartEditing) {
           const taskComponent = this._taskFocusService.lastFocusedTaskComponent();

@@ -6,7 +6,7 @@ import { LocalBackupConfig } from '../../features/config/global-config.model';
 import { debounceTime, map, switchMap, tap } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { LocalBackupMeta } from './local-backup.model';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../app.constants';
 import { androidInterface } from '../../features/android/android-interface';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
@@ -18,6 +18,7 @@ import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-s
 import {
   countAllTasks,
   countAllTasksInBackupStr,
+  isUsableBackupStr,
   selectBestBackupStr,
   summarizeBackupStr,
 } from './backup-ring.util';
@@ -55,6 +56,7 @@ export class LocalBackupService {
   private _translateService = inject(TranslateService);
   private _platformService = inject(CapacitorPlatformService);
   private _localActions$ = inject(LOCAL_ACTIONS);
+  private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   private _cfg$: Observable<LocalBackupConfig> = this._configService.cfg$.pipe(
     map((cfg) => cfg.localBackup),
@@ -80,7 +82,7 @@ export class LocalBackupService {
   }
 
   checkBackupAvailable(): Promise<boolean | LocalBackupMeta> {
-    if (IS_ANDROID_WEB_VIEW) {
+    if (this._isAndroidWebView) {
       // Available if either ring slot holds a backup (#7901).
       return androidInterface.loadFromDbWrapped(ANDROID_DB_KEY).then(async (primary) => {
         if (primary) {
@@ -126,6 +128,11 @@ export class LocalBackupService {
     return selectBestBackupStr(primary, prev) ?? '';
   }
 
+  /** Newest usable backup blob for the current mobile platform ('' if none). */
+  private _loadBestMobileBackupStr(): Promise<string> {
+    return this._isAndroidWebView ? this.loadBackupAndroid() : this.loadBackupIOS();
+  }
+
   private async _checkBackupAvailableIOS(): Promise<boolean> {
     // Available if either ring slot exists (#7901).
     const [primary, prev] = await Promise.all([
@@ -136,7 +143,7 @@ export class LocalBackupService {
   }
 
   async askForFileStoreBackupIfAvailable(): Promise<void> {
-    if (!IS_ELECTRON && !IS_ANDROID_WEB_VIEW && !this._platformService.isIOS()) {
+    if (!IS_ELECTRON && !this._isAndroidWebView && !this._platformService.isIOS()) {
       return;
     }
 
@@ -164,9 +171,7 @@ export class LocalBackupService {
     // can tell the user what they would restore (#7901). Loading is cheap and
     // lets a blind "discard my data?" dialog become an informed one — they should
     // never dismiss the only copy of their data without seeing it exists.
-    const backupData = IS_ANDROID_WEB_VIEW
-      ? await this.loadBackupAndroid()
-      : await this.loadBackupIOS();
+    const backupData = await this._loadBestMobileBackupStr();
     if (!backupData) {
       // Nothing usable to restore — stay silent rather than prompt for nothing.
       return;
@@ -174,6 +179,40 @@ export class LocalBackupService {
     if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
       Log.log('mobile backupData loaded, length: ' + backupData.length);
       await this._importBackup(backupData);
+    }
+  }
+
+  async restoreLatestMobileBackupFromSettings(): Promise<void> {
+    // iOS is supported here so the method works on either mobile platform, but
+    // the Settings action is currently only wired up for Android (#8066 scope);
+    // see config-page.component.ts. iOS stays future-proof, not dead.
+    if (!this._isAndroidWebView && !this._platformService.isIOS()) {
+      return;
+    }
+
+    const backupData = await this._loadBestMobileBackupStr();
+
+    // Not redundant with loadBackup*: selectBestBackupStr falls back to a
+    // non-empty *corrupt* blob when neither ring slot is usable, so this gate is
+    // what rejects corrupt data and surfaces the snack instead of attempting a
+    // doomed import. Don't "simplify" to `!backupData`.
+    if (!isUsableBackupStr(backupData)) {
+      this._snackService.open({
+        type: 'WARNING',
+        msg: T.GCF.AUTO_BACKUPS.S_NO_BACKUP_AVAILABLE,
+      });
+      return;
+    }
+
+    if (confirmDialog(this._restoreMobileFromSettingsPromptMsg(backupData))) {
+      Log.log('mobile backupData loaded from settings, length: ' + backupData.length);
+      const didImport = await this._importBackup(backupData);
+      if (didImport) {
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.GCF.AUTO_BACKUPS.S_RESTORE_SUCCESS,
+        });
+      }
     }
   }
 
@@ -191,6 +230,17 @@ export class LocalBackupService {
       tasks: summary.taskCount,
       projects: summary.projectCount,
     });
+  }
+
+  private _restoreMobileFromSettingsPromptMsg(backupData: string): string {
+    const summary = summarizeBackupStr(backupData);
+    return this._translateService.instant(
+      T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS,
+      {
+        tasks: summary?.taskCount ?? 0,
+        projects: summary?.projectCount ?? 0,
+      },
+    );
   }
 
   private async _backup(): Promise<void> {
@@ -211,7 +261,7 @@ export class LocalBackupService {
       // needed (the bug class A3 protects against doesn't apply).
       await this._backupElectron(data);
     }
-    if (IS_ANDROID_WEB_VIEW) {
+    if (this._isAndroidWebView) {
       await this._backupAndroid(data);
     }
     if (this._platformService.isIOS()) {
@@ -314,7 +364,7 @@ export class LocalBackupService {
     }
   }
 
-  private async _importBackup(backupData: string): Promise<void> {
+  private async _importBackup(backupData: string): Promise<boolean> {
     try {
       // isForceConflict=true only gates page reload; fresh clock is always generated
       await this._backupService.importCompleteBackup(
@@ -323,12 +373,13 @@ export class LocalBackupService {
         true,
         true,
       );
+      return true;
     } catch (e) {
       this._snackService.open({
         type: 'ERROR',
         msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED,
       });
-      return;
+      return false;
     }
   }
 }

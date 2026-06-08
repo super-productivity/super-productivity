@@ -26,6 +26,7 @@
     "RESTORE_FILE_BACKUP": "There seems to be NO DATA, but there are backups available at \"{{dir}}\". Do you want to restore the latest backup from {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "There seems to be NO DATA, but there is a backup available. Do you want to load it?",
     "RESTORE_FILE_BACKUP_MOBILE": "No data was found on this device, but a backup is available to restore (tasks: {{tasks}}, projects: {{projects}}). Restore it?",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Restore the latest automatic backup (tasks: {{tasks}}, projects: {{projects}})? This replaces all current data on this device and, if you use sync, overwrites your other devices on the next sync.",
     "RESTORE_STRAY_BACKUP": "During the last sync, there may have been an error. Do you want to restore the last backup?"
   },
   "DATETIME_SCHEDULE": {
@@ -1309,7 +1310,8 @@
         "RECOMMEND_SERVER": "Recommended: Accept the server data to stay in sync with the other device.",
         "TITLE": "Sync Conflict Detected",
         "USE_LOCAL": "Use My Data",
-        "USE_REMOTE": "Use Server Data"
+        "USE_REMOTE": "Use Server Data",
+        "USE_REMOTE_CONFIRM": "This replaces this device's data with the server's and discards {{count}} local change(s). Continue?"
       },
       "FORM": {
         "BTN_CHANGE_PASSWORD": "Change Password",
@@ -1534,6 +1536,7 @@
         "LOCAL_CHANGES_DISCARDED": "{{count}} local change(s) discarded - item(s) were deleted on another device",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} unsaved local change(s) discarded - sync downloaded newer data",
         "LOCAL_DATA_REPLACE_CANCELLED": "Sync cancelled. Your local data has been preserved.",
+        "LOCAL_DATA_REPLACE_UNDO": "Your local data was replaced with the server's data.",
         "LOCK_TIMEOUT_ERROR": "Sync timed out waiting for a previous operation to finish. Please try again.",
         "LWW_CONFLICTS_AUTO_RESOLVED": "Sync conflicts auto-resolved: {{localWins}} local win(s), {{remoteWins}} remote win(s)",
         "MIGRATION_FAILED": "Some sync data could not be migrated and was skipped. This may indicate data corruption or a bug.",
@@ -1546,6 +1549,7 @@
         "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
         "REMOTE_DATA_TOO_OLD": "Remote data is too old to be processed. Please update your remote app.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
+        "RESTORE_ENCRYPTED": "Restoring from server history isn't available when end-to-end encryption is enabled. The server can't read your encrypted data to reconstruct an earlier point.",
         "RESTORE_ERROR": "Failed to restore data",
         "RESTORE_SUCCESS": "Data restored successfully",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Could not migrate data to server - local data validation failed. Please try importing a backup.",
@@ -1668,6 +1672,12 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",
+        "ADD_CHECKLIST_ITEM": "Add checklist item",
+        "CHECKLIST_ACTIONS": "Checklist actions",
+        "CHECK_ALL": "Check all",
+        "CLEAR_COMPLETED": "Clear completed",
+        "NOTES_OR_CHECKLIST": "Notes / Checklist",
+        "UNCHECK_ALL": "Uncheck all",
         "PASTED_IMAGE_TITLE": "Pasted image",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Links & Files ({{nr}})",
@@ -1699,6 +1709,7 @@
         "ADD_SUB_TASK": "Add subtask",
         "ADD_TO_MY_DAY": "Add to Today",
         "ADD_TO_PROJECT": "Add to a project",
+        "CHECKLIST_PROGRESS": "Checklist: {{done}} of {{total}} done",
         "CLEAR_ESTIMATE": "Clear estimate",
         "CONVERT_TO_PARENT_TASK": "Convert to parent task",
         "CUSTOM_ESTIMATE": "Custom…",
@@ -2236,6 +2247,9 @@
       "LOCATION_INFO": "Backups are saved to:",
       "MAX_BACKUP_FILES": "Maximum backup files",
       "MAX_BACKUP_FILES_DESCRIPTION": "Desktop only. Older automatic backup files are deleted once this limit is exceeded.",
+      "RESTORE_LATEST": "Restore latest automatic backup",
+      "S_NO_BACKUP_AVAILABLE": "No automatic backup available.",
+      "S_RESTORE_SUCCESS": "Backup restored successfully.",
       "TITLE": "Automatic Backups"
     },
     "CALENDARS": {
@@ -2334,7 +2348,7 @@
       "GO_TO_SCHEDULED_VIEW": "Go to Schedule",
       "GO_TO_SETTINGS": "Go to settings",
       "GO_TO_WORK_VIEW": "Go to task list and focus first task",
-      "HELP": "<p>Here you can configure all keyboard shortcuts.</p><p>Click on the text input and press the desired keyboard key or key combination. Press <strong>Escape</strong> to abort.</p><p>There are three types of shortcuts:</p> <ul> <li> <strong>Global shortcuts:</strong> When the app is running it will trigger the action from every other application. </li> <li> <strong>Application level shortcuts:</strong> Will trigger from every screen of the application, but not if you're currently editing a text field. </li> <li> <strong>Task level shortcuts:</strong> They will only trigger if you have selected a task via mouse or keyboard and usually trigger an action specifically related to that one task.</li> </ul><p>Press <strong>Escape</strong> to remove a shortcut.",
+      "HELP": "<p>Here you can configure all keyboard shortcuts.</p><p>Click on the text input and press the desired keyboard key or key combination. Press <strong>Escape</strong> to abort.</p><p>There are three types of shortcuts:</p> <ul> <li> <strong>Global shortcuts:</strong> When the app is running it will trigger the action from every other application. </li> <li> <strong>Application level shortcuts:</strong> Will trigger from every screen of the application, but not if you're currently editing a text field. </li> <li> <strong>Task level shortcuts:</strong> They will only trigger if you have selected a task via mouse or keyboard and usually trigger an action specifically related to that one task.</li> </ul><p>Press <strong>Escape</strong>, <strong>Backspace</strong>, or <strong>Delete</strong> to remove an existing shortcut.",
       "MOVE_TASK_DOWN": "Move task down in the list",
       "MOVE_TASK_TO_BOTTOM": "Move task to the bottom of the list",
       "MOVE_TASK_TO_TOP": "Move task to the top of the list",
