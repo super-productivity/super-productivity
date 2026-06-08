@@ -269,6 +269,29 @@ describe('SuperSyncRestoreService', () => {
       });
     });
 
+    it('should show an encryption-specific message when the server blocks restore (#8107)', async () => {
+      // Server can't replay E2E-encrypted ops → 400 whose reason mentions
+      // encryption (embedded in the thrown message by the provider).
+      const error = new Error(
+        'HTTP 400 Bad Request — Server-side snapshot is unavailable because ' +
+          'operations are end-to-end encrypted.',
+      );
+      mockProvider.getStateAtSeq.and.returnValue(Promise.reject(error));
+
+      await expectAsync(service.restoreToPoint(100)).toBeRejectedWith(error);
+
+      // Not a network error → no retry.
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(1);
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.RESTORE_ENCRYPTED,
+      });
+      expect(mockSnackService.open).not.toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.RESTORE_ERROR,
+      });
+    });
+
     it('should retry on "failed to fetch" errors', async () => {
       jasmine.clock().install();
 
