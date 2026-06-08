@@ -1,11 +1,16 @@
 :host {
   display: block;
   width: 100%;
+  box-sizing: border-box;
 
   mat-dialog-content {
     max-width: 500px;
-    min-width: 350px;
+    width: 100%;
+    box-sizing: border-box;
     padding: var(--s2) var(--s2) var(--s);
+
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -15,7 +20,7 @@
   margin-top: var(--s);
 
   th {
-    padding: var(--s) var(--s2);
+    padding: var(--s) var(--s-half);
     font-weight: var(--font-weight-semibold);
     text-align: left;
     color: var(--text-color-muted);
@@ -26,7 +31,7 @@
   }
 
   td {
-    padding: var(--s2) var(--s2);
+    padding: var(--s2) var(--s-half);
     vertical-align: middle;
     border-bottom: 1px solid var(--divider-color);
   }
@@ -39,6 +44,7 @@
     text-align: left;
     color: var(--text-color);
     font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
   }
 
   .shortcut-cell {
@@ -61,7 +67,13 @@
     border-bottom-width: 2px;
     border-radius: var(--radius-xs);
     font-size: var(--font-size-xs);
-    margin: 0 var(--s-half);
+    margin: 0 var(--s);
     min-width: var(--s3);
+  }
+}
+
+@media (max-width: 25rem) {
+  :host mat-dialog-content {
+    padding: var(--s) var(--s) var(--s);
   }
 }

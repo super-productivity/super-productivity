@@ -184,6 +184,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
   openShortcutsHelp(): void {
     this._matDialog.open(DialogMarkdownShortcutsComponent, {
+      maxWidth: '100vw',
       width: '402px',
     });
   }
