@@ -124,7 +124,13 @@ export class ShortSyntaxEffects {
             isReplaceTagIds ? 'replace' : 'combine',
           ).then((r) => {
             if (environment.production) {
-              TaskLog.log('shortSyntax', r);
+              TaskLog.log('shortSyntax', {
+                taskId: task.id,
+                hasResult: !!r,
+                changedFields: r ? Object.keys(r.taskChanges) : [],
+                attachmentCount: r?.attachments.length ?? 0,
+                projectId: r?.projectId,
+              });
             }
             const isAddDefaultProjectIfNecessary: boolean =
               !!defaultProjectId &&

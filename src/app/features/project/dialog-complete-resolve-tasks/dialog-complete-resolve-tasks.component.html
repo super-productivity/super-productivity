@@ -1,0 +1,35 @@
+<h2 mat-dialog-title>{{ T.MH.COMPLETE_PROJECT | translate }}</h2>
+
+<mat-dialog-content>
+  <p>
+    <strong>{{ data.title }}</strong>
+    {{
+      (data.nr === 1
+        ? T.F.PROJECT.COMPLETE.RESOLVE.MSG_ONE
+        : T.F.PROJECT.COMPLETE.RESOLVE.MSG
+      ) | translate: { nr: data.nr }
+    }}
+  </p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    (click)="cancel()"
+  >
+    {{ T.G.CANCEL | translate }}
+  </button>
+  <button
+    mat-button
+    (click)="markDone()"
+  >
+    {{ T.F.PROJECT.COMPLETE.RESOLVE.MARK_DONE | translate }}
+  </button>
+  <button
+    mat-flat-button
+    color="primary"
+    (click)="moveToInbox()"
+  >
+    {{ T.F.PROJECT.COMPLETE.RESOLVE.MOVE_TO_INBOX | translate }}
+  </button>
+</mat-dialog-actions>

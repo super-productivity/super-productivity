@@ -206,7 +206,10 @@ export class DialogEditIssueProviderComponent {
 
   constructor() {
     this._initOAuthAndOptions().catch((err) => {
-      console.error('[DialogEditIssueProvider] OAuth init failed', err);
+      console.error(
+        '[DialogEditIssueProvider] OAuth init failed',
+        getSafeErrorLogMeta(err),
+      );
     });
   }
 
@@ -255,7 +258,11 @@ export class DialogEditIssueProviderComponent {
   }
 
   customCfgCmpSave(cfgUpdates: IssueIntegrationCfg): void {
-    IssueLog.log('customCfgCmpSave()', cfgUpdates);
+    IssueLog.log('Issue provider config component saved updates', {
+      issueProviderKey: this.issueProviderKey,
+      issueProviderId: this.model.id,
+      ...getSafeCfgUpdateLogMeta(cfgUpdates),
+    });
     this.updateModel(cfgUpdates);
   }
 
@@ -366,7 +373,7 @@ export class DialogEditIssueProviderComponent {
       const detail = (e instanceof Error ? e.message : String(e))
         .replace(/\s+/g, ' ')
         .slice(0, 200);
-      IssueLog.err('OAuth connect failed', { message: detail });
+      IssueLog.err('OAuth connect failed', getSafeErrorLogMeta(e));
       this._snackService.open({
         type: 'ERROR',
         msg: detail ? T.F.ISSUE.S.OAUTH_FAILED_WITH_DETAIL : T.F.ISSUE.S.OAUTH_FAILED,
@@ -446,10 +453,11 @@ export class DialogEditIssueProviderComponent {
         }
       } catch (e) {
         anyFailed = true;
-        console.error(
-          `[DialogEditIssueProvider] loadOptions failed for field '${field.key}':`,
-          e,
-        );
+        console.error('[DialogEditIssueProvider] loadOptions failed', {
+          issueProviderKey: this.issueProviderKey,
+          hasFieldKey: !!field.key,
+          ...getSafeErrorLogMeta(e),
+        });
         this._snackService.open({
           type: 'ERROR',
           msg: T.F.ISSUE.S.LOAD_OPTIONS_FAILED,
@@ -773,3 +781,67 @@ export class DialogEditIssueProviderComponent {
     this.optionsLoadState.set(success ? 'loaded' : 'failed');
   }
 }
+
+const CREDENTIAL_LIKE_CFG_KEY_RE = /token|secret|key|password|auth|credential/i;
+
+const getSafeCfgUpdateLogMeta = (
+  cfgUpdates: IssueIntegrationCfg,
+): {
+  updateCount: number;
+  hasCredentialLikeUpdate: boolean;
+  hasPluginConfigUpdate: boolean;
+  hasDefaultNoteUpdate: boolean;
+  hasDefaultProjectUpdate: boolean;
+  defaultTagUpdateCount: number;
+} => {
+  const cfgUpdateRecord = cfgUpdates as unknown as Record<string, unknown>;
+  const updateKeys = Object.keys(cfgUpdateRecord);
+  const defaultTagIds = cfgUpdateRecord['defaultTagIds'];
+
+  return {
+    updateCount: updateKeys.length,
+    hasCredentialLikeUpdate: hasCredentialLikeCfgKey(cfgUpdateRecord, new WeakSet()),
+    hasPluginConfigUpdate: updateKeys.includes('pluginConfig'),
+    hasDefaultNoteUpdate: updateKeys.includes('defaultNote'),
+    hasDefaultProjectUpdate: updateKeys.includes('defaultProjectId'),
+    defaultTagUpdateCount: Array.isArray(defaultTagIds) ? defaultTagIds.length : 0,
+  };
+};
+
+const hasCredentialLikeCfgKey = (value: unknown, seen: WeakSet<object>): boolean => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+
+  return Object.entries(value as Record<string, unknown>).some(
+    ([key, nestedValue]) =>
+      CREDENTIAL_LIKE_CFG_KEY_RE.test(key) || hasCredentialLikeCfgKey(nestedValue, seen),
+  );
+};
+
+const getSafeErrorLogMeta = (
+  e: unknown,
+): {
+  errorName: string;
+  errorCode?: string | number;
+} => {
+  const errorName =
+    e instanceof Error
+      ? e.name
+      : typeof e === 'object' && e !== null && 'name' in e && typeof e.name === 'string'
+        ? e.name
+        : 'UnknownError';
+  const errorCode =
+    typeof e === 'object' &&
+    e !== null &&
+    'code' in e &&
+    (typeof e.code === 'string' || typeof e.code === 'number')
+      ? e.code
+      : undefined;
+
+  return errorCode === undefined ? { errorName } : { errorName, errorCode };
+};

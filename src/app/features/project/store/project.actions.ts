@@ -99,6 +99,32 @@ export const unarchiveProject = createAction(
   }),
 );
 
+export const completeProject = createAction(
+  '[Project] Complete Project',
+  (projectProps: { id: string; doneOn: number }) => ({
+    ...projectProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'PROJECT',
+      entityId: projectProps.id,
+      opType: OpType.Update, // Completing is an update (also flips isArchived)
+    } satisfies PersistentActionMeta,
+  }),
+);
+
+export const reopenProject = createAction(
+  '[Project] Reopen Project',
+  (projectProps: { id: string }) => ({
+    ...projectProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'PROJECT',
+      entityId: projectProps.id,
+      opType: OpType.Update,
+    } satisfies PersistentActionMeta,
+  }),
+);
+
 export const toggleHideFromMenu = createAction(
   '[Project] Toggle hide from menu',
   (projectProps: { id: string }) => ({

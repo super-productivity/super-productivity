@@ -27,8 +27,7 @@ import { PluginLog } from '../../../core/log';
       } @else {
         <div>
           {{
-            dialogData.htmlContent ||
-              _translateService.instant(T.PLUGINS.NO_CONTENT_PROVIDED)
+            dialogData.content || _translateService.instant(T.PLUGINS.NO_CONTENT_PROVIDED)
           }}
         </div>
       }
@@ -139,19 +138,18 @@ export class PluginDialogComponent {
   readonly defaultButtons: DialogButtonCfg[] = [
     {
       label: this._translateService.instant(T.PLUGINS.OK),
-      onClick: () => this._dialogRef.close(),
     },
   ];
 
-  data = inject<DialogCfg & { title?: string }>(MAT_DIALOG_DATA);
+  data = inject<DialogCfg>(MAT_DIALOG_DATA);
 
   constructor() {
-    this.dialogData = this.data;
+    this.dialogData = this._normalizeDialogData(this.data);
 
     // Sanitize HTML content if provided
-    if (this.data.htmlContent) {
+    if (this.dialogData.htmlContent) {
       this.sanitizedContent = this._sanitizer.bypassSecurityTrustHtml(
-        this._pluginSecurity.sanitizeHtml(this.data.htmlContent),
+        this._pluginSecurity.sanitizeHtml(this.dialogData.htmlContent),
       );
     }
   }
@@ -169,5 +167,32 @@ export class PluginDialogComponent {
       PluginLog.err('Plugin dialog button action failed:', error);
       this._dialogRef.close('error');
     }
+  }
+
+  private _normalizeDialogData(data: DialogCfg): DialogCfg {
+    if (data.buttons) {
+      return data;
+    }
+
+    const legacyButtons: DialogButtonCfg[] = [];
+    if (data.cancelBtnLabel) {
+      legacyButtons.push({
+        label: data.cancelBtnLabel,
+      });
+    }
+    if (data.okBtnLabel) {
+      legacyButtons.push({
+        label: data.okBtnLabel,
+        color: 'primary',
+        raised: true,
+      });
+    }
+
+    return legacyButtons.length > 0
+      ? {
+          ...data,
+          buttons: legacyButtons,
+        }
+      : data;
   }
 }

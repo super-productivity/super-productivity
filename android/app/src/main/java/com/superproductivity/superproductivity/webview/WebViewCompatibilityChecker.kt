@@ -51,6 +51,7 @@ object WebViewCompatibilityChecker {
         "com.chrome.canary",
         "com.sec.android.app.sbrowser",
         "com.huawei.webview",
+        "app.vanadium.webview",
     )
 
     enum class Status {
@@ -255,6 +256,9 @@ object WebViewCompatibilityChecker {
         providerPackageIsCurrent: Boolean,
     ): Boolean =
         providerPackageIsCurrent && packageMajor != null && packageMajor >= MIN_CHROMIUM_VERSION
+
+    @VisibleForTesting
+    internal fun knownWebViewPackages(): List<String> = KNOWN_WEBVIEW_PACKAGES
 
     @VisibleForTesting
     internal fun blockScreenConfig(

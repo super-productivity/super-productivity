@@ -25,6 +25,7 @@ const NEXT_BTN = {
 };
 
 export enum TourId {
+  CreateTask = 'CreateTask',
   KeyboardNav = 'KeyboardNav',
 }
 
@@ -40,6 +41,85 @@ export const SHEPHERD_STEPS = (
     `<kbd>${cfg.keyboard[action]}</kbd>`;
 
   return [
+    {
+      id: TourId.CreateTask,
+      title: 'Create a task',
+      text: [
+        '<p>Tasks can be created from the Add Task Bar. ',
+        'It also understands short syntax, so you can set useful details ',
+        'while typing the task title.</p>',
+      ].join(''),
+      buttons: [
+        {
+          classes: PRIMARY_CLASSES,
+          text: 'Open Add Task Bar',
+          action: () => {
+            layoutService.showAddTaskBar();
+            window.setTimeout(() => shepherdService.next());
+          },
+        },
+      ],
+    },
+    {
+      title: 'Create a task',
+      text: [
+        'Try creating a task with a planned date and time estimate:<br><br>',
+        '<code>Prepare demo @tomorrow 30m</code><br><br>',
+        'Type it into the Add Task Bar and press <kbd>Enter</kbd>.',
+      ].join(''),
+      attachTo: {
+        element: 'add-task-bar',
+        on: 'bottom',
+      },
+      beforeShowPromise: () => promiseTimeout(200),
+      when: twoWayObs(
+        {
+          obs: actions$.pipe(ofType(TaskSharedActions.addTask)),
+        },
+        { obs: actions$.pipe(ofType(hideAddTaskBar)) },
+        shepherdService,
+      ),
+    },
+    {
+      title: 'Close the Add Task Bar',
+      text: 'Press the <kbd>Escape</kbd> key to close the Add Task Bar.',
+      attachTo: {
+        element: 'add-task-bar',
+        on: 'bottom',
+      },
+      beforeShowPromise: () => promiseTimeout(200),
+      when: nextOnObs(actions$.pipe(ofType(hideAddTaskBar)), shepherdService),
+    },
+    {
+      title: 'Short syntax',
+      text: [
+        '<p>The example title is cleaned up automatically. ',
+        'With the default Short Syntax settings, ',
+        '<code>@tomorrow</code> plans the task for tomorrow and ',
+        '<code>30m</code> sets a 30 minute estimate.</p>',
+        '<p>You can also use:</p>',
+        '<ul>',
+        '<li><code>#tag</code> to add a tag</li>',
+        '<li><code>+project</code> to assign a project</li>',
+        '<li><code>@friday</code> or <code>@16:00</code> to plan a task</li>',
+        '<li><code>!friday</code> or <code>!14:30</code> to set a deadline</li>',
+        '</ul>',
+      ].join(''),
+      buttons: [NEXT_BTN],
+    },
+    {
+      title: 'Short syntax settings',
+      text: '<p>You can enable or disable the individual short syntax options under <strong>Settings / Tasks / Short Syntax</strong>.</p><p>This how-to stays available from the Help menu whenever you want to try it again.</p>',
+      buttons: [
+        {
+          text: 'End Tour',
+          classes: PRIMARY_CLASSES,
+          action: () => {
+            shepherdService.complete();
+          },
+        },
+      ],
+    },
     {
       id: TourId.KeyboardNav,
       title: 'Keyboard Navigation',

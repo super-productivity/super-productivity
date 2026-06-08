@@ -10,8 +10,8 @@ import { OP_LOG_SYNC_LOGGER } from '../sync-logger.adapter';
 
 // Re-export provider-shared error classes from @sp/sync-providers.
 // Single class definition per error is critical for `instanceof` checks
-// across the codebase. See docs/plans/2026-05-12-pr5-dropbox-slice.md
-// action item A5 and sync-errors.identity.spec.ts.
+// across the codebase (one definition, re-exported — never re-declared).
+// Identity is covered by sync-errors.identity.spec.ts.
 export {
   AuthFailSPError,
   EmptyRemoteBodySPError,

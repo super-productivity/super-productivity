@@ -10,6 +10,7 @@ import {
   setIsTrayShowCurrentTask,
   setIsTrayShowCurrentCountdown,
 } from '../shared-state';
+import { refreshIndicator } from '../indicator';
 import { lockscreen } from '../lockscreen';
 import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-inform';
 import { GlobalConfigState } from '../../src/app/features/config/global-config.model';
@@ -41,8 +42,11 @@ export const initAppControlIpc = (): void => {
 
   const updateSettings = async (ev: any, cfg: GlobalConfigState): Promise<void> => {
     setIsMinimizeToTray(cfg.misc.isMinimizeToTray);
-    setIsTrayShowCurrentTask(!!cfg.misc.isTrayShowCurrentTask);
+    setIsTrayShowCurrentTask(
+      cfg.tasks?.isTrayShowCurrent ?? !!cfg.misc.isTrayShowCurrentTask,
+    );
     setIsTrayShowCurrentCountdown(!!cfg.misc.isTrayShowCurrentCountdown);
+    refreshIndicator();
     updateLocalRestApiConfig(cfg);
 
     if (cfg.misc.isUseCustomWindowTitleBar !== undefined) {

@@ -640,7 +640,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
             flatTasks.push(pt);
             flatTasks = flatTasks.concat(subTasks);
           }
-        } else if (_isWorkedOnDoneOrDueToday(pt) || pt.repeatCfgId) {
+        } else if (_isWorkedOnDoneOrDueToday(pt)) {
           flatTasks.push(pt);
         }
       });

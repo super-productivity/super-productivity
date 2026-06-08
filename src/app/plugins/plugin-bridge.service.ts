@@ -6,6 +6,7 @@ import { SnackService } from '../core/snack/snack.service';
 import { NotifyService } from '../core/notify/notify.service';
 import {
   DialogCfg,
+  DialogResult,
   Hooks,
   NotifyCfg,
   PluginCreateTaskData,
@@ -502,10 +503,10 @@ export class PluginBridgeService implements OnDestroy {
   /**
    * Open a dialog using Angular Material
    */
-  async openDialog(dialogCfg: DialogCfg): Promise<void> {
+  async openDialog(dialogCfg: DialogCfg): Promise<DialogResult> {
     typia.assert<DialogCfg>(dialogCfg);
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<DialogResult>((resolve, reject) => {
       try {
         const dialogRef = this._dialog.open(PluginDialogComponent, {
           data: dialogCfg,
@@ -521,7 +522,7 @@ export class PluginBridgeService implements OnDestroy {
 
         dialogRef.afterClosed().subscribe((result) => {
           PluginLog.log('PluginBridge: Dialog closed');
-          resolve();
+          resolve(result);
         });
       } catch (error) {
         PluginLog.err('PluginBridge: Failed to open dialog:', error);

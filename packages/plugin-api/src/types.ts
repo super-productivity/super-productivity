@@ -44,13 +44,19 @@ export interface PluginBaseCfg {
 export interface DialogButtonCfg {
   label: string;
   icon?: string;
-  onClick: () => void | Promise<void>;
+  onClick?: () => void | Promise<void>;
   color?: 'primary' | 'warn';
   raised?: boolean;
 }
 
+export type DialogResult = string | undefined;
+
 export interface DialogCfg {
+  title?: string;
   htmlContent?: string;
+  content?: string;
+  okBtnLabel?: string;
+  cancelBtnLabel?: string;
   buttons?: DialogButtonCfg[];
 }
 
@@ -543,7 +549,7 @@ export interface PluginAPI {
 
   showIndexHtmlAsView(): void;
 
-  openDialog(dialogCfg: DialogCfg): Promise<void>;
+  openDialog(dialogCfg: DialogCfg): Promise<DialogResult>;
 
   // tasks
   getTasks(): Promise<Task[]>;

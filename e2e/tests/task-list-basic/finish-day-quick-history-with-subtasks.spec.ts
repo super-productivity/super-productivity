@@ -6,7 +6,7 @@ const TASK_TITLE = 'task task-title';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const QUICK_HISTORY_DAY_ROW = 'history .week-row';
+const HISTORY_DAY_TOGGLE = 'history .week-row .day-toggle';
 
 const markTaskAsDone = async (task: Locator): Promise<void> => {
   await task.hover();
@@ -62,20 +62,25 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     // Step 4: Wait for route change and click Save and go home
     await page.waitForSelector('daily-summary', { state: 'visible' });
     await page.waitForSelector(SAVE_AND_GO_HOME_BTN, { state: 'visible' });
-    await page.click(SAVE_AND_GO_HOME_BTN);
+    await Promise.all([
+      page.waitForURL(/#\/tag\/TODAY\/tasks/, { timeout: 15000 }),
+      page.click(SAVE_AND_GO_HOME_BTN),
+    ]);
 
-    // Wait for navigation back to work view
-    await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
+    // Wait for the archive/save flow to settle on Today before navigating away.
+    await expect(page.locator('task-list').first()).toBeVisible();
 
-    // Step 5: Navigate directly to the legacy Quick History route
-    await page.goto('/#/tag/TODAY/quick-history');
-    await page.waitForURL(/#\/tag\/TODAY\/quick-history/);
-    await page.waitForSelector('history', { state: 'visible' });
+    // Step 5: Navigate directly to the canonical History route. Legacy route
+    // coverage lives in the navigation specs; this flow only needs archived task visibility.
+    await page.goto('/#/tag/TODAY/history');
+    await expect(page).toHaveURL(/#\/tag\/TODAY\/history/);
+    await expect(page.locator('history')).toBeVisible();
 
     // Step 6: Expand the day row to reveal its tasks
-    const dayRow = page.locator(QUICK_HISTORY_DAY_ROW).first();
-    await dayRow.waitFor({ state: 'visible' });
-    await dayRow.click();
+    const dayToggle = page.locator(HISTORY_DAY_TOGGLE).first();
+    await expect(dayToggle).toBeVisible();
+    await dayToggle.click();
+    await expect(dayToggle).toHaveAttribute('aria-expanded', 'true');
 
     // Step 7: Confirm the history page + task table render
     await expect(page.locator('history')).toBeVisible();

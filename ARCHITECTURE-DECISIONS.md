@@ -164,6 +164,40 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
 
 ---
 
+### 5. Project Completion: Decoupled Resolution over Atomic Multi-Entity Op
+
+**Status**: ✅ Active (since 2026-06-06, branch `feat/completing-projects-48eeb4`)
+
+**Decision**: "Complete project" is a **plain single-entity `PROJECT` flag flip** (`completeProject`, `OpType.Update`, mirroring `archiveProject` → sets `isDone`/`doneOn`/`isArchived`). The accompanying resolution of unfinished tasks ("move to Inbox" / "mark done") runs **first, as the normal per-task actions** (`moveToOtherProject` / `updateTask isDone`) dispatched in a loop with the Rule&nbsp;#6 bulk-dispatch flush — **not** bundled into a single atomic multi-entity op.
+
+**Rationale**: An earlier iteration made completion one atomic `Batch` op (`completeProject`) that marked/moved tasks inside the project-shared meta-reducer. Because that op deliberately routed **around** the normal per-task actions, every system that observes those actions had to be re-taught about `completeProject` separately:
+
+- **Conflict detection** needed a whole new `affectedEntities` multi-entity-ref feature threaded through sync-core, the sync server (+ a Prisma migration), shared-schema and the op-log — ~1,565 LOC, of which `completeProject` was the **only** producer.
+- **Native-reminder cancellation**, **issue two-way-sync**, **time-block sync** and **repeat-cfg** effects each needed a dedicated `completeProject` listener to re-derive the task changes the atomic op skipped.
+
+The atomic op's headline benefit — reversing the whole thing as one unit — was never realized: `reopenProject` only clears the project flags; it does **not** un-move or un-complete the resolved tasks. So the bundle paid a large cross-cutting cost for an undo guarantee it didn't provide. Decoupling makes the existing effects and per-entity conflict detection fire naturally and deletes ~1,750 LOC total (revert + decouple). Trade-off accepted: completion now emits **N+1 ops** (one per resolved task + the flag flip) instead of one, and there is a brief intermediate state — both fine for a rare, user-initiated action whose resolution is not atomically reversible anyway. One behavioral nuance vs. the old atomic op: when unfinished work is **moved to Inbox**, a task that was being actively tracked stays the current task (it was carried forward, not finished — consistent with Inbox's carry-forward intent); the **mark-done** path stops tracking the current task via the existing `autoSetNextTask$` effect. The atomic op cleared the current task in both cases; the decoupled design intentionally keeps it for the carry-forward case.
+
+**Implementation**:
+
+- **Action/reducer**: `completeProject({ id, doneOn })` in `project.actions.ts`; `on(completeProject)` flag flip in `project.reducer.ts` (guards `INBOX_PROJECT`). `reopenProject` clears the flags only.
+- **Service**: `ProjectService.complete(id, doneOn)` dispatches the flag flip; `moveTasksToInbox()` / `markTasksDone()` loop the normal per-task actions + `setTimeout(0)` flush.
+- **Flow**: `work-context-menu` resolves unfinished work **before** calling `complete()`.
+- **Do NOT** reintroduce a multi-entity `completeProject` op or `affectedEntities` for it without re-justifying the full downstream cost above. Prior atomic implementation is preserved in history at commit `0893a86162`.
+
+**Key Files**:
+
+- [`project.actions.ts`](src/app/features/project/store/project.actions.ts), [`project.reducer.ts`](src/app/features/project/store/project.reducer.ts)
+- [`project.service.ts`](src/app/features/project/project.service.ts) — `complete` / `moveTasksToInbox` / `markTasksDone`
+- [`work-context-menu.component.ts`](src/app/core-ui/work-context-menu/work-context-menu.component.ts) — `completeProject()` flow
+
+**When to Update This Decision**:
+
+- Adding a true bulk meta-reducer action for general use (revisit whether completion should adopt it)
+- Reworking how completion resolves unfinished tasks
+- Any proposal to make completion a single synced op again
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes
