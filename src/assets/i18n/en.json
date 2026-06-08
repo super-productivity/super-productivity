@@ -793,7 +793,13 @@
           "NUMBERED_LIST": "Numbered list",
           "QUOTE": "Quote",
           "STRIKETHROUGH": "Strikethrough",
-          "TASK_LIST": "Task list"
+          "TASK_LIST": "Task list",
+          "KEYBOARD_SHORTCUTS": "Keyboard shortcuts"
+        },
+        "SHORTCUTS": {
+          "DIALOG_TITLE": "Markdown Keyboard Shortcuts",
+          "COLUMN_ACTION": "Action",
+          "COLUMN_SHORTCUT": "Shortcut"
         },
         "VIEW_PARSED": "View as parsed (non-editable) Markdown",
         "VIEW_SPLIT": "View parsed and unparsed Markdown in split view",
