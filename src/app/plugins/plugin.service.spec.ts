@@ -20,10 +20,14 @@ import { PluginSecurityService } from './plugin-security';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginInstance, PluginManifest } from './plugin-api.model';
 import { PluginService } from './plugin.service';
+import { PluginState } from './plugin-state.model';
+import { T } from '../t.const';
 
 describe('PluginService', () => {
   let service: PluginService;
   let pluginMetaPersistenceService: jasmine.SpyObj<PluginMetaPersistenceService>;
+  let pluginLoader: jasmine.SpyObj<PluginLoaderService>;
+  let snackService: jasmine.SpyObj<SnackService>;
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -42,6 +46,12 @@ describe('PluginService', () => {
   };
 
   beforeEach(() => {
+    pluginLoader = jasmine.createSpyObj<PluginLoaderService>('PluginLoaderService', [
+      'loadPluginAssets',
+      'loadUploadedPluginAssets',
+      'clearAllCaches',
+    ]);
+    snackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
     pluginMetaPersistenceService = jasmine.createSpyObj<PluginMetaPersistenceService>(
       'PluginMetaPersistenceService',
       [
@@ -114,14 +124,7 @@ describe('PluginService', () => {
             'removePlugin',
           ]),
         },
-        {
-          provide: PluginLoaderService,
-          useValue: jasmine.createSpyObj<PluginLoaderService>('PluginLoaderService', [
-            'loadPluginAssets',
-            'loadUploadedPluginAssets',
-            'clearAllCaches',
-          ]),
-        },
+        { provide: PluginLoaderService, useValue: pluginLoader },
         {
           provide: PluginCleanupService,
           useValue: jasmine.createSpyObj<PluginCleanupService>('PluginCleanupService', [
@@ -158,10 +161,7 @@ describe('PluginService', () => {
             ['register', 'unregister'],
           ),
         },
-        {
-          provide: SnackService,
-          useValue: jasmine.createSpyObj<SnackService>('SnackService', ['open']),
-        },
+        { provide: SnackService, useValue: snackService },
       ],
     });
 
@@ -204,6 +204,128 @@ describe('PluginService', () => {
         loaded: false,
         isEnabled: false,
       }),
+    ]);
+  });
+
+  it('rejects nodeExecution activation before loading plugin assets', async () => {
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      permissions: ['nodeExecution'],
+    };
+    const state: PluginState = {
+      manifest,
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/node-plugin',
+      type: 'built-in',
+      isEnabled: true,
+    };
+
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(manifest.id, state);
+
+    const result = await service.activatePlugin(manifest.id);
+
+    expect(result).toBeNull();
+    expect(pluginLoader.loadPluginAssets).not.toHaveBeenCalled();
+    expect(service.getAllPluginStates().get(manifest.id)).toEqual(
+      jasmine.objectContaining({
+        status: 'error',
+        error: T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY,
+      }),
+    );
+  });
+
+  it('does not persist nodeExecution plugins as enabled via enableAndActivatePlugin', async () => {
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      permissions: ['nodeExecution'],
+    };
+    const state: PluginState = {
+      manifest,
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/node-plugin',
+      type: 'built-in',
+      isEnabled: false,
+    };
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(manifest.id, state);
+
+    const result = await service.enableAndActivatePlugin(manifest.id);
+
+    expect(result).toBeNull();
+    expect(pluginMetaPersistenceService.setPluginEnabled).not.toHaveBeenCalled();
+    expect(snackService.open).toHaveBeenCalledWith({
+      msg: T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY,
+      type: 'ERROR',
+    });
+    expect(service.getAllPluginStates().get(manifest.id)).toEqual(
+      jasmine.objectContaining({
+        status: 'error',
+        isEnabled: false,
+        error: T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY,
+      }),
+    );
+  });
+
+  it('does not expose disabled nodeExecution issue providers in setup lists', () => {
+    const normalIssueProvider: PluginManifest = {
+      ...mockManifest,
+      id: 'normal-issue-provider',
+      name: 'Normal Issue Provider',
+      type: 'issueProvider',
+      issueProvider: {
+        pollIntervalMs: 60000,
+        issueProviderKey: 'plugin:normal-issue-provider',
+        icon: 'extension',
+      },
+    };
+    const nodeIssueProvider: PluginManifest = {
+      ...normalIssueProvider,
+      id: 'node-issue-provider',
+      name: 'Node Issue Provider',
+      permissions: ['nodeExecution'],
+      issueProvider: {
+        pollIntervalMs: 60000,
+        issueProviderKey: 'plugin:node-issue-provider',
+        icon: 'extension',
+      },
+    };
+    const setState = (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState.bind(service);
+
+    setState(normalIssueProvider.id, {
+      manifest: normalIssueProvider,
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/normal-issue-provider',
+      type: 'built-in',
+      isEnabled: false,
+    });
+    setState(nodeIssueProvider.id, {
+      manifest: nodeIssueProvider,
+      status: 'error',
+      path: 'assets/bundled-plugins/node-issue-provider',
+      type: 'built-in',
+      isEnabled: false,
+      error: T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY,
+    });
+
+    const disabledIssueProviders = service.getDisabledIssueProviderPlugins();
+
+    expect(disabledIssueProviders.map((p) => p.pluginId)).toEqual([
+      normalIssueProvider.id,
     ]);
   });
 });

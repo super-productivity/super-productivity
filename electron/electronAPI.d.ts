@@ -11,11 +11,6 @@ import { Task } from '../src/app/features/tasks/task.model';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import { AppDataComplete } from '../src/app/op-log/model/model-config';
 import {
-  PluginNodeScriptRequest,
-  PluginNodeScriptResult,
-  PluginManifest,
-} from '../packages/plugin-api/src/types';
-import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
@@ -225,17 +220,6 @@ export interface ElectronAPI {
   onSwitchTask(listener: (taskId: string) => void): void;
 
   exec(command: string): void;
-
-  pluginExecNodeScript(
-    pluginId: string,
-    manifest: PluginManifest,
-    request: PluginNodeScriptRequest,
-  ): Promise<PluginNodeScriptResult>;
-
-  // Register/revoke a plugin's nodeExecution grant with the main process so the
-  // executor authorizes from its own state, not the per-call manifest.
-  // See GHSA-78rv-m663-4fph.
-  pluginSetNodeConsent(pluginId: string, isGranted: boolean): Promise<void>;
 
   // Plugin OAuth
   pluginOAuthPrepare(): Promise<{ port: number }>;

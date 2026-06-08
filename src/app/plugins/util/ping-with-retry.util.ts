@@ -1,9 +1,7 @@
 /**
  * Generic retry helper for "ping until ready" semantics.
  *
- * Used by PluginService to wait for the Node.js IPC bridge to come up on cold
- * boot before firing plugin onReady callbacks. Pure function — no Angular DI,
- * no side effects beyond the supplied pingFn.
+ * Pure function — no Angular DI, no side effects beyond the supplied pingFn.
  *
  * Returns true if any attempt succeeds, false if all attempts fail.
  *

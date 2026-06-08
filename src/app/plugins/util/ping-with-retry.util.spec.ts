@@ -1,6 +1,5 @@
 /**
- * Tests for the production pingWithRetry utility used by PluginService
- * to wait for the Node.js IPC bridge on cold boot.
+ * Tests for the production pingWithRetry utility.
  */
 import { fakeAsync, tick } from '@angular/core/testing';
 import { pingWithRetry } from './ping-with-retry.util';

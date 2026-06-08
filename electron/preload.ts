@@ -13,11 +13,6 @@ import {
 } from './shared-with-frontend/get-dist-channel';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
-  PluginManifest,
-  PluginNodeScriptRequest,
-  PluginNodeScriptResult,
-} from '../packages/plugin-api/src/types';
-import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
@@ -246,25 +241,6 @@ const ea: ElectronAPI = {
     // Because the standard 'on' method doesn't strip out the event arg like we need
     ipcRenderer.on('SWITCH_TASK', (_: any, taskId: string) => listener(taskId));
   },
-
-  // Plugin API
-  pluginExecNodeScript: (
-    pluginId: string,
-    manifest: PluginManifest,
-    request: PluginNodeScriptRequest,
-  ) =>
-    _invoke(
-      'PLUGIN_EXEC_NODE_SCRIPT',
-      pluginId,
-      manifest,
-      request,
-    ) as Promise<PluginNodeScriptResult>,
-
-  // Register/revoke a plugin's nodeExecution grant with the main process. The
-  // executor authorizes from this out-of-band state, not the per-call manifest.
-  // See GHSA-78rv-m663-4fph.
-  pluginSetNodeConsent: (pluginId: string, isGranted: boolean) =>
-    _invoke('PLUGIN_SET_NODE_CONSENT', pluginId, isGranted) as Promise<void>,
 
   // Plugin OAuth
   pluginOAuthPrepare: () => _invoke('PLUGIN_OAUTH_PREPARE') as Promise<{ port: number }>,

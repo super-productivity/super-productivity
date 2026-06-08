@@ -66,7 +66,6 @@ import { PluginConfigService } from './plugin-config.service';
 import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { Router } from '@angular/router';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
-import { IS_ELECTRON } from '../app.constants';
 import { isAllowedPluginAction } from './allowed-plugin-actions.const';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../t.const';
@@ -1646,13 +1645,6 @@ export class PluginBridgeService implements OnDestroy {
     manifest: PluginManifest | null,
     request: PluginNodeScriptRequest,
   ): Promise<PluginNodeScriptResult> {
-    if (!IS_ELECTRON) {
-      return {
-        success: false,
-        error: this._translateService.instant(T.PLUGINS.NODE_ONLY_DESKTOP),
-      };
-    }
-
     try {
       typia.assert<PluginNodeScriptRequest>(request);
 
@@ -1663,18 +1655,13 @@ export class PluginBridgeService implements OnDestroy {
         };
       }
 
-      // Check if Electron API is available
-      if (!window.ea || typeof window.ea.pluginExecNodeScript !== 'function') {
-        return {
-          success: false,
-          error: this._translateService.instant(T.PLUGINS.ELECTRON_API_NOT_AVAILABLE),
-        };
-      }
-
-      // Call Electron main process via IPC
-      const result = await window.ea.pluginExecNodeScript(pluginId, manifest, request);
-
-      return result;
+      PluginLog.err(`PluginBridge: nodeExecution is disabled for plugin ${pluginId}`);
+      return {
+        success: false,
+        error: this._translateService.instant(
+          T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY,
+        ),
+      };
     } catch (error) {
       PluginLog.err('PluginBridge: Failed to execute Node.js script:', error);
       return {
@@ -1688,14 +1675,10 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
-   * Ping the Node.js IPC bridge for a plugin using a trivial vm-executed script.
-   * Returns true if the bridge responds successfully, false otherwise.
+   * Compatibility helper for nodeExecution readiness checks. Returns false while
+   * plugin Node.js execution is disabled for security hardening.
    */
   async pingNodeBridge(pluginId: string, manifest: PluginManifest): Promise<boolean> {
-    // 1.5s is plenty for an in-process vm script that returns true — the ping
-    // is a bridge health check, not a long-running operation. Combined with
-    // pingWithRetry's defaults (3 attempts, 1s+2s delays) this caps cold-boot
-    // failure detection at ~7.5s instead of ~17s.
     const result = await this._executeNodeScript(pluginId, manifest, {
       script: 'return true',
       timeout: 1500,

@@ -12,9 +12,8 @@ import { initClipboardImageHandlers } from './clipboard-image-handler';
 import { initLocalRestApi } from './local-rest-api';
 
 export const initIpcInterfaces = (): void => {
-  // Initialize plugin node executor (registers IPC handlers)
-  // This is needed for plugins with nodeExecution permission
-  // The constructor automatically sets up the IPC handlers
+  // Register the fail-closed nodeExecution IPC handler while plugin Node.js
+  // execution is disabled for security hardening.
   log('Initializing plugin node executor');
   if (!pluginNodeExecutor) {
     log('Warning: Plugin node executor failed to initialize');

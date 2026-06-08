@@ -166,4 +166,39 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
       T.PLUGINS.INDEX_HTML_NOT_LOADED,
     );
   });
+
+  it('does not serve iframe HTML for uploaded nodeExecution plugins', async () => {
+    const nodeManifest: PluginManifest = {
+      ...iframeManifest,
+      id: 'node-iframe',
+      name: 'Node Iframe',
+      permissions: ['nodeExecution'],
+    };
+    const indexHtml = '<!doctype html><html><body>Blocked Plugin UI</body></html>';
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(nodeManifest);
+    files['index.html'] = indexHtml;
+    const file = createZipFile(files);
+
+    const result = await service.loadPluginFromZip(file);
+
+    expect(result).toEqual(
+      jasmine.objectContaining({
+        loaded: false,
+        isEnabled: false,
+        error: T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY,
+      }),
+    );
+    expect(pluginRunner.loadPlugin).not.toHaveBeenCalled();
+    expect(service.getPluginIndexHtml(nodeManifest.id)).toBeNull();
+
+    pluginCache.getPlugin.and.resolveTo({
+      id: nodeManifest.id,
+      manifest: JSON.stringify(nodeManifest),
+      code: '',
+      indexHtml,
+      uploadDate: Date.now(),
+    });
+    expect(await service.loadPluginIndexHtml(nodeManifest.id)).toBeNull();
+  });
 });

@@ -326,9 +326,7 @@ export class PluginAPI implements PluginAPIInterface {
 
   /**
    * Register a callback to run after the app confirms all declared APIs are ready.
-   * Put startup init code here (e.g. executeNodeScript calls) instead of at the
-   * top level of plugin.js. For nodeExecution plugins, fires only after a successful
-   * IPC ping — guaranteeing the bridge is available.
+   * Put startup init code here instead of at the top level of plugin.js.
    */
   onReady(fn: () => void | Promise<void>): void {
     this._onReadyRegister?.(fn);

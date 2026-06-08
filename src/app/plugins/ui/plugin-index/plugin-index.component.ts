@@ -207,6 +207,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
         throw new Error('Plugin does not support iframes');
       }
 
+      if (plugin.error) {
+        throw new Error(plugin.error);
+      }
+
       throw new Error('Plugin index.html not loaded');
     }
 
@@ -215,6 +219,9 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     const plugin = plugins.find((p) => p.manifest.id === pluginId);
     if (!plugin) {
       throw new Error('Plugin not found');
+    }
+    if (plugin.error) {
+      throw new Error(plugin.error);
     }
 
     const baseCfg = await this._pluginService.getBaseCfg();

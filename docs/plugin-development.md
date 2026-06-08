@@ -103,7 +103,7 @@ The `manifest.json` file is required for all plugins and defines the plugin's me
 | `icon`            | string   |          | Path to icon file (SVG recommended)                                                    |
 | `iFrame`          | boolean  |          | Whether plugin uses iframe UI (default: false)                                         |
 | `sidePanel`       | boolean  |          | Show plugin in side panel (default: false), requires `iFrame:true`                     |
-| `permissions`     | string[] |          | The permissions the plugin needs (e.g., ["nodeExecution"])                             |
+| `permissions`     | string[] |          | The permissions the plugin needs (`nodeExecution` is temporarily disabled)             |
 | `hooks`           | string[] |          | App events to listen to                                                                |
 | `uiKit`           | boolean  |          | Enable UI Kit CSS reset for iframe plugins (default: true). Set to `false` to disable. |
 
@@ -122,7 +122,7 @@ The `manifest.json` file is required for all plugins and defines the plugin's me
   "icon": "icon.svg",
   "iFrame": true,
   "sidePanel": false,
-  "permissions": ["nodeExecution"],
+  "permissions": [],
   "hooks": ["taskComplete", "taskUpdate", "currentTaskChange"]
 }
 ```
@@ -539,53 +539,17 @@ console.log(data); // '{ count: 42 }'
 
 ### Node.js Script Execution
 
-Plugins with `"permissions": ["nodeExecution"]` can run Node.js scripts in the Electron
-desktop app.
+`executeNodeScript` and the `"nodeExecution"` permission are temporarily disabled for
+security hardening. Plugins that declare this permission cannot run Node.js scripts until
+the Electron authorization boundary is reworked and this capability is re-enabled.
 
-```javascript
-const result = await plugin.executeNodeScript({
-  script: `
-    const os = require('os');
-    return os.hostname();
-  `,
-  timeout: 5000,
-});
-
-if (result.success) {
-  console.log('Hostname:', result.result);
-}
-```
-
-**Important — use `plugin.onReady()` for startup calls:**
-
-`executeNodeScript` requires the Electron IPC bridge to be available. On cold boot this
-bridge may not be ready when `plugin.js` first runs. Always put `executeNodeScript` calls
-(and any other startup init code) inside `plugin.onReady()`:
-
-```javascript
-// ❌ May fail on cold boot
-const result = await plugin.executeNodeScript({ script: 'return true' });
-
-// ✅ Correct — fires after the bridge is confirmed available
-plugin.onReady(async () => {
-  const result = await plugin.executeNodeScript({ script: 'return true' });
-});
-```
-
-`plugin.onReady(fn)` fires after `plugin.js` has fully evaluated **and** the app has
-confirmed the Node.js IPC bridge is responding (with automatic retry). If the bridge is
-unavailable after retries, an error is shown in the plugin management UI and `onReady` does
-not fire.
-
-You can also use `onReady` for any other startup work that should run after the plugin
-script has finished setting up its hooks and registrations — not just for `nodeExecution`.
+You can use `onReady` for startup work that should run after the plugin script has
+finished setting up its hooks and registrations.
 
 **Iframe plugins:** `plugin.onReady()` is also available inside iframe plugins, but it
 fires on the next microtask after `plugin.js` finishes evaluating — without an IPC bridge
 ping. This is fine in practice because iframe plugins are rendered on user navigation
-(well after host startup, when the bridge is already up). If your iframe plugin needs the
-bridge from `onReady`, it will be available; cold-boot races affect host-side plugin code
-only.
+(well after host startup).
 
 ### 4. Don't spam the logs
 
@@ -630,7 +594,7 @@ In iframe context, these methods are NOT available:
 - `registerSidePanelButton()`
 - `registerShortcut()`
 - `registerHook()`
-- `execNodeScript()`
+- `executeNodeScript()`
 
 ### Content Security Policy
 
@@ -684,9 +648,7 @@ async function testAPI() {
 
 - Check if method is available in current context
 - Verify permissions in manifest
-- If `executeNodeScript` fails on startup or cold boot, wrap your init code in
-  `plugin.onReady(async () => { ... })` — this ensures the Node.js bridge is ready before
-  your code runs
+- `executeNodeScript` is temporarily disabled for security hardening
 
 **Iframe not displaying:**
 

@@ -535,10 +535,10 @@ export interface PluginAPI {
    */
   closeWorkContextView(): void;
 
-  // readiness signal — register a callback to run after the app confirms all
-  // declared APIs (e.g. nodeExecution IPC bridge) are available. Put startup
-  // init code here instead of at the top level of plugin.js. Optional so older
-  // plugin API typings remain assignable; the host always provides it.
+  // readiness signal — register a callback to run after the host finishes
+  // plugin startup checks. Put startup init code here instead of at the top
+  // level of plugin.js. Optional so older plugin API typings remain assignable;
+  // the host always provides it.
   onReady?(fn: () => void | Promise<void>): void;
 
   // cross-process communication
@@ -652,7 +652,7 @@ export interface PluginAPI {
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 
-  // node execution (only available in Electron with nodeExecution permission)
+  // node execution is temporarily disabled for security hardening.
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
   // action execution - dispatch NgRx actions (limited to allowed subset)

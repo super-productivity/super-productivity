@@ -37,6 +37,7 @@ import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
+import { T } from '../t.const';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -420,6 +421,78 @@ describe('PluginBridgeService - openDialog', () => {
     });
 
     expect(result).toBeUndefined();
+  });
+});
+
+describe('PluginBridgeService - nodeExecution security shutdown', () => {
+  let service: PluginBridgeService;
+  let originalElectronApi: typeof window.ea | undefined;
+  let pluginExecNodeScriptSpy: jasmine.Spy;
+
+  const manifest = {
+    id: 'node-plugin',
+    name: 'Node Plugin',
+    manifestVersion: 1,
+    version: '1.0.0',
+    minSupVersion: '1.0.0',
+    permissions: ['nodeExecution'],
+    hooks: [],
+  };
+
+  beforeEach(() => {
+    originalElectronApi = window.ea;
+    pluginExecNodeScriptSpy = jasmine.createSpy('pluginExecNodeScript');
+    window.ea = {
+      ...(window.ea ?? {}),
+      pluginExecNodeScript: pluginExecNodeScriptSpy,
+    } as typeof window.ea;
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string): string => key },
+        },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  afterEach(() => {
+    window.ea = originalElectronApi as typeof window.ea;
+  });
+
+  it('rejects nodeExecution without calling the exposed Electron bridge', async () => {
+    const bound = service.createBoundMethods('node-plugin', manifest);
+
+    const result = await bound.executeNodeScript({ script: 'return true' });
+
+    expect(result).toEqual({
+      success: false,
+      error: T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY,
+    });
+    expect(pluginExecNodeScriptSpy).not.toHaveBeenCalled();
   });
 });
 

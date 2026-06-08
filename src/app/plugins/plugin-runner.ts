@@ -194,8 +194,8 @@ export class PluginRunner {
   }
 
   /**
-   * Fire the onReady callback for a plugin.
-   * Called by plugin.service.ts after the IPC bridge is confirmed available.
+   * Fire the onReady callback for a plugin after PluginService confirms declared
+   * startup requirements are available.
    */
   async triggerReady(pluginId: string): Promise<void> {
     const fn = this._readyCallbacks.get(pluginId);
@@ -205,9 +205,8 @@ export class PluginRunner {
   }
 
   /**
-   * Ping the Node.js IPC bridge by running a trivial script via the vm (executeDirectly)
-   * path in the Electron executor. Uses the bridge directly — no plugin permission check.
-   * Returns true if the bridge responds, false otherwise.
+   * Compatibility helper for nodeExecution readiness checks. Returns false while
+   * plugin Node.js execution is disabled for security hardening.
    */
   async pingNodeBridge(pluginId: string): Promise<boolean> {
     const instance = this._loadedPlugins.get(pluginId);

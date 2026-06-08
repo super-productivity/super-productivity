@@ -19,12 +19,7 @@ import {
   MAX_PLUGIN_MANIFEST_SIZE,
   MAX_PLUGIN_ZIP_SIZE,
 } from './plugin.const';
-import { MatDialog } from '@angular/material/dialog';
-import {
-  PluginNodeConsentDialogComponent,
-  PluginNodeConsentDialogData,
-} from './ui/plugin-node-consent-dialog/plugin-node-consent-dialog-simple.component';
-import { first, take } from 'rxjs/operators';
+import { take } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLoaderService } from './plugin-loader.service';
@@ -39,11 +34,6 @@ import { selectIsDominaModeConfig } from '../features/config/store/global-config
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { SnackService } from '../core/snack/snack.service';
-import { pingWithRetry } from './util/ping-with-retry.util';
-import {
-  decideNodeExecutionConsent,
-  NodeExecutionConsentDialogResult,
-} from './util/plugin-consent.util';
 
 // Each plugin's `id` (from its manifest.json, distinct from the asset path
 // here) becomes the entityId prefix for all data it persists via
@@ -78,7 +68,6 @@ export class PluginService implements OnDestroy {
   private readonly _pluginMetaPersistenceService = inject(PluginMetaPersistenceService);
   private readonly _pluginUserPersistenceService = inject(PluginUserPersistenceService);
   private readonly _pluginCacheService = inject(PluginCacheService);
-  private readonly _dialog = inject(MatDialog);
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _pluginLoader = inject(PluginLoaderService);
   private readonly _translateService = inject(TranslateService);
@@ -368,7 +357,12 @@ export class PluginService implements OnDestroy {
       useAgendaView: boolean;
     }> = [];
     for (const [, state] of this._pluginStates()) {
-      if (!state.isEnabled && state.manifest.type === 'issueProvider') {
+      if (
+        !state.isEnabled &&
+        state.status !== 'error' &&
+        state.manifest.type === 'issueProvider' &&
+        !this._isNodeExecutionDisabled(state.manifest)
+      ) {
         result.push({
           pluginId: state.manifest.id,
           name: state.manifest.name,
@@ -387,6 +381,22 @@ export class PluginService implements OnDestroy {
    * Enable and activate a plugin. Returns the activated instance.
    */
   async enableAndActivatePlugin(pluginId: string): Promise<PluginInstance | null> {
+    const state = this._getPluginState(pluginId);
+    if (state && this._isNodeExecutionDisabled(state.manifest)) {
+      const error = this._getNodeExecutionDisabledError();
+      this._setPluginState(pluginId, {
+        ...state,
+        status: 'error',
+        isEnabled: false,
+        error,
+      });
+      this._snackService.open({
+        msg: error,
+        type: 'ERROR',
+      });
+      return null;
+    }
+
     await this._pluginMetaPersistenceService.setPluginEnabled(pluginId, true);
     return this.activatePlugin(pluginId, true);
   }
@@ -479,30 +489,14 @@ export class PluginService implements OnDestroy {
       ? this._getPluginState(pluginId) || state
       : state;
 
-    // Only check for permission if plugin is actually enabled
-    if (currentState.isEnabled) {
-      // Only check permission on startup - manual activation already checked in UI
-      if (!isManualActivation) {
-        const hasConsent = await this._checkNodeExecutionPermissionForStartup(
-          currentState.manifest,
-        );
-        if (!hasConsent) {
-          console.log(
-            'Plugin requires Node.js execution permission but no stored consent found:',
-            state.manifest.id,
-          );
-          // Don't disable the plugin on startup - user may have enabled it but not granted permission yet
-          return null;
-        }
-      }
-    } else {
+    if (!currentState.isEnabled) {
       // Plugin is not enabled, don't activate it
       console.log(`Plugin ${pluginId} is not enabled, skipping activation`);
       return null;
     }
 
-    // Load the plugin (nodeExecution authorization is registered in _fireOnReady,
-    // the common chokepoint for all load paths — see GHSA-78rv-m663-4fph).
+    // Load the plugin. nodeExecution plugins are rejected until the Electron
+    // bridge has a main-process-owned authorization boundary.
     this._setPluginState(pluginId, {
       ...currentState,
       status: 'loading',
@@ -561,6 +555,8 @@ export class PluginService implements OnDestroy {
   }
 
   private async _loadPluginLazy(state: PluginState): Promise<PluginInstance> {
+    this._throwIfNodeExecutionDisabled(state.manifest);
+
     // Load the plugin code and assets
     const assets = await this._pluginLoader.loadPluginAssets(state.path);
     const { code: pluginCode, indexHtml, translations } = assets;
@@ -595,24 +591,56 @@ export class PluginService implements OnDestroy {
   }
 
   /**
-   * Fire onReady for a successfully loaded plugin. For nodeExecution plugins on
-   * Electron, pings the IPC bridge first (with retry); throws if the bridge stays
-   * unavailable. Called after every plugin load path.
+   * Fire onReady for a successfully loaded plugin. nodeExecution plugins are
+   * intentionally blocked until the Electron bridge has a main-process-owned
+   * authorization boundary. Called after every plugin load path.
    */
   private async _fireOnReady(instance: PluginInstance): Promise<void> {
     if (!instance.loaded) {
       return;
     }
-    if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
-      // SECURITY: authorize this plugin for Node execution in the main process
-      // BEFORE the first node call (the ping). This is the single chokepoint for
-      // every load path (startup, manual activation, zip upload), and reaching
-      // onReady for a nodeExecution plugin means activation already verified
-      // consent. See GHSA-78rv-m663-4fph.
-      await this._setNodeExecutionGrant(instance.manifest.id, true);
-      await this._pingNodeBridge(instance.manifest);
+    if (instance.manifest.permissions?.includes('nodeExecution')) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY),
+      );
     }
     await this._pluginRunner.triggerReady(instance.manifest.id);
+  }
+
+  private _isNodeExecutionDisabled(manifest: PluginManifest): boolean {
+    return manifest.permissions?.includes('nodeExecution') ?? false;
+  }
+
+  private _getNodeExecutionDisabledError(): string {
+    return this._translateService.instant(T.PLUGINS.NODE_EXECUTION_DISABLED_FOR_SECURITY);
+  }
+
+  private _createNodeExecutionDisabledPlaceholder(
+    manifest: PluginManifest,
+  ): PluginInstance {
+    return {
+      manifest,
+      loaded: false,
+      isEnabled: false,
+      error: this._getNodeExecutionDisabledError(),
+    };
+  }
+
+  private _throwIfNodeExecutionDisabled(manifest: PluginManifest): void {
+    if (this._isNodeExecutionDisabled(manifest)) {
+      throw new Error(this._getNodeExecutionDisabledError());
+    }
+  }
+
+  private _canServePluginIndexHtml(pluginId: string): boolean {
+    const state = this._getPluginState(pluginId);
+    return (
+      !!state &&
+      state.status === 'loaded' &&
+      state.isEnabled &&
+      !state.error &&
+      !this._isNodeExecutionDisabled(state.manifest)
+    );
   }
 
   /**
@@ -732,6 +760,22 @@ export class PluginService implements OnDestroy {
       const assets = await this._pluginLoader.loadPluginAssets(pluginPath);
       const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
 
+      // Validate manifest and code
+      const manifestValidation = validatePluginManifest(manifest);
+      if (!manifestValidation.isValid) {
+        throw new Error(
+          this._translateService.instant(T.PLUGINS.VALIDATION_FAILED, {
+            errors: manifestValidation.errors.join(', '),
+          }),
+        );
+      }
+
+      if (this._isNodeExecutionDisabled(manifest)) {
+        this._pluginPaths.set(manifest.id, pluginPath);
+        PluginLog.err(`Plugin ${manifest.id} requires disabled nodeExecution`);
+        return this._createNodeExecutionDisabledPlaceholder(manifest);
+      }
+
       // Store assets if loaded
       if (indexHtml) {
         this._pluginIndexHtml.set(manifest.id, indexHtml);
@@ -754,16 +798,6 @@ export class PluginService implements OnDestroy {
       const isPluginEnabled = await this._pluginMetaPersistenceService.isPluginEnabled(
         manifest.id,
       );
-
-      // Validate manifest and code
-      const manifestValidation = validatePluginManifest(manifest);
-      if (!manifestValidation.isValid) {
-        throw new Error(
-          this._translateService.instant(T.PLUGINS.VALIDATION_FAILED, {
-            errors: manifestValidation.errors.join(', '),
-          }),
-        );
-      }
 
       // Check for dangerous permissions
       if (this._pluginSecurity.hasElevatedPermissions(manifest)) {
@@ -959,6 +993,9 @@ export class PluginService implements OnDestroy {
    * Get index.html content for a plugin
    */
   getPluginIndexHtml(pluginId: string): string | null {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
     return this._pluginIndexHtml.get(pluginId) || null;
   }
 
@@ -1033,6 +1070,10 @@ export class PluginService implements OnDestroy {
    * Load plugin index.html content
    */
   async loadPluginIndexHtml(pluginId: string): Promise<string | null> {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
+
     // First check if we already have it cached
     const cached = this._pluginIndexHtml.get(pluginId);
     if (cached) {
@@ -1044,6 +1085,9 @@ export class PluginService implements OnDestroy {
     if (pluginPath?.startsWith('uploaded://')) {
       const cachedPlugin = await this._pluginCacheService.getPlugin(pluginId);
       if (cachedPlugin?.indexHtml) {
+        if (!this._canServePluginIndexHtml(pluginId)) {
+          return null;
+        }
         this._pluginIndexHtml.set(pluginId, cachedPlugin.indexHtml);
         return cachedPlugin.indexHtml;
       }
@@ -1267,6 +1311,34 @@ export class PluginService implements OnDestroy {
         undefined,
         configSchema,
       );
+
+      if (this._isNodeExecutionDisabled(manifest)) {
+        const placeholderInstance =
+          this._createNodeExecutionDisabledPlaceholder(manifest);
+        this._pluginPaths.set(manifest.id, uploadedPluginPath);
+
+        const existingIndexDisabled = this._loadedPlugins.findIndex(
+          (p) => p.manifest.id === manifest.id,
+        );
+        if (existingIndexDisabled === -1) {
+          this._loadedPlugins.push(placeholderInstance);
+        } else {
+          this._loadedPlugins[existingIndexDisabled] = placeholderInstance;
+        }
+
+        this._setPluginState(manifest.id, {
+          manifest,
+          status: 'error',
+          path: uploadedPluginPath,
+          type: 'uploaded',
+          isEnabled: false,
+          error: placeholderInstance.error,
+          icon: iconContent || undefined,
+        });
+
+        PluginLog.err(`Uploaded plugin ${manifest.id} requires disabled nodeExecution`);
+        return placeholderInstance;
+      }
 
       // Store index.html content if it exists
       if (indexHtml) {
@@ -1545,14 +1617,6 @@ export class PluginService implements OnDestroy {
     this._pluginHooks.unregisterPluginHooks(pluginId);
     this._pluginI18nService.unloadPluginTranslations(pluginId);
     this._pluginRunner.unloadPlugin(pluginId);
-
-    // SECURITY: revoke the main-process nodeExecution grant on teardown, so a
-    // disabled/uninstalled plugin cannot run Node for the rest of the session.
-    // Best-effort and fire-and-forget (teardown is synchronous); revoking by id
-    // is a no-op for plugins that never held a grant. See GHSA-78rv-m663-4fph.
-    void this._setNodeExecutionGrant(pluginId, false).catch((e) =>
-      PluginLog.err(`Failed to revoke nodeExecution grant for ${pluginId}`, e),
-    );
   }
 
   unloadPlugin(pluginId: string): boolean {
@@ -1601,6 +1665,36 @@ export class PluginService implements OnDestroy {
       const assets = await this._pluginLoader.loadUploadedPluginAssets(pluginId);
       const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
 
+      // Validate manifest
+      const manifestValidation = validatePluginManifest(manifest);
+      if (!manifestValidation.isValid) {
+        throw new Error(
+          this._translateService.instant(T.PLUGINS.VALIDATION_FAILED, {
+            errors: manifestValidation.errors.join(', '),
+          }),
+        );
+      }
+
+      if (this._isNodeExecutionDisabled(manifest)) {
+        const placeholderInstance =
+          this._createNodeExecutionDisabledPlaceholder(manifest);
+        const uploadedPluginPath = `uploaded://${manifest.id}`;
+        this._pluginPaths.set(manifest.id, uploadedPluginPath);
+        this._setPluginState(manifest.id, {
+          manifest,
+          status: 'error',
+          path: uploadedPluginPath,
+          type: 'uploaded',
+          isEnabled: false,
+          error: placeholderInstance.error,
+          icon: icon || undefined,
+        });
+        PluginLog.err(
+          `Uploaded plugin ${manifest.id} requires disabled nodeExecution, skipping reload`,
+        );
+        return placeholderInstance;
+      }
+
       // Store assets if loaded
       if (indexHtml) {
         this._pluginIndexHtml.set(manifest.id, indexHtml);
@@ -1616,16 +1710,6 @@ export class PluginService implements OnDestroy {
         this._pluginI18nService.loadPluginTranslationsFromContent(
           manifest.id,
           translations,
-        );
-      }
-
-      // Validate manifest
-      const manifestValidation = validatePluginManifest(manifest);
-      if (!manifestValidation.isValid) {
-        throw new Error(
-          this._translateService.instant(T.PLUGINS.VALIDATION_FAILED, {
-            errors: manifestValidation.errors.join(', '),
-          }),
         );
       }
 
@@ -1692,24 +1776,8 @@ export class PluginService implements OnDestroy {
   }
 
   /**
-   * Register (or revoke) a plugin's nodeExecution grant with the Electron main
-   * process, so the main process authorizes Node execution from its own state
-   * rather than the per-call manifest the renderer passes (CWE-501). The full
-   * rationale (and the "defense in depth, not a hard boundary" caveat) lives on
-   * the executor — see electron/plugin-node-executor.ts and GHSA-78rv-m663-4fph.
-   * No-op outside Electron.
-   */
-  private async _setNodeExecutionGrant(
-    pluginId: string,
-    isGranted: boolean,
-  ): Promise<void> {
-    if (IS_ELECTRON) {
-      await window.ea.pluginSetNodeConsent(pluginId, isGranted);
-    }
-  }
-
-  /**
-   * Check if a plugin requires and has consent for Node.js execution
+   * Check if a plugin requires Node.js execution. The capability is temporarily
+   * disabled for security hardening, so nodeExecution plugins are rejected.
    */
   async checkNodeExecutionPermission(manifest: PluginManifest): Promise<boolean> {
     // Check if plugin has nodeExecution permission
@@ -1717,86 +1785,11 @@ export class PluginService implements OnDestroy {
       return true; // No node execution permission needed
     }
 
-    // Only check consent in Electron environment
-    if (!IS_ELECTRON) {
-      PluginLog.err(
-        `Plugin ${manifest.id} requires nodeExecution permission which is not available in web environment`,
-      );
-      return false;
-    }
-
-    return this._getNodeExecutionConsent(manifest);
-  }
-
-  /**
-   * Ping the Node.js IPC bridge with a trivial no-op script.
-   * Retries up to 3 times (delays: 1s, 2s) before throwing.
-   * Throws if the bridge is unavailable after all retries.
-   */
-  private async _pingNodeBridge(manifest: PluginManifest): Promise<void> {
-    const ok = await pingWithRetry(() => this._pluginRunner.pingNodeBridge(manifest.id));
-    if (!ok) {
-      throw new Error(
-        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE),
-      );
-    }
-  }
-
-  /**
-   * Check node execution permission on startup (uses stored consent)
-   */
-  private async _checkNodeExecutionPermissionForStartup(
-    manifest: PluginManifest,
-  ): Promise<boolean> {
-    // Check if plugin has nodeExecution permission
-    if (!manifest.permissions?.includes('nodeExecution')) {
-      return true; // No node execution permission needed
-    }
-
-    // Only check consent in Electron environment
-    if (!IS_ELECTRON) {
-      console.warn(
-        `Plugin ${manifest.id} requires nodeExecution permission which is not available in web environment`,
-      );
-      return false;
-    }
-
-    // On startup, use stored consent if available
-    const storedConsent =
-      await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
-
-    // Only allow if consent was explicitly granted and stored
-    return storedConsent === true;
-  }
-
-  /**
-   * Get consent for Node.js execution permissions (KISS approach)
-   */
-  private async _getNodeExecutionConsent(manifest: PluginManifest): Promise<boolean> {
-    // Check if we should pre-check the "remember" checkbox based on previous consent
-    const previousConsent =
-      await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
-
-    // Always show dialog for nodeExecution permission
-    const result = (await this._dialog
-      .open(PluginNodeConsentDialogComponent, {
-        data: {
-          manifest,
-          rememberChoice: previousConsent === true, // Pre-check if previously consented
-        } as PluginNodeConsentDialogData,
-        disableClose: false,
-        width: '500px',
-      })
-      .afterClosed()
-      .pipe(first())
-      .toPromise()) as NodeExecutionConsentDialogResult | undefined;
-
-    const decision = decideNodeExecutionConsent(result);
-    await this._pluginMetaPersistenceService.setNodeExecutionConsent(
-      manifest.id,
-      decision.consentToStore,
-    );
-    return decision.granted;
+    this._snackService.open({
+      msg: this._getNodeExecutionDisabledError(),
+      type: 'ERROR',
+    });
+    return false;
   }
 
   /**
