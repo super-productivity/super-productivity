@@ -8,9 +8,10 @@ import {
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
+  WebDavNativeRequestError,
 } from '../../errors';
 import { errorMeta } from '../../log/error-meta';
-import { WebDavHttpStatus } from './webdav.const';
+import { WebDavHttpHeader, WebDavHttpStatus } from './webdav.const';
 
 export interface WebDavHttpRequest {
   url: string;
@@ -42,6 +43,44 @@ export interface WebDavHttpAdapterDeps {
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
 
+  /**
+   * Sync correctness (#7144): force revalidation on the NATIVE HTTP path. iOS
+   * `URLSession` caches GETs by default and an upstream reverse proxy / CDN may
+   * cache too — a stale `sync-data.json` both hides remote changes and defeats
+   * the content-hash conflict check, silently overwriting newer remote data.
+   *
+   * Native-only, intentionally: the web/fetch path uses the CORS-safe fetch
+   * `cache: 'no-store'` option instead. `Cache-Control` is not a CORS-safelisted
+   * request header, so adding it to a cross-origin browser request would require
+   * the WebDAV server to allow it in preflight and could break web sync. Native
+   * HTTP is not subject to CORS, so the headers are safe here and additionally
+   * instruct upstream proxies to revalidate.
+   */
+  private static readonly NO_CACHE_HEADERS: Record<string, string> = {
+    [WebDavHttpHeader.CACHE_CONTROL]: 'no-cache, no-store',
+    Pragma: 'no-cache',
+  };
+
+  /**
+   * Non-sensitive, cache-relevant response headers worth surfacing in a shared
+   * log capture so we can tell whether a stale read came from a client cache or
+   * an upstream proxy. Deliberately excludes anything that can carry user data
+   * or secrets (set-cookie, www-authenticate, content-location, location).
+   */
+  private static readonly _CACHE_HEADER_ALLOWLIST = [
+    'etag',
+    'age',
+    'cache-control',
+    'date',
+    'last-modified',
+    'expires',
+    'x-cache',
+    'cf-cache-status',
+    'x-served-by',
+    'via',
+    'x-proxy-cache',
+  ] as const;
+
   constructor(private readonly _deps: WebDavHttpAdapterDeps) {}
 
   async request(options: WebDavHttpRequest): Promise<WebDavHttpResponse> {
@@ -63,7 +102,10 @@ export class WebDavHttpAdapter {
         const nativeResp = await this._deps.nativeHttp({
           url: options.url,
           method: options.method,
-          headers: options.headers ?? {},
+          headers: {
+            ...(options.headers ?? {}),
+            ...WebDavHttpAdapter.NO_CACHE_HEADERS,
+          },
           data: options.body ?? undefined,
           responseType: 'text',
         });
@@ -101,6 +143,17 @@ export class WebDavHttpAdapter {
         }
       }
 
+      // Diagnostic (#7144): surface cache-relevant response headers so a shared
+      // log capture reveals whether a stale read originated from the client
+      // cache or an upstream proxy. Allowlisted, non-sensitive metadata only.
+      this._deps.logger.normal(`${WebDavHttpAdapter.L}.response()`, {
+        method: options.method,
+        url: scrubbedUrl,
+        status: response.status,
+        bodyChars: response.data.length,
+        cacheHeaders: WebDavHttpAdapter._pickCacheHeaders(response.headers),
+      });
+
       // Check for common HTTP errors
       this._checkHttpStatus(response.status, scrubbedUrl, response.data);
 
@@ -116,10 +169,23 @@ export class WebDavHttpAdapter {
         throw e;
       }
 
+      const nativeErrorCode = WebDavHttpAdapter._readErrorCode(e);
       this._deps.logger.critical(
         `${WebDavHttpAdapter.L}.request() error`,
-        errorMeta(e, { url: scrubbedUrl, method: options.method }),
+        errorMeta(e, {
+          ...(nativeErrorCode !== undefined ? { errorCode: nativeErrorCode } : {}),
+          url: scrubbedUrl,
+          method: options.method,
+        }),
       );
+
+      if (this._deps.platformInfo.isNativePlatform) {
+        throw new WebDavNativeRequestError(
+          this._formatNativeErrorMessage(e),
+          nativeErrorCode,
+        );
+      }
+
       // Create a fake Response object for the error
       const errorResponse = new Response(`HTTP error for ${scrubbedUrl}`, {
         status: WebDavHttpStatus.INTERNAL_SERVER_ERROR,
@@ -166,6 +232,54 @@ export class WebDavHttpAdapter {
     }
   }
 
+  private _formatNativeErrorMessage(error: unknown): string {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : typeof error === 'string' && error
+          ? error
+          : 'Native WebDAV request failed';
+    return WebDavHttpAdapter._redactUrlParts(message);
+  }
+
+  private static _readErrorCode(error: unknown): string | number | undefined {
+    const rawCode = (error as { code?: unknown } | null)?.code;
+    return typeof rawCode === 'string' || typeof rawCode === 'number'
+      ? rawCode
+      : undefined;
+  }
+
+  private static _redactUrlParts(message: string): string {
+    return message.replace(/https?:\/\/[^\s"'<>]+/gi, (rawUrl) => {
+      try {
+        const url = new URL(rawUrl);
+        return `${url.protocol}//${url.host}`;
+      } catch {
+        return '[redacted-url]';
+      }
+    });
+  }
+
+  /**
+   * Serialize the allowlisted cache-relevant headers (case-insensitive) into a
+   * compact, log-safe string like `etag=W/"a1"; age=3; x-cache=HIT`. Returns
+   * `'none'` when the response carries no such headers (already a useful
+   * signal). `SyncLogMeta` only holds primitives, hence a string not an object.
+   */
+  private static _pickCacheHeaders(headers: Record<string, string>): string {
+    const lower: Record<string, string> = {};
+    for (const [key, value] of Object.entries(headers)) {
+      lower[key.toLowerCase()] = value;
+    }
+    const parts: string[] = [];
+    for (const key of WebDavHttpAdapter._CACHE_HEADER_ALLOWLIST) {
+      if (lower[key] !== undefined) {
+        parts.push(`${key}=${lower[key]}`);
+      }
+    }
+    return parts.length > 0 ? parts.join('; ') : 'none';
+  }
+
   private async _convertFetchResponse(response: Response): Promise<WebDavHttpResponse> {
     const headers: Record<string, string> = {};
     response.headers.forEach((value, key) => {
@@ -186,7 +300,7 @@ export class WebDavHttpAdapter {
     }
 
     if (status === WebDavHttpStatus.UNAUTHORIZED) {
-      throw new AuthFailSPError();
+      throw new AuthFailSPError('Authentication failed (HTTP 401)');
     }
 
     if (status === WebDavHttpStatus.NOT_FOUND) {

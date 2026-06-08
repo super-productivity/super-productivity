@@ -20,6 +20,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 
+import com.getcapacitor.BridgeActivity
 import com.superproductivity.superproductivity.R
 
 /**
@@ -34,8 +35,15 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
     private var feedbackText: TextView? = null
     private var barView: LinearLayout? = null
     private var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var insetLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     private var taskCount = 0
     private var isBarVisible = false
+    // How far the WebView's bottom sits above the overlay's bottom (px) = the
+    // bottom inset the edge-to-edge plugin applied to the WebView. This is what
+    // the web UI's safe area actually is on this device — measured directly from
+    // the WebView's geometry rather than guessed from navigationBars(), which
+    // does not match the applied inset on gesture-nav devices. -1 = not measured.
+    private var webViewBottomInset = -1
 
     private val isDarkMode: Boolean
         get() {
@@ -54,6 +62,16 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
         barView = overlayView?.findViewById(R.id.startup_overlay_bar)
 
         applyTheme()
+
+        // Edge-to-edge (Capacitor 8, targetSdk 36): this overlay lives on the
+        // full-window android.R.id.content, behind the system navigation bar,
+        // while the web UI lives in a WebView that the edge-to-edge plugin insets
+        // above the nav bar. Lift the FAB/input bar by that same inset so they
+        // line up with the web add-task button/bar we hand off to. Re-measured on
+        // each layout so it catches the inset being applied late and on rotation.
+        insetLayoutListener = ViewTreeObserver.OnGlobalLayoutListener { updateOverlayInsets() }
+        rootView.viewTreeObserver.addOnGlobalLayoutListener(insetLayoutListener)
+        updateOverlayInsets()
 
         editText?.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_DONE ||
@@ -77,6 +95,48 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
         Log.d(TAG, "Startup overlay shown (darkMode=$isDarkMode)")
     }
 
+    /**
+     * Measure how far the WebView's bottom sits above the overlay's bottom (the
+     * inset the edge-to-edge plugin applied) and lift the FAB / input bar by it
+     * so they align with the web add-task button/bar. Mirroring the WebView's
+     * real geometry is device-independent: it works regardless of gesture vs
+     * 3-button navigation, where navigationBars() would not match the applied
+     * inset. No-op until the views are laid out and when the inset is unchanged.
+     */
+    private fun updateOverlayInsets() {
+        val overlay = overlayView ?: return
+        // Freeze the inset once the bar is expanded. The edge-to-edge plugin sets
+        // the WebView's bottom margin to 0 while the IME is visible (EdgeToEdge.java:
+        // "system already resizes the window for the keyboard"), so re-measuring
+        // during the keyboard phase would read ~0 and drop the bar behind the
+        // keyboard. The FAB-phase value (keyboard down) is the one the keyboard
+        // listener needs. This also stops dead work once the FAB is gone.
+        if (isBarVisible) return
+        val webView = (activity as? BridgeActivity)?.bridge?.webView ?: return
+        if (overlay.height == 0 || webView.height == 0) return
+
+        val overlayLoc = IntArray(2)
+        val webViewLoc = IntArray(2)
+        overlay.getLocationInWindow(overlayLoc)
+        webView.getLocationInWindow(webViewLoc)
+        val inset = ((overlayLoc[1] + overlay.height) - (webViewLoc[1] + webView.height))
+            .coerceAtLeast(0)
+        if (inset == webViewBottomInset) return
+        webViewBottomInset = inset
+
+        // Bar is still hidden here (we return early once it is shown), so set its
+        // resting margin too; the keyboard listener takes over once expanded.
+        val density = activity.resources.displayMetrics.density
+        (fab?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            lp.bottomMargin = (FAB_GAP_DP * density).toInt() + webViewBottomInset
+            fab?.layoutParams = lp
+        }
+        (barView?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            lp.bottomMargin = (BAR_GAP_DP * density).toInt() + webViewBottomInset
+            barView?.layoutParams = lp
+        }
+    }
+
     private fun expandToInputBar() {
         if (isBarVisible) return
         isBarVisible = true
@@ -85,7 +145,7 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
 
         // Setup keyboard tracking before showing bar
         val density = activity.resources.displayMetrics.density
-        val baseMargin = ((8 + 36) * density).toInt()
+        val baseMargin = (BAR_GAP_DP * density).toInt()
         var baseOffset = -1
         layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
             val rect = Rect()
@@ -97,7 +157,11 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
             }
             val keyboardHeight = bottomGap - baseOffset
             val params = barView?.layoutParams as? ViewGroup.MarginLayoutParams ?: return@OnGlobalLayoutListener
-            params.bottomMargin = if (keyboardHeight > 0) keyboardHeight + baseMargin else baseMargin
+            // baseOffset already captured (and now subtracts) the nav bar, so
+            // add the WebView's bottom inset back to keep the bar above it.
+            params.bottomMargin =
+                (if (keyboardHeight > 0) keyboardHeight + baseMargin else baseMargin) +
+                webViewBottomInset.coerceAtLeast(0)
             barView?.layoutParams = params
         }
         rootView.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
@@ -138,9 +202,10 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
         }
         fab?.background = fabBg
 
-        // Match web AddTaskBar: left/right: 4px, bottom: 8px + 36px action bar height
+        // Match web AddTaskBar: left/right 4px, bottom gap + 36px action bar
+        // height. updateOverlayInsets() re-applies this with the WebView inset.
         val sideMarginPx = (4 * density).toInt()
-        val bottomMarginPx = ((8 + 36) * density).toInt()
+        val bottomMarginPx = (BAR_GAP_DP * density).toInt()
         val params = barView?.layoutParams as? ViewGroup.MarginLayoutParams
         params?.leftMargin = sideMarginPx
         params?.rightMargin = sideMarginPx
@@ -245,10 +310,11 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
     }
 
     private fun removeLayoutListener() {
-        layoutListener?.let {
-            activity.findViewById<View>(android.R.id.content)?.viewTreeObserver?.removeOnGlobalLayoutListener(it)
-        }
+        val observer = activity.findViewById<View>(android.R.id.content)?.viewTreeObserver
+        layoutListener?.let { observer?.removeOnGlobalLayoutListener(it) }
         layoutListener = null
+        insetLayoutListener?.let { observer?.removeOnGlobalLayoutListener(it) }
+        insetLayoutListener = null
     }
 
     private fun removeOverlayView() {
@@ -262,5 +328,13 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
 
     companion object {
         private const val TAG = "StartupOverlay"
+
+        // Base bottom gaps (dp) above the WebView's bottom inset. The FAB mirrors
+        // the web bottom-nav button, whose bottom edge sits ~6dp above the nav
+        // line (measured). The input bar adds 36dp on top to clear the web
+        // add-task-bar's action-button row. Fine-tune here if a device shows a
+        // small constant offset (these are now device-independent of nav type).
+        private const val FAB_GAP_DP = 6
+        private const val BAR_GAP_DP = 6 + 36
     }
 }

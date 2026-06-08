@@ -112,6 +112,90 @@ describe('OperationLogDownloadService', () => {
         expect(mockApiProvider.downloadOps).toHaveBeenCalled();
       });
 
+      describe('encrypted ops with no key — log severity (Fix B)', () => {
+        const NO_KEY_MSG = /no encryption key is configured/;
+
+        const setupEncryptedNoKeyDownload = (): void => {
+          // No getEncryptKey on the provider → encryptKey resolves to undefined.
+          mockApiProvider.downloadOps.and.returnValue(
+            Promise.resolve({
+              ops: [
+                {
+                  serverSeq: 1,
+                  receivedAt: Date.now(),
+                  op: {
+                    id: 'op-encrypted',
+                    clientId: 'c1',
+                    actionType: '[Task] Add' as ActionType,
+                    opType: OpType.Create,
+                    entityType: 'TASK',
+                    payload: 'encrypted-payload-string',
+                    isPayloadEncrypted: true,
+                    vectorClock: {},
+                    timestamp: Date.now(),
+                    schemaVersion: 1,
+                  },
+                },
+              ],
+              hasMore: false,
+              latestSeq: 1,
+            }),
+          );
+        };
+
+        it('logs quietly (normal, not error) for a never-synced client', async () => {
+          const errSpy = spyOn(OpLog, 'error');
+          mockOpLogStore.hasSyncedOps.and.returnValue(Promise.resolve(false));
+          setupEncryptedNoKeyDownload();
+
+          try {
+            await service.downloadRemoteOps(mockApiProvider);
+          } catch {
+            // DecryptNoPasswordError is expected — it triggers the password prompt.
+          }
+
+          expect(OpLog.normal).toHaveBeenCalledWith(jasmine.stringMatching(NO_KEY_MSG));
+          expect(errSpy).not.toHaveBeenCalledWith(jasmine.stringMatching(NO_KEY_MSG));
+        });
+
+        it('logs loudly (error) for an already-synced client (dropped-credential signature)', async () => {
+          const errSpy = spyOn(OpLog, 'error');
+          mockOpLogStore.hasSyncedOps.and.returnValue(Promise.resolve(true));
+          setupEncryptedNoKeyDownload();
+
+          try {
+            await service.downloadRemoteOps(mockApiProvider);
+          } catch {
+            // expected
+          }
+
+          expect(errSpy).toHaveBeenCalledWith(jasmine.stringMatching(NO_KEY_MSG));
+          expect(OpLog.normal).not.toHaveBeenCalledWith(
+            jasmine.stringMatching(NO_KEY_MSG),
+          );
+        });
+
+        it('logs loudly (error) for a never-synced client whose local config still flags encryption on (wiped-store dropped-credential)', async () => {
+          const errSpy = spyOn(OpLog, 'error');
+          mockOpLogStore.hasSyncedOps.and.returnValue(Promise.resolve(false));
+          mockApiProvider.isEncryptionEnabled = jasmine
+            .createSpy('isEncryptionEnabled')
+            .and.returnValue(Promise.resolve(true));
+          setupEncryptedNoKeyDownload();
+
+          try {
+            await service.downloadRemoteOps(mockApiProvider);
+          } catch {
+            // expected
+          }
+
+          expect(errSpy).toHaveBeenCalledWith(jasmine.stringMatching(NO_KEY_MSG));
+          expect(OpLog.normal).not.toHaveBeenCalledWith(
+            jasmine.stringMatching(NO_KEY_MSG),
+          );
+        });
+      });
+
       it('should detect and warn about clock drift after retry', fakeAsync(() => {
         const driftMs = CLOCK_DRIFT_THRESHOLD_MS + 60000; // Threshold + 1 min
         const initialTime = Date.now();

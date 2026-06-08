@@ -34,11 +34,13 @@
   --lg-accent-active: #0062cc;
 
   /* Route theme-private radius names through the design-system scale.
-   * --radius-md = 8px, --radius-xl = 16px. 22px is novel (between xl
-   * and pill), so it stays declared inline. */
+   * --radius-md = 8px, --radius-xl = 16px. 20px is novel (larger
+   * than xl), kept inline — macOS Tahoe panels use a continuous
+   * squircle that reads visibly larger than a 16px round corner;
+   * CSS border-radius approximates it best in the 18–22px range. */
   --lg-radius-sm: var(--radius-md);
   --lg-radius-md: var(--radius-xl);
-  --lg-radius-lg: 22px;
+  --lg-radius-lg: 20px;
 
   /* Tier A blur — subtle vibrancy with mild saturation so the
    * wallpaper color picks up through cards and tasks. */
@@ -126,13 +128,18 @@ body {
    * remaining translucency lets the wallpaper "frame" surfaces
    * without bleeding through them. */
   --card-bg: rgba(255, 255, 255, 0.88);
-  --sidenav-bg: rgba(255, 255, 255, 0.78);
-  --sidenav-bg-mobile: rgba(255, 255, 255, 0.85);
-  /* Active item = "more opaque" version of the glass.
-   * Reads as a highlighted zone of the same material, not a
-   * colored selection. Same value as the mobile bottom nav. */
-  --sidenav-item-active-bg: rgba(255, 255, 255, 0.92);
-  --sidenav-hover-bg: rgba(255, 255, 255, 0.55);
+  /* Translucent white glass — lets the wallpaper's primary-tinted
+   * radials show through and pick up app identity, without going
+   * flat gray. Lower alpha than --card-bg so the sidebar still
+   * reads as a calmer/softer surface next to the brighter cards. */
+  --sidenav-bg: rgba(255, 255, 255, 0.62);
+  --sidenav-bg-mobile: rgba(255, 255, 255, 0.78);
+  /* Active item = a darker patch carved INTO the glass (the way
+   * Tahoe renders selection — "depressed" not "raised"). A faint
+   * black overlay on top of the already-gray sidebar reads as a
+   * subtle darker pill, not a bright fill. */
+  --sidenav-item-active-bg: rgba(0, 0, 0, 0.06);
+  --sidenav-hover-bg: rgba(0, 0, 0, 0.03);
 
   --right-panel-bg: rgba(255, 255, 255, 0.92);
   --right-panel-bg-mobile: rgba(255, 255, 255, 0.92);
@@ -303,11 +310,14 @@ body.isDarkTheme {
   --bg-lightest: rgba(60, 62, 70, 0.6);
   --bg-super-light: rgba(80, 82, 90, 0.65);
 
+  /* See light-mode rationale — Tahoe's dark sidebar sits a step
+   * darker than the content surfaces around it. */
   --card-bg: rgba(36, 38, 44, 0.88);
-  --sidenav-bg: rgba(28, 30, 38, 0.78);
-  --sidenav-bg-mobile: rgba(20, 22, 28, 0.92);
-  --sidenav-item-active-bg: rgba(255, 255, 255, 0.32);
-  --sidenav-hover-bg: rgba(255, 255, 255, 0.18);
+  --sidenav-bg: rgba(14, 16, 22, 0.78);
+  --sidenav-bg-mobile: rgba(10, 12, 18, 0.92);
+  /* Selection = subtle darker patch within the dark glass. */
+  --sidenav-item-active-bg: rgba(0, 0, 0, 0.25);
+  --sidenav-hover-bg: rgba(0, 0, 0, 0.15);
 
   --right-panel-bg: rgba(28, 30, 38, 0.92);
   --right-panel-bg-mobile: rgba(20, 22, 28, 0.94);
@@ -595,11 +605,18 @@ body.isMac.isElectron magic-side-nav {
 magic-side-nav .nav-sidenav {
   border-radius: var(--lg-radius-lg);
   overflow: hidden;
-  /* Softer than dialog/menu shadows — the sidebar is large
-   * so the same numbers read much heavier. */
+  /* Background comes from --sidenav-bg (cool-gray in light, deep
+   * neutral in dark) — Tahoe's sidebar is a neutral material, no
+   * directional accent gradient. */
+  /* Uniform perimeter rim — Apple's Tahoe sidebar reads as
+   * a softly edged panel, not a top-highlighted dialog. The
+   * dialog/menu "showpiece" bright-top + dark-bottom rim is
+   * Tier B; on the large Tier A sidebar that asymmetry made
+   * the top edge feel pronounced. Keep just the uniform
+   * outer hairline plus a very soft inner light rim on all
+   * four sides, then the ambient drop shadow. */
   box-shadow:
-    inset 0 1.5px 0 var(--lg-overlay-rim),
-    inset 0 -1px 0 var(--lg-rim-bottom),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
     0 2px 8px rgba(0, 0, 0, 0.06),
     0 8px 20px rgba(0, 0, 0, 0.08),
     0 0 0 0.5px var(--lg-hairline);
@@ -607,8 +624,7 @@ magic-side-nav .nav-sidenav {
 
 body.isDarkTheme magic-side-nav .nav-sidenav {
   box-shadow:
-    inset 0 1.5px 0 var(--lg-overlay-rim),
-    inset 0 -1px 0 var(--lg-rim-bottom),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
     0 2px 8px rgba(0, 0, 0, 0.22),
     0 10px 28px rgba(0, 0, 0, 0.28),
     0 0 0 0.5px var(--lg-hairline);
@@ -643,6 +659,28 @@ body.isMac.isElectron magic-side-nav .nav-list {
   padding-top: 48px !important;
 }
 
+/* Tahoe-style selection: the pill background is the only "carved
+ * into the glass" cue (handled via --sidenav-item-active-bg above);
+ * the LABEL drops back to strong neutral text and only the ICON
+ * carries the brand color. The component sets text + icon to
+ * --sidenav-active-text (= --brand) via !important, so this rule
+ * needs !important to win. */
+magic-side-nav .nav-link.active,
+magic-side-nav .nav-link.active .nav-label {
+  color: var(--text-color-more-intense) !important;
+}
+
+magic-side-nav .nav-link.active .nav-icon {
+  color: var(--palette-primary-500) !important;
+}
+
+/* Drop the elevation shadow on active rows — the depressed-pill
+ * background is the selection cue; an additional lift reads as a
+ * raised button, which is the opposite of Tahoe's treatment. */
+magic-side-nav .nav-link.active {
+  box-shadow: none !important;
+}
+
 /* ---------------------------------------------------------
  * Mobile bottom nav — calm floating glass, iOS-style.
  *
@@ -656,13 +694,17 @@ body.isMac.isElectron magic-side-nav .nav-list {
   bottom: max(8px, env(safe-area-inset-bottom)) !important;
   border-top: none !important;
   border-radius: var(--lg-radius-lg);
+  /* Neutral nav material — no accent gradient, see sidenav. */
   background: var(--lg-mobile-nav-bg) !important;
   backdrop-filter: blur(var(--lg-blur-mobile-nav)) saturate(var(--lg-saturate-mobile-nav));
   -webkit-backdrop-filter: blur(var(--lg-blur-mobile-nav))
     saturate(var(--lg-saturate-mobile-nav));
+  /* Uniform perimeter rim — see sidenav rationale above. The
+   * bottom nav is also Tier A persistent navigation, so it
+   * gets the same soft-on-all-sides edge instead of the
+   * dialog-style bright-top highlight. */
   box-shadow:
-    inset 0 1.5px 0 var(--lg-overlay-rim),
-    inset 0 -1px 0 var(--lg-rim-bottom),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
     0 4px 16px rgba(0, 0, 0, 0.08),
     0 12px 32px rgba(0, 0, 0, 0.12),
     0 0 0 0.5px var(--lg-hairline) !important;
@@ -670,8 +712,7 @@ body.isMac.isElectron magic-side-nav .nav-list {
 
 body.isDarkTheme .mobile-bottom-nav {
   box-shadow:
-    inset 0 1.5px 0 var(--lg-overlay-rim),
-    inset 0 -1px 0 var(--lg-rim-bottom),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
     0 4px 16px rgba(0, 0, 0, 0.32),
     0 14px 36px rgba(0, 0, 0, 0.42),
     0 0 0 0.5px var(--lg-hairline) !important;

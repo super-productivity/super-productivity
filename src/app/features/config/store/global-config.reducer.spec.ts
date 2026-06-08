@@ -22,6 +22,7 @@ import { GlobalConfigState } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { AppDataComplete } from '../../../op-log/model/model-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
+import { INBOX_PROJECT } from '../../project/project.const';
 
 describe('GlobalConfigReducer', () => {
   describe('loadAllData action', () => {
@@ -88,6 +89,62 @@ describe('GlobalConfigReducer', () => {
         DEFAULT_GLOBAL_CONFIG.tasks.isMarkdownFormattingInNotesEnabled,
       );
       expect(result.tasks.notesTemplate).toBe(DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate);
+    });
+
+    it('should coerce a legacy null defaultProjectId to the Inbox default (#7891)', () => {
+      // Older configs stored `null` (the removed "None" default). With the "None"
+      // option gone, that value no longer matches a dropdown option, so it must be
+      // normalized to the Inbox project on load.
+      const incomingConfig = {
+        ...initialGlobalConfigState,
+        tasks: { ...initialGlobalConfigState.tasks, defaultProjectId: null } as any,
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: incomingConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.tasks.defaultProjectId).toBe(INBOX_PROJECT.id);
+    });
+
+    it('should coerce a legacy empty-string defaultProjectId to the Inbox default (#7891)', () => {
+      // The removed "None" mat-option used value `''`, so users who explicitly
+      // selected it persisted an empty string (not null). It must coerce to Inbox too.
+      const incomingConfig = {
+        ...initialGlobalConfigState,
+        tasks: { ...initialGlobalConfigState.tasks, defaultProjectId: '' } as any,
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: incomingConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.tasks.defaultProjectId).toBe(INBOX_PROJECT.id);
+    });
+
+    it('should preserve an explicitly configured defaultProjectId on load', () => {
+      const incomingConfig = {
+        ...initialGlobalConfigState,
+        tasks: {
+          ...initialGlobalConfigState.tasks,
+          defaultProjectId: 'my-project',
+        } as any,
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: incomingConfig } as AppDataComplete,
+        }),
+      );
+
+      expect(result.tasks.defaultProjectId).toBe('my-project');
     });
 
     describe('keyboard migration', () => {
@@ -650,6 +707,16 @@ describe('GlobalConfigReducer', () => {
         // Migration must NOT have backfilled — the prototype key is not "owned".
         expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
       });
+    });
+  });
+
+  describe('default misc config (#7891)', () => {
+    it('should NOT persist a default isUseCustomWindowTitleBar', () => {
+      // Guard: a concrete default here would be pushed to Electron on every launch
+      // and override a legacy `isUseObsidianStyleHeader` choice. The checkbox
+      // default is seeded display-only in misc-settings-form.const.ts. Do not
+      // "fix" the checkbox by adding a value here (see #7891).
+      expect(DEFAULT_GLOBAL_CONFIG.misc.isUseCustomWindowTitleBar).toBeUndefined();
     });
   });
 

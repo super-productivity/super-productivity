@@ -32,6 +32,16 @@
         [model]="repeatCfg()"
       ></formly-form>
 
+      @if (isWeekdaySelectionInvalid()) {
+        <div
+          id="weekday-error"
+          class="weekday-error"
+          role="alert"
+        >
+          {{ T.F.TASK_REPEAT.F.WEEKDAY_REQUIRED | translate }}
+        </div>
+      }
+
       <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
         <chip-list-input
           (addItem)="addTag($event)"
@@ -93,8 +103,14 @@
     }
 
     <button
-      [disabled]="!formGroup1().valid || !formGroup2().valid || isLoading()"
+      [disabled]="
+        !formGroup1().valid ||
+        !formGroup2().valid ||
+        isLoading() ||
+        isWeekdaySelectionInvalid()
+      "
       [attr.aria-label]="T.G.SAVE | translate"
+      [attr.aria-describedby]="isWeekdaySelectionInvalid() ? 'weekday-error' : null"
       class="icon-on-small"
       color="primary"
       mat-raised-button

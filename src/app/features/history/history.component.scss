@@ -1,0 +1,230 @@
+@use '../../../styles/_globals.scss' as *;
+
+:host {
+  text-align: center;
+}
+
+.total-time {
+  margin-top: var(--s4);
+}
+
+.year {
+  border-top: 1px dashed var(--separator-color);
+
+  &-title {
+    margin-top: var(--s3);
+  }
+
+  &-time-spent {
+    font-size: 20px;
+    line-height: 26px;
+    margin-bottom: var(--s4);
+  }
+}
+
+.month {
+  margin-top: calc(3 * var(--s));
+  margin-bottom: 0;
+  border-top: 1px dashed var(--separator-color);
+  padding-top: var(--s2);
+
+  &-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s);
+    margin-bottom: var(--s);
+
+    .collapsible-expand-icon {
+      vertical-align: middle;
+    }
+  }
+
+  .month-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .month-toggle:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  &-time-spent {
+    font-size: 18px;
+    line-height: 22px;
+    margin-bottom: var(--s3);
+  }
+}
+
+.weeks {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap-reverse;
+
+  @include mq(xs) {
+    flex-wrap: wrap;
+  }
+}
+
+.week {
+  --table-outer-padding-left-right: var(--s6);
+  margin: var(--s4) 0;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+
+  &-header {
+    display: flex;
+    margin-bottom: var(--s2);
+    align-self: center;
+
+    button {
+      margin-left: var(--s);
+    }
+  }
+
+  &-title {
+    white-space: nowrap;
+    margin-bottom: 0;
+  }
+
+  // day-row disclosure control — renders as plain text, keyboard-accessible
+  .day-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    white-space: nowrap;
+  }
+
+  .day-toggle:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  table.week-table {
+    border-collapse: collapse;
+    width: 320px;
+
+    // tbody might or might not be there
+    &,
+    > tbody {
+      > tr.week-row > {
+        th,
+        td {
+          padding: var(--s-half) var(--s);
+          white-space: nowrap;
+          vertical-align: middle;
+
+          > * {
+            vertical-align: middle;
+          }
+
+          &:first-child {
+            padding-left: var(--table-outer-padding-left-right);
+            text-align: left;
+            border-top-left-radius: var(--card-border-radius);
+          }
+
+          &:last-child {
+            padding-right: var(--table-outer-padding-left-right);
+            border-top-right-radius: var(--card-border-radius);
+
+            mat-icon {
+              // prevent table recalculation on icon change
+              min-width: 28px;
+              vertical-align: middle;
+              // height is off for some reason
+              height: auto;
+              text-shadow: none !important;
+            }
+          }
+        }
+      }
+
+      > tr.week-row {
+        // :focus-within highlights the row when its day-toggle button is focused
+        &:hover,
+        &:focus-within,
+        &.isExpanded {
+          cursor: pointer;
+
+          > td {
+            // bold without respacing
+            text-shadow: 0.01px 0 0.01px;
+            background: var(--card-bg);
+            box-shadow: var(--whiteframe-shadow-2dp);
+
+            background-color: var(--bg-lighter);
+          }
+        }
+      }
+    }
+  }
+}
+
+// work start–end column in the per-day table
+.work-range {
+  white-space: nowrap;
+  // the header row is not a .week-row, so it misses the table's middle-align
+  vertical-align: middle;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    vertical-align: middle;
+  }
+}
+
+.summary-table-wrapper {
+  display: inline-block;
+  width: 100%;
+  margin-bottom: var(--s);
+  border: none;
+  // position above parent table shadow
+  position: relative;
+  z-index: 3;
+
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+
+  > table {
+    width: 100%;
+    text-align: left;
+    border-collapse: collapse;
+
+    * {
+      user-select: text;
+      -webkit-touch-callout: default;
+    }
+
+    // Overwrite default styles in table.scss
+    tr {
+      &:first-of-type {
+        th,
+        td {
+          border-top-width: 1px;
+        }
+      }
+    }
+  }
+
+  > table > tr:focus {
+    outline: none;
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
+    border-radius: var(--card-border-radius);
+  }
+}

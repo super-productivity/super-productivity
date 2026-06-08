@@ -1,10 +1,14 @@
 import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 
 @Injectable({ providedIn: 'root' })
 export class DateService {
   private startOfNextDayDiff: number = 0;
+  private _startOfNextDayDiffChange$ = new Subject<void>();
+
+  readonly startOfNextDayDiffChange$ = this._startOfNextDayDiffChange$.asObservable();
 
   setStartOfNextDayDiff(
     startOfNextDayTimeOrHour: string | number | undefined,
@@ -17,7 +21,16 @@ export class DateService {
         ? startOfNextDayTimeOrHour
         : legacyStartOfNextDay;
 
-    this.startOfNextDayDiff = getStartOfNextDayDiffMs(startOfNextDayTime, startOfNextDay);
+    const nextStartOfNextDayDiff = getStartOfNextDayDiffMs(
+      startOfNextDayTime,
+      startOfNextDay,
+    );
+    if (this.startOfNextDayDiff === nextStartOfNextDayDiff) {
+      return;
+    }
+
+    this.startOfNextDayDiff = nextStartOfNextDayDiff;
+    this._startOfNextDayDiffChange$.next();
   }
 
   /**

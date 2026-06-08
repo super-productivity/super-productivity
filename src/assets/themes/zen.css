@@ -1,24 +1,23 @@
 /**
  * Zen Theme for Super Productivity
  * Removes task backgrounds for a clean, borderless look.
- * Tasks still get a background when dragged or selected/current.
+ * Tasks still get a background when dragged or selected; the current task keeps
+ * the default theme's elevated style (accent bg + shadow).
  * Works with both light and dark modes.
  */
 
 body,
 body.isDarkTheme {
-  /* Task backgrounds: transparent */
+  /* Task backgrounds: transparent (current task keeps the default accent bg) */
   --task-c-bg: transparent;
   --task-c-bg-done: transparent;
-  --task-c-current-bg: transparent;
   --sub-task-c-bg: transparent;
   --sub-task-c-bg-done: transparent;
   --sub-task-c-bg-in-selected: transparent;
 
-  /* Remove task shadows */
+  /* Remove task shadows (current task keeps the default elevation shadow) */
   --task-shadow: none;
   --task-shadow-sub-task: none;
-  --task-current-shadow: none;
 
   /* Remove task border */
   --task-border: none;
@@ -273,11 +272,6 @@ body.isDarkTheme .week-month-selector {
 
 body .week-month-btn:not(.active) {
   background: transparent !important;
-}
-
-/* Give current task a background when sticky (page scrolled) */
-app-root.isWorkViewScrolled task.isCurrent .box {
-  background: var(--bg) !important;
 }
 
 /* Banner: zen normally hides chrome; give it a neutral elevated bg so it

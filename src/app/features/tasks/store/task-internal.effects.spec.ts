@@ -16,12 +16,15 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { GlobalConfigState, TasksConfig } from '../../config/global-config.model';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { DateService } from '../../../core/date/date.service';
 
 describe('TaskInternalEffects', () => {
   let effects: TaskInternalEffects;
   let actions$: Subject<any>;
   let store: MockStore;
   let mainListTaskIds$: BehaviorSubject<string[]>;
+  let dateService: jasmine.SpyObj<DateService>;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -79,6 +82,12 @@ describe('TaskInternalEffects', () => {
   beforeEach(() => {
     actions$ = new Subject<any>();
     mainListTaskIds$ = new BehaviorSubject<string[]>([]);
+    dateService = jasmine.createSpyObj<DateService>('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
+    dateService.todayStr.and.returnValue('2026-01-05');
+    dateService.getStartOfNextDayDiffMs.and.returnValue(0);
 
     const workContextServiceMock = {
       mainListTaskIds$,
@@ -96,10 +105,12 @@ describe('TaskInternalEffects', () => {
             },
             { selector: selectTaskFeatureState, value: createTaskState([]) },
             { selector: selectConfigFeatureState, value: createConfigState() },
+            { selector: selectTodayTaskIds, value: [] },
           ],
         }),
         { provide: WorkContextService, useValue: workContextServiceMock },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
+        { provide: DateService, useValue: dateService },
       ],
     });
 
@@ -331,6 +342,82 @@ describe('TaskInternalEffects', () => {
         expect(emitted).toBe(false);
         done();
       }, 50);
+    });
+  });
+
+  describe('planStartedTaskForToday$', () => {
+    it('should plan the started task for today when it is not in today', (done) => {
+      const task = createTask('task1', { isDone: false });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.refreshState();
+
+      effects.planStartedTaskForToday$.subscribe((action) => {
+        expect(action).toEqual(
+          TaskSharedActions.planTasksForToday({
+            taskIds: ['task1'],
+            today: '2026-01-05',
+            startOfNextDayDiffMs: 0,
+            parentTaskMap: { task1: undefined },
+          }),
+        );
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+    });
+
+    it('should not plan the started task again when it is already in today', (done) => {
+      const task = createTask('task1', { isDone: false, dueDay: '2026-01-05' });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.overrideSelector(selectTodayTaskIds, ['task1']);
+      store.refreshState();
+
+      let emitted = false;
+      effects.planStartedTaskForToday$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+
+    it('should plan the actual started subtask when a parent task start selects it', (done) => {
+      const parent = createTask('parent', {
+        subTaskIds: ['sub1'],
+        isDone: false,
+      });
+      const subTask = createTask('sub1', {
+        parentId: 'parent',
+        isDone: false,
+      });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parent, subTask], 'sub1'),
+      );
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.refreshState();
+
+      effects.planStartedTaskForToday$.subscribe((action) => {
+        expect(action).toEqual(
+          TaskSharedActions.planTasksForToday({
+            taskIds: ['sub1'],
+            today: '2026-01-05',
+            startOfNextDayDiffMs: 0,
+            parentTaskMap: { sub1: 'parent' },
+          }),
+        );
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'parent' }));
     });
   });
 

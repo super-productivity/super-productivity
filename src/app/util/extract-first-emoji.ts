@@ -21,6 +21,11 @@ const isEmojiCodePoint = (codePoint: number): boolean => {
     (codePoint >= 0x1f300 && codePoint <= 0x1f5ff) || // Misc Symbols and Pictographs
     (codePoint >= 0x1f680 && codePoint <= 0x1f6ff) || // Transport and Map Symbols
     (codePoint >= 0x1f1e0 && codePoint <= 0x1f1ff) || // Regional Indicator Symbols
+    codePoint === 0x231a || // Watch
+    codePoint === 0x231b || // Hourglass
+    (codePoint >= 0x23e9 && codePoint <= 0x23ec) || // Fast arrows
+    codePoint === 0x23f0 || // Alarm clock
+    codePoint === 0x23f3 || // Hourglass with flowing sand
     (codePoint >= 0x2600 && codePoint <= 0x26ff) || // Misc symbols
     (codePoint >= 0x2700 && codePoint <= 0x27bf) || // Dingbats
     (codePoint >= 0x2b00 && codePoint <= 0x2bff) || // Misc Symbols and Arrows (includes ⭐)

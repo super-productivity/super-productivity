@@ -16,7 +16,7 @@ import { provideMockActions } from '@ngrx/effects/testing';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
 import { selectUnarchivedProjects } from '../../project/store/project.selectors';
-import { selectAllTasksWithoutHiddenProjects } from '../../tasks/store/task.selectors';
+import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
@@ -81,7 +81,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
-        } else if (selectorFn === selectAllTasksWithoutHiddenProjects) {
+        } else if (selectorFn === selectAllTasksInActiveProjects) {
           return of(mockTasks);
         }
         return of([]);
@@ -173,6 +173,7 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
   let actions$: ReplaySubject<any>;
 
   const hiddenProjectBacklogTaskId = 'hidden-backlog-task';
+  const hiddenProjectRegularTaskId = 'hidden-regular-task';
   const regularTaskId = 'regular-task';
 
   const mockPanelCfg: Partial<BoardPanelCfg> = {
@@ -190,6 +191,19 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
     {
       id: hiddenProjectBacklogTaskId,
       title: 'Task from hidden project backlog',
+      projectId: 'hidden-project',
+      timeSpentOnDay: {},
+      attachments: [],
+      timeEstimate: 0,
+      timeSpent: 0,
+      isDone: false,
+      tagIds: ['important-tag'],
+      created: Date.now(),
+      subTaskIds: [],
+    } as TaskCopy,
+    {
+      id: hiddenProjectRegularTaskId,
+      title: 'Regular task from hidden project',
       projectId: 'hidden-project',
       timeSpentOnDay: {},
       attachments: [],
@@ -232,7 +246,7 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
-        } else if (selectorFn === selectAllTasksWithoutHiddenProjects) {
+        } else if (selectorFn === selectAllTasksInActiveProjects) {
           return of(mockTasks);
         }
         return of([]);
@@ -271,7 +285,7 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
     fixture.detectChanges();
   });
 
-  it('should exclude backlog tasks from hidden projects when backlogState is NoBacklog', () => {
+  it('should include regular tasks from hidden projects when backlogState is NoBacklog', () => {
     fixture.componentRef.setInput('panelCfg', {
       ...mockPanelCfg,
       backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,
@@ -279,8 +293,10 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
     fixture.detectChanges();
 
     const tasks = component.tasks();
-    expect(tasks.length).toBe(1);
-    expect(tasks[0].id).toBe(regularTaskId);
+    expect(tasks.map((task) => task.id)).toEqual([
+      hiddenProjectRegularTaskId,
+      regularTaskId,
+    ]);
     expect(tasks.find((t) => t.id === hiddenProjectBacklogTaskId)).toBeFalsy();
   });
 
@@ -324,7 +340,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
-        if (selectorFn === selectAllTasksWithoutHiddenProjects) return of(tasks);
+        if (selectorFn === selectAllTasksInActiveProjects) return of(tasks);
         return of([]);
       },
       dispatch: jasmine.createSpy('dispatch'),
@@ -661,7 +677,7 @@ describe('BoardPanelComponent - drop()', () => {
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
-        if (selectorFn === selectAllTasksWithoutHiddenProjects) return of(tasks);
+        if (selectorFn === selectAllTasksInActiveProjects) return of(tasks);
         return of([]);
       },
       pipe: () => ({ toPromise: () => Promise.resolve(undefined) }),

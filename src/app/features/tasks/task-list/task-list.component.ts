@@ -526,177 +526,190 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // store actions, since there's no active work context to save against.
     if (/all-tasks/.test(this._router.url)) {
       this._saveAllTasksOrder(taskId, src, target, newOrderedIds);
+      return;
+    }
 
-      if (
-        srcListId === 'SUB' &&
-        targetListId === 'PARENT' &&
-        (target === 'DONE' || target === 'UNDONE')
-      ) {
+    if (
+      srcListId === 'SUB' &&
+      targetListId === 'PARENT' &&
+      (target === 'DONE' || target === 'UNDONE')
+    ) {
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        TaskSharedActions.convertToMainTask({
+          task: draggedTask ?? ({ id: taskId, parentId: src } as TaskWithSubTasks),
+          isPlanForToday: this._workContextService.activeWorkContextId === TODAY_TAG.id,
+          afterTaskId,
+          isDone: target === 'DONE',
+        }),
+      );
+      return;
+    }
+
+    if (srcListId === 'PARENT' && targetListId === 'SUB') {
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        TaskSharedActions.convertToSubTask({
+          taskId,
+          targetParentId: target as string,
+          afterTaskId,
+        }),
+      );
+      return;
+    }
+
+    if (workContextId) {
+      // Section drop-lists are PARENT-level lists whose listModelId is a
+      // section id (anything that isn't one of the reserved keywords).
+      // Subtask drop-lists (listId === 'SUB') also use non-reserved
+      // listModelIds (parent task ids) — those must NOT be treated as
+      // sections, otherwise a subtask drag would dispatch addTaskToSection
+      // instead of moveSubTask.
+      const targetIsSection = targetListId === 'PARENT' && !RESERVED_LIST_IDS.has(target);
+      const srcIsSection = srcListId === 'PARENT' && !RESERVED_LIST_IDS.has(src);
+
+      if (targetIsSection) {
         const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          TaskSharedActions.convertToMainTask({
-            task: draggedTask ?? ({ id: taskId, parentId: src } as TaskWithSubTasks),
-            isPlanForToday: this._workContextService.activeWorkContextId === TODAY_TAG.id,
-            afterTaskId,
-            isDone: target === 'DONE',
-          }),
+        // Pass the source section explicitly so replay is deterministic.
+        // `null` means the task wasn't in a section before the drag.
+        const sourceSectionId = srcIsSection ? (src as string) : null;
+        this._sectionService.addTaskToSection(
+          target as string,
+          taskId,
+          afterTaskId,
+          sourceSectionId,
         );
         return;
       }
-
-      if (srcListId === 'PARENT' && targetListId === 'SUB') {
-        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          TaskSharedActions.convertToSubTask({
-            taskId,
-            targetParentId: target as string,
-            afterTaskId,
-          }),
-        );
-        return;
-      }
-
-      if (workContextId) {
-        // Section drop-lists are PARENT-level lists whose listModelId is a
-        // section id (anything that isn't one of the reserved keywords).
-        // Subtask drop-lists (listId === 'SUB') also use non-reserved
-        // listModelIds (parent task ids) — those must NOT be treated as
-        // sections, otherwise a subtask drag would dispatch addTaskToSection
-        // instead of moveSubTask.
-        const targetIsSection = targetListId === 'PARENT' && !RESERVED_LIST_IDS.has(target);
-        const srcIsSection = srcListId === 'PARENT' && !RESERVED_LIST_IDS.has(src);
-
-        if (targetIsSection) {
-          const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-          // Pass the source section explicitly so replay is deterministic.
-          // `null` means the task wasn't in a section before the drag.
-          const sourceSectionId = srcIsSection ? (src as string) : null;
-          this._sectionService.addTaskToSection(
-            target as string,
-            taskId,
-            afterTaskId,
-            sourceSectionId,
-          );
-          return;
-        }
-        if (srcIsSection) {
-          // Dragged out of a section into the no-section area. Single op:
-          // section-shared meta-reducer strips section membership AND
-          // repositions in workContext.taskIds so the task lands at the
-          // dropped slot atomically (no partial-replay window).
-          //
-          // `afterTaskId` is computed from `newOrderedIds` (the visible
-          // no-section bucket) but is then applied against the FULL
-          // workContext.taskIds list — `moveItemAfterAnchor` preserves the
-          // relative order of all unmoved items, so any sectioned tasks
-          // interleaved before the anchor stay where they are and the
-          // displayed no-section order is correct.
-          const workContextType = this._workContextService
-            .activeWorkContextType as WorkContextType;
-          const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-          this._sectionService.removeTaskFromSection(
-            src as string,
-            taskId,
-            workContextId,
-            workContextType,
-            afterTaskId,
-          );
-          return;
-        }
-      }
-
-      if (isSrcRegularList && isTargetRegularList) {
-        // move inside today
+      if (srcIsSection) {
+        // Dragged out of a section into the no-section area. Single op:
+        // section-shared meta-reducer strips section membership AND
+        // repositions in workContext.taskIds so the task lands at the
+        // dropped slot atomically (no partial-replay window).
+        //
+        // `afterTaskId` is computed from `newOrderedIds` (the visible
+        // no-section bucket) but is then applied against the FULL
+        // workContext.taskIds list — `moveItemAfterAnchor` preserves the
+        // relative order of all unmoved items, so any sectioned tasks
+        // interleaved before the anchor stay where they are and the
+        // displayed no-section order is correct.
         const workContextType = this._workContextService
           .activeWorkContextType as WorkContextType;
         const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          moveTaskInTodayList({
-            taskId,
-            afterTaskId,
-            src,
-            target,
-            workContextId,
-            workContextType,
-          }),
+        this._sectionService.removeTaskFromSection(
+          src as string,
+          taskId,
+          workContextId,
+          workContextType,
+          afterTaskId,
         );
-      } else if (target === 'OVERDUE') {
-        // Cannot drop into OVERDUE list
         return;
-      } else if (src === 'OVERDUE' && !isTargetRegularList) {
-        // OVERDUE tasks can only be moved to UNDONE or DONE, not BACKLOG or subtask lists
-        return;
-      } else if (src === 'OVERDUE' && isTargetRegularList) {
-        const workContextType = this._workContextService
-          .activeWorkContextType as WorkContextType;
-        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          TaskSharedActions.planTasksForToday({
-            taskIds: [taskId],
-            today: this._dateService.todayStr(),
-            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-          }),
-        );
-        this._store.dispatch(
-          moveTaskInTodayList({
-            taskId,
-            afterTaskId,
-            src,
-            target,
-            workContextId,
-            workContextType,
-          }),
-        );
-        if (target === 'DONE') {
-          this._store.dispatch(
-            TaskSharedActions.updateTask({
-              task: { id: taskId, changes: { isDone: true } },
-            }),
-          );
-        }
-      } else if (src === 'BACKLOG' && target === 'BACKLOG') {
-        // move inside backlog
-        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          moveProjectTaskInBacklogList({ taskId, afterTaskId, workContextId }),
-        );
-      } else if (src === 'BACKLOG' && isTargetRegularList) {
-        // move from backlog to today
-        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          moveProjectTaskToRegularList({
-            taskId,
-            afterTaskId,
-            src,
-            target,
-            workContextId,
-          }),
-        );
-      } else if (isSrcRegularList && target === 'BACKLOG') {
-        // move from today to backlog
-        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          moveProjectTaskToBacklogList({ taskId, afterTaskId, workContextId }),
-        );
-      } else {
-        // move sub task
-        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
-        this._store.dispatch(
-          moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, afterTaskId }),
-        );
       }
     }
 
-  private _saveAllTasksOrder(
-      taskId: string,
-      src: string,
-      target: string,
-      newOrderedIds: string[],
-  ): void {
-      let undoneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_UNDONE, []);
-      let doneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_DONE, []);
+    if (isSrcRegularList && isTargetRegularList) {
+      // move inside today
+      const workContextType = this._workContextService
+        .activeWorkContextType as WorkContextType;
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        moveTaskInTodayList({
+          taskId,
+          afterTaskId,
+          src,
+          target,
+          workContextId,
+          workContextType,
+        }),
+      );
+    } else if (target === 'OVERDUE') {
+      // Cannot drop into OVERDUE list
+      return;
+    } else if (src === 'OVERDUE' && !isTargetRegularList) {
+      // OVERDUE tasks can only be moved to UNDONE or DONE, not BACKLOG or subtask lists
+      return;
+    } else if (src === 'OVERDUE' && isTargetRegularList) {
+      const workContextType = this._workContextService
+        .activeWorkContextType as WorkContextType;
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        TaskSharedActions.planTasksForToday({
+          taskIds: [taskId],
+          today: this._dateService.todayStr(),
+          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+        }),
+      );
+      this._store.dispatch(
+        moveTaskInTodayList({
+          taskId,
+          afterTaskId,
+          src,
+          target,
+          workContextId,
+          workContextType,
+        }),
+      );
+      if (target === 'DONE') {
+        this._store.dispatch(
+          TaskSharedActions.updateTask({
+            task: { id: taskId, changes: { isDone: true } },
+          }),
+        );
+      }
+    } else if (src === 'BACKLOG' && target === 'BACKLOG') {
+      // move inside backlog
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        moveProjectTaskInBacklogList({ taskId, afterTaskId, workContextId }),
+      );
+    } else if (src === 'BACKLOG' && isTargetRegularList) {
+      // move from backlog to today
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        moveProjectTaskToRegularList({
+          taskId,
+          afterTaskId,
+          src,
+          target,
+          workContextId,
+        }),
+      );
+    } else if (isSrcRegularList && target === 'BACKLOG') {
+      // move from today to backlog
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        moveProjectTaskToBacklogList({ taskId, afterTaskId, workContextId }),
+      );
+    } else {
+      // move sub task
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      this._store.dispatch(
+        moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, afterTaskId }),
+      );
+    }
+  }
 
-      if (src === 'UNDONE') {
+  expandDoneTasks(): void {
+    const pid = this.parentId();
+    if (!pid) {
+      throw new Error('Parent ID is undefined');
+    }
+
+    this._taskService.showSubTasks(pid);
+    // note this might be executed from the task detail panel, where this is not possible
+    this._taskService.focusTaskIfPossible(pid);
+  }
+
+    private _saveAllTasksOrder(
+    taskId: string,
+    src: string,
+    target: string,
+    newOrderedIds: string[],
+  ): void {
+    let undoneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_UNDONE, []);
+    let doneOrder = lsGetJSON<string[]>(LS.ALL_TASKS_TASK_IDS_DONE, []);
+
+    if (src === 'UNDONE') {
       undoneOrder = undoneOrder.filter((id) => id !== taskId);
     } else if (src === 'DONE') {
       doneOrder = doneOrder.filter((id) => id !== taskId);
@@ -712,15 +725,4 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     lsSetJSON(LS.ALL_TASKS_TASK_IDS_DONE, doneOrder);
     this._allTasksOrderService.notifyOrderChanged();
   }
-
-    expandDoneTasks(): void {
-      const pid = this.parentId();
-      if (!pid) {
-      throw new Error('Parent ID is undefined');
-    }
-
-    this._taskService.showSubTasks(pid);
-    // note this might be executed from the task detail panel, where this is not possible
-    this._taskService.focusTaskIfPossible(pid);
-  }
-  }
+}

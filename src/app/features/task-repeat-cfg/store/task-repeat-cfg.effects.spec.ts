@@ -2118,6 +2118,102 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       });
     });
 
+    // Issue #7951: editing a schedule-affecting field of a DAILY repeat whose
+    // current day is still a valid occurrence must NOT strand today's live
+    // instance by moving it to tomorrow. Before the fix the effect used the
+    // strictly-future getNextRepeatOccurrence(), so today's task disappeared
+    // from Today and lastTaskCreationDay jumped past today — permanently
+    // skipping today's instance.
+    it('should keep the live instance on today when a DAILY repeat still includes today (#7951)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { repeatEvery: 1 },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({ task: liveTask as any, day: todayStr }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
+        );
+        done();
+      });
+    });
+
+    // #7951 follow-up: an OVERDUE undone instance (dueDay in the past) must also
+    // be relocated to today on a schedule edit, not pushed to tomorrow (which
+    // would skip both its overdue day and today).
+    it('relocates an overdue live instance to today for a DAILY repeat (#7951)', (done) => {
+      const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const threeDaysAgo = today.getTime() - THREE_DAYS;
+      const threeDaysAgoStr = getDbDateStr(new Date(threeDaysAgo));
+
+      const overdueTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: threeDaysAgoStr,
+        created: threeDaysAgo,
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: threeDaysAgoStr,
+        lastTaskCreationDay: threeDaysAgoStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { repeatEvery: 1 },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([overdueTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({ task: overdueTask as any, day: todayStr }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
+        );
+        done();
+      });
+    });
+
     it('should dispatch scheduleTaskWithTime when schedule-affecting field changes and task is timed', (done) => {
       const today = new Date();
       const todayStr = getDbDateStr(today);
@@ -2151,6 +2247,56 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
       effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
         expect(result.type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+        done();
+      });
+    });
+
+    // #7951 review (W1): a timed task whose start time has already passed today
+    // must NOT be scheduled at that past time — that would set a past remindAt
+    // and fire an immediate "missed reminder" on save (#7354). It advances to
+    // the next future slot instead.
+    it('does not schedule a past remindAt for a timed task whose start time passed today (#7951)', (done) => {
+      const now = Date.now();
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+        // start of today — always in the past relative to "now"
+        startTime: '00:00',
+        remindAt: TaskReminderOptionId.AtStart,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { repeatEvery: 1 },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        const scheduled = result as ReturnType<
+          typeof TaskSharedActions.scheduleTaskWithTime
+        >;
+        expect(scheduled.type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+        // The scheduled time and reminder must be in the future, not this morning.
+        expect(scheduled.dueWithTime).toBeGreaterThan(now);
+        expect(scheduled.remindAt).toBeGreaterThanOrEqual(now);
         done();
       });
     });

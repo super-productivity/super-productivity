@@ -30,12 +30,12 @@ import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 
 /**
- * Updates project.taskIds arrays when a task's projectId changes via LWW Update.
+ * Updates project.taskIds arrays when a task's project membership changes via LWW Update.
  *
- * When LWW conflict resolution updates a task's projectId, we must also update
- * the corresponding project.taskIds arrays to maintain bidirectional consistency:
- * - Remove task from old project's taskIds (if it exists there)
- * - Add task to new project's taskIds (if not already there)
+ * When LWW conflict resolution updates a task's projectId or parentId, we must
+ * also update the corresponding project.taskIds arrays to maintain consistency:
+ * - Remove task from old project's taskIds if it moved away or became a subtask
+ * - Add task to new project's taskIds if it is now a root task
  *
  * This is necessary because the original moveToOtherProject action updates both
  * the task and project entities atomically, but LWW Update only syncs the TASK
@@ -46,22 +46,17 @@ const syncProjectTaskIds = (
   taskId: string,
   oldProjectId: string | undefined,
   newProjectId: string | undefined,
-  isSubTask: boolean,
+  oldIsSubTask: boolean,
+  newIsSubTask: boolean,
 ): RootState => {
-  // Don't add subtasks to project.taskIds - only parent tasks should be there
-  if (isSubTask) {
-    return state;
-  }
-
-  // If projectId didn't change, nothing to do
-  if (oldProjectId === newProjectId) {
-    return state;
-  }
-
   let projectState = state[PROJECT_FEATURE_NAME];
+  const shouldRemoveFromOldProject =
+    !!oldProjectId && (oldProjectId !== newProjectId || newIsSubTask);
+  const shouldAddToNewProject =
+    !!newProjectId && !newIsSubTask && (oldProjectId !== newProjectId || oldIsSubTask);
 
   // Remove from old project's taskIds
-  if (oldProjectId && projectState.entities[oldProjectId]) {
+  if (shouldRemoveFromOldProject && oldProjectId && projectState.entities[oldProjectId]) {
     const oldProject = projectState.entities[oldProjectId] as Project;
     const filteredTaskIds = oldProject.taskIds.filter((id) => id !== taskId);
     const filteredBacklogTaskIds = oldProject.backlogTaskIds.filter(
@@ -84,7 +79,7 @@ const syncProjectTaskIds = (
         projectState,
       );
     }
-  } else if (oldProjectId) {
+  } else if (shouldRemoveFromOldProject && oldProjectId) {
     // Old project was deleted before LWW update arrived - benign race condition
     OpLog.warn(
       `lwwUpdateMetaReducer: syncProjectTaskIds: old project ${oldProjectId} not found for task ${taskId}`,
@@ -92,7 +87,7 @@ const syncProjectTaskIds = (
   }
 
   // Add to new project's taskIds
-  if (newProjectId && projectState.entities[newProjectId]) {
+  if (shouldAddToNewProject && newProjectId && projectState.entities[newProjectId]) {
     const newProject = projectState.entities[newProjectId] as Project;
     // Only add if not already present
     if (!newProject.taskIds.includes(taskId)) {
@@ -106,17 +101,19 @@ const syncProjectTaskIds = (
         projectState,
       );
     }
-  } else if (newProjectId) {
+  } else if (shouldAddToNewProject && newProjectId) {
     // New project was deleted before LWW update arrived - benign race condition
     OpLog.warn(
       `lwwUpdateMetaReducer: syncProjectTaskIds: new project ${newProjectId} not found for task ${taskId}`,
     );
   }
 
-  return {
-    ...state,
-    [PROJECT_FEATURE_NAME]: projectState,
-  };
+  return projectState === state[PROJECT_FEATURE_NAME]
+    ? state
+    : {
+        ...state,
+        [PROJECT_FEATURE_NAME]: projectState,
+      };
 };
 
 /**
@@ -608,38 +605,41 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       ...rootState,
       [featureName]: updatedFeatureState,
     };
+    const updatedEntity = (
+      updatedFeatureState as unknown as {
+        entities?: Record<string, Record<string, unknown>>;
+      }
+    ).entities?.[entityId];
 
     // For TASK entities, sync related entities when relationships change
-    if (entityType === 'TASK') {
+    if (entityType === 'TASK' && updatedEntity) {
       // Sync project.taskIds when projectId changes
       const oldProjectId = existingEntity?.projectId as string | undefined;
-      const newProjectId = entityData['projectId'] as string | undefined;
-      // Use the NEW parentId to decide subtask status: if the LWW update
-      // clears parentId (promoting to main task), we should add it to project.taskIds.
-      // Fall back to existing only when the LWW update doesn't include parentId at all.
-      const isSubTask = !!('parentId' in entityData
-        ? entityData['parentId']
-        : existingEntity?.parentId);
+      const newProjectId = updatedEntity.projectId as string | undefined;
+      const oldIsSubTask = !!existingEntity?.parentId;
+      const newParentId = updatedEntity.parentId as string | undefined;
+      const newIsSubTask = !!newParentId;
 
       updatedState = syncProjectTaskIds(
         updatedState,
         entityId,
         oldProjectId,
         newProjectId,
-        isSubTask,
+        oldIsSubTask,
+        newIsSubTask,
       );
 
       // Sync tag.taskIds when tagIds changes
       const oldTagIds = (existingEntity?.tagIds as string[]) || [];
-      const newTagIds = (entityData['tagIds'] as string[]) || [];
+      const newTagIds = (updatedEntity.tagIds as string[]) || [];
 
       updatedState = syncTagTaskIds(updatedState, entityId, oldTagIds, newTagIds);
 
       // Sync TODAY_TAG.taskIds when dueDay or dueWithTime changes (virtual tag based on dueDay/dueWithTime)
       const oldDueDay = existingEntity?.dueDay as string | undefined;
-      const newDueDay = entityData['dueDay'] as string | undefined;
+      const newDueDay = updatedEntity.dueDay as string | undefined;
       const oldDueWithTime = existingEntity?.dueWithTime as number | undefined;
-      const newDueWithTime = entityData['dueWithTime'] as number | undefined;
+      const newDueWithTime = updatedEntity.dueWithTime as number | undefined;
       updatedState = syncTodayTagTaskIds(
         updatedState,
         entityId,
@@ -651,7 +651,6 @@ export const lwwUpdateMetaReducer: MetaReducer = (
 
       // Sync parent.subTaskIds when parentId changes
       const oldParentId = existingEntity?.parentId as string | undefined;
-      const newParentId = entityData['parentId'] as string | undefined;
       updatedState = syncParentSubTaskIds(
         updatedState,
         entityId,

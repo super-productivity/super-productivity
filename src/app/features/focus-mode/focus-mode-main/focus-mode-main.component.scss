@@ -62,7 +62,10 @@
   justify-content: center;
   position: relative;
   flex-direction: column;
-  margin: var(--s);
+  width: calc(100% - var(--s2));
+  max-width: var(--component-max-width);
+  min-width: 0;
+  margin: var(--s) auto;
 
   &:hover button {
     opacity: 1;
@@ -125,6 +128,12 @@
 }
 
 .task-title {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(24vh, 8em);
+  overflow-x: hidden;
+  overflow-y: auto;
+
   ::ng-deep textarea {
     text-align: center;
   }

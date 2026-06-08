@@ -279,6 +279,26 @@ describe('taskSharedMetaReducer', () => {
       );
     });
 
+    it('should auto-plan the task when applyShortSyntax sets a deadline for today', () => {
+      const today = getDbDateStr();
+      const task = createMockTask({ id: 'task1', tagIds: [] });
+      const testState = createStateWithExistingTasks(['task1'], [], [], []);
+      const action = TaskSharedActions.applyShortSyntax({
+        task,
+        taskChanges: { deadlineDay: today },
+        autoPlanToday: today,
+        autoPlanStartOfNextDayDiffMs: 0,
+      });
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', { deadlineDay: today, dueDay: today }),
+          ...expectTagUpdate('TODAY', { taskIds: ['task1'] }),
+        },
+        action,
+        testState,
+      );
+    });
+
     it('should create task entity with correct properties', () => {
       const taskData = {
         id: 'task1',

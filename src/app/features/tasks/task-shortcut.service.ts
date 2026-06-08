@@ -76,25 +76,11 @@ export class TaskShortcutService {
       if (focusedTaskId) {
         // Focused task exists - delegate to the task component
         this._handleTaskShortcut(focusedTaskId, 'togglePlayPause');
-      } else {
-        // No focused task - check for selected task (e.g., from Schedule view)
-        const selectedId = this._taskService.selectedTaskId();
-        if (selectedId) {
-          const currentTaskId = this._taskService.currentTaskId();
-          if (currentTaskId === selectedId) {
-            // Already tracking this task - stop tracking
-            this._taskService.setCurrentId(null);
-          } else {
-            // Start tracking the selected task
-            this._taskService.setCurrentId(selectedId);
-          }
-        } else {
-          // Neither focused nor selected - use global toggle
-          this._taskService.toggleStartTask();
-        }
+        ev.preventDefault();
+        return true;
       }
-      ev.preventDefault();
-      return true;
+      // If no focused task, return false to let ShortcutService handle global fallback
+      return false;
     }
 
     // All other shortcuts require a focused task
@@ -176,6 +162,11 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskScheduleDeadline)) {
+      this._handleTaskShortcut(focusedTaskId, 'openDeadlineDialog');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskUnschedule)) {
       this._handleTaskShortcut(focusedTaskId, 'unschedule');
       ev.preventDefault();
@@ -244,8 +235,8 @@ export class TaskShortcutService {
       ((!isShiftOrCtrlPressed && ev.key === 'ArrowUp') ||
         checkKeyCombo(ev, keys.selectPreviousTask))
     ) {
-      ev.preventDefault();
       this._handleTaskShortcut(focusedTaskId, 'handleArrowUp');
+      ev.preventDefault();
       return true;
     }
 
@@ -254,8 +245,8 @@ export class TaskShortcutService {
       ((!isShiftOrCtrlPressed && ev.key === 'ArrowDown') ||
         checkKeyCombo(ev, keys.selectNextTask))
     ) {
-      ev.preventDefault();
       this._handleTaskShortcut(focusedTaskId, 'handleArrowDown');
+      ev.preventDefault();
       return true;
     }
 
@@ -311,6 +302,38 @@ export class TaskShortcutService {
   }
 
   /**
+   * Handles togglePlay shortcut as a fallback when no task is focused.
+   *
+   * @param ev - The keyboard event
+   * @returns True if handled, false otherwise
+   */
+  handleTogglePlayFallback(ev: KeyboardEvent): boolean {
+    const cfg = this._configService.cfg();
+    if (!cfg) return false;
+
+    if (checkKeyCombo(ev, cfg.keyboard.togglePlay) && this.isTimeTrackingEnabled()) {
+      // Check for selected task (e.g., from Schedule view)
+      const selectedId = this._taskService.selectedTaskId();
+      if (selectedId) {
+        const currentTaskId = this._taskService.currentTaskId();
+        if (currentTaskId === selectedId) {
+          // Already tracking this task - stop tracking
+          this._taskService.setCurrentId(null);
+        } else {
+          // Start tracking the selected task
+          this._taskService.setCurrentId(selectedId);
+        }
+      } else {
+        // Neither focused nor selected - use global toggle
+        this._taskService.toggleStartTask();
+      }
+      ev.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Calls a method on the currently focused task component.
    *
    * @param taskId - The ID of the task (must match lastFocusedTaskComponent;
@@ -318,22 +341,23 @@ export class TaskShortcutService {
    *   the active element belongs to a different task than the one tracked).
    * @param method - The method name to call on the task component
    * @param args - Arguments to pass to the method
+   * @returns True if the method was found and called, false otherwise
    */
   private _handleTaskShortcut(
     taskId: TaskId,
     method: TaskComponentMethod,
     ...args: unknown[]
-  ): void {
+  ): boolean {
     const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
     if (!taskComponent) {
       Log.warn(`No focused task component available for ID: ${taskId}`);
-      return;
+      return false;
     }
     if (taskComponent.task().id !== taskId) {
       Log.warn(
         `Focused task component (${taskComponent.task().id}) does not match shortcut target (${taskId})`,
       );
-      return;
+      return false;
     }
 
     if (typeof taskComponent[method] === 'function') {
@@ -341,8 +365,10 @@ export class TaskShortcutService {
       this._closeContextMenuIfOpen(taskComponent);
 
       (taskComponent[method] as (...args: unknown[]) => void)(...args);
+      return true;
     } else {
       Log.warn(`Method ${method} not found on task component`, taskComponent);
+      return false;
     }
   }
 

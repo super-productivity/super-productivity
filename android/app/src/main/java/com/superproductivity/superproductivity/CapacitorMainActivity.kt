@@ -12,7 +12,6 @@ import android.util.Log
 import android.view.View
 import android.webkit.WebView
 import android.widget.Toast
-import androidx.activity.addCallback
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
@@ -29,6 +28,7 @@ import com.superproductivity.superproductivity.webview.JavaScriptInterface
 import com.superproductivity.superproductivity.webview.WebHelper
 import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
+import com.superproductivity.superproductivity.webview.WebViewRecovery
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.StartupOverlayManager
 import com.superproductivity.plugins.webdavhttp.WebDavHttpPlugin
@@ -41,6 +41,7 @@ class CapacitorMainActivity : BridgeActivity() {
     private lateinit var javaScriptInterface: JavaScriptInterface
     private var webViewCompatibility: WebViewCompatibilityChecker.Result? = null
     private var webViewBlocked = false
+    private var webViewRecoveryScheduled = false
     private var pendingShareIntent: JSONObject? = null
     private var isFrontendReady = false
     private var startupOverlayManager: StartupOverlayManager? = null
@@ -108,7 +109,9 @@ class CapacitorMainActivity : BridgeActivity() {
             showWebViewInitFailureOrThrow("BridgeActivity.onCreate() failed to initialize WebView", e)
             return
         }
-        if (webViewBlocked) {
+        // A recovery relaunch was scheduled during super.onCreate()/load(); don't
+        // fall through to the (now-doomed) bridge.webView null check and re-handle it.
+        if (webViewBlocked || webViewRecoveryScheduled) {
             return
         }
 
@@ -171,17 +174,6 @@ class CapacitorMainActivity : BridgeActivity() {
         WebViewCompatibilityChecker.recordSuccessfulLoad(this, webViewCompatibility?.majorVersion)
 
 
-        // Register OnBackPressedCallback to handle back button press
-        onBackPressedDispatcher.addCallback(this) {
-            Log.v("TW", "onBackPressed ${webView.canGoBack()}")
-            if (webView.canGoBack()) {
-                webView.goBack()
-            } else {
-                isEnabled = false
-                onBackPressedDispatcher.onBackPressed()
-            }
-        }
-
         // Handle keyboard visibility changes
         val rootView = findViewById<View>(android.R.id.content)
         rootView.viewTreeObserver.addOnGlobalLayoutListener {
@@ -236,10 +228,36 @@ class CapacitorMainActivity : BridgeActivity() {
         if (!WebViewCompatibilityChecker.isLikelyWebViewInitFailure(error)) {
             throw error
         }
-        showWebViewInitFailure(message, error)
+        recoverOrShowWebViewInitFailure(message, error)
     }
 
     private fun showWebViewInitFailure(message: String, error: Throwable? = null) {
+        recoverOrShowWebViewInitFailure(message, error)
+    }
+
+    /**
+     * WebView init failures are usually transient, and the user's own workaround is
+     * to relaunch the app — so attempt that automatically once (via [WebViewRecovery])
+     * before surfacing the terminal block screen. [WebViewCompatibilityChecker] caps
+     * this at one relaunch per window so a genuinely broken provider still reaches
+     * the block screen instead of boot-looping. The [webViewRecoveryScheduled] flag
+     * stops Capacitor's multiple onCreate/load() failure checkpoints from each
+     * scheduling a relaunch. → issue #7518.
+     */
+    private fun recoverOrShowWebViewInitFailure(message: String, error: Throwable?) {
+        if (webViewBlocked || webViewRecoveryScheduled) {
+            return
+        }
+        if (WebViewCompatibilityChecker.canRetryInitFailure(this)) {
+            webViewRecoveryScheduled = true
+            Log.w("CapacitorMainActivity", "$message - scheduling one-shot WebView recovery relaunch")
+            WebViewRecovery.scheduleRelaunch(this)
+            return
+        }
+        blockForWebViewInitFailure(message, error)
+    }
+
+    private fun blockForWebViewInitFailure(message: String, error: Throwable?) {
         if (error == null) {
             Log.e("CapacitorMainActivity", "$message - finishing activity")
         } else {

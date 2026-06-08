@@ -22,15 +22,23 @@ import { DialogPromptComponent } from '../../../ui/dialog-prompt/dialog-prompt.c
 import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskService } from '../../tasks/task.service';
-import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { MenuTreeKind, MenuTreeViewNode } from '../../menu-tree/store/menu-tree.model';
+import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { Tag } from '../tag.model';
 
 @Component({
   selector: 'tag-toggle-menu-list',
   standalone: true,
-  imports: [MatIcon, MatMenu, MatMenuContent, MatMenuItem, MatMenuTrigger, TranslatePipe],
+  imports: [
+    MatIcon,
+    MatMenu,
+    MatMenuContent,
+    MatMenuItem,
+    MatMenuTrigger,
+    TranslatePipe,
+    SelectOptionRowComponent,
+  ],
   templateUrl: './tag-toggle-menu-list.component.html',
   styleUrl: './tag-toggle-menu-list.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,6 +58,7 @@ export class TagToggleMenuListComponent {
   private _tagList = toSignal(this._tagService.tagsNoMyDayAndNoList$, {
     initialValue: [],
   });
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
   // Build tree from tags to maintain menu tree ordering
   private _tagTree = computed(() => {
@@ -74,12 +83,7 @@ export class TagToggleMenuListComponent {
     };
 
     extractTags(tree);
-
-    // Map to include isEmojiIcon
-    return tags.map((tag) => ({
-      ...tag,
-      isEmojiIcon: tag.icon ? isSingleEmoji(tag.icon) : false,
-    }));
+    return tags;
   });
   menuEl = viewChild('menuEl', {
     // read: MatMenu,

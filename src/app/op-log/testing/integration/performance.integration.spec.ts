@@ -317,6 +317,12 @@ describe('Performance Integration', () => {
       mockStateSnapshot.getAllSyncModelDataFromStore.and.returnValue({
         task: { ids: taskIds, entities: taskEntities },
       } as any);
+      // Compaction reads live state via getStateSnapshot(); give it the same
+      // task-bearing data so the empty-state guard (#7892) doesn't skip the
+      // cycle (the shared default returns an empty store).
+      mockStateSnapshot.getStateSnapshot.and.returnValue({
+        task: { ids: taskIds, entities: taskEntities },
+      } as any);
 
       // Measure compaction
       const compactStart = Date.now();

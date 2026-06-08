@@ -9,7 +9,10 @@ test.describe('App Features - Time Tracking', () => {
     const taskPlayButton = page
       .locator('task')
       .getByRole('button', { name: 'Start tracking time' });
-    const mainPlayButton = page.getByRole('button').filter({ hasText: 'play_arrow' });
+    // Scope to the main-header play FAB. A loose `hasText: 'play_arrow'` filter
+    // also matches a task's hover-control start button (`.start-task-btn`, same
+    // icon), which collides once the task is in the TODAY view.
+    const mainPlayButton = page.locator('play-button .play-btn');
 
     // elements on settings page
     const appFeaturesSection = page.locator('collapsible', { hasText: 'App Features' });

@@ -102,5 +102,13 @@
     "author": "ai-eifying",
     "authorUrl": "https://github.com/ai-eifying",
     "stars": 4
+  },
+  {
+    "name": "Memos Sync",
+    "shortDescription": "Syncs plugin-owned notes between Super Productivity and Memos with attachments, auto-sync, and conflict handling.",
+    "url": "https://github.com/giba0/memos-sync",
+    "author": "giba0",
+    "authorUrl": "https://github.com/giba0",
+    "stars": 2
   }
 ]

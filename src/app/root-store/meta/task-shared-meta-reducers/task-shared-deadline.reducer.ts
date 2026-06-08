@@ -208,6 +208,35 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     }
     return state;
   },
+  [TaskSharedActions.applyShortSyntax.type]: () => {
+    const { task, taskChanges, autoPlanToday, autoPlanStartOfNextDayDiffMs } =
+      action as ReturnType<typeof TaskSharedActions.applyShortSyntax>;
+    if (
+      taskChanges.deadlineDay !== undefined ||
+      taskChanges.deadlineWithTime !== undefined
+    ) {
+      const updatedState = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          {
+            id: task.id,
+            changes: {
+              deadlineDay: taskChanges.deadlineDay,
+              deadlineWithTime: taskChanges.deadlineWithTime,
+              deadlineRemindAt: taskChanges.deadlineRemindAt,
+            },
+          },
+          state[TASK_FEATURE_NAME],
+        ),
+      };
+      return autoPlanTaskDueToDeadline(
+        updatedState,
+        task.id,
+        getAutoPlanContext(autoPlanToday, autoPlanStartOfNextDayDiffMs),
+      );
+    }
+    return state;
+  },
   [TaskSharedActions.setDeadline.type]: () => {
     const {
       taskId,

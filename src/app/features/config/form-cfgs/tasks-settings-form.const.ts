@@ -45,6 +45,10 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
       type: 'project-select',
       templateOptions: {
         label: T.GCF.TASKS.DEFAULT_PROJECT,
+        // "None" is meaningless here: an unset default still routes new tasks to
+        // the Inbox, so the option only confused users (#7891). Inbox is itself a
+        // selectable project, so hiding "None" leaves no functionality behind.
+        hideNoneOption: true,
       },
     },
     {

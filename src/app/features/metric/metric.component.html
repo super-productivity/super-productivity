@@ -71,90 +71,91 @@
     <activity-heatmap></activity-heatmap>
   </section>
 
-  @if (!metricService.hasData()) {
-    <p class="no-data-msg">
-      {{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}
-    </p>
-  }
-  @if (metricService.hasData()) {
-    <section class="metric-metrics">
-      <h1>{{ T.F.METRIC.CMP.GLOBAL_METRICS | translate }}</h1>
-      <section class="line-charts">
-        @if (productivityBreakdownChartData(); as breakdownChart) {
-          @if (breakdownChart) {
+  @if (isShowingAllTasks()) {
+    @if (metricService.hasData()) {
+      <section class="metric-metrics">
+        <h1>{{ T.F.METRIC.CMP.GLOBAL_METRICS | translate }}</h1>
+        <section class="line-charts">
+          @if (productivityBreakdownChartData(); as breakdownChart) {
+            @if (breakdownChart) {
+              <section>
+                <h3>{{ T.F.METRIC.CMP.PRODUCTIVITY_BREAKDOWN_OVER_TIME | translate }}</h3>
+                <lazy-chart
+                  [type]="lineChartType"
+                  [datasets]="breakdownChart.datasets"
+                  [labels]="breakdownChart.labels"
+                  [legend]="true"
+                  [options]="lineChartOptions"
+                  height="400px"
+                  [shareFileName]="'productivity-sustainability-breakdown.png'"
+                  [enableTimeframeSelector]="true"
+                >
+                </lazy-chart>
+              </section>
+            }
+          }
+          @if (focusSessionData(); as focusSessions) {
+            @if (focusSessions.labels?.length) {
+              <section>
+                <h3>{{ T.F.METRIC.CMP.FOCUS_SESSION_TRENDS | translate }}</h3>
+                <lazy-chart
+                  [type]="lineChartType"
+                  [datasets]="focusSessions.datasets"
+                  [labels]="focusSessions.labels"
+                  [legend]="true"
+                  [options]="lineChartOptions"
+                  height="400px"
+                  [shareFileName]="'focus-session-trends.png'"
+                  [enableTimeframeSelector]="true"
+                ></lazy-chart>
+              </section>
+            }
+          }
+        </section>
+      </section>
+      <section class="metric-metrics">
+        <h2>{{ T.F.METRIC.CMP.SIMPLE_COUNTERS | translate }}</h2>
+        <section class="line-charts">
+          @if (simpleClickCounterData(); as simpleCounterClickData) {
             <section>
-              <h3>{{ T.F.METRIC.CMP.PRODUCTIVITY_BREAKDOWN_OVER_TIME | translate }}</h3>
+              <h3>{{ T.F.METRIC.CMP.SIMPLE_CLICK_COUNTERS_OVER_TIME | translate }}</h3>
               <lazy-chart
                 [type]="lineChartType"
-                [datasets]="breakdownChart.datasets"
-                [labels]="breakdownChart.labels"
-                [legend]="true"
+                [datasets]="simpleCounterClickData.datasets"
+                [labels]="simpleCounterClickData.labels"
                 [options]="lineChartOptions"
+                [legend]="true"
                 height="400px"
-                [shareFileName]="'productivity-sustainability-breakdown.png'"
+                [shareFileName]="'simple-click-counters-over-time.png'"
                 [enableTimeframeSelector]="true"
               >
               </lazy-chart>
             </section>
           }
-        }
-        @if (focusSessionData(); as focusSessions) {
-          @if (focusSessions.labels?.length) {
+          @if (simpleCounterStopWatchData(); as simpleCounterStopWatchData) {
             <section>
-              <h3>{{ T.F.METRIC.CMP.FOCUS_SESSION_TRENDS | translate }}</h3>
+              <h3>
+                {{ T.F.METRIC.CMP.SIMPLE_STOPWATCH_COUNTERS_OVER_TIME | translate }}
+              </h3>
               <lazy-chart
                 [type]="lineChartType"
-                [datasets]="focusSessions.datasets"
-                [labels]="focusSessions.labels"
-                [legend]="true"
+                [datasets]="simpleCounterStopWatchData.datasets"
+                [labels]="simpleCounterStopWatchData.labels"
                 [options]="lineChartOptions"
+                [legend]="true"
                 height="400px"
-                [shareFileName]="'focus-session-trends.png'"
+                [shareFileName]="'simple-stopwatch-counters-over-time.png'"
                 [enableTimeframeSelector]="true"
-              ></lazy-chart>
+              >
+              </lazy-chart>
             </section>
           }
-        }
+        </section>
       </section>
-    </section>
-  }
-  @if (metricService.hasData()) {
-    <section class="metric-metrics">
-      <h2>{{ T.F.METRIC.CMP.SIMPLE_COUNTERS | translate }}</h2>
-      <section class="line-charts">
-        @if (simpleClickCounterData(); as simpleCounterClickData) {
-          <section>
-            <h3>{{ T.F.METRIC.CMP.SIMPLE_CLICK_COUNTERS_OVER_TIME | translate }}</h3>
-            <lazy-chart
-              [type]="lineChartType"
-              [datasets]="simpleCounterClickData.datasets"
-              [labels]="simpleCounterClickData.labels"
-              [options]="lineChartOptions"
-              [legend]="true"
-              height="400px"
-              [shareFileName]="'simple-click-counters-over-time.png'"
-              [enableTimeframeSelector]="true"
-            >
-            </lazy-chart>
-          </section>
-        }
-        @if (simpleCounterStopWatchData(); as simpleCounterStopWatchData) {
-          <section>
-            <h3>{{ T.F.METRIC.CMP.SIMPLE_STOPWATCH_COUNTERS_OVER_TIME | translate }}</h3>
-            <lazy-chart
-              [type]="lineChartType"
-              [datasets]="simpleCounterStopWatchData.datasets"
-              [labels]="simpleCounterStopWatchData.labels"
-              [options]="lineChartOptions"
-              [legend]="true"
-              height="400px"
-              [shareFileName]="'simple-stopwatch-counters-over-time.png'"
-              [enableTimeframeSelector]="true"
-            >
-            </lazy-chart>
-          </section>
-        }
-      </section>
-    </section>
+    } @else {
+      <p class="no-data-msg">
+        {{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}
+      </p>
+    }
   }
 </div>

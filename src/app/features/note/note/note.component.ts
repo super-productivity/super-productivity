@@ -35,6 +35,7 @@ import {
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
+import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 
@@ -86,6 +87,7 @@ export class NoteComponent implements OnChanges {
   resolvedShortenedContent = signal<string>('');
 
   T: typeof T = T;
+  readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   projectTag$: Observable<TagComponentTag | null> =
     this._workContextService.activeWorkContextTypeAndId$.pipe(
@@ -102,7 +104,7 @@ export class NoteComponent implements OnChanges {
                           ? {
                               ...project,
                               color: project.theme?.primary || DEFAULT_PROJECT_COLOR,
-                              icon: 'list',
+                              icon: project.icon || DEFAULT_PROJECT_ICON,
                               theme: {
                                 primary: project.theme?.primary || DEFAULT_PROJECT_COLOR,
                               },

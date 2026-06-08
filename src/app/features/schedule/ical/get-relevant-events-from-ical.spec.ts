@@ -892,4 +892,261 @@ END:VCALENDAR`;
       }).not.toThrow();
     });
   });
+
+  describe('duplicate UID handling (#7848)', () => {
+    // Real-world shape from #3837: a provider (Google/Outlook) emits the same
+    // UID twice for an invited/modified event — one copy sparse, one with a
+    // DESCRIPTION. Both are plain (no RRULE, no RECURRENCE-ID), so without
+    // dedup they render as two identical overlay entries.
+    it('collapses two plain VEVENTs sharing a UID, keeping the copy with a description', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:invited-event@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SUMMARY:Invited Meeting
+END:VEVENT
+BEGIN:VEVENT
+UID:invited-event@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+DESCRIPTION:full details here
+SUMMARY:Invited Meeting
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      expect(events.length).toBe(1);
+      expect(events[0].description).toBe('full details here');
+    });
+
+    it('keeps the description-bearing copy regardless of VEVENT order', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:invited-event@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+DESCRIPTION:full details here
+SUMMARY:Invited Meeting
+END:VEVENT
+BEGIN:VEVENT
+UID:invited-event@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SUMMARY:Invited Meeting
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      expect(events.length).toBe(1);
+      expect(events[0].description).toBe('full details here');
+    });
+
+    it('does NOT collapse distinct events that merely share a start time', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:event-a@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SUMMARY:Meeting A
+END:VEVENT
+BEGIN:VEVENT
+UID:event-b@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SUMMARY:Meeting B
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      expect(events.length).toBe(2);
+    });
+
+    it('does NOT collapse occurrences of a recurring series (distinct ids preserved)', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:daily@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+RRULE:FREQ=DAILY;COUNT=3
+SUMMARY:Daily Standup
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      expect(events.length).toBe(3);
+    });
+
+    it('collapses three or more copies of the same UID into the richest one', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:triple@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SUMMARY:Triple
+END:VEVENT
+BEGIN:VEVENT
+UID:triple@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+DESCRIPTION:the real one
+SUMMARY:Triple
+END:VEVENT
+BEGIN:VEVENT
+UID:triple@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SUMMARY:Triple
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      expect(events.length).toBe(1);
+      expect(events[0].description).toBe('the real one');
+    });
+
+    // Two plain VEVENTs sharing a UID but with DIFFERENT start times. Per RFC 5545
+    // a UID without a distinct RECURRENCE-ID is the SAME event, so we collapse them.
+    // On a richness tie (both sparse) the first-seen copy wins — documenting that we
+    // keep the earlier-listed slot and intentionally drop the other.
+    it('collapses same-UID copies with different start times (first-seen wins on a tie)', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:moved@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SUMMARY:Moved
+END:VEVENT
+BEGIN:VEVENT
+UID:moved@example.com
+DTSTART:20250115T140000Z
+DTEND:20250115T150000Z
+SUMMARY:Moved
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      expect(events.length).toBe(1);
+      expect(events[0].start).toBe(new Date('2025-01-15T10:00:00Z').getTime());
+    });
+
+    // DECISION GUARD: the tie-breaker is "richness" (has description/url), NOT the
+    // RFC 5545 SEQUENCE. The model carries no SEQUENCE, and the observed duplicates
+    // share a revision (one full, one sparse), so SEQUENCE would tie anyway. This
+    // test pins that choice: the populated copy wins even though the sparse copy has
+    // a HIGHER SEQUENCE. If a real feed ever needs SEQUENCE precedence, this test is
+    // where that decision must change.
+    it('keeps the populated copy over a higher-SEQUENCE sparse copy (richness, not SEQUENCE)', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:seq@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SEQUENCE:5
+SUMMARY:Seq Test
+END:VEVENT
+BEGIN:VEVENT
+UID:seq@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+SEQUENCE:0
+DESCRIPTION:populated but lower sequence
+SUMMARY:Seq Test
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      expect(events.length).toBe(1);
+      expect(events[0].description).toBe('populated but lower sequence');
+    });
+
+    // A plain VEVENT that shares a UID with a recurring series but has no
+    // RECURRENCE-ID gets id `<uid>`, while occurrences get `<uid>_<time>` — distinct
+    // ids, so dedup must NOT fold the plain event into the series.
+    it('does NOT fold a plain VEVENT into a recurring series with the same UID', async () => {
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:mixed@example.com
+DTSTART:20250115T100000Z
+DTEND:20250115T110000Z
+RRULE:FREQ=DAILY;COUNT=3
+SUMMARY:Mixed Series
+END:VEVENT
+BEGIN:VEVENT
+UID:mixed@example.com
+DTSTART:20250120T160000Z
+DTEND:20250120T170000Z
+SUMMARY:Mixed One-Off
+END:VEVENT
+END:VCALENDAR`;
+
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+
+      // 3 recurring occurrences + 1 standalone plain event = 4
+      expect(events.length).toBe(4);
+    });
+  });
 });

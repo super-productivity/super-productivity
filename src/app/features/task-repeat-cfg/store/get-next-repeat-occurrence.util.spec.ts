@@ -927,4 +927,161 @@ describe('getNextRepeatOccurrence()', () => {
       expect(result!.getTime()).toBeGreaterThanOrEqual(today.getTime());
     });
   });
+
+  // Issue #7951: the inclusive variant is used when relocating an existing live
+  // instance on a schedule edit — `fromDate` (today) must be considered instead
+  // of being skipped to the day after the last creation.
+  describe('inclusive option (#7951)', () => {
+    const noon = (d: Date): Date => {
+      const r = new Date(d);
+      r.setHours(12, 0, 0, 0);
+      return r;
+    };
+
+    // Enable exactly one weekday (0 = Sunday … 6 = Saturday).
+    const weekdayFlags = (enabledDay: number): Partial<TaskRepeatCfg> => ({
+      sunday: enabledDay === 0,
+      monday: enabledDay === 1,
+      tuesday: enabledDay === 2,
+      wednesday: enabledDay === 3,
+      thursday: enabledDay === 4,
+      friday: enabledDay === 5,
+      saturday: enabledDay === 6,
+    });
+
+    it('returns today for a DAILY repeat created today (vs tomorrow when exclusive)', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      const tomorrow = noon(new Date(today.getTime() + DAY));
+      expect(getNextRepeatOccurrence(cfg, today)).toEqual(tomorrow);
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('returns today for a WEEKLY repeat when today matches the enabled weekday', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+        ...weekdayFlags(today.getDay()),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('still skips today when today is not a valid occurrence', () => {
+      const today = noon(new Date());
+      const tomorrow = noon(new Date(today.getTime() + DAY));
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+        // only tomorrow's weekday is enabled
+        ...weekdayFlags(tomorrow.getDay()),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(tomorrow);
+    });
+
+    it('returns today for a MONTHLY repeat whose day-of-month is today', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('does not resolve to a past MONTHLY occurrence when this month already passed', () => {
+      // fromDate is the 16th; the monthly anchor (the 10th) already passed this
+      // month, so the soonest inclusive occurrence is next month's 10th — never
+      // the past June 10th. Exercises the floor guard, not just the
+      // epoch-neutralised gating.
+      const fromDate = noon(new Date(2026, 5, 16)); // Tue Jun 16 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: '2026-01-10',
+        lastTaskCreationDay: '2026-06-10',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate, { inclusive: true })).toEqual(
+        noon(new Date(2026, 6, 10)), // Jul 10 2026
+      );
+    });
+
+    it('returns today for a YEARLY repeat whose month and day are today', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('does not resolve to a past YEARLY occurrence when this year already passed', () => {
+      // Yearly anchor is March 10; fromDate is mid-June, so this year's
+      // occurrence already passed → next year's March 10, never the past one.
+      const fromDate = noon(new Date(2026, 5, 16)); // Tue Jun 16 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: '2020-03-10',
+        lastTaskCreationDay: '2026-03-10',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate, { inclusive: true })).toEqual(
+        noon(new Date(2027, 2, 10)), // Mar 10 2027
+      );
+    });
+
+    it('keeps the repeatFromCompletionDate anchor (lastTaskCreationDay), not startDate', () => {
+      // repeatFromCompletionDate cfgs anchor the pattern on lastTaskCreationDay
+      // (via getEffectiveRepeatStartDate). The inclusive path must preserve that
+      // anchor — it only neutralises the prior-creation *gating*, computed after
+      // the start anchor is resolved. With lastTaskCreationDay = today the
+      // soonest inclusive daily occurrence is today (exclusive would be tomorrow).
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        // startDate is intentionally far in the past; for repeatFromCompletionDate
+        // the pattern anchors on lastTaskCreationDay, not startDate.
+        startDate: '2020-01-01',
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('respects repeatEvery when today is off-cycle (returns the next on-cycle day)', () => {
+      // Every-2-days anchored on yesterday → today is off-cycle (diff 1, odd),
+      // so inclusive must NOT force today; the next on-cycle day is tomorrow.
+      const today = noon(new Date());
+      const tomorrow = noon(new Date(today.getTime() + DAY));
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 2,
+        startDate: getDbDateStr(new Date(today.getTime() - DAY)),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(tomorrow);
+    });
+  });
 });

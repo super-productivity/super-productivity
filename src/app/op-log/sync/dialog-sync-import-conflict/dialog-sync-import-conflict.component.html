@@ -22,6 +22,17 @@
     </p>
   }
 
+  @if (isNeverSynced) {
+    <p class="first-sync-warning">
+      <mat-icon
+        class="warning-icon"
+        aria-hidden="true"
+        >warning</mat-icon
+      >
+      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.FIRST_SYNC_WARNING | translate }}
+    </p>
+  }
+
   <div class="import-info">
     <div class="info-row">
       <span class="label"
@@ -54,6 +65,7 @@
     <button
       (click)="close('USE_REMOTE')"
       [color]="isIncomingImport ? 'primary' : undefined"
+      [attr.cdkFocusInitial]="isIncomingImport ? '' : null"
       mat-stroked-button
     >
       <mat-icon aria-hidden="true">cloud_download</mat-icon>
@@ -62,6 +74,7 @@
     <button
       (click)="close('USE_LOCAL')"
       [color]="isIncomingImport ? undefined : 'primary'"
+      [attr.cdkFocusInitial]="isIncomingImport ? null : ''"
       mat-stroked-button
     >
       <mat-icon aria-hidden="true">cloud_upload</mat-icon>

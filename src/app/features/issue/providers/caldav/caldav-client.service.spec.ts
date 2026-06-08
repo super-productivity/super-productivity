@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
+import { firstValueFrom } from 'rxjs';
 import { CaldavClientService } from './caldav-client.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { CaldavCfg } from './caldav.model';
+import { CaldavIssue } from './caldav-issue.model';
 
 // ─── _getParentRelatedTo ──────────────────────────────────────────────────────
 
@@ -82,6 +84,15 @@ const MOCK_CFG: CaldavCfg = {
 
 const EXPECTED_AUTH = 'Basic ' + btoa('user:secret');
 
+const makeIssue = (id: string): CaldavIssue => ({
+  id,
+  completed: false,
+  item_url: `/${id}`,
+  summary: id,
+  labels: [],
+  etag_hash: 1,
+});
+
 /** Subclass that makes platform detection and native HTTP injectable for tests. */
 class TestableCaldavClientService extends CaldavClientService {
   private _isNativePlatformValue = false;
@@ -146,6 +157,37 @@ describe('CaldavClientService._getXhrProvider – web platform', () => {
     xhr.open('REPORT', 'https://cal.example.com/');
     expect(headers['Authorization']).toBe(EXPECTED_AUTH);
     expect(headers['X-Requested-With']).toBe('SuperProductivity');
+  });
+});
+
+describe('CaldavClientService.getByIds$', () => {
+  let svc: CaldavClientService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        CaldavClientService,
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+      ],
+    });
+    svc = TestBed.inject(CaldavClientService);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('returns only tasks matching the requested ids', async () => {
+    spyOn(svc as any, '_getTasks').and.resolveTo([
+      makeIssue('task-10'),
+      makeIssue('1'),
+      makeIssue('other'),
+    ]);
+
+    const result = await firstValueFrom(svc.getByIds$(['task-10', 'other'], MOCK_CFG));
+
+    expect(result.map((issue) => issue.id)).toEqual(['task-10', 'other']);
   });
 });
 

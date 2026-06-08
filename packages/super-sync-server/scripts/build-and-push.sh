@@ -12,8 +12,10 @@
 #
 # Prerequisites:
 #   Add to .env file:
-#     GHCR_USER=your-github-username
+#     GHCR_USER=your-github-username   # GitHub account used to log in to GHCR
 #     GHCR_TOKEN=your-github-token
+#   Optional:
+#     GHCR_NAMESPACE=super-productivity  # image owner; defaults to the org
 
 set -e
 
@@ -25,13 +27,19 @@ DOCKERFILE="$SERVER_DIR/Dockerfile"
 
 # Load .env file
 if [ -f "$SERVER_DIR/.env" ]; then
-    export $(grep -E '^(GHCR_USER|GHCR_TOKEN)=' "$SERVER_DIR/.env" | xargs)
+    export $(grep -E '^(GHCR_USER|GHCR_TOKEN|GHCR_NAMESPACE)=' "$SERVER_DIR/.env" | xargs)
 fi
 
 # Configuration
-GITHUB_USER="${GHCR_USER:-johannesjo}"
+# Publish under the super-productivity org namespace to match the CI workflow
+# (.github/workflows/supersync-docker.yml), docker-compose.yml and the Helm
+# chart. Override GHCR_NAMESPACE only when pushing to a fork/personal registry.
+GHCR_NAMESPACE="${GHCR_NAMESPACE:-super-productivity}"
+# GHCR login user: a GitHub *account* with write access to the namespace's
+# packages (you cannot authenticate as an org). Required only when pushing.
+GITHUB_USER="${GHCR_USER:-}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
-IMAGE_NAME="ghcr.io/$GITHUB_USER/supersync"
+IMAGE_NAME="ghcr.io/$GHCR_NAMESPACE/supersync"
 
 supersync_image_source_revision() {
     git -C "$REPO_ROOT" log -1 --format=%H -- \
@@ -135,6 +143,11 @@ echo ""
 
 # Step 2: Login to GHCR (if token provided)
 if [ -n "$GHCR_TOKEN" ]; then
+    if [ -z "$GITHUB_USER" ]; then
+        echo "ERROR: GHCR_TOKEN is set but GHCR_USER is empty." >&2
+        echo "       Set GHCR_USER to the GitHub account used to authenticate to GHCR." >&2
+        exit 1
+    fi
     echo "==> Logging in to GHCR..."
     echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
     echo ""

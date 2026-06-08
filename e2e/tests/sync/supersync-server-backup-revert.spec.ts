@@ -11,6 +11,7 @@ import {
   type TestUser,
 } from '../../utils/supersync-helpers';
 import { execSync } from 'child_process';
+import { writeFileSync } from 'fs';
 
 /** Default encryption password used by setupSuperSync's mandatory encryption dialog */
 const ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
@@ -76,28 +77,59 @@ const wipeSyncDataViaSql = (userId: number): void => {
 };
 
 /**
- * Create a pg_dump of the full database and return the path to the dump file.
+ * Tables that hold a user's sync data. All are keyed by `user_id`; the account
+ * (`users`, `passkeys`) lives outside this set and is intentionally preserved.
  */
-const createFullDump = (): string => {
-  const dumpPath = `/tmp/supersync_e2e_dump_${Date.now()}.sql`;
-  execSync(
-    `docker compose -f docker-compose.yaml exec -T db pg_dump -U supersync supersync_db > ${dumpPath}`,
-    { encoding: 'utf-8', timeout: 30000 },
-  );
+const USER_SYNC_TABLES = ['operations', 'user_sync_state', 'sync_devices'] as const;
+
+/**
+ * Snapshot a SINGLE user's sync data to a restorable SQL script and return its
+ * host path.
+ *
+ * Replaces a previous full-database `pg_dump` + `DROP SCHEMA public CASCADE`
+ * restore. That restore wiped EVERY user's rows on the shared test database;
+ * under Playwright's `fullyParallel` execution other @supersync test files run
+ * concurrently against the same Postgres, so the global restore reverted their
+ * in-flight data mid-test — a cross-test data-loss flake (#7810).
+ *
+ * The generated script deletes the user's current rows and re-inserts the
+ * snapshotted rows via COPY, all in one transaction scoped to this user. It
+ * preserves exact values — including `user_sync_state.last_seq`, which the
+ * `/ops-after` test route deletes and therefore cannot reproduce the
+ * SYNC_IMPORT_EXISTS scenario these tests exercise.
+ */
+const dumpUserData = (userId: number): string => {
+  const dumpPath = `/tmp/supersync_e2e_userdump_${userId}_${Date.now()}.sql`;
+  let script = 'BEGIN;\n';
+  for (const table of USER_SYNC_TABLES) {
+    script += `DELETE FROM ${table} WHERE user_id = ${userId};\n`;
+  }
+  for (const table of USER_SYNC_TABLES) {
+    // COPY ... TO STDOUT emits the standard psql text format; piping it back
+    // through COPY ... FROM STDIN below round-trips the rows exactly.
+    const copyData = execSync(
+      'docker compose -f docker-compose.yaml exec -T db psql -U supersync supersync_db -c ' +
+        JSON.stringify(
+          `COPY (SELECT * FROM ${table} WHERE user_id = ${userId}) TO STDOUT`,
+        ),
+      { encoding: 'utf-8', timeout: 30000 },
+    );
+    script += `COPY ${table} FROM STDIN;\n${copyData}\\.\n`;
+  }
+  script += 'COMMIT;\n';
+  writeFileSync(dumpPath, script);
   return dumpPath;
 };
 
 /**
- * Wipe the entire database and restore from a dump file.
+ * Restore a user's sync data from a snapshot created by dumpUserData().
+ * Atomic (ON_ERROR_STOP aborts the transaction) and scoped to the snapshotted
+ * user — it never touches other users' rows.
  */
-const restoreFullDump = (dumpPath: string): void => {
-  // Drop and recreate all tables by restoring into a clean database
+const restoreUserData = (dumpPath: string): void => {
   execSync(
-    `docker compose -f docker-compose.yaml exec -T db psql -U supersync -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" supersync_db`,
-    { encoding: 'utf-8', timeout: 10000 },
-  );
-  execSync(
-    `cat ${dumpPath} | docker compose -f docker-compose.yaml exec -T db psql -U supersync supersync_db`,
+    `cat ${dumpPath} | docker compose -f docker-compose.yaml exec -T db ` +
+      `psql -U supersync supersync_db -v ON_ERROR_STOP=1`,
     {
       encoding: 'utf-8',
       timeout: 30000,
@@ -558,9 +590,9 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       await waitForTask(clientA.page, task1);
       console.log('[FullRestore] Task 1 synced');
 
-      // 2. Take a full dump (this is our "backup")
-      dumpPath = createFullDump();
-      console.log(`[FullRestore] Full dump created at ${dumpPath}`);
+      // 2. Snapshot this user's sync data (this is our "backup")
+      dumpPath = dumpUserData(user.userId);
+      console.log(`[FullRestore] User data snapshot created at ${dumpPath}`);
 
       // 3. Add more data after the backup
       const task2 = `Late-${testRunId}`;
@@ -569,9 +601,9 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       await waitForTask(clientA.page, task2);
       console.log('[FullRestore] Task 2 synced (after backup)');
 
-      // 4. Simulate disaster: restore from the dump
-      restoreFullDump(dumpPath);
-      console.log('[FullRestore] Database restored from dump');
+      // 4. Simulate disaster: restore this user's data from the snapshot
+      restoreUserData(dumpPath);
+      console.log('[FullRestore] User data restored from snapshot');
 
       // 5. Client A syncs — will encounter SYNC_IMPORT_EXISTS
       await clientA.sync.syncAndWait();
@@ -651,18 +683,18 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       await waitForTask(clientA.page, task3);
       console.log('[AllLost] All tasks synced to server');
 
-      // 2. Take a full dump
-      dumpPath = createFullDump();
-      console.log(`[AllLost] Full dump created at ${dumpPath}`);
+      // 2. Snapshot this user's sync data
+      dumpPath = dumpUserData(user.userId);
+      console.log(`[AllLost] User data snapshot created at ${dumpPath}`);
 
       // 3. Close client A — simulates losing all devices
       await closeClient(clientA);
       clientA = null;
       console.log('[AllLost] Client A closed (all devices lost)');
 
-      // 4. Simulate disaster: wipe and restore from dump
-      restoreFullDump(dumpPath);
-      console.log('[AllLost] Database restored from dump');
+      // 4. Simulate disaster: restore this user's data from the snapshot
+      restoreUserData(dumpPath);
+      console.log('[AllLost] User data restored from snapshot');
 
       // 5. Fresh client B connects — should download everything
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);

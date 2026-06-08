@@ -11,16 +11,9 @@ import {
 import { taskAdapter } from './task.adapter';
 import { devError } from '../../../util/dev-error';
 import { isDBDateStr } from '../../../util/get-db-date-str';
-import { TODAY_TAG } from '../../tag/tag.const';
 import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
-import {
-  selectArchivedProjectIds,
-  selectHiddenProjectIds,
-} from '../../project/store/project.selectors';
-import {
-  selectTagFeatureState,
-  selectTodayTagTaskIds,
-} from '../../tag/store/tag.reducer';
+import { selectArchivedProjectIds } from '../../project/store/project.selectors';
+import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
@@ -28,6 +21,12 @@ import {
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
+
+export const isCalendarIssueTask = (task: Task | undefined): task is Task =>
+  !!task &&
+  !!task.issueType &&
+  (task.issueType === 'ICAL' || isPluginIssueProvider(task.issueType));
+
 const mapSubTasksToTasks = (tasksIN: Task[]): TaskWithSubTasks[] => {
   // Create a Map for O(1) lookups instead of O(n) find() calls
   const taskMap = new Map<string, Task>();
@@ -325,26 +324,6 @@ export const selectOverdueTasksWithSubTasks = createSelector(
   },
 );
 
-export const selectAllTasksDueAndOverdue = createSelector(
-  selectTaskFeatureState,
-  selectTagFeatureState,
-  selectTodayStr,
-  (s, tagState, todayStr): Task[] => {
-    const todayTaskIdSet = new Set(tagState.entities[TODAY_TAG.id]?.taskIds);
-    return s.ids
-      .map((id) => s.entities[id])
-      .filter(
-        (task): task is Task =>
-          !!task &&
-          // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
-          // which is lexicographically sortable. This avoids timezone conversion issues.
-          !!task.dueDay &&
-          task.dueDay <= todayStr &&
-          !todayTaskIdSet.has(task.id),
-      );
-  },
-);
-
 export const selectSelectedTaskId = createSelector(
   selectTaskFeatureState,
   (state) => state.selectedTaskId,
@@ -561,47 +540,14 @@ export const selectMainTasksWithoutTag = createSelector(
 export const selectAllCalendarTaskEventIds = createSelector(
   selectAllTasks,
   (tasks: Task[]): string[] =>
-    tasks
-      .filter(
-        (task) =>
-          !!task &&
-          !!task.issueType &&
-          (task.issueType === 'ICAL' || isPluginIssueProvider(task.issueType)),
-      )
-      .map((t) => t.issueId as string),
+    tasks.filter(isCalendarIssueTask).map((t) => t.issueId as string),
 );
 
 // intentionally unfiltered: explicit design choice to poll ALL calendar tasks across all projects
 // (including archived) — see poll-issue-updates.effects.ts comment "poll ALL calendar tasks"
 export const selectAllCalendarIssueTasks = createSelector(
   selectAllTasks,
-  (tasks: Task[]): Task[] =>
-    tasks.filter(
-      (task) =>
-        !!task &&
-        !!task.issueType &&
-        (task.issueType === 'ICAL' || isPluginIssueProvider(task.issueType)),
-    ),
-);
-
-// intentionally unfiltered: seems unused
-export const selectTasksWorkedOnOrDoneFlat = createSelector(
-  selectAllTasks,
-  (tasks: Task[], props: { day: string }) => {
-    if (!props) {
-      return null;
-    }
-
-    const todayStr = props.day;
-    return tasks.filter(
-      (t: Task) =>
-        !!t &&
-        (t.isDone ||
-          (t.timeSpentOnDay &&
-            t.timeSpentOnDay?.[todayStr] &&
-            t.timeSpentOnDay?.[todayStr] > 0)),
-    );
-  },
+  (tasks: Task[]): Task[] => tasks.filter(isCalendarIssueTask),
 );
 
 export const selectTasksDueForDay = createSelector(
@@ -770,13 +716,6 @@ export const selectAllTaskIssueIdsForIssueProvider = (issueProvider: IssueProvid
       .map((t) => t.issueId as string);
   });
 };
-
-export const selectAllTasksWithoutHiddenProjects = createSelector(
-  selectAllTasksInActiveProjects,
-  selectHiddenProjectIds,
-  (tasks: Task[], hiddenIds: Set<string>): Task[] =>
-    tasks.filter((t) => !t.projectId || !hiddenIds.has(t.projectId)),
-);
 
 export const selectAllUndoneTasksWithDueDay = createSelector(
   selectAllTasksInActiveProjects,

@@ -117,12 +117,33 @@ export class OperationLogHydratorService {
 
       // 3. Validate snapshot if it exists
       if (snapshot && !this.snapshotService.isValidSnapshot(snapshot)) {
-        OpLog.warn(
-          'OperationLogHydratorService: Snapshot is invalid/corrupted. Attempting recovery...',
-        );
-        await this.recoveryService.attemptRecovery();
-        sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
-        return;
+        OpLog.warn('OperationLogHydratorService: Snapshot is invalid/corrupted.');
+        // The snapshot is only a load-time cache — the op-log is the source of
+        // truth. Before surrendering to recovery (which, with no legacy data and
+        // no sync, drops to an EMPTY store), check whether the op-log itself is
+        // intact and rebuild from it (#7892).
+        //
+        // Correctness: compaction only ever prunes *synced* ops, so for a
+        // no-sync client the entire log survives and replay-from-0 fully
+        // reconstructs state; for a synced client any pruned ops still live on
+        // the remote and a subsequent sync restores them. Either way, replaying
+        // the surviving log is strictly better than discarding it for empty.
+        const lastSeq = await this.opLogStore.getLastSeq();
+        if (lastSeq > 0) {
+          OpLog.warn(
+            `OperationLogHydratorService: Discarding corrupt snapshot and replaying ` +
+              `the op-log from the start (lastSeq=${lastSeq}).`,
+          );
+          // Fall through to the "no snapshot → replay all operations" branch.
+          snapshot = null;
+        } else {
+          OpLog.warn(
+            'OperationLogHydratorService: No op-log to replay. Attempting recovery...',
+          );
+          await this.recoveryService.attemptRecovery();
+          sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
+          return;
+        }
       }
 
       if (snapshot) {

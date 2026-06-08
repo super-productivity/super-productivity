@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
-import { first, map } from 'rxjs/operators';
+import { first, map, tap } from 'rxjs/operators';
 import { IssueTask, Task } from 'src/app/features/tasks/task.model';
 import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
 import { IssueData, SearchResultItem } from '../../issue.model';
@@ -31,12 +31,27 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     { taskPromise: Promise<CaldavIssue[]>; ts: number }
   >();
   private readonly _OPEN_TASKS_CACHE_TTL_MS = 60_000;
+  private _cachedCfg?: CaldavCfg;
 
   readonly providerKey = 'CALDAV' as const;
-  readonly pollInterval: number = CALDAV_POLL_INTERVAL;
+
+  get pollInterval(): number {
+    return this._cachedCfg?.pollIntervalMinutes
+      ? this._cachedCfg.pollIntervalMinutes * 60 * 1000
+      : CALDAV_POLL_INTERVAL;
+  }
 
   isEnabled(cfg: CaldavCfg): boolean {
     return isCaldavEnabled(cfg);
+  }
+
+  // Caches config for the pollInterval getter (mirrors NextcloudDeck).
+  protected override _getCfgOnce$(issueProviderId: string): Observable<CaldavCfg> {
+    return super._getCfgOnce$(issueProviderId).pipe(
+      tap((cfg) => {
+        this._cachedCfg = cfg;
+      }),
+    );
   }
 
   testConnection(cfg: CaldavCfg): Promise<boolean> {

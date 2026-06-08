@@ -39,7 +39,7 @@ import { TaskAttachmentService } from '../task-attachment/task-attachment.servic
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { ProjectService } from '../../project/project.service';
 import { Project } from '../../project/project.model';
-import { _MISSING_PROJECT_ } from '../../project/project.const';
+import { _MISSING_PROJECT_, DEFAULT_PROJECT_ICON } from '../../project/project.const';
 import { T } from '../../../t.const';
 import {
   MatMenu,
@@ -89,6 +89,8 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
 @Component({
   selector: 'task',
@@ -132,6 +134,7 @@ import { MatTooltip } from '@angular/material/tooltip';
     TagToggleMenuListComponent,
     DoneToggleComponent,
     SwipeBlockComponent,
+    SelectOptionRowComponent,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
@@ -146,6 +149,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _menuTreeService = inject(MenuTreeService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -279,6 +283,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   });
 
   T: typeof T = T;
+  readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
   isTouchActive = isTouchActive;
   isDragOver: boolean = false;
   isDragReady = signal(false);
@@ -302,6 +307,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   // Lazy-loaded project list - only fetched when project menu opens
   moveToProjectList = signal<Project[] | undefined>(undefined);
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   private _loadedProjectListForProjectId: string | null | undefined;
   private _moveToProjectListSub?: Subscription;
 
@@ -557,33 +563,38 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  moveTaskUp(): void {
+  private _moveAndRefocus(
+    move: (id: string, parentId: string | undefined, isBacklog: boolean) => void,
+  ): void {
     const t = this.task();
-    this._taskService.moveUp(t.id, t.parentId, this.isBacklog());
+    move(t.id, t.parentId, this.isBacklog());
     // timeout required to let changes take place
     setTimeout(() => this.focusSelf());
     setTimeout(() => this.focusSelf(), 10);
   }
 
+  moveTaskUp(): void {
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveUp(id, parentId, isBacklog),
+    );
+  }
+
   moveTaskDown(): void {
-    const t = this.task();
-    this._taskService.moveDown(t.id, t.parentId, this.isBacklog());
-    setTimeout(() => this.focusSelf());
-    setTimeout(() => this.focusSelf(), 10);
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveDown(id, parentId, isBacklog),
+    );
   }
 
   moveTaskToTop(): void {
-    const t = this.task();
-    this._taskService.moveToTop(t.id, t.parentId, this.isBacklog());
-    setTimeout(() => this.focusSelf());
-    setTimeout(() => this.focusSelf(), 10);
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveToTop(id, parentId, isBacklog),
+    );
   }
 
   moveTaskToBottom(): void {
-    const t = this.task();
-    this._taskService.moveToBottom(t.id, t.parentId, this.isBacklog());
-    setTimeout(() => this.focusSelf());
-    setTimeout(() => this.focusSelf(), 10);
+    this._moveAndRefocus((id, parentId, isBacklog) =>
+      this._taskService.moveToBottom(id, parentId, isBacklog),
+    );
   }
 
   handleArrowUp(): void {
@@ -861,7 +872,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   hideDetailPanel(): void {
-    this._taskService.setSelectedId(this.task().id);
+    // Explicitly deselect to close the panel; do NOT re-select (that's showDetailPanel's job).
+    this._taskService.setSelectedId(null);
     this.focusSelf();
   }
 
@@ -912,15 +924,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     setTimeout(() => {
       this.tagToggleMenuList()?.openMenu();
     });
-
-    // this._matDialog
-    //   .open(DialogEditTagsForTaskComponent, {
-    //     data: {
-    //       task: this.task(),
-    //     },
-    //   })
-    //   .afterClosed()
-    //   .subscribe(() => this.focusSelf());
   }
 
   toggleTag(tagId: string): void {
@@ -1058,6 +1061,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   onHostTouchEnd(): void {
+    this._cancelDragReady();
+  }
+
+  // A confirmed horizontal swipe (open menu / mark done) is not a drag, so
+  // cancel the pending long-press drag-ready state before it can fire mid-swipe.
+  onSwipeStart(): void {
+    this._cancelDragReady();
+  }
+
+  private _cancelDragReady(): void {
     window.clearTimeout(this._dragReadyTimeout);
     this.isDragReady.set(false);
   }

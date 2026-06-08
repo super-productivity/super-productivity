@@ -455,6 +455,112 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    it('should place a converted task after the drag anchor', () => {
+      const { action, testState: baseTestState } = createConvertAction(
+        {},
+        { afterTaskId: 'existing-task' },
+      );
+
+      const testState = {
+        ...baseTestState,
+        [TASK_FEATURE_NAME]: {
+          ...baseTestState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TASK_FEATURE_NAME].entities,
+            'existing-task': createMockTask({ id: 'existing-task' }),
+          },
+          ids: [...baseTestState[TASK_FEATURE_NAME].ids, 'existing-task'],
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...baseTestState[PROJECT_FEATURE_NAME],
+          entities: {
+            ...baseTestState[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...baseTestState[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['existing-task'],
+            } as Project,
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseTestState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...baseTestState[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['existing-task'],
+            } as Tag,
+          },
+        },
+      };
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['existing-task', 'task1'] }),
+          ...expectTagUpdate('tag1', { taskIds: ['existing-task', 'task1'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should append a converted done task when dropped at the start of DONE', () => {
+      const { action, testState: baseTestState } = createConvertAction(
+        {},
+        { afterTaskId: null, isDone: true },
+      );
+
+      const testState = {
+        ...baseTestState,
+        [TASK_FEATURE_NAME]: {
+          ...baseTestState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TASK_FEATURE_NAME].entities,
+            task1: action.task,
+          },
+          ids: [...baseTestState[TASK_FEATURE_NAME].ids, 'task1'],
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...baseTestState[PROJECT_FEATURE_NAME],
+          entities: {
+            ...baseTestState[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...baseTestState[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['existing-task'],
+            } as Project,
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseTestState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...baseTestState[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['existing-task'],
+            } as Tag,
+          },
+        },
+      };
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['existing-task', 'task1'] }),
+          ...expectTagUpdate('tag1', { taskIds: ['existing-task', 'task1'] }),
+          ...expectTaskUpdate('task1', {
+            isDone: true,
+            doneOn: jasmine.any(Number) as unknown as number,
+            dueDay: getDbDateStr(),
+            dueWithTime: undefined,
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should not duplicate task ID in project or tag taskIds when task already exists', () => {
       const { action, testState: baseTestState } = createConvertAction();
 
@@ -492,6 +598,293 @@ describe('taskSharedCrudMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+
+    // Regression: a fresh client bulk-replaying SuperSync ops hit
+    // "TypeError: r is not iterable" inside handleConvertToMainTask when the
+    // captured op carried a malformed parentTagIds. Two shapes can produce
+    // this — both must survive the reducer:
+    //   (a) parentTagIds is missing AND parent.tagIds is missing
+    //       — the original `??` chain handled this but only by accident.
+    //   (b) parentTagIds is truthy but not an array (e.g. carried through
+    //       as a number/object from a producer bug or legacy op payload)
+    //       — `??` does NOT catch this, only Array.isArray does. This is
+    //       the case the user actually hit during SuperSync replay.
+    it('should not throw when parentTagIds is omitted and parent.tagIds is missing', () => {
+      const parentTask = {
+        ...createMockTask({ id: 'parent-task', projectId: 'project1' }),
+        tagIds: undefined as unknown as string[],
+      };
+      const testState: RootState = {
+        ...baseState,
+        [TASK_FEATURE_NAME]: {
+          ...baseState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseState[TASK_FEATURE_NAME].entities,
+            'parent-task': parentTask,
+          },
+          ids: [...baseState[TASK_FEATURE_NAME].ids, 'parent-task'],
+        },
+      };
+
+      const action = TaskSharedActions.convertToMainTask({
+        task: createMockTask({ id: 'task1', parentId: 'parent-task' }),
+        isPlanForToday: false,
+      });
+
+      expect(() => metaReducer(testState, action)).not.toThrow();
+    });
+
+    it('should not throw when parentTagIds is truthy-but-non-array (legacy/corrupt op)', () => {
+      const parentTask = createMockTask({
+        id: 'parent-task',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+      });
+      const testState: RootState = {
+        ...baseState,
+        [TASK_FEATURE_NAME]: {
+          ...baseState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseState[TASK_FEATURE_NAME].entities,
+            'parent-task': parentTask,
+          },
+          ids: [...baseState[TASK_FEATURE_NAME].ids, 'parent-task'],
+        },
+      };
+
+      const action = TaskSharedActions.convertToMainTask({
+        task: createMockTask({ id: 'task1', parentId: 'parent-task' }),
+        // Truthy non-array bypasses `??` — only Array.isArray catches it.
+        parentTagIds: 0 as unknown as string[],
+        isPlanForToday: false,
+      });
+
+      expect(() => metaReducer(testState, action)).not.toThrow();
+    });
+  });
+
+  describe('convertToSubTask action', () => {
+    const createConvertToSubTaskState = (
+      taskOverrides: Partial<Task> = {},
+      parentOverrides: Partial<Task> = {},
+    ): RootState => {
+      const task = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        subTaskIds: [],
+        ...taskOverrides,
+      });
+      const parentTask = createMockTask({
+        id: 'parent-task',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        subTaskIds: [],
+        ...parentOverrides,
+      });
+
+      return {
+        ...baseState,
+        [TASK_FEATURE_NAME]: {
+          ...baseState[TASK_FEATURE_NAME],
+          ids: ['parent-task', 'task1'],
+          entities: {
+            'parent-task': parentTask,
+            task1: task,
+          },
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...baseState[PROJECT_FEATURE_NAME],
+          entities: {
+            ...baseState[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...baseState[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['parent-task', 'task1'],
+              backlogTaskIds: ['task1'],
+            } as Project,
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseState[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...baseState[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['parent-task', 'task1'],
+            } as Tag,
+            TODAY: {
+              ...baseState[TAG_FEATURE_NAME].entities.TODAY,
+              taskIds: ['task1'],
+            } as Tag,
+          },
+        },
+      };
+    };
+
+    const createConvertToSubTaskAction = (afterTaskId: string | null = null) =>
+      TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetParentId: 'parent-task',
+        afterTaskId,
+      });
+
+    it('should move a main task under the target parent', () => {
+      const testState = createConvertToSubTaskState();
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', {
+            parentId: 'parent-task',
+            projectId: 'project1',
+            tagIds: [],
+          }),
+          ...expectTaskUpdate('parent-task', { subTaskIds: ['task1'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should remove converted task from project and tag top-level lists', () => {
+      const testState = createConvertToSubTaskState();
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', {
+            taskIds: ['parent-task'],
+            backlogTaskIds: [],
+          }),
+          ...expectTagUpdates({
+            tag1: { taskIds: ['parent-task'] },
+            TODAY: { taskIds: [] },
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should clear dueDay and planner placement from a converted task', () => {
+      const testState = {
+        ...createConvertToSubTaskState({ dueDay: '2099-12-25' }),
+        planner: {
+          ...baseState.planner,
+          days: {
+            '2099-12-25': ['other-task', 'task1'],
+          },
+        },
+      };
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', {
+            parentId: 'parent-task',
+            dueDay: undefined,
+            tagIds: [],
+          }),
+          ...expectTagUpdates({
+            tag1: { taskIds: ['parent-task'] },
+            TODAY: { taskIds: [] },
+          }),
+          planner: jasmine.objectContaining({
+            days: jasmine.objectContaining({
+              '2099-12-25': ['other-task'],
+            }),
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should place the converted task after the target anchor', () => {
+      const existingSubTask = createMockTask({
+        id: 'existing-sub',
+        parentId: 'parent-task',
+        tagIds: [],
+      });
+      const base = createConvertToSubTaskState({}, { subTaskIds: ['existing-sub'] });
+      const testState = {
+        ...base,
+        [TASK_FEATURE_NAME]: {
+          ...base[TASK_FEATURE_NAME],
+          ids: ['parent-task', 'existing-sub', 'task1'],
+          entities: {
+            ...base[TASK_FEATURE_NAME].entities,
+            'existing-sub': existingSubTask,
+          },
+        },
+      };
+      const action = createConvertToSubTaskAction('existing-sub');
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        expectTaskUpdate('parent-task', { subTaskIds: ['existing-sub', 'task1'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should not convert a task that already has subtasks', () => {
+      const testState = createConvertToSubTaskState({ subTaskIds: ['child-task'] });
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+    });
+
+    it('should not convert scheduled, repeating, or issue-linked tasks', () => {
+      const blockedCases: Partial<Task>[] = [
+        { dueWithTime: 4070908800000 },
+        { reminderId: 'reminder1' },
+        { remindAt: 4070908800000 },
+        { repeatCfgId: 'repeat1' },
+        { issueId: 'ISSUE-1' },
+        { issueProviderId: 'github' },
+        { issueType: 'GITHUB' as Task['issueType'] },
+      ];
+
+      blockedCases.forEach((taskOverrides) => {
+        const testState = createConvertToSubTaskState(taskOverrides);
+        const action = createConvertToSubTaskAction();
+
+        metaReducer(testState, action);
+        expect(mockReducer).toHaveBeenCalledWith(testState, action);
+        mockReducer.calls.reset();
+      });
+    });
+
+    it('should not convert under a target parent that is itself a subtask', () => {
+      // Nesting under a subtask would create a third level the UI cannot render
+      // (orphaning the task) and leave the grandparent's time aggregation stale.
+      const testState = createConvertToSubTaskState({}, { parentId: 'grandparent' });
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+    });
+
+    it('should not convert a task onto itself', () => {
+      const testState = createConvertToSubTaskState();
+      const action = TaskSharedActions.convertToSubTask({
+        taskId: 'task1',
+        targetParentId: 'task1',
+        afterTaskId: null,
+      });
+
+      metaReducer(testState, action);
+      expect(mockReducer).toHaveBeenCalledWith(testState, action);
     });
   });
 

@@ -182,6 +182,13 @@ export interface OperationSyncCapable<
   ): Promise<SnapshotUploadResponse>;
   deleteAllData(): Promise<{ success: boolean }>;
   getEncryptKey?(): Promise<string | undefined>;
+  /**
+   * Whether the host has flagged encryption as enabled, independent of whether a
+   * usable key is present. Lets consumers distinguish a genuinely-fresh client
+   * (encryption never configured) from one whose key is missing despite an
+   * encrypted config — the dropped-credential signature.
+   */
+  isEncryptionEnabled?(): Promise<boolean>;
 }
 
 export interface RestorePoint<TRestorePointType extends string = string> {

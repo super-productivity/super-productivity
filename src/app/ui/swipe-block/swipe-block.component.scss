@@ -32,7 +32,10 @@
 // SWIPE BLOCK (swipe-left gesture)
 .block-right {
   pointer-events: none;
-  color: var(--palette-primary-contrast-500);
+  // Resting: brand-colored icon only, no fill (a "ghost" affordance).
+  // --brand adapts per theme (darker in light, lighter in dark) so the icon
+  // stays legible over the task-row background. See #7841.
+  color: var(--brand);
   position: absolute;
   bottom: 2px;
   top: 1px;
@@ -43,15 +46,31 @@
   border-radius: var(--task-border-radius);
   overflow: hidden;
 
+  // Armed: the reveal fills with the brand primary (never the red-ish accent)
+  // and the icon inverts + pops, so "release to open menu" is unmistakable
+  // without implying a destructive action. See #7841.
   &.isActive {
-    background-color: var(--c-accent);
+    background-color: var(--c-primary);
+    color: var(--c-contrast);
+
+    mat-icon {
+      transform: translate(-50%, -50%) scale(1.3);
+    }
   }
 
+  // Only the icon animates: the block's own transition is suppressed inline
+  // during the pan, so the fill flips instantly without lagging the finger.
+  // (--transition-standard already embeds `all`, so it can't be reused here.)
   mat-icon {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scaleX(1);
+    transform: translate(-50%, -50%);
+    transition: transform var(--transition-duration-m) var(--ani-standard-timing);
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   }
 }
 

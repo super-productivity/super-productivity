@@ -1,0 +1,31 @@
+<div
+  class="custom-option-layout"
+  [class.has-checkbox]="showCheckbox()"
+>
+  @if (showCheckbox()) {
+    <mat-icon class="check-ico">{{
+      isSelected() ? 'check_box' : 'check_box_outline_blank'
+    }}</mat-icon>
+  }
+
+  @if (isEmoji()) {
+    <mat-icon
+      class="menu-icon-emoji"
+      [style.color]="color()"
+    >
+      {{ effectiveIcon() }}
+    </mat-icon>
+  } @else {
+    <mat-icon
+      class="option-main-icon"
+      [style.color]="color()"
+    >
+      {{ effectiveIcon() }}
+    </mat-icon>
+  }
+
+  <span class="option-title">{{ title() }}</span>
+  @if (folderPath(); as f) {
+    <span class="folder-subtitle">{{ f }}</span>
+  }
+</div>

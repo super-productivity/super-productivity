@@ -435,7 +435,7 @@ export class TimeBlockSyncEffects {
     task: Task,
     dueWithTime: number,
   ): Promise<void> {
-    const durationMs = Math.max(task.timeEstimate - task.timeSpent, 0) || 30 * 60 * 1000;
+    const durationMs = this._calcDurationMs(task);
     await ctx.definition.timeBlock!.upsertEvent(
       task.id,
       {
@@ -447,6 +447,26 @@ export class TimeBlockSyncEffects {
       ctx.config,
       ctx.http,
     );
+  }
+
+  /**
+   * Duration of the calendar block for a task.
+   *
+   * - Active task: the *remaining* estimated work (`timeEstimate - timeSpent`),
+   *   mirroring the in-app schedule view (planner.selectors.ts).
+   * - Done task: "remaining work" is meaningless once finished, so reflect the
+   *   *actual* time spent instead. Otherwise completing a task would shrink the
+   *   block to a leftover sliver (estimate > spent) or collapse to 0 and hit the
+   *   default (spent >= estimate) — see #7949.
+   *
+   * Falls back to a sensible non-zero default so the event is never zero-length.
+   */
+  private _calcDurationMs(task: Task): number {
+    const DEFAULT_DURATION_MS = 30 * 60 * 1000;
+    if (task.isDone) {
+      return task.timeSpent || task.timeEstimate || DEFAULT_DURATION_MS;
+    }
+    return Math.max(task.timeEstimate - task.timeSpent, 0) || DEFAULT_DURATION_MS;
   }
 
   private _handleError(err: unknown): Observable<never> {

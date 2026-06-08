@@ -186,6 +186,8 @@
     display: flex;
     align-items: center;
     gap: var(--s);
+    justify-content: space-between;
+    width: 100%;
 
     .project-icon {
       font-size: 16px;
@@ -205,6 +207,10 @@
     mat-icon:first-child {
       margin-right: 0;
       flex-shrink: 0;
+    }
+
+    tag {
+      margin-left: auto;
     }
   }
 

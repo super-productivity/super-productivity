@@ -50,7 +50,7 @@
       @if (isSyncIconEnabled()) {
         <button
           class="sync-btn"
-          matTooltip="{{ T.MH.TRIGGER_SYNC | translate }}"
+          matTooltip="{{ syncTooltip() | translate }}"
           (click)="onSyncButtonClick()"
           (longPress)="setupSync()"
           (contextmenu)="$event.preventDefault(); setupSync()"

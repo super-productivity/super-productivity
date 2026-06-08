@@ -3,16 +3,9 @@ import { TranslateService } from '@ngx-translate/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OpLog } from '../../core/log';
-import { INBOX_PROJECT } from '../../features/project/project.const';
-import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 import { T } from '../../t.const';
 import { confirmDialog } from '../../util/native-dialogs';
-
-const isEntityState = (obj: unknown): obj is { ids: string[] } =>
-  typeof obj === 'object' &&
-  obj !== null &&
-  'ids' in obj &&
-  Array.isArray((obj as { ids: unknown }).ids);
+import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 
 @Injectable({
   providedIn: 'root',
@@ -29,7 +22,13 @@ export class SyncLocalStateService {
     return !snapshot && lastSeq === 0;
   }
 
-  hasMeaningfulStoreData(): boolean {
+  /**
+   * @param ignoreTaskIds Optional task ids to exclude from the "has a task?" check.
+   *   The file-based conflict gate passes the ids of pending onboarding example tasks so
+   *   an example-only store is not treated as meaningful (#7985). Omitting it preserves
+   *   the original behavior for every other caller.
+   */
+  hasMeaningfulStoreData(ignoreTaskIds?: ReadonlySet<string>): boolean {
     const snapshot = this.stateSnapshotService.getStateSnapshot();
 
     if (!snapshot) {
@@ -39,29 +38,7 @@ export class SyncLocalStateService {
       return false;
     }
 
-    if (isEntityState(snapshot.task) && snapshot.task.ids.length > 0) {
-      return true;
-    }
-
-    if (
-      isEntityState(snapshot.project) &&
-      snapshot.project.ids.some((id) => id !== INBOX_PROJECT.id)
-    ) {
-      return true;
-    }
-
-    if (
-      isEntityState(snapshot.tag) &&
-      snapshot.tag.ids.some((id) => !SYSTEM_TAG_IDS.has(id))
-    ) {
-      return true;
-    }
-
-    if (isEntityState(snapshot.note) && snapshot.note.ids.length > 0) {
-      return true;
-    }
-
-    return false;
+    return hasMeaningfulStateData(snapshot, ignoreTaskIds);
   }
 
   confirmFreshClientSync(opCount: number): boolean {

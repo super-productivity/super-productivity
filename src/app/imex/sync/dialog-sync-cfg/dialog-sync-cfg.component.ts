@@ -523,7 +523,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     this._matDialogRef.close();
 
     if (isOnline()) {
-      this.syncWrapperService.sync();
+      this.syncWrapperService.sync(true);
     }
   }
 

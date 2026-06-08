@@ -6,6 +6,7 @@ import {
 
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
+import { INBOX_PROJECT } from '../project/project.const';
 
 const minute = 60 * 1000;
 const defaultTaskNotesTemplate = `**How can I best achieve it now?**
@@ -44,7 +45,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isAutoAddWorkedOnToToday: true,
     isAutoMarkParentAsDone: false,
     isTrayShowCurrent: true,
-    defaultProjectId: null,
+    defaultProjectId: INBOX_PROJECT.id,
     isMarkdownFormattingInNotesEnabled: true,
     notesTemplate: defaultTaskNotesTemplate,
   },
@@ -59,6 +60,11 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isDisableAnimations: false,
     isVerticalActionBar: false,
     isDisableCelebration: false,
+    // NOTE: isUseCustomWindowTitleBar is intentionally NOT defaulted here. A
+    // persisted default would be pushed to Electron on every launch and override
+    // a legacy `isUseObsidianStyleHeader` choice. Its effective default is resolved
+    // at read time (main-window.ts / global-theme.service.ts: `?? !IS_GNOME_DESKTOP`)
+    // and the settings checkbox is seeded display-only in misc-settings-form (#7891).
     isShowProductivityTipLonger: false,
     customTheme: 'default',
     defaultStartPage: 0,
@@ -146,7 +152,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     zoomIn: 'Ctrl++',
     zoomOut: 'Ctrl+-',
     zoomDefault: 'Ctrl+0',
-    saveNote: 'Ctrl+S',
     triggerSync: 'Ctrl+S',
     taskEditTitle: null,
     taskToggleDetailPanelOpen: 'I',
@@ -154,6 +159,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     taskOpenNotesFullscreen: null,
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
+    taskScheduleDeadline: 'Shift+S',
     taskUnschedule: 'U',
     taskToggleDone: 'D',
     taskAddSubTask: 'A',

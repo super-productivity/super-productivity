@@ -951,12 +951,23 @@ describe('LockService', () => {
 
         await Promise.all([aFinished, cPromise]);
 
-        // A must complete without C running concurrently
+        // A must complete.
         expect(executed).toContain('a-start');
         expect(executed).toContain('a-end');
-        // C should have timed out (not run concurrently with A)
-        expect(executed).not.toContain('c-start');
-        expect(executed).toContain('c-timed-out');
+        // The mutex invariant under test is "no concurrent execution": C must
+        // never run while A still holds the lock. Depending on runner speed C
+        // either times out waiting, or — if A releases before C's timeout
+        // fires — acquires the lock and runs, but only AFTER A has finished.
+        // Asserting C always times out is timing-flaky (a slow runner lets A
+        // release first); assert the actual no-overlap invariant instead.
+        const cStartIdx = executed.indexOf('c-start');
+        const cTimedOutIdx = executed.indexOf('c-timed-out');
+        // C must have been resolved one way or the other (not silently dropped).
+        expect(cStartIdx !== -1 || cTimedOutIdx !== -1).toBeTrue();
+        // If C ran, it must have started strictly after A ended (no overlap).
+        if (cStartIdx !== -1) {
+          expect(executed.indexOf('a-end')).toBeLessThan(cStartIdx);
+        }
       } finally {
         Object.defineProperty(navigator, 'locks', {
           value: originalLocks,

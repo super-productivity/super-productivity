@@ -12,6 +12,14 @@ import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { ValidateStateService } from '../validation/validate-state.service';
 
+// Meaningful state (contains a task) so saveCurrentStateAsSnapshot proceeds past
+// the empty-state guard (#7892). Tests that care only about clock pruning /
+// compactedAt / entity keys use this so the save actually fires; the guard
+// itself has a dedicated test.
+const MEANINGFUL_SNAPSHOT_STATE = {
+  task: { ids: ['t1'], entities: { t1: { id: 't1' } } },
+} as unknown;
+
 describe('OperationLogSnapshotService', () => {
   let service: OperationLogSnapshotService;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
@@ -195,13 +203,27 @@ describe('OperationLogSnapshotService', () => {
     });
 
     it('should not throw when save fails', async () => {
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.rejectWith(new Error('Save failed'));
 
       // Should not throw - errors are caught internally
       await expectAsync(service.saveCurrentStateAsSnapshot()).toBeResolved();
+    });
+
+    it('should skip saving when state has no meaningful data (#7892)', async () => {
+      // A transient empty/initial NgRx state must never be cached over good data.
+      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({ client1: 1 });
+      mockOpLogStore.getLastSeq.and.resolveTo(10);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
     });
 
     it('should prune vector clock before saving when it exceeds MAX_VECTOR_CLOCK_SIZE', async () => {
@@ -213,7 +235,9 @@ describe('OperationLogSnapshotService', () => {
       // Ensure the local client is in the clock
       bloatedClock['test-client'] = 999;
 
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(bloatedClock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -229,7 +253,9 @@ describe('OperationLogSnapshotService', () => {
 
     it('should not prune vector clock when it is within MAX_VECTOR_CLOCK_SIZE', async () => {
       const smallClock = { client1: 5, client2: 3 };
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(smallClock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -245,7 +271,9 @@ describe('OperationLogSnapshotService', () => {
       for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
         exactClock[`client-${i}`] = i + 1;
       }
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(exactClock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -259,7 +287,9 @@ describe('OperationLogSnapshotService', () => {
     it('should save unpruned clock if clientId is null', async () => {
       mockClientIdProvider.loadClientId.and.resolveTo(null);
       const clock = { client1: 5 };
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(clock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -272,7 +302,9 @@ describe('OperationLogSnapshotService', () => {
 
     it('should include compactedAt timestamp', async () => {
       const beforeTime = Date.now();
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);

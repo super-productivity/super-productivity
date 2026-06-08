@@ -15,6 +15,13 @@ import { Log } from '../../../core/log';
 export const getNextRepeatOccurrence = (
   taskRepeatCfg: TaskRepeatCfg,
   fromDate: Date = new Date(),
+  // When `inclusive` is true the scan starts from `fromDate` itself instead of
+  // the day after the last task creation. Used when relocating an existing live
+  // instance on a schedule edit: `fromDate` (today) may still be a valid
+  // occurrence and must not be skipped (#7951). The default (exclusive) keeps
+  // the "strictly next future occurrence" semantics relied on by the preview,
+  // scheduled-list and heatmap.
+  { inclusive = false }: { inclusive?: boolean } = {},
 ): Date | null => {
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
     Log.warn(
@@ -37,11 +44,28 @@ export const getNextRepeatOccurrence = (
   lastTaskCreation.setHours(12, 0, 0, 0);
   startDateDate.setHours(12, 0, 0, 0);
 
-  // Start checking from the day after last task creation
-  if (lastTaskCreation >= checkDate) {
-    checkDate.setTime(lastTaskCreation.getTime());
+  // In inclusive mode, never resolve to an occurrence before `fromDate` itself.
+  // DAILY/WEEKLY only scan forward from `fromDate`, but the day-of-month
+  // MONTHLY and YEARLY branches jump to this period's anchor day — which may
+  // already have passed today — so they need an explicit floor (applied in
+  // their loops below). The MONTHLY nth-weekday branch enforces the same floor
+  // via its own `candidate >= checkDate` predicate (checkDate === fromDate in
+  // inclusive mode), so it does not use `fromDateFloor`.
+  const fromDateFloor = inclusive ? new Date(checkDate) : null;
+
+  if (inclusive) {
+    // Relocating an existing instance: ignore prior-creation gating entirely so
+    // the scan starts at `fromDate` and today is considered. Neutralising
+    // `lastTaskCreation` (epoch) also disarms the per-cycle "skip past last
+    // creation" guards (MONTHLY/YEARLY below) for a uniform inclusive scan.
+    lastTaskCreation.setTime(0);
+  } else {
+    // Start checking from the day after last task creation
+    if (lastTaskCreation >= checkDate) {
+      checkDate.setTime(lastTaskCreation.getTime());
+    }
+    checkDate.setDate(checkDate.getDate() + 1);
   }
-  checkDate.setDate(checkDate.getDate() + 1);
 
   switch (taskRepeatCfg.repeatCycle) {
     case 'DAILY': {
@@ -128,7 +152,11 @@ export const getNextRepeatOccurrence = (
       for (let i = 0; i < maxMonthsToCheck; i++) {
         const diffInMonth = getDiffInMonth(startDateDate, checkDate);
 
-        if (diffInMonth >= 0 && diffInMonth % taskRepeatCfg.repeatEvery === 0) {
+        if (
+          diffInMonth >= 0 &&
+          diffInMonth % taskRepeatCfg.repeatEvery === 0 &&
+          (!fromDateFloor || checkDate >= fromDateFloor)
+        ) {
           return checkDate;
         }
         checkDate.setMonth(checkDate.getMonth() + 1);
@@ -172,7 +200,11 @@ export const getNextRepeatOccurrence = (
       for (let i = 0; i < maxYearsToCheck; i++) {
         const diffInYears = getDiffInYears(startDateDate, checkDate);
 
-        if (diffInYears >= 0 && diffInYears % taskRepeatCfg.repeatEvery === 0) {
+        if (
+          diffInYears >= 0 &&
+          diffInYears % taskRepeatCfg.repeatEvery === 0 &&
+          (!fromDateFloor || checkDate >= fromDateFloor)
+        ) {
           return checkDate;
         }
         checkDate.setFullYear(checkDate.getFullYear() + 1);

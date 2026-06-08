@@ -25,6 +25,7 @@
     "RELOAD_AFTER_IDB_ERROR": "Database Error - App Will Restart\n\nSuper Productivity cannot save data! This is usually caused by:\n• Low disk space (most common)\n• App update in background\n• Linux Snap users: run 'snap set core experimental.refresh-app-awareness=true'\n\nYour recent changes may not have been saved. Please free up disk space if low. The app will restart after you close this dialog.",
     "RESTORE_FILE_BACKUP": "There seems to be NO DATA, but there are backups available at \"{{dir}}\". Do you want to restore the latest backup from {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "There seems to be NO DATA, but there is a backup available. Do you want to load it?",
+    "RESTORE_FILE_BACKUP_MOBILE": "No data was found on this device, but a backup is available to restore (tasks: {{tasks}}, projects: {{projects}}). Restore it?",
     "RESTORE_STRAY_BACKUP": "During the last sync, there may have been an error. Do you want to restore the last backup?"
   },
   "DATETIME_SCHEDULE": {
@@ -74,6 +75,18 @@
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android blocked the persistent time tracking notification. Time is still tracked in the app, but background recovery may be unavailable. Check notification permission and battery/background restrictions.",
       "OPEN_NOTIFICATION_SETTINGS": "Open settings"
     },
+    "AZURE_DEVOPS": {
+      "FORM": {
+        "HOST": "Host (organization or collection URL)",
+        "HOST_DESCRIPTION": "Use the full Azure DevOps URL, for example https://dev.azure.com/your-org or https://server:8080/tfs/DefaultCollection.",
+        "PROJECT": "Project",
+        "SCOPE": "Scope (Auto Import only)",
+        "SCOPE_ALL": "All",
+        "SCOPE_ASSIGNED": "Assigned to me",
+        "SCOPE_CREATED": "Created by me",
+        "TOKEN": "Personal Access Token"
+      }
+    },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
       "DIALOG_EDIT": {
@@ -117,6 +130,13 @@
         "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
         "BACKLOG_TASK_FILTER_TYPE": "Backlog tasks",
         "COLUMNS": "Columns",
+        "ONLY_PARENT_TASKS": "Only parent tasks",
+        "PROJECT": "Project",
+        "PROJECT_ALL": "All Projects",
+        "SCHEDULED_STATE": "Scheduled State",
+        "SCHEDULED_STATE_ALL": "All",
+        "SCHEDULED_STATE_NOT_SCHEDULED": "Not Scheduled",
+        "SCHEDULED_STATE_SCHEDULED": "Scheduled",
         "SORT_BY": "Sort by",
         "SORT_BY_CREATED": "Created",
         "SORT_BY_DUE": "Due date",
@@ -159,6 +179,7 @@
         "CALDAV_URL": "CalDAV URL (the base URL)",
         "CALDAV_USER": "Your CalDAV username",
         "IS_ADD_SUB_TASKS": "Also import subtasks when a task is added",
+        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
         "TWO_WAY_SYNC_BOTH": "Both (bidirectional)",
         "TWO_WAY_SYNC_NOTES": "Notes / Description sync direction",
         "TWO_WAY_SYNC_OFF": "Off",
@@ -922,7 +943,7 @@
       },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Enable Project Backlog",
-        "L_IS_HIDDEN_FROM_MENU": "Hide project from menu",
+        "L_IS_HIDDEN_FROM_MENU": "Hide project from sidebar",
         "L_TITLE": "Project Name",
         "TITLE": "Basic Settings"
       },
@@ -950,11 +971,11 @@
       },
       "S": {
         "ARCHIVED": "Archived Project",
-        "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the menu on the top left.",
+        "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the sidebar.",
         "DELETED": "Deleted Project",
-        "SHOW_IN_MENU": "Show in menu",
+        "SHOW_IN_MENU": "Show in sidebar",
         "UNARCHIVED": "Project restored",
-        "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the menu",
+        "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the sidebar",
         "UPDATED": "Updated project settings"
       },
       "ARCHIVED_NOTICE": "This project is archived.",
@@ -983,11 +1004,6 @@
       },
       "TOOLTIP_CREATE": "Create project folder",
       "TOOLTIP_VISIBILITY": "Show/hide projects"
-    },
-    "QUICK_HISTORY": {
-      "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
-      "PAGE_TITLE": "Quick History",
-      "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
       "DIALOG_TRACK_TIME": {
@@ -1250,6 +1266,8 @@
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Affected changes",
+        "FIRST_SYNC_USE_LOCAL_CONFIRM": "This device has never synced before. \"Use My Data\" will permanently replace the data on the server with this device's local data. This cannot be undone. Continue?",
+        "FIRST_SYNC_WARNING": "This device hasn't synced before, so \"Use My Data\" would overwrite the server's existing data with this device's data.",
         "IMPORT_DATE": "Import date",
         "MSG_INCOMING": "Your data was fully replaced on another device. You have {{filteredOpCount}} local changes that may not carry over.",
         "MSG_INCOMING_NO_OPS": "Your data was fully replaced on another device. This device will sync to the new state.",
@@ -1422,6 +1440,7 @@
           "L_TENANT_ID": "Tenant ID",
           "L_USE_CUSTOM_APP": "Use my own Microsoft Entra app registration",
           "OFFICIAL_MODE_INFO": "Using built-in Microsoft 365 sign-in for this app. Switch to custom mode only if you need your own Entra app registration.",
+          "PLATFORM_INFO": "OneDrive sync is available in the desktop and mobile apps only, not in the browser version.",
           "SYNC_FOLDER_PATH_DESCRIPTION": "Stored under your OneDrive App Folder (e.g. super-productivity)",
           "TENANT_ID_DESCRIPTION": "Use 'common' for multi-tenant sign-in",
           "USE_CUSTOM_APP_DESCRIPTION": "Enable this if you want to provide your own Application (Client) ID"
@@ -1430,7 +1449,7 @@
         "WEB_DAV": {
           "CORS_INFO": "<strong>Making it work in a web browser:</strong> You need to allow Super Productivity to make CORS requests to your server. For Nextcloud, one approach is allowing \"https://app.super-productivity.com\" via the <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> app. Refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information.",
           "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g. '/super-productivity' or '/'). This is NOT your server's internal directory path.",
-          "INFO": "<strong>Warning:</strong> Generic WebDAV sync is provided <strong>as-is without support</strong>. If you are using Nextcloud, please use the Nextcloud sync option instead.",
+          "INFO": "<strong>Warning:</strong> Generic WebDAV sync is <strong>experimental and provided as-is, without support</strong>. WebDAV implementations differ enormously between servers, and the vast majority of sync problems are caused by your provider's setup or quirks (CORS, authentication, non-standard behavior, file locking, etc.) — <strong>not by Super Productivity</strong>. We cannot debug individual WebDAV servers, so please troubleshoot such issues with your provider and do not report them to us as bugs. If you are using Nextcloud, use the dedicated Nextcloud option instead. For reliable, fully supported sync consider Dropbox or SuperSync.",
           "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Password",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
@@ -1604,8 +1623,8 @@
         "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Today",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Toggle adding task to backlog / today's list",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Toggle adding task to top & bottom of list",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Toggle adding task to backlog / today's list",
         "TOMORROW": "Tomorrow",
         "TOOLTIP_ADD_TASK": "Add task",
         "TOOLTIP_ADD_TO_BACKLOG": "Add to backlog",
@@ -1613,6 +1632,7 @@
         "TOOLTIP_ADD_TO_TODAY": "Add to today",
         "TOOLTIP_ADD_TO_TOP": "Add to top (Ctrl+1)",
         "TOOLTIP_CLEAR_DATE": "Clear date",
+        "TOOLTIP_CLEAR_DEADLINE": "Clear deadline",
         "TOOLTIP_CLEAR_ESTIMATE": "Clear estimate",
         "TOOLTIP_CLEAR_REPEAT": "Clear repeat setting",
         "TOOLTIP_CLEAR_TAGS": "Clear tags",
@@ -1621,6 +1641,7 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",
+        "PASTED_IMAGE_TITLE": "Pasted image",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Links & Files ({{nr}})",
         "COMPLETED_ON": "Completed on",
@@ -1828,6 +1849,10 @@
         "MONDAY_TO_FRIDAY_AND_TIME": "Mon-Fri, {{timeStr}}",
         "MONTHLY_CURRENT_DATE": "Monthly on day {{dateDayStr}}",
         "MONTHLY_CURRENT_DATE_AND_TIME": "Monthly on day {{dateDayStr}}, {{timeStr}}",
+        "MONTHLY_LAST_DAY": "Monthly on the last day",
+        "MONTHLY_LAST_DAY_AND_TIME": "Monthly on the last day, {{timeStr}}",
+        "MONTHLY_NTH_WEEKDAY": "Monthly on the {{ordinalStr}} {{weekdayStr}}",
+        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Monthly on the {{ordinalStr}} {{weekdayStr}}, {{timeStr}}",
         "WEEKLY_CURRENT_WEEKDAY": "Weekly on {{weekdayStr}}",
         "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "Weekly on {{weekdayStr}}, {{timeStr}}",
         "YEARLY_CURRENT_DATE": "Yearly on {{dayAndMonthStr}}",
@@ -1875,10 +1900,15 @@
         "MONTHLY_MODE_DAY_OF_MONTH": "Day of month",
         "NOTES": "Default notes",
         "ORD_FIRST": "first",
+        "ORD_FIRST_NTH": "first",
         "ORD_FOURTH": "fourth",
+        "ORD_FOURTH_NTH": "fourth",
         "ORD_LAST": "last",
+        "ORD_LAST_NTH": "last",
         "ORD_SECOND": "second",
+        "ORD_SECOND_NTH": "second",
         "ORD_THIRD": "third",
+        "ORD_THIRD_NTH": "third",
         "Q_CUSTOM": "Custom recurring config",
         "Q_DAILY": "Every day",
         "Q_MONDAY_TO_FRIDAY": "Every Monday through Friday",
@@ -1897,8 +1927,8 @@
         "REPEAT_EVERY": "Recur every",
         "SATURDAY": "Saturday",
         "SCHEDULE_TYPE_LABEL": "Schedule type",
-        "SKIP_OVERDUE": "Skip overdue instances",
-        "SKIP_OVERDUE_DESCRIPTION": "When enabled, if the app is opened after missing a scheduled occurrence (e.g. a weekly task where today is not a scheduled day), the missed instance will be silently skipped instead of being created as an overdue task",
+        "SKIP_OVERDUE": "Don't let overdue instances pile up",
+        "SKIP_OVERDUE_DESCRIPTION": "Stops unfinished recurring tasks from piling up as overdue duplicates. An empty missed instance is removed once a newer one exists; instances where you tracked time or completed subtasks are kept.",
         "START_DATE": "Start date",
         "START_TIME": "Scheduled start time",
         "START_TIME_DESCRIPTION": "E.g. 15:00. Leave blank for an all day task",
@@ -1910,7 +1940,8 @@
         "WAIT_FOR_COMPLETION_DESCRIPTION": "Prevents multiple pending recurring tasks from piling up. The next instance will only be created once the current task is completed",
         "WEDNESDAY": "Wednesday",
         "WEEK_OF_MONTH": "Week of month",
-        "WEEKDAY": "Weekday"
+        "WEEKDAY": "Weekday",
+        "WEEKDAY_REQUIRED": "Select at least one weekday"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Could not open repeat config dialog. You can configure it from the task menu."
     },
@@ -1964,7 +1995,8 @@
     },
     "TIME_TRACKING": {
       "B": {
-        "ALREADY_DID": "I already did",
+        "BREAK_SNACK": "Enjoy your break!",
+        "PAUSE_AND_BREAK": "Pause & take a break",
         "SNOOZE": "Snooze {{time}}"
       },
       "B_TTR": {
@@ -2015,6 +2047,7 @@
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Days, worked:",
+        "EXPORT_DATA": "Export data",
         "MONTH_WORKED": "Month worked:",
         "REPEATING_TASK": "Recurring task",
         "RESTORE_TASK_FROM_ARCHIVE": "Restore task from archive",
@@ -2023,7 +2056,9 @@
         "VIEW_TASK_DETAILS": "View task details",
         "WEEK_NR": "Week {{nr}}",
         "WEEK_NR_SHORT": "W{{nr}}",
-        "WORKED": "Worked"
+        "WEEK_RANGE_TOOLTIP": "{{start}}.–{{end}}., days: {{days}}, time: {{time}}",
+        "WORKED": "Worked",
+        "WORK_TIMES": "Working times"
       },
       "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Today task list?",
       "D_EXPORT_TITLE": "Worklog Export {{start}}–{{end}}",
@@ -2280,7 +2315,6 @@
       "MOVE_TO_REGULARS_TASKS": "Move task to Today",
       "OPEN_PROJECT_NOTES": "Show/hide notes",
       "PLUGIN_SHORTCUTS": "Plugin Shortcuts",
-      "SAVE_NOTE": "Save note",
       "SELECT_NEXT_TASK": "Select next task",
       "SELECT_PREVIOUS_TASK": "Select previous task",
       "SHOW_SEARCH_BAR": "Show search bar",
@@ -2294,6 +2328,7 @@
       "TASK_OPEN_CONTEXT_MENU": "Open task context menu",
       "TASK_OPEN_ESTIMATION_DIALOG": "Edit estimate/time spent",
       "TASK_SCHEDULE": "Schedule task",
+      "TASK_SCHEDULE_DEADLINE": "Set task deadline",
       "TASK_SHORTCUTS": "Tasks",
       "TASK_SHORTCUTS_INFO": "The following shortcuts apply to the currently selected task (selected via tab or mouse).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Show/hide task panel",
@@ -2543,16 +2578,8 @@
     "UNPLANNED_TODAY_TASKS": "Unplanned all tasks from Today"
   },
   "GPB": {
-    "ASSETS": "Loading assets...",
-    "DBX_DOWNLOAD": "Dropbox: Download file...",
-    "DBX_GEN_TOKEN": "Dropbox: Generate token...",
-    "DBX_META": "Dropbox: Get file meta...",
-    "DBX_UPLOAD": "Dropbox: Upload file...",
     "JIRA_LOAD_ISSUE": "Jira: Load issue data...",
-    "SYNC": "Syncing data...",
-    "UNKNOWN": "Loading remote data",
-    "WEB_DAV_DOWNLOAD": "WebDAV: Downloading data...",
-    "WEB_DAV_UPLOAD": "WebDAV: Uploading data..."
+    "UNKNOWN": "Loading remote data"
   },
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
@@ -2576,6 +2603,7 @@
     "HM": {
       "CALENDARS": "How to: Connect calendars",
       "CONTRIBUTE": "Contribute",
+      "CREATE_TASK": "How to: Create a task",
       "GET_HELP_ONLINE": "Get help online",
       "KEYBOARD": "How to: Keyboard Navigation",
       "REDDIT_COMMUNITY": "Reddit community",
@@ -2583,6 +2611,7 @@
       "START_WELCOME": "Start welcome tour",
       "SYNC": "How to: Configure sync"
     },
+    "HISTORY": "History",
     "METRICS": "Metrics",
     "NO_PROJECT_INFO": "No projects available. You can create a new project by clicking the 'Create Project' button.",
     "NO_TAG_INFO": "There are currently no tags. You can add tags by entering `#yourTagName` when adding or editing tasks.",
@@ -2596,13 +2625,18 @@
     "PROJECT_MENU": "Project Menu",
     "PROJECT_SETTINGS": "Project Settings",
     "PROJECTS": "Projects",
-    "QUICK_HISTORY": "Quick history",
     "SCHEDULE": "Schedule",
     "SEARCH": "Search",
     "SETTINGS": "Settings",
     "SHARE_TASK_LIST_MARKDOWN": "Share Task List",
     "SHOW_TRACKED_TASK": "Show tracked task",
     "SIDE_PANEL_MENU": "Side Panel Menu",
+    "SYNC_STATE": {
+      "ERROR": "Sync problem — click to retry",
+      "IN_SYNC": "In sync — click to sync now",
+      "OFFLINE": "You're offline — sync resumes when you reconnect",
+      "SYNCING": "Syncing…"
+    },
     "TAGS": "Tags",
     "TASK_LIST": "Task List",
     "TASKS": "Tasks",
@@ -2612,7 +2646,6 @@
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
-    "WORKLOG": "Worklog",
     "ARCHIVED_PROJECTS": "Archived Projects"
   },
   "MIGRATE": {
@@ -2636,7 +2669,9 @@
   "ONBOARDING": {
     "TITLE": "How do you want to use Super Productivity?",
     "SUBTITLE": "Pick a setup that matches your workflow. You can always change this later in Settings.",
-    "PRIVACY_HINT": "Your data stays securely on your device. Nothing is sent to a server.",
+    "PRIVACY_HINT": "Your data stays securely on your device unless you choose to set up sync.",
+    "SYNC_CTA": "Already using Super Productivity on another device?",
+    "SYNC_CTA_LINK": "Set up sync",
     "PRESETS": {
       "SIMPLE_TODO": {
         "TITLE": "Simple Todo List",
@@ -2802,6 +2837,7 @@
     "DIALOG_TITLE": "System Update"
   },
   "PS": {
+    "CLICK_TO_COPY_VERSION": "Click to copy version",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Failed to copy to clipboard",
     "GLOBAL_SETTINGS": "Global Settings",
     "NO_PLUGINS_INSTALLED": "No plugins are currently installed",

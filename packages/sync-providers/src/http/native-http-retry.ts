@@ -1,4 +1,5 @@
 import { NOOP_SYNC_LOGGER, toSyncLogError, type SyncLogger } from '@sp/sync-core';
+import { urlHostOnly } from '../log/error-meta';
 
 /**
  * Max retries for transient network errors (e.g., iOS NSURLErrorNetworkConnectionLost).
@@ -100,7 +101,7 @@ export const executeNativeRequestWithRetry = async (
           `${label} transient network error, retrying in ${delayMs}ms ` +
             `(attempt ${attempt + 1}/${maxRetries})`,
           {
-            url: config.url,
+            url: urlHostOnly(config.url),
             attempt: attempt + 1,
             maxRetries,
             delayMs,
@@ -148,7 +149,9 @@ export const isTransientNetworkError = (e: unknown): boolean => {
     if (
       errorCode === 'SocketTimeoutException' ||
       errorCode === 'UnknownHostException' ||
-      errorCode === 'ConnectException'
+      errorCode === 'ConnectException' ||
+      errorCode === 'NETWORK_ERROR' ||
+      errorCode === 'TIMEOUT_ERROR'
     ) {
       return true;
     }

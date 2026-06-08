@@ -13,6 +13,9 @@ export enum LS {
   APP_START_COUNT = 'APP_START_COUNT',
   APP_START_COUNT_LAST_START_DAY = 'APP_START_COUNT_LAST_START_DAY',
   RATE_DIALOG_STATE = 'SUP_RATE_DIALOG_STATE',
+  // Set on an unhandled error or any detected data damage; read by the rating
+  // prompt to hold off for a cooldown after a bad experience. Time only.
+  LAST_CRITICAL_ERROR_TIME = 'SUP_LAST_CRITICAL_ERROR_TIME',
   LAST_LOCAL_SYNC_MODEL_CHANGE = 'SUP_LAST_LOCAL_SYNC_MODEL_CHANGE',
   LOCAL_UI_HELPER = 'SUP_UI_HELPER',
 

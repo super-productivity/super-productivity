@@ -12,6 +12,7 @@ import { extractEntityKeysFromState } from './extract-entity-keys';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 
 type StateCache = MigratableStateCache;
 
@@ -82,6 +83,21 @@ export class OperationLogSnapshotService {
     try {
       // Get current state from NgRx
       const currentState = this.stateSnapshotService.getStateSnapshot();
+
+      // GUARD (#7892): never cache an empty/degraded state over a good one.
+      // The snapshot is only a load-time cache — the op-log is the source of
+      // truth. If the live NgRx state has no user data (e.g. a transient
+      // hydration glitch left the store in its initial empty state), caching it
+      // would make the next boot trust empty data. Skipping the save is always
+      // safe for correctness: replaying the op-log reconstructs the true state
+      // (including legitimate full-wipe deletes), at most costing a slower boot.
+      if (!hasMeaningfulStateData(currentState)) {
+        OpLog.warn(
+          'OperationLogSnapshotService: Skipping snapshot save — current state has no ' +
+            'meaningful data (refusing to overwrite cache with empty state)',
+        );
+        return;
+      }
 
       // Get current vector clock and last seq
       const vectorClock = await this.vectorClockService.getCurrentVectorClock();

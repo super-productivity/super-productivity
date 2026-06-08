@@ -149,6 +149,7 @@ export class TagListComponent {
           repeatCfg,
           this._dateTimeFormatService.currentLocale(),
           this._dateTimeFormatService,
+          this._translateService,
         );
         chips.push({
           title: this._translateService.instant(key, params),

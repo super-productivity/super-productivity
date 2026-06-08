@@ -4,6 +4,18 @@ import {
   TaskRepeatCfg,
 } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { T } from '../../../t.const';
+import { TranslateService } from '@ngx-translate/core';
+
+const mockTranslateService = {
+  instant: (key: string) => {
+    if (key === T.F.TASK_REPEAT.F.ORD_FIRST_NTH) return 'first';
+    if (key === T.F.TASK_REPEAT.F.ORD_SECOND_NTH) return 'second';
+    if (key === T.F.TASK_REPEAT.F.ORD_THIRD_NTH) return 'third';
+    if (key === T.F.TASK_REPEAT.F.ORD_FOURTH_NTH) return 'fourth';
+    if (key === T.F.TASK_REPEAT.F.ORD_LAST_NTH) return 'last';
+    return key;
+  },
+} as unknown as TranslateService;
 
 describe('getTaskRepeatInfoText()', () => {
   (
@@ -156,6 +168,74 @@ describe('getTaskRepeatInfoText()', () => {
           quickSetting: 'CUSTOM',
         },
       ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_LAST_DAY,
+        { timeStr: '' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyLastDay: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+        { timeStr: '', ordinalStr: 'first', weekdayStr: 'Saturday' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyWeekOfMonth: 1,
+          monthlyWeekday: 6,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+        { timeStr: '', ordinalStr: 'last', weekdayStr: 'Monday' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyWeekOfMonth: -1,
+          monthlyWeekday: 1,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_NTH_WEEKDAY,
+        { timeStr: '', ordinalStr: 'second', weekdayStr: 'Wednesday' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          monthlyWeekOfMonth: 2,
+          monthlyWeekday: 3,
+          monthlyLastDay: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_CURRENT_DATE,
+        { timeStr: '', dateDayStr: '24' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          startDate: '2022-02-24',
+          monthlyWeekOfMonth: 5,
+          monthlyWeekday: 6,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.MONTHLY_CURRENT_DATE,
+        { timeStr: '', dateDayStr: '24' },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          startDate: '2022-02-24',
+          monthlyWeekOfMonth: 1,
+          monthlyWeekday: undefined,
+        },
+      ],
 
       [
         T.F.TASK_REPEAT.ADD_INFO_PANEL.CUSTOM_WEEKLY,
@@ -191,6 +271,8 @@ describe('getTaskRepeatInfoText()', () => {
             id: 'IDDD',
           },
           'en-US',
+          undefined,
+          mockTranslateService,
         ),
       ).toEqual([translationKey, translateParams]);
     });
@@ -208,6 +290,8 @@ describe('getTaskRepeatInfoText()', () => {
             startTime: 'INVALID_CLOCK_STRING',
           },
           'en-US',
+          undefined,
+          mockTranslateService,
         ),
       ).not.toThrow();
     });
@@ -222,6 +306,8 @@ describe('getTaskRepeatInfoText()', () => {
           startTime: 'INVALID_CLOCK_STRING',
         },
         'en-US',
+        undefined,
+        mockTranslateService,
       );
       expect(key).toBe(T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY);
       expect(params).toEqual({ timeStr: '' });

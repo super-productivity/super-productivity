@@ -178,6 +178,37 @@ describe('FocusModeMainComponent', () => {
     it('should initialize isDragOver to false', () => {
       expect(component.isDragOver()).toBe(false);
     });
+
+    it('should constrain long task titles in focus mode layout (issue #8012)', () => {
+      currentTaskSubject.next({
+        ...mockTask,
+        title: 'A'.repeat(1000),
+      });
+      fixture.detectChanges();
+
+      const taskSection = fixture.nativeElement.querySelector(
+        '.task-section',
+      ) as HTMLElement | null;
+      const taskTitle = fixture.nativeElement.querySelector(
+        'task-title.task-title',
+      ) as HTMLElement | null;
+
+      expect(taskSection).not.toBeNull();
+      expect(taskTitle).not.toBeNull();
+
+      if (!taskSection || !taskTitle) {
+        return;
+      }
+
+      const sectionStyles = window.getComputedStyle(taskSection);
+      const titleStyles = window.getComputedStyle(taskTitle);
+
+      expect(sectionStyles.maxWidth).not.toBe('none');
+      expect(titleStyles.maxWidth).not.toBe('none');
+      expect(titleStyles.maxHeight).not.toBe('none');
+      expect(titleStyles.overflowX).toBe('hidden');
+      expect(titleStyles.overflowY).toBe('auto');
+    });
   });
 
   describe('issue URL observable', () => {

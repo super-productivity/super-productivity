@@ -293,7 +293,12 @@ export class TaskRepeatCfgEffects {
 
                 const firstOccurrence = isStartDateMovedEarlier
                   ? getFirstRepeatOccurrence(fullCfg)
-                  : getNextRepeatOccurrence(fullCfg, new Date());
+                  : // inclusive: relocate the live instance to the soonest
+                    // occurrence on or after today. The strictly-future variant
+                    // always skipped today, stranding a still-valid daily
+                    // instance on tomorrow and advancing lastTaskCreationDay past
+                    // today (#7951).
+                    getNextRepeatOccurrence(fullCfg, new Date(), { inclusive: true });
 
                 if (undoneInstances.length === 0) {
                   // No live instance to reschedule. But when startDate moved
@@ -333,25 +338,45 @@ export class TaskRepeatCfgEffects {
                   a.created > b.created ? a : b,
                 );
 
-                const firstOccurrenceStr = firstOccurrence
-                  ? this._dateService.todayStr(firstOccurrence)
-                  : this._dateService.todayStr();
-
-                // Update lastTaskCreationDay on the config
-                this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, {
-                  lastTaskCreationDay: firstOccurrenceStr,
-                  lastTaskCreation: firstOccurrence?.getTime() || Date.now(),
-                });
-
                 const isTimedTask = !!(
                   fullCfg.startTime &&
                   fullCfg.remindAt &&
                   isValidSplitTime(fullCfg.startTime)
                 );
 
+                // For a timed task, the inclusive occurrence can land on today
+                // even when today's start time has ALREADY passed. Scheduling
+                // that slot would set a past remindAt and fire an immediate
+                // "missed reminder" on save (#7354/#7951 review). Advance to the
+                // next future occurrence in that case; a start time still
+                // upcoming today is kept on today.
+                let targetOccurrence = firstOccurrence;
+                if (isTimedTask && targetOccurrence) {
+                  const slot = getDateTimeFromClockString(
+                    fullCfg.startTime as string,
+                    targetOccurrence.getTime(),
+                  );
+                  if (slot < Date.now()) {
+                    const nextOccurrence = getNextRepeatOccurrence(fullCfg, new Date());
+                    if (nextOccurrence) {
+                      targetOccurrence = nextOccurrence;
+                    }
+                  }
+                }
+
+                const firstOccurrenceStr = targetOccurrence
+                  ? this._dateService.todayStr(targetOccurrence)
+                  : this._dateService.todayStr();
+
+                // Update lastTaskCreationDay on the config
+                this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, {
+                  lastTaskCreationDay: firstOccurrenceStr,
+                  lastTaskCreation: targetOccurrence?.getTime() || Date.now(),
+                });
+
                 if (isTimedTask) {
-                  const targetDayTimestamp = firstOccurrence
-                    ? firstOccurrence.getTime()
+                  const targetDayTimestamp = targetOccurrence
+                    ? targetOccurrence.getTime()
                     : Date.now();
                   const dateTime = getDateTimeFromClockString(
                     fullCfg.startTime as string,
@@ -378,7 +403,7 @@ export class TaskRepeatCfgEffects {
                 // and adds it to TODAY_TAG ordering via the planner meta
                 // reducer. Skipping today here left the instance stranded on
                 // its old dueDay (#7768 Bug 1).
-                if (firstOccurrence) {
+                if (targetOccurrence) {
                   return rxOf(
                     PlannerActions.planTaskForDay({
                       task: task as TaskCopy,

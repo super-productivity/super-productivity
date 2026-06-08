@@ -78,7 +78,6 @@ export const logAdvancedStacktrace = (
       }
 
       const githubIssueLinks = document.getElementsByClassName('github-issue-urlX');
-      Log.log(githubIssueLinks);
 
       if (githubIssueLinks) {
         const errEscaped = _cleanHtml(getErrorTxt(origErr));
@@ -165,8 +164,6 @@ export const createErrorAlert = (
     }
   });
   innerWrapper.append(btnReload);
-
-  Log.log(userData);
 
   if (userData) {
     const btnExport = document.createElement('BUTTON');

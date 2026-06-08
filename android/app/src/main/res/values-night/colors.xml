@@ -2,4 +2,5 @@
 <resources>
     <color name="statusBar">#131314</color>
     <color name="navigationBar">#131314</color>
+    <color name="windowBackground">#131314</color>
 </resources>

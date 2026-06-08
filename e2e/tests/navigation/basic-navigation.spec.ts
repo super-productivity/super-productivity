@@ -15,17 +15,23 @@ test.describe('Basic Navigation', () => {
     await expect(page).toHaveURL(/\/#\/schedule/);
     await expect(page.locator('.route-wrapper')).toBeVisible();
 
-    // Navigate to quick history
-    await page.goto('/#/tag/TODAY/quick-history');
+    // Navigate to history (merged Quick History + Worklog)
+    await page.goto('/#/tag/TODAY/history');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/quick-history/);
-    await expect(page.locator('quick-history')).toBeVisible();
+    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/history/);
+    await expect(page.locator('history')).toBeVisible();
 
-    // Navigate to worklog
+    // Legacy worklog route still opens the full History view
     await page.goto('/#/tag/TODAY/worklog');
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/\/#\/tag\/TODAY\/worklog/);
-    await expect(page.locator('.route-wrapper')).toBeVisible();
+    await expect(page.locator('history .total-time')).toBeVisible();
+
+    // Legacy Quick History route now also opens the unified History view
+    await page.goto('/#/tag/TODAY/quick-history');
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/#\/tag\/TODAY\/quick-history/);
+    await expect(page.locator('history .total-time')).toBeVisible();
 
     // Navigate to metrics
     await page.goto('/#/tag/TODAY/metrics');

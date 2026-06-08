@@ -36,6 +36,7 @@ For SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/CLAUDE.
 - **Privacy:** no analytics or tracking — user data stays local unless explicitly synced.
 - **Electron:** check `IS_ELECTRON` before using Electron-specific APIs.
 - **Templates:** plain HTML, minimal CSS/classes, Angular Material sparingly. See [`docs/styling-guide.md`](docs/styling-guide.md).
+- **Styling review:** do not locally restyle Angular Material or shared `src/app/ui/` components for one-off context needs. This includes overriding button styles via `.mat-*`, `.mdc-*`, `button[mat-*]`, or component internals in local SCSS. Prefer existing inputs/classes/tokens; if a variant must exist, make it reusable or add it to the shared style layer.
 - **Strict TypeScript:** no `any` (use `unknown` if truly unknown).
 - **State:** never mutate NgRx state — return new objects in reducers. Prefer Signals to Observables.
 - **Tests:** add unit tests for new services and state logic.
@@ -60,11 +61,12 @@ Angular format `type(scope): description`. Types: `feat`, `fix`, `docs`, `style`
 
 ## Anti-patterns
 
-| Avoid                              | Do instead                               |
-| ---------------------------------- | ---------------------------------------- |
-| `any` type                         | proper types, `unknown` if truly unknown |
-| Direct DOM access                  | Angular bindings, `viewChild()`          |
-| Side effects in constructors       | `async` pipe or `toSignal`               |
-| Subscribing without cleanup        | `takeUntilDestroyed()` or async pipe     |
-| `NgModules` for new code           | standalone components                    |
-| Re-declaring Material theme styles | existing theme variables                 |
+| Avoid                                                                      | Do instead                               |
+| -------------------------------------------------------------------------- | ---------------------------------------- |
+| `any` type                                                                 | proper types, `unknown` if truly unknown |
+| Direct DOM access                                                          | Angular bindings, `viewChild()`          |
+| Side effects in constructors                                               | `async` pipe or `toSignal`               |
+| Subscribing without cleanup                                                | `takeUntilDestroyed()` or async pipe     |
+| `NgModules` for new code                                                   | standalone components                    |
+| Re-declaring Material theme styles                                         | existing theme variables                 |
+| One-off `.mat-*`, `.mdc-*`, `button[mat-*]`, or shared component overrides | reusable inputs, tokens, or shared styles |

@@ -144,6 +144,11 @@ export class AddTasksForTomorrowService {
 
     TaskLog.log('[AddTasksForTomorrow] Starting addAllDueToday', { todayStr });
 
+    // Yield to event loop before reading so any in-flight store updates
+    // (e.g. the re-anchor dispatch from rescheduleTaskOnRepeatCfgUpdate$)
+    // have fully propagated before the selector is evaluated. (#7923)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     const dueRepeatCfgs = await this._taskRepeatCfgService
       .getAllUnprocessedRepeatableTasks$(todayDate.getTime())
       .pipe(first())

@@ -281,6 +281,17 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
   });
   // Log.timeEnd('TEST');
 
+  // Collapse events that resolve to the same id. Per RFC 5545 a UID (without a
+  // distinct RECURRENCE-ID) identifies a single event, but some providers
+  // (Google/Outlook) emit the same UID twice for invited/modified events — once
+  // fully populated and once sparse — which surfaced as duplicated overlay
+  // entries (#7848, #3837). Recurring occurrences are unaffected because each
+  // carries a unique `<uid>_<occurrence>` id.
+  // Must run BEFORE the Google-URL synthesis below so the richness tie-break
+  // compares only feed-provided data (a generated URL would otherwise inflate
+  // both copies equally) and we synthesize at most one URL per surviving event.
+  calendarIntegrationEvents = dedupeCalendarEventsById(calendarIntegrationEvents);
+
   // Generate URLs for Google Calendar events that don't already have one
   if (icalUrl) {
     const googleEmail = getGoogleCalendarEmail(icalUrl);
@@ -294,6 +305,33 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
   }
 
   return calendarIntegrationEvents;
+};
+
+/**
+ * Scores the optional fields that distinguish a fully-populated copy of an event
+ * from a sparse one (description, url) — the only fields that realistically vary
+ * between the duplicate same-UID copies providers emit. Used purely as the
+ * dedup tie-breaker; on an equal score the first-seen copy is kept.
+ */
+const calendarEventRichness = (ev: CalendarIntegrationEvent): number =>
+  (ev.description ? 1 : 0) + (ev.url ? 1 : 0);
+
+/**
+ * Removes duplicate events that share the same id, keeping the richest copy.
+ * Insertion order is preserved; the original array is returned unchanged when
+ * there are no duplicates (the common case).
+ */
+const dedupeCalendarEventsById = (
+  events: CalendarIntegrationEvent[],
+): CalendarIntegrationEvent[] => {
+  const byId = new Map<string, CalendarIntegrationEvent>();
+  for (const ev of events) {
+    const existing = byId.get(ev.id);
+    if (!existing || calendarEventRichness(ev) > calendarEventRichness(existing)) {
+      byId.set(ev.id, ev);
+    }
+  }
+  return byId.size === events.length ? events : Array.from(byId.values());
 };
 
 const calculateEventDuration = (vevent: ICalVEvent, startTimeStamp: number): number => {

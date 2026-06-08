@@ -13,3 +13,9 @@
   background: var(--c-primary) !important;
   color: var(--c-contrast) !important;
 }
+.mention-active {
+  .option-main-icon,
+  .tag-ico-emoji {
+    color: var(--c-contrast) !important;
+  }
+}

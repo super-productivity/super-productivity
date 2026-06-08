@@ -1,7 +1,6 @@
 #!/usr/bin/env ts-node
 
 import * as fs from 'fs';
-import * as path from 'path';
 
 const filesToMigrate = [
   'src/app/core/persistence/android-db-adapter.service.ts',
@@ -9,7 +8,9 @@ const filesToMigrate = [
   'src/app/features/android/store/android.effects.ts',
 ];
 
-function migrateFile(filePath: string): void {
+const CORE_LOG_IMPORT_RE = /from\s*['"][^'"]*core\/log['"]/;
+
+const migrateFile = (filePath: string): void => {
   console.log(`Processing ${filePath}...`);
 
   let content = fs.readFileSync(filePath, 'utf8');
@@ -25,16 +26,7 @@ function migrateFile(filePath: string): void {
   // Update imports
   if (modified) {
     // Check if file already imports from log
-    if (
-      content.includes("from '../../../../core/log'") ||
-      content.includes('from "../../../core/log"') ||
-      content.includes('from "../../core/log"') ||
-      content.includes('from "../core/log"') ||
-      content.includes("from '../../../../core/log'") ||
-      content.includes("from '../../../core/log'") ||
-      content.includes("from '../../core/log'") ||
-      content.includes("from '../core/log'")
-    ) {
+    if (CORE_LOG_IMPORT_RE.test(content)) {
       // Replace Log import with DroidLog
       content = content.replace(
         /import\s*{\s*([^}]*)\bLog\b([^}]*)\}\s*from\s*['"][^'"]*core\/log['"]/g,
@@ -58,7 +50,7 @@ function migrateFile(filePath: string): void {
   } else {
     console.log(`- No changes needed in ${filePath}`);
   }
-}
+};
 
 // Process all files
 filesToMigrate.forEach(migrateFile);

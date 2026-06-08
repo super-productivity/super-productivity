@@ -88,83 +88,70 @@ const parseLineStructure = (line: string): ParsedLine | null => {
   return null;
 };
 
-const buildNotesFromNestedItems = (nestedItems: ParsedLine[]): string => {
-  return nestedItems
-    .map((item) => {
-      // Calculate leading whitespace from original line
-      const leadingWhitespace = item.originalLine.match(/^(\s*)/)?.[1] || '';
-
-      // Convert to checkbox format
-      const checkboxFormat = item.isCompleted ? '[x]' : '[ ]';
-
-      // Build the standardized line
-      return `${leadingWhitespace}- ${checkboxFormat} ${item.content}`;
-    })
-    .join('\n');
-};
-
-export const convertToMarkdownNotes = (text: string): string | null => {
+/**
+ * Validate, split, and parse every line into structured form.
+ * Returns null when the input is invalid, too large, empty, or contains any
+ * line that is not a bullet/checkbox list item.
+ */
+const parseLines = (text: string): ParsedLine[] | null => {
   if (!text || typeof text !== 'string') {
     return null;
   }
-
-  if (text.length > MAX_INPUT_LENGTH) return null;
-  const lines = splitMarkdownLines(text);
-  const convertedLines: string[] = [];
-
-  for (const line of lines) {
-    const parsed = parseLineStructure(line);
-    if (parsed) {
-      // Calculate leading whitespace from original line
-      const leadingWhitespace = parsed.originalLine.match(/^(\s*)/)?.[1] || '';
-
-      // Convert to checkbox format
-      const checkboxFormat = parsed.isCompleted ? '[x]' : '[ ]';
-
-      // Build the standardized line
-      convertedLines.push(`${leadingWhitespace}- ${checkboxFormat} ${parsed.content}`);
-    } else {
-      // If we encounter a line that doesn't match our patterns, return null
-      return null;
-    }
+  if (text.length > MAX_INPUT_LENGTH) {
+    return null;
   }
 
-  return convertedLines.length > 0 ? convertedLines.join('\n') : null;
+  const parsedLines: ParsedLine[] = [];
+  for (const line of splitMarkdownLines(text)) {
+    const parsed = parseLineStructure(line);
+    if (!parsed) {
+      // A non-list line means the whole block isn't a task list.
+      return null;
+    }
+    parsedLines.push(parsed);
+  }
+
+  return parsedLines.length > 0 ? parsedLines : null;
+};
+
+// Shift indent levels so the shallowest item sits at level 0, making the
+// top-level walk independent of how deeply the source list was indented.
+// Mutates in place; safe because parseLines hands each caller a freshly built,
+// single-owner array.
+const normalizeIndentation = (parsedLines: ParsedLine[]): void => {
+  const minIndentLevel = findMinIndentLevel(parsedLines);
+  for (const line of parsedLines) {
+    line.indentLevel -= minIndentLevel;
+  }
+};
+
+// Normalize a parsed item to `<indent>- [ ] content` (or `[x]`), preserving the
+// original leading whitespace so nested depth survives the round-trip.
+const formatAsCheckboxLine = (item: ParsedLine): string => {
+  const leadingWhitespace = item.originalLine.match(/^(\s*)/)?.[1] || '';
+  const checkboxFormat = item.isCompleted ? '[x]' : '[ ]';
+  return `${leadingWhitespace}- ${checkboxFormat} ${item.content}`;
+};
+
+const buildNotesFromNestedItems = (nestedItems: ParsedLine[]): string =>
+  nestedItems.map(formatAsCheckboxLine).join('\n');
+
+export const convertToMarkdownNotes = (text: string): string | null => {
+  const parsedLines = parseLines(text);
+  if (!parsedLines) {
+    return null;
+  }
+  return parsedLines.map(formatAsCheckboxLine).join('\n');
 };
 
 export const parseMarkdownTasksWithStructure = (
   text: string,
 ): MarkdownTaskStructure | null => {
-  if (!text || typeof text !== 'string') {
+  const parsedLines = parseLines(text);
+  if (!parsedLines) {
     return null;
   }
-
-  if (text.length > MAX_INPUT_LENGTH) return null;
-  const lines = splitMarkdownLines(text);
-  const parsedLines: ParsedLine[] = [];
-
-  // Parse all lines first
-  for (const line of lines) {
-    const parsed = parseLineStructure(line);
-    if (parsed) {
-      parsedLines.push(parsed);
-    } else {
-      // If we encounter a line that doesn't match our patterns, it's not a valid task list
-      return null;
-    }
-  }
-
-  if (parsedLines.length === 0) {
-    return null;
-  }
-
-  // Find the minimum indentation level to normalize
-  const minIndentLevel = findMinIndentLevel(parsedLines);
-
-  // Normalize indentation levels by subtracting the minimum
-  parsedLines.forEach((line) => {
-    line.indentLevel -= minIndentLevel;
-  });
+  normalizeIndentation(parsedLines);
 
   const tasks: ParsedMarkdownTask[] = [];
   let totalSubTasks = 0;
@@ -263,36 +250,11 @@ export const parseMarkdownTasksWithStructure = (
 };
 
 export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null => {
-  if (!text || typeof text !== 'string') {
+  const parsedLines = parseLines(text);
+  if (!parsedLines) {
     return null;
   }
-
-  if (text.length > MAX_INPUT_LENGTH) return null;
-  const lines = splitMarkdownLines(text);
-  const parsedLines: ParsedLine[] = [];
-
-  // Parse all lines first
-  for (const line of lines) {
-    const parsed = parseLineStructure(line);
-    if (parsed) {
-      parsedLines.push(parsed);
-    } else {
-      // If we encounter a line that doesn't match our patterns, it's not a valid task list
-      return null;
-    }
-  }
-
-  if (parsedLines.length === 0) {
-    return null;
-  }
-
-  // Find the minimum indentation level to normalize
-  const minIndentLevel = findMinIndentLevel(parsedLines);
-
-  // Normalize indentation levels by subtracting the minimum
-  parsedLines.forEach((line) => {
-    line.indentLevel -= minIndentLevel;
-  });
+  normalizeIndentation(parsedLines);
 
   const tasks: ParsedMarkdownTask[] = [];
   let i = 0;

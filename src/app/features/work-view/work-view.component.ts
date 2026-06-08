@@ -199,7 +199,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(toObservable(this.undoneTasks)),
-    { initialValue: { list: INITIAL_CUSTOMIZED_UNDONE_TASKS } },
+    { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },
   );
   doneTasks = input.required<TaskWithSubTasks[]>();
   backlogTasks = input.required<TaskWithSubTasks[]>();

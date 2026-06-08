@@ -40,11 +40,16 @@
   width: 100%;
   box-sizing: border-box;
   overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   display: block;
   resize: none;
   min-height: inherit;
   overflow: hidden;
   cursor: text;
+}
+
+.markdown-unparsed {
+  white-space: pre-wrap;
 }
 
 :host:has(.controls) {

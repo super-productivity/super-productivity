@@ -8,8 +8,13 @@ import { expect, test } from '../../fixtures/test.fixture';
  * emits a new date (once per day via `distinctUntilChanged()`). If this
  * mechanism fails, tasks never appear until restart.
  *
- * Strategy: Use `page.clock.setFixedTime()` to override `Date.now()` while
- * keeping real timers (zone.js, RxJS interval, NgRx effects) running.
+ * Strategy: Use `page.clock.setSystemTime()` so the wall clock keeps ticking
+ * forward on real time. This is load-bearing: RxJS time-based operators
+ * (debounceTime, interval) read `Date.now()` via their scheduler, so a *frozen*
+ * clock (`setFixedTime`) permanently wedges the effect's `debounceTime(1000)` —
+ * `now` never reaches `lastTime + dueTime` — and `addAllDueToday()` never runs.
+ * With `setSystemTime` the clock advances, the day-change is detected, and the
+ * effect fires exactly as it does in production. (Same trap and fix as #4559.)
  * Set time to 23:55, create a daily repeat task, mark it done, then advance
  * the clock past midnight and wait for the new instance to appear.
  *
@@ -25,8 +30,10 @@ test.describe('Repeat Task - Day Change (#6230)', () => {
   }) => {
     const taskTitle = `${testPrefix}-DailyRepeat6230`;
 
-    // 1. Set clock to 23:55 on Day X and reload so the app boots with our clock
-    await page.clock.setFixedTime(new Date('2026-06-15T23:55:00'));
+    // 1. Set clock to 23:55 on Day X and reload so the app boots with our clock.
+    //    setSystemTime (not setFixedTime) so Date.now() keeps advancing — the
+    //    effect chain's debounceTime relies on a moving clock.
+    await page.clock.setSystemTime(new Date('2026-06-15T23:55:00'));
     await page.reload();
     await workViewPage.waitForTaskList();
 
@@ -68,22 +75,22 @@ test.describe('Repeat Task - Day Change (#6230)', () => {
       taskPage.getDoneTasks().filter({ hasText: taskTitle }).first(),
     ).toBeVisible({ timeout: 5000 });
 
-    // 7. Advance clock past midnight to Day X+1
-    await page.clock.setFixedTime(new Date('2026-06-16T00:05:00'));
+    // 7. Advance clock past midnight to Day X+1. With setSystemTime the clock
+    //    keeps ticking from here, so the 1s `interval` (timerBased$) samples the
+    //    new day and the effect's debounceTime(1000) settles normally.
+    await page.clock.setSystemTime(new Date('2026-06-16T00:05:00'));
 
-    // The day-change emission has two real-world paths in GlobalTrackingIntervalService:
-    // the 1s `interval` (timerBased$) and `window:focus` / `visibilitychange`.
-    // CI runners have enough CPU contention that the 1s tick can lag past the 30s
-    // wait window. Dispatching a focus event triggers focusBased$ (debounced 100ms)
-    // immediately, exercising the same effect chain deterministically.
+    // Also dispatch a focus event to exercise focusBased$ (debounced 100ms) for a
+    // faster, deterministic trigger alongside the 1s interval tick.
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 
-    // 8. Assert: a new undone task with the same title should appear
-    //    The app's date-change mechanism should detect the new day and create
-    //    a fresh repeat task instance. 30s timeout accounts for debounce + sync.
+    // 8. Assert: a new undone task with the same title should appear once the
+    //    date-change mechanism detects the new day and creates a fresh instance.
+    //    60s timeout accounts for debounce + sync on saturated CI runners where
+    //    the 1s tick can lag substantially.
     await expect(
       taskPage.getUndoneTasks().filter({ hasText: taskTitle }).first(),
-    ).toBeVisible({ timeout: 30000 });
+    ).toBeVisible({ timeout: 60000 });
 
     console.log('[Bug #6230] New repeat task instance appeared after day change');
   });

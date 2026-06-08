@@ -1,20 +1,25 @@
 import { Routes } from '@angular/router';
-import { WorklogComponent } from '../features/worklog/worklog.component';
-import { QuickHistoryComponent } from '../features/quick-history/quick-history.component';
+import { HistoryComponent } from '../features/history/history.component';
 import { DailySummaryComponent } from '../pages/daily-summary/daily-summary.component';
 import { MetricPageComponent } from '../pages/metric-page/metric-page.component';
 import { ProjectTaskPageComponent } from '../pages/project-task-page/project-task-page.component';
 
 const SHARED_CONTEXT_ROUTES: Routes = [
   {
+    path: 'history',
+    component: HistoryComponent,
+    data: { page: 'history' },
+  },
+  // legacy routes: both old pages now redirect to the unified History view
+  {
     path: 'worklog',
-    component: WorklogComponent,
-    data: { page: 'worklog' },
+    component: HistoryComponent,
+    data: { page: 'history' },
   },
   {
     path: 'quick-history',
-    component: QuickHistoryComponent,
-    data: { page: 'quick-history' },
+    component: HistoryComponent,
+    data: { page: 'history' },
   },
   {
     path: 'daily-summary',

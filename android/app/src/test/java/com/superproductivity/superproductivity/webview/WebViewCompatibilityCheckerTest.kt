@@ -233,7 +233,12 @@ class WebViewCompatibilityCheckerTest {
     }
 
     @Test
-    fun `blockScreenConfig uses init-failure copy and gated settings action when provider details exist`() {
+    fun `knownWebViewPackages includes Vanadium System WebView`() {
+        assertTrue(WebViewCompatibilityChecker.knownWebViewPackages().contains("app.vanadium.webview"))
+    }
+
+    @Test
+    fun `blockScreenConfig uses init-failure copy and gated app-info action when provider details exist`() {
         val config = WebViewCompatibilityChecker.blockScreenConfig(
             source = VersionSource.INIT_FAILURE,
             hasProviderDetails = true,
@@ -241,9 +246,10 @@ class WebViewCompatibilityCheckerTest {
 
         assertEquals(R.string.webview_init_failure_message, config.titleResId)
         assertEquals(R.string.webview_init_failure_details_with_provider, config.detailsIntroResId)
-        assertEquals(BlockScreenAction.OPEN_WEBVIEW_SETTINGS_WITH_WARNING, config.action)
+        assertEquals(BlockScreenAction.OPEN_WEBVIEW_APP_INFO_WITH_WARNING, config.action)
         assertFalse(config.showTryAnyway)
         assertTrue(config.showSource)
+        assertTrue(config.showRetry)
     }
 
     @Test
@@ -255,6 +261,7 @@ class WebViewCompatibilityCheckerTest {
 
         assertEquals(R.string.webview_init_failure_details_without_provider, config.detailsIntroResId)
         assertFalse(config.showTryAnyway)
+        assertTrue(config.showRetry)
     }
 
     @Test
@@ -269,6 +276,7 @@ class WebViewCompatibilityCheckerTest {
         assertEquals(BlockScreenAction.UPDATE_WEBVIEW, config.action)
         assertTrue(config.showTryAnyway)
         assertFalse(config.showSource)
+        assertFalse(config.showRetry)
     }
 
     // Intent helper data ------------------------------------------------------
@@ -298,6 +306,24 @@ class WebViewCompatibilityCheckerTest {
         assertEquals(
             "package:com.android.chrome",
             WebViewCompatibilityChecker.webViewProviderDetailsUri("com.android.chrome"),
+        )
+    }
+
+    @Test
+    fun `providerPackageOrDefault keeps a resolved provider but falls back when blank`() {
+        assertEquals(
+            "com.android.chrome",
+            WebViewCompatibilityChecker.providerPackageOrDefault("com.android.chrome"),
+        )
+        // Init failures usually have no resolvable provider, so App Info must still
+        // target the standard system WebView package rather than "package:null".
+        assertEquals(
+            "com.google.android.webview",
+            WebViewCompatibilityChecker.providerPackageOrDefault(null),
+        )
+        assertEquals(
+            "com.google.android.webview",
+            WebViewCompatibilityChecker.providerPackageOrDefault("  "),
         )
     }
 
@@ -402,6 +428,54 @@ class WebViewCompatibilityCheckerTest {
         val error = RuntimeException("WebView factory failed", cause)
 
         assertFalse(WebViewCompatibilityChecker.isLikelyWebViewInitFailure(error))
+    }
+
+    // init-failure recovery guard --------------------------------------------
+
+    @Test
+    fun `shouldRetryInitFailure allows the first recovery attempt`() {
+        assertTrue(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 0L,
+                now = 1_000L,
+                windowMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `shouldRetryInitFailure blocks a second attempt within the window`() {
+        // The relaunch we just triggered failed again immediately → don't boot-loop.
+        assertFalse(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 1_000L,
+                now = 1_000L + 59_000L,
+                windowMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `shouldRetryInitFailure allows a fresh attempt once the window elapses`() {
+        assertTrue(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 1_000L,
+                now = 1_000L + 60_000L,
+                windowMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `shouldRetryInitFailure allows retry when the wall clock moves backwards`() {
+        // A clock change must not wedge the user on the block screen forever.
+        assertTrue(
+            WebViewCompatibilityChecker.shouldRetryInitFailure(
+                lastRetryAt = 10_000L,
+                now = 5_000L,
+                windowMs = 60_000L,
+            ),
+        )
     }
 
     // parseMajorVersion ------------------------------------------------------

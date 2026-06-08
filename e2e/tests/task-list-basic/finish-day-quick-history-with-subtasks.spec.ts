@@ -1,61 +1,56 @@
 import { test, expect } from '../../fixtures/test.fixture';
+import type { Locator } from '@playwright/test';
 
 const TASK_SEL = 'task';
 const TASK_TITLE = 'task task-title';
-const TASK_DONE_BTN = 'done-toggle';
 const FINISH_DAY_BTN = '.e2e-finish-day';
-const FIRST_TASK = 'task:nth-child(1)';
-const SECOND_TASK = 'task:nth-child(2)';
-const THIRD_TASK = 'task:nth-child(3)';
 const SAVE_AND_GO_HOME_BTN =
   'daily-summary button[mat-flat-button][color="primary"]:last-of-type';
-const TABLE_CAPTION = 'quick-history  h3';
-const TABLE_ROWS = 'table tr';
+const HISTORY_DAY_TOGGLE = 'history .week-row .day-toggle';
+
+const markTaskAsDone = async (task: Locator): Promise<void> => {
+  await task.hover();
+  const doneBtn = task.locator('done-toggle').first();
+  await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
+  await doneBtn.click();
+};
 
 test.describe('Finish Day Quick History With Subtasks', () => {
   test('should complete full finish day flow with subtasks', async ({
     page,
     workViewPage,
+    testPrefix,
   }) => {
     test.setTimeout(60000); // Increase timeout for this long flow
     // Wait for work view to be ready
     await workViewPage.waitForTaskList();
 
-    await workViewPage.addTask('Main Task with Subtasks');
+    const parentTitle = `${testPrefix}-Main Task with Subtasks`;
+    const firstSubtaskTitle = `${testPrefix}-First Subtask`;
+    const secondSubtaskTitle = `${testPrefix}-Second Subtask`;
+
+    await workViewPage.addTask(parentTitle);
     await page.waitForSelector(TASK_SEL, { state: 'visible' });
-    await expect(page.locator(TASK_TITLE).first()).toContainText(
-      /Main Task with Subtasks/,
-    );
+    await expect(page.locator(TASK_TITLE).first()).toContainText(parentTitle);
 
-    // Add tasks that would be subtasks as top-level tasks
-    await workViewPage.addTask('First Subtask');
-    await workViewPage.addTask('Second Subtask');
+    const parentTask = page.locator(`task:has-text("${parentTitle}")`).first();
 
-    // Verify we have three tasks (newest first)
-    await expect(page.locator(FIRST_TASK)).toBeVisible();
-    await expect(page.locator(SECOND_TASK)).toBeVisible();
-    await expect(page.locator(THIRD_TASK)).toBeVisible();
-    await expect(page.locator(`${FIRST_TASK} task-title`)).toContainText(
-      /Second Subtask/,
-    );
-    await expect(page.locator(`${SECOND_TASK} task-title`)).toContainText(
-      /First Subtask/,
-    );
-    await expect(page.locator(`${THIRD_TASK} task-title`)).toContainText(
-      /Main Task with Subtasks/,
-    );
+    await workViewPage.addSubTask(parentTask, firstSubtaskTitle);
+    await workViewPage.addSubTask(parentTask, secondSubtaskTitle);
 
-    // Step 2: Mark all tasks as done
-    // Mark all three tasks as done - always mark the first undone task
-    for (let i = 0; i < 3; i++) {
-      const undoneTask = page.locator('task:not(.isDone)').first();
-      await undoneTask.hover();
-      const doneBtn = undoneTask.locator(TASK_DONE_BTN);
-      await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await doneBtn.click();
-      // Wait for Angular to process the done state change
-      await page.waitForTimeout(300);
-    }
+    const subTasks = parentTask.locator('.sub-tasks task');
+    await expect(subTasks).toHaveCount(2);
+    await expect(
+      subTasks.locator('task-title').filter({ hasText: firstSubtaskTitle }),
+    ).toBeVisible();
+    await expect(
+      subTasks.locator('task-title').filter({ hasText: secondSubtaskTitle }),
+    ).toBeVisible();
+
+    // Step 2: Mark the real subtasks and their parent as done
+    await markTaskAsDone(subTasks.nth(0));
+    await markTaskAsDone(subTasks.nth(1));
+    await markTaskAsDone(parentTask);
 
     // Verify no undone tasks remain
     await expect(page.locator('task:not(.isDone)')).toHaveCount(0);
@@ -67,56 +62,37 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     // Step 4: Wait for route change and click Save and go home
     await page.waitForSelector('daily-summary', { state: 'visible' });
     await page.waitForSelector(SAVE_AND_GO_HOME_BTN, { state: 'visible' });
-    await page.click(SAVE_AND_GO_HOME_BTN);
+    await Promise.all([
+      page.waitForURL(/#\/tag\/TODAY\/tasks/, { timeout: 15000 }),
+      page.click(SAVE_AND_GO_HOME_BTN),
+    ]);
 
-    // Wait for navigation back to work view
-    await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
+    // Wait for the archive/save flow to settle on Today before navigating away.
+    await expect(page.locator('task-list').first()).toBeVisible();
 
-    // Step 5: Navigate to quick history via left-hand menu
-    // Right-click on work view in magic-side-nav (first main nav item)
-    const navItemBtn = page
-      .locator('magic-side-nav .nav-list > li.nav-item:first-child nav-item button')
-      .first();
-    await navItemBtn.waitFor({ state: 'visible', timeout: 5000 });
-    await page.click(
-      'magic-side-nav .nav-list > li.nav-item:first-child nav-item button',
-      {
-        button: 'right',
-      },
-    );
-    await page.waitForSelector('work-context-menu > button:nth-child(1)', {
+    // Step 5: Navigate directly to the canonical History route. Legacy route
+    // coverage lives in the navigation specs; this flow only needs archived task visibility.
+    await page.goto('/#/tag/TODAY/history');
+    await expect(page).toHaveURL(/#\/tag\/TODAY\/history/);
+    await expect(page.locator('history')).toBeVisible();
+
+    // Step 6: Expand the day row to reveal its tasks
+    const dayToggle = page.locator(HISTORY_DAY_TOGGLE).first();
+    await expect(dayToggle).toBeVisible();
+    await dayToggle.click();
+    await expect(dayToggle).toHaveAttribute('aria-expanded', 'true');
+
+    // Step 7: Confirm the history page + task table render
+    await expect(page.locator('history')).toBeVisible();
+    await page.waitForSelector('.task-summary-table tr', {
       state: 'visible',
+      timeout: 5000,
     });
-    await page.click('work-context-menu > button:nth-child(1)');
-    await page.waitForSelector('quick-history', { state: 'visible' });
 
-    // Step 6: Click on table caption
-    await page.waitForSelector(TABLE_CAPTION, { state: 'visible' });
-    await page.click(TABLE_CAPTION);
-
-    // Step 7: Confirm quick history page loads
-    await page.waitForSelector('quick-history', { state: 'visible' });
-    // Verify we're on the quick history page without specific task checks
-    // Tasks created with 'a' shortcut may not be properly nested/archived
-    await expect(page.locator('quick-history')).toBeVisible();
-    await expect(page.locator('table')).toBeVisible();
-
-    // Step 8: Confirm tasks are in the table
-    // Tasks are now sorted alphabetically: First Subtask, Main Task with Subtasks, Second Subtask
-    await page.waitForSelector(TABLE_ROWS, { state: 'visible', timeout: 5000 });
-    await expect(page.locator(TABLE_ROWS).first()).toBeVisible();
-    await page.waitForSelector('table > tr:nth-child(1) > td.title > span', {
-      state: 'visible',
-    });
-    // Verify the tasks appear in alphabetical order
-    await expect(page.locator('table > tr:nth-child(1) > td.title > span')).toContainText(
-      'First Subtask',
-    );
-    await expect(page.locator('table > tr:nth-child(2) > td.title > span')).toContainText(
-      'Main Task with Subtasks',
-    );
-    await expect(page.locator('table > tr:nth-child(3) > td.title > span')).toContainText(
-      'Second Subtask',
-    );
+    // Step 8: Parent task appears with its real subtasks grouped below it
+    const rows = page.locator('.task-summary-table tr td.title button');
+    await expect(rows.nth(0)).toContainText(parentTitle);
+    await expect(rows.nth(1)).toContainText(firstSubtaskTitle);
+    await expect(rows.nth(2)).toContainText(secondSubtaskTitle);
   });
 });

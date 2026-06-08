@@ -28,7 +28,8 @@
   [cdkDropListSortingDisabled]="isSortingDisabled()"
   [cdkDropListEnterPredicate]="enterPredicate"
   [cdkDropListData]="dropModelDataForList()"
-  (cdkDropListDropped)="drop(filteredTasks(), $event)"
+  (cdkDropListDropped)="drop($event)"
+  [attr.data-list-id]="listId()"
   [@taskList]="
     (dropListService.isBlockAniAfterDrop$ | async) ? 'BLOCK' : filteredTasks()?.length
   "
@@ -45,6 +46,7 @@
       [cdkDragLockAxis]="isXs() ? 'y' : ''"
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY'"
       [cdkDragData]="task"
+      (pointerdown)="onDragPointerDown(task, $event)"
       (cdkDragStarted)="onDragStarted(task, $event)"
       (cdkDragEnded)="onDragEnded()"
     >

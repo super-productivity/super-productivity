@@ -50,8 +50,11 @@
 
 <p align="center">
   <strong>For all current downloads, package links, and platform-specific notes:
+    <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install" target="_blank">
+      check the wiki
+    </a>
+  </strong><br/>
   <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install" target="_blank">
-    check the wiki</strong>.<br/>
     <img
       src="docs/screens/get-it-on-github.webp"
       alt="Get it on GitHub"
@@ -200,17 +203,7 @@ There are several ways to help.
 
 ### Special Thanks to our Sponsors!!!
 
-Recently support for Super Productivity has been growing! A big thank you to all our sponsors, especially the ones below!
-
-- <p>
-      Agentic AI Quality Engineering via:&nbsp;
-      <a href="https://www.testmuai.com/?utm_medium=sponsor&utm_source=superproductivity" target="_blank">
-        <picture>
-            <source srcset="https://super-productivity.com/_astro/test-mu-log-dark.Dy0yXuJ7.svg" media="(prefers-color-scheme: dark)" />
-            <img src="https://super-productivity.com/_astro/test-mu-log-light.CehEzLCt.svg" style="vertical-align: middle;" width="150" height="30" alt="TestMu AI" />
-        </picture>
-      </a>
-  </p>
+Recently support for Super Productivity has been growing! A big thank you to all our sponsors!
 
 _(If you are, intend to or have been a sponsor and want to be shown here, [please let me know](mailto:contact@super-productivity.com)!)_
 
@@ -221,7 +214,6 @@ Windows binaries are signed. Free code signing is provided by [SignPath.io](http
 ## Documentation: Manual versus Automated
 
 There are two wikis: the official one hosted in by GitHub autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
-
 
 <div style="display: flex; gap: 10px; align-items: flex-start;">
 

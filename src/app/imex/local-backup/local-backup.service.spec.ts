@@ -1,5 +1,5 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 import { LocalBackupService } from './local-backup.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
@@ -10,8 +10,12 @@ import { ArchiveModel } from '../../features/archive/archive.model';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
 import { AppDataComplete } from '../../op-log/model/model-config';
+import { T } from '../../t.const';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { Action } from '@ngrx/store';
 
 const BACKUP_INTERVAL = 5 * 60 * 1000;
+const DATA_CHANGE_DEBOUNCE = 30 * 1000;
 
 type LocalBackupServiceWithPrivate = {
   _backup: () => Promise<void>;
@@ -117,6 +121,8 @@ describe('LocalBackupService', () => {
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: TranslateService, useValue: translateServiceSpy },
         { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+        // Default is an inert stream; the data-change trigger specs override.
+        { provide: LOCAL_ACTIONS, useValue: new Subject<Action>() },
       ],
     });
 
@@ -173,6 +179,110 @@ describe('LocalBackupService', () => {
     });
   });
 
+  describe('empty-state guard (#7901)', () => {
+    const setIosPlatform = (): jasmine.Spy => {
+      (
+        service as unknown as {
+          _platformService: Pick<CapacitorPlatformService, 'isIOS'>;
+        }
+      )._platformService = { isIOS: () => true };
+      return spyOn(
+        service as unknown as LocalBackupServiceWithBackupIos,
+        '_backupIOS',
+      ).and.resolveTo();
+    };
+
+    it('should NOT write a backup when the store has no meaningful data', async () => {
+      // Simulates a post-eviction boot: empty store (no tasks, only INBOX
+      // project, only system tags, no notes). hasMeaningfulStateData → false.
+      stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo({
+        task: { ids: [], entities: {} },
+        project: { ids: [], entities: {} },
+        tag: { ids: [], entities: {} },
+        note: { ids: [], entities: {} },
+        archiveYoung: DEFAULT_ARCHIVE,
+        archiveOld: DEFAULT_ARCHIVE,
+      } as any);
+      const backupIosSpy = setIosPlatform();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(backupIosSpy).not.toHaveBeenCalled();
+    });
+
+    it('should write a backup when the store has meaningful data', async () => {
+      // Default mock has task1 → hasMeaningfulStateData → true.
+      const backupIosSpy = setIosPlatform();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(backupIosSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('iOS backup ring (#7901)', () => {
+    const PRIMARY = 'super-productivity-backup.json';
+    const PREV = 'super-productivity-backup.prev.json';
+
+    type LocalBackupServiceWithIosRing = {
+      _readIOSFileOrNull: (path: string) => Promise<string | null>;
+      _writeIOSFile: (path: string, data: string) => Promise<void>;
+    };
+
+    beforeEach(() => {
+      (
+        service as unknown as {
+          _platformService: Pick<CapacitorPlatformService, 'isIOS'>;
+        }
+      )._platformService = { isIOS: () => true };
+    });
+
+    it('promotes the existing backup to the prev slot before overwriting', async () => {
+      const existing = JSON.stringify({ task: { ids: ['existing'] } });
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileOrNull',
+      ).and.resolveTo(existing);
+      const writeSpy = spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_writeIOSFile',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      // First write promotes the existing blob to prev, second writes the new primary.
+      expect(writeSpy).toHaveBeenCalledTimes(2);
+      expect(writeSpy.calls.first().args).toEqual([PREV, existing]);
+      expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
+    });
+
+    it('skips promotion when there is no existing backup yet', async () => {
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileOrNull',
+      ).and.resolveTo(null);
+      const writeSpy = spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_writeIOSFile',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+      expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
+    });
+
+    it('loadBackupIOS resolves to "" (never throws) when no usable backup exists', async () => {
+      // Guards the fire-and-forget startup path from an unhandled rejection.
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileOrNull',
+      ).and.resolveTo(null);
+
+      await expectAsync(service.loadBackupIOS()).toBeResolvedTo('');
+    });
+  });
+
   describe('automatic backup timer', () => {
     it('should stop creating automatic backups when disabled after being enabled', fakeAsync(() => {
       const cfg$ = new BehaviorSubject({
@@ -192,6 +302,7 @@ describe('LocalBackupService', () => {
           { provide: SnackService, useValue: snackServiceSpy },
           { provide: TranslateService, useValue: translateServiceSpy },
           { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+          { provide: LOCAL_ACTIONS, useValue: new Subject<Action>() },
         ],
       });
       service = TestBed.inject(LocalBackupService);
@@ -214,6 +325,244 @@ describe('LocalBackupService', () => {
         (service as unknown as LocalBackupServiceWithPrivate)._backup,
       ).toHaveBeenCalledTimes(1);
     }));
+  });
+
+  describe('near-empty overwrite guard (A3, #7925)', () => {
+    type LocalBackupServiceWithA3 = {
+      _isNearEmptyOverwrite: (
+        newData: AppDataComplete,
+        existingRaw: string | null,
+      ) => boolean;
+    };
+
+    type LocalBackupServiceWithIosRing = {
+      _readIOSFileOrNull: (path: string) => Promise<string | null>;
+      _writeIOSFile: (path: string, data: string) => Promise<void>;
+    };
+
+    const makeData = (taskCount: number): AppDataComplete =>
+      ({
+        task: {
+          ids: Array.from({ length: taskCount }, (_, i) => `t${i}`),
+          entities: {},
+        },
+        archiveYoung: { task: { ids: [], entities: {} } },
+        archiveOld: { task: { ids: [], entities: {} } },
+      }) as unknown as AppDataComplete;
+
+    const makeStoredBackup = (activeTasks: number, archivedTasks: number = 0): string =>
+      JSON.stringify({
+        task: {
+          ids: Array.from({ length: activeTasks }, (_, i) => `t${i}`),
+          entities: {},
+        },
+        archiveYoung: {
+          task: {
+            ids: Array.from({ length: archivedTasks }, (_, i) => `a${i}`),
+            entities: {},
+          },
+        },
+        archiveOld: { task: { ids: [], entities: {} } },
+      });
+
+    describe('_isNearEmptyOverwrite (pure)', () => {
+      it('blocks when new < 3 tasks AND existing >= 10 tasks', () => {
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(0), makeStoredBackup(10))).toBe(true);
+        expect(guard.call(service, makeData(2), makeStoredBackup(10))).toBe(true);
+        expect(guard.call(service, makeData(2), makeStoredBackup(50))).toBe(true);
+      });
+
+      it('counts archived tasks toward the "substantial" threshold', () => {
+        // 4 active + 8 archived = 12 → still substantial.
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(1), makeStoredBackup(4, 8))).toBe(true);
+      });
+
+      it('allows when the new snapshot is not near-empty', () => {
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(3), makeStoredBackup(100))).toBe(false);
+        expect(guard.call(service, makeData(10), makeStoredBackup(10))).toBe(false);
+      });
+
+      it('allows when the existing backup is not substantial', () => {
+        // A legitimate fresh-start scenario: existing has only a few tasks too.
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(1), makeStoredBackup(9))).toBe(false);
+        expect(guard.call(service, makeData(0), makeStoredBackup(0))).toBe(false);
+      });
+
+      it('allows when there is no existing backup or it is corrupt', () => {
+        // First-ever write must not be blocked, and a corrupt slot must not
+        // pretend to be a substantial backup.
+        const guard = (service as unknown as LocalBackupServiceWithA3)
+          ._isNearEmptyOverwrite;
+        expect(guard.call(service, makeData(0), null)).toBe(false);
+        expect(guard.call(service, makeData(0), '')).toBe(false);
+        expect(guard.call(service, makeData(0), '{broken')).toBe(false);
+      });
+    });
+
+    describe('integration via _backupIOS', () => {
+      beforeEach(() => {
+        (
+          service as unknown as {
+            _platformService: Pick<CapacitorPlatformService, 'isIOS'>;
+          }
+        )._platformService = { isIOS: () => true };
+      });
+
+      it('skips the overwrite when a near-empty snapshot would clobber a substantial backup', async () => {
+        stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo(
+          makeData(1) as any,
+        );
+        spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_readIOSFileOrNull',
+        ).and.resolveTo(makeStoredBackup(20));
+        const writeSpy = spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_writeIOSFile',
+        ).and.resolveTo();
+
+        await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+        // Guard fired before any write — neither the prev promotion nor the
+        // primary overwrite happened, so the good backup is preserved.
+        expect(writeSpy).not.toHaveBeenCalled();
+      });
+
+      it('writes normally when the new snapshot is not near-empty', async () => {
+        stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo(
+          makeData(5) as any,
+        );
+        spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_readIOSFileOrNull',
+        ).and.resolveTo(makeStoredBackup(20));
+        const writeSpy = spyOn(
+          service as unknown as LocalBackupServiceWithIosRing,
+          '_writeIOSFile',
+        ).and.resolveTo();
+
+        await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+        // Prev-promotion + primary write = 2 calls.
+        expect(writeSpy).toHaveBeenCalledTimes(2);
+      });
+    });
+  });
+
+  describe('debounced data-change trigger (A2, #7925)', () => {
+    const setup = (
+      isEnabled: boolean,
+    ): { actions$: Subject<Action>; backupSpy: jasmine.Spy } => {
+      const actions$ = new Subject<Action>();
+      const cfg$ = new BehaviorSubject({ localBackup: { isEnabled } });
+      globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+        cfg$,
+      });
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          LocalBackupService,
+          { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
+          { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
+          { provide: BackupService, useValue: backupServiceSpy },
+          { provide: SnackService, useValue: snackServiceSpy },
+          { provide: TranslateService, useValue: translateServiceSpy },
+          { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+        ],
+      });
+      service = TestBed.inject(LocalBackupService);
+      const backupSpy = spyOn(
+        service as unknown as LocalBackupServiceWithPrivate,
+        '_backup',
+      ).and.resolveTo();
+      service.init();
+      return { actions$, backupSpy };
+    };
+
+    it('fires one backup after the debounce settles, regardless of action count', fakeAsync(() => {
+      const { actions$, backupSpy } = setup(true);
+
+      actions$.next({ type: 'SomeAction' });
+      actions$.next({ type: 'AnotherAction' });
+      actions$.next({ type: 'YetAnother' });
+
+      // Inside the debounce window — no backup yet.
+      tick(DATA_CHANGE_DEBOUNCE - 1);
+      expect(backupSpy).not.toHaveBeenCalled();
+
+      // Window settles — exactly one backup.
+      tick(1);
+      expect(backupSpy).toHaveBeenCalledTimes(1);
+    }));
+
+    it('resets the debounce on each new action', fakeAsync(() => {
+      const { actions$, backupSpy } = setup(true);
+
+      actions$.next({ type: 'A' });
+      tick(DATA_CHANGE_DEBOUNCE - 1);
+      // New action just before the window closes — debounce resets.
+      actions$.next({ type: 'B' });
+      tick(DATA_CHANGE_DEBOUNCE - 1);
+      expect(backupSpy).not.toHaveBeenCalled();
+
+      tick(1);
+      expect(backupSpy).toHaveBeenCalledTimes(1);
+    }));
+
+    it('does not fire when isEnabled is false', fakeAsync(() => {
+      const { actions$, backupSpy } = setup(false);
+
+      actions$.next({ type: 'SomeAction' });
+      tick(DATA_CHANGE_DEBOUNCE);
+      tick(BACKUP_INTERVAL);
+
+      expect(backupSpy).not.toHaveBeenCalled();
+    }));
+  });
+
+  describe('informed mobile restore prompt (#7901)', () => {
+    type LocalBackupServiceWithPrompt = {
+      _restoreMobilePromptMsg: (backupData: string) => string;
+    };
+
+    it('names the task and project counts when the backup parses', () => {
+      translateServiceSpy.instant.and.returnValue('msg');
+      const backupData = JSON.stringify({
+        task: { ids: ['a', 'b'], entities: {} },
+        project: { ids: ['p1'], entities: {} },
+      });
+
+      (service as unknown as LocalBackupServiceWithPrompt)._restoreMobilePromptMsg(
+        backupData,
+      );
+
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE,
+        { tasks: 2, projects: 1 },
+      );
+    });
+
+    it('falls back to the generic prompt for an unparseable backup', () => {
+      translateServiceSpy.instant.and.returnValue('msg');
+
+      (service as unknown as LocalBackupServiceWithPrompt)._restoreMobilePromptMsg(
+        '{corrupt',
+      );
+
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID,
+      );
+    });
   });
 
   describe('import backup', () => {

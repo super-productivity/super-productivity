@@ -14,6 +14,7 @@ import {
 import {
   deleteTaskHelper,
   removeTaskFromParentSideEffects,
+  reCalcTimesForParentIfParent,
   updateDoneOnForTask,
   updateTimeEstimateForTask,
   updateTimeSpentForTask,
@@ -26,6 +27,8 @@ import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { unique } from '../../../util/unique';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
+import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   ActionHandlerMap,
   addTaskToList,
@@ -137,11 +140,35 @@ const handleAddTask = (
   return updatedState;
 };
 
+/**
+ * Removes the given task IDs from every tag's `taskIds`. Scans all tags from
+ * the CURRENT state (not a payload-provided list) so sync replays with
+ * divergent tag associations are fully cleaned up. Uses a Set for O(1) lookup.
+ * Returns state unchanged when no tag references the tasks.
+ */
+const removeTasksFromAllTags = (state: RootState, taskIds: string[]): RootState => {
+  const taskIdSet = new Set(taskIds);
+  const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
+    .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
+    .filter((tag): tag is Tag => !!tag && tag.taskIds.some((id) => taskIdSet.has(id)))
+    .map(
+      (tag): Update<Tag> => ({
+        id: tag.id,
+        changes: {
+          taskIds: removeTasksFromList(tag.taskIds, taskIds),
+        },
+      }),
+    );
+  return updateTags(state, tagUpdates);
+};
+
 const handleConvertToMainTask = (
   state: RootState,
   task: Task,
-  parentTagIds: string[],
+  parentTagIds: string[] | undefined,
   isPlanForToday?: boolean,
+  afterTaskId?: string | null,
+  isDone?: boolean,
 ): RootState => {
   // First, get the parent task to copy its properties
   const parentTask = state[TASK_FEATURE_NAME].entities[task.parentId as string] as Task;
@@ -150,6 +177,23 @@ const handleConvertToMainTask = (
   }
 
   const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  // `Array.isArray` guard (not `??`): a truthy non-array `parentTagIds`
+  // from a captured op (seen on long-running SuperSync clients) bypasses
+  // `??` and crashes the spread below. Same for `parentTask.tagIds`.
+  const resolvedParentTagIds = Array.isArray(parentTagIds)
+    ? parentTagIds
+    : Array.isArray(parentTask.tagIds)
+      ? parentTask.tagIds
+      : [];
+  const positionConvertedTask = (taskIds: string[]): string[] => {
+    // Dropped at the start of DONE → append to the bottom of the done list.
+    if (afterTaskId == null && isDone) {
+      return [...removeTasksFromList(taskIds, [task.id]), task.id];
+    }
+    // afterTaskId === undefined (legacy callers) and null both mean "prepend",
+    // which moveItemAfterAnchor already does for a null anchor.
+    return moveItemAfterAnchor(task.id, afterTaskId ?? null, taskIds);
+  };
 
   // Handle parent-child relationship cleanup and task entity updates
   const taskStateAfterParentCleanup = removeTaskFromParentSideEffects(
@@ -164,11 +208,32 @@ const handleConvertToMainTask = (
         parentId: undefined,
         // Filter out TODAY_TAG.id - it's a virtual tag where membership is
         // determined by task.dueDay, not by being in tagIds
-        tagIds: parentTask.tagIds.filter((id) => id !== TODAY_TAG.id),
+        tagIds: (Array.isArray(parentTask.tagIds) ? parentTask.tagIds : []).filter(
+          (id) => id !== TODAY_TAG.id,
+        ),
         modified: Date.now(),
         ...(isPlanForToday && !task.dueWithTime
           ? {
               dueDay: todayStr,
+            }
+          : {}),
+        // Dragging a subtask onto the work-view DONE list converts it to a
+        // main task done *today* by design: the DONE list is "done today", so
+        // mark it done, stamp doneOn, drop any prior schedule and set
+        // dueDay=today (TODAY membership is by dueDay). This is intentional even
+        // outside the Today context.
+        ...(isDone !== undefined
+          ? {
+              isDone,
+              ...(isDone
+                ? {
+                    doneOn: Date.now(),
+                    dueDay: todayStr,
+                    dueWithTime: undefined,
+                  }
+                : {
+                    doneOn: undefined,
+                  }),
             }
           : {}),
       },
@@ -185,13 +250,13 @@ const handleConvertToMainTask = (
   if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
     const project = getProject(state, task.projectId);
     updatedState = updateProject(updatedState, task.projectId, {
-      taskIds: unique([task.id, ...project.taskIds]),
+      taskIds: positionConvertedTask(project.taskIds),
     });
   }
 
   // Update tags - only update tags that exist
   const tagIdsToUpdate = [
-    ...parentTagIds,
+    ...resolvedParentTagIds,
     ...(isPlanForToday ? [TODAY_TAG.id] : []),
   ].filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]);
 
@@ -200,12 +265,77 @@ const handleConvertToMainTask = (
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: unique([task.id, ...getTag(updatedState, tagId).taskIds]),
+        taskIds: positionConvertedTask(getTag(updatedState, tagId).taskIds),
       },
     }),
   );
 
   return updateTags(updatedState, tagUpdates);
+};
+
+const handleConvertToSubTask = (
+  state: RootState,
+  taskId: string,
+  targetParentId: string,
+  afterTaskId: string | null,
+): RootState => {
+  const task = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
+  const targetParent = state[TASK_FEATURE_NAME].entities[targetParentId] as
+    | Task
+    | undefined;
+
+  // The `!task || !targetParent` checks also narrow the types below; the full
+  // eligibility rule (incl. self-target and not-a-subtask) lives in the shared
+  // guard so the section meta-reducer stays in lock-step.
+  if (!task || !targetParent || !canApplyConvertToSubTask(task, targetParent)) {
+    return state;
+  }
+
+  let updatedState = state;
+
+  if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
+    const project = getProject(state, task.projectId);
+    updatedState = updateProject(updatedState, task.projectId, {
+      taskIds: removeTasksFromList(project.taskIds, [task.id]),
+      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, [task.id]),
+    });
+  }
+
+  updatedState = removeTasksFromAllTags(updatedState, [task.id]);
+  updatedState = removeTaskFromPlannerDays(updatedState, task.id);
+
+  let taskState = updatedState[TASK_FEATURE_NAME];
+  taskState = taskAdapter.updateMany(
+    [
+      {
+        id: targetParent.id,
+        changes: {
+          subTaskIds: moveItemAfterAnchor(
+            task.id,
+            afterTaskId,
+            targetParent.subTaskIds ?? [],
+          ),
+        },
+      },
+      {
+        id: task.id,
+        changes: {
+          parentId: targetParent.id,
+          projectId: targetParent.projectId,
+          tagIds: [],
+          dueDay: undefined,
+          modified: Date.now(),
+        },
+      },
+    ],
+    taskState,
+  );
+  taskState = reCalcTimesForParentIfParent(targetParent.id, taskState);
+
+  return {
+    ...updatedState,
+    [TASK_FEATURE_NAME]: taskState,
+  };
 };
 
 const handleDeleteTask = (
@@ -238,34 +368,10 @@ const handleDeleteTask = (
     });
   }
 
-  // Update tags - find affected tags from CURRENT STATE, not payload.
-  // During sync, the receiving client may have different tag associations
-  // (e.g. an LWW Update recreated the task with different tags), so we must
-  // iterate all tags to ensure complete cleanup. This matches handleDeleteTasks.
-  const taskIdsToRemove = [task.id, ...(task.subTaskIds || [])];
-  const taskIdsToRemoveSet = new Set(taskIdsToRemove);
-
-  const affectedTagIds = (updatedState[TAG_FEATURE_NAME].ids as string[]).filter(
-    (tagId) => {
-      const tag = updatedState[TAG_FEATURE_NAME].entities[tagId];
-      if (!tag) return false;
-      return tag.taskIds.some((taskId) => taskIdsToRemoveSet.has(taskId));
-    },
-  );
-
-  const tagUpdates = affectedTagIds.map(
-    (tagId): Update<Tag> => ({
-      id: tagId,
-      changes: {
-        taskIds: removeTasksFromList(
-          getTag(updatedState, tagId).taskIds,
-          taskIdsToRemove,
-        ),
-      },
-    }),
-  );
-
-  return updateTags(updatedState, tagUpdates);
+  // Find affected tags from CURRENT STATE, not payload — during sync the
+  // receiving client may have different tag associations, so all tags are
+  // scanned (incl. the task's subtask ids) for complete cleanup.
+  return removeTasksFromAllTags(updatedState, [task.id, ...(task.subTaskIds || [])]);
 };
 
 const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
@@ -324,26 +430,8 @@ const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
     }
   }
 
-  // Only update tags that actually contain at least one of the tasks being deleted
-  // Use allIds (includes subtasks) to ensure subtask IDs are also removed from tags
-  // PERF: Use Set for O(1) lookup instead of O(n) Array.includes() - fixes O(n³) bottleneck
-  const allIdsSet = new Set(allIds);
-  const affectedTags = (state[TAG_FEATURE_NAME].ids as string[]).filter((tagId) => {
-    const tag = state[TAG_FEATURE_NAME].entities[tagId];
-    if (!tag) return false;
-    return tag.taskIds.some((taskId) => allIdsSet.has(taskId));
-  });
-
-  const tagUpdates = affectedTags.map(
-    (tagId): Update<Tag> => ({
-      id: tagId,
-      changes: {
-        taskIds: removeTasksFromList(getTag(state, tagId).taskIds, allIds),
-      },
-    }),
-  );
-
-  return updateTags(updatedState, tagUpdates);
+  // Remove the deleted task ids (incl. subtasks via allIds) from all tags.
+  return removeTasksFromAllTags(updatedState, allIds);
 };
 
 /**
@@ -535,11 +623,7 @@ const sanitizeDoneScheduleChanges = (
   };
 };
 
-const handleUpdateTask = (
-  state: RootState,
-  taskUpdate: Update<Task>,
-  isIgnoreShortSyntax?: boolean,
-): RootState => {
+const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState => {
   const taskId = taskUpdate.id as string;
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
 
@@ -719,10 +803,22 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     return handleAddTask(state, task, isAddToBottom, isAddToBacklog);
   },
   [TaskSharedActions.convertToMainTask.type]: () => {
-    const { task, parentTagIds, isPlanForToday } = action as ReturnType<
-      typeof TaskSharedActions.convertToMainTask
+    const { task, parentTagIds, isPlanForToday, afterTaskId, isDone } =
+      action as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+    return handleConvertToMainTask(
+      state,
+      task,
+      parentTagIds,
+      isPlanForToday,
+      afterTaskId,
+      isDone,
+    );
+  },
+  [TaskSharedActions.convertToSubTask.type]: () => {
+    const { taskId, targetParentId, afterTaskId } = action as ReturnType<
+      typeof TaskSharedActions.convertToSubTask
     >;
-    return handleConvertToMainTask(state, task, parentTagIds, isPlanForToday);
+    return handleConvertToSubTask(state, taskId, targetParentId, afterTaskId);
   },
   [TaskSharedActions.deleteTask.type]: () => {
     const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
@@ -739,10 +835,8 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     );
   },
   [TaskSharedActions.updateTask.type]: () => {
-    const { task, isIgnoreShortSyntax } = action as ReturnType<
-      typeof TaskSharedActions.updateTask
-    >;
-    return handleUpdateTask(state, task, isIgnoreShortSyntax);
+    const { task } = action as ReturnType<typeof TaskSharedActions.updateTask>;
+    return handleUpdateTask(state, task);
   },
 });
 

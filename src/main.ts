@@ -20,6 +20,7 @@ import {
 } from './app/core/locale.constants';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
+import { AndroidBackButtonService } from './app/features/android/android-back-button.service';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from './app/util/is-native-platform';
 import { DataInitStateService } from './app/core/data-init/data-init-state.service';
 // Type definitions for window.ea are in ./app/core/window-ea.d.ts
@@ -69,10 +70,8 @@ import { EffectsModule } from '@ngrx/effects';
 import { ReactiveFormsModule } from '@angular/forms';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import {
-  TRANSLATE_HTTP_LOADER_CONFIG,
-  TranslateHttpLoader,
-} from '@ngx-translate/http-loader';
+import { TRANSLATE_HTTP_LOADER_CONFIG } from '@ngx-translate/http-loader';
+import { TranslateHttpLoaderWithFallback } from './app/core/http/translate-http-loader-with-fallback.class';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { AppComponent } from './app/app.component';
 import { ShortTimeHtmlPipe } from './app/ui/pipes/short-time-html.pipe';
@@ -83,6 +82,7 @@ import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-men
 import { Log, SyncLog } from './app/core/log';
 import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { TaskService } from './app/features/tasks/task.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
@@ -186,7 +186,7 @@ bootstrapApplication(AppComponent, {
         fallbackLang: DEFAULT_LANGUAGE,
         loader: {
           provide: TranslateLoader,
-          useClass: TranslateHttpLoader,
+          useClass: TranslateHttpLoaderWithFallback,
         },
       }),
       CdkDropListGroup,
@@ -450,7 +450,13 @@ if (!(environment.production || environment.stage) && IS_ANDROID_WEB_VIEW) {
 // Android-specific: Handle back button
 if (IS_ANDROID_WEB_VIEW) {
   CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-    if (!canGoBack) {
+    // Delegate to the Angular service so back from a top-level destination pops
+    // to the start destination / exits per Android guidelines (issue #7972).
+    const backButtonService = appInjector?.get(AndroidBackButtonService);
+    if (backButtonService) {
+      backButtonService.handleBackButton(canGoBack);
+    } else if (!canGoBack) {
+      // Pre-bootstrap fallback (back pressed before Angular is ready).
       CapacitorApp.minimizeApp();
     } else {
       window.history.back();
@@ -496,6 +502,10 @@ if (IS_IOS_NATIVE) {
     }
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
+        // Dispatch any accumulated tracked time so it is enqueued before the
+        // op-log drain below. iOS suspends the WebView seconds after this, so
+        // both the dispatch and the persist must happen inside this budget.
+        appInjector?.get(TaskService).flushAccumulatedTimeSpent();
         await flushPendingOperations('iOS');
       } catch (e) {
         Log.err('iOS background: operation flush failed', e);
