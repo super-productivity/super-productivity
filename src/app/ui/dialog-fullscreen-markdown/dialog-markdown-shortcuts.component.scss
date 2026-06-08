@@ -3,7 +3,7 @@
   width: 100%;
   box-sizing: border-box;
 
-  mat-dialog-content {
+  .keyboard-shortcuts-dialog-content {
     max-width: 500px;
     width: 100%;
     box-sizing: border-box;
@@ -73,7 +73,7 @@
 }
 
 @media (max-width: 25rem) {
-  :host mat-dialog-content {
+  :host .keyboard-shortcuts-dialog-content {
     padding: var(--s) var(--s) var(--s);
   }
 }
