@@ -11,6 +11,7 @@ import {
 } from '../../op-log/sync-providers/provider.interface';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 
 describe('SnapshotUploadService', () => {
   let service: SnapshotUploadService;
@@ -25,6 +26,8 @@ describe('SnapshotUploadService', () => {
   let mockSyncProvider: jasmine.SpyObj<
     SyncProviderBase<SyncProviderId> & OperationSyncCapable
   >;
+  let originalCryptoSubtleDescriptor: PropertyDescriptor | undefined;
+  let originalCryptoSubtle: SubtleCrypto | undefined;
 
   const mockExistingCfg: SuperSyncPrivateCfg = {
     baseUrl: 'https://test.example.com',
@@ -34,6 +37,12 @@ describe('SnapshotUploadService', () => {
   };
 
   beforeEach(() => {
+    originalCryptoSubtle = globalThis.crypto.subtle;
+    originalCryptoSubtleDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis.crypto,
+      'subtle',
+    );
+
     mockSyncProvider = jasmine.createSpyObj('SyncProvider', [
       'uploadSnapshot',
       'setLastServerSeq',
@@ -97,6 +106,34 @@ describe('SnapshotUploadService', () => {
 
     service = TestBed.inject(SnapshotUploadService);
   });
+
+  afterEach(() => {
+    if (originalCryptoSubtleDescriptor) {
+      Object.defineProperty(globalThis.crypto, 'subtle', originalCryptoSubtleDescriptor);
+    } else {
+      Object.defineProperty(globalThis.crypto, 'subtle', {
+        value: originalCryptoSubtle,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
+  const setCryptoSubtle = (subtle: SubtleCrypto | undefined): void => {
+    Object.defineProperty(globalThis.crypto, 'subtle', {
+      value: subtle,
+      writable: true,
+      configurable: true,
+    });
+  };
+
+  const mockCryptoSubtleAvailable = (): void => {
+    setCryptoSubtle({} as SubtleCrypto);
+  };
+
+  const mockCryptoSubtleUnavailable = (): void => {
+    setCryptoSubtle(undefined);
+  };
 
   describe('getValidatedSuperSyncProvider', () => {
     it('should return the provider when valid', () => {
@@ -237,6 +274,7 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should encrypt payload when enabling encryption', async () => {
+      mockCryptoSubtleAvailable();
       const mockState = { task: [] };
       mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
 
@@ -273,6 +311,8 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should update provider config with new encryption settings', async () => {
+      mockCryptoSubtleAvailable();
+
       await service.deleteAndReuploadWithNewEncryption({
         encryptKey: 'new-key',
         isEncryptionEnabled: true,
@@ -391,6 +431,7 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should execute steps in correct order', async () => {
+      mockCryptoSubtleAvailable();
       const callOrder: string[] = [];
 
       mockStateSnapshotService.getStateSnapshotAsync.and.callFake(async () => {
@@ -435,6 +476,23 @@ describe('SnapshotUploadService', () => {
         'uploadSnapshot',
         'setLastServerSeq',
       ]);
+    });
+
+    it('should throw before destructive actions when enabling encryption without WebCrypto', async () => {
+      mockCryptoSubtleUnavailable();
+
+      await expectAsync(
+        service.deleteAndReuploadWithNewEncryption({
+          encryptKey: 'key',
+          isEncryptionEnabled: true,
+          logPrefix: 'TestPrefix',
+        }),
+      ).toBeRejectedWithError(WebCryptoNotAvailableError);
+
+      expect(mockStateSnapshotService.getStateSnapshotAsync).not.toHaveBeenCalled();
+      expect(mockSyncProvider.deleteAllData).not.toHaveBeenCalled();
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
+      expect(mockSyncProvider.uploadSnapshot).not.toHaveBeenCalled();
     });
   });
 });

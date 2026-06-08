@@ -12,7 +12,7 @@
   "devDependencies": {
     "esbuild": "^0.25.11",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.1"
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@super-productivity/plugin-api": "file:../../plugin-api"

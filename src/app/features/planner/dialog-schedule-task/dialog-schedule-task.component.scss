@@ -163,3 +163,26 @@ mat-dialog-content {
 .time-clear-btn {
   cursor: pointer;
 }
+
+.schedule-info {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-half);
+  margin: 0 0 var(--s) 0;
+  padding: var(--s-half) var(--s);
+  border-radius: var(--card-border-radius);
+  border: 1px solid color-mix(in srgb, var(--text-color-muted) 32%, transparent);
+  background: color-mix(in srgb, var(--bg-lighter) 90%, var(--text-color-muted) 10%);
+  color: var(--text-color-muted);
+  font-size: 12px;
+  line-height: 1.4;
+
+  mat-icon {
+    margin-top: 1px;
+    flex: 0 0 auto;
+  }
+}
+
+.schedule-info-text {
+  min-width: 0;
+}

@@ -18,6 +18,20 @@ export const urlPathOnly = (url: string): string => {
 };
 
 /**
+ * Keep only the URL host for exportable log metadata.
+ *
+ * Unlike `urlPathOnly`, invalid inputs are not returned unchanged because this
+ * helper is intended for potentially user-configured sync endpoints.
+ */
+export const urlHostOnly = (url: string): string => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '[invalid-url]';
+  }
+};
+
+/**
  * Build privacy-aware `SyncLogMeta` from an unknown error plus an
  * optional bag of extra fields.
  *

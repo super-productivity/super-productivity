@@ -106,6 +106,15 @@ export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[]
           label: T.F.CALDAV.FORM.IS_ADD_SUB_TASKS,
         },
       },
+      {
+        key: 'pollIntervalMinutes',
+        type: 'input',
+        templateOptions: {
+          label: T.F.CALDAV.FORM.POLL_INTERVAL_MINUTES,
+          type: 'number',
+          min: 1,
+        },
+      },
     ],
   },
   ...TWO_WAY_SYNC_FORM_FIELDS,

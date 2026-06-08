@@ -8,7 +8,6 @@ vi.mock('../src/db', () => ({
     operation: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
-      aggregate: vi.fn(),
     },
     userSyncState: {
       findUnique: vi.fn(),
@@ -81,6 +80,29 @@ const createMockOpRow = (
   isPayloadEncrypted: overrides.isPayloadEncrypted ?? false,
   syncImportReason: overrides.syncImportReason ?? null,
 });
+
+// The download flow calls operation.findFirst twice: first the latest
+// full-state op (orderBy serverSeq 'desc'), then the minimum server_seq for
+// gap detection (orderBy serverSeq 'asc'). The minSeq query replaced an
+// operation.aggregate({ _min }) call whose Prisma-generated `OFFSET 0`
+// subquery defeated the (user_id, server_seq) index and ran for minutes under
+// load. This branching mock keeps the two findFirst calls independently
+// controllable from a single tx.operation.findFirst spy.
+const mockOpFindFirst = (
+  fullStateOp: unknown = null,
+  minServerSeq: number | null = null,
+): ReturnType<typeof vi.fn> =>
+  vi
+    .fn()
+    .mockImplementation((args: { orderBy?: { serverSeq?: 'asc' | 'desc' } }) =>
+      Promise.resolve(
+        args?.orderBy?.serverSeq === 'asc'
+          ? minServerSeq === null
+            ? null
+            : { serverSeq: minServerSeq }
+          : fullStateOp,
+      ),
+    );
 
 describe('OperationDownloadService', () => {
   let service: OperationDownloadService;
@@ -204,7 +226,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn(),
             findMany: vi.fn(),
-            aggregate: vi.fn(),
           },
           userSyncState: {
             findUnique: vi.fn(),
@@ -219,7 +240,6 @@ describe('OperationDownloadService', () => {
         tx.operation.findFirst.mockResolvedValue(null); // No full-state op
         tx.operation.findMany.mockResolvedValue([]);
         tx.userSyncState.findUnique.mockResolvedValue({ lastSeq: 5 });
-        tx.operation.aggregate.mockResolvedValue({ _min: { serverSeq: 1 } });
 
         return {
           ops: [],
@@ -237,15 +257,14 @@ describe('OperationDownloadService', () => {
       expect(result.gapDetected).toBe(false);
     });
 
-    it('should skip min sequence aggregate when gap detection cannot use it', async () => {
+    it('should skip the minSeq query when gap detection cannot use it', async () => {
       let capturedTx: any;
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         capturedTx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue(null),
+            findFirst: mockOpFindFirst(null, 1),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn(),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 5 }),
@@ -257,7 +276,11 @@ describe('OperationDownloadService', () => {
       const result = await service.getOpsSinceWithSeq(1, 0);
 
       expect(result.gapDetected).toBe(false);
-      expect(capturedTx.operation.aggregate).not.toHaveBeenCalled();
+      // sinceSeq=0 → the indexed minSeq findFirst (orderBy asc) must be skipped;
+      // only the full-state lookup (orderBy desc) runs.
+      expect(capturedTx.operation.findFirst).not.toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { serverSeq: 'asc' } }),
+      );
     });
 
     it('should return immediately for an empty server without operation queries', async () => {
@@ -268,7 +291,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn(),
             findMany: vi.fn(),
-            aggregate: vi.fn(),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 0 }),
@@ -288,7 +310,6 @@ describe('OperationDownloadService', () => {
       });
       expect(capturedTx.operation.findFirst).not.toHaveBeenCalled();
       expect(capturedTx.operation.findMany).not.toHaveBeenCalled();
-      expect(capturedTx.operation.aggregate).not.toHaveBeenCalled();
     });
 
     it('should select only download response fields inside atomic reads', async () => {
@@ -301,7 +322,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn(),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 5 }),
@@ -328,7 +348,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
@@ -356,10 +375,45 @@ describe('OperationDownloadService', () => {
           }),
         }),
       );
-      expect(capturedTx.operation.aggregate).toHaveBeenCalledWith({
+      expect(capturedTx.operation.findFirst).toHaveBeenCalledWith({
         where: { userId: 1, serverSeq: { lte: 20 } },
-        _min: { serverSeq: true },
+        orderBy: { serverSeq: 'asc' },
+        select: { serverSeq: true },
       });
+    });
+
+    it('uses an indexed findFirst (not the slow Prisma _min aggregate) for minSeq', async () => {
+      // Regression: operation.aggregate({ _min }) compiled to MIN() over an
+      // `OFFSET 0` subquery, an optimization fence that prevented the
+      // (user_id, server_seq) index seek — a per-user O(N) scan that ran for
+      // minutes under load and blew the 60s interactive-tx timeout. The minSeq
+      // query must be a findFirst ordered by the indexed column, and the
+      // aggregate path must never be reintroduced.
+      let capturedTx: any;
+      const aggregate = vi.fn();
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        capturedTx = {
+          operation: {
+            findFirst: mockOpFindFirst(null, 7),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate,
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 30 }),
+          },
+        };
+        return fn(capturedTx);
+      });
+
+      await service.getOpsSinceWithSeq(1, 10);
+
+      expect(capturedTx.operation.findFirst).toHaveBeenCalledWith({
+        where: { userId: 1, serverSeq: { lte: 30 } },
+        orderBy: { serverSeq: 'asc' },
+        select: { serverSeq: true },
+      });
+      expect(aggregate).not.toHaveBeenCalled();
     });
 
     it('should skip snapshot vector-clock aggregation but still return the full-state op when metadata is not requested', async () => {
@@ -380,7 +434,6 @@ describe('OperationDownloadService', () => {
                 payload: { state: { task: {} } },
               }),
             ]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
@@ -413,7 +466,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 5 }),
@@ -434,7 +486,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn(),
             findMany: vi.fn(),
-            aggregate: vi.fn(),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 0 }),
@@ -448,16 +499,15 @@ describe('OperationDownloadService', () => {
       expect(result.gapDetected).toBe(true);
       expect(capturedTx.operation.findFirst).not.toHaveBeenCalled();
       expect(capturedTx.operation.findMany).not.toHaveBeenCalled();
-      expect(capturedTx.operation.aggregate).not.toHaveBeenCalled();
     });
 
     it('should detect gap when requested seq is purged', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue(null),
+            // No full-state op (desc → null); minSeq is 50 (asc → 50).
+            findFirst: mockOpFindFirst(null, 50),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 50 } }), // Min is 50
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 100 }),
@@ -475,10 +525,11 @@ describe('OperationDownloadService', () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue({
-              serverSeq: 50,
-              clientId: 'snapshot-author',
-            }),
+            // Full-state op at 50 (desc); minSeq is also 50 (asc).
+            findFirst: mockOpFindFirst(
+              { serverSeq: 50, clientId: 'snapshot-author' },
+              50,
+            ),
             findMany: vi.fn().mockResolvedValue([
               createMockOpRow(50, 'snapshot-author', {
                 opType: 'SYNC_IMPORT',
@@ -487,7 +538,6 @@ describe('OperationDownloadService', () => {
                 payload: { TASK: { 'task-1': { id: 'task-1' } } },
               }),
             ]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 50 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 100 }),
@@ -517,7 +567,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue(mockOps),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
@@ -539,7 +588,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 42 }),
@@ -571,9 +619,10 @@ describe('OperationDownloadService', () => {
           take: 500,
         }),
       );
-      expect(capturedTx.operation.aggregate).toHaveBeenCalledWith({
+      expect(capturedTx.operation.findFirst).toHaveBeenCalledWith({
         where: { userId: 1, serverSeq: { lte: 42 } },
-        _min: { serverSeq: true },
+        orderBy: { serverSeq: 'asc' },
+        select: { serverSeq: true },
       });
     });
 
@@ -587,7 +636,9 @@ describe('OperationDownloadService', () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue({ serverSeq: 50 }),
+            // Full-state op at 50 (desc); pre-snapshot ops purged by
+            // retention so minSeq is now 30 (asc).
+            findFirst: mockOpFindFirst({ serverSeq: 50 }, 30),
             findMany: vi.fn().mockResolvedValue([
               createMockOpRow(50, 'snapshot-author', {
                 opType: 'SYNC_IMPORT',
@@ -595,8 +646,6 @@ describe('OperationDownloadService', () => {
                 entityId: null,
               }),
             ] as any),
-            // Pre-snapshot ops were purged by retention; minSeq is now 30.
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 30 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 50 }),
@@ -622,7 +671,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue(mockOps),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
@@ -654,7 +702,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(snapshotOp),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
@@ -682,7 +729,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(snapshotOp),
             findMany: vi.fn().mockResolvedValue(opsAfterSnapshot as any),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
@@ -720,7 +766,6 @@ describe('OperationDownloadService', () => {
               clientId: 'snapshot-author',
             }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({
@@ -757,7 +802,6 @@ describe('OperationDownloadService', () => {
               clientId: 'snapshot-author',
             }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({
@@ -795,7 +839,6 @@ describe('OperationDownloadService', () => {
               clientId: 'snapshot-author',
             }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({
@@ -825,7 +868,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
@@ -859,7 +901,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
@@ -879,7 +920,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
@@ -912,7 +952,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 5 }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 10 }),
@@ -944,7 +983,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 50 }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
@@ -981,7 +1019,6 @@ describe('OperationDownloadService', () => {
               .fn()
               .mockResolvedValue({ serverSeq: 50, clientId: 'snapshot-author' }),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
@@ -1008,7 +1045,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 50 }),
             findMany: vi.fn().mockResolvedValue([createMockOpRow(61)] as any),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 70 }),
@@ -1033,7 +1069,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null), // No full-state op
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
@@ -1055,7 +1090,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 50 }), // Snapshot at 50
             findMany: vi.fn().mockResolvedValue([createMockOpRow(61)] as any),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 70 }),
@@ -1076,7 +1110,6 @@ describe('OperationDownloadService', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: null } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue(null), // No sync state

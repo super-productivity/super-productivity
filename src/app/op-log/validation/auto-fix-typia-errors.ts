@@ -5,6 +5,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-conf
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { devError } from '../../util/dev-error';
 
 const LOG_PREFIX = '[auto-fix-typia-errors]';
 
@@ -130,6 +131,12 @@ export const autoFixTypiaErrors = (
           setValueByPath(data, keys, parsedValue);
           logAutoFixApplied(path, keys, 'task-string-to-number', value, parsedValue);
         } else {
+          // Destructive for time-tracking fields (timeSpentOnDay, timeSpent,
+          // timeEstimate). Originally a release valve for #4346; surface so
+          // the root cause gets investigated instead of auto-buried.
+          devError(
+            `auto-fix-typia-errors: defaulting task number field to 0 — data loss. path=${path}`,
+          );
           setValueByPath(data, keys, 0);
           logAutoFixApplied(path, keys, 'task-number-default-zero', value, 0);
         }
@@ -201,6 +208,41 @@ export const autoFixTypiaErrors = (
           value,
           orderValue,
         );
+      } else if (
+        keys[0] === 'taskRepeatCfg' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        keys[3] === 'quickSetting' &&
+        value === undefined
+      ) {
+        // Legacy / imported repeat configs (e.g. from MS Todos migration) may
+        // be missing the required `quickSetting` field. 'CUSTOM' is the safe
+        // default: it never auto-picks a weekday/date without explicit user
+        // intent. data-repair._fixTaskRepeatCfgInvalidQuickSetting handles
+        // the present-but-inconsistent case; this covers the undefined case.
+        setValueByPath(data, keys, 'CUSTOM');
+        logAutoFixApplied(
+          path,
+          keys,
+          'task-repeat-cfg-quickSetting-undefined-to-custom',
+          value,
+          'CUSTOM',
+        );
+      } else if (
+        keys[0] === 'tag' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        keys[3] === 'created' &&
+        error.expected.includes('number') &&
+        value === undefined
+      ) {
+        // Legacy tags (incl. built-ins like TODAY) created before `created`
+        // was tightened to a required number can be missing the field.
+        // Use Date.now() to satisfy the type without inventing a fake past
+        // timestamp.
+        const created = Date.now();
+        setValueByPath(data, keys, created);
+        logAutoFixApplied(path, keys, 'tag-created-undefined-to-now', value, created);
       } else if (
         keys[0] === 'metric' &&
         keys[1] === 'entities' &&

@@ -74,7 +74,7 @@ const readMigratedState = async (
 }> => {
   return page.evaluate(async () => {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('SUP_OPS', 5);
+      const request = indexedDB.open('SUP_OPS');
       request.onsuccess = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         const tx = db.transaction('state_cache', 'readonly');
@@ -107,7 +107,7 @@ const readMigratedArchive = async (
 }> => {
   return page.evaluate(async (storeKey) => {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('SUP_OPS', 5);
+      const request = indexedDB.open('SUP_OPS');
       request.onsuccess = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         const tx = db.transaction(storeKey, 'readonly');

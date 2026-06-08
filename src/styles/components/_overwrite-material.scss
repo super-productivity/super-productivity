@@ -160,6 +160,34 @@ body .mat-mdc-dialog-surface {
   }
 }
 
+.project-complete-fullscreen-dialog {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+
+  @supports (height: 100dvh) {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+body.isNativeMobile .project-complete-fullscreen-dialog {
+  width: calc(100vw - var(--safe-area-left) - var(--safe-area-right)) !important;
+  height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
+}
+
 // FORMS
 // --------
 .mat-mdc-form-field {
@@ -376,6 +404,16 @@ mat-tooltip-component {
   pointer-events: none;
 }
 
+// The tooltip's overlay PANE wrapper (not just the inner component) must
+// not swallow pointer events. A tooltip shown 'below' a button in the
+// vertical action strip lands directly over the next button — without
+// this it intercepts clicks for both real users and Playwright. Scoped
+// to the experimental flag so other tooltips in the app keep their
+// pane-level pointer events (interactive hover content, etc.).
+body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
+  pointer-events: none;
+}
+
 // SNACK
 // Move snack bar above mobile bottom nav for all touch devices
 @include media-queries.mq(xs, max) {
@@ -400,4 +438,22 @@ mat-tooltip-component {
 
 .mat-expansion-panel-header {
   --mat-expansion-header-expanded-state-height: 48px;
+}
+
+.mat-mdc-menu-panel:has(select-option-row) .mat-mdc-menu-item,
+.mat-mdc-autocomplete-panel:has(select-option-row) .mat-mdc-option {
+  height: auto !important;
+  min-height: 48px;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.mention-menu:has(select-option-row) .mention-item {
+  height: auto !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  display: flex !important;
+  align-items: center !important;
 }

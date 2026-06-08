@@ -14,7 +14,7 @@
   <div class="mode-selector-wrapper">
     <segmented-button-group
       class="focus-mode-select-mode"
-      [options]="modeOptions"
+      [options]="modeOptions()"
       [selectedId]="mode()"
       [ariaLabel]="T.F.FOCUS_MODE.SELECT_MODE | translate"
       (selectionChange)="selectMode($event)"

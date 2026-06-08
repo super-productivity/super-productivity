@@ -16,7 +16,7 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import sharp from 'sharp';
+import { loadSharp } from './load-sharp';
 import {
   LOCALES,
   MASTER_DIR_ELECTRON,
@@ -148,6 +148,7 @@ const roundedRectSvg = (
   );
 
 const frameFlathubWindow = async (src: string): Promise<Buffer> => {
+  const sharp = await loadSharp();
   const metadata = await sharp(src).metadata();
   const width = metadata.width;
   const height = metadata.height;
@@ -215,6 +216,7 @@ const writeWithCap = async (
   if (!opts.maxBytes) return target;
   if (buf.byteLength <= opts.maxBytes) return target;
 
+  const sharp = await loadSharp();
   const jpgTarget = target.replace(/\.png$/i, '.jpg');
   // Step down quality 90 → 60. If even q60 exceeds the cap (vanishingly rare
   // on screenshots that are mostly UI), bail loudly so the operator notices.

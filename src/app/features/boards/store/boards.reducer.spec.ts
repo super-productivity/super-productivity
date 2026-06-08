@@ -271,6 +271,38 @@ describe('Boards Reducer - panel cfg sanitization', () => {
   });
 });
 
+describe('Boards Reducer - loadAllData with malformed payload (#7666)', () => {
+  it('does not throw when boardCfgs is undefined', () => {
+    const appDataComplete = {
+      boards: { boardCfgs: undefined } as unknown as BoardsState,
+    } as unknown as AppDataComplete;
+
+    expect(() =>
+      boardsReducer({ boardCfgs: [] }, loadAllData({ appDataComplete })),
+    ).not.toThrow();
+
+    const result = boardsReducer({ boardCfgs: [] }, loadAllData({ appDataComplete }));
+    expect(result.boardCfgs).toEqual([]);
+  });
+
+  it('does not throw when a board has undefined panels', () => {
+    const appDataComplete = {
+      boards: {
+        boardCfgs: [
+          { id: 'b1', title: 'B1', cols: 2, panels: undefined } as unknown as BoardCfg,
+        ],
+      },
+    } as unknown as AppDataComplete;
+
+    expect(() =>
+      boardsReducer({ boardCfgs: [] }, loadAllData({ appDataComplete })),
+    ).not.toThrow();
+
+    const result = boardsReducer({ boardCfgs: [] }, loadAllData({ appDataComplete }));
+    expect(result.boardCfgs[0].panels).toEqual([]);
+  });
+});
+
 describe('fixBuggyDefaultBoardFilters (#7498)', () => {
   const eisenhowerPanelIds = [
     'URGENT_AND_IMPORTANT',

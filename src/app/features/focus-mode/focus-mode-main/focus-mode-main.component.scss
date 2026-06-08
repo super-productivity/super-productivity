@@ -88,7 +88,10 @@
   justify-content: center;
   position: relative;
   flex-direction: column;
-  margin: var(--s);
+  width: calc(100% - var(--s2));
+  max-width: var(--component-max-width);
+  min-width: 0;
+  margin: var(--s) auto;
   min-height: var(--s9); // fits extended FAB + parent-title + buffer
 }
 
@@ -145,6 +148,12 @@
 }
 
 .task-title {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(24vh, 8em);
+  overflow-x: hidden;
+  overflow-y: auto;
+
   ::ng-deep textarea {
     text-align: center;
   }
@@ -170,9 +179,9 @@
   margin-bottom: var(--s2);
 
   // Mirror the size tokens declared on focus-clock-face's :host so sibling
-  // elements (the duration-slider overlay) can read them. Source of truth
-  // lives in focus-clock-face.component.scss; keep in sync.
-  --clock-face-size: clamp(180px, min(54vmin, 58vh), 640px);
+  // elements (the duration-slider overlay) can read them. Both pull the
+  // diameter from the shared --clock-face-size-default token.
+  --clock-face-size: var(--clock-face-size-default);
   --clock-time-size: calc(var(--clock-face-size) * 0.22);
 
   &__content {
@@ -212,90 +221,9 @@
   display: flex;
   justify-content: center;
 
-  // The slider's :host has overflow:hidden which clips the handle when it
-  // rotates past the slider's bounding box. Restore overflow so the dot can
-  // sit on the ring at every position.
-  input-duration-slider {
-    overflow: visible;
-  }
-
-  // Strip the slider's own circular chrome so the focus-clock-face ring
-  // underneath provides the visual. Only the handle and value remain.
-  ::ng-deep .circle {
-    background: transparent !important;
-    box-shadow: none !important;
-    cursor: grab;
-  }
-
-  ::ng-deep .inner-circle,
-  ::ng-deep .dots {
-    display: none;
-  }
-
-  // Round handle on the ring centerline, slightly larger than the ring
-  // stroke (~19px at 340px diameter). Drop the vertical bar so only the
-  // dot is visible.
-  ::ng-deep .handle {
-    background: transparent;
-    height: 0;
-
-    &::after {
-      width: 30px;
-      height: 30px;
-      margin-left: -15px;
-      top: -15px;
-      background: var(--c-accent);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    }
-  }
-
-  // Pomodoro: type-only. The slider's drag handler is on the host
-  // <input-duration-slider> element; pointer-events: none on the host (and
-  // by inheritance, .circle and friends) makes the entire widget transparent
-  // to pointer events. The input is re-enabled with pointer-events: auto so
-  // typing/focus still works — events fired on it bubble through the host
-  // (which is allowed by the spec when a descendant overrides) and the
-  // handler's `target === 'INPUT'` short-circuit then bails out.
-  &.is-handle-hidden {
-    ::ng-deep .handle {
-      display: none;
-    }
-
-    input-duration-slider {
-      pointer-events: none;
-    }
-
-    ::ng-deep .circle {
-      cursor: default;
-    }
-
-    ::ng-deep .value {
-      pointer-events: auto;
-    }
-  }
-
-  // The slider wraps its input at 70% width, which truncates clock-time-size
-  // digits like "25:00". Widen to the full ring so the digits fit and sit
-  // visually centered.
-  ::ng-deep .value-wrapper {
-    width: 100%;
-  }
-
-  // The slider's editable value sits dead-center; match the clock-time
-  // typography (font-size driven by --input-duration-slider-value-size).
-  // Suppress the focus-scale — at clock-time font sizes it pushes the digits
-  // past the ring.
-  ::ng-deep .value {
-    font-family: inherit;
-    font-weight: bold;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    color: inherit;
-
-    &:focus {
-      transform: none;
-    }
-  }
+  // The bare-ring visual (transparent chrome, dot handle, full-width value)
+  // and the Pomodoro type-only behaviour now live on the slider itself, via
+  // its [bareRing] / [hideHandle] inputs.
 }
 
 // When the duration slider is showing (countdown prep), hide the clock
@@ -384,7 +312,7 @@
 .simple-counter-buttons {
   display: flex;
   position: absolute;
-  top: 14px;
+  top: calc(var(--s2) + 80px);
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-focus-mode-simple-counter);
@@ -395,12 +323,14 @@
       transition: var(--transition-standard);
       opacity: 0;
       transform: translateY(-10px);
+      pointer-events: none;
     }
 
     :host:hover & {
       transition: var(--transition-standard);
       opacity: 1;
       transform: translateY(0);
+      pointer-events: auto;
     }
   }
 }

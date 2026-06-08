@@ -228,6 +228,102 @@ describe('loadConfigFromEnv - CORS_ORIGINS parsing', () => {
   });
 });
 
+describe('loadConfigFromEnv - SuperSync rollout flags', () => {
+  beforeEach(() => {
+    resetEnv();
+  });
+
+  afterEach(() => {
+    resetEnv();
+  });
+
+  it('should keep batch uploads disabled by default', async () => {
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.batchUpload).toBe(false);
+  });
+
+  it('should enable batch uploads only after the payload byte backfill completed', async () => {
+    process.env.SUPERSYNC_BATCH_UPLOAD = 'true';
+    process.env.SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE = 'true';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.batchUpload).toBe(true);
+  });
+
+  it('should reject batch uploads before the payload byte backfill completed', async () => {
+    process.env.SUPERSYNC_BATCH_UPLOAD = 'true';
+
+    const { loadConfigFromEnv } = await importConfig();
+
+    expect(() => loadConfigFromEnv()).toThrow(
+      'SUPERSYNC_BATCH_UPLOAD=true requires SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true',
+    );
+  });
+});
+
+describe('loadConfigFromEnv - server bind address', () => {
+  beforeEach(() => {
+    resetEnv();
+  });
+
+  afterEach(() => {
+    resetEnv();
+  });
+
+  it('should bind to all IPv4 interfaces by default', async () => {
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.host).toBe('0.0.0.0');
+  });
+
+  it('should load HOST from environment', async () => {
+    process.env.HOST = '::';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.host).toBe('::');
+  });
+
+  it('should trim HOST from environment', async () => {
+    process.env.HOST = '  127.0.0.1  ';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.host).toBe('127.0.0.1');
+  });
+
+  it('should reject an empty HOST', async () => {
+    process.env.HOST = '';
+
+    const { loadConfigFromEnv } = await importConfig();
+
+    expect(() => loadConfigFromEnv()).toThrow('Invalid HOST: must not be empty');
+  });
+
+  it('should reject a whitespace-only HOST', async () => {
+    process.env.HOST = '   ';
+
+    const { loadConfigFromEnv } = await importConfig();
+
+    expect(() => loadConfigFromEnv()).toThrow('Invalid HOST: must not be empty');
+  });
+
+  it('should reject HOST values with protocol or path', async () => {
+    process.env.HOST = 'http://0.0.0.0';
+
+    const { loadConfigFromEnv } = await importConfig();
+
+    expect(() => loadConfigFromEnv()).toThrow('without protocol or path');
+  });
+});
+
 describe('DEFAULT_CORS_ORIGINS', () => {
   beforeEach(() => {
     resetEnv();

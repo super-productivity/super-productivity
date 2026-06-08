@@ -14,7 +14,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { FocusModeService } from '../focus-mode.service';
-import { FocusModeMode, getBreakCycle } from '../focus-mode.model';
+import { FocusModeMode } from '../focus-mode.model';
 import {
   selectCurrentTask,
   selectLastCurrentTask,
@@ -23,12 +23,8 @@ import {
   cancelFocusSession,
   selectFocusTask,
   selectFocusDuration,
-  startBreak,
 } from '../store/focus-mode.actions';
-import { selectCurrentCycle } from '../store/focus-mode.selectors';
 import { selectFocusModeConfig } from '../../config/store/global-config.reducer';
-import { FocusModeStrategyFactory } from '../focus-mode-strategies';
-import { unsetCurrentTask } from '../../tasks/store/task.actions';
 import { MatIcon } from '@angular/material/icon';
 import { TaskTrackingInfoComponent } from '../task-tracking-info/task-tracking-info.component';
 
@@ -43,14 +39,12 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
   private _store = inject(Store);
   private readonly _confettiService = inject(ConfettiService);
   private readonly _focusModeService = inject(FocusModeService);
-  private readonly _strategyFactory = inject(FocusModeStrategyFactory);
   private readonly _router = inject(Router);
 
   mode = this._focusModeService.mode;
   FocusModeMode = FocusModeMode;
   currentTask = toSignal(this._store.select(selectCurrentTask));
   focusModeConfig = toSignal(this._store.select(selectFocusModeConfig));
-  currentCycle = toSignal(this._store.select(selectCurrentCycle));
   taskTitle = toSignal(
     this._store.select(selectLastCurrentTask).pipe(
       switchMap((lastCurrentTask) =>
@@ -96,31 +90,5 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
 
   continueWithFocusSession(): void {
     this._store.dispatch(selectFocusDuration());
-  }
-
-  startBreakManually(): void {
-    const mode = this.mode();
-    const cycle = this.currentCycle() ?? 1;
-    const currentTaskId = this.currentTask()?.id;
-    const config = this.focusModeConfig();
-    const strategy = this._strategyFactory.getStrategy(mode);
-
-    // Decrease cycle by 1 because break comes after a focus session
-    const breakInfo = strategy.getBreakDuration(getBreakCycle(cycle));
-    if (breakInfo) {
-      // Pause task tracking during break if enabled
-      const shouldPauseTracking = config?.isPauseTrackingDuringBreak && currentTaskId;
-      if (shouldPauseTracking) {
-        this._store.dispatch(unsetCurrentTask());
-      }
-
-      this._store.dispatch(
-        startBreak({
-          duration: breakInfo.duration,
-          isLongBreak: breakInfo.isLong,
-          pausedTaskId: shouldPauseTracking ? currentTaskId : undefined,
-        }),
-      );
-    }
   }
 }

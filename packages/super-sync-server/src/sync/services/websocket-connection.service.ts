@@ -6,6 +6,25 @@ interface ConnectedClient {
   clientId: string;
   userId: number;
   lastPong: number;
+  /** Wall-clock ms when this socket was accepted (used for the storm summary). */
+  connectedAt: number;
+  /**
+   * Wall-clock ms at which the reconnect cooldown expires. Set on accept and
+   * extended forward on each refused challenger so a sustained storm cannot
+   * tick the gate out (sliding window). Eviction only allowed once
+   * `Date.now() >= cooldownUntil`.
+   */
+  cooldownUntil: number;
+  /** Count of challengers refused during this incumbent's lifetime. */
+  refusedChallengers: number;
+  /**
+   * Set true after `removeConnection` emits the storm-summary INFO. Guards
+   * against the inevitable `ws.on('close')` re-entry (triggered by
+   * removeConnection's own ws.close — eviction, heartbeat, closeAll) firing
+   * the summary a second time. Preferred over zeroing `refusedChallengers`
+   * because the count remains observably truthful for the life of the object.
+   */
+  summaryLogged: boolean;
 }
 
 /**
@@ -27,6 +46,22 @@ export class WebSocketConnectionService {
   private static readonly NOTIFY_DEBOUNCE_MS = 100;
   /** Max WebSocket connections per user to prevent resource exhaustion */
   private static readonly MAX_CONNECTIONS_PER_USER = 10;
+  /** Close code sent to the stale socket when a new one from the same clientId replaces it */
+  private static readonly REPLACED_CLOSE_CODE = 4009;
+  /** Close code sent to a challenger socket refused during the reconnect cooldown */
+  private static readonly RECONNECT_COOLDOWN_CLOSE_CODE = 4008;
+  /**
+   * Sliding-window cooldown. While a still-OPEN incumbent's `cooldownUntil` is
+   * in the future, a new socket from the same clientId is refused (the
+   * incumbent is kept, NOT evicted) and `cooldownUntil` is extended by another
+   * RECONNECT_COOLDOWN_MS. Eviction only resumes after this long of QUIET (no
+   * challengers). Breaks the shared-clientId reconnect storm from pre-18.6.0
+   * clients that reconnect immediately on the 4009 eviction: under sustained
+   * load the gate never expires, so the server stops emitting 4009 and the
+   * loop loses its fuel. A genuinely dead/closing incumbent bypasses this (see
+   * addConnection), so a real network-blip reconnect still recovers.
+   */
+  private static readonly RECONNECT_COOLDOWN_MS = 5_000;
 
   private pendingNotifications = new Map<
     number,
@@ -38,10 +73,72 @@ export class WebSocketConnectionService {
   >();
 
   addConnection(userId: number, clientId: string, ws: WebSocket): void {
+    // A new socket from the same clientId means the device is reconnecting — the
+    // server's old entry is by definition stale (network blip, proxy idle close,
+    // OS sleep). Evict it eagerly instead of waiting up to ~40s for the heartbeat
+    // cycle; otherwise stale entries pile up to MAX_CONNECTIONS_PER_USER and
+    // legitimate reconnects get rejected with 4008.
+    const existingSet = this.connections.get(userId);
+    if (existingSet) {
+      for (const existing of existingSet) {
+        if (existing.clientId === clientId) {
+          // Reconnect cooldown (sliding window): if the incumbent socket is
+          // still OPEN and now < its cooldownUntil, this is a too-fast reconnect
+          // (the shared-clientId storm from pre-18.6.0 clients that reconnect
+          // immediately on any close frame). Refuse the challenger and KEEP the
+          // incumbent untouched — the incumbent is never evicted, so the server
+          // stops emitting 4009 and the loop loses its fuel. Each refusal
+          // extends cooldownUntil forward so a sustained storm cannot tick the
+          // gate out: eviction only resumes after RECONNECT_COOLDOWN_MS of
+          // quiet. A dead/closing incumbent falls through to normal eviction so
+          // a genuine network-blip reconnect still recovers.
+          const now = Date.now();
+          if (existing.ws.readyState === WebSocket.OPEN && now < existing.cooldownUntil) {
+            existing.cooldownUntil =
+              now + WebSocketConnectionService.RECONNECT_COOLDOWN_MS;
+            existing.refusedChallengers++;
+            // Log only the first refusal per incumbent — a sustained storm
+            // produces hundreds of these per second and the only useful signal
+            // is "storm started"; the summary on removeConnection reports the
+            // total count when this incumbent finally goes away.
+            if (existing.refusedChallengers === 1) {
+              Logger.warn(
+                `[ws:user:${userId}:${clientId}] Reconnect within cooldown; refusing challenger, keeping incumbent`,
+              );
+            }
+            try {
+              ws.close(
+                WebSocketConnectionService.RECONNECT_COOLDOWN_CLOSE_CODE,
+                'Reconnecting too fast',
+              );
+            } catch (err) {
+              Logger.debug(
+                `[ws:user:${userId}:${clientId}] Error closing refused challenger`,
+                err,
+              );
+            }
+            return;
+          }
+          Logger.info(
+            `[ws:user:${userId}:${clientId}] Replacing stale connection from same client`,
+          );
+          // `removeConnection` may drop the userId entry from `this.connections`
+          // entirely if the set becomes empty; the `!this.connections.has(userId)`
+          // check below re-creates it before we add the new client.
+          this.removeConnection(userId, existing, {
+            code: WebSocketConnectionService.REPLACED_CLOSE_CODE,
+            reason: 'Replaced by newer connection',
+          });
+          break;
+        }
+      }
+    }
+
     if (!this.connections.has(userId)) {
       this.connections.set(userId, new Set());
     }
     const userSet = this.connections.get(userId)!;
+
     if (userSet.size >= WebSocketConnectionService.MAX_CONNECTIONS_PER_USER) {
       Logger.warn(
         `[ws:user:${userId}] Connection rejected: max connections per user reached`,
@@ -49,11 +146,16 @@ export class WebSocketConnectionService {
       ws.close(4008, 'Too many connections');
       return;
     }
+    const nowMs = Date.now();
     const client: ConnectedClient = {
       ws,
       clientId,
       userId,
-      lastPong: Date.now(),
+      lastPong: nowMs,
+      connectedAt: nowMs,
+      cooldownUntil: nowMs + WebSocketConnectionService.RECONNECT_COOLDOWN_MS,
+      refusedChallengers: 0,
+      summaryLogged: false,
     };
     userSet.add(client);
 
@@ -94,7 +196,11 @@ export class WebSocketConnectionService {
     );
   }
 
-  removeConnection(userId: number, client: ConnectedClient): void {
+  removeConnection(
+    userId: number,
+    client: ConnectedClient,
+    closeFrame?: { code: number; reason: string },
+  ): void {
     const userSet = this.connections.get(userId);
     if (userSet) {
       userSet.delete(client);
@@ -102,13 +208,29 @@ export class WebSocketConnectionService {
         this.connections.delete(userId);
       }
     }
+    // Storm summary: the first refusal logged a WARN; the rest were silent.
+    // When the incumbent finally goes away, log the cumulative count so the
+    // operator sees the scale of the storm without per-attempt log spam.
+    // `summaryLogged` guards against the inevitable `ws.on('close')` re-entry
+    // (triggered by our own ws.close below) double-logging.
+    if (client.refusedChallengers > 0 && !client.summaryLogged) {
+      const incumbentLifetimeMs = Date.now() - client.connectedAt;
+      Logger.info(
+        `[ws:user:${userId}:${client.clientId}] Refused ${client.refusedChallengers} reconnect challenger(s) over ${incumbentLifetimeMs}ms incumbent lifetime before removal`,
+      );
+      client.summaryLogged = true;
+    }
     // Close the WebSocket if still open
     if (
       client.ws.readyState === WebSocket.OPEN ||
       client.ws.readyState === WebSocket.CONNECTING
     ) {
       try {
-        client.ws.close();
+        if (closeFrame) {
+          client.ws.close(closeFrame.code, closeFrame.reason);
+        } else {
+          client.ws.close();
+        }
       } catch (err) {
         Logger.debug(
           `[ws:user:${userId}:${client.clientId}] Error closing connection`,

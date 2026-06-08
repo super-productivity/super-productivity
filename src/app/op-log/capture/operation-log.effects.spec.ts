@@ -20,7 +20,7 @@ import {
 import { ClientIdService } from '../../core/util/client-id.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { DateService } from '../../core/date/date.service';
+import { T } from '../../t.const';
 
 describe('OperationLogEffects', () => {
   let effects: OperationLogEffects;
@@ -34,7 +34,6 @@ describe('OperationLogEffects', () => {
   let mockImmediateUploadService: jasmine.SpyObj<ImmediateUploadService>;
   let mockClientIdService: jasmine.SpyObj<ClientIdService>;
   let mockOperationCaptureService: jasmine.SpyObj<OperationCaptureService>;
-  let mockDateService: jasmine.SpyObj<DateService>;
 
   const createPersistentAction = (
     type: string,
@@ -72,17 +71,16 @@ describe('OperationLogEffects', () => {
     mockImmediateUploadService = jasmine.createSpyObj('ImmediateUploadService', [
       'trigger',
     ]);
-    mockClientIdService = jasmine.createSpyObj('ClientIdService', ['loadClientId']);
+    mockClientIdService = jasmine.createSpyObj('ClientIdService', [
+      'getOrGenerateClientId',
+    ]);
     mockOperationCaptureService = jasmine.createSpyObj('OperationCaptureService', [
       'dequeue',
     ]);
-    mockDateService = jasmine.createSpyObj('DateService', ['todayStr']);
 
     // Default mock implementations
-    mockLockService.request.and.callFake(
-      async (_name: string, fn: () => Promise<void>) => {
-        await fn();
-      },
+    mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
+      fn(),
     );
     mockOpLogStore.append.and.returnValue(Promise.resolve(1));
     mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(1));
@@ -93,9 +91,10 @@ describe('OperationLogEffects', () => {
     mockCompactionService.compact.and.returnValue(Promise.resolve());
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
     mockStore.select.and.returnValue(of({})); // Return empty state observable
-    mockClientIdService.loadClientId.and.returnValue(Promise.resolve('testClient'));
+    mockClientIdService.getOrGenerateClientId.and.returnValue(
+      Promise.resolve('testClient'),
+    );
     mockOperationCaptureService.dequeue.and.returnValue([]);
-    mockDateService.todayStr.and.returnValue('2024-06-14');
 
     TestBed.configureTestingModule({
       providers: [
@@ -110,7 +109,6 @@ describe('OperationLogEffects', () => {
         { provide: ImmediateUploadService, useValue: mockImmediateUploadService },
         { provide: ClientIdService, useValue: mockClientIdService },
         { provide: OperationCaptureService, useValue: mockOperationCaptureService },
-        { provide: DateService, useValue: mockDateService },
       ],
     });
 
@@ -184,6 +182,74 @@ describe('OperationLogEffects', () => {
           expect(mockLockService.request).toHaveBeenCalledWith(
             'sp_op_log',
             jasmine.any(Function),
+          );
+          done();
+        },
+      });
+    });
+
+    it('should load clientId only after acquiring operation log lock', (done) => {
+      const callOrder: string[] = [];
+      mockLockService.request.and.callFake(
+        async <T>(_name: string, fn: () => Promise<T>) => {
+          callOrder.push('lock');
+          return fn();
+        },
+      );
+      mockClientIdService.getOrGenerateClientId.and.callFake(async () => {
+        callOrder.push('clientId');
+        return 'testClient';
+      });
+      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(async () => {
+        callOrder.push('append');
+        return 1;
+      });
+
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(callOrder).toEqual(['lock', 'clientId', 'append']);
+          done();
+        },
+      });
+    });
+
+    it('should capture the post-rotation clientId when a destructive replacement rotates it while this op is queued (#7709)', (done) => {
+      // Simulates the race the fix at operation-log.effects.ts closes: a
+      // clean-slate / backup-import is already holding the operation-log lock
+      // and rotates the clientId inside runDestructiveStateReplacement. A
+      // queued op waiting behind that lock must read the rotated id, not the
+      // pre-rotation id captured before lock acquisition.
+      let persistedClientId = 'oldClient';
+
+      mockLockService.request.and.callFake(
+        async <T>(_name: string, fn: () => Promise<T>) => {
+          // The destructive replacement that we're racing has already mutated
+          // ClientIdService's persisted state by the time we acquire the lock.
+          persistedClientId = 'newClient';
+          return fn();
+        },
+      );
+      mockClientIdService.getOrGenerateClientId.and.callFake(
+        async () => persistedClientId,
+      );
+
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+            jasmine.objectContaining({ clientId: 'newClient' }),
+            'local',
+          );
+          // Negative assertion: if clientId were read before lock acquisition,
+          // we'd see 'oldClient'. The fix prevents that.
+          expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalledWith(
+            jasmine.objectContaining({ clientId: 'oldClient' }),
+            jasmine.anything(),
           );
           done();
         },
@@ -288,7 +354,7 @@ describe('OperationLogEffects', () => {
       });
     });
 
-    it('should persist replay date fields for done task updates', (done) => {
+    it('should persist doneOn but not rewrite dueDay for done task updates', (done) => {
       const now = new Date(2024, 5, 15, 2, 0, 0, 0);
       jasmine.clock().install();
       jasmine.clock().mockDate(now);
@@ -312,7 +378,6 @@ describe('OperationLogEffects', () => {
                   changes: {
                     isDone: true,
                     doneOn: now.getTime(),
-                    dueDay: '2024-06-14',
                   },
                 },
               },
@@ -383,9 +448,10 @@ describe('OperationLogEffects', () => {
             mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
           expect(firstOp.clientId).toBe('testClient');
 
-          // Simulate backup import generating a new client ID
-          // (BackupService calls generateNewClientId which updates the cached value)
-          mockClientIdService.loadClientId.and.returnValue(
+          // Simulate a backup import rotating the client ID (BackupService's
+          // destructive replacement persists a fresh id; the next read of
+          // getOrGenerateClientId() picks it up after the cache is cleared).
+          mockClientIdService.getOrGenerateClientId.and.returnValue(
             Promise.resolve('newImportClient'),
           );
 
@@ -730,6 +796,96 @@ describe('OperationLogEffects', () => {
       // Vector clock should be incremented from current value (includes remote ops)
       expect(operation.vectorClock['testClient']).toBe(101);
       expect(operation.vectorClock['otherClient']).toBe(50);
+    });
+
+    it('should not acquire nested lock when caller already holds operation log lock', async () => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      bufferDeferredAction(action);
+
+      await effects.processDeferredActions({ callerHoldsOperationLogLock: true });
+
+      expect(mockLockService.request).not.toHaveBeenCalled();
+      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          clientId: 'testClient',
+        }),
+        'local',
+      );
+    });
+
+    it('should not run emergency compaction while caller already holds operation log lock', async () => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      bufferDeferredAction(action);
+      mockOpLogStore.appendWithVectorClockUpdate.and.rejectWith(
+        new DOMException('Quota exceeded', 'QuotaExceededError'),
+      );
+
+      await effects.processDeferredActions({ callerHoldsOperationLogLock: true });
+
+      expect(mockCompactionService.emergencyCompact).not.toHaveBeenCalled();
+      expect(mockLockService.request).not.toHaveBeenCalledWith(
+        'sp_op_log',
+        jasmine.any(Function),
+      );
+      expect(mockLockService.request).toHaveBeenCalledWith(
+        'sp_quota_exceeded',
+        jasmine.any(Function),
+      );
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+        }),
+      );
+    });
+
+    // #7700: when callerHoldsOperationLogLock=true and quota fires, the
+    // bail path skips emergency compaction (would deadlock against the
+    // held sp_op_log) BUT must NOT silently treat the failed write as
+    // a success — pre-this-commit, handleQuotaExceeded returned without
+    // throwing, the retry loop saw success=true, and the deferred action
+    // vanished. Now it throws so the retry loop surfaces the failure as
+    // DEFERRED_ACTION_FAILED after retries exhaust.
+    it('should surface DEFERRED_ACTION_FAILED when quota fires under caller-holds-lock', async () => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      bufferDeferredAction(action);
+      mockOpLogStore.appendWithVectorClockUpdate.and.rejectWith(
+        new DOMException('Quota exceeded', 'QuotaExceededError'),
+      );
+
+      await effects.processDeferredActions({ callerHoldsOperationLogLock: true });
+
+      // 1. The bail path actually ran (proves handleQuotaExceeded was invoked
+      //    AND took the caller-holds-lock branch — not some other code path).
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+        }),
+      );
+      // 2. Dedupe: even though the retry loop calls handleQuotaExceeded 3
+      //    times, STORAGE_QUOTA_EXCEEDED snack must fire ONLY ONCE.
+      //    Without the dedupe (lastStorageQuotaSnackAt window) the user
+      //    would see 3 identical sticky snacks per quota event.
+      const storageQuotaSnackCalls = mockSnackService.open.calls
+        .allArgs()
+        .filter(
+          ([arg]) => (arg as { msg?: string })?.msg === T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+        );
+      expect(storageQuotaSnackCalls.length).toBe(1);
+      // 3. The retry loop saw the throw and actually retried — appendWith*
+      //    was attempted MAX_RETRIES=3 times, not once. Pre-fix the loop
+      //    would have broken on attempt #1 with success=true.
+      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(3);
+      // 4. DEFERRED_ACTION_FAILED fires ONLY when the retry loop's
+      //    failedCount > 0 after all retries — the loud-fail outcome.
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.DEFERRED_ACTION_FAILED,
+        }),
+      );
     });
   });
 });

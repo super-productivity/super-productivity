@@ -5,6 +5,7 @@ let i: number = 0;
 const KEY_TO_REPLACE = [
   'username',
   'userName',
+  'loginName',
   'password',
   'token',
   'notes',

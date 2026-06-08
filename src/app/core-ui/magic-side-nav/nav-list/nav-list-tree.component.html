@@ -159,8 +159,12 @@
 <!-- Project Visibility Menu -->
 <mat-menu #visibilityMenu="matMenu">
   @for (project of allUnarchivedProjects(); track project.id) {
+    @let projectIcon = project.icon || DEFAULT_PROJECT_ICON;
+    @let isProjectIconEmoji = isSingleEmoji(projectIcon);
     <button
       mat-menu-item
+      role="menuitemcheckbox"
+      [attr.aria-checked]="!project.isHiddenFromMenu"
       (click)="toggleProjectVisibility(project.id)"
     >
       @if (!project.isHiddenFromMenu) {
@@ -168,7 +172,29 @@
       } @else {
         <mat-icon>visibility_off</mat-icon>
       }
-      <span>{{ project.title }}</span>
+      <mat-icon
+        class="nav-icon"
+        [class.nav-icon-emoji]="isProjectIconEmoji"
+        [style.color]="getProjectVisibilityIconColor(project)"
+        >{{ projectIcon }}</mat-icon
+      >
+      {{ project.title }}
+    </button>
+  }
+  @if (archivedProjectsCount() > 0) {
+    <mat-divider></mat-divider>
+    <button
+      mat-menu-item
+      (click)="goToArchivedProjects()"
+    >
+      <mat-icon>archive</mat-icon>
+      <span
+        [attr.aria-label]="`${(T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate)} (${archivedProjectsCount()})`"
+      >
+        {{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }} ({{
+          archivedProjectsCount()
+        }})
+      </span>
     </button>
   }
 </mat-menu>

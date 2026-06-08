@@ -214,15 +214,19 @@ describe('DialogImportFromUrlComponent', () => {
       expect(submitButton.disabled).toBe(false);
     });
 
-    it('should have button disable logic based on URL validity in template', () => {
-      // Note: Testing HTML5 form validation in unit tests is complex because
-      // browser validation behavior differs from test environment.
-      // We verify the template has the correct disable condition structure.
-      const submitButtonElement = fixture.debugElement.query(
-        By.css('button[color="primary"]'),
-      );
-      expect(submitButtonElement).toBeDefined();
-      expect(submitButtonElement.nativeElement.disabled).toBeDefined();
+    it('should disable and enable the submit button from template state', async () => {
+      const urlInput = fixture.debugElement.query(By.css('input[name="urlInput"]'));
+
+      component.url.set('');
+      fixture.detectChanges();
+      expect(submitButton.disabled).toBe(true);
+
+      urlInput.nativeElement.value = 'https://example.com/backup.json';
+      urlInput.nativeElement.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(submitButton.disabled).toBe(false);
     });
 
     it('should always enable cancel button', () => {
@@ -350,9 +354,15 @@ describe('DialogImportFromUrlComponent', () => {
       const descElement = fixture.debugElement.query(By.css('mat-dialog-content p'));
       const labelElement = fixture.debugElement.query(By.css('mat-label'));
 
-      expect(titleElement.nativeElement.textContent).toContain(''); // Will be empty in test but pipe should be there
-      expect(descElement.nativeElement.textContent).toContain('');
-      expect(labelElement.nativeElement.textContent).toContain('');
+      expect(titleElement.nativeElement.textContent.trim()).toBe(
+        T.FILE_IMEX.IMPORT_FROM_URL_DIALOG_TITLE,
+      );
+      expect(descElement.nativeElement.textContent.trim()).toBe(
+        T.FILE_IMEX.IMPORT_FROM_URL_DIALOG_DESCRIPTION,
+      );
+      expect(labelElement.nativeElement.textContent.trim()).toBe(
+        T.FILE_IMEX.URL_PLACEHOLDER,
+      );
     });
 
     it('should have proper accessibility attributes', () => {

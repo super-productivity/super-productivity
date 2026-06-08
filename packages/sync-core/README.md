@@ -32,7 +32,7 @@ All ciphertexts are base64-encoded for transport. The format is discriminated by
 ### Salt and IV semantics
 
 - The **IV** (12 bytes) is freshly random per call. AES-GCM security under a fixed key reduces to IV uniqueness, which this guarantees.
-- The **salt** (16 bytes) is derived once per `(process session, password)` pair and reused across every `encrypt`/`encryptWithDerivedKey`/`encryptBatch` call in that session. This is intentional — it lets the session cache amortize the ~500 ms–2 s Argon2id derivation. Two encryptions of the same plaintext within a session therefore share the salt prefix and differ only in IV and ciphertext. Do not assert per-call salt uniqueness in tests.
+- The **salt** (16 bytes) is derived once per `(process session, password)` pair and reused across every `encrypt`/`encryptBatch` call in that session. This is intentional — it lets the session cache amortize the ~500 ms–2 s Argon2id derivation. Two encryptions of the same plaintext within a session therefore share the salt prefix and differ only in IV and ciphertext. Do not assert per-call salt uniqueness in tests.
 
 ### Session key caching
 
@@ -42,10 +42,9 @@ Call `clearSessionKeyCache()` whenever the user changes their password or logs o
 
 ### Legacy-KDF migration
 
-Old data was encrypted with PBKDF2 using the password as its own salt — cryptographically weak. Two complementary mechanisms surface legacy ciphertext:
+Old data was encrypted with PBKDF2 using the password as its own salt — cryptographically weak. `decrypt()` and `decryptBatch()` still read legacy ciphertexts so existing sync data remains accessible.
 
-1. **Structural** — `decryptWithMigration(data, password)` returns a `DecryptResult` with `wasLegacyKdf` and `migratedCiphertext`. Persist `migratedCiphertext` to migrate the record off PBKDF2.
-2. **Side-channel** — `setLegacyKdfWarningHandler(fn)` registers a callback fired on every successful legacy decrypt, regardless of which entry point was used. The host throttles user-facing messages (e.g. show a deprecation banner once per session).
+`setLegacyKdfWarningHandler(fn)` registers a callback fired on every successful legacy decrypt, regardless of which entry point was used. The host throttles user-facing messages (e.g. show a deprecation banner once per session).
 
 ### Argon2id parameters
 
@@ -66,9 +65,9 @@ See `src/index.ts` for the full barrel and the JSDoc on individual symbols for u
 ## Tests
 
 ```bash
-npm test           # vitest run, Node WebCrypto + @noble fallback
+npm test           # typecheck specs + vitest run, Node WebCrypto + @noble fallback
 npm run test:watch # watch mode
-npm run build      # tsup → ESM + CJS + .d.ts
+npm run build      # tsup -> ESM + CJS + .d.ts
 ```
 
 Browser-context smoke coverage lives in the consuming app at `src/app/op-log/encryption/encryption.browser.spec.ts` (Karma + real Chrome).

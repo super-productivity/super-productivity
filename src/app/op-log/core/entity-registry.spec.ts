@@ -8,7 +8,6 @@ import {
   isSingletonEntity,
   isMapEntity,
   isArrayEntity,
-  isVirtualEntity,
   EntityConfig,
 } from './entity-registry';
 
@@ -60,9 +59,12 @@ describe('entity-registry', () => {
 
   const MAP_ENTITIES: EntityType[] = ['PLANNER'];
 
-  const ARRAY_ENTITIES: EntityType[] = ['BOARD', 'REMINDER'];
-
-  const VIRTUAL_ENTITIES: EntityType[] = ['PLUGIN_USER_DATA', 'PLUGIN_METADATA'];
+  const ARRAY_ENTITIES: EntityType[] = [
+    'BOARD',
+    'REMINDER',
+    'PLUGIN_USER_DATA',
+    'PLUGIN_METADATA',
+  ];
 
   describe('ENTITY_CONFIGS completeness', () => {
     it('should have config for all regular entity types', () => {
@@ -267,33 +269,10 @@ describe('entity-registry', () => {
     });
   });
 
-  describe('virtual entities', () => {
-    it('should have correct storagePattern', () => {
-      for (const entityType of VIRTUAL_ENTITIES) {
-        const config = ENTITY_CONFIGS[entityType];
-        expect(config?.storagePattern).toBe(
-          'virtual',
-          `${entityType} should have storagePattern 'virtual'`,
-        );
-      }
-    });
-
-    it('should have payloadKey', () => {
-      for (const entityType of VIRTUAL_ENTITIES) {
-        const config = ENTITY_CONFIGS[entityType];
-        expect(config?.payloadKey).toBeDefined(`${entityType} missing payloadKey`);
-      }
-    });
-
-    it('should NOT have featureName (not stored in NgRx)', () => {
-      for (const entityType of VIRTUAL_ENTITIES) {
-        const config = ENTITY_CONFIGS[entityType];
-        expect(config?.featureName).toBeUndefined(
-          `${entityType} should NOT have featureName (virtual)`,
-        );
-      }
-    });
-  });
+  // (No 'virtual entities' describe block — no entity in this registry uses
+  // the 'virtual' storagePattern. PLUGIN_USER_DATA / PLUGIN_METADATA
+  // migrated to 'array'. The pattern remains in @sp/sync-core for external
+  // consumers.)
 
   describe('getEntityConfig', () => {
     it('should return config for known entity types', () => {
@@ -388,12 +367,14 @@ describe('entity-registry', () => {
       expect(isArrayEntity(taskConfig)).toBe(false);
     });
 
-    it('isVirtualEntity should correctly identify virtual entities', () => {
-      const pluginConfig = getEntityConfig('PLUGIN_USER_DATA') as EntityConfig;
-      const taskConfig = getEntityConfig('TASK') as EntityConfig;
-
-      expect(isVirtualEntity(pluginConfig)).toBe(true);
-      expect(isVirtualEntity(taskConfig)).toBe(false);
+    it('no currently-configured entity uses the virtual storagePattern', () => {
+      // The 'virtual' pattern remains in @sp/sync-core for external
+      // consumers, but no entity in this registry uses it after
+      // PLUGIN_USER_DATA / PLUGIN_METADATA migrated to 'array'.
+      for (const entityType of REGULAR_ENTITY_TYPES) {
+        const config = getEntityConfig(entityType) as EntityConfig;
+        expect(config.storagePattern).not.toBe('virtual');
+      }
     });
   });
 
@@ -403,8 +384,7 @@ describe('entity-registry', () => {
         ADAPTER_ENTITIES.length +
         SINGLETON_ENTITIES.length +
         MAP_ENTITIES.length +
-        ARRAY_ENTITIES.length +
-        VIRTUAL_ENTITIES.length;
+        ARRAY_ENTITIES.length;
 
       expect(totalConfigured).toBe(REGULAR_ENTITY_TYPES.length);
     });

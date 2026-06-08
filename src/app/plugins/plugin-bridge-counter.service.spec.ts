@@ -56,9 +56,9 @@ describe('PluginBridgeService.setCounter()', () => {
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['allTasks$']);
     const projectServiceSpy = jasmine.createSpyObj('ProjectService', ['list$']);
     const tagServiceSpy = jasmine.createSpyObj('TagService', ['getTags$']);
-    const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [
-      'activeWorkContext$',
-    ]);
+    const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
+      activeWorkContext$: of(null),
+    });
     const dataInitServiceSpy = jasmine.createSpyObj('DataInitService', ['reInit']);
     dataInitServiceSpy.reInit.and.resolveTo();
 

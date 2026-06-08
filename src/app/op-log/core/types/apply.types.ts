@@ -20,4 +20,11 @@ export interface ApplyOperationsOptions {
    * local operations during hydration.
    */
   isLocalHydration?: boolean;
+
+  /**
+   * When true, the caller will flush deferred local actions after finishing its
+   * own crash-safety bookkeeping, such as marking remote ops applied and merging
+   * their vector clocks.
+   */
+  skipDeferredLocalActions?: boolean;
 }

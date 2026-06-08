@@ -270,21 +270,54 @@ const writeFileEnsuringDir = (filePath, content) => {
 };
 
 const readLineSync = () => {
+  // Open /dev/tty directly when available: stdin (fd 0) may be in non-blocking
+  // mode when this script is invoked through `npm run`, which makes
+  // fs.readSync(0, ...) throw EAGAIN immediately. /dev/tty is always blocking.
+  let fd = 0;
+  let opened = false;
+  try {
+    fd = fs.openSync('/dev/tty', 'r');
+    opened = true;
+  } catch {
+    fd = 0;
+  }
+
   const buffer = Buffer.alloc(1);
   const chars = [];
+  const sharedBuf = new SharedArrayBuffer(4);
+  const waitView = new Int32Array(sharedBuf);
 
-  while (true) {
-    const bytesRead = fs.readSync(0, buffer, 0, 1, null);
-    if (bytesRead === 0) {
-      break;
-    }
+  try {
+    while (true) {
+      let bytesRead;
+      try {
+        bytesRead = fs.readSync(fd, buffer, 0, 1, null);
+      } catch (err) {
+        if (err.code === 'EAGAIN') {
+          Atomics.wait(waitView, 0, 0, 20);
+          continue;
+        }
+        throw err;
+      }
+      if (bytesRead === 0) {
+        break;
+      }
 
-    const char = buffer.toString('utf8', 0, bytesRead);
-    if (char === '\n') {
-      break;
+      const char = buffer.toString('utf8', 0, bytesRead);
+      if (char === '\n') {
+        break;
+      }
+      if (char !== '\r') {
+        chars.push(char);
+      }
     }
-    if (char !== '\r') {
-      chars.push(char);
+  } finally {
+    if (opened) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* ignore */
+      }
     }
   }
 

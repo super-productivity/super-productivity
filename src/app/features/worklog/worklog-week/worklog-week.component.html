@@ -3,11 +3,7 @@
 @if (worklogService.currentWeek$ | async; as currentWeek) {
   <div>
     <div class="days">
-      @for (
-        day of currentWeek!.ent | keyvalue: sortDays;
-        track trackByDay($index, day);
-        let i = $index
-      ) {
+      @for (day of currentWeek!.ent | keyvalue: sortDays; track day.key; let i = $index) {
         <div class="day">
           <div class="material-table">
             <div
@@ -88,56 +84,22 @@
                 [@expandFade]
                 class="task-summary-table"
               >
-                @for (
-                  logEntry of day.value.logEntries;
-                  track trackByLogEntry($index, logEntry)
-                ) {
-                  <tr>
-                    <td
-                      [class.isSubTask]="logEntry.task.parentId"
-                      class="title"
-                      colspan
-                    >
-                      <span
-                        (click)="viewTaskDetails(logEntry.task)"
-                        class="task-title task-title-clickable"
-                        >{{ logEntry.task.title }}</span
-                      >
-                    </td>
-                    <td class="worked">
-                      @if (
-                        logEntry.task.subTaskIds && logEntry.task.subTaskIds.length > 0
-                      ) {
-                        <span
-                          >∑
-                          {{
-                            logEntry.task.timeSpentOnDay[day.value.dateStr]
-                              | msToClockString
-                          }}</span
-                        >
-                      }
-                      @if (
-                        !logEntry.task.subTaskIds || !logEntry.task.subTaskIds.length
-                      ) {
-                        <inline-input
-                          (changed)="
-                            updateTimeSpentTodayForTask(
-                              logEntry.task,
-                              day.value.dateStr,
-                              $event
-                            )
-                          "
-                          [displayValue]="
-                            logEntry.task.timeSpentOnDay[day.value.dateStr]
-                              | msToClockString
-                          "
-                          [type]="'duration'"
-                          [value]="logEntry.task.timeSpentOnDay[day.value.dateStr]"
-                        >
-                        </inline-input>
-                      }
-                    </td>
-                  </tr>
+                @for (logEntry of day.value.logEntries; track logEntry.task.id) {
+                  <tr
+                    (taskClick)="viewTaskDetails($event)"
+                    (timeChange)="
+                      updateTimeSpentTodayForTask(
+                        logEntry.task,
+                        day.value.dateStr,
+                        $event
+                      )
+                    "
+                    [dateStr]="day.value.dateStr"
+                    [entry]="logEntry"
+                    [hasActionsColumn]="false"
+                    [showRepeatIcon]="false"
+                    worklogTaskRow
+                  ></tr>
                 }
               </table>
             }

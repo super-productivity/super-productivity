@@ -28,6 +28,7 @@ export class ContextMenuComponent implements OnInit {
   rightClickTriggerEl = input.required<HTMLElement | MatMenuItem | MatIconButton>();
   contextMenu = input.required<TemplateRef<any>>();
   allowedSelectors = input<string>('');
+  isEnabled = input<boolean>(true);
 
   readonly contextMenuTriggerEl = viewChild.required('contextMenuTriggerEl', {
     read: MatMenuTrigger,
@@ -65,6 +66,12 @@ export class ContextMenuComponent implements OnInit {
   }
 
   private openContextMenu(event: TouchEvent | MouseEvent): void {
+    // When disabled the menu must stay inert (e.g. the background menu is only
+    // valid on the work-view, not on unrelated pages like Habits). See #7734.
+    if (!this.isEnabled()) {
+      return;
+    }
+
     // If allowedSelectors is provided, check if the target matches any of the selectors
     const allowedSelectors = this.allowedSelectors();
     if (allowedSelectors) {

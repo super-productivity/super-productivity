@@ -19,12 +19,17 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
 
 export interface ElectronAPI {
   on(
     channel: string,
     listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
   ): void;
+
+  // SYNC
+  // ----
+  getDistChannel(): ElectronDistChannel | null;
 
   // INVOKE
   // ------
@@ -199,7 +204,10 @@ export interface ElectronAPI {
 
   jiraSetupImgHeaders(args: { jiraCfg: JiraCfg }): void;
 
-  backupAppData(appData: AppDataCompleteLegacy | AppDataComplete): void;
+  backupAppData(args: {
+    data: AppDataCompleteLegacy | AppDataComplete;
+    maxBackupFiles?: number | null;
+  }): void;
 
   updateCurrentTask(
     task: Task | null,

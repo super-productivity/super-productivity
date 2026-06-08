@@ -47,6 +47,7 @@ import {
   type WebdavPrivateCfg,
 } from '@sp/sync-providers/webdav';
 import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
+import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
 
 @Component({
   selector: 'dialog-sync-cfg',
@@ -207,7 +208,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   // in lockstep with the provider-side definition without an async probe.
   private _reauthBtn(): FormlyFieldConfig {
     return this._actionBtn({
-      text: T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE,
+      text: T.F.SYNC.FORM.BTN_REAUTHENTICATE,
       onClick: () => this.reauth(),
       hideExpression: (m, v, field) => {
         const id = field?.parent?.parent?.model?.syncProvider as
@@ -219,7 +220,12 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   }
 
   private async _testNextcloudConnection(cfg: NextcloudPrivateCfg): Promise<void> {
-    if (!cfg?.serverUrl || !cfg?.userName || !cfg?.password || !cfg?.syncFolderPath) {
+    if (
+      !cfg?.serverUrl?.trim() ||
+      !cfg?.userName?.trim() ||
+      !cfg?.password ||
+      !cfg?.syncFolderPath?.trim()
+    ) {
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.SYNC.FORM.WEB_DAV.S_FILL_ALL_FIELDS,
@@ -229,7 +235,8 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     await this._testWebDavConnection({
       ...cfg,
       baseUrl: NextcloudProvider.buildBaseUrl(cfg),
-    } as unknown as WebdavPrivateCfg);
+      userName: NextcloudProvider.getAuthUserName(cfg),
+    } as WebdavPrivateCfg);
   }
 
   private async _testWebDavConnection(webDavCfg: WebdavPrivateCfg): Promise<void> {
@@ -375,6 +382,11 @@ export class DialogSyncCfgComponent implements AfterViewInit {
             providerSpecificUpdate = {
               encryptKey: privateCfg.encryptKey || '',
             };
+          } else if (newProvider === SyncProviderId.OneDrive && privateCfg) {
+            providerSpecificUpdate = {
+              oneDrive: privateCfg as any,
+              encryptKey: privateCfg.encryptKey || '',
+            };
           }
 
           // Update the model, preserving non-provider-specific fields
@@ -406,6 +418,65 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     this._matDialogRef.close();
   }
 
+  private async _persistOneDriveFormCfgBeforeAuth(
+    providerId: SyncProviderId,
+  ): Promise<void> {
+    if (providerId !== SyncProviderId.OneDrive) {
+      return;
+    }
+    const oneDriveProvider = await this._providerManager.getProviderById(providerId);
+    if (oneDriveProvider) {
+      const existingCfg = (await oneDriveProvider.privateCfg.load()) as
+        | OneDrivePrivateCfg
+        | null
+        | undefined;
+      const formOneDriveCfg = this._tmpUpdatedCfg.oneDrive || {};
+
+      // If useCustomApp / clientId / tenantId changed, existing tokens are
+      // bound to the old identity — clear them to force a fresh OAuth flow.
+      let identityChanged = !existingCfg;
+      if (existingCfg && !identityChanged) {
+        const formClientId = formOneDriveCfg.clientId ?? existingCfg.clientId;
+        const formTenantId = formOneDriveCfg.tenantId ?? existingCfg.tenantId;
+        const formUseCustomApp = formOneDriveCfg.useCustomApp ?? existingCfg.useCustomApp;
+
+        identityChanged =
+          formUseCustomApp !== existingCfg.useCustomApp ||
+          formClientId !== existingCfg.clientId ||
+          formTenantId !== existingCfg.tenantId;
+      }
+
+      // Build the merged cfg explicitly so TS structurally validates the
+      // result against OneDrivePrivateCfg, and so form-side `null` values
+      // get coerced to `undefined` (the storage type doesn't accept null).
+      // NOTE: any new field added to OneDrivePrivateCfg must be added here
+      // — the explicit literal will not silently pick it up via spread.
+      const clientId = formOneDriveCfg.clientId ?? existingCfg?.clientId;
+      const tenantId = formOneDriveCfg.tenantId ?? existingCfg?.tenantId;
+      if (!clientId || !tenantId) {
+        // Form validators normally prevent this; surface a snack instead of
+        // a silent no-op save if we ever reach it.
+        SyncLog.err('OneDrive cfg save: missing required clientId/tenantId');
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.INCOMPLETE_CFG,
+        });
+        return;
+      }
+      const mergedCfg: OneDrivePrivateCfg = {
+        encryptKey: existingCfg?.encryptKey,
+        useCustomApp: formOneDriveCfg.useCustomApp ?? existingCfg?.useCustomApp,
+        clientId,
+        tenantId,
+        syncFolderPath: formOneDriveCfg.syncFolderPath ?? existingCfg?.syncFolderPath,
+        accessToken: identityChanged ? '' : existingCfg?.accessToken,
+        refreshToken: identityChanged ? '' : existingCfg?.refreshToken,
+        tokenExpiresAt: identityChanged ? 0 : existingCfg?.tokenExpiresAt,
+      };
+      await oneDriveProvider.privateCfg.setComplete(mergedCfg);
+    }
+  }
+
   async save(): Promise<void> {
     // Check if form is valid
     if (!this.form.valid) {
@@ -432,6 +503,10 @@ export class DialogSyncCfgComponent implements AfterViewInit {
 
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
+      if (providerId === SyncProviderId.OneDrive) {
+        await this._persistOneDriveFormCfgBeforeAuth(providerId);
+      }
+
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);
 
       // If the provider requires auth (e.g. Dropbox) and is still not ready,
@@ -448,7 +523,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     this._matDialogRef.close();
 
     if (isOnline()) {
-      this.syncWrapperService.sync();
+      this.syncWrapperService.sync(true);
     }
   }
 
@@ -464,6 +539,10 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       return;
     }
     try {
+      if (providerId === SyncProviderId.OneDrive) {
+        await this._persistOneDriveFormCfgBeforeAuth(providerId);
+      }
+
       const result =
         await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(
           providerId,
@@ -472,7 +551,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       if (result.wasConfigured) {
         this._snackService.open({
           type: 'SUCCESS',
-          msg: T.F.SYNC.FORM.DROPBOX.REAUTH_SUCCESS,
+          msg: T.F.SYNC.FORM.REAUTH_SUCCESS,
         });
       }
     } catch (e) {

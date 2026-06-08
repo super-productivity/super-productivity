@@ -16,16 +16,8 @@ import { catchError } from 'rxjs/operators';
 import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 import { throwHandledError } from '../../../../util/throw-handled-error';
 import { IssueLog } from '../../../../core/log';
-import { Capacitor, registerPlugin } from '@capacitor/core';
-
-interface WebDavHttpPlugin {
-  request(options: {
-    url: string;
-    method: string;
-    headers?: Record<string, string>;
-    data?: string;
-  }): Promise<{ status: number; headers: Record<string, string>; data: string }>;
-}
+import { Capacitor } from '@capacitor/core';
+import { WebDavHttp } from '../../../../op-log/sync-providers/file-based/webdav/capacitor-webdav-http';
 
 /** Subset of the XMLHttpRequest surface that @nextcloud/cdav-library v1.5.3 actually uses. */
 interface XhrLike {
@@ -47,8 +39,6 @@ interface XhrLike {
   onabort: ((event: unknown) => void) | null;
   onreadystatechange: ((event: unknown) => void) | null;
 }
-
-const WebDavHttp = registerPlugin<WebDavHttpPlugin>('WebDavHttp');
 
 interface ClientCache {
   client: DavClient;
@@ -320,9 +310,10 @@ export class CaldavClientService {
   }
 
   getByIds$(ids: string[], cfg: CaldavCfg): Observable<CaldavIssue[]> {
+    const idSet = new Set(ids);
     return from(
       this._getTasks(cfg, false, false).then((tasks) =>
-        tasks.filter((task) => task.id in ids),
+        tasks.filter((task) => idSet.has(task.id)),
       ),
     ).pipe(
       catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),

@@ -1,9 +1,8 @@
-import { md5 } from 'hash-wasm';
 import type { SyncLogger } from '@sp/sync-core';
 import type { SyncCredentialStorePort } from '../../credential-store-port';
 import type { FileAdapter } from '../../file-adapter';
 import { errorMeta } from '../../log/error-meta';
-import type { FileSyncProvider } from '../../provider.types';
+import type { FileSyncProvider } from '../../provider-types';
 import {
   FileHashCreationAPIError,
   InvalidDataSPError,
@@ -11,6 +10,7 @@ import {
   RemoteFileNotFoundAPIError,
   UploadRevToMatchMismatchAPIError,
 } from '../../errors';
+import { computeContentRev } from '../content-rev';
 import { PROVIDER_ID_LOCAL_FILE, type LocalFileSyncPrivateCfg } from './local-file.model';
 
 export interface LocalFileSyncBaseDeps {
@@ -190,7 +190,7 @@ export abstract class LocalFileSyncBase implements FileSyncProvider<
 
     let hash: string;
     try {
-      hash = await md5(dataStr);
+      hash = await computeContentRev(dataStr);
     } catch (e) {
       throw new FileHashCreationAPIError(e);
     }

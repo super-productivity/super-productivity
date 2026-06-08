@@ -1,43 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AuthFailSPError,
+  RemoteFileNotFoundAPIError,
+  TooManyRequestsAPIError,
+  UploadRevToMatchMismatchAPIError,
+} from '../../../src/errors';
+import {
   type DropboxCfg,
   type DropboxDeps,
   type DropboxPrivateCfg,
-  type NativeHttpExecutor,
   PROVIDER_ID_DROPBOX,
-  RemoteFileNotFoundAPIError,
-  type SyncCredentialStorePort,
-  TooManyRequestsAPIError,
-  UploadRevToMatchMismatchAPIError,
-} from '../../../src';
+} from '../../../src/dropbox';
+import type { NativeHttpExecutor, NativeHttpResponse } from '../../../src/http';
+import type { SyncCredentialStorePort } from '../../../src/credential-store';
 import { DropboxApi } from '../../../src/file-based/dropbox/dropbox-api';
-import type { SyncLogger } from '@sp/sync-core';
+import { createMockSyncLogger } from '../../helpers/sync-logger';
+import { createMockCredentialStore } from '../../helpers/credential-store';
 
 type DropboxCredentialStore = SyncCredentialStorePort<
   typeof PROVIDER_ID_DROPBOX,
   DropboxPrivateCfg
 >;
 
-const noopLogger = (): SyncLogger => ({
-  log: vi.fn(),
-  error: vi.fn(),
-  err: vi.fn(),
-  normal: vi.fn(),
-  verbose: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  critical: vi.fn(),
-  debug: vi.fn(),
-});
+const noopLogger = createMockSyncLogger;
 
-const createCredentialStore = (): DropboxCredentialStore => ({
-  load: vi.fn(),
-  setComplete: vi.fn(),
-  updatePartial: vi.fn(),
-  upsertPartial: vi.fn(),
-  clear: vi.fn(),
-});
+const createCredentialStore = (): DropboxCredentialStore =>
+  createMockCredentialStore<typeof PROVIDER_ID_DROPBOX, DropboxPrivateCfg>();
 
 type FetchSpyMock = ReturnType<typeof vi.fn>;
 
@@ -770,7 +758,7 @@ describe('DropboxApi Native Platform Routing', () => {
   describe('error handling on native platform', () => {
     it('should handle 401 errors and retry on native platform', async () => {
       let callCount = 0;
-      nativeExecutor.mockImplementation(async (options) => {
+      nativeExecutor.mockImplementation(async (options): Promise<NativeHttpResponse> => {
         callCount++;
 
         if (callCount === 1) {

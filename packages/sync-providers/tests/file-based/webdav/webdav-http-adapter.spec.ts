@@ -7,10 +7,10 @@ import {
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
+  WebDavNativeRequestError,
 } from '../../../src/errors';
-import type { NativeHttpExecutor } from '../../../src/http/native-http-retry';
-import type { ProviderPlatformInfo } from '../../../src/platform/provider-platform-info';
-import type { WebFetchFactory } from '../../../src/platform/web-fetch-factory';
+import type { NativeHttpExecutor } from '../../../src/http';
+import type { ProviderPlatformInfo, WebFetchFactory } from '../../../src/platform';
 
 const makeDeps = (overrides: {
   isNativePlatform?: boolean;
@@ -64,6 +64,34 @@ describe('WebDavHttpAdapter', () => {
       );
     });
 
+    it('sends no-cache request headers on the native path (#7144)', async () => {
+      // Regression guard: iOS URLSession / upstream proxies otherwise serve a
+      // stale sync-data.json, which hides remote changes and defeats the
+      // content-hash conflict check, causing silent overwrite/data loss.
+      const nativeHttp = vi.fn().mockResolvedValue({
+        status: 200,
+        headers: {},
+        data: 'native-body',
+      });
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp }),
+      );
+
+      await adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'GET',
+        headers: { Authorization: 'Basic abc' },
+      });
+
+      const sentHeaders = (
+        nativeHttp.mock.calls[0][0] as { headers: Record<string, string> }
+      ).headers;
+      expect(sentHeaders['Cache-Control']).toBe('no-cache, no-store');
+      expect(sentHeaders['Pragma']).toBe('no-cache');
+      // Caller headers are preserved.
+      expect(sentHeaders['Authorization']).toBe('Basic abc');
+    });
+
     it('uses fetch when not native', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse(200, 'web-body'));
       const adapter = new WebDavHttpAdapter(
@@ -94,9 +122,14 @@ describe('WebDavHttpAdapter', () => {
       const adapter = new WebDavHttpAdapter(
         makeDeps({ fetchImpl: fetchImpl as unknown as typeof fetch }),
       );
-      await expect(
-        adapter.request({ url: 'https://dav.example.com/x', method: 'GET' }),
-      ).rejects.toBeInstanceOf(AuthFailSPError);
+      const promise = adapter.request({
+        url: 'https://dav.example.com/x',
+        method: 'GET',
+      });
+      await expect(promise).rejects.toBeInstanceOf(AuthFailSPError);
+      await expect(promise).rejects.toMatchObject({
+        message: 'Authentication failed (HTTP 401)',
+      });
     });
 
     it('throws RemoteFileNotFoundAPIError on 404', async () => {
@@ -219,22 +252,78 @@ describe('WebDavHttpAdapter', () => {
       };
     });
 
-    it('scrubs the URL to host+pathname in normal request logs', async () => {
+    it('scrubs WebDAV request log URLs to host only', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse(200, 'ok'));
       const adapter = new WebDavHttpAdapter(
         makeDeps({ fetchImpl: fetchImpl as unknown as typeof fetch, logger }),
       );
 
       await adapter.request({
-        url: 'https://user:pass@dav.example.com/sync/file?token=secret',
+        url: 'https://user:pass@dav.example.com/remote.php/dav/files/alice/sync/file?token=secret',
         method: 'GET',
       });
 
-      // urlPathOnly strips userinfo, query, fragment
       const meta = loggedMessages[0]?.meta as { url?: string };
-      expect(meta?.url).toBe('dav.example.com/sync/file');
+      expect(meta?.url).toBe('dav.example.com');
       expect(JSON.stringify(loggedMessages)).not.toContain('secret');
       expect(JSON.stringify(loggedMessages)).not.toContain('user:pass');
+      expect(JSON.stringify(loggedMessages)).not.toContain('alice');
+      expect(JSON.stringify(loggedMessages)).not.toContain('sync/file');
+    });
+
+    it('logs allowlisted cache headers but never sensitive ones (#7144 diagnostic)', async () => {
+      /* eslint-disable @typescript-eslint/naming-convention */
+      const nativeHttp = vi.fn().mockResolvedValue({
+        status: 200,
+        headers: {
+          ETag: 'W/"v15"',
+          Age: '7',
+          'X-Cache': 'HIT',
+          'Set-Cookie': 'session=topsecret',
+          'WWW-Authenticate': 'Basic realm="x"',
+        },
+        data: 'body',
+      });
+      /* eslint-enable @typescript-eslint/naming-convention */
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      await adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'GET',
+      });
+
+      const responseLog = loggedMessages.find((l) => l.msg.includes('.response()'));
+      expect(responseLog).toBeTruthy();
+      const cacheHeaders = (responseLog?.meta as { cacheHeaders?: string }).cacheHeaders;
+      // Allowlisted, case-insensitive.
+      expect(cacheHeaders).toContain('etag=W/"v15"');
+      expect(cacheHeaders).toContain('age=7');
+      expect(cacheHeaders).toContain('x-cache=HIT');
+      // Sensitive headers never surface in the log.
+      expect(JSON.stringify(loggedMessages)).not.toContain('topsecret');
+      expect(JSON.stringify(loggedMessages)).not.toContain('set-cookie');
+      expect(JSON.stringify(loggedMessages)).not.toContain('Set-Cookie');
+    });
+
+    it('logs cacheHeaders=none when the response has no cache headers', async () => {
+      const nativeHttp = vi.fn().mockResolvedValue({
+        status: 200,
+        headers: {},
+        data: 'body',
+      });
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      await adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'GET',
+      });
+
+      const responseLog = loggedMessages.find((l) => l.msg.includes('.response()'));
+      expect((responseLog?.meta as { cacheHeaders?: string }).cacheHeaders).toBe('none');
     });
 
     it('logs structured errorMeta on unexpected error (no raw Error)', async () => {
@@ -257,9 +346,70 @@ describe('WebDavHttpAdapter', () => {
       expect(errorLog?.meta).toEqual(
         expect.objectContaining({
           errorName: 'Error',
-          url: 'dav.example.com/sync/file',
+          url: 'dav.example.com',
         }),
       );
+    });
+
+    it('surfaces native network errors with code and readable message', async () => {
+      const nativeHttp = vi.fn().mockRejectedValue(
+        Object.assign(new Error('Network error: Unable to resolve host'), {
+          code: 'NETWORK_ERROR',
+        }),
+      );
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      const promise = adapter.request({
+        url: 'https://dav.example.com/sync/file',
+        method: 'PROPFIND',
+      });
+      await expect(promise).rejects.toBeInstanceOf(WebDavNativeRequestError);
+      await expect(promise).rejects.toMatchObject({
+        message: 'Network error: Unable to resolve host',
+        code: 'NETWORK_ERROR',
+      });
+
+      const errorLog = loggedMessages.find((l) => l.msg.includes('error'));
+      expect(errorLog?.meta).toEqual(
+        expect.objectContaining({
+          errorName: 'Error',
+          errorCode: 'NETWORK_ERROR',
+          url: 'dav.example.com',
+        }),
+      );
+    });
+
+    it('redacts URL secrets and paths from re-thrown native error messages', async () => {
+      const nativeHttp = vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(
+            new Error(
+              'Network error: Failed for https://user:pass@dav.example.com/remote.php/dav/files/alice/sp?token=secret#frag',
+            ),
+            { code: 'NETWORK_ERROR' },
+          ),
+        );
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isNativePlatform: true, nativeHttp, logger }),
+      );
+
+      try {
+        await adapter.request({
+          url: 'https://dav.example.com/sync/file',
+          method: 'PROPFIND',
+        });
+        expect.fail('expected throw');
+      } catch (e) {
+        const message = (e as Error).message;
+        expect(message).toContain('https://dav.example.com');
+        expect(message).not.toContain('user:pass');
+        expect(message).not.toContain('token=secret');
+        expect(message).not.toContain('/remote.php');
+        expect(message).not.toContain('alice');
+      }
     });
   });
 });

@@ -184,6 +184,55 @@ const isHttpStatus = (err: unknown, status: number): boolean =>
   'status' in err &&
   (err as { status: number }).status === status;
 
+const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
+const RATE_LIMIT_MAX_ATTEMPTS = 4;
+
+/**
+ * Read `error.errors[0].reason` from a Google Calendar API error response.
+ * Returns undefined for non-JSON / unrecognized bodies (safe degradation —
+ * the 429 rate-limit path stays reason-independent).
+ */
+const getGcalErrorReason = (err: unknown): string | undefined => {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const body = (err as { error?: unknown }).error;
+  if (typeof body !== 'object' || body === null) return undefined;
+  // Angular puts the parsed JSON on `.error`; Google wraps it in `{ error: {...} }`.
+  const envelope = (body as { error?: unknown }).error ?? body;
+  const errors =
+    typeof envelope === 'object' && envelope !== null
+      ? (envelope as { errors?: unknown }).errors
+      : undefined;
+  if (!Array.isArray(errors) || errors.length === 0) return undefined;
+  const first = errors[0] as { reason?: unknown };
+  return typeof first?.reason === 'string' ? first.reason : undefined;
+};
+
+/**
+ * Google Calendar returns 403 `rateLimitExceeded` (domain `usageLimits`) or 429
+ * for write-rate violations. These must be retried with exponential backoff;
+ * other 403s (e.g. `forbiddenForNonOrganizer`) must not.
+ */
+const isRateLimitError = (err: unknown): boolean => {
+  if (isHttpStatus(err, 429)) return true;
+  if (!isHttpStatus(err, 403)) return false;
+  const reason = getGcalErrorReason(err);
+  return reason !== undefined && RATE_LIMIT_REASONS.has(reason);
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Run `fn`, retrying with exponential backoff + jitter on rate-limit errors. */
+const withRateLimitRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isRateLimitError(err) || attempt >= RATE_LIMIT_MAX_ATTEMPTS) throw err;
+      await sleep(500 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    }
+  }
+};
+
 const isDeclined = (event: GoogleCalendarEvent): boolean =>
   event.attendees?.some((a) => a.self && a.responseStatus === 'declined') ?? false;
 
@@ -631,17 +680,30 @@ PluginAPI.registerIssueProvider({
         extendedProperties: { private: { spTaskId: taskId } },
       };
 
+      const patchBody = {
+        summary: body.summary,
+        start: body.start,
+        end: body.end,
+      };
+      const patch = (): Promise<unknown> =>
+        http.patch(eventUrl(calendarId, gcalEventId), patchBody);
+
+      // Patch first: the event already exists on every sync after the first,
+      // so this is a single idempotent write. Inserting first would always get
+      // a 409 "duplicate" and then patch anyway — two writes per sync. Each
+      // call is retried independently so a throttled write isn't amplified.
       try {
-        await http.post(eventUrl(calendarId), body);
+        await withRateLimitRetry(patch);
       } catch (err: unknown) {
-        if (isHttpStatus(err, 409)) {
-          await http.patch(eventUrl(calendarId, gcalEventId), {
-            summary: body.summary,
-            start: body.start,
-            end: body.end,
-          });
-        } else {
-          throw err;
+        if (!isHttpStatus(err, 404)) throw err;
+        // Event doesn't exist yet — create it. A concurrent upsert for the
+        // same task can win the race (409 duplicate); the event then exists,
+        // so fall back to patching it.
+        try {
+          await withRateLimitRetry(() => http.post(eventUrl(calendarId), body));
+        } catch (insertErr: unknown) {
+          if (!isHttpStatus(insertErr, 409)) throw insertErr;
+          await withRateLimitRetry(patch);
         }
       }
     },
@@ -654,11 +716,13 @@ PluginAPI.registerIssueProvider({
       const cfg = migrateConfig(config);
       const calendarId = getTimeBlockCalendarId(cfg);
       const gcalEventId = taskIdToGcalEventId(taskId);
-      try {
-        await http.delete(eventUrl(calendarId, gcalEventId));
-      } catch (err: unknown) {
-        if (!isHttpStatus(err, 404)) throw err;
-      }
+      await withRateLimitRetry(async () => {
+        try {
+          await http.delete(eventUrl(calendarId, gcalEventId));
+        } catch (err: unknown) {
+          if (!isHttpStatus(err, 404)) throw err;
+        }
+      });
     },
   },
 

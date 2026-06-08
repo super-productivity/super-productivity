@@ -28,6 +28,10 @@ import {
   openEncryptionPasswordChangeDialog,
   openEncryptionPasswordChangeDialogForFileBased,
 } from '../../../imex/sync/encryption-password-dialog-opener.service';
+import {
+  HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
+  IS_ONEDRIVE_SUPPORTED,
+} from '../../../imex/sync/onedrive-auth-mode.const';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -119,6 +123,17 @@ const createWebdavFormFields = (options: {
   ];
 };
 
+const isOneDriveClientIdRequired = (field: FormlyFieldConfig): boolean => {
+  if (field?.parent?.parent?.model?.syncProvider !== SyncProviderId.OneDrive) {
+    return false;
+  }
+
+  // If no official app client ID is available, users must provide their own.
+  // If an official app client ID is available, clientId is only required when
+  // users explicitly switch to custom app mode.
+  return !HAS_OFFICIAL_ONEDRIVE_CLIENT_ID || !!field?.parent?.model?.useCustomApp;
+};
+
 export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
   title: T.F.SYNC.FORM.TITLE,
   key: 'sync',
@@ -142,6 +157,14 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
           { label: 'Nextcloud', value: SyncProviderId.Nextcloud },
+          ...(IS_ONEDRIVE_SUPPORTED
+            ? [
+                {
+                  label: 'Microsoft 365 / OneDrive (experimental)',
+                  value: SyncProviderId.OneDrive,
+                },
+              ]
+            : []),
           {
             label: 'WebDAV (not recommended / no support)',
             value: SyncProviderId.WebDAV,
@@ -266,11 +289,20 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'userName',
           type: 'input',
           templateOptions: {
-            label: T.F.SYNC.FORM.WEB_DAV.L_USER_NAME,
+            label: T.F.SYNC.FORM.NEXTCLOUD.L_FILE_USER_NAME,
+            description: T.F.SYNC.FORM.NEXTCLOUD.FILE_USER_NAME_DESCRIPTION,
           },
           expressions: {
             'props.required': (field: FormlyFieldConfig) =>
               field?.parent?.parent?.model?.syncProvider === SyncProviderId.Nextcloud,
+          },
+        },
+        {
+          key: 'loginName',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.NEXTCLOUD.L_LOGIN_NAME,
+            description: T.F.SYNC.FORM.NEXTCLOUD.LOGIN_NAME_DESCRIPTION,
           },
         },
         {
@@ -326,6 +358,90 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           templateOptions: {
             tag: 'p',
             text: T.F.SYNC.FORM.DROPBOX.INFO_TEXT,
+          },
+        },
+      ],
+    },
+    // OneDrive provider form fields
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.OneDrive,
+      resetOnHide: false,
+      key: 'oneDrive',
+      fieldGroup: [
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'div',
+            text: T.F.SYNC.FORM.ONEDRIVE.PLATFORM_INFO,
+            class: 'info-panel',
+          },
+        },
+        ...(HAS_OFFICIAL_ONEDRIVE_CLIENT_ID
+          ? [
+              {
+                type: 'tpl',
+                hideExpression: (m: any) => !!m?.useCustomApp,
+                templateOptions: {
+                  tag: 'p',
+                  text: T.F.SYNC.FORM.ONEDRIVE.OFFICIAL_MODE_INFO,
+                },
+              },
+              {
+                key: 'useCustomApp',
+                type: 'checkbox',
+                defaultValue: false,
+                templateOptions: {
+                  label: T.F.SYNC.FORM.ONEDRIVE.L_USE_CUSTOM_APP,
+                  description: T.F.SYNC.FORM.ONEDRIVE.USE_CUSTOM_APP_DESCRIPTION,
+                },
+              },
+            ]
+          : []),
+        {
+          key: 'clientId',
+          type: 'input',
+          hideExpression: (m: any) => HAS_OFFICIAL_ONEDRIVE_CLIENT_ID && !m?.useCustomApp,
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_CLIENT_ID,
+            description: T.F.SYNC.FORM.ONEDRIVE.CLIENT_ID_DESCRIPTION,
+          },
+          expressions: {
+            'props.required': (field: FormlyFieldConfig) =>
+              isOneDriveClientIdRequired(field),
+          },
+        },
+        {
+          key: 'tenantId',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_TENANT_ID,
+            description: T.F.SYNC.FORM.ONEDRIVE.TENANT_ID_DESCRIPTION,
+          },
+        },
+        {
+          key: 'syncFolderPath',
+          type: 'input',
+          templateOptions: {
+            label: T.F.SYNC.FORM.ONEDRIVE.L_SYNC_FOLDER_PATH,
+            description: T.F.SYNC.FORM.ONEDRIVE.SYNC_FOLDER_PATH_DESCRIPTION,
+          },
+        },
+      ],
+    },
+
+    // OneDrive provider authentication panel
+    {
+      hideExpression: (m, v, field) =>
+        field?.parent?.model.syncProvider !== SyncProviderId.OneDrive,
+      resetOnHide: false,
+      props: {},
+      fieldGroup: [
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            text: T.F.SYNC.FORM.ONEDRIVE.INFO_TEXT,
           },
         },
       ],
@@ -462,6 +578,21 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
     {
       key: 'superSync',
       fieldGroup: [
+        // Encryption info line — shown the moment SuperSync is selected so the
+        // mandatory client-side encryption step is visible before a token is
+        // entered. Hidden once encryption is set up (the encryption-status-box
+        // above already shows "Encryption password is set" in that case).
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
+            (field?.parent?.parent?.model?.isEncryptionEnabled ?? false),
+          type: 'tpl',
+          templateOptions: {
+            tag: 'div',
+            text: T.F.SYNC.FORM.SUPER_SYNC.E2E_ENCRYPTION_INFO,
+            class: 'info-panel info-panel--encryption',
+          },
+        },
         {
           hideExpression: (m, v, field) =>
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
@@ -495,11 +626,14 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           },
         },
         // Encryption encouragement warning (shown when encryption is NOT enabled)
-        // Hidden during initial setup (encryption dialog opens automatically after save)
+        // Hidden during initial setup (encryption dialog opens automatically after save).
+        // Reads root `isEncryptionEnabled` so it stays in lockstep with the
+        // encryption-status-box / BTN_CHANGE_PASSWORD above (sync.service derives
+        // the root flag from SuperSync's privateCfg.isEncryptionEnabled).
         {
           hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
             field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
-            (field?.model?.isEncryptionEnabled ?? false) ||
+            (field?.parent?.parent?.model?.isEncryptionEnabled ?? false) ||
             field?.parent?.parent?.model?._isInitialSetup === true,
           type: 'tpl',
           templateOptions: {
@@ -513,7 +647,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         {
           hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
             field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
-            (field?.model?.isEncryptionEnabled ?? false) ||
+            (field?.parent?.parent?.model?.isEncryptionEnabled ?? false) ||
             field?.parent?.parent?.model?._isInitialSetup === true,
           type: 'btn',
           className: 'e2e-enable-encryption-btn',
@@ -523,8 +657,24 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             btnStyle: 'stroked',
             onClick: async (field: FormlyFieldConfig) => {
               const result = await openEnableEncryptionDialog();
-              if (result?.success && field?.model) {
-                field.model.isEncryptionEnabled = true;
+              if (result?.success) {
+                // Two writes are needed (asymmetric with the Disable flow,
+                // which only needs the root write):
+                //   - Sub-model: `sync-config.service._deriveEncryptionState
+                //     ForSuperSync` reads `superSync.isEncryptionEnabled`
+                //     first in its fallback chain (privateCfg comes second).
+                //     Writing it here ensures the next form-save derives
+                //     `true` even if `privateCfg` propagation lags.
+                //   - Root: sibling hideExpressions (info-panel,
+                //     ENCRYPTION_ENCOURAGED, this button) read the root
+                //     flag, so it must flip in the current Formly tick to
+                //     hide them immediately.
+                if (field?.model) {
+                  field.model.isEncryptionEnabled = true;
+                }
+                if (field?.parent?.parent?.model) {
+                  field.parent.parent.model.isEncryptionEnabled = true;
+                }
               }
               return result?.success ? true : false;
             },

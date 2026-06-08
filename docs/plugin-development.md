@@ -33,10 +33,15 @@ If you want to build a sophisticated UI there is a boilerplate available for sol
 ```
 my-plugin/
 ├── manifest.json      # Plugin metadata (required)
-├── plugin.js          # Main plugin code that is launched when activated and when Super Productivity starts
-├── index.html         # UI interface (optional) => requires iFrame:true in manifest
+├── plugin.js          # Host-side plugin code (optional for iframe-only plugins)
+├── index.html         # UI interface (required when omitting plugin.js; requires iFrame:true in manifest)
 └── icon.svg           # Plugin icon (optional)
 ```
+
+`plugin.js` is required for plugins that need host-side setup at plugin load time,
+shortcuts, header buttons, background behavior, or host-side API handlers. A UI-only
+iframe plugin can ship only `manifest.json` and `index.html` when the manifest sets
+`iFrame: true`.
 
 ### 2. Minimal Example
 
@@ -161,6 +166,10 @@ Plugins that render custom UI in a sandboxed iframe.
 
 - You need custom UI/visualizations
 - You want to display charts, forms, or complex interfaces
+
+Iframe-only plugins do not need a `plugin.js` file if all plugin behavior lives inside
+`index.html`. Super Productivity automatically adds the default menu or side-panel entry
+from the manifest when the plugin is loaded.
 
 **Important:** When using iframes, you must inline all CSS and JavaScript directly in the HTML file. External stylesheets and scripts are blocked for security reasons.
 
@@ -287,6 +296,10 @@ Iframe plugins automatically receive:
 - `addTask(task)` - Create a new task
 - `updateTask(taskId, updates)` - Update existing task
 
+#### Application State
+
+- `getAppState()` - Get the current application state (read-only; returns `PluginAppState`). An overview of the data returned is the JSON file exported via `Settings > Sync & Backup > Import/Export > Export data`. Example: `const state = await PluginAPI.getAppState();`
+
 #### Projects
 
 - `getAllProjects()` - Get all projects
@@ -386,11 +399,19 @@ PluginAPI.notify({
 // Open a dialog
 const result = await PluginAPI.openDialog({
   title: 'Confirm Action',
-  content: 'Are you sure?',
-  okBtnLabel: 'Yes',
-  cancelBtnLabel: 'No',
+  htmlContent: '<p>Are you sure?</p>',
+  buttons: [{ label: 'No' }, { label: 'Yes', color: 'primary', raised: true }],
 });
+
+if (result === 'Yes') {
+  // Continue with the confirmed action
+}
 ```
+
+`openDialog()` resolves with the clicked button label. If the user dismisses
+the dialog without clicking a button, it resolves with `undefined`. The legacy
+`content`, `okBtnLabel`, and `cancelBtnLabel` fields are still accepted, but new
+plugins should use `htmlContent` and `buttons`.
 
 ### Registration Methods (plugin.js only)
 
@@ -454,10 +475,21 @@ const hooks = {
   CURRENT_TASK_CHANGE: 'currentTaskChange',
   FINISH_DAY: 'finishDay',
   LANGUAGE_CHANGE: 'languageChange',
-  PERSISTED_DATA_UPDATE: 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
 };
+```
 
+`PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
+changes — local writes, remote sync deliveries, and bulk imports —
+_after_ the host has finished its initial boot load. The handler
+receives no payload; re-call `loadSyncedData(key?)` for any key your
+plugin tracks to get fresh data. There is no replay-on-register and no
+guaranteed ordering across rapid changes, so handlers must be
+idempotent. The typical pattern is: call `loadSyncedData()` once on
+plugin init, then subscribe to this hook for subsequent updates.
+
+```javascript
 // Register hook listener
 PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
   console.log(`Task ${taskId} completed!`);
@@ -505,9 +537,61 @@ console.log(data); // '{ count: 42 }'
 
 - **Request minimal permissions**: Only what you need
 
+### Node.js Script Execution
+
+Plugins with `"permissions": ["nodeExecution"]` can run Node.js scripts in the Electron
+desktop app.
+
+```javascript
+const result = await plugin.executeNodeScript({
+  script: `
+    const os = require('os');
+    return os.hostname();
+  `,
+  timeout: 5000,
+});
+
+if (result.success) {
+  console.log('Hostname:', result.result);
+}
+```
+
+**Important — use `plugin.onReady()` for startup calls:**
+
+`executeNodeScript` requires the Electron IPC bridge to be available. On cold boot this
+bridge may not be ready when `plugin.js` first runs. Always put `executeNodeScript` calls
+(and any other startup init code) inside `plugin.onReady()`:
+
+```javascript
+// ❌ May fail on cold boot
+const result = await plugin.executeNodeScript({ script: 'return true' });
+
+// ✅ Correct — fires after the bridge is confirmed available
+plugin.onReady(async () => {
+  const result = await plugin.executeNodeScript({ script: 'return true' });
+});
+```
+
+`plugin.onReady(fn)` fires after `plugin.js` has fully evaluated **and** the app has
+confirmed the Node.js IPC bridge is responding (with automatic retry). If the bridge is
+unavailable after retries, an error is shown in the plugin management UI and `onReady` does
+not fire.
+
+You can also use `onReady` for any other startup work that should run after the plugin
+script has finished setting up its hooks and registrations — not just for `nodeExecution`.
+
+**Iframe plugins:** `plugin.onReady()` is also available inside iframe plugins, but it
+fires on the next microtask after `plugin.js` finishes evaluating — without an IPC bridge
+ping. This is fine in practice because iframe plugins are rendered on user navigation
+(well after host startup, when the bridge is already up). If your iframe plugin needs the
+bridge from `onReady`, it will be available; cold-boot races affect host-side plugin code
+only.
+
 ### 4. Don't spam the logs
 
 `console.logs` should be kept to a minimum.
+
+### 5. Iframe plugins: inline everything
 
 1. **Inline everything**: CSS and JavaScript must be in the HTML file
 
@@ -600,6 +684,9 @@ async function testAPI() {
 
 - Check if method is available in current context
 - Verify permissions in manifest
+- If `executeNodeScript` fails on startup or cold boot, wrap your init code in
+  `plugin.onReady(async () => { ... })` — this ensures the Node.js bridge is ready before
+  your code runs
 
 **Iframe not displaying:**
 

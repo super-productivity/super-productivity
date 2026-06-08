@@ -136,6 +136,9 @@ button.isActive2 {
   margin-left: auto;
   display: flex;
   align-items: center;
+  // Keep the action group at its intrinsic width so a long title shrinks
+  // (it ellipsizes) instead of pushing these buttons off screen (#7477).
+  flex: 0 0 auto;
   gap: var(--header-nav-button-gap);
   min-width: 0;
 
@@ -143,6 +146,10 @@ button.isActive2 {
     margin-left: 0;
     margin-right: auto;
   }
+
+  // EXPERIMENT: vertical action strip styles live in src/styles.scss so they
+  // bypass Angular view encapsulation (and any containing-block surprises
+  // from this file). See `nav.action-nav-right` rules there.
 
   // Set 20px icon sizing for buttons outside counters-action-group
   // (add button, panel buttons, etc.)
@@ -196,6 +203,9 @@ page-title {
 
   &.isVisible {
     pointer-events: all;
+    border-radius: var(--card-border-radius);
+    background: var(--card-bg);
+    box-shadow: var(--whiteframe-shadow-2dp);
   }
 
   simple-counter-button {

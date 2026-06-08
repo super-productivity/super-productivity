@@ -20,6 +20,7 @@
     "docker:shell": "./scripts/docker-monitor.sh shell",
     "delete-user": "ts-node scripts/delete-user.ts",
     "clear-data": "ts-node scripts/clear-data.ts",
+    "recover-user": "ts-node --transpile-only scripts/recover-user.ts",
     "monitor": "node dist/scripts/monitor.js",
     "monitor:dev": "tsx scripts/monitor.ts",
     "analyze-storage": "node dist/scripts/analyze-storage.js",
@@ -27,7 +28,9 @@
     "monitor:all": "node dist/scripts/run-all-monitoring.js",
     "monitor:all:dev": "tsx scripts/run-all-monitoring.ts",
     "monitor:all:quick": "node dist/scripts/run-all-monitoring.js --quick",
-    "monitor:all:save": "node dist/scripts/run-all-monitoring.js --save"
+    "monitor:all:save": "node dist/scripts/run-all-monitoring.js --save",
+    "migrate-payload-bytes": "node dist/scripts/migrate-payload-bytes.js",
+    "migrate-payload-bytes:dev": "ts-node scripts/migrate-payload-bytes.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
@@ -50,7 +53,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^18.0.0",
+    "@types/node": "^20.0.0",
     "@types/nodemailer": "^7.0.5",
     "@types/supertest": "^6.0.3",
     "@types/ws": "^8.18.1",
@@ -59,6 +62,6 @@
     "supertest": "^7.1.4",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.6"
   }
 }

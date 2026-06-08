@@ -271,7 +271,7 @@ export class ConfigPageComponent implements OnInit {
   }
 
   triggerSync(): void {
-    this._syncWrapperService.sync();
+    this._syncWrapperService.sync(true);
   }
 
   async saveGlobalCfg($event: {

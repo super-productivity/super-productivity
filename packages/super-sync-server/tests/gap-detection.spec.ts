@@ -76,6 +76,20 @@ vi.mock('../src/db', async () => {
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
           return applyOperationSelect(ops[0], args.select) || null;
         }
+        // Min-server_seq gap-detection query (replaced an aggregate({ _min })
+        // whose Prisma OFFSET-0 subquery defeated the index): smallest
+        // serverSeq for the user, bounded by serverSeq <= lte, ordered asc.
+        if (args.orderBy?.serverSeq === 'asc' && args.where?.userId !== undefined) {
+          const lte = args.where.serverSeq?.lte;
+          const ops = Array.from(state.operations.values())
+            .filter(
+              (op: any) =>
+                op.userId === args.where.userId &&
+                (lte === undefined || op.serverSeq <= lte),
+            )
+            .sort((a: any, b: any) => a.serverSeq - b.serverSeq);
+          return applyOperationSelect(ops[0], args.select) || null;
+        }
         return null;
       }),
       findMany: vi.fn().mockImplementation(async (args: any) => {

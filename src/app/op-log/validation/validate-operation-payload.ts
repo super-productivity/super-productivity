@@ -227,6 +227,17 @@ const validateUpdatePayload = (
     return { success: true };
   }
 
+  // convertToSubTask uses a compact intent shape rather than { task: { changes } }.
+  // afterTaskId is the placement anchor: a task id or null (prepend).
+  if (
+    entityType === 'TASK' &&
+    isValidEntityId(p['taskId']) &&
+    isValidEntityId(p['targetParentId']) &&
+    (p['afterTaskId'] === null || typeof p['afterTaskId'] === 'string')
+  ) {
+    return { success: true };
+  }
+
   // METRIC focus session logging uses a special shape: { day, duration }
   // This comes from logFocusSession action (see metric.actions.ts)
   if (entityType === 'METRIC' && 'day' in p && 'duration' in p) {

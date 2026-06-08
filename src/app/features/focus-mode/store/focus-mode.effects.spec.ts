@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subscription } from 'rxjs';
 import { FocusModeEffects } from './focus-mode.effects';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { FocusModeStrategyFactory } from '../focus-mode-strategies';
@@ -46,6 +46,16 @@ describe('FocusModeEffects', () => {
     purpose: null,
     ...overrides,
   });
+
+  const collectEmissions = <T>(
+    source$: Observable<T>,
+  ): { emitted: T[]; subscription: Subscription } => {
+    const emitted: T[] = [];
+    const subscription = source$.subscribe((action) => {
+      emitted.push(action);
+    });
+    return { emitted, subscription };
+  };
 
   beforeEach(() => {
     currentTaskId$ = new BehaviorSubject<string | null>(null);
@@ -403,20 +413,57 @@ describe('FocusModeEffects', () => {
           });
       });
 
-      it('should NOT dispatch startBreak when isManualBreakStart is enabled', (done) => {
+      it('should dispatch both unsetCurrentTask and startBreak with pausedTaskId when isPauseTrackingDuringBreak is true and task is active', (done) => {
         actions$ = of(actions.incrementCycle());
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
         store.overrideSelector(selectors.selectCurrentCycle, 1);
         store.overrideSelector(selectFocusModeConfig, {
           isSkipPreparation: false,
           isManualBreakStart: true,
+          isPauseTrackingDuringBreak: true,
         });
+        currentTaskId$.next('task-123');
         store.refreshState();
 
         effects.autoStartBreakOnSessionComplete$
           .pipe(toArray())
           .subscribe((actionsArr) => {
-            expect(actionsArr.length).toBe(0);
+            expect(actionsArr.length).toBe(2);
+            expect(actionsArr[0]).toEqual(unsetCurrentTask());
+            expect(actionsArr[1]).toEqual(
+              actions.startBreak({
+                duration: 5 * 60 * 1000,
+                isLongBreak: false,
+                pausedTaskId: 'task-123',
+              }),
+            );
+            done();
+          });
+      });
+
+      it('should NOT dispatch unsetCurrentTask and should dispatch startBreak with pausedTaskId undefined when isPauseTrackingDuringBreak is false and task is active', (done) => {
+        actions$ = of(actions.incrementCycle());
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectors.selectCurrentCycle, 1);
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+          isManualBreakStart: true,
+          isPauseTrackingDuringBreak: false,
+        });
+        currentTaskId$.next('task-123');
+        store.refreshState();
+
+        effects.autoStartBreakOnSessionComplete$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(1);
+            expect(actionsArr[0]).toEqual(
+              actions.startBreak({
+                duration: 5 * 60 * 1000,
+                isLongBreak: false,
+                pausedTaskId: undefined,
+              }),
+            );
             done();
           });
       });
@@ -1084,9 +1131,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1102,10 +1154,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
-        // Should not start new session when on SessionDone screen
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1121,10 +1177,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
-        // Should not start new session when on Break screen
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1168,10 +1228,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStartToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
-        // Should not start session when focus mode feature is disabled
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1299,6 +1363,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1306,6 +1373,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1353,6 +1422,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1361,6 +1433,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1378,6 +1452,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1385,7 +1462,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
-        // Should not pause session when focus mode feature is disabled
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -1408,6 +1486,9 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
       currentTaskId$.next('task-123');
 
       setTimeout(() => {
@@ -1415,7 +1496,8 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       setTimeout(() => {
-        // Effect should NOT fire during sync - this prevents the freeze bug
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2129,9 +2211,14 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
-      // Wait a bit to ensure no action is dispatched
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
-        done(); // If no emission occurred, test passes
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
+        done();
       }, 50);
     });
 
@@ -2150,7 +2237,13 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2170,7 +2263,13 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2190,7 +2289,42 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
+        done();
+      }, 50);
+    });
+
+    // #7856: after a native timer-complete ends the session (createIdleTimer ->
+    // purpose null), a following resume tick must NOT make this effect dispatch a
+    // SECOND completeFocusSession. Guards the no-double-completion race invariant.
+    it('should NOT dispatch when the session is already idle (purpose null)', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: null,
+          duration: 0,
+          elapsed: 0,
+        }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
         done();
       }, 50);
     });
@@ -2214,9 +2348,41 @@ describe('FocusModeEffects', () => {
 
       effects = TestBed.inject(FocusModeEffects);
 
+      const { emitted, subscription } = collectEmissions(
+        effects.detectSessionCompletion$,
+      );
+
       setTimeout(() => {
-        done(); // If no emission occurred, test passes
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
+        done();
       }, 50);
+    });
+
+    // Bug #7707: dragging the timer down to 0 (or starting a non-Flowtime session
+    // with duration 0) must still reach the SessionDone screen. The reducer flips
+    // isRunning to false on the next tick; this effect must then dispatch
+    // completeFocusSession even though duration is 0.
+    it('should dispatch completeFocusSession when duration is 0 (Bug #7707)', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'work',
+          duration: 0,
+          elapsed: 60 * 1000, // user focused for 1 min, then dragged duration to 0
+        }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectIsOvertimeEnabled, false);
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.detectSessionCompletion$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(actions.completeFocusSession({ isManual: false }));
+        done();
+      });
     });
 
     // Bug #6206 updated: with overtime, isManualBreakStart=true causes the timer to keep
@@ -2317,13 +2483,15 @@ describe('FocusModeEffects', () => {
 
   describe('detectBreakTimeUp$', () => {
     it('should call notification when break timer completes', (done) => {
+      const breakDuration = 5 * 60 * 1000;
       store.overrideSelector(
         selectors.selectTimer,
         createMockTimer({
           isRunning: false,
           purpose: 'break',
-          duration: 5 * 60 * 1000,
-          elapsed: 5 * 60 * 1000,
+          startedAt: Date.now() - breakDuration,
+          duration: breakDuration,
+          elapsed: breakDuration,
         }),
       );
       store.refreshState();
@@ -2358,110 +2526,52 @@ describe('FocusModeEffects', () => {
         done();
       }, 50);
     });
-  });
 
-  describe('storePausedTaskOnManualBreakSession$ (Bug #5954)', () => {
-    it('should dispatch setPausedTaskId when session completes with manual break start and pause tracking enabled', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next('task-123');
+    // Regression: reducer drops the `duration > 0` completion guard, so a
+    // break with duration=0 stops immediately. The effect must match — without
+    // this, the break ends silently with no notification.
+    it('should notify when a duration=0 break stops', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'break',
+          startedAt: Date.now() - 1000,
+          duration: 0,
+          elapsed: 0,
+        }),
+      );
       store.refreshState();
 
-      effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-        expect(action.type).toBe('[FocusMode] Set Paused Task Id');
-        expect((action as any).pausedTaskId).toBe('task-123');
+      effects = TestBed.inject(FocusModeEffects);
+      const notifyUserSpy = spyOn(effects as any, '_notifyUser');
+
+      effects.detectBreakTimeUp$.pipe(take(1)).subscribe(() => {
+        expect(notifyUserSpy).toHaveBeenCalled();
         done();
       });
     });
 
-    it('should NOT dispatch setPausedTaskId when isManualBreakStart is false', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: false, // Not manual break
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next('task-123');
+    it('should NOT notify for an unstarted duration=0 break offer', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'break',
+          startedAt: null,
+          duration: 0,
+          elapsed: 0,
+        }),
+      );
       store.refreshState();
 
-      effects.storePausedTaskOnManualBreakSession$
-        .pipe(toArray())
-        .subscribe((actionsArr) => {
-          expect(actionsArr.length).toBe(0);
-          done();
-        });
-    });
+      effects = TestBed.inject(FocusModeEffects);
+      const notifyUserSpy = spyOn(effects as any, '_notifyUser');
 
-    // Bug #5974 fix: Store pausedTaskId even when isPauseTrackingDuringBreak is false
-    // This allows tracking to resume if user manually stops tracking before starting break
-    it('should dispatch setPausedTaskId when isPauseTrackingDuringBreak is false', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: false, // Don't pause tracking
-      });
-      currentTaskId$.next('task-123');
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-        expect(action.type).toEqual(actions.setPausedTaskId.type);
-        expect(action.pausedTaskId).toBe('task-123');
+      setTimeout(() => {
+        expect(notifyUserSpy).not.toHaveBeenCalled();
         done();
-      });
-    });
-
-    it('should NOT dispatch setPausedTaskId when no current task', (done) => {
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next(null); // No current task
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$
-        .pipe(toArray())
-        .subscribe((actionsArr) => {
-          expect(actionsArr.length).toBe(0);
-          done();
-        });
-    });
-
-    it('should NOT dispatch setPausedTaskId for Flowtime mode (no breaks)', (done) => {
-      // For Flowtime, shouldStartBreakAfterSession is false
-      strategyFactoryMock.getStrategy.and.returnValue({
-        initialSessionDuration: 0,
-        shouldStartBreakAfterSession: false,
-        shouldAutoStartNextSession: false,
-        getBreakDuration: () => null,
-      });
-
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSkipPreparation: false,
-        isManualBreakStart: true,
-        isPauseTrackingDuringBreak: true,
-      });
-      currentTaskId$.next('task-123');
-      store.refreshState();
-
-      effects.storePausedTaskOnManualBreakSession$
-        .pipe(toArray())
-        .subscribe((actionsArr) => {
-          expect(actionsArr.length).toBe(0);
-          done();
-        });
+      }, 50);
     });
   });
 
@@ -2534,6 +2644,9 @@ describe('FocusModeEffects', () => {
 
         effects = TestBed.inject(FocusModeEffects);
 
+        const { emitted, subscription } = collectEmissions(
+          effects.syncTrackingStopToSession$,
+        );
         currentTaskId$.next('task-123');
 
         setTimeout(() => {
@@ -2541,7 +2654,8 @@ describe('FocusModeEffects', () => {
         }, 10);
 
         setTimeout(() => {
-          // Should not dispatch when break timer is already paused
+          expect(emitted).toEqual([]);
+          subscription.unsubscribe();
           done();
         }, 50);
       });
@@ -2611,44 +2725,6 @@ describe('FocusModeEffects', () => {
 
         effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
           expect(actionsArr.length).toBe(0);
-          done();
-        });
-      });
-    });
-
-    describe('storePausedTaskOnManualBreakSession$ edge cases', () => {
-      it('should store pausedTaskId correctly for later resumption', (done) => {
-        actions$ = of(actions.completeFocusSession({ isManual: false }));
-        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(selectFocusModeConfig, {
-          isManualBreakStart: true,
-          isPauseTrackingDuringBreak: true,
-          isSkipPreparation: false,
-        });
-        currentTaskId$.next('important-task-123');
-        store.refreshState();
-
-        effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-          expect(action.type).toEqual('[FocusMode] Set Paused Task Id');
-          expect((action as any).pausedTaskId).toBe('important-task-123');
-          done();
-        });
-      });
-
-      it('should work with sync disabled but manual break start and pause tracking enabled', (done) => {
-        actions$ = of(actions.completeFocusSession({ isManual: false }));
-        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(selectFocusModeConfig, {
-          isManualBreakStart: true,
-          isPauseTrackingDuringBreak: true,
-          isSkipPreparation: false,
-        });
-        currentTaskId$.next('task-123');
-        store.refreshState();
-
-        // Should still dispatch since it only checks isManualBreakStart and isPauseTrackingDuringBreak
-        effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
-          expect(action.type).toEqual('[FocusMode] Set Paused Task Id');
           done();
         });
       });

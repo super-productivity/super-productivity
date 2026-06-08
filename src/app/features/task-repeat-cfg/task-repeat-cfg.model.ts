@@ -72,6 +72,14 @@ export interface TaskRepeatCfgCopy {
   monthlyWeekOfMonth?: MonthlyWeekOfMonth;
   monthlyWeekday?: MonthlyWeekday;
 
+  // MONTHLY-only: when true, the recurrence anchors to the last calendar day
+  // of every month (28/29/30/31) regardless of `startDate`'s day-of-month.
+  // Decouples the anchor from `startDate` so the first occurrence is never
+  // backdated. Mutually exclusive with the Nth-weekday anchor above; if a
+  // malformed payload sets both, the Nth-weekday anchor wins (checked first
+  // by all recurrence calc utils). Issue #7726.
+  monthlyLastDay?: boolean;
+
   // advanced
   notes: string | undefined;
   // ... possible sub tasks & attachments

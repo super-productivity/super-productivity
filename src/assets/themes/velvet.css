@@ -524,29 +524,35 @@ body.isDarkTheme .bg-image {
   transform: scale(1.06);
 }
 
-/* Sidenav: one consistent translucent panel. Apply blur+bg to the OUTER
-   host AND make every inner wrapper (.nav-sidenav, .nav-list) transparent
-   so the host's bg shows through uniformly — otherwise the inner solid bg
-   covers up the host's translucency and produces inconsistent edges. */
+/* Sidenav: translucent panel. Paint background + backdrop-filter on the
+   INNER .nav-sidenav, NOT on the magic-side-nav host. backdrop-filter on the
+   host establishes a new containing block for fixed-positioned descendants
+   (the drawer .nav-sidenav and overlay .nav-backdrop-mobile). On mobile the
+   host computes to width:0 (magic-side-nav.component.ts hostWidthSignal),
+   which then collapses those fixed children to width:0 — the drawer never
+   appears. Keep host visually inert; let inner wrappers below stay
+   transparent so the inner panel reads as one surface. */
 body.isDarkTheme magic-side-nav {
+  border-right: 1px solid var(--velvet-fill-2);
+}
+
+body.isDarkTheme magic-side-nav .nav-sidenav {
   background: var(--velvet-pane-2) !important;
   backdrop-filter: var(--velvet-frost-deep);
   -webkit-backdrop-filter: var(--velvet-frost-deep);
-  border-right: 1px solid var(--velvet-fill-2);
 }
 
 /* When a wallpaper is set, .bg-image is already heavily blurred (24px), and
    the bg-overlay + .app-container gradient already provide tint and contrast.
-   Drop both the sidenav's backdrop blur (which re-blurs already-blurred pixels
-   into mud) and its dark bg, so the wallpaper + overlay + gradient read as one
-   continuous surface across sidenav and main content. */
-body.isDarkTheme.hasBgImage magic-side-nav {
+   Drop the sidenav's backdrop blur (which re-blurs already-blurred pixels
+   into mud) and its dark bg, so the wallpaper + overlay + gradient read as
+   one continuous surface across sidenav and main content. */
+body.isDarkTheme.hasBgImage magic-side-nav .nav-sidenav {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   background: transparent !important;
 }
 
-body.isDarkTheme magic-side-nav .nav-sidenav,
 body.isDarkTheme magic-side-nav .nav-list,
 body.isDarkTheme magic-side-nav nav-list,
 body.isDarkTheme magic-side-nav .side-nav {

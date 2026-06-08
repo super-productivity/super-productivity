@@ -3,6 +3,7 @@ import {
   fakeAsync,
   tick,
   discardPeriodicTasks,
+  flush,
   flushMicrotasks,
 } from '@angular/core/testing';
 import {
@@ -37,6 +38,8 @@ import 'ical.js';
 import { loadIcalModule } from '../schedule/ical/ical-lazy-loader';
 import { CalendarIntegrationEvent } from './calendar-integration.model';
 import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
+import { ScheduleCalendarMapEntry } from '../schedule/schedule.model';
+import { TaskArchiveService } from '../archive/task-archive.service';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -47,6 +50,14 @@ describe('CalendarIntegrationService', () => {
   const mockSnackService = {
     open: jasmine.createSpy('open'),
   };
+
+  // Default: no calendar tasks in the archive. The #7971 repro overrides `load` to
+  // return an archived calendar task. Reset in beforeEach to avoid cross-test pollution.
+  const mockTaskArchiveService = {
+    load: jasmine.createSpy('load'),
+  };
+  const emptyArchive = (): Promise<{ ids: string[]; entities: object }> =>
+    Promise.resolve({ ids: [], entities: {} });
 
   const createMockProvider = (
     overrides: Partial<IssueProviderCalendar> = {},
@@ -63,11 +74,13 @@ describe('CalendarIntegrationService', () => {
       ...overrides,
     }) as IssueProviderCalendar;
 
+  const todayIcalDate = getDbDateStr().replace(/-/g, '');
+
   const MOCK_ICAL_DATA = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
-DTSTART:20260104T100000Z
-DTEND:20260104T110000Z
+DTSTART:${todayIcalDate}T100000Z
+DTEND:${todayIcalDate}T110000Z
 SUMMARY:Test Event
 UID:test-event-1
 END:VEVENT
@@ -76,8 +89,8 @@ END:VCALENDAR`;
   const MOCK_ICAL_DATA_2 = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
-DTSTART:20260104T140000Z
-DTEND:20260104T150000Z
+DTSTART:${todayIcalDate}T140000Z
+DTEND:${todayIcalDate}T150000Z
 SUMMARY:Another Event
 UID:test-event-2
 END:VEVENT
@@ -87,6 +100,7 @@ END:VCALENDAR`;
     // Clear localStorage before each test
     localStorage.clear();
     subscriptions = [];
+    mockTaskArchiveService.load.and.callFake(emptyArchive);
 
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -100,6 +114,7 @@ END:VCALENDAR`;
           ],
         }),
         { provide: SnackService, useValue: mockSnackService },
+        { provide: TaskArchiveService, useValue: mockTaskArchiveService },
       ],
     });
 
@@ -294,6 +309,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -375,6 +391,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -443,6 +460,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -520,6 +538,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -694,7 +713,7 @@ END:VCALENDAR`;
         tick(0);
 
         // Should still emit (with empty or cached data)
-        expect(lastValue).toBeDefined();
+        expect(lastValue).toEqual([{ items: [] }]);
         discardPeriodicTasks();
       }));
 
@@ -792,6 +811,7 @@ END:VCALENDAR`;
               ],
             }),
             { provide: SnackService, useValue: mockSnackService },
+            { provide: TaskArchiveService, useValue: mockTaskArchiveService },
           ],
         });
 
@@ -822,7 +842,16 @@ END:VCALENDAR`;
         expect(emittedCount).toBeGreaterThan(0);
 
         const cached = localStorage.getItem('SUP_CAL_EVENTS_CACHE');
-        expect(cached).toBeTruthy();
+        expect(JSON.parse(cached ?? '[]') as ScheduleCalendarMapEntry[]).toEqual([
+          {
+            items: [
+              jasmine.objectContaining({
+                id: 'test-event-1',
+                title: 'Test Event',
+              }),
+            ],
+          },
+        ]);
 
         sub.unsubscribe();
         discardPeriodicTasks();
@@ -859,8 +888,7 @@ END:VCALENDAR`;
       service.skipCalendarEvent(event);
 
       const stored = localStorage.getItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY');
-      expect(stored).toBeTruthy();
-      expect(JSON.parse(stored!)).toContain('test-event-id');
+      expect(JSON.parse(stored ?? '[]') as string[]).toContain('test-event-id');
     });
 
     it('should not add duplicate event IDs', () => {
@@ -910,7 +938,7 @@ END:VCALENDAR`;
       service.skipCalendarEvent(event);
 
       const skipDay = localStorage.getItem('SUP_CALENDER_EVENTS_LAST_SKIP_DAY');
-      expect(skipDay).toBeTruthy();
+      expect(skipDay).toBe(getDbDateStr());
     });
   });
 
@@ -1049,9 +1077,16 @@ END:VCALENDAR`;
       const req = httpMock.expectOne(mockProvider.icalUrl);
       req.flush(MOCK_ICAL_DATA);
 
-      tick(0);
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
+      // flush() (not tick(0)) because requestEvents$ awaits loadIcalModule(),
+      // a dynamic import('ical.js') whose promise chain isn't guaranteed to
+      // resolve in a single microtask drain on first invocation.
+      flush();
+      expect(result).toEqual([
+        jasmine.objectContaining({
+          id: 'test-event-1',
+          title: 'Test Event',
+        }),
+      ]);
     }));
 
     it('should return empty array for disabled web app provider in browser', fakeAsync(() => {
@@ -1065,7 +1100,7 @@ END:VCALENDAR`;
       });
       subscriptions.push(sub);
 
-      tick(0);
+      flush();
 
       // May or may not make request depending on IS_WEB_BROWSER
     }));
@@ -1081,7 +1116,7 @@ END:VCALENDAR`;
       const req = httpMock.expectOne(mockProvider.icalUrl);
       req.flush('INVALID ICAL DATA');
 
-      tick(0);
+      flush();
       // Should not throw, might return empty array or parsed result
     }));
 
@@ -1103,7 +1138,7 @@ END:VCALENDAR`;
           '</body></html>',
       );
 
-      tick(0);
+      flush();
       expect(result).toEqual([]);
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -1131,7 +1166,7 @@ END:VCALENDAR`;
       const req = httpMock.expectOne(mockProvider.icalUrl);
       req.flush('<html>not ical</html>');
 
-      tick(0);
+      flush();
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           msg: 'F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL',
@@ -1249,6 +1284,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1280,6 +1316,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1307,6 +1344,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1331,6 +1369,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1342,7 +1381,7 @@ END:VCALENDAR`;
       freshStore.overrideSelector(selectCalendarProviders, [mockProvider]);
       freshStore.refreshState();
 
-      let lastValue: any;
+      let lastValue: ScheduleCalendarMapEntry[] = [];
       const sub = freshService.calendarEvents$.subscribe((val) => {
         lastValue = val;
       });
@@ -1356,11 +1395,7 @@ END:VCALENDAR`;
       tick(100);
 
       // The event with ID 'test-event-1' should be filtered out
-      if (lastValue && lastValue.length > 0) {
-        const allItems = lastValue.flatMap((entry: any) => entry.items || []);
-        const hasFilteredEvent = allItems.some((item: any) => item.id === 'test-event-1');
-        expect(hasFilteredEvent).toBe(false);
-      }
+      expect(lastValue).toEqual([{ items: [] }]);
 
       sub.unsubscribe();
       discardPeriodicTasks();
@@ -1381,7 +1416,7 @@ END:VCALENDAR`;
         duration: 3600000,
       });
 
-      let lastValue: any;
+      let lastValue: ScheduleCalendarMapEntry[] = [];
       const sub = service.calendarEvents$.subscribe((val) => {
         lastValue = val;
       });
@@ -1396,11 +1431,7 @@ END:VCALENDAR`;
       tick(100);
 
       // Skipped event should be filtered
-      if (lastValue && lastValue.length > 0) {
-        const allItems = lastValue.flatMap((entry: any) => entry.items || []);
-        const hasSkippedEvent = allItems.some((item: any) => item.id === 'test-event-1');
-        expect(hasSkippedEvent).toBe(false);
-      }
+      expect(lastValue).toEqual([{ items: [] }]);
 
       discardPeriodicTasks();
     }));
@@ -1439,6 +1470,160 @@ END:VCALENDAR`;
       // Should have more emissions after skipping
       expect(emissions.length).toBeGreaterThanOrEqual(emissionsBeforeSkip);
 
+      discardPeriodicTasks();
+    }));
+  });
+
+  // Repro for https://github.com/super-productivity/super-productivity/issues/7971
+  //
+  // Flow: a calendar event is imported as a task, completed before its due day, then
+  // moved to the archive by "Finish Day". The archived task leaves the live NgRx task
+  // state, so `selectAllCalendarTaskEventIds` (built from `selectAllTasks`, active tasks
+  // only) no longer lists its event id. The schedule/planner view filter relied solely on
+  // that selector, so the event re-surfaced as a "not yet added" entry the next day.
+  //
+  // The fix also feeds archived calendar task event ids (read from the synced archive via
+  // `TaskArchiveService.load()`) into the same view filter, so the event stays hidden.
+  describe('BUG #7971: archived calendar task must stay hidden from the schedule', () => {
+    // Builds a TaskArchiveService.load() result from a list of archived tasks.
+    const archiveOf = (
+      tasks: Array<{ id: string; issueId: string; issueType: string }>,
+    ): Promise<{ ids: string[]; entities: Record<string, unknown> }> =>
+      Promise.resolve({
+        ids: tasks.map((t) => t.id),
+        entities: Object.fromEntries(tasks.map((t) => [t.id, { ...t, isDone: true }])),
+      });
+
+    // Subscribes to calendarEvents$ for one provider, flushes a single iCal fetch and
+    // returns the event ids that survive the view filter. Must run inside fakeAsync.
+    const fetchVisibleEventIds = (activeIds: string[], icalData: string): string[] => {
+      TestBed.resetTestingModule();
+      localStorage.clear();
+      TestBed.configureTestingModule({
+        imports: [HttpClientTestingModule],
+        providers: [
+          CalendarIntegrationService,
+          provideMockStore({
+            selectors: [
+              { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
+              { selector: selectAllCalendarTaskEventIds, value: activeIds },
+            ],
+          }),
+          { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
+        ],
+      });
+
+      const freshService = TestBed.inject(CalendarIntegrationService);
+      const freshStore = TestBed.inject(MockStore);
+      const freshHttpMock = TestBed.inject(HttpTestingController);
+
+      const mockProvider = createMockProvider();
+      freshStore.overrideSelector(selectCalendarProviders, [mockProvider]);
+      freshStore.refreshState();
+
+      let lastValue: ScheduleCalendarMapEntry[] = [];
+      const sub = freshService.calendarEvents$.subscribe((val) => (lastValue = val));
+
+      tick(0);
+      freshHttpMock.expectOne(mockProvider.icalUrl).flush(icalData);
+      tick(100);
+      flushMicrotasks();
+      freshStore.refreshState();
+      tick(100);
+      flushMicrotasks();
+
+      sub.unsubscribe();
+      discardPeriodicTasks();
+      return lastValue.flatMap((entry) => entry.items.map((item) => item.id));
+    };
+
+    it('hides an event whose only linked task lives in the archive', fakeAsync(() => {
+      // 'test-event-1' is the UID of MOCK_ICAL_DATA's event; the archived calendar task
+      // points back to it. No active task — it was moved to the archive by "Finish Day".
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'archivedTask1', issueId: 'test-event-1', issueType: 'ICAL' }]),
+      );
+
+      expect(fetchVisibleEventIds([], MOCK_ICAL_DATA)).not.toContain('test-event-1');
+    }));
+
+    it('still shows an event whose matching archived task is NOT a calendar task', fakeAsync(() => {
+      // A non-calendar archived task (e.g. a GitHub issue) sharing the id must not
+      // suppress the calendar event — isCalendarIssueTask gates the contribution.
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'ghTask1', issueId: 'test-event-1', issueType: 'GITHUB' }]),
+      );
+
+      expect(fetchVisibleEventIds([], MOCK_ICAL_DATA)).toContain('test-event-1');
+    }));
+
+    it('still shows an event whose id matches no archived calendar task', fakeAsync(() => {
+      // The archive holds a different event id (e.g. a past occurrence); today's event
+      // must remain visible — guards against over-filtering recurring/independent events.
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'archivedTask1', issueId: 'test-event-1', issueType: 'ICAL' }]),
+      );
+
+      expect(fetchVisibleEventIds([], MOCK_ICAL_DATA_2)).toContain('test-event-2');
+    }));
+
+    it('keeps the event hidden across the active → archived transition (no flash)', fakeAsync(() => {
+      TestBed.resetTestingModule();
+      localStorage.clear();
+      // Phase 1: the task is still live (active selector lists its id), archive empty.
+      mockTaskArchiveService.load.and.callFake(emptyArchive);
+
+      TestBed.configureTestingModule({
+        imports: [HttpClientTestingModule],
+        providers: [
+          CalendarIntegrationService,
+          provideMockStore({
+            selectors: [
+              { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
+              { selector: selectAllCalendarTaskEventIds, value: ['test-event-1'] },
+            ],
+          }),
+          { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
+        ],
+      });
+
+      const freshService = TestBed.inject(CalendarIntegrationService);
+      const freshStore = TestBed.inject(MockStore);
+      const freshHttpMock = TestBed.inject(HttpTestingController);
+
+      const mockProvider = createMockProvider();
+      freshStore.overrideSelector(selectCalendarProviders, [mockProvider]);
+      freshStore.refreshState();
+
+      const emittedIdLists: string[][] = [];
+      const sub = freshService.calendarEvents$.subscribe((val) =>
+        emittedIdLists.push(val.flatMap((e) => e.items.map((i) => i.id))),
+      );
+
+      tick(0);
+      freshHttpMock.expectOne(mockProvider.icalUrl).flush(MOCK_ICAL_DATA);
+      tick(100);
+      flushMicrotasks();
+
+      // Phase 2: "Finish Day" archives the task → it leaves the active set and lands in
+      // the archive in the same beat.
+      mockTaskArchiveService.load.and.returnValue(
+        archiveOf([{ id: 'archivedTask1', issueId: 'test-event-1', issueType: 'ICAL' }]),
+      );
+      freshStore.overrideSelector(selectAllCalendarTaskEventIds, []);
+      freshStore.refreshState();
+      tick(100);
+      flushMicrotasks();
+
+      // The event must never surface in ANY emission across the transition.
+      expect(emittedIdLists.length).toBeGreaterThan(0);
+      emittedIdLists.forEach((ids) => expect(ids).not.toContain('test-event-1'));
+
+      sub.unsubscribe();
       discardPeriodicTasks();
     }));
   });
@@ -1504,6 +1689,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1586,7 +1772,7 @@ END:VCALENDAR`;
 
       // Should not error, should emit empty or cached data
       expect(errorOccurred).toBe(false);
-      expect(lastValue).toBeDefined();
+      expect(lastValue).toEqual([{ items: [] }, { items: [] }]);
 
       discardPeriodicTasks();
     }));
@@ -1699,6 +1885,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1722,6 +1909,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1754,6 +1942,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -1910,6 +2099,7 @@ END:VCALENDAR`;
             ],
           }),
           { provide: SnackService, useValue: mockSnackService },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -2052,6 +2242,7 @@ END:VCALENDAR`;
           { provide: SnackService, useValue: mockSnackService },
           { provide: PluginIssueProviderRegistryService, useValue: mockRegistry },
           { provide: PluginHttpService, useValue: mockPluginHttp },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         ],
       });
 
@@ -2063,9 +2254,10 @@ END:VCALENDAR`;
       expect(events.length).toBe(2);
       const timed = events.find((e: any) => e.id === 'evt-with-time');
       const allDay = events.find((e: any) => e.id === 'evt-without-time');
-      expect(timed).toBeDefined();
-      expect(timed.dueWithTime).toBe(1701700000000);
-      expect(allDay).toBeDefined();
+      expect(timed).toEqual(
+        jasmine.objectContaining({ id: 'evt-with-time', dueWithTime: 1701700000000 }),
+      );
+      expect(allDay).toEqual(jasmine.objectContaining({ id: 'evt-without-time' }));
       expect(allDay.dueWithTime).toBeUndefined();
     });
   });

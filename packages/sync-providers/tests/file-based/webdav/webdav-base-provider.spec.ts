@@ -1,41 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { md5 as md5HashWasm } from 'hash-wasm';
 import { NOOP_SYNC_LOGGER } from '@sp/sync-core';
-import { Webdav } from '../../../src/file-based/webdav/webdav';
 import {
+  NextcloudProvider,
   PROVIDER_ID_NEXTCLOUD,
   PROVIDER_ID_WEBDAV,
-} from '../../../src/file-based/webdav/webdav-base-provider';
-import { NextcloudProvider } from '../../../src/file-based/webdav/nextcloud';
-import type { WebdavPrivateCfg } from '../../../src/file-based/webdav/webdav.model';
-import type { NextcloudPrivateCfg } from '../../../src/file-based/webdav/nextcloud.model';
-import type { SyncCredentialStorePort } from '../../../src/credential-store-port';
-import type { NativeHttpExecutor } from '../../../src/http/native-http-retry';
+  Webdav,
+  type NextcloudPrivateCfg,
+  type WebdavPrivateCfg,
+} from '../../../src/webdav';
+import type { SyncCredentialStorePort } from '../../../src/credential-store';
+import type { SyncProviderBase } from '../../../src/provider-types';
+import type { NativeHttpExecutor } from '../../../src/http';
 import {
   MissingCredentialsSPError,
   UploadRevToMatchMismatchAPIError,
 } from '../../../src/errors';
+import { createStatefulCredentialStore } from '../../helpers/credential-store';
 
 const fakeStore = <PID extends string, T>(
   initial: T | null,
-): SyncCredentialStorePort<PID, T> => {
-  let state: T | null = initial;
-  return {
-    load: async () => state,
-    setComplete: async (cfg) => {
-      state = cfg;
-    },
-    updatePartial: async (updates) => {
-      state = { ...(state ?? {}), ...updates } as T;
-    },
-    upsertPartial: async (updates) => {
-      state = { ...(state ?? {}), ...updates } as T;
-    },
-    clear: async () => {
-      state = null;
-    },
-  };
-};
+): SyncCredentialStorePort<PID, T> =>
+  createStatefulCredentialStore<PID, T>(initial, { spy: false });
 
 const nativeNoop: NativeHttpExecutor = async () => ({
   status: 200,
@@ -228,6 +214,88 @@ describe('NextcloudProvider', () => {
     expect(url).toBe('https://cloud.example.com/remote.php/dav/files/a%20b%2Fc/');
   });
 
+  it('getAuthUserName falls back to file username when loginName is empty', () => {
+    expect(
+      NextcloudProvider.getAuthUserName({
+        userName: 'alice',
+        loginName: '',
+      }),
+    ).toBe('alice');
+  });
+
+  it('isReady rejects whitespace-only file username', async () => {
+    const provider = new NextcloudProvider({
+      logger: NOOP_SYNC_LOGGER,
+      platformInfo: {
+        isNativePlatform: false,
+        isAndroidWebView: false,
+        isIosNative: false,
+      },
+      webFetch: () => globalThis.fetch as typeof fetch,
+      nativeHttp: nativeNoop,
+      credentialStore: fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>({
+        ...validNextcloudCfg,
+        userName: '   ',
+      }),
+    });
+    expect(await provider.isReady()).toBe(false);
+  });
+
+  it('_cfgOrError rejects whitespace-only file username', async () => {
+    const provider = new NextcloudProvider({
+      logger: NOOP_SYNC_LOGGER,
+      platformInfo: {
+        isNativePlatform: false,
+        isAndroidWebView: false,
+        isIosNative: false,
+      },
+      webFetch: () => globalThis.fetch as typeof fetch,
+      nativeHttp: nativeNoop,
+      credentialStore: fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>({
+        ...validNextcloudCfg,
+        userName: '   ',
+      }),
+    });
+    await expect(provider.downloadFile('op-1.json')).rejects.toBeInstanceOf(
+      MissingCredentialsSPError,
+    );
+  });
+
+  it('uses loginName for auth while keeping userName in the DAV files path', async () => {
+    const nativeHttp = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: 'real-payload',
+    });
+    const provider = new NextcloudProvider({
+      logger: NOOP_SYNC_LOGGER,
+      platformInfo: {
+        isNativePlatform: true,
+        isAndroidWebView: false,
+        isIosNative: false,
+      },
+      webFetch: () => globalThis.fetch as typeof fetch,
+      nativeHttp,
+      credentialStore: fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>({
+        ...validNextcloudCfg,
+        loginName: 'alice@example.com',
+      }),
+    });
+
+    await provider.downloadFile('op-1.json');
+
+    const request = nativeHttp.mock.calls[0]?.[0] as {
+      url: string;
+      headers: Record<string, string>;
+    };
+    expect(request.url).toBe(
+      'https://cloud.example.com/remote.php/dav/files/alice/sp/op-1.json',
+    );
+    expect(request.headers.Authorization).toBe(
+      `Basic ${btoa('alice@example.com:secret')}`,
+    );
+  });
+
   it('_cfgOrError rejects missing serverUrl', async () => {
     const provider = new NextcloudProvider({
       logger: NOOP_SYNC_LOGGER,
@@ -266,5 +334,92 @@ describe('NextcloudProvider', () => {
     await expect(provider.downloadFile('op-1.json')).rejects.toBeInstanceOf(
       MissingCredentialsSPError,
     );
+  });
+});
+
+/**
+ * Issue #7616: "18.5.0 breaks connection to Webdav".
+ *
+ * The auth-error path (sync-wrapper -> ProviderManager.clearAuthCredentials
+ * -> `provider.clearAuthCredentials?.()`) fires on a SINGLE
+ * AuthFailSPError / MissingCredentialsSPError for WebDAV (the transient
+ * tolerance is SuperSync-only). For WebDAV the "credential" is a
+ * user-typed username/password (often an irrecoverable Nextcloud app
+ * password), not a refreshable OAuth token. Erasing it on a recoverable
+ * 401 silently destroys the user's connection settings with no undo —
+ * exactly the reported symptom ("error message, then my connection
+ * settings were gone").
+ *
+ * Contract: invoking the provider's auth-clear hook the way
+ * ProviderManager does MUST NOT erase user-entered credentials for
+ * WebDAV / Nextcloud.
+ */
+describe('clearAuthCredentials — issue #7616: recoverable auth error must NOT erase user-typed credentials', () => {
+  const depsWith = <PID extends string, T>(
+    store: SyncCredentialStorePort<PID, T>,
+  ): {
+    logger: typeof NOOP_SYNC_LOGGER;
+    platformInfo: {
+      isNativePlatform: boolean;
+      isAndroidWebView: boolean;
+      isIosNative: boolean;
+    };
+    webFetch: () => typeof fetch;
+    nativeHttp: NativeHttpExecutor;
+    credentialStore: SyncCredentialStorePort<PID, T>;
+  } => ({
+    logger: NOOP_SYNC_LOGGER,
+    platformInfo: {
+      isNativePlatform: false,
+      isAndroidWebView: false,
+      isIosNative: false,
+    },
+    webFetch: () => globalThis.fetch as typeof fetch,
+    nativeHttp: nativeNoop,
+    credentialStore: store,
+  });
+
+  it('Webdav: the auth-clear hook keeps userName/password intact', async () => {
+    const store = fakeStore<typeof PROVIDER_ID_WEBDAV, WebdavPrivateCfg>({
+      ...validWebdavCfg,
+    });
+    // Typed as ProviderManager sees it: SyncProviderBase, where the hook
+    // is optional. After the fix it is undefined for WebDAV (safe no-op).
+    const provider: SyncProviderBase<typeof PROVIDER_ID_WEBDAV, WebdavPrivateCfg> =
+      new Webdav(depsWith(store));
+
+    // The contract ProviderManager's guard depends on: WebDAV must expose
+    // NO clearAuthCredentials hook. Re-adding one (even a "safe" one) fails
+    // here — that is the regression guard for issue #7616.
+    expect(provider.clearAuthCredentials).toBeUndefined();
+
+    // ProviderManager invokes it exactly like this.
+    await provider.clearAuthCredentials?.();
+
+    const after = await store.load();
+    expect(after?.userName).toBe(validWebdavCfg.userName);
+    expect(after?.password).toBe(validWebdavCfg.password);
+  });
+
+  it('NextcloudProvider: the auth-clear hook keeps userName/password intact', async () => {
+    const cfg: NextcloudPrivateCfg = {
+      serverUrl: 'https://cloud.example.com',
+      userName: 'alice',
+      password: 'app-password-cannot-be-recovered',
+      syncFolderPath: 'sp',
+    };
+    const store = fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>({
+      ...cfg,
+    });
+    const provider: SyncProviderBase<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg> =
+      new NextcloudProvider(depsWith(store));
+
+    expect(provider.clearAuthCredentials).toBeUndefined();
+
+    await provider.clearAuthCredentials?.();
+
+    const after = await store.load();
+    expect(after?.userName).toBe(cfg.userName);
+    expect(after?.password).toBe(cfg.password);
   });
 });

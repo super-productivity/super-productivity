@@ -1,30 +1,22 @@
 import { updateGlobalConfigSection } from './global-config.actions';
-import { createFeatureSelector, createReducer, createSelector, on } from '@ngrx/store';
 import {
-  AppFeaturesConfig,
+  createFeatureSelector,
+  createReducer,
+  createSelector,
+  MemoizedSelector,
+  on,
+} from '@ngrx/store';
+import {
   ClipboardImagesConfig,
-  DominaModeConfig,
-  EvaluationConfig,
   FocusModeConfig,
   GlobalConfigState,
-  IdleConfig,
-  LocalizationConfig,
   MiscConfig,
-  PomodoroConfig,
-  FlowtimeConfig,
-  ReminderConfig,
-  ScheduleConfig,
-  ShortSyntaxConfig,
-  SoundConfig,
-  SyncConfig,
-  TakeABreakConfig,
-  TasksConfig,
 } from '../global-config.model';
 import type { KeyboardConfig } from '../keyboard-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
-import { getStartOfNextDayHourFromTimeString } from '../../../util/start-of-next-day.util';
+import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 
 /**
  * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
@@ -63,78 +55,45 @@ const migrateFocusModeConfig = (
 export const CONFIG_FEATURE_NAME = 'globalConfig';
 export const selectConfigFeatureState =
   createFeatureSelector<GlobalConfigState>(CONFIG_FEATURE_NAME);
-export const selectLocalizationConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): LocalizationConfig => cfg?.localization ?? DEFAULT_GLOBAL_CONFIG.localization,
-);
-export const selectTasksConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): TasksConfig => cfg.tasks ?? DEFAULT_GLOBAL_CONFIG.tasks,
-);
-export const selectMiscConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): MiscConfig => cfg?.misc ?? DEFAULT_GLOBAL_CONFIG.misc,
-);
-export const selectShortSyntaxConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): ShortSyntaxConfig => cfg?.shortSyntax ?? DEFAULT_GLOBAL_CONFIG.shortSyntax,
-);
-export const selectSoundConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): SoundConfig => cfg?.sound ?? DEFAULT_GLOBAL_CONFIG.sound,
-);
-export const selectEvaluationConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): EvaluationConfig => cfg?.evaluation ?? DEFAULT_GLOBAL_CONFIG.evaluation,
-);
-export const selectIdleConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): IdleConfig => cfg?.idle ?? DEFAULT_GLOBAL_CONFIG.idle,
-);
-export const selectSyncConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): SyncConfig => cfg?.sync ?? DEFAULT_GLOBAL_CONFIG.sync,
-);
-export const selectTakeABreakConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): TakeABreakConfig => cfg?.takeABreak ?? DEFAULT_GLOBAL_CONFIG.takeABreak,
-);
-export const selectTimelineConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): ScheduleConfig => cfg?.schedule ?? DEFAULT_GLOBAL_CONFIG.schedule,
-);
+/**
+ * Builds a section selector that returns the config slice, falling back to the
+ * baked-in default when the slice is missing (older data / partial snapshots).
+ */
+const createConfigSectionSelector = <K extends keyof GlobalConfigState>(
+  key: K,
+): MemoizedSelector<object, GlobalConfigState[K]> =>
+  createSelector(
+    selectConfigFeatureState,
+    (cfg): GlobalConfigState[K] => cfg?.[key] ?? DEFAULT_GLOBAL_CONFIG[key],
+  );
+
+export const selectLocalizationConfig = createConfigSectionSelector('localization');
+export const selectTasksConfig = createConfigSectionSelector('tasks');
+export const selectMiscConfig = createConfigSectionSelector('misc');
+export const selectShortSyntaxConfig = createConfigSectionSelector('shortSyntax');
+export const selectSoundConfig = createConfigSectionSelector('sound');
+export const selectEvaluationConfig = createConfigSectionSelector('evaluation');
+export const selectIdleConfig = createConfigSectionSelector('idle');
+export const selectSyncConfig = createConfigSectionSelector('sync');
+export const selectTakeABreakConfig = createConfigSectionSelector('takeABreak');
+// NOTE: the schedule slice is historically surfaced under the "Timeline" name.
+export const selectTimelineConfig = createConfigSectionSelector('schedule');
 
 /** @deprecated Exists only for migration to the voice-reminder plugin. */
-export const selectIsDominaModeConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): DominaModeConfig => cfg?.dominaMode ?? DEFAULT_GLOBAL_CONFIG.dominaMode,
-);
+export const selectIsDominaModeConfig = createConfigSectionSelector('dominaMode');
 
-export const selectFocusModeConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): FocusModeConfig => cfg?.focusMode ?? DEFAULT_GLOBAL_CONFIG.focusMode,
-);
+export const selectFocusModeConfig = createConfigSectionSelector('focusMode');
+// Hand-written: `clipboardImages` is optional on the state, so the non-null
+// assertion on the default keeps the public return type non-nullable.
 export const selectClipboardImagesConfig = createSelector(
   selectConfigFeatureState,
   (cfg): ClipboardImagesConfig =>
     cfg?.clipboardImages ?? DEFAULT_GLOBAL_CONFIG.clipboardImages!,
 );
-export const selectPomodoroConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): PomodoroConfig => cfg?.pomodoro ?? DEFAULT_GLOBAL_CONFIG.pomodoro,
-);
-export const selectFlowtimeConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): FlowtimeConfig => cfg?.flowtime ?? DEFAULT_GLOBAL_CONFIG.flowtime,
-);
-export const selectReminderConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): ReminderConfig => cfg?.reminder ?? DEFAULT_GLOBAL_CONFIG.reminder,
-);
-export const selectAppFeaturesConfig = createSelector(
-  selectConfigFeatureState,
-  (cfg): AppFeaturesConfig => cfg?.appFeatures ?? DEFAULT_GLOBAL_CONFIG.appFeatures,
-);
+export const selectPomodoroConfig = createConfigSectionSelector('pomodoro');
+export const selectFlowtimeConfig = createConfigSectionSelector('flowtime');
+export const selectReminderConfig = createConfigSectionSelector('reminder');
+export const selectAppFeaturesConfig = createConfigSectionSelector('appFeatures');
 export const selectIsFocusModeEnabled = createSelector(
   selectConfigFeatureState,
   (cfg): boolean =>
@@ -144,37 +103,6 @@ export const selectIsFocusModeEnabled = createSelector(
 
 export const initialGlobalConfigState: GlobalConfigState = {
   ...DEFAULT_GLOBAL_CONFIG,
-};
-
-const normalizeStartOfNextDayConfig = (
-  misc: Partial<MiscConfig>,
-): Partial<MiscConfig> => {
-  // `startOfNextDayTime` wins when present. When both fields arrive together
-  // from sync/REST/plugin payloads we keep minute precision from
-  // `startOfNextDayTime` and derive a legacy hour-only `startOfNextDay`.
-  // If only the legacy `startOfNextDay` arrives, minutes are unavoidably lost.
-  type NormalizedMiscConfig = Omit<
-    Partial<MiscConfig>,
-    'startOfNextDay' | 'startOfNextDayTime'
-  > & {
-    startOfNextDay?: number;
-    startOfNextDayTime?: string;
-  };
-  const normalized: NormalizedMiscConfig = { ...misc };
-
-  if (typeof misc.startOfNextDayTime === 'string') {
-    const hour = getStartOfNextDayHourFromTimeString(misc.startOfNextDayTime);
-    if (hour != null) {
-      normalized.startOfNextDay = hour;
-    }
-  }
-
-  if (typeof misc.startOfNextDay === 'number' && normalized.startOfNextDayTime == null) {
-    const hour = Math.max(0, Math.min(23, misc.startOfNextDay));
-    normalized.startOfNextDayTime = `${String(hour).padStart(2, '0')}:00`;
-  }
-
-  return normalized;
 };
 
 const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {
@@ -251,10 +179,21 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       tasks: {
         ...DEFAULT_GLOBAL_CONFIG.tasks,
         ...appDataComplete.globalConfig.tasks,
+        // Legacy configs stored `null`/`''` (the old "None" default) which no longer
+        // has a matching dropdown option; coerce to the Inbox default so the select
+        // shows a value. Behavior is unchanged — an unset default already routed new
+        // tasks to the Inbox (#7891).
+        defaultProjectId:
+          appDataComplete.globalConfig.tasks?.defaultProjectId ||
+          DEFAULT_GLOBAL_CONFIG.tasks.defaultProjectId,
       },
       shortSyntax: {
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
+      },
+      localBackup: {
+        ...DEFAULT_GLOBAL_CONFIG.localBackup,
+        ...appDataComplete.globalConfig.localBackup,
       },
       focusMode: {
         ...DEFAULT_GLOBAL_CONFIG.focusMode,

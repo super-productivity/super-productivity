@@ -19,24 +19,31 @@ import {
   isArrayEntity as isArrayEntityFromCore,
   isMapEntity as isMapEntityFromCore,
   isSingletonEntity as isSingletonEntityFromCore,
-  isVirtualEntity as isVirtualEntityFromCore,
 } from '@sp/sync-core';
-import type { EntityConfig, EntityRegistry } from '@sp/sync-core';
+import type { EntityRegistry as CoreEntityRegistry } from '@sp/sync-core';
+import type {
+  HostEntityConfig,
+  HostEntityExtensions,
+} from './entity-registry-host.types';
 import { EntityType } from './operation.types';
 
+// The app-wide EntityConfig type carries the NgRx-shaped host extensions.
+// Sync-core only sees the engine-essential subset.
+export type EntityConfig = HostEntityConfig;
+export type EntityRegistry<TEntityType extends string = string> = CoreEntityRegistry<
+  TEntityType,
+  HostEntityExtensions
+>;
+
+export type { BaseEntity, EntityDictionary, EntityStoragePattern } from '@sp/sync-core';
 export type {
-  BaseEntity,
   EntityAdapterLike,
-  EntityConfig,
-  EntityDictionary,
-  EntityRegistry,
-  EntityStoragePattern,
   EntityUpdateLike,
   PropsStateSelector,
   SelectById,
   SelectByIdFactory,
   StateSelector,
-} from '@sp/sync-core';
+} from './entity-registry-host.types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTS - Adapters & Feature Names
@@ -73,6 +80,14 @@ import { plannerFeatureKey } from '../../features/planner/store/planner.reducer'
 import { BOARDS_FEATURE_NAME } from '../../features/boards/store/boards.reducer';
 import { menuTreeFeatureKey } from '../../features/menu-tree/store/menu-tree.reducer';
 import { REMINDER_FEATURE_NAME } from '../../features/reminder/store/reminder.reducer';
+import {
+  PLUGIN_USER_DATA_FEATURE_NAME,
+  selectPluginUserDataFeatureState,
+} from '../../plugins/store/plugin-user-data.reducer';
+import {
+  PLUGIN_METADATA_FEATURE_NAME,
+  selectPluginMetadataFeatureState,
+} from '../../plugins/store/plugin-metadata.reducer';
 import {
   SECTION_FEATURE_NAME,
   adapter as sectionAdapter,
@@ -307,15 +322,26 @@ export const buildEntityRegistry = (): EntityRegistry<EntityType> =>
       arrayKey: null, // State IS the array
     },
 
-    // ── VIRTUAL ENTITIES ───────────────────────────────────────────────────────
+    // PLUGIN_USER_DATA / PLUGIN_METADATA were registered as `'virtual'` before
+    // ConflictResolutionService grew a virtual branch. Their state shape is
+    // already Array<{ id, ... }> — identical to REMINDER's arrayKey:null —
+    // so the existing array branch in getCurrentEntityState (and elsewhere)
+    // resolves them correctly. Keeping them virtual silently disabled LWW
+    // conflict resolution for all plugin data.
     PLUGIN_USER_DATA: {
-      storagePattern: 'virtual',
+      storagePattern: 'array',
+      featureName: PLUGIN_USER_DATA_FEATURE_NAME,
       payloadKey: 'pluginUserData',
+      selectState: selectPluginUserDataFeatureState,
+      arrayKey: null,
     },
 
     PLUGIN_METADATA: {
-      storagePattern: 'virtual',
+      storagePattern: 'array',
+      featureName: PLUGIN_METADATA_FEATURE_NAME,
       payloadKey: 'pluginMetadata',
+      selectState: selectPluginMetadataFeatureState,
+      arrayKey: null,
     },
 
     // Note: ALL, RECOVERY, MIGRATION are not configured - they're special operation types
@@ -362,7 +388,10 @@ export const isMapEntity = isMapEntityFromCore;
 
 export const isArrayEntity = isArrayEntityFromCore;
 
-export const isVirtualEntity = isVirtualEntityFromCore;
+// `isVirtualEntity` removed: no entity in this registry uses the `'virtual'`
+// storagePattern after PLUGIN_USER_DATA / PLUGIN_METADATA migrated to
+// `'array'`. The pattern still exists in `@sp/sync-core` for external
+// consumers; re-export it here once we have a real user again.
 
 /**
  * Returns all payload keys from configured entities.

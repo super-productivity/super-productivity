@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CLIENT_ID_REGEX, MAX_CLIENT_ID_LENGTH } from '../src/sync/sync.const';
+import {
+  CLIENT_ID_REGEX,
+  MAX_CLIENT_ID_LENGTH,
+  isValidClientId,
+} from '../src/sync/sync.const';
 import {
   WS_CONNECTION_RATE_LIMIT_MAX,
   WS_CONNECTION_RATE_LIMIT_WINDOW,
+  wsRateLimitKeyGenerator,
 } from '../src/sync/websocket.routes';
+import type { FastifyRequest } from 'fastify';
 
 /**
  * Tests the WebSocket route validation logic from websocket.routes.ts.
@@ -59,11 +65,7 @@ async function simulateWsHandler(
       return 'rejected';
     }
 
-    if (
-      !clientId ||
-      !CLIENT_ID_REGEX.test(clientId) ||
-      clientId.length > MAX_CLIENT_ID_LENGTH
-    ) {
+    if (!isValidClientId(clientId)) {
       socket.close(4001, 'Invalid clientId');
       return 'rejected';
     }
@@ -104,6 +106,55 @@ describe('WebSocket Route Validation', () => {
     it('should tolerate reconnect bursts after deploys and restarts', () => {
       expect(WS_CONNECTION_RATE_LIMIT_MAX).toBe(120);
       expect(WS_CONNECTION_RATE_LIMIT_WINDOW).toBe('1 minute');
+    });
+  });
+
+  describe('wsRateLimitKeyGenerator', () => {
+    const buildReq = (ip: string, query: Record<string, unknown>): FastifyRequest =>
+      ({ ip, query }) as unknown as FastifyRequest;
+
+    it('should compose (ip, clientId) for a valid clientId so one hammering client does not poison shared-NAT quota', () => {
+      const key = wsRateLimitKeyGenerator(
+        buildReq('192.0.2.1', { clientId: 'valid_client-1' }),
+      );
+      expect(key).toBe('192.0.2.1:valid_client-1');
+    });
+
+    it('should return distinct keys for two clientIds on the same IP', () => {
+      const a = wsRateLimitKeyGenerator(buildReq('192.0.2.1', { clientId: 'A' }));
+      const b = wsRateLimitKeyGenerator(buildReq('192.0.2.1', { clientId: 'B' }));
+      expect(a).not.toBe(b);
+    });
+
+    it('should fall back to ip when clientId is missing', () => {
+      const key = wsRateLimitKeyGenerator(buildReq('192.0.2.1', {}));
+      expect(key).toBe('192.0.2.1');
+    });
+
+    it('should fall back to ip when clientId fails regex validation', () => {
+      const key = wsRateLimitKeyGenerator(
+        buildReq('192.0.2.1', { clientId: 'bad!!!id' }),
+      );
+      expect(key).toBe('192.0.2.1');
+    });
+
+    it('should fall back to ip when clientId exceeds the max length (DoS hardening)', () => {
+      const key = wsRateLimitKeyGenerator(
+        buildReq('192.0.2.1', { clientId: 'a'.repeat(MAX_CLIENT_ID_LENGTH + 1) }),
+      );
+      expect(key).toBe('192.0.2.1');
+    });
+
+    it('should fall back to ip when clientId is an array (Fastify ?cid=a&cid=b parse)', () => {
+      const key = wsRateLimitKeyGenerator(
+        buildReq('192.0.2.1', { clientId: ['a', 'b'] }),
+      );
+      expect(key).toBe('192.0.2.1');
+    });
+
+    it('should fall back to ip when query is undefined', () => {
+      const req = { ip: '192.0.2.1' } as unknown as FastifyRequest;
+      expect(wsRateLimitKeyGenerator(req)).toBe('192.0.2.1');
     });
   });
 

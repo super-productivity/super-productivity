@@ -71,7 +71,7 @@ const archiveDoneTasks = async (page: SimulatedE2EClient['page']): Promise<void>
 const checkWorklogForArchivedTasks = async (
   page: SimulatedE2EClient['page'],
 ): Promise<number> => {
-  await page.goto('/#/tag/TODAY/worklog');
+  await page.goto('/#/tag/TODAY/history');
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(1000);
 

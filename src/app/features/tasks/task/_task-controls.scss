@@ -401,6 +401,14 @@ done-toggle {
   }
 }
 
+:host.hasTimeConflict {
+  .schedule-btn mat-icon,
+  .schedule-btn .time-badge {
+    color: var(--text-color-muted);
+    border-color: color-mix(in srgb, var(--text-color-muted) 45%, transparent);
+  }
+}
+
 .deadline-btn {
   position: relative;
 

@@ -1482,7 +1482,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "既存のタスク「{{taskTitle}}」を追加",
         "CREATE_NEW_TAGS": "新しいタグを作成する",
-        "DUE_BUTTON": "正当",
+        "DUE_BUTTON": "予定",
         "ESTIMATE_BUTTON": "見積もる",
         "PLACEHOLDER_CREATE": "タスクタイトル #tag@16:00",
         "PLACEHOLDER_SEARCH": "既存のタスクや課題を追加してみましょう...",

@@ -168,6 +168,22 @@
   a[href] {
     color: inherit;
   }
+
+  // Monospace + upright so the channel suffix (I / l / 1 / L) stays readable
+  // — the version is what we ask users for in triage.
+  .version {
+    font-family: var(--font-mono-stack);
+    font-style: normal;
+
+    mat-icon {
+      font-size: 1em;
+      width: 1em;
+      height: 1em;
+      vertical-align: middle;
+      margin-left: var(--s-quarter);
+      opacity: var(--muted-alpha);
+    }
+  }
 }
 
 :host .config-section ::ng-deep {

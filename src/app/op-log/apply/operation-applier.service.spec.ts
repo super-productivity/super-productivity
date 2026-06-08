@@ -665,6 +665,16 @@ describe('OperationApplierService', () => {
       expect(mockOperationLogEffects.processDeferredActions).toHaveBeenCalledTimes(1);
     });
 
+    it('should skip deferred action processing when caller will flush later', async () => {
+      const op = createMockOperation('op-1');
+
+      await service.applyOperations([op], {
+        skipDeferredLocalActions: true,
+      });
+
+      expect(mockOperationLogEffects.processDeferredActions).not.toHaveBeenCalled();
+    });
+
     it('should call processDeferredActions after endApplyingRemoteOps', async () => {
       const callOrder: string[] = [];
 

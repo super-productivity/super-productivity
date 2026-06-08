@@ -28,6 +28,7 @@ import { UserProfileService } from '../../user-profile/user-profile.service';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
+import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -122,9 +123,10 @@ export class GlobalConfigEffects {
       withLatestFrom(this._store.select(selectAllTasks)),
       switchMap(([{ sectionCfg }, allTasks]) => {
         const oldTodayStr = this._dateService.todayStr();
-        const miscCfg = sectionCfg as MiscConfig;
+        const miscCfg = normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>);
         this._dateService.setStartOfNextDayDiff(
-          miscCfg.startOfNextDayTime ?? miscCfg.startOfNextDay,
+          miscCfg.startOfNextDayTime,
+          miscCfg.startOfNextDay,
         );
         const newTodayStr = this._dateService.todayStr();
 
@@ -158,8 +160,11 @@ export class GlobalConfigEffects {
       tap(({ appDataComplete }) => {
         const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
         const misc = cfg?.misc ?? DEFAULT_GLOBAL_CONFIG.misc;
-        const startOfNextDay = misc.startOfNextDayTime ?? misc.startOfNextDay;
-        this._dateService.setStartOfNextDayDiff(startOfNextDay);
+        const normalizedMisc = normalizeStartOfNextDayConfig(misc);
+        this._dateService.setStartOfNextDayDiff(
+          normalizedMisc.startOfNextDayTime,
+          normalizedMisc.startOfNextDay,
+        );
       }),
       map(() =>
         AppStateActions.setTodayString({

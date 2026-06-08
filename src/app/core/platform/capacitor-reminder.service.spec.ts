@@ -39,12 +39,16 @@ describe('CapacitorReminderService', () => {
 
     notificationServiceSpy = jasmine.createSpyObj('CapacitorNotificationService', [
       'ensurePermissions',
+      'getPermissionState',
       'cancel',
       'cancelMultiple',
+      'registerReminderActions',
     ]);
     notificationServiceSpy.ensurePermissions.and.returnValue(Promise.resolve(true));
+    notificationServiceSpy.getPermissionState.and.returnValue(Promise.resolve('granted'));
     notificationServiceSpy.cancel.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.cancelMultiple.and.returnValue(Promise.resolve(true));
+    notificationServiceSpy.registerReminderActions.and.returnValue(Promise.resolve());
 
     TestBed.configureTestingModule({
       providers: [
@@ -89,6 +93,58 @@ describe('CapacitorReminderService', () => {
     });
   });
 
+  describe('initialize', () => {
+    // initialize() branches solely on isIOS(); other platform fields are
+    // intentionally omitted to keep the mock honest about what's exercised.
+    const setupPlatform = (
+      platform: 'ios' | 'android' | 'web',
+    ): CapacitorReminderService => {
+      const platformSpy = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['hasCapability', 'isIOS'],
+        { platform },
+      );
+      platformSpy.isIOS.and.returnValue(platform === 'ios');
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          CapacitorReminderService,
+          provideMockStore(),
+          { provide: CapacitorPlatformService, useValue: platformSpy },
+          { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
+        ],
+      });
+      return TestBed.inject(CapacitorReminderService);
+    };
+
+    it('registers reminder action types on iOS', async () => {
+      const iosService = setupPlatform('ios');
+      await iosService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT request permissions eagerly on iOS (contextual prompt on first schedule)', async () => {
+      const iosService = setupPlatform('ios');
+      await iosService.initialize();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op on Android', async () => {
+      const androidService = setupPlatform('android');
+      await androidService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).not.toHaveBeenCalled();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op on web', async () => {
+      const webService = setupPlatform('web');
+      await webService.initialize();
+      expect(notificationServiceSpy.registerReminderActions).not.toHaveBeenCalled();
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
+    });
+  });
+
   describe('scheduleReminder', () => {
     it('should return false when not available', async () => {
       const result = await service.scheduleReminder({
@@ -126,6 +182,14 @@ describe('CapacitorReminderService', () => {
     it('should return false when not available', async () => {
       const result = await service.ensurePermissions();
       expect(result).toBe(false);
+    });
+  });
+
+  describe('getPermissionState', () => {
+    it("should return 'denied' when not available, without prompting", async () => {
+      const result = await service.getPermissionState();
+      expect(result).toBe('denied');
+      expect(notificationServiceSpy.getPermissionState).not.toHaveBeenCalled();
     });
   });
 
@@ -183,6 +247,14 @@ describe('CapacitorReminderService', () => {
       const result = await legacyService.ensureExactAlarmPermission();
       expect(result).toBe(true);
       expect(checkExactAlarmSpy).not.toHaveBeenCalled();
+    });
+
+    it("getPermissionState reports 'granted' without consulting Capacitor", async () => {
+      // Same #7408 reasoning as ensurePermissions: the upfront check is broken
+      // in the legacy WebView, so we trust the OS to gate at fire time.
+      const result = await legacyService.getPermissionState();
+      expect(result).toBe('granted');
+      expect(notificationServiceSpy.getPermissionState).not.toHaveBeenCalled();
     });
   });
 
@@ -247,6 +319,16 @@ describe('CapacitorReminderService', () => {
     it('should call notificationService.ensurePermissions when ensuring permissions', async () => {
       await nativeService.ensurePermissions();
       expect(notificationServiceSpy.ensurePermissions).toHaveBeenCalled();
+    });
+
+    it('getPermissionState delegates to notificationService (no prompt) on native', async () => {
+      notificationServiceSpy.getPermissionState.and.returnValue(
+        Promise.resolve('denied'),
+      );
+      const result = await nativeService.getPermissionState();
+      expect(result).toBe('denied');
+      expect(notificationServiceSpy.getPermissionState).toHaveBeenCalledTimes(1);
+      expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
     });
 
     it('should include sound property when scheduling on iOS', async () => {

@@ -219,7 +219,7 @@ vi.mock('../src/db', async () => {
         state.userSyncStates.set(args.where.userId, result);
         return result;
       }),
-      // Race-safe writers used by SnapshotService._generateSnapshotImpl:
+      // Race-safe writers used by snapshot generation:
       // updateMany honours the `OR: [lastSnapshotSeq null, lastSnapshotSeq < seq]`
       // guard; create is the first-time-user fallback.
       updateMany: vi.fn().mockImplementation(async (args: any) => {
@@ -862,23 +862,6 @@ describe('Sync Operations', () => {
       // This should work without error
       const snapshot = await service.generateSnapshot(userId);
       expect(snapshot).toBeDefined();
-    });
-
-    // Skip: Cannot spy on zlib.gunzipSync in this test environment
-    it.skip('should discard cached snapshot if decompression exceeds limit', async () => {
-      const service = getSyncService();
-
-      await service.uploadOps(userId, clientId, [createOp('task-1', 'CRT')]);
-      await service.generateSnapshot(userId);
-
-      const gunzipSpy = vi.spyOn(zlib, 'gunzipSync').mockImplementation(() => {
-        throw new RangeError('maxOutputLength exceeded');
-      });
-
-      const cached = await service.getCachedSnapshot(userId);
-      expect(cached).toBeNull();
-
-      gunzipSpy.mockRestore();
     });
   });
 

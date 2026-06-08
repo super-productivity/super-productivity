@@ -19,7 +19,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { IS_ELECTRON } from '../../app.constants';
 
-const MAX_BACKGROUND_IMAGE_FILE_SIZE_BYTES = 200 * 1024;
+const MAX_BACKGROUND_IMAGE_FILE_SIZE_BYTES = 256 * 1024;
 
 @Component({
   selector: 'formly-image-input',

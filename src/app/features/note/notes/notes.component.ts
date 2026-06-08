@@ -15,7 +15,7 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { Note } from '../note.model';
 import { T } from '../../../t.const';
 import { WorkContextService } from '../../work-context/work-context.service';
-import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { moveItemInArray } from '../../../util/move-item-in-array';
 import { MatIcon } from '@angular/material/icon';
 import { NoteComponent } from '../note/note.component';
@@ -40,7 +40,6 @@ import { IS_MOBILE } from 'src/app/util/is-mobile';
     NoteComponent,
     AsyncPipe,
     TranslatePipe,
-    CdkDragHandle,
   ],
 })
 export class NotesComponent implements OnInit {

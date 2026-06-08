@@ -64,6 +64,8 @@ vi.mock('../src/db', () => ({
 }));
 
 import { syncRoutes } from '../src/sync/sync.routes';
+import { SYNC_ERROR_CODES } from '../src/sync/sync.types';
+import { SUPER_SYNC_MAX_OPS_PER_UPLOAD } from '@sp/shared-schema';
 
 const gzipAsync = promisify(zlib.gzip);
 
@@ -185,6 +187,38 @@ describe('Sync compressed body routes', () => {
     expect(typeof quotaCall[1]).toBe('number');
     expect(quotaCall[1]).toBeGreaterThan(0);
     expect(quotaCall[1]).toBeLessThan(payloadSize);
+  });
+
+  it('should reject oversized op batches before schema validation', async () => {
+    const clientId = 'too-many-ops-client';
+    const payload = {
+      ops: Array.from({ length: SUPER_SYNC_MAX_OPS_PER_UPLOAD + 1 }, (_, i) => ({
+        ...createOp(clientId),
+        entityId: `task-${i}`,
+        timestamp: Date.now() + i,
+      })),
+      clientId,
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/ops',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+      },
+      payload: JSON.stringify(payload),
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+        maxOpsPerBatch: SUPER_SYNC_MAX_OPS_PER_UPLOAD,
+      }),
+    );
+    expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
+    expect(mocks.syncService.checkStorageQuota).not.toHaveBeenCalled();
   });
 
   it('should fall back to UTF-8 JSON byte size for plain JSON without content-length', async () => {
@@ -485,7 +519,7 @@ describe('Sync compressed body routes', () => {
       false,
       expect.anything(),
     );
-  });
+  }, 15000);
 
   it('should keep plain JSON snapshots capped at the binary route limit', async () => {
     const clientId = 'plain-json-large-snapshot-client';

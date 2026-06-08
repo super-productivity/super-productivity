@@ -1415,7 +1415,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Legg til eksisterende oppgave \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Opprett nye merker",
-        "DUE_BUTTON": "Forfall",
+        "DUE_BUTTON": "Planlegg",
         "ESTIMATE_BUTTON": "Estimert",
         "PLACEHOLDER_CREATE": "En oppgavetittel #tag @16:00",
         "PLACEHOLDER_SEARCH": "Legg til eksisterende oppgave eller saker...",

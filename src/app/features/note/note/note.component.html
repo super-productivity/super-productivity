@@ -36,7 +36,6 @@
       class="bottom-controls handle-drag"
       [class.isOver]="note.imgUrl"
     >
-      <ng-content></ng-content>
       @if (note.projectId) {
         <button
           mat-icon-button
@@ -46,7 +45,7 @@
             <mat-icon>wb_sunny</mat-icon>
           }
           @if (note.isPinnedToToday) {
-            <mat-icon>timer_off</mat-icon>
+            <mat-icon svgIcon="remove_today"></mat-icon>
           }
         </button>
       }
@@ -121,7 +120,7 @@
             <mat-icon
               [style.color]="project.theme.primary"
               class="tag-ico"
-              >{{ project.icon || 'list' }}</mat-icon
+              >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
             >
             {{ project.title }}
           </button>

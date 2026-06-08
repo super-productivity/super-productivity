@@ -55,8 +55,22 @@ echo ""
 cd "$SERVER_DIR"
 
 # Pull latest code (scripts, docker-compose.yml, etc.)
+DEPLOY_SCRIPT_FILE="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_BEFORE_HASH=""
+if [ -z "${SUPER_SYNC_DEPLOY_REEXECED:-}" ]; then
+    SCRIPT_BEFORE_HASH="$(git hash-object "$DEPLOY_SCRIPT_FILE" 2>/dev/null || true)"
+fi
 echo "==> Pulling latest code..."
 git pull --ff-only || { echo "WARNING: git pull failed — continuing with current files"; }
+if [ -z "${SUPER_SYNC_DEPLOY_REEXECED:-}" ] && [ -n "$SCRIPT_BEFORE_HASH" ]; then
+    SCRIPT_AFTER_HASH="$(git hash-object "$DEPLOY_SCRIPT_FILE" 2>/dev/null || true)"
+    if [ -n "$SCRIPT_AFTER_HASH" ] && [ "$SCRIPT_BEFORE_HASH" != "$SCRIPT_AFTER_HASH" ]; then
+        echo ""
+        echo "==> deploy.sh updated by git pull; re-executing the new version..."
+        export SUPER_SYNC_DEPLOY_REEXECED=1
+        exec "$DEPLOY_SCRIPT_FILE" "$@"
+    fi
+fi
 echo ""
 
 # Load deploy-script settings from .env when they were not already exported.
@@ -81,9 +95,78 @@ load_env_value() {
     export "$key=$value"
 }
 
-for env_key in GHCR_USER GHCR_TOKEN DATABASE_URL POSTGRES_SERVICE POSTGRES_WAIT_TIMEOUT MIGRATION_TIMEOUT DEPLOY_WAIT_TIMEOUT; do
+for env_key in GHCR_USER GHCR_TOKEN DATABASE_URL POSTGRES_SERVICE POSTGRES_WAIT_TIMEOUT MIGRATION_TIMEOUT DEPLOY_WAIT_TIMEOUT SUPERSYNC_SKIP_IMAGE_REVISION_CHECK; do
     load_env_value "$env_key"
 done
+
+if [ "${SUPERSYNC_SKIP_IMAGE_REVISION_CHECK:-}" != "true" ] && ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq is required to read the supersync image from docker compose config."
+    echo "       Install jq, or set SUPERSYNC_SKIP_IMAGE_REVISION_CHECK=true for a deliberate manual override."
+    exit 1
+fi
+
+supersync_image_source_revision() {
+    local revision
+
+    revision="$(git log -1 --format=%H -- \
+        ../../.dockerignore \
+        ../../.github/workflows/supersync-docker.yml \
+        ../../package.json \
+        ../../package-lock.json \
+        ../shared-schema \
+        ../sync-core \
+        . 2>/dev/null || true)"
+    if [ -n "$revision" ]; then
+        printf '%s\n' "$revision"
+        return
+    fi
+
+    git rev-parse HEAD 2>/dev/null || true
+}
+
+assert_clean_supersync_image_inputs() {
+    local untracked_files
+
+    if ! git diff --quiet -- \
+        ../../.dockerignore \
+        ../../.github/workflows/supersync-docker.yml \
+        ../../package.json \
+        ../../package-lock.json \
+        ../shared-schema \
+        ../sync-core \
+        . ||
+        ! git diff --cached --quiet -- \
+            ../../.dockerignore \
+            ../../.github/workflows/supersync-docker.yml \
+            ../../package.json \
+            ../../package-lock.json \
+            ../shared-schema \
+            ../sync-core \
+            .; then
+        echo ""
+        echo "ERROR: Refusing to build a labeled supersync image from dirty tracked input files."
+        echo "       Commit or stash changes under packages/super-sync-server,"
+        echo "       packages/sync-core, packages/shared-schema, package*.json, or"
+        echo "       .dockerignore/.github/workflows/supersync-docker.yml before running --build."
+        exit 1
+    fi
+
+    untracked_files="$(git ls-files --others --exclude-standard -- \
+        ../../.dockerignore \
+        ../../.github/workflows/supersync-docker.yml \
+        ../../package.json \
+        ../../package-lock.json \
+        ../shared-schema \
+        ../sync-core \
+        . 2>/dev/null || true)"
+    if [ -n "$untracked_files" ]; then
+        echo ""
+        echo "ERROR: Refusing to build a labeled supersync image with untracked input files."
+        echo "       Commit, stash, remove, or ignore these files first:"
+        printf '%s\n' "$untracked_files" | sed 's/^/       - /'
+        exit 1
+    fi
+}
 
 # Login to GHCR if credentials provided
 if [ -n "${GHCR_TOKEN:-}" ] && [ -n "${GHCR_USER:-}" ]; then
@@ -118,12 +201,68 @@ if [ "$BUILD_LOCAL" = true ]; then
     # Local build mode
     echo "==> Building locally..."
     COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.build.yml"
+    assert_clean_supersync_image_inputs
+    export SUPERSYNC_BUILD_SHA="$(supersync_image_source_revision)"
     docker compose $COMPOSE_FILES build
 else
     # Pull from registry (default)
     echo "==> Pulling latest image..."
     docker compose $COMPOSE_FILES pull supersync
 fi
+
+verify_supersync_image_revision() {
+    if [ "${SUPERSYNC_SKIP_IMAGE_REVISION_CHECK:-}" = "true" ]; then
+        echo "==> Skipping image revision check (SUPERSYNC_SKIP_IMAGE_REVISION_CHECK=true)"
+        return
+    fi
+
+    local compose_config_json expected_revision image_ref image_revision
+
+    expected_revision="$(supersync_image_source_revision)"
+    if [ -z "$expected_revision" ]; then
+        echo "WARNING: Could not determine expected supersync image revision; skipping image revision check"
+        return
+    fi
+
+    compose_config_json="$(docker compose $COMPOSE_FILES config --format json 2>/dev/null || true)"
+    if [ -z "$compose_config_json" ]; then
+        echo ""
+        echo "ERROR: docker compose config --format json failed."
+        echo "       Upgrade Docker Compose, or set SUPERSYNC_SKIP_IMAGE_REVISION_CHECK=true"
+        echo "       for a deliberate manual override."
+        exit 1
+    fi
+
+    image_ref="$(printf '%s\n' "$compose_config_json" | jq -r '.services.supersync.image // empty' 2>/dev/null || true)"
+    if [ -z "$image_ref" ]; then
+        echo ""
+        echo "ERROR: Could not determine the supersync image from docker compose config JSON."
+        exit 1
+    fi
+
+    image_revision="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_ref" 2>/dev/null || true)"
+    if [ -z "$image_revision" ] || [ "$image_revision" = "<no value>" ] || [ "$image_revision" = "unknown" ]; then
+        echo ""
+        echo "ERROR: The supersync image has no git revision label."
+        echo "       It may be stale relative to the checked-out deploy scripts."
+        echo "       Build and push the current image, or run ./scripts/deploy.sh --build."
+        exit 1
+    fi
+
+    if [ "$image_revision" != "$expected_revision" ]; then
+        echo ""
+        echo "ERROR: The supersync image revision does not match the expected source revision."
+        echo "       image: $image_revision"
+        echo "       code:  $expected_revision"
+        echo "       Wait for the GHCR image build to finish, build/push the current image,"
+        echo "       or run ./scripts/deploy.sh --build."
+        exit 1
+    fi
+
+    echo "==> Verified supersync image revision: ${image_revision:0:12}"
+}
+
+verify_supersync_image_revision
 
 # Run migrations before replacing the app container. This keeps the currently
 # running app available while online index builds run, and it fails the deploy
@@ -148,7 +287,6 @@ echo ""
 # loudly instead of hanging this script forever. Exit code 124 = timed out.
 MIGRATION_TIMEOUT="${MIGRATION_TIMEOUT:-900}"
 MIGRATOR_RUN="docker compose $COMPOSE_FILES run --rm --no-deps --interactive=false -T supersync"
-FULL_STATE_INDEX_MIGRATION="20260512000000_add_full_state_sequence_index_drop_redundant_indexes"
 echo "==> Verifying database connectivity from the supersync image..."
 set +e
 timeout "$POSTGRES_WAIT_TIMEOUT" \
@@ -171,132 +309,16 @@ echo "    Database reachable"
 echo ""
 echo "==> Applying database migrations before app restart (timeout: ${MIGRATION_TIMEOUT}s)..."
 
-MIGRATE_LOG=""
+# Migration application + recovery lives in the in-image scripts/migrate-deploy.sh
+# so it is always version-locked to prisma/migrations in the pulled image (a
+# stale host deploy.sh can no longer skip a new CONCURRENTLY migration's
+# recovery). The host only owns the timeout + exit-code policy here.
 MIGRATE_STATUS=0
-
-run_migrate_deploy() {
-    MIGRATE_LOG="$(mktemp "${TMPDIR:-/tmp}/supersync-migrate.XXXXXX")"
-    set +e
-    timeout "$MIGRATION_TIMEOUT" \
-        $MIGRATOR_RUN sh -ec 'echo "    Migrator container started"; npx prisma migrate deploy' 2>&1 | tee "$MIGRATE_LOG"
-    MIGRATE_STATUS=${PIPESTATUS[0]}
-    set -e
-}
-
-is_recoverable_full_state_index_migration_failure() {
-    [ -n "$MIGRATE_LOG" ] &&
-        grep -q 'P3009' "$MIGRATE_LOG" &&
-        grep -q "$FULL_STATE_INDEX_MIGRATION" "$MIGRATE_LOG"
-}
-
-is_full_state_index_transaction_block_failure() {
-    [ -n "$MIGRATE_LOG" ] &&
-        grep -q 'P3018' "$MIGRATE_LOG" &&
-        grep -q "$FULL_STATE_INDEX_MIGRATION" "$MIGRATE_LOG" &&
-        grep -q 'cannot run inside a transaction block' "$MIGRATE_LOG"
-}
-
-run_concurrent_index_sql() {
-    local sql="$1"
-    local execute_status
-
-    set +e
-    # Use the same supersync container and DATABASE_URL as `migrate deploy`.
-    # This avoids marking the Prisma migration applied in one database after
-    # running the out-of-band index SQL against another.
-    printf '%s\n' "$sql" | timeout "$MIGRATION_TIMEOUT" \
-        $MIGRATOR_RUN sh -ec 'npx prisma db execute --schema prisma/schema.prisma --stdin'
-    execute_status=${PIPESTATUS[1]}
-    set -e
-
-    if [ "$execute_status" -eq 124 ]; then
-        echo ""
-        echo "ERROR: concurrent index SQL timed out after ${MIGRATION_TIMEOUT}s."
-        echo "       A long-running transaction may be blocking CREATE/DROP INDEX CONCURRENTLY."
-        exit 1
-    fi
-    if [ "$execute_status" -ne 0 ]; then
-        echo ""
-        echo "ERROR: concurrent index SQL failed (exit $execute_status)."
-        exit "$execute_status"
-    fi
-}
-
-apply_full_state_index_migration_outside_prisma() {
-    echo ""
-    echo "==> Applying $FULL_STATE_INDEX_MIGRATION outside Prisma migrate..."
-    echo "    Prisma cannot run this multi-statement CONCURRENTLY migration in one transaction block."
-
-    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_full_state_server_seq_idx";'
-    run_concurrent_index_sql "CREATE INDEX CONCURRENTLY \"operations_user_id_full_state_server_seq_idx\" ON \"operations\"(\"user_id\", \"server_seq\") WHERE \"op_type\" IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR');"
-    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_op_type_idx";'
-    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_entity_type_entity_id_idx";'
-    run_concurrent_index_sql 'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_server_seq_idx";'
-}
-
-resolve_failed_full_state_index_migration() {
-    local resolve_status
-
-    echo ""
-    echo "==> Resolving failed index-only migration $FULL_STATE_INDEX_MIGRATION..."
-    echo "    Marking it rolled back so Prisma can retry the idempotent migration SQL."
-    set +e
-    timeout "$POSTGRES_WAIT_TIMEOUT" \
-        $MIGRATOR_RUN npx prisma migrate resolve --rolled-back "$FULL_STATE_INDEX_MIGRATION"
-    resolve_status=$?
-    set -e
-
-    if [ "$resolve_status" -eq 124 ]; then
-        echo ""
-        echo "ERROR: prisma migrate resolve timed out after ${POSTGRES_WAIT_TIMEOUT}s."
-        exit 1
-    fi
-    if [ "$resolve_status" -ne 0 ]; then
-        echo ""
-        echo "ERROR: prisma migrate resolve failed (exit $resolve_status)."
-        exit "$resolve_status"
-    fi
-}
-
-resolve_applied_full_state_index_migration() {
-    local resolve_status
-
-    echo ""
-    echo "==> Marking $FULL_STATE_INDEX_MIGRATION as applied after out-of-band SQL..."
-    set +e
-    timeout "$POSTGRES_WAIT_TIMEOUT" \
-        $MIGRATOR_RUN npx prisma migrate resolve --applied "$FULL_STATE_INDEX_MIGRATION"
-    resolve_status=$?
-    set -e
-
-    if [ "$resolve_status" -eq 124 ]; then
-        echo ""
-        echo "ERROR: prisma migrate resolve --applied timed out after ${POSTGRES_WAIT_TIMEOUT}s."
-        exit 1
-    fi
-    if [ "$resolve_status" -ne 0 ]; then
-        echo ""
-        echo "ERROR: prisma migrate resolve --applied failed (exit $resolve_status)."
-        exit "$resolve_status"
-    fi
-}
-
-run_migrate_deploy
-if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
-    is_recoverable_full_state_index_migration_failure; then
-    resolve_failed_full_state_index_migration
-    echo ""
-    echo "==> Retrying database migrations after resolving $FULL_STATE_INDEX_MIGRATION..."
-    run_migrate_deploy
-fi
-if [ "$MIGRATE_STATUS" -ne 0 ] && [ "$MIGRATE_STATUS" -ne 124 ] &&
-    is_full_state_index_transaction_block_failure; then
-    apply_full_state_index_migration_outside_prisma
-    resolve_applied_full_state_index_migration
-    echo ""
-    echo "==> Retrying database migrations after applying $FULL_STATE_INDEX_MIGRATION..."
-    run_migrate_deploy
-fi
+set +e
+timeout "$MIGRATION_TIMEOUT" \
+    $MIGRATOR_RUN sh -ec 'echo "    Migrator container started"; sh scripts/migrate-deploy.sh'
+MIGRATE_STATUS=$?
+set -e
 
 if [ "$MIGRATE_STATUS" -eq 124 ]; then
     echo ""
@@ -307,7 +329,9 @@ if [ "$MIGRATE_STATUS" -eq 124 ]; then
 fi
 if [ "$MIGRATE_STATUS" -ne 0 ]; then
     echo ""
-    echo "ERROR: prisma migrate deploy failed (exit $MIGRATE_STATUS)."
+    echo "ERROR: database migrations failed (exit $MIGRATE_STATUS)."
+    echo "       scripts/migrate-deploy.sh prints exact manual recovery steps"
+    echo "       above for any migration it cannot safely auto-recover."
     exit "$MIGRATE_STATUS"
 fi
 

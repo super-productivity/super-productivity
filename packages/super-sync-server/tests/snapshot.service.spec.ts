@@ -3,6 +3,7 @@ import {
   SnapshotService,
   EncryptedOpsNotSupportedError,
 } from '../src/sync/services/snapshot.service';
+import { replayOpsToState } from '../src/sync/op-replay';
 import * as zlib from 'zlib';
 
 // Mock prisma
@@ -272,13 +273,6 @@ describe('SnapshotService', () => {
         previousBytes: 0,
         deltaBytes: 0,
       });
-    });
-
-    // Skip: Testing size limit requires mocking zlib which is a native module.
-    // The size check is a simple comparison and is implicitly tested by integration tests.
-    it.skip('should skip caching if snapshot is too large', async () => {
-      // This test is skipped because zlib cannot be easily mocked
-      // The MAX_SNAPSHOT_SIZE_BYTES check is a simple comparison
     });
 
     it('should clear a previously-cached snapshot when the new one is oversized', async () => {
@@ -1456,7 +1450,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any);
+      const result = replayOpsToState(ops as any);
 
       expect(result).toEqual({
         TASK: {
@@ -1482,7 +1476,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any, initialState);
+      const result = replayOpsToState(ops as any, initialState);
 
       expect(result).toEqual({
         TASK: {
@@ -1511,7 +1505,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any, initialState);
+      const result = replayOpsToState(ops as any, initialState);
 
       expect(result).toEqual({
         TASK: {
@@ -1539,7 +1533,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any);
+      const result = replayOpsToState(ops as any);
 
       expect(result).toEqual({
         TASK: {
@@ -1568,10 +1562,82 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any);
+      const result = replayOpsToState(ops as any);
 
       expect(result.TASK).toEqual({ 'task-1': { id: 'task-1' } });
       expect(result.PROJECT).toEqual({ 'proj-1': { id: 'proj-1' } });
+    });
+
+    it('should never stringify the full replay state for small delta ops', () => {
+      // Delta accounting is a proven over-estimate, so when the running bound
+      // stays well under the cap the exact measurement is provably redundant
+      // and skipped entirely. This matches the pre-existing per-op-loop replay
+      // (which did zero full stringifications below its 1000-op cadence) — the
+      // earlier "exactly 1" expectation encoded a regression on the dominant
+      // small/incremental-replay path.
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      const ops = Array.from({ length: 1500 }, (_, index) => ({
+        id: `op-${index}`,
+        opType: 'CRT',
+        entityType: 'TASK',
+        entityId: `task-${index}`,
+        payload: { id: `task-${index}`, title: `Task ${index}` },
+        isPayloadEncrypted: false,
+        serverSeq: index + 1,
+        schemaVersion: 1,
+      }));
+
+      try {
+        replayOpsToState(ops as any);
+
+        const fullStateStringifications = stringifySpy.mock.calls.filter(([value]) => {
+          return (
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            Object.prototype.hasOwnProperty.call(value, 'TASK')
+          );
+        });
+        expect(fullStateStringifications).toHaveLength(0);
+      } finally {
+        stringifySpy.mockRestore();
+      }
+    });
+
+    it('should measure replay state immediately after a full-state op', () => {
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      const ops = [
+        {
+          id: 'op-1',
+          opType: 'SYNC_IMPORT',
+          entityType: 'FULL_STATE',
+          entityId: null,
+          payload: {
+            appDataComplete: {
+              TASK: { 'task-1': { id: 'task-1' } },
+            },
+          },
+          isPayloadEncrypted: false,
+          serverSeq: 1,
+          schemaVersion: 1,
+        },
+      ];
+
+      try {
+        replayOpsToState(ops as any);
+
+        const fullStateStringifications = stringifySpy.mock.calls.filter(([value]) => {
+          return (
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            Object.prototype.hasOwnProperty.call(value, 'TASK')
+          );
+        });
+        expect(fullStateStringifications.length).toBeGreaterThanOrEqual(1);
+      } finally {
+        stringifySpy.mockRestore();
+      }
     });
 
     it('SYNC_IMPORT replaces the entire state (does NOT merge into stale cache)', () => {
@@ -1601,7 +1667,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any, stalePriorState);
+      const result = replayOpsToState(ops as any, stalePriorState);
 
       expect(result).toEqual({ TASK: { 'new-task': { id: 'new-task' } } });
       // Stale keys gone
@@ -1655,7 +1721,7 @@ describe('SnapshotService', () => {
       ];
 
       try {
-        const result = service.replayOpsToState(ops as any) as Record<string, unknown> & {
+        const result = replayOpsToState(ops as any) as Record<string, unknown> & {
           polluted?: unknown;
         };
 
@@ -1708,12 +1774,8 @@ describe('SnapshotService', () => {
         },
       ];
 
-      expect(() => service.replayOpsToState(ops as any)).toThrow(
-        EncryptedOpsNotSupportedError,
-      );
-      expect(() => service.replayOpsToState(ops as any)).toThrow(
-        'ENCRYPTED_OPS_NOT_SUPPORTED',
-      );
+      expect(() => replayOpsToState(ops as any)).toThrow(EncryptedOpsNotSupportedError);
+      expect(() => replayOpsToState(ops as any)).toThrow('ENCRYPTED_OPS_NOT_SUPPORTED');
     });
 
     it('should skip unknown entity types', () => {
@@ -1730,7 +1792,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any);
+      const result = replayOpsToState(ops as any);
 
       expect(result).toEqual({});
     });
@@ -1762,7 +1824,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any) as Record<string, unknown>;
+      const result = replayOpsToState(ops as any) as Record<string, unknown>;
       const taskMap = result.TASK as Record<string, unknown> & { polluted?: boolean };
 
       // Unsafe id was skipped; the legitimate task still applied.
@@ -1792,7 +1854,7 @@ describe('SnapshotService', () => {
         },
       ];
 
-      const result = service.replayOpsToState(ops as any) as Record<string, unknown>;
+      const result = replayOpsToState(ops as any) as Record<string, unknown>;
       const taskMap = result.TASK as Record<string, unknown> & { polluted?: boolean };
       expect(taskMap['real-id']).toEqual({ id: 'real-id' });
       expect(Object.getPrototypeOf(taskMap)).toBe(Object.prototype);
@@ -1814,7 +1876,7 @@ describe('SnapshotService', () => {
               schemaVersion: 1,
             },
           ];
-          const result = service.replayOpsToState(ops as any) as Record<string, unknown>;
+          const result = replayOpsToState(ops as any) as Record<string, unknown>;
           const taskMap = result.TASK as Record<string, unknown> | undefined;
           if (taskMap) {
             expect(Object.getPrototypeOf(taskMap)).toBe(Object.prototype);

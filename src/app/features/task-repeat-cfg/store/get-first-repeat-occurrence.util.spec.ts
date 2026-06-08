@@ -173,6 +173,62 @@ describe('getFirstRepeatOccurrence', () => {
     });
   });
 
+  describe('MONTHLY last day of month (issue #7726)', () => {
+    it('returns the last day of a 31-day startDate month', () => {
+      const result = getFirstRepeatOccurrence(
+        mkCfg({
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2026-05-31',
+          monthlyLastDay: true,
+        }),
+      );
+      expect(result!.getFullYear()).toBe(2026);
+      expect(result!.getMonth()).toBe(4);
+      expect(result!.getDate()).toBe(31);
+    });
+
+    it('returns the last day of a 30-day startDate month', () => {
+      const result = getFirstRepeatOccurrence(
+        mkCfg({
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2026-06-30',
+          monthlyLastDay: true,
+        }),
+      );
+      expect(result!.getMonth()).toBe(5);
+      expect(result!.getDate()).toBe(30);
+    });
+
+    it('resolves to the month-end regardless of startDate day-of-month', () => {
+      const result = getFirstRepeatOccurrence(
+        mkCfg({
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2026-02-15',
+          monthlyLastDay: true,
+        }),
+      );
+      expect(result!.getMonth()).toBe(1);
+      expect(result!.getDate()).toBe(28);
+    });
+
+    it('resolves to February 29 in a leap year', () => {
+      const result = getFirstRepeatOccurrence(
+        mkCfg({
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2024-02-10',
+          monthlyLastDay: true,
+        }),
+      );
+      expect(result!.getFullYear()).toBe(2024);
+      expect(result!.getMonth()).toBe(1);
+      expect(result!.getDate()).toBe(29);
+    });
+  });
+
   describe('MONTHLY Nth weekday (issue #6040)', () => {
     it('returns the Nth weekday in the start month when on/after startDate', () => {
       // 2026-01-01 (Thu) is the 1st Thursday of Jan 2026 → returns Jan 1.

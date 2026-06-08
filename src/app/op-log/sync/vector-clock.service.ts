@@ -3,6 +3,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { VectorClock, EntityType } from '../core/operation.types';
 import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { toEntityKey } from '../util/entity-key.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 
 /**
  * Service for managing vector clocks in the operation log system.
@@ -174,11 +175,7 @@ export class VectorClockService {
       // Skip rejected ops - they shouldn't affect the frontier
       if (entry.rejectedAt) continue;
 
-      const ids = entry.op.entityIds?.length
-        ? entry.op.entityIds
-        : entry.op.entityId
-          ? [entry.op.entityId]
-          : [];
+      const ids = getOpEntityIds(entry.op);
 
       for (const id of ids) {
         if (entityType && entry.op.entityType !== entityType) continue;

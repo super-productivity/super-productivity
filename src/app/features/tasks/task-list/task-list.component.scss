@@ -19,6 +19,23 @@
   }
 }
 
+// Sub-task drop lists keep their drag-drop padding INSIDE the cdkDropList
+// element (`.task-list-inner`) instead of on :host, so the strip above the
+// first subtask and below the last one becomes part of the CDK drop rect. A
+// task dragged into that strip then enters the list and CDK drops it as the
+// first / last child (SingleAxisSortStrategy._shouldEnterAsFirstChild).
+// Without it, the only target for the first/last slot is half of the edge row,
+// which is awkwardly small to hit (#7905 scenario B). The matching :host
+// padding is dropped for sub-lists so the visible gap stays compact.
+:host-context(.sub-tasks) {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.task-list-inner[data-list-id='SUB'] {
+  padding: var(--s) 0;
+}
+
 .done-task-box {
   text-align: center;
   display: flex;

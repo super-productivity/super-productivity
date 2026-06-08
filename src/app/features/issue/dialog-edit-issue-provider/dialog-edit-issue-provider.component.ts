@@ -47,6 +47,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { CalendarContextInfoTarget } from '../providers/calendar/calendar.model';
 import { IssueIconPipe } from '../issue-icon/issue-icon.pipe';
 import { JiraAdditionalCfgComponent } from '../providers/jira/jira-view-components/jira-cfg/jira-additional-cfg.component';
+import { JiraCfg } from '../providers/jira/jira.model';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
@@ -59,7 +60,7 @@ import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
-import { OAuthFlowConfig } from '@super-productivity/plugin-api';
+import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 // ClickUp is now a plugin — no built-in config component needed
@@ -205,7 +206,10 @@ export class DialogEditIssueProviderComponent {
 
   constructor() {
     this._initOAuthAndOptions().catch((err) => {
-      console.error('[DialogEditIssueProvider] OAuth init failed', err);
+      console.error(
+        '[DialogEditIssueProvider] OAuth init failed',
+        getSafeErrorLogMeta(err),
+      );
     });
   }
 
@@ -254,7 +258,11 @@ export class DialogEditIssueProviderComponent {
   }
 
   customCfgCmpSave(cfgUpdates: IssueIntegrationCfg): void {
-    IssueLog.log('customCfgCmpSave()', cfgUpdates);
+    IssueLog.log('Issue provider config component saved updates', {
+      issueProviderKey: this.issueProviderKey,
+      issueProviderId: this.model.id,
+      ...getSafeCfgUpdateLogMeta(cfgUpdates),
+    });
     this.updateModel(cfgUpdates);
   }
 
@@ -365,7 +373,7 @@ export class DialogEditIssueProviderComponent {
       const detail = (e instanceof Error ? e.message : String(e))
         .replace(/\s+/g, ' ')
         .slice(0, 200);
-      IssueLog.err('OAuth connect failed', { message: detail });
+      IssueLog.err('OAuth connect failed', getSafeErrorLogMeta(e));
       this._snackService.open({
         type: 'ERROR',
         msg: detail ? T.F.ISSUE.S.OAUTH_FAILED_WITH_DETAIL : T.F.ISSUE.S.OAUTH_FAILED,
@@ -398,6 +406,10 @@ export class DialogEditIssueProviderComponent {
   protected readonly IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
+
+  protected get isJiraDirectFetchEnabled(): boolean {
+    return !!(this.model as Partial<JiraCfg>).allowFetchFallback;
+  }
 
   protected isOAuthUnavailableInWeb(oauthConfig: OAuthFlowConfig): boolean {
     return !IS_ELECTRON && !IS_NATIVE_PLATFORM && !oauthConfig.webClientId;
@@ -441,10 +453,11 @@ export class DialogEditIssueProviderComponent {
         }
       } catch (e) {
         anyFailed = true;
-        console.error(
-          `[DialogEditIssueProvider] loadOptions failed for field '${field.key}':`,
-          e,
-        );
+        console.error('[DialogEditIssueProvider] loadOptions failed', {
+          issueProviderKey: this.issueProviderKey,
+          hasFieldKey: !!field.key,
+          ...getSafeErrorLogMeta(e),
+        });
         this._snackService.open({
           type: 'ERROR',
           msg: T.F.ISSUE.S.LOAD_OPTIONS_FAILED,
@@ -506,6 +519,26 @@ export class DialogEditIssueProviderComponent {
       migrated['readCalendarIds'] = [migrated['calendarId'] as string];
       migrated['writeCalendarId'] = migrated['writeCalendarId'] || migrated['calendarId'];
     }
+    const defaultPluginConfig = this._getDefaultPluginConfig();
+    const defaultTwoWaySync = defaultPluginConfig['twoWaySync'] as
+      | Record<string, PluginSyncDirection>
+      | undefined;
+    if (defaultTwoWaySync) {
+      const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+      const isPushSupported = !!provider?.definition.updateIssue;
+      const currentTwoWaySync =
+        (migrated['twoWaySync'] as Record<string, PluginSyncDirection> | undefined) ?? {};
+      const normalizedCurrentTwoWaySync = Object.fromEntries(
+        Object.entries(currentTwoWaySync).map(([field, direction]) => [
+          field,
+          this._normalizeSyncDirectionForCapabilities(direction, isPushSupported),
+        ]),
+      );
+      migrated['twoWaySync'] = {
+        ...defaultTwoWaySync,
+        ...normalizedCurrentTwoWaySync,
+      };
+    }
     return { ...model, pluginConfig: migrated } as Partial<IssueProvider>;
   }
 
@@ -513,15 +546,30 @@ export class DialogEditIssueProviderComponent {
     if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
       return {};
     }
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const fieldMappings = this._pluginRegistry.getFieldMappings(this.issueProviderKey);
     if (!fieldMappings?.length) {
       return {};
     }
     const twoWaySync: Record<string, string> = {};
     for (const m of fieldMappings) {
-      twoWaySync[m.taskField] = m.defaultDirection;
+      twoWaySync[m.taskField] = this._normalizeSyncDirectionForCapabilities(
+        m.defaultDirection as PluginSyncDirection,
+        isPushSupported,
+      );
     }
     return { twoWaySync };
+  }
+
+  private _normalizeSyncDirectionForCapabilities(
+    direction: PluginSyncDirection,
+    isPushSupported: boolean,
+  ): PluginSyncDirection {
+    if (!isPushSupported && (direction === 'pushOnly' || direction === 'both')) {
+      return 'pullOnly';
+    }
+    return direction;
   }
 
   private _getPluginFormSection(): ConfigFormSection<IssueIntegrationCfg> | undefined {
@@ -626,11 +674,17 @@ export class DialogEditIssueProviderComponent {
     pluginKey: IssueProviderKey,
     fieldMappings: { taskField: string; issueField: string; defaultDirection: string }[],
   ): unknown {
+    const provider = this._pluginRegistry.getProvider(pluginKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const syncDirectionOptions = [
       { value: 'off', label: T.F.ISSUE.TWO_WAY_SYNC.OFF },
       { value: 'pullOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PULL_ONLY },
-      { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
-      { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+      ...(isPushSupported
+        ? [
+            { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
+            { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+          ]
+        : []),
     ];
     const TASK_FIELD_LABELS: Record<string, string> = {
       isDone: T.F.ISSUE.TWO_WAY_SYNC.STATUS,
@@ -639,6 +693,7 @@ export class DialogEditIssueProviderComponent {
       dueDay: T.F.ISSUE.TWO_WAY_SYNC.DUE_DAY,
       dueWithTime: T.F.ISSUE.TWO_WAY_SYNC.DUE_WITH_TIME,
       timeEstimate: T.F.ISSUE.TWO_WAY_SYNC.TIME_ESTIMATE,
+      tagIds: T.F.ISSUE.TWO_WAY_SYNC.TAGS,
     };
     const syncFields: any[] = fieldMappings.map((m) => ({
       key: ('pluginConfig.twoWaySync.' + m.taskField) as keyof IssueIntegrationCfg,
@@ -648,7 +703,6 @@ export class DialogEditIssueProviderComponent {
         options: syncDirectionOptions,
       },
     }));
-    const provider = this._pluginRegistry.getProvider(pluginKey);
     if (provider?.definition.createIssue) {
       syncFields.push({
         key: 'pluginConfig.isAutoCreateIssues',
@@ -660,6 +714,16 @@ export class DialogEditIssueProviderComponent {
         props: {
           label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES,
           description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES_DESCRIPTION,
+        },
+      });
+    }
+    if (provider?.definition.fieldMappings?.some((m) => m.taskField === 'tagIds')) {
+      syncFields.push({
+        key: 'pluginConfig.isAutoCreateTags',
+        type: 'checkbox',
+        props: {
+          label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS,
+          description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS_DESCRIPTION,
         },
       });
     }
@@ -717,3 +781,67 @@ export class DialogEditIssueProviderComponent {
     this.optionsLoadState.set(success ? 'loaded' : 'failed');
   }
 }
+
+const CREDENTIAL_LIKE_CFG_KEY_RE = /token|secret|key|password|auth|credential/i;
+
+const getSafeCfgUpdateLogMeta = (
+  cfgUpdates: IssueIntegrationCfg,
+): {
+  updateCount: number;
+  hasCredentialLikeUpdate: boolean;
+  hasPluginConfigUpdate: boolean;
+  hasDefaultNoteUpdate: boolean;
+  hasDefaultProjectUpdate: boolean;
+  defaultTagUpdateCount: number;
+} => {
+  const cfgUpdateRecord = cfgUpdates as unknown as Record<string, unknown>;
+  const updateKeys = Object.keys(cfgUpdateRecord);
+  const defaultTagIds = cfgUpdateRecord['defaultTagIds'];
+
+  return {
+    updateCount: updateKeys.length,
+    hasCredentialLikeUpdate: hasCredentialLikeCfgKey(cfgUpdateRecord, new WeakSet()),
+    hasPluginConfigUpdate: updateKeys.includes('pluginConfig'),
+    hasDefaultNoteUpdate: updateKeys.includes('defaultNote'),
+    hasDefaultProjectUpdate: updateKeys.includes('defaultProjectId'),
+    defaultTagUpdateCount: Array.isArray(defaultTagIds) ? defaultTagIds.length : 0,
+  };
+};
+
+const hasCredentialLikeCfgKey = (value: unknown, seen: WeakSet<object>): boolean => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+
+  return Object.entries(value as Record<string, unknown>).some(
+    ([key, nestedValue]) =>
+      CREDENTIAL_LIKE_CFG_KEY_RE.test(key) || hasCredentialLikeCfgKey(nestedValue, seen),
+  );
+};
+
+const getSafeErrorLogMeta = (
+  e: unknown,
+): {
+  errorName: string;
+  errorCode?: string | number;
+} => {
+  const errorName =
+    e instanceof Error
+      ? e.name
+      : typeof e === 'object' && e !== null && 'name' in e && typeof e.name === 'string'
+        ? e.name
+        : 'UnknownError';
+  const errorCode =
+    typeof e === 'object' &&
+    e !== null &&
+    'code' in e &&
+    (typeof e.code === 'string' || typeof e.code === 'number')
+      ? e.code
+      : undefined;
+
+  return errorCode === undefined ? { errorName } : { errorName, errorCode };
+};

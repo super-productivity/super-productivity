@@ -137,6 +137,20 @@ describe('SuperSyncWebSocketService', () => {
     expect(MockWebSocket.instances).toHaveSize(1);
   });
 
+  // Regression: two tabs share one clientId (per-origin IndexedDB). When the
+  // server kicks the older socket with 4009 ("Replaced by newer connection"),
+  // auto-reconnecting would kick the other tab and trigger a 1Hz ping-pong
+  // reconnect loop. Periodic sync handles re-establishing the connection.
+  it('should not reconnect after being replaced by a newer connection from same clientId', async () => {
+    await service.connect('http://localhost:1901', 'token');
+    MockWebSocket.instances[0].emitClose(4009, 'Replaced by newer connection');
+
+    jasmine.clock().tick(60000);
+    await Promise.resolve();
+
+    expect(MockWebSocket.instances).toHaveSize(1);
+  });
+
   it('should not create a duplicate socket while the same connection is pending', async () => {
     await service.connect('http://localhost:1901', 'token');
     await service.connect('http://localhost:1901', 'token');

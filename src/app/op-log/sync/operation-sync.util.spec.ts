@@ -56,6 +56,7 @@ describe('operation-sync utility', () => {
       const KNOWN_FILE_BASED: ReadonlySet<SyncProviderId> = new Set([
         SyncProviderId.Dropbox,
         SyncProviderId.WebDAV,
+        SyncProviderId.OneDrive,
         SyncProviderId.LocalFile,
         SyncProviderId.Nextcloud,
       ]);

@@ -6,12 +6,9 @@ import {
   clearSessionKeyCache,
   decrypt,
   decryptBatch,
-  decryptWithDerivedKey,
-  decryptWithMigration,
   deriveKeyFromPassword,
   encrypt,
   encryptBatch,
-  encryptWithDerivedKey,
   getArgon2Params,
   getSessionKeyCacheStats,
   isCryptoSubtleAvailable,
@@ -134,47 +131,6 @@ describe('encryption', () => {
 
       expect(calls).toBe(0);
     });
-
-    describe('decryptWithMigration (structural diagnostic)', () => {
-      it('returns wasLegacy=false + no migration for Argon2id data', async () => {
-        const encrypted = await encrypt(DATA, PASSWORD);
-        const result = await decryptWithMigration(encrypted, PASSWORD);
-
-        expect(result.plaintext).toBe(DATA);
-        expect(result.wasLegacy).toBe(false);
-        expect(result.migratedCiphertext).toBeUndefined();
-      });
-
-      it('returns wasLegacy=true + migratedCiphertext for legacy data', async () => {
-        const legacy = await encryptLegacy(DATA, PASSWORD);
-        const result = await decryptWithMigration(legacy, PASSWORD);
-
-        expect(result.plaintext).toBe(DATA);
-        expect(result.wasLegacy).toBe(true);
-        expect(result.wasLegacyKdf).toBe(true);
-        expect(result.migratedCiphertext).toBeDefined();
-      });
-
-      it('produces migratedCiphertext that round-trips without further migration', async () => {
-        const legacy = await encryptLegacy(DATA, PASSWORD);
-        const first = await decryptWithMigration(legacy, PASSWORD);
-        const second = await decryptWithMigration(first.migratedCiphertext!, PASSWORD);
-
-        expect(second.plaintext).toBe(DATA);
-        expect(second.wasLegacy).toBe(false);
-      });
-
-      it('still invokes the legacy-KDF warning handler', async () => {
-        let calls = 0;
-        setLegacyKdfWarningHandler(() => {
-          calls += 1;
-        });
-        const legacy = await encryptLegacy(DATA, PASSWORD);
-        await decryptWithMigration(legacy, PASSWORD);
-
-        expect(calls).toBeGreaterThan(0);
-      });
-    });
   });
 
   describe('Argon2 params', () => {
@@ -295,9 +251,9 @@ describe('encryption', () => {
       const items = Array.from({ length: COUNT }, (_, i) => `item-${i}`);
       const encrypted: string[] = [];
       for (let i = 0; i < COUNT; i++) {
-        // Fresh derivation per item → unique salt per ciphertext
-        const key = await deriveKeyFromPassword(PASSWORD);
-        encrypted.push(await encryptWithDerivedKey(items[i], key));
+        // Fresh cache per item → fresh salt → unique salt per ciphertext
+        clearSessionKeyCache();
+        encrypted.push(await encrypt(items[i], PASSWORD));
       }
       const decrypted = await decryptBatch(encrypted, PASSWORD);
       expect(decrypted).toEqual(items);
@@ -356,33 +312,6 @@ describe('encryption', () => {
       expect(a[0]).not.toBe(b[0]);
       await expect(decryptBatch(a, PASSWORD)).resolves.toEqual(['x']);
       await expect(decryptBatch(b, 'different_password')).resolves.toEqual(['x']);
-    });
-  });
-
-  describe('Pre-derived key helpers', () => {
-    it('encryptWithDerivedKey/decryptWithDerivedKey round-trips', async () => {
-      const key = await deriveKeyFromPassword(PASSWORD);
-      const ct = await encryptWithDerivedKey(DATA, key);
-      await expect(decryptWithDerivedKey(ct, key)).resolves.toBe(DATA);
-    });
-
-    it('deriveKeyFromPassword honors the supplied salt', async () => {
-      const customSalt = globalThis.crypto.getRandomValues(new Uint8Array(16));
-      const key = await deriveKeyFromPassword(PASSWORD, customSalt);
-      expect(key.salt).toEqual(customSalt);
-    });
-
-    it('deriveKeyFromPassword returns 32-byte AES key material', async () => {
-      const key = await deriveKeyFromPassword(PASSWORD);
-      expect(key.keyBytes.length).toBe(32);
-      expect(key.salt.length).toBe(16);
-    });
-
-    it('encryptWithDerivedKey produces different IVs across calls', async () => {
-      const key = await deriveKeyFromPassword(PASSWORD);
-      const a = await encryptWithDerivedKey(DATA, key);
-      const b = await encryptWithDerivedKey(DATA, key);
-      expect(a).not.toBe(b);
     });
   });
 

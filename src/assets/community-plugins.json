@@ -13,7 +13,7 @@
     "url": "https://github.com/baiyina/Archived-Tasks-Viewer",
     "author": "baiyina",
     "authorUrl": "https://github.com/baiyina",
-    "stars": 28
+    "stars": 31
   },
   {
     "name": "QuestArc",
@@ -21,7 +21,7 @@
     "url": "https://codeberg.org/Nexumia/QuestArc",
     "author": "Nexumia",
     "authorUrl": "https://codeberg.org/Nexumia",
-    "stars": 3
+    "stars": 4
   },
   {
     "name": "AutoPlan",
@@ -36,7 +36,8 @@
     "shortDescription": "Provides 2-way sync between SP tasks and Asana tasks.",
     "url": "https://codeberg.org/sinenomine/sp-asana",
     "author": "sinenomine",
-    "authorUrl": "https://codeberg.org/sinenomine"
+    "authorUrl": "https://codeberg.org/sinenomine",
+    "stars": 0
   },
   {
     "name": "Obsidian Integration",
@@ -44,7 +45,7 @@
     "url": "https://codeberg.org/sinenomine/sp-obsidian/",
     "author": "sinenomine",
     "authorUrl": "https://codeberg.org/sinenomine",
-    "stars": 2
+    "stars": 5
   },
   {
     "name": "MCP",
@@ -52,14 +53,15 @@
     "url": "https://github.com/organicmoron/SP-MCP",
     "author": "organicmoron",
     "authorUrl": "https://github.com/organicmoron",
-    "stars": 56
+    "stars": 68
   },
   {
     "name": "Super Productivity MCP",
     "shortDescription": "Feature-rich MCP server with 19 tools covering full task CRUD, time tracking summaries, project/tag management, and notifications.",
     "url": "https://github.com/b0x42/Super-Productivity-MCP",
     "author": "b0x42",
-    "authorUrl": "https://github.com/b0x42"
+    "authorUrl": "https://github.com/b0x42",
+    "stars": 11
   },
   {
     "name": "Dashboard",
@@ -67,7 +69,7 @@
     "url": "https://github.com/dougcooper/sp-dashboard",
     "author": "dougcooper",
     "authorUrl": "https://github.com/dougcooper",
-    "stars": 29
+    "stars": 43
   },
   {
     "name": "Invoicer",
@@ -75,7 +77,7 @@
     "url": "https://github.com/1jamesthompson1/sp-invoicer",
     "author": "1jamesthompson1",
     "authorUrl": "https://github.com/1jamesthompson1",
-    "stars": 9
+    "stars": 11
   },
   {
     "name": "StudyForge Leaderboard",
@@ -83,7 +85,7 @@
     "url": "https://github.com/dhananajay-030/studyforge-plugin",
     "author": "dhananajay-030",
     "authorUrl": "https://github.com/dhananajay-030",
-    "stars": 4
+    "stars": 6
   },
   {
     "name": "Print Tasks",
@@ -99,6 +101,14 @@
     "url": "https://github.com/ai-eifying/ai-assistant-plugin",
     "author": "ai-eifying",
     "authorUrl": "https://github.com/ai-eifying",
-    "stars": 0
+    "stars": 4
+  },
+  {
+    "name": "Memos Sync",
+    "shortDescription": "Syncs plugin-owned notes between Super Productivity and Memos with attachments, auto-sync, and conflict handling.",
+    "url": "https://github.com/giba0/memos-sync",
+    "author": "giba0",
+    "authorUrl": "https://github.com/giba0",
+    "stars": 2
   }
 ]

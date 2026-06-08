@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, PermissionState } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Log } from '../log';
 import { CapacitorPlatformService } from './capacitor-platform.service';
@@ -81,6 +81,13 @@ export class CapacitorReminderService {
    */
   async initialize(): Promise<void> {
     if (this._platformService.isIOS()) {
+      // Action types must be registered before any notification with an
+      // actionTypeId is scheduled, so this runs at startup. The permission
+      // dialog is intentionally NOT requested here — CapacitorNotificationService.schedule()
+      // calls ensurePermissions() lazily, so the OS prompt appears the first
+      // time the user actually triggers a notification (creating a reminder,
+      // hitting an estimate-exceeded warning, etc.) — better grant rates than
+      // an unprompted launch-time dialog.
       await this._notificationService.registerReminderActions();
     }
   }
@@ -155,6 +162,12 @@ export class CapacitorReminderService {
           return false;
         }
 
+        // Re-clamp after the permission await: a first-launch dialog can take
+        // several seconds, aging triggerAt into the past. The iOS plugin
+        // rejects past timestamps ("Scheduled time must be after current time"),
+        // which would silently fail the very first reminder.
+        const safeTriggerAt = Math.max(triggerAt, Date.now() + 1000);
+
         await LocalNotifications.schedule({
           notifications: [
             {
@@ -175,7 +188,7 @@ export class CapacitorReminderService {
                 ? 'sp_reminders'
                 : undefined,
               schedule: {
-                at: new Date(triggerAt),
+                at: new Date(safeTriggerAt),
                 allowWhileIdle: true,
               },
               extra: {
@@ -190,7 +203,7 @@ export class CapacitorReminderService {
         Log.log('CapacitorReminderService: iOS reminder scheduled', {
           notificationId: options.notificationId,
           reminderId: options.reminderId,
-          triggerAt: new Date(triggerAt).toISOString(),
+          triggerAt: new Date(safeTriggerAt).toISOString(),
         });
         return true;
       } catch (error) {
@@ -274,8 +287,34 @@ export class CapacitorReminderService {
   }
 
   /**
+   * Read notification permission state WITHOUT prompting the user.
+   *
+   * Used at startup to decide whether to warn (explicit 'denied') while
+   * deferring the actual OS prompt to the first real schedule (see
+   * `initialize()` — contextual prompts have better grant rates than an
+   * unprompted launch-time dialog).
+   *
+   * Legacy Android WebView: the upfront Capacitor check is unreliable there
+   * (no Capacitor bridge → stale `Notification.permission`, issue #7408), so
+   * report 'granted' and let the OS gate POST_NOTIFICATIONS at fire time —
+   * matching `ensurePermissions()`.
+   */
+  async getPermissionState(): Promise<PermissionState> {
+    if (!this.isAvailable) {
+      return 'denied';
+    }
+
+    if (this._isLegacyAndroidWebView()) {
+      return 'granted';
+    }
+
+    return this._notificationService.getPermissionState();
+  }
+
+  /**
    * Ensure notification permissions are granted.
-   * Also handles Android 12+ exact alarm permissions.
+   * Android exact-alarm permission is checked separately once notification
+   * permission is available.
    */
   async ensurePermissions(): Promise<boolean> {
     if (!this.isAvailable) {
@@ -297,10 +336,10 @@ export class CapacitorReminderService {
       return false;
     }
 
-    // Note: exact alarm permission is checked once at startup via
-    // askPermissionsIfNotGiven$ in mobile-notification.effects.ts.
-    // We intentionally do NOT check it here to avoid repeatedly
-    // opening the Android settings page on every scheduling cycle.
+    // Note: exact alarm permission is checked once by MobileNotificationEffects
+    // after notification permission is actually available. We intentionally do
+    // NOT check it here to avoid repeatedly opening the Android settings page
+    // on every scheduling cycle.
 
     return true;
   }

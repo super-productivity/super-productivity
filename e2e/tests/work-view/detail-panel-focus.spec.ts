@@ -58,12 +58,17 @@ test.describe('Detail Panel Focus Sync', () => {
     const panelTitle = page.locator(`${DETAIL_PANEL} task-title`);
     await expect(panelTitle).toContainText(/Arrow Task B/);
 
-    // Focus the task element, then press ArrowDown to navigate to next task
-    await taskB.focus();
-    await page.keyboard.press('ArrowDown');
-
-    // Verify detail panel updates to show Arrow Task A
-    await expect(panelTitle).toContainText(/Arrow Task A/);
+    // Focus the task element, then press ArrowDown to navigate to the next task.
+    // Retry the focus+keypress as a single unit: opening the panel schedules a
+    // deferred auto-focus that can land *after* taskB.focus() and yank focus
+    // into the panel, so a lone ArrowDown gets swallowed (focusNext() reads
+    // document.activeElement, finds no task row, and stays put). Re-focusing on
+    // retry makes the navigation deterministic. (#6578)
+    await expect(async () => {
+      await taskB.focus();
+      await page.keyboard.press('ArrowDown');
+      await expect(panelTitle).toContainText(/Arrow Task A/, { timeout: 2000 });
+    }).toPass({ timeout: 20000 });
   });
 
   test('should not open detail panel when clicking task if panel is closed', async ({
@@ -86,6 +91,32 @@ test.describe('Detail Panel Focus Sync', () => {
     await expect(page.locator(DETAIL_PANEL)).not.toBeVisible();
   });
 
+  test('should move focus into detail panel when opening via ArrowRight', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+
+    await workViewPage.addTask('ArrowRight Focus Task');
+    await expect(taskPage.getAllTasks()).toHaveCount(1);
+
+    const task = taskPage.getTask(1);
+    await task.focus();
+
+    // Press ArrowRight to open the detail panel — focus should move into the panel.
+    await page.keyboard.press('ArrowRight');
+
+    // Wait for the panel to open and auto-focus its first item.
+    await expect(page.locator(DETAIL_PANEL)).toBeVisible();
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => !!document.activeElement?.closest('task-detail-panel')),
+      )
+      .toBe(true);
+  });
+
   test('should keep focus in task list after panel switches', async ({
     page,
     workViewPage,
@@ -105,12 +136,14 @@ test.describe('Detail Panel Focus Sync', () => {
     const panelTitle = page.locator(`${DETAIL_PANEL} task-title`);
     await expect(panelTitle).toContainText(/Focus Stay B/);
 
-    // Focus task B, then arrow down to task A
-    await taskB.focus();
-    await page.keyboard.press('ArrowDown');
-
-    // Verify panel switched
-    await expect(panelTitle).toContainText(/Focus Stay A/);
+    // Focus task B, then arrow down to task A. Retry as a single unit to absorb
+    // the panel's deferred open-time auto-focus, which can otherwise swallow the
+    // ArrowDown (see the arrow-key navigation test above). (#6578)
+    await expect(async () => {
+      await taskB.focus();
+      await page.keyboard.press('ArrowDown');
+      await expect(panelTitle).toContainText(/Focus Stay A/, { timeout: 2000 });
+    }).toPass({ timeout: 20000 });
 
     // Verify focus is still in the task list, not stolen by the detail panel
     const activeElement = await page.evaluate(() => {

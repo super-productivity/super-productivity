@@ -1,5 +1,51 @@
-import { AutomationRule } from '../types';
+import { ActionType, AutomationRule, AutomationTriggerType, ConditionType } from '../types';
 import { PluginAPI } from '@super-productivity/plugin-api';
+
+// Keep these arrays in sync with the unions in types.ts. They are duplicated
+// here (and in utils/rule-validator.ts) rather than centralized in types.ts
+// because types.ts must stay type-only — otherwise vite produces a shared
+// runtime chunk that breaks plugin.js (which the host evaluates with
+// `new Function`, not as an ES module).
+//
+// The `satisfies` clause catches extra / mistyped entries. The `_AssertEq`
+// helper enforces the other direction: if a union gains a new member, this
+// file fails to compile until the corresponding array is updated.
+type _AssertEq<T, U> = [T] extends [U] ? ([U] extends [T] ? true : never) : never;
+
+const AUTOMATION_TRIGGER_TYPES = [
+  'taskCompleted',
+  'taskCreated',
+  'taskUpdated',
+  'taskStarted',
+  'taskStopped',
+  'timeBased',
+] as const satisfies readonly AutomationTriggerType[];
+const _exhaustiveTriggers: _AssertEq<
+  AutomationTriggerType,
+  (typeof AUTOMATION_TRIGGER_TYPES)[number]
+> = true;
+
+const AUTOMATION_CONDITION_TYPES = [
+  'titleContains',
+  'titleStartsWith',
+  'projectIs',
+  'hasTag',
+  'weekdayIs',
+] as const satisfies readonly ConditionType[];
+const _exhaustiveConditions: _AssertEq<ConditionType, (typeof AUTOMATION_CONDITION_TYPES)[number]> =
+  true;
+
+const AUTOMATION_ACTION_TYPES = [
+  'createTask',
+  'deleteTask',
+  'addTag',
+  'removeTag',
+  'moveToProject',
+  'displaySnack',
+  'displayDialog',
+  'webhook',
+] as const satisfies readonly ActionType[];
+const _exhaustiveActions: _AssertEq<ActionType, (typeof AUTOMATION_ACTION_TYPES)[number]> = true;
 
 export class RuleRegistry {
   private rules: AutomationRule[] = [];
@@ -64,23 +110,9 @@ export class RuleRegistry {
       return null;
     }
 
-    const validTriggers = new Set(['taskCompleted', 'taskCreated', 'taskUpdated', 'timeBased']);
-    const validConditions = new Set([
-      'titleContains',
-      'titleStartsWith',
-      'projectIs',
-      'hasTag',
-      'weekdayIs',
-    ]);
-    const validActions = new Set([
-      'createTask',
-      'deleteTask',
-      'addTag',
-      'moveToProject',
-      'displaySnack',
-      'displayDialog',
-      'webhook',
-    ]);
+    const validTriggers = new Set<string>(AUTOMATION_TRIGGER_TYPES);
+    const validConditions = new Set<string>(AUTOMATION_CONDITION_TYPES);
+    const validActions = new Set<string>(AUTOMATION_ACTION_TYPES);
 
     const isValidCondition = (c: any) =>
       c &&
@@ -160,6 +192,27 @@ export class RuleRegistry {
         this.rules[index] = rule;
       } else {
         this.rules.push(rule);
+      }
+      try {
+        await this.plugin.persistDataSynced(JSON.stringify(this.rules));
+      } catch (e) {
+        this.plugin.log.error('Failed to save rules', e);
+      }
+    });
+    await this.saveQueue;
+  }
+
+  async addRules(rules: AutomationRule[]) {
+    if (rules.length === 0) return;
+    await this.initPromise;
+    this.saveQueue = this.saveQueue.then(async () => {
+      for (const rule of rules) {
+        const index = this.rules.findIndex((r) => r.id === rule.id);
+        if (index !== -1) {
+          this.rules[index] = rule;
+        } else {
+          this.rules.push(rule);
+        }
       }
       try {
         await this.plugin.persistDataSynced(JSON.stringify(this.rules));

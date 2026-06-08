@@ -96,6 +96,9 @@ describe('SuperSyncEncryptionToggleService', () => {
         isEncryptionEnabled: true,
         logPrefix: 'SuperSyncEncryptionToggleService',
       });
+      // clearSessionKeyCache() is called directly on success (module-level
+      // function, not spyable). Matches the pattern in
+      // file-based-encryption.service.ts and encryption-password-change.service.ts.
     });
 
     it('should revert config on failure using pre-captured config (preserving auth credentials)', async () => {
@@ -157,6 +160,9 @@ describe('SuperSyncEncryptionToggleService', () => {
         isEncryptionEnabled: false,
         logPrefix: 'SuperSyncEncryptionToggleService',
       });
+      // clearSessionKeyCache() is called directly on success (module-level
+      // function, not spyable). Matches the pattern in
+      // file-based-encryption.service.ts and encryption-password-change.service.ts.
     });
 
     it('should revert config to original state (including encryption key) on failure', async () => {

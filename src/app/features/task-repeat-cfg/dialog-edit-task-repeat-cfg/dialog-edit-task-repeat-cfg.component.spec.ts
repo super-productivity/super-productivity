@@ -397,6 +397,85 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
   });
 
+  describe('_normalizeMonthlyAnchor strips stale monthlyLastDay (#7726)', () => {
+    it('clears monthlyLastDay when quickSetting is no longer MONTHLY_LAST_DAY', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'CUSTOM',
+        monthlyLastDay: true,
+      });
+      expect(normalized.monthlyLastDay).toBeUndefined();
+    });
+
+    it('keeps monthlyLastDay for the MONTHLY_LAST_DAY preset', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'MONTHLY_LAST_DAY',
+        monthlyLastDay: true,
+      });
+      expect(normalized.monthlyLastDay).toBe(true);
+    });
+
+    it('still converts the monthlyWeekOfMonth null sentinel to undefined', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'CUSTOM',
+        monthlyWeekOfMonth: null,
+      });
+      expect(normalized.monthlyWeekOfMonth).toBeUndefined();
+    });
+  });
+
+  describe('startDate min floor (#7768 Bug 4)', () => {
+    const getStartDateMin = (
+      fixture: ComponentFixture<DialogEditTaskRepeatCfgComponent>,
+    ): unknown => {
+      const fields = fixture.componentInstance.essentialFormFields();
+      const startDateField = fields.find((f) => f.key === 'startDate');
+      return (startDateField?.templateOptions as Record<string, unknown> | undefined)?.[
+        'min'
+      ];
+    };
+
+    const todayStr = (): string => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    it('floors startDate to today for a new repeat cfg created from a task', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      expect(getStartDateMin(fixture)).toBe(todayStr());
+    });
+
+    it('keeps the past startDate as the floor when editing an existing past cfg', async () => {
+      const pastCfg: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startDate: '2020-01-15',
+      };
+      const fixture = await setupTestBed({ repeatCfg: pastCfg });
+      expect(getStartDateMin(fixture)).toBe('2020-01-15');
+    });
+
+    it('floors to today when editing a cfg whose startDate is in the future', async () => {
+      const future = new Date();
+      future.setFullYear(future.getFullYear() + 1);
+      const yyyy = future.getFullYear();
+      const mm = String(future.getMonth() + 1).padStart(2, '0');
+      const dd = String(future.getDate()).padStart(2, '0');
+      const futureStr = `${yyyy}-${mm}-${dd}`;
+      const futureCfg: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startDate: futureStr,
+      };
+      const fixture = await setupTestBed({ repeatCfg: futureCfg });
+      expect(getStartDateMin(fixture)).toBe(todayStr());
+    });
+  });
+
   describe('save button disabled state (issue #5828)', () => {
     it('should not allow save while isLoading is true', fakeAsync(async () => {
       const taskWithRepeatCfg = {
@@ -455,5 +534,88 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       // Now the button is disabled until isLoading becomes false,
       // which only happens after repeatCfgInitial is set
     }));
+  });
+
+  describe('isWeekdaySelectionInvalid (issue #8025)', () => {
+    const baseCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      monday: false,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+    };
+
+    it('should be true for a CUSTOM weekly config with no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(true);
+    });
+
+    it('should be false once at least one weekday is selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        wednesday: true,
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should be false for non-weekly cycles even with no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'MONTHLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should be false for non-CUSTOM quick settings (e.g. DAILY)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'DAILY',
+        repeatCycle: 'WEEKLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should block direct save when a CUSTOM weekly config has no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+      });
+
+      component.save();
+
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
   });
 });

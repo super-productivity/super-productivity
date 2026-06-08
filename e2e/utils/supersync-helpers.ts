@@ -22,6 +22,12 @@ import {
   TASK_WAIT_TIMEOUT,
   UI_VISIBLE_TIMEOUT_SHORT,
 } from './e2e-constants';
+import {
+  assertNoRuntimeBrowserErrors,
+  attachPageErrorCollector,
+  installDevErrorDialogHandler,
+  type RuntimeBrowserError,
+} from './runtime-errors';
 
 /**
  * SuperSync server URL for E2E tests.
@@ -50,6 +56,7 @@ export interface SimulatedE2EClient {
   workView: WorkViewPage;
   sync: SuperSyncPage;
   clientName: string;
+  runtimeErrors: RuntimeBrowserError[];
 }
 
 /**
@@ -204,7 +211,9 @@ export const createSimulatedClient = async (
   baseURL: string,
   clientName: string,
   testPrefix: string,
+  options: { allowExampleTasks?: boolean } = {},
 ): Promise<SimulatedE2EClient> => {
+  const { allowExampleTasks = false } = options;
   // Use provided baseURL or fall back to localhost:4242 (Playwright fixture may be undefined)
   const effectiveBaseURL = baseURL || 'http://localhost:4242';
 
@@ -216,20 +225,21 @@ export const createSimulatedClient = async (
   });
 
   const page = await context.newPage();
+  const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
+  installDevErrorDialogHandler(page, `Client ${clientName}`);
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
-  await page.addInitScript(() => {
+  // Tests of the example-task sync gate opt back in via { allowExampleTasks: true }
+  // so first-run onboarding tasks are actually created.
+  await page.addInitScript((allowExamples) => {
     localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
     localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
     localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-  });
-
-  // Set up error logging
-  page.on('pageerror', (error) => {
-    console.error(`[Client ${clientName}] Page error:`, error.message);
-  });
+    if (!allowExamples) {
+      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+    }
+  }, allowExampleTasks);
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
@@ -278,6 +288,7 @@ export const createSimulatedClient = async (
     workView,
     sync,
     clientName,
+    runtimeErrors,
   };
 };
 
@@ -319,6 +330,10 @@ export const closeClient = async (client: SimulatedE2EClient): Promise<void> => 
       `[closeClient] Cleanup error (ignored): ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+
+  // Assert AFTER close so pageerrors emitted during teardown (Angular destroy
+  // hooks, late RxJS errors) are still captured before we throw.
+  assertNoRuntimeBrowserErrors(client.runtimeErrors, `Client ${client.clientName}`);
 };
 
 /**
@@ -1125,8 +1140,8 @@ export const hasTaskInWorklog = async (
 ): Promise<boolean> => {
   // Only navigate if not already on worklog page
   const currentUrl = client.page.url();
-  if (!currentUrl.includes('/worklog')) {
-    await client.page.goto('/#/tag/TODAY/worklog');
+  if (!currentUrl.includes('/history')) {
+    await client.page.goto('/#/tag/TODAY/history');
     await client.page.waitForLoadState('networkidle');
     await client.page.waitForTimeout(UI_SETTLE_EXTENDED);
   }
@@ -1200,7 +1215,7 @@ export const getWorklogTaskCount = async (
   client: SimulatedE2EClient,
 ): Promise<number> => {
   // Navigate to worklog
-  await client.page.goto('/#/tag/TODAY/worklog');
+  await client.page.goto('/#/tag/TODAY/history');
   await client.page.waitForLoadState('networkidle');
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 

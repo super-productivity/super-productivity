@@ -16,6 +16,13 @@ describe('privacyExport', () => {
       expect(result.password).not.toBe('secret123');
     });
 
+    it('should mask loginName field', () => {
+      const input = { loginName: 'john@example.com' };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.loginName).toMatch(/^loginName__\d+$/);
+      expect(result.loginName).not.toBe('john@example.com');
+    });
+
     it('should mask token field', () => {
       const input = { token: 'abc123xyz' };
       const result = JSON.parse(privacyExport(input));

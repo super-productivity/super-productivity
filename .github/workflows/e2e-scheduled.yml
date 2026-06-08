@@ -129,6 +129,8 @@ jobs:
           ./scripts/wait-for-webdav.sh
 
       - name: Run WebDAV E2E Tests
+        env:
+          E2E_REQUIRE_WEBDAV: 'true'
         run: npm run e2e:all -- --grep "@webdav"
 
       - name: Stop Docker Services
@@ -191,6 +193,8 @@ jobs:
           echo "✓ SuperSync server ready!"
 
       - name: Run SuperSync E2E Tests
+        env:
+          E2E_REQUIRE_SUPERSYNC: 'true'
         run: npm run e2e:all -- --grep "@supersync" --shard=${{ matrix.shard }}/6
 
       - name: Stop Docker Services

@@ -32,6 +32,8 @@ import { LocalDataConflictError } from '../core/errors/sync-errors';
 import { SyncHydrationService } from '../persistence/sync-hydration.service';
 import { SyncImportConflictDialogService } from './sync-import-conflict-dialog.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { BackupService } from '../backup/backup.service';
+import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { TODAY_TAG, SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 
@@ -45,6 +47,7 @@ describe('OperationLogSyncService', () => {
   let writeFlushServiceSpy: jasmine.SpyObj<OperationWriteFlushService>;
   let superSyncStatusServiceSpy: jasmine.SpyObj<SuperSyncStatusService>;
   let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
+  let backupServiceSpy: jasmine.SpyObj<BackupService>;
   let syncImportConflictDialogServiceSpy: jasmine.SpyObj<SyncImportConflictDialogService>;
 
   beforeEach(() => {
@@ -59,7 +62,9 @@ describe('OperationLogSyncService', () => {
       'clearFullStateOps',
       'getVectorClock',
       'appendBatchSkipDuplicates',
+      'hasSyncedOps',
     ]);
+    opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
     opLogStoreSpy.setVectorClock.and.resolveTo();
     opLogStoreSpy.clearFullStateOps.and.resolveTo();
     opLogStoreSpy.getVectorClock.and.resolveTo(null);
@@ -85,6 +90,13 @@ describe('OperationLogSyncService', () => {
       tag: { ids: [TODAY_TAG.id] }, // Only default TODAY tag
       note: { ids: [] },
     } as any);
+
+    backupServiceSpy = jasmine.createSpyObj('BackupService', [
+      'captureImportBackup',
+      'restoreImportBackup',
+    ]);
+    backupServiceSpy.captureImportBackup.and.resolveTo(1);
+    backupServiceSpy.restoreImportBackup.and.resolveTo(true);
 
     remoteOpsProcessingServiceSpy = jasmine.createSpyObj('RemoteOpsProcessingService', [
       'processRemoteOps',
@@ -213,6 +225,7 @@ describe('OperationLogSyncService', () => {
           ]),
         },
         { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
+        { provide: BackupService, useValue: backupServiceSpy },
         {
           provide: SyncImportConflictDialogService,
           useValue: syncImportConflictDialogServiceSpy,
@@ -327,6 +340,68 @@ describe('OperationLogSyncService', () => {
         }
       });
 
+      it('should flag the piggybacked SYNC_IMPORT conflict as never-synced using PRE-upload history', async () => {
+        // Regression: the never-synced guard must be captured before the upload marks
+        // accepted ops synced. uploadService.uploadPendingOps flips hasSyncedOps() to true
+        // as a side effect; if the gate read it afterwards it would clear the guard and
+        // re-open the data-loss trap (USE_LOCAL force-overwriting a populated remote).
+        opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+
+        const piggybackedSyncImport: Operation = {
+          id: 'remote-sync-import',
+          clientId: 'client-B',
+          actionType: ActionType.LOAD_ALL_DATA,
+          opType: OpType.SyncImport,
+          entityType: 'ALL',
+          payload: {},
+          vectorClock: { clientB: 5 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+        // A meaningful local op remains pending so the gate produces dialog data.
+        opLogStoreSpy.getUnsynced.and.resolveTo([
+          {
+            seq: 1,
+            op: {
+              id: 'local-task-create',
+              clientId: 'client-A',
+              actionType: 'test' as ActionType,
+              opType: OpType.Create,
+              entityType: 'TASK',
+              entityId: 'task-1',
+              payload: { title: 'Example task' },
+              vectorClock: { clientA: 1 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            appliedAt: Date.now(),
+            source: 'local',
+          },
+        ]);
+
+        // Simulate the upload marking ops synced: hasSyncedOps() now reports true.
+        uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
+          opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+          return {
+            uploadedCount: 1,
+            piggybackedOps: [piggybackedSyncImport],
+            rejectedCount: 0,
+            rejectedOps: [],
+          };
+        });
+
+        const mockProvider = { isReady: () => Promise.resolve(true) } as any;
+
+        const result = await service.uploadPendingOps(mockProvider);
+
+        // CANCEL is the default dialog result, so the upload reports cancelled.
+        expect(result.kind).toBe('cancelled');
+        // The dialog must have been shown with the PRE-upload never-synced value.
+        expect(
+          syncImportConflictDialogServiceSpy.showConflictDialog,
+        ).toHaveBeenCalledWith(jasmine.objectContaining({ isNeverSynced: true }));
+      });
+
       describe('rejected ops handling delegation', () => {
         let mockProvider: any;
 
@@ -353,7 +428,7 @@ describe('OperationLogSyncService', () => {
             }),
           );
 
-          await service.uploadPendingOps(mockProvider);
+          await service.uploadPendingOps(mockProvider, { isNeverSynced: true });
 
           expect(rejectedOpsHandlerServiceSpy.handleRejectedOps).toHaveBeenCalledWith(
             [{ opId: 'local-op-1', error: 'Some error', errorCode: 'VALIDATION_ERROR' }],
@@ -362,8 +437,10 @@ describe('OperationLogSyncService', () => {
         });
 
         it('should pass download callback that calls downloadRemoteOps', async () => {
-          uploadServiceSpy.uploadPendingOps.and.returnValue(
-            Promise.resolve({
+          opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+          uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
+            opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+            return {
               uploadedCount: 0,
               piggybackedOps: [],
               rejectedCount: 1,
@@ -374,8 +451,8 @@ describe('OperationLogSyncService', () => {
                   errorCode: 'CONFLICT_CONCURRENT',
                 },
               ],
-            }),
-          );
+            };
+          });
 
           // Capture the callback passed to handleRejectedOps
           let capturedCallback: any;
@@ -399,11 +476,16 @@ describe('OperationLogSyncService', () => {
 
           // Call the callback and verify it delegates to downloadRemoteOps
           await capturedCallback();
-          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, undefined);
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            isNeverSynced: true,
+          });
 
           // Test with forceFromSeq0 option
           await capturedCallback({ forceFromSeq0: true });
-          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, { forceFromSeq0: true });
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            forceFromSeq0: true,
+            isNeverSynced: true,
+          });
         });
 
         it('should add mergedOpsFromRejection to localWinOpsCreated in result', async () => {
@@ -1045,6 +1127,148 @@ describe('OperationLogSyncService', () => {
           );
         });
 
+        // #7985: a never-synced file-based client whose store + pending ops contain only
+        // onboarding example tasks must not see the spurious conflict dialog.
+        const exampleCreateEntry = (taskId: string): OperationLogEntry => ({
+          seq: 1,
+          op: {
+            id: `ex-op-${taskId}`,
+            clientId: 'client-A',
+            actionType: ActionType.TASK_SHARED_ADD,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: taskId,
+            payload: {
+              actionPayload: { task: { id: taskId }, isExampleTask: true },
+              entityChanges: [],
+            },
+            vectorClock: { clientA: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        });
+
+        const fileSnapshotDownloadResult = {
+          newOps: [],
+          hasMore: false,
+          latestSeq: 0,
+          needsFullStateUpload: false,
+          success: true,
+          providerMode: 'fileSnapshotOps',
+          failedFileCount: 0,
+          snapshotState: { tasks: [{ id: 'remote-task' }] },
+          snapshotVectorClock: { clientB: 5 },
+          latestServerSeq: 1,
+        };
+
+        it('does NOT throw LocalDataConflictError when store + pending ops contain only example tasks (#7985)', async () => {
+          opLogStoreSpy.getUnsynced.and.returnValue(
+            Promise.resolve([exampleCreateEntry('ex-task-1')]),
+          );
+          // Store holds ONLY that example task (the marker lives on the op, not the entity).
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['ex-task-1'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve(fileSnapshotDownloadResult as any),
+          );
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
+          expect(opLogStoreSpy.markRejected).toHaveBeenCalledWith(['ex-op-ex-task-1']);
+          // markRejected must run AFTER hydrateFromRemoteSync — otherwise a
+          // hydration failure would drop the example ops while leaving the
+          // user without the remote snapshot.
+          const hydrateOrder = (
+            syncHydrationServiceSpy.hydrateFromRemoteSync.calls.mostRecent() as unknown as {
+              invocationOrder: number;
+            }
+          ).invocationOrder;
+          const markRejectedOrder = (
+            opLogStoreSpy.markRejected.calls.mostRecent() as unknown as {
+              invocationOrder: number;
+            }
+          ).invocationOrder;
+          expect(markRejectedOrder).toBeGreaterThan(hydrateOrder);
+        });
+
+        it('does NOT call markRejected when hydrateFromRemoteSync rejects (#7985)', async () => {
+          opLogStoreSpy.getUnsynced.and.returnValue(
+            Promise.resolve([exampleCreateEntry('ex-task-1')]),
+          );
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['ex-task-1'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.rejectWith(
+            new Error('hydrate failed'),
+          );
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve(fileSnapshotDownloadResult as any),
+          );
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejected();
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
+          expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+        });
+
+        it('still throws LocalDataConflictError when a real task exists alongside example tasks (#7985)', async () => {
+          opLogStoreSpy.getUnsynced.and.returnValue(
+            Promise.resolve([exampleCreateEntry('ex-task-1')]),
+          );
+          // Store has the example task AND a real one — the real task must still be protected.
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['ex-task-1', 'real-task-1'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+
+          downloadServiceSpy.downloadRemoteOps.and.returnValue(
+            Promise.resolve(fileSnapshotDownloadResult as any),
+          );
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+            jasmine.any(LocalDataConflictError),
+          );
+        });
+
         it('should include correct context in LocalDataConflictError', async () => {
           const unsyncedEntries: OperationLogEntry[] = [
             {
@@ -1641,6 +1865,69 @@ describe('OperationLogSyncService', () => {
       await service.forceDownloadRemoteState(mockProvider);
 
       expect(callOrder[0]).toBe('clearUnsyncedOps');
+    });
+
+    it('should capture a safety backup BEFORE clearing unsynced ops (#8107)', async () => {
+      const callOrder: string[] = [];
+      backupServiceSpy.captureImportBackup.and.callFake(async () => {
+        callOrder.push('captureImportBackup');
+        return 1;
+      });
+      opLogStoreSpy.clearUnsyncedOps.and.callFake(async () => {
+        callOrder.push('clearUnsyncedOps');
+      });
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+      });
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+
+      expect(callOrder).toEqual(['captureImportBackup', 'clearUnsyncedOps']);
+    });
+
+    it('should ABORT without wiping local data if the safety backup fails (#8107)', async () => {
+      backupServiceSpy.captureImportBackup.and.rejectWith(new Error('disk full'));
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await expectAsync(service.forceDownloadRemoteState(mockProvider)).toBeRejected();
+
+      expect(opLogStoreSpy.clearUnsyncedOps).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.clearFullStateOps).not.toHaveBeenCalled();
+      expect(downloadServiceSpy.downloadRemoteOps).not.toHaveBeenCalled();
+    });
+
+    it('should offer to restore the previous data after replacing (#8107)', async () => {
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+      });
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_UNDO,
+          actionStr: T.G.UNDO,
+        }),
+      );
     });
 
     it('should reset lastServerSeq to 0', async () => {
@@ -2448,6 +2735,61 @@ describe('OperationLogSyncService', () => {
       expect(result.kind).toBe('cancelled');
     });
 
+    // End-to-end guard for the reported data-loss trap: a genuinely-fresh client
+    // (only the seeded example-task ops, never synced) meets a populated remote
+    // SYNC_IMPORT. The dialog must receive isNeverSynced=true so USE_LOCAL — which
+    // would overwrite the real remote with throwaway data — is guarded. Spans
+    // service -> real conflict gate -> real coordinator -> dialog.
+    it('flags isNeverSynced=true on the dialog for a never-synced client meeting a populated remote SYNC_IMPORT', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+
+      // Fresh client: has meaningful pending work (a seeded example task) but has
+      // never completed a sync.
+      opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        {
+          seq: 1,
+          op: {
+            id: 'example-task-create',
+            clientId: 'client-A',
+            actionType: 'test' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'Example Task' },
+            vectorClock: { clientA: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        },
+      ]);
+      syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.downloadRemoteOps(mockProvider);
+
+      expect(syncImportConflictDialogServiceSpy.showConflictDialog).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          scenario: 'INCOMING_IMPORT',
+          isNeverSynced: true,
+        }),
+      );
+    });
+
     it('should flush pending writes before checking incoming SYNC_IMPORT conflicts', async () => {
       const incomingSyncImport = createIncomingSyncImport();
       const events: string[] = [];
@@ -2522,6 +2864,89 @@ describe('OperationLogSyncService', () => {
       expect(
         syncImportConflictDialogServiceSpy.showConflictDialog,
       ).not.toHaveBeenCalled();
+      // No example-task ops pending -> nothing is rejected (empty-array guard).
+      expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+        incomingSyncImport,
+      ]);
+      expect(mockProvider.setLastServerSeq).toHaveBeenCalledWith(42);
+      expect(result.kind).toBe('ops_processed');
+    });
+
+    it('should process incoming SYNC_IMPORT when pending ops are only config and startup example tasks', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+
+      const pendingConfigEntry: OperationLogEntry = {
+        seq: 1,
+        op: {
+          id: 'local-config-op-1',
+          clientId: 'client-A',
+          actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+          opType: OpType.Update,
+          entityType: 'GLOBAL_CONFIG',
+          entityId: 'sync',
+          payload: { sectionKey: 'sync' },
+          vectorClock: { clientA: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        appliedAt: Date.now(),
+        source: 'local',
+      };
+      const pendingExampleTaskEntries: OperationLogEntry[] = [1, 2, 3, 4].map(
+        (counter) => ({
+          seq: counter + 1,
+          op: {
+            id: `local-example-task-op-${counter}`,
+            clientId: 'client-A',
+            actionType: ActionType.TASK_SHARED_ADD,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: `example-task-${counter}`,
+            payload: {
+              actionPayload: {
+                task: { id: `example-task-${counter}` },
+                isExampleTask: true,
+              },
+              entityChanges: [],
+            },
+            vectorClock: { clientA: counter + 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+          appliedAt: Date.now(),
+          source: 'local',
+        }),
+      );
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        pendingConfigEntry,
+        ...pendingExampleTaskEntries,
+      ]);
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      const result = await service.downloadRemoteOps(mockProvider);
+
+      expect(
+        syncImportConflictDialogServiceSpy.showConflictDialog,
+      ).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.markRejected).toHaveBeenCalledWith([
+        'local-example-task-op-1',
+        'local-example-task-op-2',
+        'local-example-task-op-3',
+        'local-example-task-op-4',
+      ]);
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
         incomingSyncImport,
       ]);

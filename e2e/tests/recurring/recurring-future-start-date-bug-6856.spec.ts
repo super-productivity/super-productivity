@@ -71,15 +71,21 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     await saveBtn.click();
     await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
 
-    // 4. Reload and navigate to today view to verify persisted state
+    // 4. Assert in-session first: the task should disappear from Today as soon
+    // as the side-effect actions (updateTask + planTaskForDay) settle. This is
+    // the bug behavior from #6856 ("immediately generated and placed in the
+    // Inbox") and asserting it here also gives the op-log persistence queue
+    // time to drain before the page.reload() below — otherwise pending writes
+    // can be lost and the post-reload assertion races with hydration.
+    await expect(taskPage.getTaskByText(taskTitle)).not.toBeVisible({ timeout: 10000 });
+
+    // 5. Reload and navigate to today view to verify the same state persists.
     await page.reload();
     await workViewPage.waitForTaskList();
     await page.goto('/#/tag/TODAY/tasks');
     await workViewPage.waitForTaskList();
 
-    // 5. Assert: task should NOT be visible in today's task list
-    // Bug #6856: The task appears immediately instead of being scheduled
-    // for the configured future start date.
+    // 6. Assert: task should still NOT be visible in today's task list.
     await expect(taskPage.getTaskByText(taskTitle)).not.toBeVisible({ timeout: 5000 });
   });
 });

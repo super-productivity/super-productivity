@@ -55,6 +55,12 @@ describe('Task onFocus detail panel sync (#6578)', () => {
     if (isInsideDetailPanel) {
       return;
     }
+    if (
+      eventTarget instanceof Element &&
+      eventTarget.closest('.show-additional-info-btn')
+    ) {
+      return;
+    }
     const selectedTaskId = mockTaskService.selectedTaskId();
     if (selectedTaskId && selectedTaskId !== taskId) {
       mockTaskService.setSelectedId(taskId);
@@ -138,6 +144,40 @@ describe('Task onFocus detail panel sync (#6578)', () => {
     simulateOnBlur(taskEl, outsideEl);
 
     expect(mockTaskFocusService.focusedTaskId()).toBeNull();
+  });
+
+  describe('toggle-detail-panel button click (#7694)', () => {
+    // When user clicks the show/hide panel button on Task B while Task A's
+    // panel is open, focusin must NOT auto-switch the selection — otherwise
+    // the click handler that follows sees isSelected=true and toggles closed.
+    const buildTaskWithToggleBtn = (): {
+      taskEl: HTMLElement;
+      toggleBtn: HTMLElement;
+    } => {
+      const taskEl = document.createElement('task');
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'show-additional-info-btn';
+      taskEl.appendChild(toggleBtn);
+      return { taskEl, toggleBtn };
+    };
+
+    it('should NOT auto-switch selection when focus came from the toggle-detail-panel button', () => {
+      const { taskEl, toggleBtn } = buildTaskWithToggleBtn();
+      mockTaskService.selectedTaskId.set(TASK_A_ID);
+
+      simulateOnFocus(TASK_B_ID, false, {}, toggleBtn, taskEl);
+
+      expect(mockTaskService.setSelectedId).not.toHaveBeenCalled();
+    });
+
+    it('should still update focusedTaskId even when toggle button is the focus source', () => {
+      const { taskEl, toggleBtn } = buildTaskWithToggleBtn();
+      mockTaskService.selectedTaskId.set(TASK_A_ID);
+
+      simulateOnFocus(TASK_B_ID, false, {}, toggleBtn, taskEl);
+
+      expect(mockTaskFocusService.focusedTaskId()).toBe(TASK_B_ID);
+    });
   });
 
   describe('focusin bubbling from nested tasks', () => {

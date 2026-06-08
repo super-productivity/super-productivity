@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "18.5.0",
+  "version": "18.9.1",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -61,15 +61,15 @@
     "e2e:headed": "npx playwright test --config e2e/playwright.config.ts --headed",
     "e2e:show-report": "npx playwright show-report .tmp/e2e-test-results/playwright-report",
     "e2e:report": "PLAYWRIGHT_HTML_REPORT=1 npx playwright test --config e2e/playwright.config.ts",
-    "e2e:webdav": "docker compose up -d webdav && ./scripts/wait-for-webdav.sh && npm run e2e:all -- --grep @webdav; docker compose down",
-    "e2e:webdav:file": "docker compose up -d webdav && ./scripts/wait-for-webdav.sh && E2E_VERBOSE=true npx playwright test --config e2e/playwright.config.ts --reporter=list; docker compose down",
-    "e2e:supersync": "docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && echo 'Waiting for SuperSync server...' && until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done && echo 'Server ready!' && npm run e2e:all -- --grep @supersync --workers=3; docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync",
-    "e2e:supersync:file": "docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && echo 'Waiting for SuperSync server...' && until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done && echo 'Server ready!' && E2E_VERBOSE=true npx playwright test --config e2e/playwright.config.ts --reporter=list --workers=3",
-    "supersync:up": "docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && echo 'Waiting for SuperSync server...' && until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done && echo 'Server ready!'",
+    "e2e:webdav": "sh -c 'docker compose up -d webdav && ./scripts/wait-for-webdav.sh && E2E_REQUIRE_WEBDAV=true npm run e2e:all -- --grep @webdav \"$@\"; EXIT_CODE=$?; docker compose down; exit $EXIT_CODE' --",
+    "e2e:webdav:file": "sh -c 'docker compose up -d webdav && ./scripts/wait-for-webdav.sh && E2E_REQUIRE_WEBDAV=true E2E_VERBOSE=true npx playwright test --config e2e/playwright.config.ts --reporter=list \"$@\"; EXIT_CODE=$?; docker compose down; exit $EXIT_CODE' --",
+    "e2e:supersync": "sh -c 'docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && ./scripts/wait-for-supersync.sh && E2E_REQUIRE_SUPERSYNC=true npm run e2e:all -- --grep @supersync --workers=3 \"$@\"; EXIT_CODE=$?; docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync; exit $EXIT_CODE' --",
+    "e2e:supersync:file": "sh -c 'docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && ./scripts/wait-for-supersync.sh && E2E_REQUIRE_SUPERSYNC=true E2E_VERBOSE=true npx playwright test --config e2e/playwright.config.ts --reporter=list --workers=3 \"$@\"; EXIT_CODE=$?; docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync; exit $EXIT_CODE' --",
+    "supersync:up": "docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && ./scripts/wait-for-supersync.sh",
     "supersync:down": "docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync",
-    "e2e:docker": "docker compose -f docker-compose.e2e.yaml up -d app && ./scripts/wait-for-app.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e; docker compose -f docker-compose.e2e.yaml down",
-    "e2e:docker:webdav": "docker compose -f docker-compose.e2e.yaml up -d app webdav && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e:all -- --grep @webdav; docker compose -f docker-compose.e2e.yaml down",
-    "e2e:docker:all": "docker compose -f docker-compose.e2e.yaml -f docker-compose.yaml -f docker-compose.supersync.yaml up -d app webdav db supersync && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && ./scripts/wait-for-supersync.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e:all -- --workers=6; EXIT_CODE=$?; docker compose -f docker-compose.e2e.yaml -f docker-compose.yaml -f docker-compose.supersync.yaml down; exit $EXIT_CODE",
+    "e2e:docker": "docker compose -f docker-compose.e2e.yaml up -d app && ./scripts/wait-for-app.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e; EXIT_CODE=$?; docker compose -f docker-compose.e2e.yaml down; exit $EXIT_CODE",
+    "e2e:docker:webdav": "docker compose -f docker-compose.e2e.yaml up -d app webdav && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && E2E_REQUIRE_WEBDAV=true E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e:all -- --grep @webdav; EXIT_CODE=$?; docker compose -f docker-compose.e2e.yaml down; exit $EXIT_CODE",
+    "e2e:docker:all": "docker compose -f docker-compose.e2e.yaml -f docker-compose.yaml -f docker-compose.supersync.yaml up -d app webdav db supersync && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && ./scripts/wait-for-supersync.sh && E2E_REQUIRE_WEBDAV=true E2E_REQUIRE_SUPERSYNC=true E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e:all -- --workers=6; EXIT_CODE=$?; docker compose -f docker-compose.e2e.yaml -f docker-compose.yaml -f docker-compose.supersync.yaml down; exit $EXIT_CODE",
     "screenshots": "npm run screenshots:capture && npm run screenshots:build",
     "screenshots:capture": "npx playwright test --config e2e/playwright.store-screenshots.config.ts",
     "screenshots:capture:desktop": "npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=desktopMaster",
@@ -103,7 +103,8 @@
     "int:test": "node ./tools/test-lng-files.js",
     "int:unused": "node ./tools/find-unused-translations.js",
     "int:watch": "node ./tools/extract-i18n-watch.js",
-    "lint": "npm run lint:ts && npm run lint:scss",
+    "lint": "npm run lint:ts && npm run lint:scss && npm run test:lint-rules",
+    "test:lint-rules": "node eslint-local-rules/run-specs.js",
     "lint:ts": "ng lint",
     "lint:scss": "stylelint \"**/*.scss\" -- --custom-formatter @csstools/stylelint-formatter-github",
     "localInstall": "sudo echo 'Starting local install' && rm -Rf ./.tmp/angular-dist/ && rm -Rf ./.tmp/app-builds/ && npm run buildAllElectron:stage && electron-builder --linux deb && sudo dpkg -i .tmp/app-builds/superProductivity*.deb",
@@ -177,13 +178,14 @@
     "@ctrl/tinycolor": "4.1.0"
   },
   "dependencies": {
-    "@capacitor/browser": "^7.0.4",
-    "@capacitor/ios": "^7.4.4",
-    "@capacitor/keyboard": "^7.0.4",
-    "@capacitor/status-bar": "^7.0.4",
-    "@material-symbols/font-400": "^0.44.4",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/ios": "^8.3.4",
+    "@capacitor/keyboard": "8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
+    "@capawesome/capacitor-android-edge-to-edge-support": "^8.0.8",
+    "@material-symbols/font-400": "^0.44.10",
     "@noble/ciphers": "^2.2.0",
-    "capacitor-plugin-safe-area": "^4.0.3",
+    "capacitor-plugin-safe-area": "^5.0.0",
     "electron-dl": "^3.5.2",
     "electron-localshortcut": "^3.2.1",
     "electron-log": "^5.4.3",
@@ -215,15 +217,15 @@
     "@angular/platform-server": "^21.2.11",
     "@angular/router": "^21.2.11",
     "@angular/service-worker": "^21.2.11",
-    "@capacitor/android": "^7.4.4",
-    "@capacitor/app": "^7.1.0",
-    "@capacitor/cli": "^7.5.0",
-    "@capacitor/core": "^7.4.3",
-    "@capacitor/filesystem": "^7.1.1",
-    "@capacitor/local-notifications": "^7.0.1",
-    "@capacitor/share": "^7.0.2",
-    "@capawesome/capacitor-android-dark-mode-support": "^7.0.0",
-    "@capawesome/capacitor-background-task": "^7.0.1",
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/local-notifications": "^8.2.0",
+    "@capacitor/share": "^8.0.1",
+    "@capawesome/capacitor-android-dark-mode-support": "^8.0.1",
+    "@capawesome/capacitor-background-task": "^8.0.2",
     "@csstools/stylelint-formatter-github": "^2.0.0",
     "@dotenv-run/cli": "^1.3.6",
     "@electron/notarize": "^3.1.1",
@@ -240,7 +242,7 @@
     "@ngx-translate/core": "^17.0.0",
     "@ngx-translate/http-loader": "^17.0.0",
     "@playwright/test": "^1.59.1",
-    "@schematics/angular": "^21.2.9",
+    "@schematics/angular": "^21.2.13",
     "@types/electron": "^1.6.12",
     "@types/electron-localshortcut": "^3.1.3",
     "@types/file-saver": "^2.0.7",
@@ -272,6 +274,7 @@
     "eslint-plugin-local-rules": "^3.0.2",
     "eslint-plugin-prefer-arrow": "1.2.3",
     "eslint-plugin-prettier": "^5.5.5",
+    "fake-indexeddb": "^6.2.5",
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "fs-extra": "^11.3.4",
@@ -301,6 +304,7 @@
     "query-string": "^7.1.3",
     "rxjs": "^7.8.2",
     "shepherd.js": "^11.2.0",
+    "sql.js": "^1.14.1",
     "stacktrace-js": "^2.0.2",
     "start-server-and-test": "^2.1.3",
     "stylelint": "^17.9.1",
@@ -314,8 +318,12 @@
   },
   "overrides": {
     "app-builder-lib": {
-      "minimatch": "10.1.1"
-    }
+      "minimatch": "10.2.5"
+    },
+    "@electron/asar": {
+      "minimatch": "3.1.2"
+    },
+    "webpack-dev-server": "5.2.4"
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-x64": "^3.5.4",
@@ -323,8 +331,7 @@
     "@lmdb/lmdb-win32-x64": "^3.5.4",
     "@rollup/rollup-darwin-x64": "4.60.2",
     "@rollup/rollup-linux-x64-gnu": "4.60.2",
-    "@rollup/rollup-win32-x64-msvc": "4.60.2",
-    "sharp": "^0.34.5"
+    "@rollup/rollup-win32-x64-msvc": "4.60.2"
   },
   "workspaces": [
     "packages/*"

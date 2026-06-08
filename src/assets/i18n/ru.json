@@ -1514,7 +1514,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Добавить существующую задачу \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Создать новые теги",
-        "DUE_BUTTON": "Срок",
+        "DUE_BUTTON": "Запланировать",
         "ESTIMATE_BUTTON": "Оценка",
         "PLACEHOLDER_CREATE": "Заголовок задачи #тег @16:00",
         "PLACEHOLDER_SEARCH": "Добавить существующую задачу или вопросы...",

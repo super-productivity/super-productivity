@@ -1,6 +1,7 @@
 // NOTE: do not change!!
 export enum SyncProviderId {
   'Dropbox' = 'Dropbox',
+  'OneDrive' = 'OneDrive',
   'WebDAV' = 'WebDAV',
   'LocalFile' = 'LocalFile',
   'SuperSync' = 'SuperSync',
@@ -14,6 +15,7 @@ export enum SyncProviderId {
  */
 export const OAUTH_SYNC_PROVIDERS: ReadonlySet<SyncProviderId> = new Set([
   SyncProviderId.Dropbox,
+  SyncProviderId.OneDrive,
 ]);
 
 /**

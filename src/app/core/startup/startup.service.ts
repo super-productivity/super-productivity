@@ -27,6 +27,7 @@ import {
   saveRateDialogState,
   shouldShowRateDialog,
 } from '../../features/dialog-please-rate/rate-dialog-state';
+import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
 import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -352,46 +353,48 @@ export class StartupService {
   }
 
   private _requestPersistence(): void {
-    if (navigator.storage) {
-      // try to avoid data-loss
-      Promise.all([navigator.storage.persisted()])
-        .then(([persisted]) => {
-          if (!persisted) {
-            return navigator.storage.persist().then((granted) => {
-              if (granted) {
-                Log.log('Persistent store granted');
-              }
-              // NOTE: we never show this warning for native mobile apps or Electron,
-              // because persistence is managed by the OS and not subject to browser eviction.
-              // Also suppress during active onboarding to avoid confusing first-time users.
-              else if (
-                !this._platformService.isNative &&
-                !IS_ELECTRON &&
-                !OnboardingHintService.isOnboardingInProgress()
-              ) {
-                const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
-                Log.warn('Persistence not allowed');
-                this._snackService.open({ msg });
-              }
-            });
-          } else {
-            Log.log('Persistence already allowed');
-            return;
-          }
-        })
-        .catch((e) => {
-          Log.log(e);
-          const err = e && e.toString ? e.toString() : 'UNKNOWN';
-          const msg = T.GLOBAL_SNACK.PERSISTENCE_ERROR;
-          this._snackService.open({
-            type: 'ERROR',
-            msg,
-            translateParams: {
-              err,
-            },
-          });
-        });
+    // A1 (#7925): always log the outcome so a #7892-style report carries the
+    // durability state of the WebView store. Snack gating below is unchanged.
+    const isNative = this._platformService.isNative;
+    if (!navigator.storage) {
+      Log.log('Persistence: navigator.storage unavailable', { isNative, IS_ELECTRON });
+      return;
     }
+    navigator.storage
+      .persisted()
+      .then((persisted) => {
+        if (persisted) {
+          Log.log('Persistence: already granted', { isNative, IS_ELECTRON });
+          return;
+        }
+        return navigator.storage.persist().then((granted) => {
+          Log.log('Persistence: persist() resolved', {
+            granted,
+            isNative,
+            IS_ELECTRON,
+          });
+          // Native + Electron persistence is OS-managed (not subject to browser
+          // eviction); also suppress during onboarding.
+          if (
+            !granted &&
+            !isNative &&
+            !IS_ELECTRON &&
+            !OnboardingHintService.isOnboardingInProgress()
+          ) {
+            Log.warn('Persistence not allowed');
+            this._snackService.open({ msg: T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED });
+          }
+        });
+      })
+      .catch((e) => {
+        Log.log('Persistence: error', { isNative, IS_ELECTRON, error: e });
+        const err = e && e.toString ? e.toString() : 'UNKNOWN';
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.GLOBAL_SNACK.PERSISTENCE_ERROR,
+          translateParams: { err },
+        });
+      });
   }
 
   private _checkAvailableStorage(): void {
@@ -429,7 +432,7 @@ export class StartupService {
     }
 
     const state = loadRateDialogState();
-    if (!shouldShowRateDialog(state, appStarts)) {
+    if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
       return;
     }
     this._matDialog

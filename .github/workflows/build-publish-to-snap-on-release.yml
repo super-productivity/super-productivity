@@ -3,30 +3,63 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs: {}
+    inputs:
+      tag_name:
+        description: Release tag to publish to edge and stable
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   snap-release:
     runs-on: ubuntu-latest
-    # Run snapcraft from Canonical's official container so we don't depend on
-    # `sudo snap install snapcraft --classic` working on the runner — that path
-    # has been a recurring source of "unable to contact snap store" failures.
-    container:
-      image: ghcr.io/canonical/snapcraft:8_core24
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
       SNAPCRAFT_HAS_TTY: 'true' # Workaround for https://github.com/snapcore/snapcraft/issues/4439
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag_name }}
 
-    if: '!github.event.release.prerelease'
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
 
     steps:
-      - name: Promote edge → stable
+      - name: Download release snap
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .tmp/snap-release
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'superProductivity-*.snap' \
+            --dir .tmp/snap-release
+
+          SNAP_COUNT=$(find .tmp/snap-release -maxdepth 1 -type f -name '*.snap' | wc -l | tr -d '[:space:]')
+          if [ "$SNAP_COUNT" != "1" ]; then
+            echo "Expected exactly one snap asset for $RELEASE_TAG, found $SNAP_COUNT"
+            find .tmp/snap-release -maxdepth 1 -type f -print
+            exit 1
+          fi
+
+          mv .tmp/snap-release/*.snap .tmp/snap-release/sp.snap
+
+      # Run snapcraft from Canonical's official container so we don't depend on
+      # `sudo snap install snapcraft --classic` working on the runner. The
+      # container wrapper already runs `snapcraft "$@"`, so the docker CMD must
+      # not include a leading `snapcraft` word.
+      - name: Upload release snap to edge and stable
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
           max_attempts: 5
-          timeout_minutes: 10
+          timeout_minutes: 15
           retry_wait_seconds: 60
-          command: yes | snapcraft promote superproductivity --from-channel latest/edge --to-channel latest/stable
+          command: |
+            docker run --rm \
+              -v "$PWD/.tmp/snap-release:/project" \
+              -e SNAPCRAFT_STORE_CREDENTIALS \
+              -e SNAPCRAFT_HAS_TTY=true \
+              ghcr.io/canonical/snapcraft:8_core24 \
+              upload sp.snap --release edge,stable
+
 #      - uses: actions/setup-node@v3
 #        with:
 #          node-version: 20

@@ -37,6 +37,9 @@ export class SwipeBlockComponent implements OnDestroy {
   readonly swipeRight = output<void>();
   readonly swipeRightTriggered = output<boolean>();
   readonly swipeLeft = output<void>();
+  /** Emitted once a horizontal swipe is confirmed, so the host can cancel a
+   * pending drag-ready (long-press) state that would otherwise fire mid-swipe. */
+  readonly swipeStart = output<void>();
 
   readonly isTouchActive = isTouchActive;
 
@@ -85,6 +88,7 @@ export class SwipeBlockComponent implements OnDestroy {
       return;
     }
     this._showPanHelper();
+    this.swipeStart.emit();
     this.isPreventPointerEventsWhilePanning.set(true);
     const hostRect = this._elementRef.nativeElement.getBoundingClientRect();
     this._cachedWidth = hostRect.width;

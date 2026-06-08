@@ -88,13 +88,15 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
 
     const result = await replayOperationBatch({
       ops,
-      applyOptions: options,
+      applyOptions: { isLocalHydration },
       dispatcher: this.store,
       createBulkApplyAction: (operations) => bulkApplyOperations({ operations }),
       remoteApplyWindow: this.hydrationState,
       deferredLocalActions: {
         processDeferredActions: () =>
-          this.injector.get(OperationLogEffects).processDeferredActions(),
+          options.skipDeferredLocalActions
+            ? undefined
+            : this.injector.get(OperationLogEffects).processDeferredActions(),
       },
       archiveSideEffects: this.archiveOperationHandler,
       operationToAction: convertOpToAction,

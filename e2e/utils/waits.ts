@@ -18,10 +18,19 @@ type WaitForAppReadyOptions = {
 };
 
 export const skipOnboardingForE2E = (): void => {
-  localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
-  localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
-  localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-  localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+  // Playwright's addInitScript runs in every frame, including iframes the app
+  // creates with a `data:` URL (e.g. plugin-index destroys its iframe by
+  // swapping in `data:text/html,<html><body></body></html>`). data: URLs have
+  // an opaque origin and accessing localStorage throws SecurityError, which
+  // the runtime-error collector would surface as a test failure.
+  try {
+    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+  } catch {
+    // No localStorage in this frame (data:/sandboxed); the host frame already ran us.
+  }
 };
 
 /**

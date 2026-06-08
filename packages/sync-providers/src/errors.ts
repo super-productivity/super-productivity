@@ -15,4 +15,5 @@ export {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
+  WebDavNativeRequestError,
 } from './errors/index';

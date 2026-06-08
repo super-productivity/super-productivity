@@ -6,14 +6,16 @@ import type {
   WebDavHttpAdapter,
   WebDavHttpResponse,
 } from '../../../src/file-based/webdav/webdav-http-adapter';
-import type { WebdavPrivateCfg } from '../../../src/file-based/webdav/webdav.model';
+import type { WebdavPrivateCfg } from '../../../src/webdav';
 import {
+  AuthFailSPError,
   EmptyRemoteBodySPError,
   HttpNotOkAPIError,
   InvalidDataSPError,
   MissingCredentialsSPError,
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
+  WebDavNativeRequestError,
 } from '../../../src/errors';
 
 const cfg: WebdavPrivateCfg = {
@@ -243,12 +245,73 @@ describe('WebdavApi', () => {
       expect(r.success).toBe(true);
     });
 
+    // Regression: issue #7617. The probe must hit the WebDAV base ROOT,
+    // not `baseUrl + syncFolderPath`. On a first-time setup the sync
+    // folder does not exist yet (created lazily on first upload), so
+    // probing it would 404 and falsely fail an otherwise valid config.
+    it('probes the base root, not the configured sync folder', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(okResponse(sampleListing, 207));
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(true);
+      expect(adapter.request).toHaveBeenCalledTimes(1);
+      const arg = adapter.request.mock.calls[0][0] as { url: string };
+      expect(arg.url).toBe('https://dav.example.com/dav/');
+      expect(arg.url).not.toContain('/sp');
+      // ...but the result still reports the configured sync folder (where
+      // data will sync), NOT the probed root — UI invariant.
+      expect(r.fullUrl).toBe('https://dav.example.com/dav/sp');
+    });
+
+    // A wrong username / base path makes the base root itself 404 on
+    // Nextcloud — that is a genuine misconfig and must still fail.
+    it('returns success: false when the base root is 404 (wrong base/username)', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValue(
+        new RemoteFileNotFoundAPIError('https://dav.example.com/dav/'),
+      );
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(false);
+    });
+
+    // Safety invariant for #7617: relaxing the folder check must NOT let a
+    // bad password through. A 401 on the base root surfaces as
+    // AuthFailSPError and must still fail the test.
+    it('returns success: false on bad credentials (401 → AuthFailSPError)', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValue(new AuthFailSPError());
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(false);
+    });
+
     it('returns success: false with user-facing error + fullUrl on failure', async () => {
       const adapter = makeAdapter();
       adapter.request.mockRejectedValue(new Error('Network unreachable'));
       const r = await makeApi(adapter).testConnection(cfg);
       expect(r.success).toBe(false);
       expect(r.error).toBe('Network unreachable');
+      expect(r.fullUrl).toContain('dav.example.com');
+    });
+
+    // Issue #8053: on native platforms the adapter wraps a thrown native
+    // request error (SSL/timeout/DNS) into WebDavNativeRequestError carrying a
+    // readable, already-redacted message. testConnection must surface that
+    // message verbatim as `result.error` so the "Test connection" snackbar
+    // shows something actionable instead of "Unknown error". This guards the
+    // seam between the adapter (proven to redact in webdav-http-adapter.spec)
+    // and the user-facing return value.
+    it('surfaces a native WebDavNativeRequestError message to the user', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValue(
+        new WebDavNativeRequestError(
+          'SSL error: Trust anchor for certification path not found',
+          'SSL_ERROR',
+        ),
+      );
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(false);
+      expect(r.error).toBe('SSL error: Trust anchor for certification path not found');
+      expect(r.error).not.toBe('Unknown error');
       expect(r.fullUrl).toContain('dav.example.com');
     });
 

@@ -110,6 +110,11 @@ export class ShortcutService {
       return;
     }
 
+    // Handle task-specific shortcuts first when a task is focused
+    if (this._taskShortcutService.handleTaskShortcuts(ev)) {
+      return;
+    }
+
     if (
       checkKeyCombo(ev, keys.toggleBacklog) &&
       this._workContextService.activeWorkContextType === WorkContextType.PROJECT
@@ -154,6 +159,9 @@ export class ShortcutService {
     } else if (checkKeyCombo(ev, keys.focusSideNav)) {
       this._focusSideNav();
       ev.preventDefault();
+    } else if (checkKeyCombo(ev, keys.toggleSideNavMode)) {
+      this._layoutService.toggleSideNavMode();
+      ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.addNewTask)) {
       this._layoutService.showAddTaskBar();
       ev.preventDefault();
@@ -195,8 +203,10 @@ export class ShortcutService {
     } else if (checkKeyCombo(ev, keys.triggerSync)) {
       ev.preventDefault();
       if (await this._syncWrapperService.isEnabledAndReady$.pipe(first()).toPromise()) {
-        this._syncWrapperService.sync();
+        this._syncWrapperService.sync(true);
       }
+    } else if (this._taskShortcutService.handleTogglePlayFallback(ev)) {
+      return;
     } else if (
       checkKeyCombo(ev, 'Ctrl+Shift+*') &&
       document.activeElement &&
@@ -216,11 +226,6 @@ export class ShortcutService {
       } else if (checkKeyCombo(ev, keys.zoomDefault)) {
         this._uiHelperService.zoomTo(1);
       }
-    }
-
-    // Handle task-specific shortcuts
-    if (this._taskShortcutService.handleTaskShortcuts(ev)) {
-      return;
     }
 
     // Check plugin shortcuts (exec last)

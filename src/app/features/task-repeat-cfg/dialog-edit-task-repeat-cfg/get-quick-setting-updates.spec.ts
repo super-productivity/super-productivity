@@ -135,6 +135,8 @@ describe('getQuickSettingUpdates', () => {
   });
 
   describe('MONTHLY_FIRST_DAY', () => {
+    afterEach(() => jasmine.clock().uninstall());
+
     it('should return MONTHLY cycle with repeatEvery 1', () => {
       const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
       expect(result).toBeDefined();
@@ -142,14 +144,39 @@ describe('getQuickSettingUpdates', () => {
       expect(result!.repeatEvery).toBe(1);
     });
 
-    it('should set startDate to the 1st of the month', () => {
+    it('should set startDate to the 1st of a month', () => {
       const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
       const startDate = new Date(result!.startDate + 'T00:00:00');
       expect(startDate.getDate()).toBe(1);
     });
+
+    it('should anchor to the NEXT 1st when today is not the 1st (#7726)', () => {
+      // Issue scenario: setting this up on 2026-05-22 must schedule June 1,
+      // never the already-past May 1.
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 4, 22));
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
+      expect(result!.startDate).toBe('2026-06-01');
+    });
+
+    it('should anchor to today when today IS the 1st', () => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 4, 1));
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
+      expect(result!.startDate).toBe('2026-05-01');
+    });
+
+    it('should roll over the year in December', () => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 11, 15));
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
+      expect(result!.startDate).toBe('2027-01-01');
+    });
   });
 
   describe('MONTHLY_LAST_DAY', () => {
+    afterEach(() => jasmine.clock().uninstall());
+
     it('should return MONTHLY cycle with repeatEvery 1', () => {
       const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
       expect(result).toBeDefined();
@@ -157,10 +184,25 @@ describe('getQuickSettingUpdates', () => {
       expect(result!.repeatEvery).toBe(1);
     });
 
-    it('should always set startDate with day=31 regardless of current month', () => {
+    it('should set the monthlyLastDay flag', () => {
       const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
-      const startDate = new Date(result!.startDate + 'T00:00:00');
-      expect(startDate.getDate()).toBe(31);
+      expect(result!.monthlyLastDay).toBe(true);
+    });
+
+    it('should anchor startDate to the last day of the current month (#7726)', () => {
+      // Issue scenario: setting this up on 2026-05-22 must schedule May 31,
+      // never the already-past Jan 31.
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 4, 22));
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
+      expect(result!.startDate).toBe('2026-05-31');
+    });
+
+    it('should anchor to a short month-end when set up in a 30-day month', () => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 5, 10));
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
+      expect(result!.startDate).toBe('2026-06-30');
     });
   });
 
@@ -217,6 +259,25 @@ describe('getQuickSettingUpdates', () => {
       const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
       expect(result!.monthlyWeekOfMonth).toBeUndefined();
       expect(result!.monthlyWeekday).toBeUndefined();
+    });
+  });
+
+  describe('monthlyLastDay anchor is mutually exclusive with other presets', () => {
+    it('MONTHLY_CURRENT_DATE clears monthlyLastDay', () => {
+      expect(
+        getQuickSettingUpdates('MONTHLY_CURRENT_DATE')!.monthlyLastDay,
+      ).toBeUndefined();
+    });
+
+    it('MONTHLY_FIRST_DAY clears monthlyLastDay', () => {
+      expect(getQuickSettingUpdates('MONTHLY_FIRST_DAY')!.monthlyLastDay).toBeUndefined();
+    });
+
+    it('MONTHLY_NTH_WEEKDAY clears monthlyLastDay', () => {
+      const ref = new Date(2026, 0, 12);
+      expect(
+        getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref)!.monthlyLastDay,
+      ).toBeUndefined();
     });
   });
 

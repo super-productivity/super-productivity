@@ -1,7 +1,10 @@
-import { extractActionPayload, OpType } from './operation.types';
+import {
+  extractActionPayload,
+  extractEntityFromPayload,
+  extractUpdateChanges,
+  OpType,
+} from './operation.types';
 import type { EntityConflict, Operation } from './operation.types';
-import { mergeVectorClocks } from './vector-clock';
-import type { VectorClock, VectorClockComparison } from './vector-clock';
 import { NOOP_SYNC_LOGGER } from './sync-logger';
 import type { SyncLogger } from './sync-logger';
 
@@ -21,23 +24,6 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 export interface DeepEqualOptions {
   logger?: SyncLogger;
   maxDepth?: number;
-}
-
-export interface EntityFrontierContext {
-  localOpsForEntity: Pick<Operation<string>, 'vectorClock'>[];
-  appliedFrontier: VectorClock | undefined;
-  snapshotVectorClock: VectorClock | undefined;
-  snapshotEntityKeys: ReadonlySet<string> | undefined;
-}
-
-export interface ClockCorruptionAdjustmentOptions {
-  comparison: VectorClockComparison;
-  entityKey: string;
-  pendingOpsCount: number;
-  hasNoSnapshotClock: boolean;
-  localFrontierIsEmpty: boolean;
-  logger?: SyncLogger;
-  onPotentialCorruption?: (message: string) => void;
 }
 
 export interface LwwConflictResolutionPlan<
@@ -121,49 +107,6 @@ const getPayloadKeys = (payload: unknown): string[] | undefined => {
     return Object.keys(actionPayload);
   }
   return undefined;
-};
-
-/**
- * Extracts a full entity from an operation payload.
- *
- * Handles both multi-entity payloads and direct action payloads. If no entity
- * exists under `payloadKey`, direct entity payloads with a top-level `id` are
- * accepted as a fallback.
- */
-export const extractEntityFromPayload = (
-  payload: unknown,
-  payloadKey: string,
-): Record<string, unknown> | undefined => {
-  const actionPayload = extractActionPayload(payload);
-  const entity = actionPayload[payloadKey];
-  if (entity && typeof entity === 'object') {
-    return entity as Record<string, unknown>;
-  }
-  if (actionPayload && typeof actionPayload === 'object' && 'id' in actionPayload) {
-    return actionPayload as Record<string, unknown>;
-  }
-  return undefined;
-};
-
-/**
- * Extracts the changed fields from an UPDATE payload.
- *
- * Supports entity-adapter style `{ id, changes }` payloads and flat entity
- * payloads, where `id` is removed from the returned changes.
- */
-export const extractUpdateChanges = (
-  payload: unknown,
-  payloadKey: string,
-): Record<string, unknown> => {
-  const actionPayload = extractActionPayload(payload);
-  const entityPayload = actionPayload[payloadKey] as Record<string, unknown> | undefined;
-  if (!entityPayload) return {};
-  if ('changes' in entityPayload && typeof entityPayload['changes'] === 'object') {
-    return entityPayload['changes'] as Record<string, unknown>;
-  }
-  const changes = { ...entityPayload };
-  delete changes['id'];
-  return changes;
 };
 
 /**
@@ -509,68 +452,4 @@ export const partitionLwwResolutions = <
   }
 
   return partitions;
-};
-
-/**
- * Builds the local frontier vector clock for one entity.
- *
- * Snapshot clocks only apply to entities known to exist at snapshot time. For
- * old snapshots without `snapshotEntityKeys`, the applied frontier is the only
- * evidence that the entity existed locally.
- */
-export const buildEntityFrontier = (
-  entityKey: string,
-  ctx: EntityFrontierContext,
-): VectorClock => {
-  const entityExistedAtSnapshot = ctx.snapshotEntityKeys
-    ? ctx.snapshotEntityKeys.has(entityKey)
-    : ctx.appliedFrontier !== undefined;
-  const fallbackClock = entityExistedAtSnapshot ? ctx.snapshotVectorClock : {};
-  const baselineClock = ctx.appliedFrontier || fallbackClock || {};
-
-  const allClocks = [baselineClock, ...ctx.localOpsForEntity.map((op) => op.vectorClock)];
-  return allClocks.reduce((acc, clock) => mergeVectorClocks(acc, clock), {});
-};
-
-/**
- * Converts unsafe vector-clock comparisons to CONCURRENT when per-entity clock
- * data appears corrupted. CONCURRENT forces conflict resolution instead of
- * silently skipping either side.
- */
-export const adjustForClockCorruption = ({
-  comparison,
-  entityKey,
-  pendingOpsCount,
-  hasNoSnapshotClock,
-  localFrontierIsEmpty,
-  logger = NOOP_SYNC_LOGGER,
-  onPotentialCorruption,
-}: ClockCorruptionAdjustmentOptions): VectorClockComparison => {
-  const potentialCorruption =
-    pendingOpsCount > 0 && hasNoSnapshotClock && localFrontierIsEmpty;
-
-  if (potentialCorruption) {
-    onPotentialCorruption?.(
-      `Clock corruption detected for entity ${entityKey}: ` +
-        `has ${pendingOpsCount} pending ops but no snapshot clock and empty local frontier`,
-    );
-  }
-
-  if (potentialCorruption && comparison === 'LESS_THAN') {
-    logger.warn('sync-core: converting LESS_THAN to CONCURRENT for clock corruption', {
-      entityKey,
-      pendingOpsCount,
-    });
-    return 'CONCURRENT';
-  }
-
-  if (potentialCorruption && comparison === 'GREATER_THAN') {
-    logger.warn('sync-core: converting GREATER_THAN to CONCURRENT for clock corruption', {
-      entityKey,
-      pendingOpsCount,
-    });
-    return 'CONCURRENT';
-  }
-
-  return comparison;
 };

@@ -9,6 +9,7 @@ import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
 import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import {
+  selectAllTasks,
   selectOverdueTasksOnToday,
   selectTasksDueForDay,
   selectTasksWithDueTimeForRange,
@@ -49,7 +50,7 @@ describe('getOverdueIdsInTodayOrder', () => {
 
 describe('TaskDueEffects', () => {
   let previousTimeout: number;
-  const actions$: Observable<Action> = of();
+  let actions$: Subject<Action>;
   let effects: TaskDueEffects;
   let store: MockStore;
   let globalTrackingIntervalService: {
@@ -105,6 +106,7 @@ describe('TaskDueEffects', () => {
   });
 
   beforeEach(() => {
+    actions$ = new Subject<Action>();
     // Create behavior subjects to control the stream emissions
     const todayDateStr$ = new BehaviorSubject<string>(todayStr);
     const afterCurrentSyncDoneOrSyncDisabled$ = new BehaviorSubject<boolean>(true);
@@ -140,6 +142,7 @@ describe('TaskDueEffects', () => {
             { selector: selectStartOfNextDayDiffMs, value: startOfNextDayDiffMs },
             { selector: selectTasksDueForDay, value: [] },
             { selector: selectTasksWithDueTimeForRange, value: [] },
+            { selector: selectAllTasks, value: [] },
           ],
         }),
         {
@@ -453,6 +456,189 @@ describe('TaskDueEffects', () => {
       tick(ENSURE_TASKS_DUE_DEBOUNCE_MS);
 
       expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
+
+    it('should dispatch planDeadlineTasksForToday for task with whole-day deadline today', fakeAsync(() => {
+      const taskWithDeadlineDay = createTask('deadline-day-1', {
+        deadlineDay: todayStr,
+      });
+
+      store.overrideSelector(selectAllTasks, [taskWithDeadlineDay]);
+      store.overrideSelector(selectTodayTaskIds, ['other-task']);
+      store.overrideSelector(selectTodayTagTaskIds, ['other-task']);
+      store.refreshState();
+
+      let emittedAction: Action | undefined;
+      const subscription = effects.ensureTasksDueTodayInTodayTag$
+        .pipe(take(1))
+        .subscribe((action) => {
+          emittedAction = action;
+        });
+
+      globalTrackingIntervalService.todayDateStr$.next(todayStr);
+      syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$.next(true);
+      tick(ENSURE_TASKS_DUE_DEBOUNCE_MS);
+
+      expect(emittedAction).toEqual(
+        jasmine.objectContaining({
+          taskIds: ['deadline-day-1'],
+          today: todayStr,
+          startOfNextDayDiffMs,
+        }),
+      );
+      expect(emittedAction?.type).toBe(TaskSharedActions.planDeadlineTasksForToday.type);
+      subscription.unsubscribe();
+    }));
+
+    it('should dispatch planDeadlineTasksForToday for task with timed deadline today', fakeAsync(() => {
+      const todayDate = new Date();
+      todayDate.setHours(12, 0, 0, 0);
+      const todayTimestamp = todayDate.getTime();
+      const taskWithDeadlineTime = createTask('deadline-time-1', {
+        deadlineWithTime: todayTimestamp,
+      });
+
+      store.overrideSelector(selectAllTasks, [taskWithDeadlineTime]);
+      store.overrideSelector(selectTodayTaskIds, ['other-task']);
+      store.overrideSelector(selectTodayTagTaskIds, ['other-task']);
+      store.refreshState();
+
+      let emittedAction: Action | undefined;
+      const subscription = effects.ensureTasksDueTodayInTodayTag$
+        .pipe(take(1))
+        .subscribe((action) => {
+          emittedAction = action;
+        });
+
+      globalTrackingIntervalService.todayDateStr$.next(todayStr);
+      syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$.next(true);
+      tick(ENSURE_TASKS_DUE_DEBOUNCE_MS);
+
+      expect(emittedAction).toEqual(
+        jasmine.objectContaining({
+          taskIds: ['deadline-time-1'],
+          today: todayStr,
+          startOfNextDayDiffMs,
+        }),
+      );
+      expect(emittedAction?.type).toBe(TaskSharedActions.planDeadlineTasksForToday.type);
+      subscription.unsubscribe();
+    }));
+
+    it('should not emit when deadline task is already in TODAY tag', fakeAsync(() => {
+      const taskWithDeadlineDay = createTask('deadline-already-in-today', {
+        deadlineDay: todayStr,
+        dueDay: todayStr,
+      });
+
+      store.overrideSelector(selectAllTasks, [taskWithDeadlineDay]);
+      // Task is already in Today
+      store.overrideSelector(selectTodayTaskIds, ['deadline-already-in-today']);
+      store.overrideSelector(selectTodayTagTaskIds, ['deadline-already-in-today']);
+      store.refreshState();
+
+      let emitted = false;
+      const subscription = effects.ensureTasksDueTodayInTodayTag$.subscribe(() => {
+        emitted = true;
+      });
+
+      globalTrackingIntervalService.todayDateStr$.next(todayStr);
+      syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$.next(true);
+      tick(ENSURE_TASKS_DUE_DEBOUNCE_MS);
+
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
+
+    it('should deduplicate when task appears in both deadline and due selectors', fakeAsync(() => {
+      // Edge case: same task ID appears in both due and deadline selectors
+      // (shouldn't happen in practice due to mutual exclusivity, but dedup must handle it)
+      const taskForDueSelector = createTaskWithDueDay('task-dual', todayStr);
+      const taskForDeadlineSelector = createTask('task-dual', { deadlineDay: todayStr });
+
+      store.overrideSelector(selectTasksDueForDay, [taskForDueSelector]);
+      store.overrideSelector(selectAllTasks, [taskForDeadlineSelector]);
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.overrideSelector(selectTodayTagTaskIds, []);
+      store.refreshState();
+
+      let emittedAction: Action | undefined;
+      const subscription = effects.ensureTasksDueTodayInTodayTag$
+        .pipe(take(1))
+        .subscribe((action) => {
+          emittedAction = action;
+        });
+
+      globalTrackingIntervalService.todayDateStr$.next(todayStr);
+      syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$.next(true);
+      tick(ENSURE_TASKS_DUE_DEBOUNCE_MS);
+
+      // Only one ID despite appearing in two selectors
+      expect(emittedAction).toEqual(
+        jasmine.objectContaining({
+          taskIds: ['task-dual'],
+        }),
+      );
+      expect(emittedAction?.type).toBe(TaskSharedActions.planTasksForToday.type);
+      subscription.unsubscribe();
+    }));
+
+    it('should not emit for deadline task scheduled for a future day', fakeAsync(() => {
+      const taskWithDeadlineDay = createTask('deadline-future-schedule', {
+        deadlineDay: todayStr,
+        dueDay: '2999-01-01',
+      });
+
+      store.overrideSelector(selectAllTasks, [taskWithDeadlineDay]);
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.overrideSelector(selectTodayTagTaskIds, []);
+      store.refreshState();
+
+      let emitted = false;
+      const subscription = effects.ensureTasksDueTodayInTodayTag$.subscribe(() => {
+        emitted = true;
+      });
+
+      globalTrackingIntervalService.todayDateStr$.next(todayStr);
+      syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$.next(true);
+      tick(ENSURE_TASKS_DUE_DEBOUNCE_MS);
+
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
+
+    it('should only include parent deadline task when parent and subtask are candidates', fakeAsync(() => {
+      const parentTask = createTask('deadline-parent', {
+        deadlineDay: todayStr,
+      });
+      const subTask = createTask('deadline-sub', {
+        deadlineDay: todayStr,
+        parentId: 'deadline-parent',
+      });
+
+      store.overrideSelector(selectAllTasks, [subTask, parentTask]);
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.overrideSelector(selectTodayTagTaskIds, []);
+      store.refreshState();
+
+      let emittedAction: Action | undefined;
+      const subscription = effects.ensureTasksDueTodayInTodayTag$
+        .pipe(take(1))
+        .subscribe((action) => {
+          emittedAction = action;
+        });
+
+      globalTrackingIntervalService.todayDateStr$.next(todayStr);
+      syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$.next(true);
+      tick(ENSURE_TASKS_DUE_DEBOUNCE_MS);
+
+      expect(emittedAction).toEqual(
+        jasmine.objectContaining({
+          taskIds: ['deadline-parent'],
+        }),
+      );
+      expect(emittedAction?.type).toBe(TaskSharedActions.planDeadlineTasksForToday.type);
       subscription.unsubscribe();
     }));
   });

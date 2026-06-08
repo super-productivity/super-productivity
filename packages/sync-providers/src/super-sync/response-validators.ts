@@ -4,7 +4,7 @@ import type {
   RestoreSnapshotResponse,
   SnapshotUploadResponse,
   SuperSyncOpDownloadResponse,
-} from '../provider.types';
+} from '../provider-types';
 
 /**
  * Host-injected response validators. The package can't import

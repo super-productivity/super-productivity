@@ -16,9 +16,7 @@ import { Store } from '@ngrx/store';
 import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.selectors';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
-import { DefaultStartPage } from './features/config/default-start-page.const';
-import { TODAY_TAG } from './features/tag/tag.const';
-import { INBOX_PROJECT } from './features/project/project.const';
+import { getStartPageUrlPath } from './features/config/default-start-page.util';
 
 @Injectable({ providedIn: 'root' })
 export class ActiveWorkContextGuard {
@@ -112,9 +110,6 @@ export class DefaultStartPageGuard {
   private _dataInitStateService = inject(DataInitStateService);
   private _router = inject(Router);
 
-  private readonly _todayUrl = (): UrlTree =>
-    this._router.parseUrl(`/tag/${TODAY_TAG.id}/tasks`);
-
   canActivate(
     next: ActivatedRouteSnapshot,
     state: RouterStateSnapshot,
@@ -127,9 +122,11 @@ export class DefaultStartPageGuard {
   }
 
   private _resolve(startPage: number | string | undefined): Observable<UrlTree> {
+    const appFeatures = this._globalConfigService.appFeatures();
+
     if (typeof startPage === 'string' && startPage.length > 0) {
-      // Project id. Fall back to Today if the project is missing, archived,
-      // or hidden from the menu — same cases where the dropdown omits it.
+      // Project id — look it up so getStartPageUrlPath can fall back to Today
+      // when the project is missing, archived, or hidden from the menu.
       return this._projectService.getByIdOnce$(startPage).pipe(
         catchError((err) => {
           Log.warn(
@@ -139,39 +136,13 @@ export class DefaultStartPageGuard {
           return of(undefined);
         }),
         map((project) =>
-          project && !project.isArchived && !project.isHiddenFromMenu
-            ? this._router.parseUrl(`/project/${startPage}/tasks`)
-            : this._todayUrl(),
+          this._router.parseUrl(getStartPageUrlPath(startPage, appFeatures, project)),
         ),
       );
     }
 
-    const appFeatures = this._globalConfigService.appFeatures();
-    switch (startPage ?? DefaultStartPage.Today) {
-      case DefaultStartPage.Inbox:
-        // Legacy numeric value preserved for old configs.
-        return of(this._router.parseUrl(`/project/${INBOX_PROJECT.id}/tasks`));
-      case DefaultStartPage.Planner:
-        return of(
-          appFeatures.isPlannerEnabled
-            ? this._router.parseUrl('/planner')
-            : this._todayUrl(),
-        );
-      case DefaultStartPage.Schedule:
-        return of(
-          appFeatures.isSchedulerEnabled
-            ? this._router.parseUrl('/schedule')
-            : this._todayUrl(),
-        );
-      case DefaultStartPage.Boards:
-        return of(
-          appFeatures.isBoardsEnabled
-            ? this._router.parseUrl('/boards')
-            : this._todayUrl(),
-        );
-      case DefaultStartPage.Today:
-      default:
-        return of(this._todayUrl());
-    }
+    return of(
+      this._router.parseUrl(getStartPageUrlPath(startPage, appFeatures, undefined)),
+    );
   }
 }

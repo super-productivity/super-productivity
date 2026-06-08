@@ -218,7 +218,7 @@ vi.mock('../src/db', async () => {
         state.userSyncStates.set(args.where.userId, result);
         return result;
       }),
-      // Race-safe writers used by SnapshotService._generateSnapshotImpl:
+      // Race-safe writers used by snapshot generation:
       // updateMany honours the `OR: [lastSnapshotSeq null, lastSnapshotSeq < seq]`
       // guard; create is the first-time-user fallback.
       updateMany: vi.fn().mockImplementation(async (args: any) => {

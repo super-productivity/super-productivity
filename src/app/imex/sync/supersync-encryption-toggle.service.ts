@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+import { clearSessionKeyCache } from '@sp/sync-core';
 import { SyncLog } from '../../core/log';
 import { SnapshotUploadService } from './snapshot-upload.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
@@ -66,6 +67,10 @@ export class SuperSyncEncryptionToggleService {
         logPrefix: LOG_PREFIX,
       });
 
+      // Drop any cached derived key from the pre-toggle password; subsequent
+      // sync cycles must re-derive against the new `encryptKey`.
+      clearSessionKeyCache();
+
       SyncLog.normal(`${LOG_PREFIX}: Encryption enabled successfully!`);
     } catch (error) {
       // Revert config on failure (server data is already deleted at this point)
@@ -108,6 +113,9 @@ export class SuperSyncEncryptionToggleService {
         isEncryptionEnabled: false,
         logPrefix: LOG_PREFIX,
       });
+
+      // Drop any cached derived key now that encryption is off.
+      clearSessionKeyCache();
 
       SyncLog.normal(`${LOG_PREFIX}: Encryption disabled successfully!`);
     } catch (uploadError) {

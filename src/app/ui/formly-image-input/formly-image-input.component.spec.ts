@@ -88,7 +88,7 @@ describe('FormlyImageInputComponent', () => {
   });
 
   it('rejects oversized files with snack', () => {
-    const largeBytes = new Uint8Array(205 * 1024);
+    const largeBytes = new Uint8Array(257 * 1024);
     const file = new File([largeBytes], 'large.png', { type: 'image/png' });
     const setValueSpy = spyOn(formControl, 'setValue').and.callThrough();
 
@@ -98,7 +98,7 @@ describe('FormlyImageInputComponent', () => {
     expect(snackService.open).toHaveBeenCalledWith({
       msg: T.F.PROJECT.FORM_THEME.S_BACKGROUND_IMAGE_TOO_LARGE,
       type: 'ERROR',
-      translateParams: { maxSizeKb: 200 },
+      translateParams: { maxSizeKb: 256 },
     });
   });
 

@@ -45,10 +45,8 @@ describe('RepairOperationService', () => {
     ]);
 
     // Default mock implementations
-    mockLockService.request.and.callFake(
-      async (_name: string, fn: () => Promise<void>) => {
-        await fn();
-      },
+    mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
+      fn(),
     );
     // appendWithVectorClockUpdate returns the sequence number
     mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(100));

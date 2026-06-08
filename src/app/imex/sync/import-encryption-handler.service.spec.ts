@@ -8,7 +8,8 @@ import {
   SyncProviderBase,
 } from '../../op-log/sync-providers/provider.interface';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
-import { AppDataComplete } from '../../op-log/model/model-config';
+import { AllModelConfig, AppDataComplete } from '../../op-log/model/model-config';
+import type { CompleteBackup } from '../../op-log/core/types/sync.types';
 
 describe('ImportEncryptionHandlerService', () => {
   let service: ImportEncryptionHandlerService;
@@ -32,6 +33,16 @@ describe('ImportEncryptionHandlerService', () => {
         },
       },
     }) as unknown as AppDataComplete;
+
+  const createMockWrappedImportedData = (
+    isEncryptionEnabled?: boolean,
+    encryptKey?: string,
+  ): CompleteBackup<AllModelConfig> => ({
+    timestamp: 1,
+    lastUpdate: 1,
+    crossModelVersion: 4.5,
+    data: createMockImportedData(isEncryptionEnabled, encryptKey),
+  });
 
   const mockExistingCfg: SuperSyncPrivateCfg = {
     baseUrl: 'https://test.example.com',
@@ -131,6 +142,21 @@ describe('ImportEncryptionHandlerService', () => {
 
       // Same enabled state = no change (key differences handled separately)
       expect(result.willChange).toBeFalse();
+    });
+
+    it('should read encryption state from wrapped backup data', async () => {
+      (mockSyncProvider.privateCfg.load as jasmine.Spy).and.resolveTo({
+        ...mockExistingCfg,
+        isEncryptionEnabled: true,
+        encryptKey: 'current-key',
+      });
+      const importedData = createMockWrappedImportedData(true, 'new-key');
+
+      const result = await service.checkEncryptionStateChange(importedData);
+
+      expect(result.willChange).toBeFalse();
+      expect(result.currentEnabled).toBeTrue();
+      expect(result.importedEnabled).toBeTrue();
     });
   });
 
@@ -248,6 +274,23 @@ describe('ImportEncryptionHandlerService', () => {
         mockSnapshotUploadService.deleteAndReuploadWithNewEncryption,
       ).toHaveBeenCalledWith({
         encryptKey: 'imported-encryption-key',
+        isEncryptionEnabled: true,
+        logPrefix: 'ImportEncryptionHandlerService',
+      });
+    });
+
+    it('should pass correct encryption key from wrapped backup data', async () => {
+      const importedData = createMockWrappedImportedData(
+        true,
+        'wrapped-imported-encryption-key',
+      );
+
+      await service.handleImportEncryptionIfNeeded(importedData);
+
+      expect(
+        mockSnapshotUploadService.deleteAndReuploadWithNewEncryption,
+      ).toHaveBeenCalledWith({
+        encryptKey: 'wrapped-imported-encryption-key',
         isEncryptionEnabled: true,
         logPrefix: 'ImportEncryptionHandlerService',
       });

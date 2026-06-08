@@ -23,6 +23,16 @@ const HEARTBEAT_TIMEOUT_MS = 45_000;
 const AUTH_FAILURE_CLOSE_CODE = 4003;
 /** Close code indicating the server-side per-user connection limit is reached */
 const TOO_MANY_CONNECTIONS_CLOSE_CODE = 4008;
+/**
+ * Close code sent on the OLD socket when a newer socket with the same clientId
+ * connects (server-side dedup). clientId is per-origin (IndexedDB), so multiple
+ * browser tabs share one. Auto-reconnecting here would kick the other tab, which
+ * would reconnect and kick us, in a 1Hz ping-pong loop. Skip reconnect and let
+ * the next sync trigger (visibility, online, user activity, or a local edit)
+ * re-establish the WS — SuperSync has no wall-clock periodic timer, so an idle
+ * tab stays disconnected until activity, which is fine for a background tab.
+ */
+const REPLACED_BY_NEWER_CLOSE_CODE = 4009;
 
 @Injectable({
   providedIn: 'root',
@@ -194,6 +204,12 @@ export class SuperSyncWebSocketService implements OnDestroy {
       if (event.code === TOO_MANY_CONNECTIONS_CLOSE_CODE) {
         SyncLog.warn(
           'SuperSyncWebSocketService: Server connection limit reached, waiting for periodic sync retry.',
+        );
+        return;
+      }
+      if (event.code === REPLACED_BY_NEWER_CLOSE_CODE) {
+        SyncLog.log(
+          'SuperSyncWebSocketService: Replaced by another connection sharing this clientId (likely another tab), waiting for periodic sync retry.',
         );
         return;
       }

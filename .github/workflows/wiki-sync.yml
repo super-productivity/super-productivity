@@ -88,7 +88,11 @@ jobs:
           path: ${{ env.CODE_ROOT }}
 
       - name: Checkout Wiki
-        uses: actions/checkout@v6.0.2
+        # Pinned to v5: v6 changed credential persistence to a path-scoped
+        # includeIf matcher, which intermittently leaves the wiki push without
+        # credentials on github-hosted runners (run 26335467138). v5 uses the
+        # path-independent extraheader and is stable for this second checkout.
+        uses: actions/checkout@v5
         with:
           repository: ${{ github.repository }}.wiki
           path: ${{ env.WIKI_ROOT }}

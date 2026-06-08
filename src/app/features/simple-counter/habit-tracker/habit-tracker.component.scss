@@ -316,6 +316,11 @@
   @include mq(xs, max) {
     min-width: 32px;
   }
+
+  &.is-disabled {
+    cursor: default;
+    opacity: 0.3;
+  }
 }
 
 .check-circle {
@@ -340,11 +345,11 @@
   }
 
   @include darkTheme() {
-    border-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.32);
   }
 
   @include lightTheme() {
-    border-color: rgba(0, 0, 0, 0.15);
+    border-color: rgba(0, 0, 0, 0.28);
   }
 
   &.is-done {

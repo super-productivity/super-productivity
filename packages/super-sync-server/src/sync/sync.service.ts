@@ -5,16 +5,11 @@ import {
   UploadResult,
   SyncConfig,
   DEFAULT_SYNC_CONFIG,
-  compareVectorClocks,
-  limitVectorClockSize,
   VectorClock,
   SYNC_ERROR_CODES,
-  ConflictResult,
-  isFullStateOpType,
 } from './sync.types';
-import { APPROX_BYTES_PER_OP, computeOpStorageBytes } from './sync.const';
+import { computeOpStorageBytes } from './sync.const';
 import { Logger } from '../logger';
-import { parsePositiveIntegerEnv } from '../util/env';
 import { Prisma } from '@prisma/client';
 import {
   ValidationService,
@@ -22,64 +17,48 @@ import {
   RequestDeduplicationService,
   DeviceService,
   OperationDownloadService,
+  OperationUploadService,
   StorageQuotaService,
   SnapshotService,
   type PreparedSnapshotCache,
   type CacheSnapshotResult,
   type SnapshotDedupResponse,
 } from './services';
+const getPrismaP2002TargetTokens = (
+  err: Prisma.PrismaClientKnownRequestError,
+): string[] => {
+  const target = err.meta?.target;
+  if (Array.isArray(target)) return target.map(String);
+  if (typeof target === 'string') return [target];
+  return [];
+};
 
-interface DuplicateOperationCandidate {
-  userId: number;
-  clientId: string;
-  actionType: string;
-  opType: string;
-  entityType: string;
-  entityId: string | null;
-  payload: unknown;
-  vectorClock: unknown;
-  schemaVersion: number;
-  clientTimestamp: bigint | number | string;
-  receivedAt: bigint | number | string;
-  isPayloadEncrypted: boolean;
-  syncImportReason: string | null;
-}
+const isRetryableOperationUniqueViolation = (err: unknown): boolean => {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
+    return false;
+  }
 
-interface LatestEntityOperationRow {
-  entityId: string;
-  clientId: string;
-  vectorClock: unknown;
-}
+  const targetTokens = getPrismaP2002TargetTokens(err);
+  if (targetTokens.length === 0) return true;
 
-// Conservative enough to avoid planner-heavy BitmapOr + Sort plans on large
-// histories while still replacing up to 100 per-entity round trips with one query.
-const CONFLICT_DETECTION_ENTITY_BATCH_SIZE = 100;
-// Observability threshold: log a warning when the full-state op aggregate scan
-// exceeds this duration. Mirrors the threshold used by the legacy snapshot
-// vector-clock aggregate in OperationDownloadService so production logs use a
-// consistent slow-aggregate signal.
-const SLOW_FULL_STATE_AGGREGATE_MS = 5_000;
-const OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = 5_000;
-const OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = 25_000;
-// Operator-DoS guardrail: a 1M `take:` materializes 1M ids in Node memory and
-// then sends a 1M-element array param to Postgres — exactly the pressure the
-// throttle is meant to avoid. Cap so misconfiguration can't unwind the bound.
-const OLD_OPS_CLEANUP_DELETE_BATCH_SIZE_MAX = 50_000;
-const OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN_MAX = 1_000_000;
-
-const getOldOpsCleanupDeleteBatchSize = (): number =>
-  parsePositiveIntegerEnv(
-    'OLD_OPS_CLEANUP_DELETE_BATCH_SIZE',
-    OLD_OPS_CLEANUP_DELETE_BATCH_SIZE,
-    OLD_OPS_CLEANUP_DELETE_BATCH_SIZE_MAX,
+  const normalizedTargets = targetTokens.map((target) =>
+    target.toLowerCase().replace(/"/g, ''),
   );
+  const targetSet = new Set(normalizedTargets);
 
-const getOldOpsCleanupMaxDeletedPerRun = (): number =>
-  parsePositiveIntegerEnv(
-    'OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN',
-    OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN,
-    OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN_MAX,
+  return (
+    normalizedTargets.some(
+      (target) =>
+        target.includes('operations_pkey') ||
+        target.includes('operation_pkey') ||
+        target.includes('operations_id') ||
+        target.includes('operation_id'),
+    ) ||
+    targetSet.has('id') ||
+    (targetSet.has('user_id') && targetSet.has('server_seq')) ||
+    (targetSet.has('userid') && targetSet.has('serverseq'))
   );
+};
 
 /**
  * Main sync orchestration service.
@@ -103,6 +82,7 @@ export class SyncService {
   private operationDownloadService: OperationDownloadService;
   private storageQuotaService: StorageQuotaService;
   private snapshotService: SnapshotService;
+  private operationUploadService: OperationUploadService;
 
   constructor(config: Partial<SyncConfig> = {}) {
     this.config = { ...DEFAULT_SYNC_CONFIG, ...config };
@@ -113,278 +93,10 @@ export class SyncService {
     this.operationDownloadService = new OperationDownloadService();
     this.storageQuotaService = new StorageQuotaService();
     this.snapshotService = new SnapshotService();
-  }
-
-  // === Conflict Detection ===
-
-  /**
-   * Check if an incoming operation conflicts with existing operations.
-   * Returns conflict info if a concurrent modification is detected.
-   */
-  private async detectConflict(
-    userId: number,
-    op: Operation,
-    tx: Prisma.TransactionClient,
-  ): Promise<ConflictResult> {
-    // Skip conflict detection for full-state operations
-    if (
-      op.opType === 'SYNC_IMPORT' ||
-      op.opType === 'BACKUP_IMPORT' ||
-      op.opType === 'REPAIR'
-    ) {
-      return { hasConflict: false };
-    }
-
-    // Build list of entity IDs to check for conflicts.
-    // Operations may have either entityId (singular) or entityIds (batch operations).
-    const rawEntityIdsToCheck = op.entityIds?.length
-      ? op.entityIds
-      : op.entityId
-        ? [op.entityId]
-        : [];
-
-    // Skip if no entity IDs (can't have entity-level conflicts)
-    if (rawEntityIdsToCheck.length === 0) {
-      return { hasConflict: false };
-    }
-
-    if (rawEntityIdsToCheck.length === 1) {
-      return this.detectConflictForEntity(userId, op, rawEntityIdsToCheck[0], tx);
-    }
-
-    const entityIdsToCheck = Array.from(new Set(rawEntityIdsToCheck));
-    return this.detectConflictForEntities(userId, op, entityIdsToCheck, tx);
-  }
-
-  private async detectConflictForEntities(
-    userId: number,
-    op: Operation,
-    entityIdsToCheck: string[],
-    tx: Prisma.TransactionClient,
-  ): Promise<ConflictResult> {
-    for (
-      let start = 0;
-      start < entityIdsToCheck.length;
-      start += CONFLICT_DETECTION_ENTITY_BATCH_SIZE
-    ) {
-      const batchEntityIds = entityIdsToCheck.slice(
-        start,
-        start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
-      );
-      const latestOps = await tx.$queryRaw<LatestEntityOperationRow[]>`
-        SELECT DISTINCT ON (entity_id)
-          entity_id AS "entityId",
-          client_id AS "clientId",
-          vector_clock AS "vectorClock"
-        FROM operations
-        WHERE user_id = ${userId}
-          AND entity_type = ${op.entityType}
-          AND entity_id IN (${Prisma.join(batchEntityIds)})
-        ORDER BY entity_id, server_seq DESC
-      `;
-
-      const latestOpByEntityId = new Map<string, LatestEntityOperationRow>();
-      for (const latestOp of latestOps) {
-        latestOpByEntityId.set(latestOp.entityId, latestOp);
-      }
-
-      for (const entityId of batchEntityIds) {
-        const existingOp = latestOpByEntityId.get(entityId);
-        if (!existingOp) continue;
-
-        const conflictResult = this.resolveConflictForExistingOp(
-          op,
-          entityId,
-          existingOp,
-        );
-        if (conflictResult.hasConflict) {
-          return conflictResult;
-        }
-      }
-    }
-
-    return { hasConflict: false };
-  }
-
-  private resolveConflictForExistingOp(
-    op: Operation,
-    entityId: string,
-    existingOp: { clientId: string; vectorClock: unknown },
-  ): ConflictResult {
-    // Stored JSON/vector_clock values arrive as unknown from both Prisma model
-    // reads and raw SQL rows; cast only at the vector-clock comparison boundary.
-    const existingClock = existingOp.vectorClock as unknown as VectorClock;
-
-    // Compare vector clocks
-    const comparison = compareVectorClocks(op.vectorClock, existingClock);
-
-    // If the incoming op's clock is GREATER_THAN existing, it's a valid successor
-    if (comparison === 'GREATER_THAN') {
-      return { hasConflict: false };
-    }
-
-    // If clocks are EQUAL, this might be a retry of the same operation - check if from same client
-    if (comparison === 'EQUAL' && op.clientId === existingOp.clientId) {
-      return { hasConflict: false };
-    }
-
-    // EQUAL clocks from different clients is suspicious - treat as conflict
-    // This could happen if client IDs rotate or clocks are somehow reused
-    if (comparison === 'EQUAL') {
-      return {
-        hasConflict: true,
-        conflictType: 'equal_different_client',
-        reason: `Equal vector clocks from different clients for ${op.entityType}:${entityId} (client ${op.clientId} vs ${existingOp.clientId})`,
-        existingClock,
-      };
-    }
-
-    // CONCURRENT means both clocks have entries the other doesn't
-    if (comparison === 'CONCURRENT') {
-      return {
-        hasConflict: true,
-        conflictType: 'concurrent',
-        reason: `Concurrent modification detected for ${op.entityType}:${entityId}`,
-        existingClock,
-      };
-    }
-
-    // LESS_THAN means the incoming op is older than what we have
-    if (comparison === 'LESS_THAN') {
-      return {
-        hasConflict: true,
-        conflictType: 'superseded',
-        reason: `Superseded operation: server has newer version of ${op.entityType}:${entityId}`,
-        existingClock,
-      };
-    }
-
-    // Should never reach here - all comparison cases handled above
-    // But if we do, default to conflict for safety
-    return {
-      hasConflict: true,
-      conflictType: 'unknown',
-      reason: `Unknown vector clock comparison result for ${op.entityType}:${entityId}`,
-      existingClock,
-    };
-  }
-
-  /**
-   * Checks conflicts for the common single-entity upload path using Prisma's
-   * typed model API. Multi-entity operations use the batched raw-SQL path above
-   * to avoid one round trip per entity.
-   */
-  private async detectConflictForEntity(
-    userId: number,
-    op: Operation,
-    entityId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<ConflictResult> {
-    // Get the latest operation for this entity
-    const existingOp = await tx.operation.findFirst({
-      where: {
-        userId,
-        entityType: op.entityType,
-        entityId,
-      },
-      select: {
-        clientId: true,
-        vectorClock: true,
-      },
-      orderBy: {
-        serverSeq: 'desc',
-      },
-    });
-
-    // No existing operation = no conflict
-    if (!existingOp) {
-      return { hasConflict: false };
-    }
-
-    return this.resolveConflictForExistingOp(op, entityId, existingOp);
-  }
-
-  private isSameDuplicateOperation(
-    existingOp: DuplicateOperationCandidate,
-    userId: number,
-    op: Operation,
-    originalTimestamp: number = op.timestamp,
-  ): boolean {
-    const storedVectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
-
-    return (
-      existingOp.userId === userId &&
-      existingOp.clientId === op.clientId &&
-      existingOp.actionType === op.actionType &&
-      existingOp.opType === op.opType &&
-      existingOp.entityType === op.entityType &&
-      existingOp.entityId === (op.entityId ?? null) &&
-      this.areJsonValuesEqual(existingOp.payload, op.payload) &&
-      this.areJsonValuesEqual(existingOp.vectorClock, storedVectorClock) &&
-      existingOp.schemaVersion === op.schemaVersion &&
-      this.isSameDuplicateTimestamp(
-        existingOp.clientTimestamp,
-        existingOp.receivedAt,
-        op.timestamp,
-        originalTimestamp,
-      ) &&
-      existingOp.isPayloadEncrypted === (op.isPayloadEncrypted ?? false) &&
-      existingOp.syncImportReason === (op.syncImportReason ?? null)
+    this.operationUploadService = new OperationUploadService(
+      this.validationService,
+      this.config,
     );
-  }
-
-  private isSameDuplicateTimestamp(
-    existingTimestamp: bigint | number | string,
-    existingReceivedAt: bigint | number | string,
-    incomingStoredTimestamp: number,
-    incomingOriginalTimestamp: number,
-  ): boolean {
-    if (existingTimestamp.toString() === incomingStoredTimestamp.toString()) {
-      return true;
-    }
-
-    // A retry can arrive after server time advances enough that the original
-    // timestamp no longer needs clamping, so original===stored does not rule
-    // out a duplicate.
-    // Future timestamps are clamped at receive time. A retry of the same op may
-    // be clamped to a later value, or stop clamping once server time reaches the
-    // original timestamp's allowed drift window. Allow exact-content duplicates
-    // whose stored timestamp came from an earlier clamp of that same original
-    // client timestamp.
-    const existingTimestampValue = BigInt(existingTimestamp);
-    const existingReceivedAtValue = BigInt(existingReceivedAt);
-    return (
-      existingTimestampValue ===
-        existingReceivedAtValue + BigInt(this.config.maxClockDriftMs) &&
-      existingTimestampValue <= BigInt(incomingOriginalTimestamp)
-    );
-  }
-
-  private areJsonValuesEqual(a: unknown, b: unknown): boolean {
-    return this.stableJsonStringify(a) === this.stableJsonStringify(b);
-  }
-
-  private stableJsonStringify(value: unknown): string {
-    return JSON.stringify(this.toStableJsonValue(value)) ?? 'undefined';
-  }
-
-  private toStableJsonValue(value: unknown): unknown {
-    if (Array.isArray(value)) {
-      return value.map((item) => this.toStableJsonValue(item));
-    }
-
-    if (value !== null && typeof value === 'object') {
-      return Object.fromEntries(
-        Object.keys(value as Record<string, unknown>)
-          .sort()
-          .map((key) => [
-            key,
-            this.toStableJsonValue((value as Record<string, unknown>)[key]),
-          ]),
-      );
-    }
-
-    return value;
   }
 
   // === Upload Operations ===
@@ -397,6 +109,8 @@ export class SyncService {
   ): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
     const now = Date.now();
+    const txStartedAt = Date.now();
+    let uploadDbRoundtrips = 0;
 
     try {
       // Use transaction to acquire write lock and ensure atomicity
@@ -438,16 +152,6 @@ export class SyncService {
             Logger.info(`[user:${userId}] Clean slate completed - all data deleted`);
           }
 
-          // Ensure user has sync state row (init if needed)
-          // We assume user exists in `users` table because of foreign key,
-          // but if `uploadOps` is called, authentication should have verified user existence.
-          // However, `user_sync_state` might not exist yet.
-          await tx.userSyncState.upsert({
-            where: { userId },
-            create: { userId, lastSeq: 0 },
-            update: {}, // No-op update to ensure it exists
-          });
-
           // Track the delta-bytes for accepted ops so we can write
           // `users.storage_used_bytes` atomically in the same transaction as the
           // op inserts. Doing the counter write outside this transaction (as
@@ -456,13 +160,45 @@ export class SyncService {
           // `markStorageNeedsReconcile` marker is lost too.
           let acceptedDeltaBytes = 0;
           let unserializableAccepted = 0;
-          for (const op of ops) {
-            const result = await this.processOperation(userId, clientId, op, now, tx);
-            results.push(result);
-            if (result.accepted) {
-              const sized = computeOpStorageBytes(op);
-              acceptedDeltaBytes += sized.bytes;
-              if (sized.fallback) unserializableAccepted += 1;
+
+          if (this.config.batchUpload) {
+            const batchResult = await this.operationUploadService.processOperationBatch(
+              userId,
+              clientId,
+              ops,
+              now,
+              tx,
+            );
+            results.push(...batchResult.results);
+            acceptedDeltaBytes = batchResult.acceptedDeltaBytes;
+            unserializableAccepted = batchResult.unserializableAccepted;
+            uploadDbRoundtrips += batchResult.dbRoundtrips;
+          } else {
+            // Ensure user has sync state row (init if needed)
+            // We assume user exists in `users` table because of foreign key,
+            // but if `uploadOps` is called, authentication should have verified user existence.
+            // However, `user_sync_state` might not exist yet.
+            await tx.userSyncState.upsert({
+              where: { userId },
+              create: { userId, lastSeq: 0 },
+              update: {}, // No-op update to ensure it exists
+            });
+            uploadDbRoundtrips++;
+
+            for (const op of ops) {
+              const result = await this.operationUploadService.processOperation(
+                userId,
+                clientId,
+                op,
+                now,
+                tx,
+              );
+              results.push(result);
+              if (result.accepted) {
+                const sized = computeOpStorageBytes(op);
+                acceptedDeltaBytes += sized.bytes;
+                if (sized.fallback) unserializableAccepted += 1;
+              }
             }
           }
           if (unserializableAccepted > 0) {
@@ -493,6 +229,9 @@ export class SyncService {
               lastSeenAt: BigInt(now),
             },
           });
+          uploadDbRoundtrips++;
+
+          if (this.config.batchUpload && acceptedDeltaBytes === 0) return;
 
           // W1: write the storage counter as the LAST statement before COMMIT
           // so the row-level write lock on `users` is held for only the
@@ -508,6 +247,7 @@ export class SyncService {
               SET storage_used_bytes = GREATEST(storage_used_bytes + ${delta}::bigint, 0::bigint)
               WHERE id = ${userId}
             `;
+            uploadDbRoundtrips++;
           } else if (acceptedDeltaBytes > 0 && isCleanSlate) {
             const delta = BigInt(Math.floor(acceptedDeltaBytes));
             await tx.$executeRaw`
@@ -515,6 +255,7 @@ export class SyncService {
               SET storage_used_bytes = ${delta}::bigint
               WHERE id = ${userId}
             `;
+            uploadDbRoundtrips++;
           }
         },
         {
@@ -522,9 +263,9 @@ export class SyncService {
           // Default Prisma timeout (5s) is too short for these. Use 60s to match generateSnapshot.
           timeout: 60000,
           // FIX 1.6: Set explicit isolation level for strict consistency.
-          // REPEATABLE_READ prevents phantom reads and ensures consistent conflict detection.
-          // Combined with the FIX 1.5 re-check after sequence allocation, this prevents
-          // race conditions where two concurrent requests both pass conflict detection.
+          // The serial path also performs the legacy post-sequence conflict re-check.
+          // The batch path serializes accepted writers through the shared
+          // user_sync_state.last_seq row update; see ARCHITECTURE-DECISIONS.md.
           isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
         },
       );
@@ -538,6 +279,17 @@ export class SyncService {
         this.storageQuotaService.clearForUser(userId);
         this.requestDeduplicationService.clearForUser(userId);
       }
+
+      const accepted = results.filter((result) => result.accepted).length;
+      Logger.info('UPLOAD_BATCH_SUMMARY', {
+        userId,
+        opsInBatch: ops.length,
+        accepted,
+        rejected: results.length - accepted,
+        txDurationMs: Date.now() - txStartedAt,
+        dbRoundtrips: uploadDbRoundtrips,
+        batchUpload: this.config.batchUpload,
+      });
     } catch (err) {
       // Transaction failed - all operations were rolled back
       const errorMessage = (err as Error).message || 'Unknown error';
@@ -547,6 +299,7 @@ export class SyncService {
       // PostgreSQL uses 40001 (serialization_failure) and 40P01 (deadlock_detected)
       const isSerializationFailure =
         (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') ||
+        (this.config.batchUpload && isRetryableOperationUniqueViolation(err)) ||
         errorMessage.includes('40001') ||
         errorMessage.includes('40P01') ||
         errorMessage.toLowerCase().includes('serialization') ||
@@ -584,384 +337,6 @@ export class SyncService {
     }
 
     return results;
-  }
-
-  /**
-   * Aggregate the per-client max vector_clock counter over all operations for
-   * `userId` with `server_seq < beforeServerSeq`. Used at full-state op upload
-   * time so the persisted `latest_full_state_vector_clock` reflects every
-   * client whose ops may still live in conflict detection — not just the
-   * clients named on the snapshot op itself.
-   *
-   * Logs a warning when the scan exceeds `SLOW_FULL_STATE_AGGREGATE_MS` so
-   * pathological histories (millions of ops, cleanup retention too long) are
-   * observable in production before they approach the 60s upload-tx timeout.
-   */
-  private async _aggregatePriorVectorClock(
-    tx: Prisma.TransactionClient,
-    userId: number,
-    beforeServerSeq: number,
-  ): Promise<VectorClock> {
-    const startedAt = Date.now();
-    const rows = await tx.$queryRaw<Array<{ client_id: string; max_counter: bigint }>>`
-      SELECT kv.key AS client_id, MAX(kv.value::bigint) AS max_counter
-      FROM operations, LATERAL jsonb_each_text(vector_clock) AS kv(key, value)
-      WHERE user_id = ${userId}
-        AND server_seq < ${beforeServerSeq}
-        AND jsonb_typeof(vector_clock) = 'object'
-        AND kv.value ~ '^[0-9]+$'
-      GROUP BY kv.key
-    `;
-    const out: VectorClock = {};
-    for (const row of rows) {
-      out[row.client_id] = Number(row.max_counter);
-    }
-    const elapsedMs = Date.now() - startedAt;
-    if (elapsedMs > SLOW_FULL_STATE_AGGREGATE_MS) {
-      Logger.warn(
-        `[user:${userId}] Full-state op aggregate scan took ${elapsedMs}ms ` +
-          `(${rows.length} clients, beforeSeq=${beforeServerSeq}); approaching ` +
-          `upload-tx timeout. Investigate history size and cleanup retention.`,
-      );
-    }
-    return out;
-  }
-
-  /**
-   * Process a single operation within a transaction.
-   * Handles validation, conflict detection, and persistence.
-   */
-  private async processOperation(
-    userId: number,
-    clientId: string,
-    op: Operation,
-    now: number,
-    tx: Prisma.TransactionClient,
-  ): Promise<UploadResult> {
-    // Clamp future timestamps instead of rejecting them (prevents silent data loss)
-    const originalTimestamp = op.timestamp;
-    const maxAllowedTimestamp = now + this.config.maxClockDriftMs;
-    if (op.timestamp > maxAllowedTimestamp) {
-      op.timestamp = maxAllowedTimestamp;
-      Logger.audit({
-        event: 'TIMESTAMP_CLAMPED',
-        userId,
-        clientId,
-        opId: op.id,
-        entityType: op.entityType,
-        originalTimestamp,
-        clampedTo: maxAllowedTimestamp,
-        driftMs: originalTimestamp - now,
-      });
-    }
-
-    // Validate operation (including clientId match)
-    const validation = this.validationService.validateOp(op, clientId);
-    if (!validation.valid) {
-      Logger.audit({
-        event: 'OP_REJECTED',
-        userId,
-        clientId,
-        opId: op.id,
-        entityType: op.entityType,
-        entityId: op.entityId,
-        errorCode: validation.errorCode,
-        reason: validation.error,
-        opType: op.opType,
-      });
-      return {
-        opId: op.id,
-        accepted: false,
-        error: validation.error,
-        errorCode: validation.errorCode,
-      };
-    }
-    // Capture the *unpruned* vector clock for full-state ops. The op row stores
-    // the pruned clock (see `limitVectorClockSize` call below); persisting the
-    // unpruned copy on `user_sync_state` lets the download path re-prune at
-    // read time with knowledge of `preserveClientIds` (excludeClient, snapshot
-    // author), keeping more relevant entries than a pre-pruned snapshot would.
-    const fullStateVectorClock = isFullStateOpType(op.opType)
-      ? { ...op.vectorClock }
-      : undefined;
-
-    // Check for duplicate operation before conflict checks and sequence allocation.
-    // This avoids expensive conflict work on retries and prevents rejected duplicates
-    // from advancing lastSeq.
-    const existingOp = await tx.operation.findUnique({
-      where: { id: op.id },
-      select: {
-        id: true,
-        userId: true,
-        clientId: true,
-        actionType: true,
-        opType: true,
-        entityType: true,
-        entityId: true,
-        payload: true,
-        vectorClock: true,
-        schemaVersion: true,
-        clientTimestamp: true,
-        receivedAt: true,
-        isPayloadEncrypted: true,
-        syncImportReason: true,
-      },
-    });
-
-    if (existingOp) {
-      if (!this.isSameDuplicateOperation(existingOp, userId, op, originalTimestamp)) {
-        Logger.audit({
-          event: 'OP_REJECTED',
-          userId,
-          clientId,
-          opId: op.id,
-          entityType: op.entityType,
-          entityId: op.entityId,
-          errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
-          reason: 'Operation ID already belongs to a different operation',
-          opType: op.opType,
-        });
-        return {
-          opId: op.id,
-          accepted: false,
-          error: 'Operation ID already belongs to a different operation',
-          errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
-        };
-      }
-
-      Logger.audit({
-        event: 'OP_REJECTED',
-        userId,
-        clientId,
-        opId: op.id,
-        entityType: op.entityType,
-        entityId: op.entityId,
-        errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
-        reason: 'Duplicate operation ID (pre-check)',
-        opType: op.opType,
-      });
-      return {
-        opId: op.id,
-        accepted: false,
-        error: 'Duplicate operation ID',
-        errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
-      };
-    }
-
-    // Check for conflicts with existing operations
-    const conflict = await this.detectConflict(userId, op, tx);
-    if (conflict.hasConflict) {
-      const errorCode =
-        conflict.conflictType === 'concurrent' ||
-        conflict.conflictType === 'equal_different_client'
-          ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
-      Logger.audit({
-        event: 'OP_REJECTED',
-        userId,
-        clientId,
-        opId: op.id,
-        entityType: op.entityType,
-        entityId: op.entityId,
-        errorCode,
-        reason: conflict.reason,
-        opType: op.opType,
-      });
-      return {
-        opId: op.id,
-        accepted: false,
-        error: conflict.reason,
-        errorCode,
-        existingClock: conflict.existingClock,
-      };
-    }
-
-    // Get next sequence number
-    const updatedState = await tx.userSyncState.update({
-      where: { userId },
-      data: { lastSeq: { increment: 1 } },
-    });
-    const serverSeq = updatedState.lastSeq;
-
-    // FIX 1.5: Re-check for conflicts after sequence allocation.
-    // This catches races where another request inserted an operation for the same
-    // entity between our initial conflict check and now. Combined with REPEATABLE_READ
-    // isolation, this ensures no undetected concurrent modifications.
-    const finalConflict = await this.detectConflict(userId, op, tx);
-    if (finalConflict.hasConflict) {
-      await tx.userSyncState.update({
-        where: { userId },
-        data: { lastSeq: { decrement: 1 } },
-      });
-
-      const errorCode =
-        finalConflict.conflictType === 'concurrent' ||
-        finalConflict.conflictType === 'equal_different_client'
-          ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
-      Logger.audit({
-        event: 'OP_REJECTED',
-        userId,
-        clientId,
-        opId: op.id,
-        entityType: op.entityType,
-        entityId: op.entityId,
-        errorCode,
-        reason: `[RACE] ${finalConflict.reason}`,
-        opType: op.opType,
-      });
-      return {
-        opId: op.id,
-        accepted: false,
-        error: finalConflict.reason,
-        errorCode,
-        existingClock: finalConflict.existingClock,
-      };
-    }
-
-    // Prune vector clock AFTER conflict detection but BEFORE storage.
-    // Moved from ValidationService to here so that the full (unpruned) clock is used
-    // for conflict comparison. This prevents false CONCURRENT results when the client
-    // builds a merged clock with MAX+1 entries during conflict resolution (all entity
-    // clock IDs + its own client ID). Pruning before comparison would drop an entity
-    // clock ID, causing the comparison to return CONCURRENT instead of GREATER_THAN,
-    // leading to an infinite rejection loop.
-    const beforeSize = Object.keys(op.vectorClock).length;
-    op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
-    const afterSize = Object.keys(op.vectorClock).length;
-    if (afterSize < beforeSize) {
-      Logger.debug(
-        `[client:${op.clientId}] Vector clock pruned from ${beforeSize} to ${afterSize} before storage`,
-      );
-    }
-
-    const createResult = await tx.operation.createMany({
-      data: [
-        {
-          id: op.id,
-          userId,
-          clientId,
-          serverSeq,
-          actionType: op.actionType,
-          opType: op.opType,
-          entityType: op.entityType,
-          entityId: op.entityId ?? null,
-          payload: op.payload as Prisma.InputJsonValue,
-          vectorClock: op.vectorClock as Prisma.InputJsonValue,
-          schemaVersion: op.schemaVersion,
-          clientTimestamp: BigInt(op.timestamp),
-          receivedAt: BigInt(now),
-          isPayloadEncrypted: op.isPayloadEncrypted ?? false,
-          syncImportReason: op.syncImportReason ?? null,
-        },
-      ],
-      skipDuplicates: true,
-    });
-
-    // A concurrent retry can pass the duplicate pre-check and then lose the
-    // insert race. `createMany(..., skipDuplicates)` maps that to count=0
-    // instead of aborting the PostgreSQL transaction with P2002/25P02.
-    if (createResult.count === 0) {
-      const duplicateOp = await tx.operation.findUnique({
-        where: { id: op.id },
-        select: {
-          id: true,
-          userId: true,
-          clientId: true,
-          actionType: true,
-          opType: true,
-          entityType: true,
-          entityId: true,
-          payload: true,
-          vectorClock: true,
-          schemaVersion: true,
-          clientTimestamp: true,
-          receivedAt: true,
-          isPayloadEncrypted: true,
-          syncImportReason: true,
-        },
-      });
-
-      if (!duplicateOp) {
-        throw new Error(
-          `Operation insert skipped by non-id unique constraint (userId=${userId}, opId=${op.id}, serverSeq=${serverSeq})`,
-        );
-      }
-
-      await tx.userSyncState.update({
-        where: { userId },
-        data: { lastSeq: { decrement: 1 } },
-      });
-
-      if (!this.isSameDuplicateOperation(duplicateOp, userId, op, originalTimestamp)) {
-        Logger.audit({
-          event: 'OP_REJECTED',
-          userId,
-          clientId,
-          opId: op.id,
-          entityType: op.entityType,
-          entityId: op.entityId,
-          errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
-          reason: 'Operation ID already belongs to a different operation',
-          opType: op.opType,
-        });
-        return {
-          opId: op.id,
-          accepted: false,
-          error: 'Operation ID already belongs to a different operation',
-          errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
-        };
-      }
-
-      Logger.audit({
-        event: 'OP_REJECTED',
-        userId,
-        clientId,
-        opId: op.id,
-        entityType: op.entityType,
-        entityId: op.entityId,
-        errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
-        reason: 'Duplicate operation ID (insert race)',
-        opType: op.opType,
-      });
-      return {
-        opId: op.id,
-        accepted: false,
-        error: 'Duplicate operation ID',
-        errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
-      };
-    }
-
-    if (fullStateVectorClock) {
-      // Persist the aggregate of (prior history ∪ this op's clock), not just the
-      // op's own clock. BACKUP_IMPORT uses a fresh `{ clientId: 1 }` by design
-      // (backup.service.ts) and a compaction-built SYNC_IMPORT clock can be
-      // pruned. Either case leaves out client_ids that still have pre-snapshot
-      // ops alive in the conflict-detection set, so a downloader that reset to
-      // the bare op clock would have its first edit go CONCURRENT against those
-      // surviving rows. Doing the aggregate here moves the cost from per-download
-      // to per-snapshot — full-state ops are rare so the upload-time scan is
-      // strictly cheaper overall. Stored unpruned; the download path applies
-      // `limitVectorClockSize` with `preserveClientIds` known to that read.
-      const priorAggregate = await this._aggregatePriorVectorClock(tx, userId, serverSeq);
-      const mergedClock: VectorClock = { ...priorAggregate };
-      for (const [clientId, counter] of Object.entries(fullStateVectorClock)) {
-        mergedClock[clientId] = Math.max(mergedClock[clientId] ?? 0, counter);
-      }
-      await tx.userSyncState.update({
-        where: { userId },
-        data: {
-          latestFullStateSeq: serverSeq,
-          latestFullStateVectorClock: mergedClock as Prisma.InputJsonValue,
-        },
-      });
-    }
-
-    return {
-      opId: op.id,
-      accepted: true,
-      serverSeq,
-    };
   }
 
   // === Download Operations ===
@@ -1153,8 +528,13 @@ export class SyncService {
     operationsBytes: number;
     snapshotBytes: number;
     totalBytes: number;
+    hasUnbackfilledRows: boolean;
   }> {
     return this.storageQuotaService.calculateStorageUsage(userId);
+  }
+
+  async assertPayloadBytesBackfillComplete(): Promise<void> {
+    return this.storageQuotaService.assertPayloadBytesBackfillComplete();
   }
 
   async checkStorageQuota(
@@ -1196,263 +576,15 @@ export class SyncService {
   async deleteOldSyncedOpsForAllUsers(
     cutoffTime: number,
   ): Promise<{ totalDeleted: number; affectedUserIds: number[] }> {
-    // S1: order stalest first so when affectedUserIds.length exceeds the
-    // cleanup reconcile budget (RECONCILE_INTERVAL_MS * maxScheduled per
-    // hour), the most-drifted users are reconciled before fresher ones.
-    // Deterministic ordering replaces an earlier random shuffle, which only
-    // probabilistically prevented starvation.
-    const states = await prisma.userSyncState.findMany({
-      where: {
-        lastSnapshotSeq: { not: null },
-        snapshotAt: { not: null },
-      },
-      select: {
-        userId: true,
-        lastSnapshotSeq: true,
-        snapshotAt: true,
-      },
-      orderBy: { snapshotAt: 'asc' },
-    });
-
-    let totalDeleted = 0;
-    const affectedUserIds: number[] = [];
-    const deleteBatchSize = getOldOpsCleanupDeleteBatchSize();
-    let remainingDeleteBudget = getOldOpsCleanupMaxDeletedPerRun();
-
-    for (const state of states) {
-      if (remainingDeleteBudget <= 0) break;
-
-      const snapshotAt = Number(state.snapshotAt);
-      const lastSnapshotSeq = state.lastSnapshotSeq ?? 0;
-
-      // Only prune ops that are both older than the retention window and covered by a snapshot
-      if (!(snapshotAt >= cutoffTime && lastSnapshotSeq > 0)) continue;
-
-      // Drain this user across multiple batches until either they're empty or
-      // the global per-run budget is exhausted. Without this, a single user
-      // with a large backlog would only lose `deleteBatchSize` ops per day
-      // even when budget remains — leaving small-backlog users behind it
-      // unserviced when their snapshotAt is fresher.
-      let userDeleted = 0;
-      while (remainingDeleteBudget > 0) {
-        const batchLimit = Math.min(deleteBatchSize, remainingDeleteBudget);
-        const deletedCount = await this.deleteOldSyncedOpsBatch(
-          state.userId,
-          lastSnapshotSeq,
-          cutoffTime,
-          batchLimit,
-        );
-        if (deletedCount === 0) break;
-
-        // Mark on the *first* successful batch (not after the loop) so that
-        // if a later batch throws, the counter still self-heals. Without
-        // this, batch-1 commits would leave the counter stale-high until the
-        // next daily pass or process restart.
-        //
-        // Deliberately leave storageUsedBytes stale-high here. A count-based
-        // approximate decrement can undercount users with many tiny ops and
-        // let them bypass quota indefinitely. The marker tells the next
-        // request to run an exact reconcile so drift self-heals.
-        //
-        // NOTE: the marker is in-memory (process-local). A persistent
-        // `users.storage_needs_reconcile` column would survive restarts; see
-        // TODO below.
-        // TODO: persist the reconcile marker in a DB column so it survives
-        // restarts of a single-instance deployment and works correctly across
-        // a multi-instance deployment behind a load balancer.
-        if (userDeleted === 0) {
-          affectedUserIds.push(state.userId);
-          this.storageQuotaService.markNeedsReconcile(state.userId);
-        }
-
-        userDeleted += deletedCount;
-        totalDeleted += deletedCount;
-        remainingDeleteBudget -= deletedCount;
-        // Short-circuit when the batch returned fewer rows than asked for: the
-        // user is empty and another findMany would only confirm zero rows.
-        if (deletedCount < batchLimit) break;
-      }
-    }
-
-    if (remainingDeleteBudget <= 0) {
-      Logger.warn(
-        `Cleanup [old-ops]: per-run budget exhausted after ${totalDeleted} ops; ` +
-          `some users may still have retained old ops. ` +
-          `Raise OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN if this happens repeatedly.`,
-      );
-    }
-
-    return { totalDeleted, affectedUserIds };
+    return this.storageQuotaService.deleteOldSyncedOpsForAllUsers(cutoffTime);
   }
 
-  private async deleteOldSyncedOpsBatch(
-    userId: number,
-    lastSnapshotSeq: number,
-    cutoffTime: number,
-    limit: number,
-  ): Promise<number> {
-    const doomedOps = await prisma.operation.findMany({
-      where: {
-        userId,
-        serverSeq: { lte: lastSnapshotSeq },
-        receivedAt: { lt: BigInt(cutoffTime) },
-      },
-      orderBy: { serverSeq: 'asc' },
-      take: limit,
-      select: { id: true },
-    });
-
-    if (doomedOps.length === 0) return 0;
-
-    const result = await prisma.operation.deleteMany({
-      where: {
-        userId,
-        id: { in: doomedOps.map((op) => op.id) },
-      },
-    });
-
-    return result.count;
-  }
-
-  /**
-   * Delete oldest restore point and all operations before it to free up storage.
-   * Used when storage quota is exceeded to make room for new uploads.
-   *
-   * Strategy:
-   * - If 2+ restore points: Delete oldest restore point AND all ops with serverSeq <= its seq
-   * - If 1 restore point: Delete all ops with serverSeq < its seq (keep the restore point)
-   * - If 0 restore points: Nothing to delete, return failure
-   *
-   * @returns Object with deletedCount, approximate freedBytes, and success flag
-   */
   async deleteOldestRestorePointAndOps(
     userId: number,
   ): Promise<{ deletedCount: number; freedBytes: number; success: boolean }> {
-    // Find all restore points (full-state operations) ordered by serverSeq ASC
-    const restorePoints = await prisma.operation.findMany({
-      where: {
-        userId,
-        opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
-      },
-      orderBy: { serverSeq: 'asc' },
-      select: { serverSeq: true, opType: true },
-      take: 2,
-    });
-
-    if (restorePoints.length === 0) {
-      Logger.warn(`[user:${userId}] No restore points found, cannot free storage`);
-      return { deletedCount: 0, freedBytes: 0, success: false };
-    }
-
-    const oldestRestorePoint = restorePoints[0];
-    let deleteUpToSeq: number;
-
-    if (restorePoints.length >= 2) {
-      // Delete the oldest restore point AND all ops up to and including it
-      deleteUpToSeq = oldestRestorePoint.serverSeq;
-      Logger.info(
-        `[user:${userId}] Deleting oldest restore point (seq=${deleteUpToSeq}) and all ops before it`,
-      );
-    } else {
-      // Only one restore point - delete all ops BEFORE it, but keep the restore point
-      deleteUpToSeq = oldestRestorePoint.serverSeq - 1;
-      Logger.info(
-        `[user:${userId}] Keeping single restore point (seq=${oldestRestorePoint.serverSeq}), deleting ops before it`,
-      );
-    }
-
-    if (deleteUpToSeq < 1) {
-      Logger.info(`[user:${userId}] No ops to delete (deleteUpToSeq=${deleteUpToSeq})`);
-      return { deletedCount: 0, freedBytes: 0, success: false };
-    }
-
-    // Full-state ops (SYNC_IMPORT/BACKUP_IMPORT/REPAIR) can be up to 20MB each,
-    // so the APPROX_BYTES_PER_OP=1024 fallback used for delta ops would undercount
-    // by ~20000x and leave the cached counter permanently low if a reconcile
-    // failure later rolls back to that figure. Measure the exact bytes for the
-    // restore-point rows in the deletion window via pg_column_size BEFORE we
-    // delete them — `deleteOldestRestorePointAndOps` deletes at most ONE
-    // restore point per call (or zero, when it keeps the single remaining one),
-    // so this is a bounded 0-1 row scan that does not reintroduce the DoS the
-    // earlier SUM(pg_column_size) over every delta op caused.
-    const fullStateRows = await prisma.$queryRaw<
-      Array<{ exact_bytes: bigint | null; full_state_count: bigint }>
-    >`
-      SELECT
-        COALESCE(SUM(pg_column_size(payload) + pg_column_size(vector_clock)), 0) AS exact_bytes,
-        COUNT(*)::bigint AS full_state_count
-      FROM operations
-      WHERE user_id = ${userId}
-        AND server_seq <= ${deleteUpToSeq}
-        AND op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR')
-    `;
-    const fullStateExactBytes = Number(fullStateRows[0]?.exact_bytes ?? 0);
-    const fullStateCount = Number(fullStateRows[0]?.full_state_count ?? 0);
-
-    // Delete the operations
-    const result = await prisma.operation.deleteMany({
-      where: {
-        userId,
-        serverSeq: { lte: deleteUpToSeq },
-      },
-    });
-
-    // freedBytes is split: exact size for the 0-1 restore-point rows just
-    // measured (catches the 20MB-ish payloads that the APPROX_BYTES_PER_OP
-    // approximation undercounts by ~20000x), plus the approximate
-    // count*APPROX_BYTES_PER_OP for the remaining delta ops (median 150-300B
-    // — modest over-estimate so the cleanup loop progresses without scanning
-    // every delta payload). Reconciled to exact value once at the end of
-    // freeStorageForUpload via a single updateStorageUsage call.
-    const deltaOpsCount = Math.max(0, result.count - fullStateCount);
-    const freedBytes = fullStateExactBytes + deltaOpsCount * APPROX_BYTES_PER_OP;
-
-    if (result.count > 0) {
-      // Clear stale snapshot cache if it references deleted operations
-      const cachedRow = await prisma.userSyncState.findUnique({
-        where: { userId },
-        select: { lastSnapshotSeq: true },
-      });
-
-      if (cachedRow?.lastSnapshotSeq && cachedRow.lastSnapshotSeq <= deleteUpToSeq) {
-        await prisma.userSyncState.update({
-          where: { userId },
-          data: {
-            snapshotData: null,
-            lastSnapshotSeq: null,
-            snapshotAt: null,
-          },
-        });
-        Logger.info(
-          `[user:${userId}] Cleared stale snapshot cache (was at seq ${cachedRow.lastSnapshotSeq}, deleted up to ${deleteUpToSeq})`,
-        );
-      }
-
-      // Decrement counter by the approximate freed bytes so freeStorageForUpload
-      // can detect progress. Final accuracy is restored by the single
-      // updateStorageUsage call at the end of freeStorageForUpload.
-      await this.decrementStorageUsage(userId, freedBytes);
-      Logger.info(
-        `[user:${userId}] Deleted ${result.count} ops (approx freed ~${Math.round(freedBytes / 1024)}KB)`,
-      );
-    }
-
-    return {
-      deletedCount: result.count,
-      freedBytes,
-      success: result.count > 0,
-    };
+    return this.storageQuotaService.deleteOldestRestorePointAndOps(userId);
   }
 
-  /**
-   * Iteratively delete old restore points and operations until enough storage
-   * space is available for the requested upload. Always keeps at least one
-   * restore point and all operations after it (minimum valid sync state).
-   *
-   * @param userId - User ID
-   * @param requiredBytes - Number of bytes needed for the upload
-   * @returns Object with success status and cleanup statistics
-   */
   async freeStorageForUpload(
     userId: number,
     requiredBytes: number,
@@ -1462,149 +594,11 @@ export class SyncService {
     deletedRestorePoints: number;
     deletedOps: number;
   }> {
-    let totalFreedBytes = 0;
-    let deletedRestorePoints = 0;
-    let totalDeletedOps = 0;
-
-    const MAX_CLEANUP_ITERATIONS = 50;
-    let iterations = 0;
-
-    // Reconcile the approximate counter once at the end via a single
-    // calculateStorageUsage scan. Slow but bounded to a single user per
-    // quota-cleanup event (not per upload like the previous regression).
-    //
-    // If reconcile fails we must NOT leave the counter at its post-decrement
-    // (artificially low) value — that would let the user bypass quota until
-    // the next successful reconcile. Roll the optimistic decrement back so the
-    // counter returns to its pre-cleanup state (which was correctly tracked by
-    // incremental upload deltas).
-    const reconcileCounter = async (): Promise<boolean> => {
-      try {
-        await this.updateStorageUsage(userId);
-        return true;
-      } catch (err) {
-        Logger.warn(
-          `[user:${userId}] Failed to reconcile storage usage after cleanup: ${
-            (err as Error).message
-          }`,
-        );
-        return false;
-      }
-    };
-    const reconcileOrRollback = async (): Promise<void> => {
-      const ok = await reconcileCounter();
-      if (!ok && totalFreedBytes > 0) {
-        try {
-          await this.storageQuotaService.incrementStorageUsage(userId, totalFreedBytes);
-          Logger.warn(
-            `[user:${userId}] Rolled back ${totalFreedBytes} bytes of optimistic cleanup decrement after reconcile failure`,
-          );
-        } catch (err) {
-          Logger.error(
-            `[user:${userId}] Failed to roll back cleanup decrement: ${
-              (err as Error).message
-            }`,
-          );
-        }
-      }
-    };
-
-    // Keep trying until we have enough space or hit minimum
-    while (iterations < MAX_CLEANUP_ITERATIONS) {
-      iterations++;
-
-      // Check if we now have enough space. The cached counter may have been
-      // moved by approximate count*const deletes, so verify once with the exact
-      // reconciled counter before declaring success.
-      const quotaCheck = await this.checkStorageQuota(userId, requiredBytes);
-      if (quotaCheck.allowed) {
-        // On the success-path we want fresh truth, but if reconcile fails we
-        // also want the rollback (otherwise we'd be making the success
-        // decision against an artificially-low counter).
-        await reconcileOrRollback();
-        const reconciledQuotaCheck = await this.checkStorageQuota(userId, requiredBytes);
-        if (reconciledQuotaCheck.allowed) {
-          return {
-            success: true,
-            freedBytes: totalFreedBytes,
-            deletedRestorePoints,
-            deletedOps: totalDeletedOps,
-          };
-        }
-        Logger.warn(
-          `[user:${userId}] Storage still exceeded after exact reconcile: ` +
-            `${reconciledQuotaCheck.currentUsage}/${reconciledQuotaCheck.quota} bytes`,
-        );
-      }
-
-      // Only need to know whether at least two restore points remain.
-      const restorePoints = await prisma.operation.findMany({
-        where: {
-          userId,
-          opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
-        },
-        orderBy: { serverSeq: 'asc' },
-        select: { serverSeq: true },
-        take: 2,
-      });
-
-      // Minimum: 1 restore point + all ops after it
-      // If we only have 1 or fewer restore points, we can't delete any more
-      if (restorePoints.length <= 1) {
-        Logger.warn(
-          `[user:${userId}] Cannot free more storage: only ${restorePoints.length} restore point(s) remaining`,
-        );
-        await reconcileOrRollback();
-        return {
-          success: false,
-          freedBytes: totalFreedBytes,
-          deletedRestorePoints,
-          deletedOps: totalDeletedOps,
-        };
-      }
-
-      // Delete oldest restore point + all ops before it
-      const result = await this.deleteOldestRestorePointAndOps(userId);
-      if (!result.success) {
-        await reconcileOrRollback();
-        return {
-          success: false,
-          freedBytes: totalFreedBytes,
-          deletedRestorePoints,
-          deletedOps: totalDeletedOps,
-        };
-      }
-
-      totalFreedBytes += result.freedBytes;
-      deletedRestorePoints++;
-      totalDeletedOps += result.deletedCount;
-
-      Logger.info(
-        `[user:${userId}] Auto-cleanup iteration: freed ${Math.round(result.freedBytes / 1024)}KB, ` +
-          `${restorePoints.length - 1} restore point(s) remaining in current cleanup window`,
-      );
-    }
-
-    // Exhausted max iterations without freeing enough space
-    Logger.warn(
-      `[user:${userId}] Storage cleanup exceeded max iterations (${MAX_CLEANUP_ITERATIONS})`,
-    );
-    await reconcileOrRollback();
-    return {
-      success: false,
-      freedBytes: totalFreedBytes,
-      deletedRestorePoints,
-      deletedOps: totalDeletedOps,
-    };
+    return this.storageQuotaService.freeStorageForUpload(userId, requiredBytes);
   }
 
   async deleteStaleDevices(beforeTime: number): Promise<number> {
-    const result = await prisma.syncDevice.deleteMany({
-      where: {
-        lastSeenAt: { lt: BigInt(beforeTime) },
-      },
-    });
-    return result.count;
+    return this.deviceService.deleteStaleDevices(beforeTime);
   }
 
   /**

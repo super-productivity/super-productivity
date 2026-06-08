@@ -1,7 +1,9 @@
 export {
   PROVIDER_ID_SUPER_SYNC,
   SUPER_SYNC_DEFAULT_BASE_URL,
+  isSuperSyncWebSocketAccess,
   type SuperSyncPrivateCfg,
+  type SuperSyncWebSocketAccess,
 } from './super-sync/super-sync.model';
 export { SuperSyncProvider, type SuperSyncDeps } from './super-sync/super-sync';
 export type { SuperSyncResponseValidators } from './super-sync/response-validators';

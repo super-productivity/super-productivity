@@ -469,8 +469,9 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
     // Safety guard: Check if we're about to overwrite non-empty archives with empty ones
-    // This can happen if SYNC_IMPORT was created with getStateSnapshot() (sync) instead
-    // of getStateSnapshotAsync() (async), which returns DEFAULT_ARCHIVE (empty)
+    // This can happen if a full-state op (SYNC_IMPORT/REPAIR) was created with the sync
+    // getStateSnapshot() instead of getStateSnapshotAsync(), which returns
+    // DEFAULT_ARCHIVE (empty)
     const hasExistingYoung = (originalArchiveYoung?.task?.ids?.length ?? 0) > 0;
     const hasExistingOld = (originalArchiveOld?.task?.ids?.length ?? 0) > 0;
     const isIncomingYoungEmpty = !archiveYoung?.task?.ids?.length;
@@ -480,12 +481,17 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     if (archiveYoung !== undefined) {
       if (hasExistingYoung && isIncomingYoungEmpty) {
         const existingCount = originalArchiveYoung?.task?.ids?.length ?? 0;
-        if (action.meta.opType === OpType.SyncImport) {
-          // SYNC_IMPORT with empty archives is likely a bug (sync snapshot used sync instead of async)
-          // Preserve local archives - the next SYNC_IMPORT (after the fix) will have correct data
+        if (
+          action.meta.opType === OpType.SyncImport ||
+          action.meta.opType === OpType.Repair
+        ) {
+          // SYNC_IMPORT/REPAIR with empty archives is most often a bug (full-state
+          // op built with the sync getStateSnapshot() instead of
+          // getStateSnapshotAsync()). Preserve local archives: discarding non-empty
+          // local data for an empty payload is never the safe choice.
           OpLog.warn(
-            `[ArchiveOperationHandler] SYNC_IMPORT has empty archiveYoung but local has ${existingCount} tasks. ` +
-              'Preserving local archives (this is likely a bug in the SYNC_IMPORT source).',
+            `[ArchiveOperationHandler] ${action.meta.opType} has empty archiveYoung but local has ${existingCount} tasks. ` +
+              'Preserving local archives (this is likely a bug in the full-state op source).',
           );
           // Skip writing empty archive - preserve local
         } else if (action.meta.opType === OpType.BackupImport) {
@@ -514,12 +520,17 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
 
       if (hasExistingOld && isIncomingOldEmpty) {
         const existingCount = originalArchiveOld?.task?.ids?.length ?? 0;
-        if (action.meta.opType === OpType.SyncImport) {
-          // SYNC_IMPORT with empty archives is likely a bug (sync snapshot used sync instead of async)
-          // Preserve local archives - the next SYNC_IMPORT (after the fix) will have correct data
+        if (
+          action.meta.opType === OpType.SyncImport ||
+          action.meta.opType === OpType.Repair
+        ) {
+          // SYNC_IMPORT/REPAIR with empty archives is most often a bug (full-state
+          // op built with the sync getStateSnapshot() instead of
+          // getStateSnapshotAsync()). Preserve local archives: discarding non-empty
+          // local data for an empty payload is never the safe choice.
           OpLog.warn(
-            `[ArchiveOperationHandler] SYNC_IMPORT has empty archiveOld but local has ${existingCount} tasks. ` +
-              'Preserving local archives (this is likely a bug in the SYNC_IMPORT source).',
+            `[ArchiveOperationHandler] ${action.meta.opType} has empty archiveOld but local has ${existingCount} tasks. ` +
+              'Preserving local archives (this is likely a bug in the full-state op source).',
           );
           shouldWriteArchiveOld = false;
         } else if (action.meta.opType === OpType.BackupImport) {

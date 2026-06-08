@@ -39,11 +39,11 @@ export class AdditionalLogErrorBase<T = unknown[]> extends Error {
 // --------------API ERRORS--------------
 
 export class NoRevAPIError extends AdditionalLogErrorBase {
-  override name = ' NoRevAPIError';
+  override name = 'NoRevAPIError';
 }
 
 export class FileHashCreationAPIError extends AdditionalLogErrorBase {
-  override name = ' FileHashCreationAPIError';
+  override name = 'FileHashCreationAPIError';
 }
 
 export class TooManyRequestsAPIError extends AdditionalLogErrorBase<{
@@ -51,7 +51,7 @@ export class TooManyRequestsAPIError extends AdditionalLogErrorBase<{
   retryAfter?: number;
   path?: string;
 }> {
-  override name = ' TooManyRequestsAPIError';
+  override name = 'TooManyRequestsAPIError';
   readonly status: number;
   readonly retryAfter?: number;
   readonly path?: string;
@@ -66,19 +66,19 @@ export class TooManyRequestsAPIError extends AdditionalLogErrorBase<{
 }
 
 export class RemoteFileNotFoundAPIError extends AdditionalLogErrorBase {
-  override name = ' RemoteFileNotFoundAPIError';
+  override name = 'RemoteFileNotFoundAPIError';
 }
 
 export class MissingRefreshTokenAPIError extends Error {
-  override name = ' MissingRefreshTokenAPIError';
+  override name = 'MissingRefreshTokenAPIError';
 }
 
 export class UploadRevToMatchMismatchAPIError extends AdditionalLogErrorBase {
-  override name = ' UploadRevToMatchMismatchAP';
+  override name = 'UploadRevToMatchMismatchAPIError';
 }
 
 export class HttpNotOkAPIError extends AdditionalLogErrorBase {
-  override name = ' HttpNotOkAPIError';
+  override name = 'HttpNotOkAPIError';
   /**
    * Raw `Response` object retained so callers can read `.status` /
    * `.statusText`.
@@ -219,6 +219,16 @@ export class NetworkUnavailableSPError extends Error {
     message = 'Unable to connect to SuperSync server. Check your internet connection.',
   ) {
     super(message);
+  }
+}
+
+export class WebDavNativeRequestError extends Error {
+  override name = 'WebDavNativeRequestError';
+  readonly code?: string | number;
+
+  constructor(message: string, code?: string | number) {
+    super(message);
+    this.code = code;
   }
 }
 

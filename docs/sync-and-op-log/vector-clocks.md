@@ -360,3 +360,53 @@ Rules that must hold for the system to be correct. Use these to verify implement
 | Server: conflict detection + prune after comparison         | `packages/super-sync-server/src/sync/sync.service.ts`                        |
 | Server: DoS cap (sanitize, no pruning)                      | `packages/super-sync-server/src/sync/services/validation.service.ts`         |
 | Server: snapshot clock pruning during download optimization | `packages/super-sync-server/src/sync/services/operation-download.service.ts` |
+
+---
+
+## 11. History & Rationale (why pruning is the way it is)
+
+Decision-history behind the current pruning design (previously in a separate
+research doc, now git-only). Load-bearing context for anyone changing
+`MAX_VECTOR_CLOCK_SIZE` or the prune ordering.
+
+### Compare before pruning — and the bugs that proved it
+
+**Never prune a vector clock before using it in a comparison.** Pruning removes
+information: a missing entry is ambiguous — "never knew about this client" vs
+"entry was pruned" — so a pre-pruned comparison returns CONCURRENT instead of
+EQUAL/causal. Two independent incidents established this:
+
+- **Riak #613:** pruning before comparison caused "sibling explosion" — objects
+  accumulated hundreds of siblings that could never resolve because pruned
+  clocks always compared CONCURRENT.
+- **Super Productivity (Feb 2026):** with `MAX = 10`, server pruning before
+  comparison caused an infinite rejection loop — a client merges all clocks +
+  its own ID (11 entries), the server prunes to 10, the non-shared key forces
+  CONCURRENT, the server rejects, the client re-merges, the loop repeats.
+
+Fix in both systems: compare the **full unpruned** clock, then prune **only
+before storage**. This is the invariant in §6 and §9.
+
+### Why MAX = 20 (the 10 → 30 → 20 evolution)
+
+The original defense against the Feb-2026 loop was a 4-layer scheme (protected
+client IDs, pruning-aware comparison, an `isLikelyPruningArtifact` heuristic,
+the same-client check) — symptom treatment. The root cause was that `MAX = 10`
+was too small, making pruning frequent and interacting badly with SYNC_IMPORT.
+
+Commit `d70f18a94d` raised `MAX` 10 → 30 (later reduced to 20 — a 20-entry
+clock is ~333 bytes, negligible) and **removed three of the four layers**.
+`isLikelyPruningArtifact` was dropped (known false positives, unnecessary at
+MAX = 20). Only the **same-client check** remains — always mathematically
+correct (monotonic counters are definitive) and independent of MAX. At
+MAX = 20, pruning needs **21+ distinct client IDs**, extremely rare for a
+personal productivity app, so the pruning path is effectively dormant
+(see §5 "Pruning is Rare").
+
+### Future options (only if the server becomes the coordinator)
+
+In a server-authoritative model, clock growth could be bounded without pruning
+via **Dotted Version Vectors** (bound to server vnodes, not devices),
+**bounded reclaimable client IDs** (needs a registration/retirement protocol),
+or **periodic stable-cut GC** (needs all-to-all clock reporting). None apply to
+the current dumb-relay model.

@@ -6,6 +6,7 @@ import { SS } from '../../../core/persistence/storage-keys.const';
 import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model';
+import { normalizeClockStr } from '../../../util/normalize-clock-str';
 
 @Injectable()
 export class AddTaskBarStateService {
@@ -34,12 +35,13 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({
       ...state,
       date,
-      time: time !== undefined ? time : state.time,
+      time: time !== undefined ? this._normTime(time) : state.time,
+      isDateExplicitlyCleared: date ? false : state.isDateExplicitlyCleared,
     }));
   }
 
   updateTime(time: string | null): void {
-    this._taskInputState.update((state) => ({ ...state, time }));
+    this._taskInputState.update((state) => ({ ...state, time: this._normTime(time) }));
   }
 
   updateSpent(spent: TimeSpentOnDay | null): void {
@@ -102,7 +104,12 @@ export class AddTaskBarStateService {
   }
 
   clearDate(cleanedInputTxt?: string): void {
-    this._taskInputState.update((state) => ({ ...state, date: null, time: null }));
+    this._taskInputState.update((state) => ({
+      ...state,
+      date: null,
+      time: null,
+      isDateExplicitlyCleared: true,
+    }));
     if (cleanedInputTxt !== undefined) {
       this.inputTxt.set(cleanedInputTxt);
     }
@@ -134,6 +141,38 @@ export class AddTaskBarStateService {
     this._taskInputState.update((state) => ({ ...state, repeatQuickSetting: null }));
   }
 
+  updateDeadline(deadlineDate: string | null, deadlineTime?: string | null): void {
+    this._taskInputState.update((state) => ({
+      ...state,
+      deadlineDate,
+      deadlineTime:
+        deadlineTime !== undefined ? this._normTime(deadlineTime) : state.deadlineTime,
+    }));
+  }
+
+  // Recover a stray seconds component (e.g. a pasted `13:30:00`) so a time the
+  // user intended survives validation at task creation instead of being dropped
+  // to a date-only due/deadline (#7802). Empty/null values pass through.
+  private _normTime(time: string | null): string | null {
+    return time ? normalizeClockStr(time) : time;
+  }
+
+  updateDeadlineRemindOption(deadlineRemindOption: TaskReminderOptionId | null): void {
+    this._taskInputState.update((state) => ({ ...state, deadlineRemindOption }));
+  }
+
+  clearDeadline(cleanedInputTxt?: string): void {
+    this._taskInputState.update((state) => ({
+      ...state,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    }));
+    if (cleanedInputTxt !== undefined) {
+      this.inputTxt.set(cleanedInputTxt);
+    }
+  }
+
   resetAfterAdd(): void {
     // Only clear input text and tags, preserve project, date, and estimate
     this._taskInputState.update((state) => ({
@@ -144,6 +183,9 @@ export class AddTaskBarStateService {
       cleanText: null,
       attachments: [],
       repeatQuickSetting: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
     }));
     this.inputTxt.set('');
     // Keep isAutoDetected as is to preserve project selection

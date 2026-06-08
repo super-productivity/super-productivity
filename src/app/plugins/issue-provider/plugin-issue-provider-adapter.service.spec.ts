@@ -18,6 +18,7 @@ import { Task } from '../../features/tasks/task.model';
 import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
+import { TagService } from '../../features/tag/tag.service';
 
 describe('PluginIssueProviderAdapterService', () => {
   let service: PluginIssueProviderAdapterService;
@@ -26,6 +27,7 @@ describe('PluginIssueProviderAdapterService', () => {
   let storeSpy: jasmine.SpyObj<Store>;
   let snackSpy: jasmine.SpyObj<SnackService>;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let tagServiceSpy: jasmine.SpyObj<TagService>;
 
   const PLUGIN_KEY = 'plugin:test-plugin';
   const PROVIDER_ID = 'provider-123';
@@ -86,13 +88,20 @@ describe('PluginIssueProviderAdapterService', () => {
       'getAvailableProviders',
     ]);
     pluginHttpSpy = jasmine.createSpyObj('PluginHttpService', ['createHttpHelper']);
-    storeSpy = jasmine.createSpyObj('Store', ['select']);
+    storeSpy = jasmine.createSpyObj('Store', ['select', 'pipe']);
 
     snackSpy = jasmine.createSpyObj('SnackService', ['open']);
     taskServiceSpy = jasmine.createSpyObj('TaskService', ['removeMultipleTasks']);
+    tagServiceSpy = jasmine.createSpyObj('TagService', [
+      'tagsNoMyDayAndNoList',
+      'addTag',
+    ]);
     pluginHttpSpy.createHttpHelper.and.returnValue(mockHttpHelper);
     storeSpy.select.and.returnValue(of(mockPluginCfg));
+    storeSpy.pipe.and.returnValue(of([]));
     registrySpy.hasProvider.and.returnValue(true);
+    tagServiceSpy.tagsNoMyDayAndNoList.and.returnValue([]);
+    tagServiceSpy.addTag.and.returnValue('new-tag-id');
 
     TestBed.configureTestingModule({
       providers: [
@@ -102,6 +111,7 @@ describe('PluginIssueProviderAdapterService', () => {
         { provide: Store, useValue: storeSpy },
         { provide: SnackService, useValue: snackSpy },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TagService, useValue: tagServiceSpy },
       ],
     });
 
@@ -362,6 +372,43 @@ describe('PluginIssueProviderAdapterService', () => {
 
       expect((result as any).dueDay).toBeDefined();
       expect((result as any).dueWithTime).toBeUndefined();
+    });
+
+    it('should apply tag mappings and seed sync values when cfg is available', () => {
+      const issueData = {
+        id: 'ISS-10',
+        title: 'Tagged issue',
+        labels: ['bug'],
+        lastUpdated: 2000,
+      } as PluginSearchResult;
+      const provider = createMockProvider({
+        fieldMappings: [
+          {
+            taskField: 'tagIds',
+            issueField: 'labels',
+            defaultDirection: 'both',
+            toIssueValue: (v: unknown) => v,
+            toTaskValue: (v: unknown) => v,
+          },
+        ],
+        extractSyncValues: undefined,
+      });
+      registrySpy.getProvider.and.returnValue(provider);
+      tagServiceSpy.tagsNoMyDayAndNoList.and.returnValue([
+        { id: 'tag-bug', title: 'bug' } as any,
+      ]);
+
+      const result = service.getAddTaskDataForCfg(issueData, {
+        ...mockPluginCfg,
+        pluginConfig: {
+          ...mockPluginConfig,
+          twoWaySync: { tagIds: 'both' },
+        },
+      } as IssueProviderPluginType);
+
+      expect(result.tagIds).toEqual(['tag-bug']);
+      expect(result.issueLastSyncedValues).toEqual({ labels: ['bug'] });
+      expect(result.issueLastUpdated).toBe(2000);
     });
   });
 
@@ -731,6 +778,102 @@ describe('PluginIssueProviderAdapterService', () => {
 
         expect(result).not.toBeNull();
         expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
+      });
+
+      it('should use issue field fallback for tagIds when extractSyncValues is absent', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Tagged',
+          lastUpdated: 2000,
+          labels: ['bug'],
+        };
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'tagIds',
+              issueField: 'labels',
+              defaultDirection: 'both',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown) => v,
+            },
+          ],
+          extractSyncValues: undefined,
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { tagIds: 'both' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          tagIds: ['local-bug-tag'],
+          issueLastSyncedValues: { labels: ['bug'] },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['tagIds' as keyof Task]).toBeUndefined();
+        expect(result!.taskChanges.issueLastSyncedValues).toEqual({ labels: ['bug'] });
+      });
+
+      it('should use issue field fallback for tagIds when extractSyncValues omits labels', async () => {
+        const freshIssue: PluginIssue = {
+          id: 'ISS-1',
+          title: 'Tagged',
+          lastUpdated: 2000,
+          labels: ['bug'],
+        };
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'tagIds',
+              issueField: 'labels',
+              defaultDirection: 'both',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown) => v,
+            },
+          ],
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ title: 'Tagged' }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const cfgWithSync = {
+          ...mockPluginCfg,
+          pluginConfig: {
+            ...mockPluginConfig,
+            twoWaySync: { tagIds: 'both' },
+          },
+        } as IssueProviderPluginType;
+        storeSpy.select.and.returnValue(of(cfgWithSync));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          tagIds: ['local-bug-tag'],
+          issueLastSyncedValues: { labels: ['bug'] },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['tagIds' as keyof Task]).toBeUndefined();
+        expect(result!.taskChanges.issueLastSyncedValues).toEqual({ labels: ['bug'] });
       });
 
       it('should pass issueNumber from the fresh issue into ctx for toTaskValue', async () => {

@@ -179,6 +179,37 @@ describe('FocusModeMainComponent', () => {
     it('should initialize isDragOver to false', () => {
       expect(component.isDragOver()).toBe(false);
     });
+
+    it('should constrain long task titles in focus mode layout (issue #8012)', () => {
+      currentTaskSubject.next({
+        ...mockTask,
+        title: 'A'.repeat(1000),
+      });
+      fixture.detectChanges();
+
+      const taskSection = fixture.nativeElement.querySelector(
+        '.task-section',
+      ) as HTMLElement | null;
+      const taskTitle = fixture.nativeElement.querySelector(
+        'task-title.task-title',
+      ) as HTMLElement | null;
+
+      expect(taskSection).not.toBeNull();
+      expect(taskTitle).not.toBeNull();
+
+      if (!taskSection || !taskTitle) {
+        return;
+      }
+
+      const sectionStyles = window.getComputedStyle(taskSection);
+      const titleStyles = window.getComputedStyle(taskTitle);
+
+      expect(sectionStyles.maxWidth).not.toBe('none');
+      expect(titleStyles.maxWidth).not.toBe('none');
+      expect(titleStyles.maxHeight).not.toBe('none');
+      expect(titleStyles.overflowX).toBe('hidden');
+      expect(titleStyles.overflowY).toBe('auto');
+    });
   });
 
   describe('issue URL observable', () => {
@@ -590,8 +621,10 @@ describe('FocusModeMainComponent', () => {
 describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
   let component: FocusModeMainComponent;
   let fixture: ComponentFixture<FocusModeMainComponent>;
+  let mockStore: MockStore;
   let currentTaskSubject: BehaviorSubject<TaskCopy | null>;
   let mainStateSignal: WritableSignal<FocusMainUIState>;
+  let modeSignal: WritableSignal<FocusModeMode>;
   let isSessionRunningSignal: WritableSignal<boolean>;
 
   const mockTask: TaskCopy = {
@@ -612,6 +645,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
   beforeEach(async () => {
     // Create writable signals for state that affects template rendering
     mainStateSignal = signal(FocusMainUIState.InProgress);
+    modeSignal = signal(FocusModeMode.Pomodoro);
     isSessionRunningSignal = signal(true);
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
@@ -652,7 +686,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       isBreakActive: signal(false),
       currentCycle: signal(1),
       sessionDuration: signal(0),
-      mode: signal(FocusModeMode.Pomodoro),
+      mode: modeSignal,
       mainState: mainStateSignal,
       focusModeConfig: signal({
         isSkipPreparation: false,
@@ -690,7 +724,45 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
 
     fixture = TestBed.createComponent(FocusModeMainComponent);
     component = fixture.componentInstance;
+    mockStore = TestBed.inject(Store) as MockStore;
+    spyOn(mockStore, 'dispatch');
     fixture.detectChanges();
+    (mockStore.dispatch as jasmine.Spy).calls.reset();
+  });
+
+  it('should hide the mode selector while a focus session is in progress', () => {
+    expect(component.isShowModeSelector()).toBe(false);
+  });
+
+  it('should hide the mode selector while a Flowtime session is in progress', () => {
+    modeSignal.set(FocusModeMode.Flowtime);
+    fixture.detectChanges();
+
+    expect(component.isShowModeSelector()).toBe(false);
+  });
+
+  it('should only show the active fixed-duration mode and Flowtime while in progress', () => {
+    const options = component.modeOptions();
+
+    expect(options.map((option) => option.id)).toEqual([
+      FocusModeMode.Flowtime,
+      FocusModeMode.Pomodoro,
+    ]);
+    expect(options.every((option) => !option.disabled)).toBe(true);
+  });
+
+  it('should dispatch Flowtime mode changes while a fixed-duration session is in progress', () => {
+    component.selectMode(FocusModeMode.Flowtime);
+
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      actions.setFocusModeMode({ mode: FocusModeMode.Flowtime }),
+    );
+  });
+
+  it('should ignore active-session mode changes to another fixed-duration mode', () => {
+    component.selectMode(FocusModeMode.Countdown);
+
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
   });
 
   it('should pass isDefaultText=false to inline-markdown when task has notes', () => {

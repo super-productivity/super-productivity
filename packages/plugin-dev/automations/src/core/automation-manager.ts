@@ -46,6 +46,8 @@ export class AutomationManager {
     globalRegistry.registerTrigger(Triggers.TriggerTaskCompleted);
     globalRegistry.registerTrigger(Triggers.TriggerTaskCreated);
     globalRegistry.registerTrigger(Triggers.TriggerTaskUpdated);
+    globalRegistry.registerTrigger(Triggers.TriggerTaskStarted);
+    globalRegistry.registerTrigger(Triggers.TriggerTaskStopped);
     globalRegistry.registerTrigger(Triggers.TriggerTimeBased);
 
     // Conditions
@@ -59,6 +61,7 @@ export class AutomationManager {
     globalRegistry.registerAction(Actions.ActionCreateTask);
     globalRegistry.registerAction(Actions.ActionDeleteTask);
     globalRegistry.registerAction(Actions.ActionAddTag);
+    globalRegistry.registerAction(Actions.ActionRemoveTag);
     globalRegistry.registerAction(Actions.ActionMoveToProject);
     globalRegistry.registerAction(Actions.ActionDisplaySnack);
     globalRegistry.registerAction(Actions.ActionDisplayDialog);

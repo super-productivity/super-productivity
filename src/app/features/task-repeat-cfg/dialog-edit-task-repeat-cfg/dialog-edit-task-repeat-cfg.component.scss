@@ -70,6 +70,21 @@ mat-dialog-actions {
     min-width: 0;
   }
 }
+
+// Visibility toggle for the weekday group, which must stay mounted (#8025):
+// hiding via CSS keeps formly from destroying/recreating the child views, which
+// would otherwise break the checkbox/FormControl wiring after a cycle round-trip.
+:host::ng-deep .repeat-cfg-hidden {
+  display: none;
+}
+
+// Inline error shown when a CUSTOM weekly config has no weekday selected (#8025).
+.weekday-error {
+  color: var(--c-warn);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--s2);
+  margin-inline-start: var(--s2);
+}
 :host::ng-deep .repeat-cycle {
   display: flex;
 

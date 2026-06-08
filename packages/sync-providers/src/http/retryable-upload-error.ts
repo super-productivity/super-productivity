@@ -20,6 +20,12 @@ const RETRYABLE_UPLOAD_ERROR_PATTERNS: RegExp[] = [
   /\bfailed to fetch\b/,
   /\bnetwork\s*(error|request|failure)?\b/,
   /\bunable to connect\b/,
+  // Android UnknownHostException: "Unable to resolve host \"…\": No address
+  // associated with hostname". Routes the error through NetworkUnavailableSPError
+  // so the user sees the friendly translated warning instead of the raw message.
+  // Anchored to "host" to avoid matching op-graph rejection strings like
+  // "Unable to resolve parent revision" that the SuperSync server may surface.
+  /\bunable to resolve host\b/,
   /\btimeout\b/,
   /\beconnrefused\b/,
   /\benotfound\b/,

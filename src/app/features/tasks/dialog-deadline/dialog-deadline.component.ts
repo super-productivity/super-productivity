@@ -28,6 +28,7 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { getClockStringFromHours } from '../../../util/get-clock-string-from-hours';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateService } from '../../../core/date/date.service';
@@ -44,8 +45,10 @@ import {
 import { MatSelect } from '@angular/material/select';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatInput } from '@angular/material/input';
+import { TimeStepDirective } from '../../../ui/time-step/time-step.directive';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
+import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 
 const DEFAULT_TIME = '09:00';
 
@@ -70,6 +73,7 @@ type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
     MatLabel,
     MatSuffix,
     MatPrefix,
+    TimeStepDirective,
   ],
   templateUrl: './dialog-deadline.component.html',
   styleUrl: './dialog-deadline.component.scss',
@@ -77,7 +81,13 @@ type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
   animations: [expandFadeAnimation, fadeAnimation],
 })
 export class DialogDeadlineComponent implements AfterViewInit {
-  data = inject<{ task: Task }>(MAT_DIALOG_DATA);
+  data = inject<{
+    task?: Task;
+    targetDeadlineDay?: string;
+    targetDeadlineTime?: string;
+    targetDeadlineRemindOption?: TaskReminderOptionId;
+    isSelectDeadlineOnly?: boolean;
+  }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogDeadlineComponent>>(MatDialogRef);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
@@ -100,7 +110,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
   readonly calendar = viewChild.required(MatCalendar);
 
   reminderOptions: TaskReminderOption[] = DEADLINE_REMINDER_OPTIONS;
-  task: Task = this.data.task;
+  task: Task | undefined = this.data.task;
 
   selectedDate: Date | null = null;
   selectedTime: string | null = null;
@@ -112,30 +122,54 @@ export class DialogDeadlineComponent implements AfterViewInit {
   private _timeCheckVal: string | null = null;
 
   ngAfterViewInit(): void {
-    if (this.task.deadlineWithTime) {
-      this.hasExistingDeadline = true;
-      this.selectedDate = new Date(this.task.deadlineWithTime);
-      this.selectedTime = new Date(this.task.deadlineWithTime).toLocaleTimeString(
-        'en-GB',
-        {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      );
-      if (this.task.deadlineRemindAt) {
-        this.selectedReminderCfgId = millisecondsDiffToRemindOption(
-          this.task.deadlineWithTime,
-          this.task.deadlineRemindAt,
+    if (this.task) {
+      if (this.task.deadlineWithTime) {
+        this.hasExistingDeadline = true;
+        this.selectedDate = new Date(this.task.deadlineWithTime);
+        this.selectedTime = new Date(this.task.deadlineWithTime).toLocaleTimeString(
+          'en-GB',
+          {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
         );
+        if (this.task.deadlineRemindAt) {
+          this.selectedReminderCfgId = millisecondsDiffToRemindOption(
+            this.task.deadlineWithTime,
+            this.task.deadlineRemindAt,
+          );
+        } else {
+          this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
+        }
+      } else if (this.task.deadlineDay) {
+        this.hasExistingDeadline = true;
+        this.selectedDate = dateStrToUtcDate(this.task.deadlineDay);
       } else {
         this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
       }
-    } else if (this.task.deadlineDay) {
-      this.hasExistingDeadline = true;
-      this.selectedDate = dateStrToUtcDate(this.task.deadlineDay);
     } else {
       this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
+      if (
+        this.data.targetDeadlineDay ||
+        this.data.targetDeadlineTime ||
+        this.data.targetDeadlineRemindOption
+      ) {
+        this.hasExistingDeadline = true;
+      }
+    }
+
+    if (this.data.targetDeadlineDay) {
+      this.selectedDate = dateStrToUtcDate(this.data.targetDeadlineDay);
+    }
+    if (this.data.targetDeadlineTime) {
+      this.selectedTime = this.data.targetDeadlineTime;
+    }
+    if (
+      this.data.isSelectDeadlineOnly &&
+      this.data.targetDeadlineRemindOption !== undefined
+    ) {
+      this.selectedReminderCfgId = this.data.targetDeadlineRemindOption;
     }
 
     this.calendar().activeDate = new Date(this.selectedDate || new Date());
@@ -216,7 +250,17 @@ export class DialogDeadlineComponent implements AfterViewInit {
   }
 
   remove(): void {
-    this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task.id }));
+    if (this.data.isSelectDeadlineOnly) {
+      this._matDialogRef.close({
+        date: null,
+        time: null,
+        remindOption: null,
+      });
+      return;
+    }
+    if (this.task) {
+      this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task.id }));
+    }
     this._matDialogRef.close();
   }
 
@@ -225,33 +269,49 @@ export class DialogDeadlineComponent implements AfterViewInit {
       return;
     }
 
-    if (this.selectedTime && isValidSplitTime(this.selectedTime)) {
-      const deadlineTimestamp = getDateTimeFromClockString(
-        this.selectedTime,
-        this.selectedDate!,
-      );
-      const deadlineRemindAt =
-        this.selectedReminderCfgId !== TaskReminderOptionId.DoNotRemind
-          ? remindOptionToMilliseconds(deadlineTimestamp, this.selectedReminderCfgId)
-          : undefined;
+    // Recover a stray seconds component (e.g. a pasted `13:30:00`) so the time
+    // the user set actually persists instead of silently dropping to a
+    // date-only deadline (#7802). Genuine garbage still fails the guard below.
+    const time = this.selectedTime ? normalizeClockStr(this.selectedTime) : null;
 
-      this._store.dispatch(
-        TaskSharedActions.setDeadline({
-          taskId: this.task.id,
-          deadlineWithTime: deadlineTimestamp,
-          deadlineRemindAt,
-        }),
-      );
-    } else {
-      // Falls through for both "no time entered" and "malformed time" — the
-      // latter would otherwise crash getDateTimeFromClockString (issue #7490).
-      const newDay = getDbDateStr(this.selectedDate!);
-      this._store.dispatch(
-        TaskSharedActions.setDeadline({
-          taskId: this.task.id,
-          deadlineDay: newDay,
-        }),
-      );
+    if (this.data.isSelectDeadlineOnly) {
+      const validTime = time && isValidSplitTime(time) ? time : null;
+      this._matDialogRef.close({
+        date: this.selectedDate,
+        time: validTime,
+        remindOption: this.selectedReminderCfgId,
+      });
+      return;
+    }
+
+    if (this.task) {
+      if (time && isValidSplitTime(time)) {
+        const deadlineTimestamp = getDateTimeFromClockString(time, this.selectedDate!);
+        const deadlineRemindAt =
+          this.selectedReminderCfgId !== TaskReminderOptionId.DoNotRemind
+            ? remindOptionToMilliseconds(deadlineTimestamp, this.selectedReminderCfgId)
+            : undefined;
+
+        this._store.dispatch(
+          TaskSharedActions.setDeadline({
+            taskId: this.task.id,
+            deadlineWithTime: deadlineTimestamp,
+            deadlineRemindAt,
+            ...getDeadlineAutoPlanFields(this._dateService, undefined, deadlineTimestamp),
+          }),
+        );
+      } else {
+        // Falls through for both "no time entered" and "malformed time" — the
+        // latter would otherwise crash getDateTimeFromClockString (issue #7490).
+        const newDay = getDbDateStr(this.selectedDate!);
+        this._store.dispatch(
+          TaskSharedActions.setDeadline({
+            taskId: this.task.id,
+            deadlineDay: newDay,
+            ...getDeadlineAutoPlanFields(this._dateService, newDay),
+          }),
+        );
+      }
     }
 
     this._matDialogRef.close();

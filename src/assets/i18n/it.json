@@ -1514,7 +1514,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Aggiungi attività esistente \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Crea nuove etichette",
-        "DUE_BUTTON": "Scadenza",
+        "DUE_BUTTON": "Pianifica",
         "ESTIMATE_BUTTON": "Stima",
         "PLACEHOLDER_CREATE": "Titolo attività #etichetta @16:00",
         "PLACEHOLDER_SEARCH": "Aggiungi attività esistente o issue...",

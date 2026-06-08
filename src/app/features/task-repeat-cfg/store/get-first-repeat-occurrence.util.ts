@@ -44,6 +44,13 @@ export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | n
           accept: (candidate) => candidate >= checkDate,
         });
       }
+      if (taskRepeatCfg.monthlyLastDay) {
+        // Last calendar day of startDate's month — day 0 of the next month
+        // (#7726).
+        const lastDay = new Date(checkDate.getFullYear(), checkDate.getMonth() + 1, 0);
+        lastDay.setHours(12, 0, 0, 0);
+        return lastDay;
+      }
       return checkDate;
     }
 

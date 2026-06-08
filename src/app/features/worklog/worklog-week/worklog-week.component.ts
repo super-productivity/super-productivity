@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { WorklogService } from '../worklog.service';
 import { DialogWorklogExportComponent } from '../dialog-worklog-export/dialog-worklog-export.component';
 import { MatDialog } from '@angular/material/dialog';
-import { WorklogDataForDay } from '../worklog.model';
 import { expandAnimation, expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { getDateRangeForWeek } from '../../../util/get-date-range-for-week';
@@ -14,7 +13,6 @@ import { SimpleCounterService } from '../../simple-counter/simple-counter.servic
 import { DateAdapter, MatRipple } from '@angular/material/core';
 import { AsyncPipe, KeyValue, KeyValuePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
-import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
 import { MatButton } from '@angular/material/button';
 import { MomentFormatPipe } from '../../../ui/pipes/moment-format.pipe';
 import { MsToClockStringPipe } from '../../../ui/duration/ms-to-clock-string.pipe';
@@ -22,6 +20,7 @@ import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clo
 import { TranslatePipe } from '@ngx-translate/core';
 import { MetricService } from '../../metric/metric.service';
 import { DialogViewArchivedTaskComponent } from '../../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
+import { WorklogTaskRowComponent } from '../worklog-task-row/worklog-task-row.component';
 
 @Component({
   selector: 'worklog-week',
@@ -32,7 +31,6 @@ import { DialogViewArchivedTaskComponent } from '../../tasks/dialog-view-archive
   imports: [
     MatRipple,
     MatIcon,
-    InlineInputComponent,
     MatButton,
     AsyncPipe,
     KeyValuePipe,
@@ -40,6 +38,7 @@ import { DialogViewArchivedTaskComponent } from '../../tasks/dialog-view-archive
     MsToClockStringPipe,
     MsToMinuteClockStringPipe,
     TranslatePipe,
+    WorklogTaskRowComponent,
   ],
 })
 export class WorklogWeekComponent {
@@ -88,14 +87,6 @@ export class WorklogWeekComponent {
       },
     });
     this.worklogService.refreshWorklog();
-  }
-
-  trackByDay<T extends KeyValue<string, V>, V = unknown>(i: number, day: T): string {
-    return day.key;
-  }
-
-  trackByLogEntry(i: number, logEntry: WorklogDataForDay): string {
-    return logEntry.task.id;
   }
 
   viewTaskDetails(task: Task): void {

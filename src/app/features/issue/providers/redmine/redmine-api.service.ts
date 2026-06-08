@@ -180,7 +180,7 @@ export class RedmineApiService {
         type: 'ERROR',
         msg: T.F.ISSUE.S.ERR_NOT_CONFIGURED,
         translateParams: {
-          ISSUE_PROVIDER_HUMANIZED: ISSUE_PROVIDER_HUMANIZED[REDMINE_TYPE],
+          issueProviderName: ISSUE_PROVIDER_HUMANIZED[REDMINE_TYPE],
         },
       });
       throwHandledError('Redmine: Not enough settings');

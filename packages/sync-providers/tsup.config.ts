@@ -2,11 +2,11 @@ import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: [
-    'src/index.ts',
     'src/dropbox.ts',
     'src/webdav.ts',
     'src/local-file.ts',
     'src/super-sync.ts',
+    'src/onedrive.ts',
     'src/http.ts',
     'src/errors.ts',
     'src/credential-store.ts',
@@ -14,9 +14,11 @@ export default defineConfig({
     'src/pkce.ts',
     'src/platform.ts',
     'src/provider-types.ts',
+    'src/log.ts',
   ],
   format: ['esm', 'cjs'],
-  dts: true,
+  tsconfig: 'tsconfig.build.json',
+  dts: { tsconfig: 'tsconfig.build.json' },
   sourcemap: true,
   clean: true,
 });

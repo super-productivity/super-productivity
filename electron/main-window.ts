@@ -30,6 +30,13 @@ import { markGpuStartupSuccess } from './gpu-startup-guard';
 
 let mainWin: BrowserWindow;
 
+// Compact WCO band on Win/Linux. Native button width is OS-controlled
+// (~138px total); only height is configurable. Lower values may be
+// clamped to the OS minimum (~24–28px on Win11) — Electron silently
+// floors instead of rejecting. Stays well clear of the vertical action
+// strip which positions itself --bar-height (48px) down.
+const WCO_HEIGHT = 24;
+
 /**
  * Returns theme-aware background color for titlebar overlay.
  * Semi-transparent to ensure window controls are always visible.
@@ -53,6 +60,42 @@ export const getWin = (): BrowserWindow => {
     throw new Error('No main window');
   }
   return mainWinModule.win;
+};
+
+// How long the "quit requested" intent survives before auto-clearing.
+// Long enough to cover normal before-close IPC (sync, finish-day prompt);
+// short enough that if the user cancels finish-day and then clicks the
+// window close button, they get their normal minimize-to-tray behavior
+// rather than being re-prompted indefinitely.
+const QUIT_REQUEST_TIMEOUT_MS = 5_000;
+
+let isQuitRequested = false;
+let quitRequestResetTimer: NodeJS.Timeout | undefined;
+
+const getIsQuitRequested = (): boolean => isQuitRequested;
+
+const setIsQuitRequested = (flag: boolean): void => {
+  if (quitRequestResetTimer) clearTimeout(quitRequestResetTimer);
+  isQuitRequested = flag;
+  quitRequestResetTimer = flag
+    ? setTimeout(() => {
+        isQuitRequested = false;
+        quitRequestResetTimer = undefined;
+      }, QUIT_REQUEST_TIMEOUT_MS)
+    : undefined;
+};
+
+export const closeWinAndQuit = (quitApp: () => void): void => {
+  if (mainWin && !mainWin.isDestroyed()) {
+    // Ensure the close handler takes the real close path (not the minimize-to-tray
+    // hide branch) so the before-close IPC flow (sync, finish-day) completes.
+    setIsQuitRequested(true);
+    mainWin.close();
+  } else {
+    // No window to drive the IPC flow through — quit directly. No flag
+    // needed: the close handler that reads it cannot run without a window.
+    quitApp();
+  }
 };
 
 export const getIsAppReady = (): boolean => {
@@ -117,7 +160,7 @@ export const createWindow = async ({
       ? {
           color: getTitleBarColor(nativeTheme.shouldUseDarkColors),
           symbolColor: initialSymbolColor,
-          height: 44,
+          height: WCO_HEIGHT,
         }
       : undefined;
 
@@ -347,7 +390,7 @@ export const createWindow = async ({
         mainWin.setTitleBarOverlay({
           color: getTitleBarColor(isDarkMode),
           symbolColor,
-          height: 44,
+          height: WCO_HEIGHT,
         });
       } catch (e) {
         // setTitleBarOverlay may not be available on all platforms
@@ -459,7 +502,7 @@ function createMenu(quitApp: () => void): void {
         {
           label: 'Quit',
           accelerator: 'CmdOrCtrl+Q',
-          click: quitApp,
+          click: () => closeWinAndQuit(quitApp),
         },
       ],
     },
@@ -512,7 +555,7 @@ const appCloseHandler = (app: App): void => {
     // NOTE: this might not work if we run a second instance of the app
     log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
     if (!getIsQuiting()) {
-      if (getIsMinimizeToTray()) {
+      if (getIsMinimizeToTray() && !getIsQuitRequested()) {
         const indicator = ensureIndicator();
         if (indicator) {
           event.preventDefault();
@@ -535,6 +578,10 @@ const appCloseHandler = (app: App): void => {
   });
 
   mainWin.on('closed', () => {
+    // Clear any pending reset timer so it doesn't keep the event loop alive
+    // after the window is gone.
+    setIsQuitRequested(false);
+
     // Dereference the window object
     mainWin = null;
     mainWinModule.win = null;

@@ -13,13 +13,13 @@ import {
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
 } from '../../src/errors';
-import type {
-  NativeHttpExecutor,
-  NativeHttpRequestConfig,
-  NativeHttpResponse,
-} from '../../src/http/native-http-retry';
-import { isRetryableUploadError } from '../../src/http/retryable-upload-error';
-import type { ProviderPlatformInfo } from '../../src/platform/provider-platform-info';
+import {
+  isRetryableUploadError,
+  type NativeHttpExecutor,
+  type NativeHttpRequestConfig,
+  type NativeHttpResponse,
+} from '../../src/http';
+import type { ProviderPlatformInfo } from '../../src/platform';
 import type {
   OpUploadResponse,
   RestorePointsResponse,
@@ -27,16 +27,17 @@ import type {
   SnapshotUploadResponse,
   SuperSyncOpDownloadResponse,
   SyncOperation,
-} from '../../src/provider.types';
-import type { SuperSyncResponseValidators } from '../../src/super-sync/response-validators';
-import type { SuperSyncStorage } from '../../src/super-sync/storage';
+} from '../../src/provider-types';
 import {
   PROVIDER_ID_SUPER_SYNC,
   SUPER_SYNC_DEFAULT_BASE_URL,
+  SuperSyncProvider,
+  type SuperSyncDeps,
   type SuperSyncPrivateCfg,
-} from '../../src/super-sync/super-sync.model';
-import { SuperSyncProvider, type SuperSyncDeps } from '../../src/super-sync/super-sync';
-import type { SyncCredentialStorePort } from '../../src/credential-store-port';
+  type SuperSyncResponseValidators,
+  type SuperSyncStorage,
+} from '../../src/super-sync';
+import type { SyncCredentialStorePort } from '../../src/credential-store';
 
 // Helpers reused across native-platform decompression assertions.
 const blobToUint8Array = async (blob: Blob): Promise<Uint8Array> => {
@@ -183,6 +184,7 @@ const buildProvider = (
     credentialStore: cfgStore.__asPort(),
     storage: storage.port,
     responseValidators: validators,
+    defaultBaseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
     webRequestRetryDelay: webRequestRetryDelay as (ms: number) => Promise<void>,
   };
   const provider = new SuperSyncProvider(deps);
@@ -292,6 +294,53 @@ describe('SuperSyncProvider', () => {
         baseUrl: 'https://sync.example.com',
       } as SuperSyncPrivateCfg);
       expect(await provider.isReady()).toBe(false);
+    });
+
+    it('returns false when encryption is enabled but the key is missing (half-configured)', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: true,
+        encryptKey: '',
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isReady()).toBe(false);
+    });
+
+    it('returns true when encryption is enabled and the key is present', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: true,
+        encryptKey: 'secret',
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isReady()).toBe(true);
+    });
+  });
+
+  describe('isEncryptionEnabled', () => {
+    it('reflects the config flag even when no key is present (half-configured)', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: true,
+        encryptKey: '',
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isEncryptionEnabled()).toBe(true);
+    });
+
+    it('returns false when encryption is disabled', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue({
+        accessToken: 'token',
+        isEncryptionEnabled: false,
+      } as SuperSyncPrivateCfg);
+      expect(await provider.isEncryptionEnabled()).toBe(false);
+    });
+
+    it('returns false when config is null', async () => {
+      const { provider, cfgStore } = buildProvider();
+      cfgStore.load.mockResolvedValue(null);
+      expect(await provider.isEncryptionEnabled()).toBe(false);
     });
   });
 

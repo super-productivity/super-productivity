@@ -112,6 +112,31 @@ describe('InlineMarkdownComponent', () => {
     });
   });
 
+  describe('long note wrapping', () => {
+    it('should wrap long words while editing and previewing notes', fakeAsync(() => {
+      const longToken = 'AVeryLongUnbrokenWordThatShouldWrapInsideTheEditor';
+      component.model = `[${longToken}](https://example.com/${longToken})`;
+      component['isShowEdit'].set(true);
+      fixture.detectChanges();
+      tick();
+
+      const textarea = fixture.nativeElement.querySelector(
+        'textarea.markdown-unparsed',
+      ) as HTMLTextAreaElement;
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      const previewLink = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed a',
+      ) as HTMLAnchorElement;
+
+      expect(window.getComputedStyle(textarea).overflowWrap).toBe('anywhere');
+      expect(window.getComputedStyle(textarea).whiteSpace).toBe('pre-wrap');
+      expect(window.getComputedStyle(preview).overflowWrap).toBe('anywhere');
+      expect(window.getComputedStyle(previewLink).overflowWrap).toBe('anywhere');
+    }));
+  });
+
   describe('ngOnDestroy', () => {
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange
@@ -637,6 +662,30 @@ describe('InlineMarkdownComponent', () => {
       // Assert
       expect(component.modelCopy()).toBe('- [ ] ');
       expect(component.changed.emit).toHaveBeenCalledOnceWith('- [ ] ');
+    });
+
+    it('should preserve default template content when toggling checklist (issue #7786)', () => {
+      // Arrange — task has no saved notes but a default template is visible
+      spyOn(component.changed, 'emit');
+      const defaultTemplate = '**How can I best achieve it now?**';
+      component.model = defaultTemplate;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — visible template preserved, checkbox appended below
+      const finalText = component.modelCopy();
+      expect(finalText).toContain(defaultTemplate);
+      expect(finalText).toContain('- [ ] ');
+      expect(component.changed.emit).toHaveBeenCalledTimes(1);
     });
 
     it('should insert checklist item after cursor line, not at end', () => {

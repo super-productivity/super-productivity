@@ -1,6 +1,7 @@
 import { CapacitorHttp } from '@capacitor/core';
 import {
   PROVIDER_ID_SUPER_SYNC,
+  SUPER_SYNC_DEFAULT_BASE_URL,
   SuperSyncProvider as PackageSuperSyncProvider,
   type SuperSyncDeps,
 } from '@sp/sync-providers/super-sync';
@@ -70,6 +71,10 @@ export const createSuperSyncProvider = (): PackageSuperSyncProvider => {
       CapacitorHttp.request(httpCfg) as unknown as Promise<NativeHttpResponse>,
     storage: localStoragePort,
     responseValidators,
+    // Host owns the SP-specific fallback. The package itself is
+    // framework-agnostic and never implicitly assumes the SP-hosted
+    // server URL.
+    defaultBaseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
   };
   return new PackageSuperSyncProvider(deps);
 };

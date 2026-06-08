@@ -62,20 +62,48 @@ const toCompoundId = (
 const parseCompoundId = (
   id: string,
   fallbackCalendarHref: string,
-): { calendarHref: string; eventHref: string } => {
+): { calendarHref: string; eventHref: string; occurrenceMs?: number } => {
   // Strip the occurrence suffix first so the remaining base id is unambiguous.
+  // A present `#occ=<digits>` marks an expanded RRULE instance whose eventHref
+  // still resolves to the shared master resource — surface it so write/read
+  // paths can stay occurrence-aware instead of silently hitting the master.
   const occIdx = id.lastIndexOf(OCCURRENCE_SEP);
-  const baseId =
-    occIdx !== -1 && /^\d+$/.test(id.slice(occIdx + OCCURRENCE_SEP.length))
-      ? id.slice(0, occIdx)
-      : id;
+  const hasOccurrence =
+    occIdx !== -1 && /^\d+$/.test(id.slice(occIdx + OCCURRENCE_SEP.length));
+  const occurrenceMs = hasOccurrence
+    ? parseInt(id.slice(occIdx + OCCURRENCE_SEP.length), 10)
+    : undefined;
+  const baseId = hasOccurrence ? id.slice(0, occIdx) : id;
   const sep = baseId.indexOf(COMPOUND_SEP);
-  if (sep === -1) return { calendarHref: fallbackCalendarHref, eventHref: baseId };
+  if (sep === -1) {
+    return { calendarHref: fallbackCalendarHref, eventHref: baseId, occurrenceMs };
+  }
   return {
     calendarHref: baseId.slice(0, sep),
     eventHref: baseId.slice(sep + COMPOUND_SEP.length),
+    occurrenceMs,
   };
 };
+
+/**
+ * A write that targets a single expanded RRULE occurrence (an `#occ=` id) can't
+ * be applied: the occurrence maps back to the shared master resource, so writing
+ * it would mutate the whole series. We refuse with this marked error. The
+ * `isExpectedSyncSkip` flag tells the host's two-way sync that this is an
+ * expected limitation — the user edited/deleted their *task*, not the calendar —
+ * so it stays silent instead of showing a sync-failure snack. Explicit calendar
+ * actions (agenda reschedule/delete) don't check the flag and still surface the
+ * message, which is the honest feedback there. See issue #7492.
+ */
+const unsupportedOccurrenceWriteError = (action: 'edit' | 'delete'): Error =>
+  Object.assign(
+    new Error(
+      `${action === 'edit' ? 'Editing' : 'Deleting'} a single occurrence of a ` +
+        `recurring event is not supported yet. ` +
+        `Please ${action} the event in your calendar app instead.`,
+    ),
+    { isExpectedSyncSkip: true },
+  );
 
 // --- iCal Helpers ---
 
@@ -972,6 +1000,30 @@ const isHttpStatus = (err: unknown, status: number): boolean =>
   'status' in err &&
   (err as { status: number }).status === status;
 
+const RETRY_MAX_ATTEMPTS = 4;
+
+/**
+ * Self-hosted CalDAV servers (Nextcloud, Baikal, Radicale, …) return 429
+ * (rate limited) or 503 (temporarily unavailable) under load. These are
+ * transient and should be retried with backoff; other errors must not.
+ */
+const isTransientError = (err: unknown): boolean =>
+  isHttpStatus(err, 429) || isHttpStatus(err, 503);
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Run `fn`, retrying with exponential backoff + jitter on transient errors. */
+const withTransientRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isTransientError(err) || attempt >= RETRY_MAX_ATTEMPTS) throw err;
+      await sleep(500 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    }
+  }
+};
+
 // --- Load calendars for config dropdowns ---
 
 const loadCalendars = async (
@@ -1083,7 +1135,7 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<PluginIssue> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(issueId, getWriteCalendarId(cfg));
+    const { eventHref, occurrenceMs } = parseCompoundId(issueId, getWriteCalendarId(cfg));
     const eventUrl = resolveHref(cfg, eventHref);
     const icalData = await http.get<string>(eventUrl, { responseType: 'text' });
     const events = parseVEvents(icalData);
@@ -1092,8 +1144,48 @@ PluginAPI.registerIssueProvider({
       throw new Error('Event not found: ' + eventHref);
     }
 
-    const startDate = parseIcalDateTime(event.dtstart, event.dtstartParams);
-    const endDate = parseIcalDateTime(event.dtend, event.dtendParams);
+    // The master VEVENT only carries the series' first DTSTART. For an expanded
+    // occurrence, re-anchor start/end onto THIS instance so the detail panel and
+    // the two-way-sync pull use the occurrence's time instead of collapsing every
+    // instance onto the master's. occurrenceMs is the same `toJSDate().getTime()`
+    // value the expander stamped into the id, so it round-trips exactly. See #7492.
+    let { dtstart: start, dtend: end } = event;
+    let startParams = event.dtstartParams;
+    let endParams = event.dtendParams;
+    if (occurrenceMs !== undefined) {
+      const allDay = isDateOnly(event.dtstart, event.dtstartParams);
+      const masterStart = parseIcalDateTime(event.dtstart, event.dtstartParams);
+      let durationMs = parseDuration(event.duration);
+      if (!durationMs && masterStart && event.dtend) {
+        const masterEnd = parseIcalDateTime(event.dtend, event.dtendParams);
+        if (masterEnd) durationMs = masterEnd.getTime() - masterStart.getTime();
+      }
+      const occStart = new Date(occurrenceMs);
+      if (allDay) {
+        // ical.js represents all-day occurrences as local midnight, so the
+        // local-getter formatter (toIcalDate) yields the correct calendar date.
+        start = toIcalDate(occStart);
+        startParams = 'VALUE=DATE';
+        if (durationMs > 0) {
+          const occEnd = new Date(occStart);
+          occEnd.setDate(occEnd.getDate() + Math.round(durationMs / 86400000));
+          end = toIcalDate(occEnd);
+          endParams = 'VALUE=DATE';
+        } else {
+          end = '';
+          endParams = '';
+        }
+      } else {
+        start = toIcalUtcDateTime(occStart);
+        startParams = '';
+        end =
+          durationMs > 0 ? toIcalUtcDateTime(new Date(occurrenceMs + durationMs)) : '';
+        endParams = '';
+      }
+    }
+
+    const startDate = parseIcalDateTime(start, startParams);
+    const endDate = parseIcalDateTime(end, endParams);
 
     return {
       id: issueId,
@@ -1104,10 +1196,10 @@ PluginAPI.registerIssueProvider({
         ? parseIcalDateTime(event.lastModified, '')?.getTime()
         : undefined,
       summary: event.summary || '(No title)',
-      start: event.dtstart,
-      end: event.dtend,
-      startParams: event.dtstartParams,
-      endParams: event.dtendParams,
+      start,
+      end,
+      startParams,
+      endParams,
       startFormatted: startDate?.toLocaleString() || '',
       endFormatted: endDate?.toLocaleString() || '',
       status: event.status,
@@ -1213,7 +1305,9 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    // Editing one occurrence would rewrite the shared master (whole series).
+    if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('edit');
     const eventUrl = resolveHref(cfg, eventHref);
 
     // Fetch current iCal data
@@ -1418,11 +1512,14 @@ PluginAPI.registerIssueProvider({
       });
 
       const eventUrl = buildNewEventUrl(cfg, calendarHref, uid);
-      // CalDAV PUT is inherently an upsert — creates if absent, replaces if present.
-      await http.put(eventUrl, icalData, {
-        headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
-        responseType: 'text',
-      });
+      // CalDAV PUT is inherently an upsert — creates if absent, replaces if
+      // present (single idempotent write; no insert/patch double-write).
+      await withTransientRetry(() =>
+        http.put(eventUrl, icalData, {
+          headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
+          responseType: 'text',
+        }),
+      );
     },
 
     async deleteEvent(
@@ -1435,11 +1532,13 @@ PluginAPI.registerIssueProvider({
       if (!calendarHref) return; // No calendar configured — nothing to delete
       const uid = taskIdToCaldavUid(taskId);
       const eventUrl = buildNewEventUrl(cfg, calendarHref, uid);
-      try {
-        await http.delete(eventUrl, { responseType: 'text' });
-      } catch (err: unknown) {
-        if (!isHttpStatus(err, 404)) throw err;
-      }
+      await withTransientRetry(async () => {
+        try {
+          await http.delete(eventUrl, { responseType: 'text' });
+        } catch (err: unknown) {
+          if (!isHttpStatus(err, 404)) throw err;
+        }
+      });
     },
   },
 
@@ -1449,7 +1548,9 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    // Deleting one occurrence would DELETE the shared master (whole series).
+    if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('delete');
     const eventUrl = resolveHref(cfg, eventHref);
     await http.delete(eventUrl, { responseType: 'text' });
   },

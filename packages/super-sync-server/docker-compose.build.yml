@@ -8,4 +8,6 @@ services:
     build:
       context: ../..
       dockerfile: packages/super-sync-server/Dockerfile
+      args:
+        VCS_REF: ${SUPERSYNC_BUILD_SHA:-local}
     image: supersync:local

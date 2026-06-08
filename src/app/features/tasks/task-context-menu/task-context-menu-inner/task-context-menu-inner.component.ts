@@ -43,7 +43,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { ProjectService } from '../../../project/project.service';
-import { _MISSING_PROJECT_ } from '../../../project/project.const';
+import { _MISSING_PROJECT_, DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { KeyboardConfig } from '../../../config/keyboard-config.model';
@@ -79,6 +79,8 @@ import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
+import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
+import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -95,6 +97,7 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
     MatTooltip,
     IssueIconPipe,
     MenuTouchFixDirective,
+    SelectOptionRowComponent,
   ],
   templateUrl: './task-context-menu-inner.component.html',
   styleUrl: './task-context-menu-inner.component.scss',
@@ -118,10 +121,12 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
+  private readonly _menuTreeService = inject(MenuTreeService);
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
   readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
+  readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   isAdvancedControls = input<boolean>(false);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
@@ -164,14 +169,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     switchMap((pid) => this._projectService.getProjectsWithoutIdSorted$(pid || null)),
   );
   toggleTagList = this._tagService.tagsNoMyDayAndNoListSorted;
+  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
+  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
-  // isShowMoveFromAndToBacklogBtns$: Observable<boolean> = this._task$.pipe(
-  //   take(1),
-  //   switchMap((task) =>
-  //     task.projectId ? this._projectService.getByIdOnce$(task.projectId) : EMPTY,
-  //   ),
-  //   map((project) => project.isEnableBacklog),
-  // );
   isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
     this._workContextService.activeWorkContext$.pipe(
       take(1),
@@ -326,7 +326,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     const btns = Array.from(
       t?.closest('.quick-access')?.querySelectorAll('button') || [],
     );
-    //   const btns = Array.from(t?.querySelectorAll('button') || []);
 
     const currentIndex = btns.indexOf(t as HTMLButtonElement);
 
@@ -340,6 +339,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   focusFirstBtn(ev: FocusEvent): void {
     const t = ev.target as HTMLElement;
     t?.parentElement?.querySelector('button')?.focus();
+  }
+
+  focusFirstSubmenuItem(menu: MatMenu): void {
+    menu.focusFirstItem('program');
   }
 
   goToFocusMode(): void {
@@ -728,11 +731,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         nextFirstDayOfWeek.setDate(nextFirstDayOfWeek.getDate() + dayOffset);
         this._schedule(nextFirstDayOfWeek);
         break;
-      // case 4:
-      //   const nextMonth = tDate;
-      //   nextMonth.setMonth(nextMonth.getMonth() + 1);
-      //   this._schedule(nextMonth);
-      //   break;
     }
   }
 

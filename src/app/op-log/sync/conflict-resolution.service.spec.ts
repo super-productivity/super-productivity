@@ -11,6 +11,7 @@ import { VectorClock, VectorClockComparison } from '../../core/util/vector-clock
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
+import { OperationLogEffects } from '../capture/operation-log.effects';
 
 describe('ConflictResolutionService', () => {
   let service: ConflictResolutionService;
@@ -21,6 +22,7 @@ describe('ConflictResolutionService', () => {
   let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
   let mockClientIdProvider: { loadClientId: jasmine.Spy };
   let mockEntityRegistry: ReturnType<typeof buildEntityRegistry>;
+  let mockOperationLogEffects: jasmine.SpyObj<OperationLogEffects>;
 
   const TEST_CLIENT_ID = 'test-client-123';
 
@@ -62,6 +64,9 @@ describe('ConflictResolutionService', () => {
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepairCurrentState',
     ]);
+    mockOperationLogEffects = jasmine.createSpyObj('OperationLogEffects', [
+      'processDeferredActions',
+    ]);
     mockClientIdProvider = {
       loadClientId: jasmine
         .createSpy('loadClientId')
@@ -77,6 +82,7 @@ describe('ConflictResolutionService', () => {
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: SnackService, useValue: mockSnackService },
         { provide: ValidateStateService, useValue: mockValidateStateService },
+        { provide: OperationLogEffects, useValue: mockOperationLogEffects },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
         { provide: ENTITY_REGISTRY, useValue: mockEntityRegistry },
       ],
@@ -85,6 +91,7 @@ describe('ConflictResolutionService', () => {
 
     // Default mock behaviors
     mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+    mockOperationLogEffects.processDeferredActions.and.resolveTo();
     mockValidateStateService.validateAndRepairCurrentState.and.resolveTo(true);
     mockOpLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
     // By default, appendBatchSkipDuplicates writes all ops (no duplicates)
@@ -1135,6 +1142,68 @@ describe('ConflictResolutionService', () => {
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-reminder']);
       });
 
+      // Regression test: PLUGIN_USER_DATA was previously registered as
+      // `'virtual'` and silently bypassed LWW. The migration to `'array'`
+      // (entity-registry.ts:325-330) wired it through the array branch;
+      // this test asserts the wiring actually fires for real conflicts.
+      it('should handle PLUGIN_USER_DATA entity conflicts', async () => {
+        const now = Date.now();
+        const conflicts: EntityConflict[] = [
+          {
+            entityType: 'PLUGIN_USER_DATA',
+            entityId: 'doc-mode',
+            localOps: [
+              {
+                id: 'local-plugin-data',
+                clientId: 'clientA',
+                actionType: '[Plugin] Upsert User Data' as ActionType,
+                opType: OpType.Update,
+                entityType: 'PLUGIN_USER_DATA',
+                entityId: 'doc-mode',
+                payload: { id: 'doc-mode', data: 'local-blob' },
+                vectorClock: { clientA: 1 },
+                timestamp: now - 500,
+                schemaVersion: 1,
+              },
+            ],
+            remoteOps: [
+              {
+                id: 'remote-plugin-data',
+                clientId: 'clientB',
+                actionType: '[Plugin] Upsert User Data' as ActionType,
+                opType: OpType.Update,
+                entityType: 'PLUGIN_USER_DATA',
+                entityId: 'doc-mode',
+                payload: { id: 'doc-mode', data: 'remote-blob' },
+                vectorClock: { clientB: 1 },
+                timestamp: now,
+                schemaVersion: 1,
+              },
+            ],
+            suggestedResolution: 'manual',
+          },
+        ];
+
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: conflicts[0].remoteOps,
+        });
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        // Remote wins (newer timestamp). Whole-blob LWW: this is the
+        // gap Stage A closes — fine for same-entity, lossy across
+        // different sub-keys of the same blob. The acceptance is in the
+        // re-bundling decision, not in this test.
+        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+          jasmine.arrayContaining([
+            jasmine.objectContaining({ id: 'remote-plugin-data' }),
+          ]),
+          'remote',
+          jasmine.any(Object),
+        );
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-plugin-data']);
+      });
+
       it('should handle mixed entity types in conflicts batch', async () => {
         const now = Date.now();
         const conflicts: EntityConflict[] = [
@@ -1479,6 +1548,52 @@ describe('ConflictResolutionService', () => {
 
         // CRITICAL: mergeRemoteOpClocks must be called with applied remote ops
         expect(mockOpLogStore.mergeRemoteOpClocks).toHaveBeenCalledWith([remoteOp]);
+      });
+
+      it('should process deferred actions after merging remote clocks when caller holds lock', async () => {
+        const now = Date.now();
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const conflicts: EntityConflict[] = [
+          createConflict(
+            'task-1',
+            [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+            [remoteOp],
+          ),
+        ];
+        const callOrder: string[] = [];
+
+        mockOpLogStore.hasOp.and.resolveTo(false);
+        mockOperationApplier.applyOperations.and.callFake(async () => {
+          callOrder.push('applyOperations');
+          return { appliedOps: [remoteOp] };
+        });
+        mockOpLogStore.markApplied.and.callFake(async () => {
+          callOrder.push('markApplied');
+        });
+        mockOpLogStore.mergeRemoteOpClocks.and.callFake(async () => {
+          callOrder.push('mergeRemoteOpClocks');
+        });
+        mockOpLogStore.markRejected.and.resolveTo(undefined);
+        mockOperationLogEffects.processDeferredActions.and.callFake(async () => {
+          callOrder.push('processDeferredActions');
+        });
+
+        await service.autoResolveConflictsLWW(conflicts, [], {
+          callerHoldsOperationLogLock: true,
+        });
+
+        expect(mockOperationApplier.applyOperations).toHaveBeenCalledWith([remoteOp], {
+          skipDeferredLocalActions: true,
+        });
+        expect(mockOperationLogEffects.processDeferredActions).toHaveBeenCalledWith({
+          callerHoldsOperationLogLock: true,
+        });
+        expect(callOrder).toEqual([
+          'applyOperations',
+          'markApplied',
+          'mergeRemoteOpClocks',
+          'processDeferredActions',
+        ]);
       });
 
       it('should call mergeRemoteOpClocks for non-conflicting ops piggybacked through conflict resolution', async () => {
@@ -3550,6 +3665,60 @@ describe('ConflictResolutionService', () => {
 
       expect(mockOpLogStore.markFailed).toHaveBeenCalled();
       expect(mockSnackService.open).toHaveBeenCalled();
+    });
+
+    // Issue #7700: the deferred-actions flush must run even on the apply-
+    // failure path. Pre-fix, replayOperationBatch's finally took care of
+    // this; with the fix, the host explicitly calls
+    // _processDeferredActionsAfterRemoteApply before the throw. If the
+    // failure path ever forgets to flush, deferred local actions linger
+    // in the buffer until the NEXT sync — surfacing as ghost ops with
+    // stale clocks. This test pins the flush.
+    it('should process deferred actions before throwing on failedOp (callerHoldsOperationLogLock=true)', async () => {
+      const localOp = createOpForBug('local-1', 'client-a', now - 1000);
+      const remoteOp = createOpForBug('remote-1', 'client-b', now);
+
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [localOp],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+      ];
+
+      const callOrder: string[] = [];
+      mockOperationApplier.applyOperations.and.callFake(async () => {
+        callOrder.push('applyOperations');
+        return {
+          appliedOps: [],
+          failedOp: { op: remoteOp, error: new Error('Apply failed for task-1') },
+        };
+      });
+      mockOpLogStore.markFailed.and.callFake(async () => {
+        callOrder.push('markFailed');
+      });
+      mockOperationLogEffects.processDeferredActions.and.callFake(async () => {
+        callOrder.push('processDeferredActions');
+      });
+
+      await expectAsync(
+        service.autoResolveConflictsLWW(conflicts, [], {
+          callerHoldsOperationLogLock: true,
+        }),
+      ).toBeRejectedWithError('Apply failed for task-1');
+
+      // Deferred flush must happen BEFORE the throw, and must thread the
+      // caller-holds-lock flag through so writeOperation skips the inner
+      // sp_op_log acquisition.
+      expect(mockOperationLogEffects.processDeferredActions).toHaveBeenCalledWith({
+        callerHoldsOperationLogLock: true,
+      });
+      expect(callOrder).toContain('processDeferredActions');
+      expect(callOrder.indexOf('processDeferredActions')).toBeGreaterThan(
+        callOrder.indexOf('applyOperations'),
+      );
     });
   });
 

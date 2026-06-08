@@ -4,6 +4,13 @@ import { BehaviorSubject, merge, Observable, ReplaySubject, Subject } from 'rxjs
 import { mapTo } from 'rxjs/operators';
 import { DroidLog } from '../../core/log';
 
+export interface AndroidShareData {
+  title: string;
+  subject: string;
+  type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
+  path: string;
+}
+
 export interface AndroidInterface {
   getVersion?(): string;
 
@@ -63,6 +70,9 @@ export interface AndroidInterface {
     isBreak: boolean,
     taskTitle: string | null,
   ): void;
+  // Read back the live focus session for cold-start/resume recovery (#7855).
+  // Returns a JSON string, or 'null' when no focus session is running.
+  getFocusModeElapsed?(): string;
 
   // Native reminder scheduling (snooze handled entirely in background)
   scheduleNativeReminder?(
@@ -100,12 +110,7 @@ export interface AndroidInterface {
   isInBackground$: Observable<boolean>;
   isKeyboardShown$: Subject<boolean>;
 
-  onShareWithAttachment$: Subject<{
-    title: string;
-    subject: string;
-    type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
-    path: string;
-  }>;
+  onShareWithAttachment$: Subject<AndroidShareData>;
 
   // Notification action callbacks
   onPauseTracking$: Subject<void>;

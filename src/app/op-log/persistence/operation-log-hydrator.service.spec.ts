@@ -127,6 +127,7 @@ describe('OperationLogHydratorService', () => {
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepair',
+      'validateState',
     ]);
     mockRepairOperationService = jasmine.createSpyObj('RepairOperationService', [
       'createRepairOperation',
@@ -184,6 +185,10 @@ describe('OperationLogHydratorService', () => {
     mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
+    });
+    mockValidateStateService.validateState.and.resolveTo({
+      isValid: true,
+      typiaErrors: [],
     });
     mockStateSnapshotService.getStateSnapshot.and.returnValue(mockState);
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
@@ -261,7 +266,9 @@ describe('OperationLogHydratorService', () => {
 
         await service.hydrateStore();
 
-        // Should NOT call validateAndRepair synchronously (trusted snapshot)
+        // Should NOT run synchronous validation (trusted snapshot).
+        // Repair-with-dialog was removed entirely to avoid Electron focus bugs.
+        expect(mockValidateStateService.validateState).not.toHaveBeenCalled();
         expect(mockValidateStateService.validateAndRepair).not.toHaveBeenCalled();
       });
 
@@ -272,9 +279,9 @@ describe('OperationLogHydratorService', () => {
 
         await service.hydrateStore();
 
-        expect(mockValidateStateService.validateAndRepair).toHaveBeenCalledWith(
-          mockState,
-        );
+        // Validation runs without ever calling the dialog-triggering repair path.
+        expect(mockValidateStateService.validateState).toHaveBeenCalledWith(mockState);
+        expect(mockValidateStateService.validateAndRepair).not.toHaveBeenCalled();
       });
 
       it('should validate snapshot state when schema version mismatches', async () => {
@@ -292,50 +299,8 @@ describe('OperationLogHydratorService', () => {
 
         await service.hydrateStore();
 
-        expect(mockValidateStateService.validateAndRepair).toHaveBeenCalled();
-      });
-
-      // SKIPPED: Repair system is disabled for debugging archive subtask loss
-      xit('should dispatch repaired state if validation repairs it', async () => {
-        // Use mismatched schema version to trigger validation
-        const snapshot = createMockSnapshot({ schemaVersion: undefined });
-        const repairedState = { ...mockState, repaired: true };
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.resolveTo({
-          isValid: false,
-          wasRepaired: true,
-          repairedState,
-          repairSummary: { entityStateFixed: 1 } as any,
-        });
-
-        await service.hydrateStore();
-
-        expect(mockStore.dispatch).toHaveBeenCalledWith(
-          loadAllData({ appDataComplete: repairedState }),
-        );
-      });
-
-      // SKIPPED: Repair system is disabled for debugging archive subtask loss
-      xit('should create repair operation when state is repaired', async () => {
-        // Use mismatched schema version to trigger validation
-        const snapshot = createMockSnapshot({ schemaVersion: undefined });
-        const repairedState = { ...mockState, repaired: true };
-        const repairSummary = { entityStateFixed: 1 } as any;
-        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.resolveTo({
-          isValid: false,
-          wasRepaired: true,
-          repairedState,
-          repairSummary,
-        });
-
-        await service.hydrateStore();
-
-        expect(mockRepairOperationService.createRepairOperation).toHaveBeenCalledWith(
-          repairedState,
-          repairSummary,
-          'test-client',
-        );
+        expect(mockValidateStateService.validateState).toHaveBeenCalled();
+        expect(mockValidateStateService.validateAndRepair).not.toHaveBeenCalled();
       });
 
       it('should restore vector clock from snapshot to vector clock store', async () => {
@@ -508,9 +473,9 @@ describe('OperationLogHydratorService', () => {
 
         // Track order of operations
         const callOrder: string[] = [];
-        mockValidateStateService.validateAndRepair.and.callFake(async () => {
+        mockValidateStateService.validateState.and.callFake(async () => {
           callOrder.push('validate');
-          return { isValid: true, wasRepaired: false };
+          return { isValid: true, typiaErrors: [] };
         });
         mockSnapshotService.saveCurrentStateAsSnapshot.and.callFake(() => {
           callOrder.push('saveSnapshot');
@@ -525,6 +490,30 @@ describe('OperationLogHydratorService', () => {
         expect(validateIndex).toBeGreaterThanOrEqual(0);
         expect(saveIndex).toBeGreaterThanOrEqual(0);
         expect(validateIndex).toBeLessThan(saveIndex);
+      });
+
+      it('should skip the tail-replay snapshot save when validation fails', async () => {
+        // Validation is now non-fatal but still gates the snapshot save so we
+        // don't cache corrupted state for next boot.
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = Array.from({ length: 15 }, (_, i) =>
+          createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+        );
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(tailOps));
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(20));
+        mockValidateStateService.validateState.and.resolveTo({
+          isValid: false,
+          typiaErrors: [{ path: '$input.task', expected: 'TaskState' }],
+        });
+
+        await service.hydrateStore();
+
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+        // State is still dispatched so the UI shows the user's data.
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          loadAllData({ appDataComplete: snapshot.state as any }),
+        );
       });
     });
 
@@ -1028,24 +1017,67 @@ describe('OperationLogHydratorService', () => {
     });
 
     describe('invalid snapshot handling', () => {
-      it('should attempt recovery if snapshot is invalid', async () => {
+      it('should attempt recovery if snapshot is invalid and there are no ops', async () => {
         const invalidSnapshot = createMockSnapshot();
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
         mockSnapshotService.isValidSnapshot.and.returnValue(false);
+        // #7892: recovery-to-empty is only taken when the op-log is also empty.
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(0));
 
         await service.hydrateStore();
 
         expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
       });
 
-      it('should not dispatch loadAllData if snapshot is invalid', async () => {
+      it('should not dispatch loadAllData if snapshot is invalid and there are no ops', async () => {
         const invalidSnapshot = createMockSnapshot();
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
         mockSnapshotService.isValidSnapshot.and.returnValue(false);
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(0));
 
         await service.hydrateStore();
 
         // Only dispatch should NOT happen because recovery takes over
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      });
+
+      // #7892: when the snapshot/state-cache is corrupt but the op-log is intact
+      // (lastSeq > 0), the hydrator must DISCARD the corrupt snapshot and replay
+      // the op-log instead of dropping to recovery-to-empty. This is the core
+      // data-saving fix; the recovery-to-empty path is reserved for lastSeq === 0.
+      it('should discard a corrupt snapshot and replay the op-log when lastSeq > 0 (#7892)', async () => {
+        const invalidSnapshot = createMockSnapshot();
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
+        mockSnapshotService.isValidSnapshot.and.returnValue(false);
+
+        // Op-log is intact: lastSeq > 0 and getOpsAfterSeq(0) returns the ops.
+        const allOps = [
+          createMockEntry(1, createMockOperation('op-1')),
+          createMockEntry(2, createMockOperation('op-2')),
+        ];
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(2));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(allOps));
+
+        await service.hydrateStore();
+
+        // Must NOT drop to recovery-to-empty.
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+        // Must replay the whole op-log from seq 0.
+        expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({ operations: allOps.map((e) => e.op) }),
+        );
+      });
+
+      it('should attempt recovery for an invalid snapshot only when no ops exist (lastSeq === 0) (#7892)', async () => {
+        const invalidSnapshot = createMockSnapshot();
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
+        mockSnapshotService.isValidSnapshot.and.returnValue(false);
+        // No op-log to replay.
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(0));
+
+        await service.hydrateStore();
+
         expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
       });
     });
@@ -1098,9 +1130,9 @@ describe('OperationLogHydratorService', () => {
 
         // Track order of operations
         const callOrder: string[] = [];
-        mockValidateStateService.validateAndRepair.and.callFake(async () => {
+        mockValidateStateService.validateState.and.callFake(async () => {
           callOrder.push('validate');
-          return { isValid: true, wasRepaired: false };
+          return { isValid: true, typiaErrors: [] };
         });
         mockSnapshotService.saveCurrentStateAsSnapshot.and.callFake(() => {
           callOrder.push('saveSnapshot');
@@ -1115,6 +1147,25 @@ describe('OperationLogHydratorService', () => {
         expect(validateIndex).toBeGreaterThanOrEqual(0);
         expect(saveIndex).toBeGreaterThanOrEqual(0);
         expect(validateIndex).toBeLessThan(saveIndex);
+      });
+
+      it('should skip the full-replay snapshot save when validation fails', async () => {
+        // Validation is non-fatal but gates the snapshot save.
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
+        const allOps = [
+          createMockEntry(1, createMockOperation('op-1')),
+          createMockEntry(2, createMockOperation('op-2')),
+        ];
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(allOps));
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(2));
+        mockValidateStateService.validateState.and.resolveTo({
+          isValid: false,
+          typiaErrors: [{ path: '$input.task', expected: 'TaskState' }],
+        });
+
+        await service.hydrateStore();
+
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
       });
 
       it('should merge ops clocks into local clock in full replay', async () => {

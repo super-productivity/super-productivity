@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+  <cloud-backup>
+    <!-- Prevent restored legacy launch_mode from pinning fresh installs to online mode. -->
+    <exclude
+      domain="sharedpref"
+      path="com.superproductivity.superproductivity_preferences.xml" />
+  </cloud-backup>
+  <device-transfer>
+    <!-- A transferred fresh install should select launch mode from current state. -->
+    <exclude
+      domain="sharedpref"
+      path="com.superproductivity.superproductivity_preferences.xml" />
+  </device-transfer>
+</data-extraction-rules>

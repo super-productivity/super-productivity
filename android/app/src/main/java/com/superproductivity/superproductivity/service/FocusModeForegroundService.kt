@@ -33,15 +33,75 @@ class FocusModeForegroundService : Service() {
         @Volatile
         var isRunning: Boolean = false
             private set
+
+        // Marks the window between startForegroundService() and the first
+        // startForeground() inside onStartCommand(). A stop arriving in that
+        // window must NOT use stopService() — tearing down a start-foreground
+        // service before it promotes crashes the process with
+        // ForegroundServiceDidNotStartInTimeException (AOSP bringDownServiceLocked,
+        // fired while fgRequired is still true). JavaScriptInterface reads this to
+        // route such stops through onStartCommand (ACTION_STOP) instead.
+        @Volatile
+        var isStartPending: Boolean = false
+            private set
+
+        fun markStartPending() {
+            isStartPending = true
+        }
+
+        fun clearStartPending() {
+            isStartPending = false
+        }
+
+        // Live timer state mirrored into the companion so JavaScriptInterface
+        // can read it back after the WebView is recreated (app reopened from
+        // recents). Mirrors TrackingForegroundService's static-state pattern so
+        // a focus session can be recovered into the Angular store (#7855).
+        // `remainingMs` and `lastUpdateTimestamp` cannot use `private set`
+        // because the tick Runnable (a nested anonymous object) mutates them;
+        // the other three are written only from instance methods, so they keep
+        // `private set`.
+        @Volatile
+        var durationMs: Long = 0
+            private set
+
+        @Volatile
+        var remainingMs: Long = 0
+
+        @Volatile
+        var isBreak: Boolean = false
+            private set
+
+        @Volatile
+        var isPaused: Boolean = false
+            private set
+
+        @Volatile
+        var lastUpdateTimestamp: Long = 0
+
+        /**
+         * Live remaining time (countdown) or elapsed time (Flowtime, where
+         * durationMs is 0 and remainingMs accumulates). Accounts for the time
+         * since the last 1-second tick so a cold-start read stays accurate.
+         *
+         * Named `liveRemainingMs` rather than `getRemainingMs` to avoid a JVM
+         * signature clash with the `remainingMs` property's generated getter.
+         */
+        fun liveRemainingMs(): Long {
+            if (!isRunning || isPaused || lastUpdateTimestamp <= 0) {
+                return remainingMs
+            }
+            val sinceLastTick = System.currentTimeMillis() - lastUpdateTimestamp
+            return if (durationMs > 0) {
+                (remainingMs - sinceLastTick).coerceAtLeast(0)
+            } else {
+                remainingMs + sinceLastTick
+            }
+        }
     }
 
     private var title: String = ""
     private var taskTitle: String? = null
-    private var durationMs: Long = 0
-    private var remainingMs: Long = 0
-    private var isBreak: Boolean = false
-    private var isPaused: Boolean = false
-    private var lastUpdateTimestamp: Long = 0
     private var hasNotifiedCompletion: Boolean = false
 
     private val handler = Handler(Looper.getMainLooper())
@@ -87,10 +147,12 @@ class FocusModeForegroundService : Service() {
         // after startForegroundService(). Promote before handling actions so
         // newly started services satisfy that contract.
         if (!ensureForegroundNotification()) {
+            clearStartPending()
             reportForegroundFailure()
             stopAfterForegroundFailure(startId)
             return START_NOT_STICKY
         }
+        clearStartPending()
 
         when (intent?.action) {
             ACTION_START -> {
@@ -187,6 +249,7 @@ class FocusModeForegroundService : Service() {
 
     private fun startFocusMode(): Boolean {
         Log.d(TAG, "Starting focus mode: title=$title, durationMs=$durationMs, remainingMs=$remainingMs, isBreak=$isBreak, isPaused=$isPaused")
+        FocusModeNotificationHelper.cancelCompletionNotification(this)
 
         isRunning = true
         hasNotifiedCompletion = false
@@ -239,6 +302,14 @@ class FocusModeForegroundService : Service() {
 
         isRunning = false
         handler.removeCallbacks(updateRunnable)
+
+        // Clear the mirrored state so a stale session can't be recovered after
+        // it has legitimately ended (#7855).
+        durationMs = 0
+        remainingMs = 0
+        isBreak = false
+        isPaused = false
+        lastUpdateTimestamp = 0
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -301,12 +372,12 @@ class FocusModeForegroundService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
         isRunning = false
+        // Heal a never-promoted start: if the service was created but torn down
+        // before onStartCommand cleared it, drop the stale flag so the next cold
+        // stop uses stopService() rather than needlessly re-spawning the service.
+        clearStartPending()
         handler.removeCallbacks(updateRunnable)
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        Log.d(TAG, "Task removed, stopping service")
-        stopFocusMode()
-    }
+    // Do not override onTaskRemoved — foreground service must survive app swipe (#7818).
 }

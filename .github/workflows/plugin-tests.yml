@@ -94,8 +94,12 @@ jobs:
           key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node22-
+      # Mirror ci.yml: use `npm i` here, not `npm ci`. The root lockfile uses
+      # an `overrides.app-builder-lib.minimatch` pin that npm 10 (bundled with
+      # Node 22) considers out-of-sync, while npm 11 accepts it. `npm i`
+      # tolerates the drift without altering the lockfile on disk.
       - name: Install root dependencies
-        run: npm ci
+        run: npm i
       # Plugins consume @super-productivity/plugin-api and vite-plugin via file:
       # references that resolve to dist/. Build those before running plugin tests.
       - name: Build shared packages

@@ -74,7 +74,13 @@ export class DatePickerInputComponent implements ControlValueAccessor {
   private _cd = inject(ChangeDetectorRef);
 
   toDate(value: Date | string): Date {
-    return value instanceof Date ? value : new Date(value);
+    // Parse YYYY-MM-DD strings to LOCAL midnight (via dateStrToUtcDate),
+    // matching both writeValue's parsing and the MatDatepicker's
+    // local-midnight selections. `new Date('2026-05-29')` would parse as UTC
+    // midnight instead, so in positive-offset timezones a selection equal to a
+    // string `min` (e.g. today) compares as "before min" and gets silently
+    // rejected (#7768 regression: "can't set start date to today").
+    return value instanceof Date ? value : dateStrToUtcDate(value);
   }
 
   formatDate(value: Date | string | undefined): string {

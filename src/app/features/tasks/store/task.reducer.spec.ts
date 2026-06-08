@@ -145,6 +145,23 @@ describe('Task Reducer', () => {
       expect(state.entities['subTask3']).toEqual({ ...newSubTask, parentId: 'task1' });
     });
 
+    it('should not duplicate parent subTaskIds when addSubTask is replayed', () => {
+      const newSubTask = createTask('subTask3');
+      const action = fromActions.addSubTask({
+        task: newSubTask,
+        parentId: 'task1',
+      });
+
+      const stateAfterFirstAdd = taskReducer(stateWithTasks, action);
+      const stateAfterReplay = taskReducer(stateAfterFirstAdd, action);
+
+      expect(stateAfterReplay.entities['task1']!.subTaskIds).toEqual([
+        'subTask1',
+        'subTask2',
+        'subTask3',
+      ]);
+    });
+
     it('should roll up the parent time estimate when adding a subtask with an estimate', () => {
       const parent = createTask('parent');
       const subTask = createTask('subTask', { timeEstimate: 2.5 * 60 * 60 * 1000 });
@@ -1030,6 +1047,27 @@ describe('Task Reducer', () => {
       const result = taskReducer(initialTaskState, loadAllData({ appDataComplete }));
 
       expect(result.entities['t1']!.timeSpentOnDay).toEqual({ '2026-04-01': 3600000 });
+    });
+  });
+
+  describe('loadAllData - subTaskIds normalization', () => {
+    it('should remove duplicate subTaskIds on load', () => {
+      const parent = createTask('parent', { subTaskIds: ['subTask', 'subTask'] });
+      const subTask = createTask('subTask', { parentId: 'parent' });
+      const appDataComplete = {
+        task: {
+          ids: ['parent', 'subTask'],
+          entities: { parent, subTask },
+          currentTaskId: null,
+          selectedTaskId: null,
+          lastCurrentTaskId: null,
+          isDataLoaded: false,
+        },
+      } as any;
+
+      const result = taskReducer(initialTaskState, loadAllData({ appDataComplete }));
+
+      expect(result.entities['parent']!.subTaskIds).toEqual(['subTask']);
     });
   });
 

@@ -400,7 +400,7 @@ describe('operation-converter utility', () => {
     });
 
     describe('updateTask done replay date backfill', () => {
-      it('injects doneOn and dueDay from the originating operation timestamp when missing', () => {
+      it('injects doneOn and legacy dueDay from the originating operation timestamp when both are missing', () => {
         const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
         const op = createMockOperation({
           actionType: ActionType.TASK_SHARED_UPDATE,
@@ -416,6 +416,24 @@ describe('operation-converter utility', () => {
 
         expect(action.task.changes.doneOn).toBe(timestamp);
         expect(action.task.changes.dueDay).toBe('2024-06-14');
+      });
+
+      it('does not inject dueDay when doneOn exists and dueDay is intentionally absent', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp,
+          payload: {
+            actionPayload: {
+              task: { id: 'task-1', changes: { isDone: true, doneOn: timestamp } },
+            },
+            entityChanges: [],
+          },
+        });
+        const action = convertOpToAction(op) as any;
+
+        expect(action.task.changes.doneOn).toBe(timestamp);
+        expect(action.task.changes.dueDay).toBeUndefined();
       });
 
       it('preserves existing doneOn and dueDay when present', () => {

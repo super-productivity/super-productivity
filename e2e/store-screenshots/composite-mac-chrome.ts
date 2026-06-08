@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import sharp from 'sharp';
+import { loadSharp } from './load-sharp';
 
 /** Default outer width the matrix expects for `desktopMaster` (= 2560 device px). */
 const TARGET_WIDTH_PX = 2560;
@@ -52,6 +52,7 @@ const buildTrafficLightsSvg = (): string => {
  */
 export const compositeMacTrafficLights = async (pngPath: string): Promise<void> => {
   if (!fs.existsSync(pngPath)) return;
+  const sharp = await loadSharp();
   const meta = await sharp(pngPath).metadata();
   if (!meta.width || !meta.height) return;
   if (meta.width !== TARGET_WIDTH_PX || meta.height !== TARGET_HEIGHT_PX) {

@@ -5,8 +5,8 @@ import {
   type NativeHttpExecutor,
   type NativeHttpRequestConfig,
   type NativeHttpResponse,
-} from '../src';
-import type { SyncLogger } from '@sp/sync-core';
+} from '../src/http';
+import { createMockSyncLogger } from './helpers/sync-logger';
 
 const successResponse: NativeHttpResponse = {
   status: 200,
@@ -22,17 +22,7 @@ const baseConfig: NativeHttpRequestConfig = {
   data: 'test-data',
 };
 
-const noopLogger = (): SyncLogger => ({
-  log: vi.fn(),
-  error: vi.fn(),
-  err: vi.fn(),
-  normal: vi.fn(),
-  verbose: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  critical: vi.fn(),
-  debug: vi.fn(),
-});
+const noopLogger = createMockSyncLogger;
 
 describe('isTransientNetworkError', () => {
   describe('iOS error.code detection (NSURLErrorDomain)', () => {
@@ -77,6 +67,27 @@ describe('isTransientNetworkError', () => {
         code: 'ConnectException',
       });
       expect(isTransientNetworkError(error)).toBe(true);
+    });
+
+    it('returns true for custom WebDavHttp NETWORK_ERROR', () => {
+      const error = Object.assign(new Error('connection reset'), {
+        code: 'NETWORK_ERROR',
+      });
+      expect(isTransientNetworkError(error)).toBe(true);
+    });
+
+    it('returns true for custom WebDavHttp TIMEOUT_ERROR', () => {
+      const error = Object.assign(new Error('request took too long'), {
+        code: 'TIMEOUT_ERROR',
+      });
+      expect(isTransientNetworkError(error)).toBe(true);
+    });
+
+    it('returns false for custom WebDavHttp SSL_ERROR', () => {
+      const error = Object.assign(new Error('certificate rejected'), {
+        code: 'SSL_ERROR',
+      });
+      expect(isTransientNetworkError(error)).toBe(false);
     });
   });
 
@@ -125,6 +136,22 @@ describe('isTransientNetworkError', () => {
 
     it('returns true for "cannot connect to host"', () => {
       expect(isTransientNetworkError(new Error('cannot connect to host'))).toBe(true);
+    });
+
+    it('returns true for Android "Unable to resolve host" message', () => {
+      expect(
+        isTransientNetworkError(
+          new Error(
+            'Unable to resolve host "sync.example.com": No address associated with hostname',
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it('returns true for custom WebDavHttp "Network error: Unable to resolve host"', () => {
+      expect(
+        isTransientNetworkError(new Error('Network error: Unable to resolve host')),
+      ).toBe(true);
     });
 
     it('is case-insensitive', () => {
@@ -223,7 +250,7 @@ describe('executeNativeRequestWithRetry', () => {
 
     expect(result).toBe(successResponse);
     expect(executor).toHaveBeenCalledTimes(2);
-    expect(delays).toEqual([1000]);
+    expect(delays).toEqual([1500]);
   });
 
   it('retries twice and succeeds on third attempt', async () => {
@@ -245,7 +272,7 @@ describe('executeNativeRequestWithRetry', () => {
 
     expect(result).toBe(successResponse);
     expect(executor).toHaveBeenCalledTimes(3);
-    expect(delays).toEqual([1000, 2000]);
+    expect(delays).toEqual([1500, 3000]);
   });
 
   it('throws after exhausting all retries for transient errors', async () => {
@@ -259,7 +286,7 @@ describe('executeNativeRequestWithRetry', () => {
       executeNativeRequestWithRetry(baseConfig, { executor, label: 'Test', delay }),
     ).rejects.toBe(transientError);
     expect(executor).toHaveBeenCalledTimes(3);
-    expect(delays).toEqual([1000, 2000]);
+    expect(delays).toEqual([1500, 3000]);
   });
 
   it('immediately throws non-transient errors without retrying', async () => {
@@ -323,10 +350,14 @@ describe('executeNativeRequestWithRetry', () => {
       .fn<NativeHttpExecutor>()
       .mockRejectedValueOnce(transientError)
       .mockResolvedValueOnce(successResponse);
+    const config: NativeHttpRequestConfig = {
+      ...baseConfig,
+      url: 'https://user:secret@example.com:8443/private/sync.json?token=abc#frag',
+    };
     const { delay } = collectDelays();
     const logger = noopLogger();
 
-    await executeNativeRequestWithRetry(baseConfig, {
+    await executeNativeRequestWithRetry(config, {
       executor,
       label: 'Test',
       logger,
@@ -337,13 +368,18 @@ describe('executeNativeRequestWithRetry', () => {
     const [message, meta] = (logger.warn as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(message).toContain('Test transient network error');
     expect(meta).toMatchObject({
-      url: baseConfig.url,
+      url: 'example.com:8443',
       attempt: 1,
       maxRetries: 2,
-      delayMs: 1000,
+      delayMs: 1500,
       errorName: 'Error',
       errorCode: 'NSURLErrorDomain',
     });
+    expect(JSON.stringify(meta)).not.toContain('user');
+    expect(JSON.stringify(meta)).not.toContain('secret');
+    expect(JSON.stringify(meta)).not.toContain('private');
+    expect(JSON.stringify(meta)).not.toContain('token');
+    expect(JSON.stringify(meta)).not.toContain('frag');
   });
 
   it('does not retry when maxRetries is 0', async () => {

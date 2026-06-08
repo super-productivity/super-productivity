@@ -15,6 +15,7 @@ import {
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { download } from '../../util/download';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
+import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 import { uuidv7 } from '../../util/uuid-v7';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
@@ -211,6 +212,8 @@ export class OperationLogMigrationService {
     let dataToMigrate = legacyData as unknown as AppDataComplete;
 
     if (!validationResult.isValid) {
+      // Damaged legacy data on migration — hold off the rating prompt.
+      recordCriticalErrorTime();
       OpLog.warn(
         'OperationLogMigrationService: Legacy data validation failed, attempting repair',
       );
@@ -235,18 +238,28 @@ export class OperationLogMigrationService {
       OpLog.normal('OperationLogMigrationService: Data repair successful');
     }
 
-    // 3. Get client ID (inherit from legacy or generate new)
+    // 3. Get client ID (inherit from legacy or resolve via ClientIdService).
+    // The genesis op's clientId MUST come from the legacy PFAPI `CLIENT_ID`
+    // key, because meta.vectorClock below is keyed by that same identity.
+    // getOrGenerateClientId() is the fallback only when `CLIENT_ID` is absent:
+    // it resolves whatever id this device already has (e.g. pf `__client_id_`)
+    // and generates a fresh one only when no id exists anywhere.
     const meta = await this.legacyPfDb.loadMetaModel();
     const legacyClientId = await this.legacyPfDb.loadClientId();
-    const clientId = legacyClientId || (await this.clientIdService.generateNewClientId());
+    const clientId =
+      legacyClientId ?? (await this.clientIdService.getOrGenerateClientId());
 
-    // Persist legacy client ID under __client_id_ so loadClientId() finds it.
+    // Persist the legacy client ID into SUP_OPS so loadClientId() finds it.
     // Without this, a brand new ID is generated on next write, doubling IDs.
     if (legacyClientId) {
       await this.clientIdService.persistClientId(legacyClientId);
     }
 
-    OpLog.normal(`OperationLogMigrationService: Using client ID: ${clientId}`);
+    // Log only a short suffix — the literal clientId keys the vector clock and
+    // log history is user-exportable (CLAUDE.md sync rule 9).
+    OpLog.normal('OperationLogMigrationService: Resolved client ID', {
+      clientIdSuffix: clientId.slice(-3),
+    });
 
     // 4. Create MIGRATION genesis operation
     const migrationOp: Operation = {

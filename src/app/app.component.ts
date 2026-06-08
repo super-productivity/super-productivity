@@ -30,6 +30,7 @@ import { LS } from './core/persistence/storage-keys.const';
 import { BannerId } from './core/banner/banner.model';
 import { T } from './t.const';
 import { GlobalThemeService } from './core/theme/global-theme.service';
+import { resolveBgImageToDataUrl } from './core/theme/resolve-bg-image-to-data-url.util';
 import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
@@ -60,12 +61,15 @@ import { NoteStartupBannerService } from './features/note/note-startup-banner.se
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
-import { WorkContextType } from './features/work-context/work-context.model';
+import {
+  WorkContextType,
+  type WorkContextThemeCfg,
+} from './features/work-context/work-context.model';
 import { SectionService } from './features/section/section.service';
 import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
 import { TODAY_TAG } from './features/tag/tag.const';
 import { normalizeBackgroundImageBlur } from './features/work-context/work-context.const';
-import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
+import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
@@ -77,6 +81,7 @@ import { OnboardingPresetSelectionComponent } from './features/onboarding/onboar
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
+import { BrowserTitleService } from './core/browser-title/browser-title.service';
 
 const ONBOARDING_PRESET_EXIT_DELAY = 1000;
 const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
@@ -86,6 +91,21 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
+
+type WorkContextThemeSource =
+  | {
+      theme?: WorkContextThemeCfg | null;
+    }
+  | null
+  | undefined;
+
+export const getBackgroundOverlayOpacity = (context: WorkContextThemeSource): number => {
+  const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
+  return baseOpacity * 0.01;
+};
+
+export const getBackgroundImageBlur = (context: WorkContextThemeSource): number =>
+  normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
 
 @Component({
   selector: 'app-root',
@@ -153,11 +173,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
+  private _browserTitleService = inject(BrowserTitleService);
   readonly T = T;
   readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
+  @ViewChild(RouterOutlet) private _routerOutlet?: RouterOutlet;
 
   @HostBinding('class.isWorkViewScrolled') get isWorkViewScrolledClass(): boolean {
     return this.layoutService.isWorkViewScrolled();
@@ -171,6 +193,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const misc = this._globalConfigService.misc();
     return misc?.isDisableAnimations ?? false;
   });
+
+  // Experimental: vertical action strip on the right edge instead of the
+  // horizontal top header. Switches the DOM layout live (see template).
+  readonly isVerticalActionBar = computed(
+    () => this._globalConfigService.misc()?.isVerticalActionBar ?? false,
+  );
 
   isRTL: boolean = false;
 
@@ -255,33 +283,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     effect(() => {
       const bgImage = this._globalThemeService.backgroundImg();
       const currentRequestId = ++bgResolveRequestId;
-      if (!bgImage) {
-        this.resolvedBgImage.set(null);
-        return;
-      }
-
-      if (!IS_ELECTRON || !bgImage.startsWith('file://')) {
-        this.resolvedBgImage.set(bgImage);
-        return;
-      }
-
-      const readLocalImageAsDataUrl = window.ea?.readLocalImageAsDataUrl;
-      if (!readLocalImageAsDataUrl) {
-        this.resolvedBgImage.set(null);
-        return;
-      }
-
-      readLocalImageAsDataUrl(bgImage)
-        .then((dataUrl) => {
-          if (currentRequestId === bgResolveRequestId) {
-            this.resolvedBgImage.set(dataUrl || null);
-          }
-        })
-        .catch(() => {
-          if (currentRequestId === bgResolveRequestId) {
-            this.resolvedBgImage.set(null);
-          }
-        });
+      void resolveBgImageToDataUrl(bgImage).then((resolved) => {
+        // Ignore stale resolutions when the source changed mid-read.
+        if (currentRequestId === bgResolveRequestId) {
+          this.resolvedBgImage.set(resolved);
+        }
+      });
     });
 
     this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
@@ -395,6 +402,19 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return outlet.activatedRouteData.page || 'one';
   }
 
+  /**
+   * The background context menu is scoped to the task-list / work-view routes
+   * (`tag/:id/tasks`, `project/:id/tasks`) so it never opens on unrelated pages
+   * like Habits or Config. See #7734.
+   */
+  isWorkViewPage(): boolean {
+    if (!this._routerOutlet) {
+      return false;
+    }
+    const page = this.getPage(this._routerOutlet);
+    return page === 'tag-tasks' || page === 'project-tasks';
+  }
+
   getActiveWorkContextId(): string | null {
     return this._activeWorkContextId() ?? null;
   }
@@ -405,16 +425,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   readonly bgOverlayOpacity = computed((): number => {
-    const context = this._activeWorkContext();
-    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
-
-    return baseOpacity * 0.01;
+    return getBackgroundOverlayOpacity(this._activeWorkContext());
   });
 
   readonly bgImageBlur = computed((): number => {
-    const context = this._activeWorkContext();
-
-    return normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
+    return getBackgroundImageBlur(this._activeWorkContext());
   });
 
   readonly bgImageBlurFilter = computed((): string => {
@@ -433,16 +448,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const entity = isForProject
       ? await firstValueFrom(this._projectService.getByIdOnce$(contextId))
       : await firstValueFrom(this._tagService.getTagById$(contextId).pipe(first()));
+    if (!entity) {
+      return;
+    }
 
-    const { DialogWorkContextSettingsComponent } =
-      await import('./features/work-context/dialog-work-context-settings/dialog-work-context-settings.component');
-    this._matDialog.open(DialogWorkContextSettingsComponent, {
-      restoreFocus: true,
-      backdropClass: 'cdk-overlay-transparent-backdrop',
-      data: {
-        isProject: isForProject,
-        entity,
-      } as WorkContextSettingsDialogData,
+    await openWorkContextSettingsDialog(this._matDialog, {
+      isProject: isForProject,
+      entity,
     });
   }
 
@@ -471,6 +483,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       this.isAppEntrance.set(false);
       this.onboardingHintService.startAfterPresetSelection();
     }, ONBOARDING_ENTRANCE_COMPLETE_DELAY);
+  }
+
+  // Returning user set up sync from onboarding: just reveal the app with their
+  // synced data — no preset applied, no new-user hint tour.
+  onOnboardingDismissed(): void {
+    this.isShowOnboardingPresets.set(false);
   }
 
   ngAfterViewInit(): void {

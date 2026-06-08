@@ -5,6 +5,7 @@ import { isSameDay } from '../../../util/is-same-day';
 import { getNewestPossibleDueDate } from './get-newest-possible-due-date.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
+import { selectArchivedProjectIds } from '../../project/store/project.selectors';
 
 export const adapter: EntityAdapter<TaskRepeatCfg> = createEntityAdapter<TaskRepeatCfg>();
 export const TASK_REPEAT_CFG_FEATURE_NAME = 'taskRepeatCfg';
@@ -15,6 +16,14 @@ export const selectTaskRepeatCfgFeatureState = createFeatureSelector<TaskRepeatC
 export const selectAllTaskRepeatCfgs = createSelector(
   selectTaskRepeatCfgFeatureState,
   selectAll,
+);
+export const selectActiveTaskRepeatCfgs = createSelector(
+  selectAllTaskRepeatCfgs,
+  selectArchivedProjectIds,
+  (cfgs: TaskRepeatCfg[], archivedIds: Set<string>): TaskRepeatCfg[] =>
+    archivedIds.size === 0
+      ? cfgs
+      : cfgs.filter((c) => !c.projectId || !archivedIds.has(c.projectId)),
 );
 export const selectTaskRepeatCfgById = createSelector(
   selectTaskRepeatCfgFeatureState,
@@ -27,13 +36,13 @@ export const selectTaskRepeatCfgById = createSelector(
   },
 );
 export const selectTaskRepeatCfgsWithStartTime = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (taskRepeatCfgs: TaskRepeatCfg[]): TaskRepeatCfg[] => {
     return taskRepeatCfgs.filter((cfg) => !!cfg.startTime);
   },
 );
 export const selectTaskRepeatCfgsWithAndWithoutStartTime = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (
     taskRepeatCfgs: TaskRepeatCfg[],
   ): {
@@ -53,7 +62,7 @@ export const selectTaskRepeatCfgsWithAndWithoutStartTime = createSelector(
   },
 );
 export const selectTaskRepeatCfgsSortedByTitleAndProject = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (taskRepeatCfgs: TaskRepeatCfg[]): TaskRepeatCfg[] => {
     return [...taskRepeatCfgs].sort((a, b) => {
       if (a.projectId !== b.projectId) {
@@ -77,7 +86,7 @@ export const selectTaskRepeatCfgsSortedByTitleAndProject = createSelector(
 // Returns task repeat configs where the calculated due date matches the specified day
 // Note: This includes overdue tasks if their calculated due date happens to be the specified day
 export const selectTaskRepeatCfgsForExactDay = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (
     taskRepeatCfgs: TaskRepeatCfg[],
     { dayDate }: { dayDate: number },
@@ -117,7 +126,7 @@ export const selectTaskRepeatCfgsForExactDay = createSelector(
 // Returns all task repeat configs that need task creation up to the specified day
 // This includes all overdue tasks regardless of their specific due date
 export const selectAllUnprocessedTaskRepeatCfgs = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (
     taskRepeatCfgs: TaskRepeatCfg[],
     { dayDate }: { dayDate: number },
@@ -163,7 +172,7 @@ export const selectTaskRepeatCfgsByProjectId = createSelector(
   },
 );
 export const selectTaskRepeatCfgsByTagId = createSelector(
-  selectAllTaskRepeatCfgs,
+  selectActiveTaskRepeatCfgs,
   (taskRepeatCfgs: TaskRepeatCfg[], props: { tagId: string }): TaskRepeatCfg[] => {
     return taskRepeatCfgs
       .filter((cfg) => cfg.tagIds?.includes(props.tagId))

@@ -50,8 +50,8 @@
       @if (isSyncIconEnabled()) {
         <button
           class="sync-btn"
-          matTooltip="{{ T.MH.TRIGGER_SYNC | translate }}"
-          (click)="syncIsEnabledAndReady() ? sync() : setupSync()"
+          matTooltip="{{ syncTooltip() | translate }}"
+          (click)="onSyncButtonClick()"
           (longPress)="setupSync()"
           (contextmenu)="$event.preventDefault(); setupSync()"
           mat-icon-button
@@ -79,6 +79,7 @@
         </button>
       }
 
+      <plugin-work-context-header-btns></plugin-work-context-header-btns>
       <plugin-header-btns></plugin-header-btns>
 
       @if (isUserProfilesEnabled()) {

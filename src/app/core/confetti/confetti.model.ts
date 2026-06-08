@@ -1,6 +1,6 @@
 export interface ConfettiConfig {
   particleCount?: number;
-  angel?: number;
+  angle?: number;
   spread?: number;
   startVelocity?: number;
   decay?: number;
@@ -13,6 +13,7 @@ export interface ConfettiConfig {
   shapes?: (string | Shape)[];
   scalar?: number;
   zIndex?: number;
+  disableForReducedMotion?: boolean;
 }
 
 interface Shape {
@@ -22,4 +23,11 @@ interface Shape {
   bitmap?: ImageBitmap;
 }
 
-export type CanvasConfetti = (props: ConfettiConfig) => Promise<void> | null;
+/**
+ * A confetti instance bound to a specific canvas (via `confetti.create`).
+ * `reset()` stops the animation loop and removes the auto-resize listener.
+ */
+export interface ConfettiInstance {
+  (props: ConfettiConfig): Promise<void> | null;
+  reset: () => void;
+}

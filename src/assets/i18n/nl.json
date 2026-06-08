@@ -1514,7 +1514,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Voeg bestaande taak \"{{taskTitle}}\" toe",
         "CREATE_NEW_TAGS": "Nieuwe tags aanmaken",
-        "DUE_BUTTON": "Vervaldatum",
+        "DUE_BUTTON": "Plannen",
         "ESTIMATE_BUTTON": "Schatting",
         "PLACEHOLDER_CREATE": "Een taak titel #tag @16:00",
         "PLACEHOLDER_SEARCH": "Bestaande taak of issues toevoegen...",

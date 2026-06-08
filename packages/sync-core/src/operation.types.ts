@@ -9,18 +9,27 @@ export enum OpType {
   Move = 'MOV', // For list reordering
   Batch = 'BATCH', // For bulk operations (import, mass update)
   /**
-   * Host-defined full-state compatibility string used by Super Productivity.
-   * Reusable core logic must receive full-state classification from the host.
+   * @deprecated Super Productivity host-specific full-state op string baked
+   * into sync-core for backward compatibility. New host integrations should
+   * declare their full-state op strings as plain string literals and
+   * register them via {@link createFullStateOpTypeHelpers}. This member
+   * will be removed from `OpType` once the SP migration completes.
    */
   SyncImport = 'SYNC_IMPORT',
   /**
-   * Host-defined full-state compatibility string used by Super Productivity.
-   * Reusable core logic must receive full-state classification from the host.
+   * @deprecated Super Productivity host-specific full-state op string baked
+   * into sync-core for backward compatibility. New host integrations should
+   * declare their full-state op strings as plain string literals and
+   * register them via {@link createFullStateOpTypeHelpers}. This member
+   * will be removed from `OpType` once the SP migration completes.
    */
   BackupImport = 'BACKUP_IMPORT',
   /**
-   * Host-defined full-state compatibility string used by Super Productivity.
-   * Reusable core logic must receive full-state classification from the host.
+   * @deprecated Super Productivity host-specific full-state op string baked
+   * into sync-core for backward compatibility. New host integrations should
+   * declare their full-state op strings as plain string literals and
+   * register them via {@link createFullStateOpTypeHelpers}. This member
+   * will be removed from `OpType` once the SP migration completes.
    */
   Repair = 'REPAIR',
 }
@@ -214,4 +223,47 @@ export const extractActionPayload = (payload: unknown): Record<string, unknown> 
     return payload.actionPayload;
   }
   return payload as Record<string, unknown>;
+};
+
+/**
+ * Extracts a full entity from an operation payload.
+ *
+ * Handles both multi-entity payloads and direct action payloads. If no entity
+ * exists under `payloadKey`, direct entity payloads with a top-level `id` are
+ * accepted as a fallback.
+ */
+export const extractEntityFromPayload = (
+  payload: unknown,
+  payloadKey: string,
+): Record<string, unknown> | undefined => {
+  const actionPayload = extractActionPayload(payload);
+  const entity = actionPayload[payloadKey];
+  if (entity && typeof entity === 'object') {
+    return entity as Record<string, unknown>;
+  }
+  if (actionPayload && typeof actionPayload === 'object' && 'id' in actionPayload) {
+    return actionPayload as Record<string, unknown>;
+  }
+  return undefined;
+};
+
+/**
+ * Extracts the changed fields from an UPDATE payload.
+ *
+ * Supports entity-adapter style `{ id, changes }` payloads and flat entity
+ * payloads, where `id` is removed from the returned changes.
+ */
+export const extractUpdateChanges = (
+  payload: unknown,
+  payloadKey: string,
+): Record<string, unknown> => {
+  const actionPayload = extractActionPayload(payload);
+  const entityPayload = actionPayload[payloadKey] as Record<string, unknown> | undefined;
+  if (!entityPayload) return {};
+  if ('changes' in entityPayload && typeof entityPayload['changes'] === 'object') {
+    return entityPayload['changes'] as Record<string, unknown>;
+  }
+  const changes = { ...entityPayload };
+  delete changes['id'];
+  return changes;
 };

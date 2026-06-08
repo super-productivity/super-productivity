@@ -38,7 +38,19 @@ import { issueProvidersFeature } from '../features/issue/store/issue-provider.re
 import { selectIsDominaModeConfig } from '../features/config/store/global-config.reducer';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { SnackService } from '../core/snack/snack.service';
+import { pingWithRetry } from './util/ping-with-retry.util';
+import {
+  decideNodeExecutionConsent,
+  NodeExecutionConsentDialogResult,
+} from './util/plugin-consent.util';
 
+// Each plugin's `id` (from its manifest.json, distinct from the asset path
+// here) becomes the entityId prefix for all data it persists via
+// `persistDataSynced` — keyed entries land under `<pluginId>:<key>` in IDB,
+// the op-log, and on the sync wire. Once a plugin ships, renaming its id
+// orphans every user's stored data: there is no automatic re-keying. Treat
+// pluginIds as permanent for any plugin that has ever been published.
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
   'assets/bundled-plugins/sync-md',
@@ -51,6 +63,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/voice-reminder',
   'assets/bundled-plugins/google-calendar-provider',
   'assets/bundled-plugins/caldav-calendar-provider',
+  'assets/bundled-plugins/doc-mode',
 ] as const;
 
 @Injectable({
@@ -75,6 +88,7 @@ export class PluginService implements OnDestroy {
     PluginIssueProviderRegistryService,
   );
   private readonly _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
+  private readonly _snackService = inject(SnackService);
 
   private _isInitialized = false;
   private _loadedPlugins: PluginInstance[] = [];
@@ -511,11 +525,36 @@ export class PluginService implements OnDestroy {
       return instance;
     } catch (error) {
       PluginLog.err(`Failed to activate plugin ${pluginId}:`, error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Tear down any partially-registered runtime (hooks, buttons, side effects)
+      // to avoid a "running" plugin while UI shows error state.
+      try {
+        this._pluginRunner.unloadPlugin(pluginId);
+      } catch (unloadError) {
+        PluginLog.err(
+          `Failed to clean up plugin ${pluginId} after activation error:`,
+          unloadError,
+        );
+      }
+
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMsg,
       });
+      // Only surface a snack on user-initiated activation. Startup auto-activation
+      // failures stay silent; the plugin tile already renders the error state, so
+      // a pile-up of snacks on cold boot would be noise.
+      if (isManualActivation) {
+        this._snackService.open({
+          msg: this._translateService.instant(T.PLUGINS.PLUGIN_LOAD_FAILED, {
+            pluginName: currentState.manifest.name,
+            error: errorMsg,
+          }),
+          type: 'ERROR',
+        });
+      }
       return null;
     }
   }
@@ -549,7 +588,79 @@ export class PluginService implements OnDestroy {
       state.isEnabled,
     );
 
+    await this._fireOnReady(instance);
+
     return instance;
+  }
+
+  /**
+   * Fire onReady for a successfully loaded plugin. For nodeExecution plugins on
+   * Electron, pings the IPC bridge first (with retry); throws if the bridge stays
+   * unavailable. Called after every plugin load path.
+   */
+  private async _fireOnReady(instance: PluginInstance): Promise<void> {
+    if (!instance.loaded) {
+      return;
+    }
+    if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
+      await this._pingNodeBridge(instance.manifest);
+    }
+    await this._pluginRunner.triggerReady(instance.manifest.id);
+  }
+
+  /**
+   * Same as _fireOnReady but tears down the plugin runtime if onReady fails,
+   * so we never leave a "running" plugin while the UI shows error state.
+   * Used by load paths whose outer catch only logs and rethrows.
+   */
+  private async _fireOnReadyWithCleanup(instance: PluginInstance): Promise<void> {
+    try {
+      await this._fireOnReady(instance);
+    } catch (error) {
+      this._handleReadyFailure(instance, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Tear down a plugin's runtime (hooks, buttons, side effects), remove it from
+   * the loaded list, and update its state to 'error'. Idempotent.
+   */
+  private _handleReadyFailure(instance: PluginInstance, error: unknown): void {
+    const pluginId = instance.manifest.id;
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    PluginLog.err(`onReady failed for plugin ${pluginId}:`, error);
+
+    try {
+      this._pluginRunner.unloadPlugin(pluginId);
+    } catch (unloadError) {
+      PluginLog.err(
+        `Failed to clean up plugin ${pluginId} after onReady error:`,
+        unloadError,
+      );
+    }
+
+    const idx = this._loadedPlugins.findIndex((p) => p.manifest.id === pluginId);
+    if (idx !== -1) {
+      this._loadedPlugins.splice(idx, 1);
+    }
+
+    const currentState = this._pluginStates().get(pluginId);
+    if (currentState) {
+      this._setPluginState(pluginId, {
+        ...currentState,
+        status: 'error',
+        error: errorMsg,
+      });
+    }
+
+    this._snackService.open({
+      msg: this._translateService.instant(T.PLUGINS.PLUGIN_LOAD_FAILED, {
+        pluginName: instance.manifest.name,
+        error: errorMsg,
+      }),
+      type: 'ERROR',
+    });
   }
 
   private async _loadUploadedPlugins(): Promise<void> {
@@ -715,6 +826,8 @@ export class PluginService implements OnDestroy {
         // Mark plugin as enabled in memory only during startup to avoid sync conflicts
         // The enabled state will be persisted later when user explicitly enables/disables plugins
         this._ensurePluginEnabledInMemory(manifest.id);
+
+        await this._fireOnReadyWithCleanup(pluginInstance);
 
         PluginLog.log(`Plugin ${manifest.id} loaded successfully`);
       } else {
@@ -941,6 +1054,17 @@ export class PluginService implements OnDestroy {
     await this._pluginHooks.dispatchHook(hookName, payload);
   }
 
+  async dispatchHookToPlugin(
+    pluginId: string,
+    hookName: Hooks,
+    payload?: unknown,
+  ): Promise<void> {
+    if (!this._isInitialized) {
+      return;
+    }
+    await this._pluginHooks.dispatchHookToPlugin(pluginId, hookName, payload);
+  }
+
   async loadPluginFromPath(pluginPath: string): Promise<PluginInstance> {
     const pluginInstance = await this._loadPlugin(pluginPath);
 
@@ -952,7 +1076,10 @@ export class PluginService implements OnDestroy {
   }
 
   async loadPluginFromZip(file: File): Promise<PluginInstance> {
-    PluginLog.log(`Starting plugin load from ZIP: ${file.name}`);
+    PluginLog.log('Starting plugin load from ZIP', {
+      size: file.size,
+      type: file.type,
+    });
 
     // Import fflate dynamically for better bundle size
     const { unzip } = await import('fflate');
@@ -990,7 +1117,14 @@ export class PluginService implements OnDestroy {
           });
         },
       );
-      PluginLog.log({ extractedFiles });
+      const extractedFileEntries = Object.entries(extractedFiles);
+      PluginLog.log('Plugin ZIP extracted', {
+        fileCount: extractedFileEntries.length,
+        totalBytes: extractedFileEntries.reduce((sum, [, data]) => sum + data.length, 0),
+        hasManifest: !!extractedFiles['manifest.json'],
+        hasPluginJs: !!extractedFiles['plugin.js'],
+        hasIndexHtml: !!extractedFiles['index.html'],
+      });
 
       // Find and extract manifest.json
       if (!extractedFiles['manifest.json']) {
@@ -1020,26 +1154,11 @@ export class PluginService implements OnDestroy {
         );
       }
 
-      // Find and extract plugin.js
-      if (!extractedFiles['plugin.js']) {
-        throw new Error(this._translateService.instant(T.PLUGINS.PLUGIN_JS_NOT_FOUND));
-      }
-
-      // Validate plugin.js size
-      const pluginCodeBytes = extractedFiles['plugin.js'];
-      if (pluginCodeBytes.length > MAX_PLUGIN_CODE_SIZE) {
-        throw new Error(
-          this._translateService.instant(T.PLUGINS.CODE_TOO_LARGE, {
-            maxSize: (MAX_PLUGIN_CODE_SIZE / 1024 / 1024).toFixed(1),
-          }),
-        );
-      }
-
-      const pluginCode = new TextDecoder().decode(pluginCodeBytes);
-
       // Extract index.html if it exists (optional) and iFrame is true
       let indexHtml: string | null = null;
-      if (manifest.iFrame && extractedFiles['index.html']) {
+      const hasIndexHtml =
+        manifest.iFrame === true && extractedFiles['index.html'] !== undefined;
+      if (hasIndexHtml) {
         const indexHtmlBytes = extractedFiles['index.html'];
         // Reuse the manifest size limit for index.html.
         if (indexHtmlBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
@@ -1050,6 +1169,25 @@ export class PluginService implements OnDestroy {
           );
         }
         indexHtml = new TextDecoder().decode(indexHtmlBytes);
+      }
+
+      // Extract plugin.js when available. Iframe-only plugins can omit it because
+      // PluginRunner auto-registers iframe menu and side-panel entries from the manifest.
+      let pluginCode = '';
+      const pluginCodeBytes = extractedFiles['plugin.js'];
+      if (pluginCodeBytes !== undefined) {
+        if (pluginCodeBytes.length > MAX_PLUGIN_CODE_SIZE) {
+          throw new Error(
+            this._translateService.instant(T.PLUGINS.CODE_TOO_LARGE, {
+              maxSize: (MAX_PLUGIN_CODE_SIZE / 1024 / 1024).toFixed(1),
+            }),
+          );
+        }
+        pluginCode = new TextDecoder().decode(pluginCodeBytes);
+      } else if (!hasIndexHtml) {
+        throw new Error(this._translateService.instant(T.PLUGINS.PLUGIN_JS_NOT_FOUND));
+      } else if (!indexHtml?.trim()) {
+        throw new Error(this._translateService.instant(T.PLUGINS.INDEX_HTML_NOT_LOADED));
       }
 
       // Extract icon if specified in manifest
@@ -1242,6 +1380,8 @@ export class PluginService implements OnDestroy {
           icon: iconContent || undefined,
         };
         this._setPluginState(manifest.id, state);
+
+        await this._fireOnReadyWithCleanup(pluginInstance);
 
         PluginLog.log(`Uploaded plugin ${manifest.id} loaded successfully`);
       } else {
@@ -1520,6 +1660,7 @@ export class PluginService implements OnDestroy {
           // Replace existing instance
           this._loadedPlugins[existingIndex] = pluginInstance;
         }
+        await this._fireOnReadyWithCleanup(pluginInstance);
         PluginLog.log(`Uploaded plugin ${manifest.id} reloaded successfully`);
       } else {
         PluginLog.err(
@@ -1553,6 +1694,20 @@ export class PluginService implements OnDestroy {
     }
 
     return this._getNodeExecutionConsent(manifest);
+  }
+
+  /**
+   * Ping the Node.js IPC bridge with a trivial no-op script.
+   * Retries up to 3 times (delays: 1s, 2s) before throwing.
+   * Throws if the bridge is unavailable after all retries.
+   */
+  private async _pingNodeBridge(manifest: PluginManifest): Promise<void> {
+    const ok = await pingWithRetry(() => this._pluginRunner.pingNodeBridge(manifest.id));
+    if (!ok) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE),
+      );
+    }
   }
 
   /**
@@ -1591,7 +1746,7 @@ export class PluginService implements OnDestroy {
       await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
 
     // Always show dialog for nodeExecution permission
-    const result = await this._dialog
+    const result = (await this._dialog
       .open(PluginNodeConsentDialogComponent, {
         data: {
           manifest,
@@ -1602,30 +1757,14 @@ export class PluginService implements OnDestroy {
       })
       .afterClosed()
       .pipe(first())
-      .toPromise();
+      .toPromise()) as NodeExecutionConsentDialogResult | undefined;
 
-    if (result && result.granted) {
-      // Store consent if user chose to remember
-      if (result.remember) {
-        // Delay write to avoid sync conflicts during startup
-        setTimeout(() => {
-          this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, true);
-        }, 5000);
-      } else {
-        // User unchecked remember - remove stored consent
-        setTimeout(() => {
-          this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
-        }, 5000);
-      }
-      return true;
-    }
-
-    // User denied permission - remove any stored consent
-    setTimeout(() => {
-      this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
-    }, 5000);
-
-    return false;
+    const decision = decideNodeExecutionConsent(result);
+    await this._pluginMetaPersistenceService.setNodeExecutionConsent(
+      manifest.id,
+      decision.consentToStore,
+    );
+    return decision.granted;
   }
 
   /**

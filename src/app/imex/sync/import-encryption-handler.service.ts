@@ -3,7 +3,8 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncLog } from '../../core/log';
-import { AppDataComplete } from '../../op-log/model/model-config';
+import { AllModelConfig, AppDataComplete } from '../../op-log/model/model-config';
+import type { CompleteBackup } from '../../op-log/core/types/sync.types';
 import { SnapshotUploadService } from './snapshot-upload.service';
 
 export interface EncryptionStateChangeResult {
@@ -14,6 +15,26 @@ export interface EncryptionStateChangeResult {
 }
 
 const LOG_PREFIX = 'ImportEncryptionHandlerService';
+
+type ImportableAppData = AppDataComplete | CompleteBackup<AllModelConfig>;
+
+const _unwrapCompleteBackup = (importedData: ImportableAppData): AppDataComplete =>
+  'crossModelVersion' in importedData &&
+  'timestamp' in importedData &&
+  'data' in importedData
+    ? importedData.data
+    : importedData;
+
+const _getImportedSuperSyncCfg = (
+  importedData: ImportableAppData,
+): { isEncryptionEnabled?: boolean; encryptKey?: string } | undefined => {
+  const appData = _unwrapCompleteBackup(importedData);
+  return (
+    appData.globalConfig as {
+      sync?: { superSync?: { isEncryptionEnabled?: boolean; encryptKey?: string } };
+    }
+  )?.sync?.superSync;
+};
 
 /**
  * Service for handling encryption state changes during data import.
@@ -40,7 +61,7 @@ export class ImportEncryptionHandlerService {
    * @param importedData - The data being imported
    * @returns Object with comparison results
    */
-  async checkEncryptionStateChange(importedData: AppDataComplete): Promise<{
+  async checkEncryptionStateChange(importedData: ImportableAppData): Promise<{
     willChange: boolean;
     currentEnabled: boolean;
     importedEnabled: boolean;
@@ -67,11 +88,7 @@ export class ImportEncryptionHandlerService {
     const currentHasKey = !!currentCfg?.encryptKey;
 
     // Get imported encryption state from globalConfig
-    const importedSuperSync = (
-      importedData.globalConfig as {
-        sync?: { superSync?: { isEncryptionEnabled?: boolean; encryptKey?: string } };
-      }
-    )?.sync?.superSync;
+    const importedSuperSync = _getImportedSuperSyncCfg(importedData);
     const importedEnabled = importedSuperSync?.isEncryptionEnabled ?? false;
     const importedHasKey = !!importedSuperSync?.encryptKey;
 
@@ -145,7 +162,7 @@ export class ImportEncryptionHandlerService {
    * @param importedData - The imported data (already in the store)
    */
   async handleImportEncryptionIfNeeded(
-    importedData: AppDataComplete,
+    importedData: ImportableAppData,
   ): Promise<EncryptionStateChangeResult | null> {
     const checkResult = await this.checkEncryptionStateChange(importedData);
 
@@ -170,15 +187,11 @@ export class ImportEncryptionHandlerService {
     });
 
     // Get the imported encryption key if encryption is being enabled
-    const importedSuperSync = (
-      importedData.globalConfig as {
-        sync?: { superSync?: { isEncryptionEnabled?: boolean; encryptKey?: string } };
-      }
-    )?.sync?.superSync;
+    const importedSuperSync = _getImportedSuperSyncCfg(importedData);
     const newEncryptKey = importedSuperSync?.encryptKey;
 
     return this.handleEncryptionStateChange(
-      importedData,
+      _unwrapCompleteBackup(importedData),
       newEncryptKey,
       checkResult.importedEnabled,
     );

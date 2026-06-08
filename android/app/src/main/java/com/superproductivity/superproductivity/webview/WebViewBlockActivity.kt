@@ -3,12 +3,15 @@ package com.superproductivity.superproductivity.webview
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.superproductivity.superproductivity.FullscreenActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.superproductivity.superproductivity.R
 
 class WebViewBlockActivity : AppCompatActivity() {
@@ -21,6 +24,19 @@ class WebViewBlockActivity : AppCompatActivity() {
         // permanently disable the WebView block, so we drop touches when the window
         // is partially obscured by an overlay app.
         findViewById<View>(android.R.id.content).filterTouchesWhenObscured = true
+
+        // This is a plain native screen with no action bar, so on edge-to-edge devices
+        // (enforced for targetSdk 35+; not opt-out-able on Android 16) the content would
+        // otherwise draw under the status/navigation bars and clip the title. Inset the
+        // scroll container by the system bars + display cutout. → issue #7840.
+        val scrollView = findViewById<View>(R.id.webview_block_scroll)
+        ViewCompat.setOnApplyWindowInsetsListener(scrollView) { view, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
 
         val minVersion = intent.getIntExtra(EXTRA_MIN_VERSION, WebViewCompatibilityChecker.MIN_CHROMIUM_VERSION)
         val detectedVersion = intent.getIntExtra(EXTRA_VERSION_MAJOR, -1)
@@ -64,11 +80,25 @@ class WebViewBlockActivity : AppCompatActivity() {
         }.trim()
         findViewById<TextView>(R.id.webview_block_details).text = details
 
+        val retryButton = findViewById<Button>(R.id.webview_block_retry)
+        if (config.showRetry) {
+            retryButton.visibility = View.VISIBLE
+            retryButton.setOnClickListener { relaunchApp() }
+        } else {
+            retryButton.visibility = View.GONE
+        }
+
         val updateButton = findViewById<Button>(R.id.webview_block_update)
-        if (config.action == WebViewCompatibilityChecker.BlockScreenAction.OPEN_WEBVIEW_SETTINGS_WITH_WARNING) {
-            updateButton.setText(R.string.webview_block_open_settings)
+        if (config.action == WebViewCompatibilityChecker.BlockScreenAction.OPEN_WEBVIEW_APP_INFO_WITH_WARNING) {
+            // For init failures, send the user to WebView's App Info page, where
+            // Storage → Clear storage resets a corrupted provider data dir — the
+            // fix that actually resolves these failures (the provider picker does
+            // not). Retry remains the primary recovery, so keep this secondary.
+            updateButton.setText(R.string.webview_block_open_app_settings)
+            updateButton.backgroundTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.webview_block_secondary))
             updateButton.setOnClickListener {
-                showOpenWebViewConfirmation(provider, useUpdatePage = false)
+                showOpenWebViewAppInfoConfirmation(provider)
             }
         } else {
             if (!providerPackageIsCurrent) {
@@ -114,6 +144,19 @@ class WebViewBlockActivity : AppCompatActivity() {
         dialog.window?.decorView?.filterTouchesWhenObscured = true
     }
 
+    private fun showOpenWebViewAppInfoConfirmation(provider: String?) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.webview_clear_storage_warning_title)
+            .setMessage(R.string.webview_clear_storage_warning_message)
+            .setPositiveButton(R.string.webview_manage_warning_continue) { _, _ ->
+                WebViewCompatibilityChecker.openWebViewAppInfoPage(this, provider)
+            }
+            .setNegativeButton(R.string.webview_override_warning_cancel, null)
+            .setCancelable(true)
+            .show()
+        dialog.window?.decorView?.filterTouchesWhenObscured = true
+    }
+
     private fun showOverrideConfirmation(minVersion: Int) {
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.webview_override_warning_title)
@@ -129,15 +172,7 @@ class WebViewBlockActivity : AppCompatActivity() {
     }
 
     private fun relaunchApp() {
-        // Always launch FullscreenActivity (the manifest's MAIN/LAUNCHER) explicitly
-        // rather than via PackageManager.getLaunchIntentForPackage, which can return
-        // null in stripped Android variants and would leave the user with an empty
-        // screen after tapping confirm. FullscreenActivity itself routes via
-        // LaunchDecider to CapacitorMainActivity when appropriate.
-        val launchIntent = Intent(this, FullscreenActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        startActivity(launchIntent)
-        finish()
+        WebViewRecovery.relaunchNow(this)
     }
 
     companion object {

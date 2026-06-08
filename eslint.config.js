@@ -220,6 +220,8 @@ module.exports = tseslint.config(
     rules: {
       'local-rules/require-hydration-guard': 'error',
       'local-rules/require-entity-registry': 'warn',
+      'local-rules/no-actions-in-effects': 'error',
+      'local-rules/no-multi-entity-effect': 'warn',
     },
   },
   // HTML files

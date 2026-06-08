@@ -32,6 +32,7 @@ import { DEFAULT_FIRST_DAY_OF_WEEK, DEFAULT_LOCALE } from 'src/app/core/locale.c
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../t.const';
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -1018,6 +1019,10 @@ describe('TaskViewCustomizerService', () => {
       preset: 'Tag A',
       label: 'Tag',
     };
+    const restoredSavedFilter: FilterOption = {
+      ...savedFilter,
+      label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG,
+    };
 
     const buildService = (
       ctx$: Observable<{ activeId: string; activeType: WorkContextType }>,
@@ -1083,7 +1088,7 @@ describe('TaskViewCustomizerService', () => {
 
       expect(newService.selectedSort()).toEqual(savedSort);
       expect(newService.selectedGroup()).toEqual(savedGroup);
-      expect(newService.selectedFilter()).toEqual(savedFilter);
+      expect(newService.selectedFilter()).toEqual(restoredSavedFilter);
     });
 
     it('should load defaults for a context with no saved state', () => {
@@ -1136,7 +1141,7 @@ describe('TaskViewCustomizerService', () => {
 
         // Return to TODAY — saved filter should be restored
         ctx$.next({ activeId: 'TODAY', activeType: WorkContextType.TAG });
-        expect(newService.selectedFilter()).toEqual(savedFilter);
+        expect(newService.selectedFilter()).toEqual(restoredSavedFilter);
         done();
       }, 50);
     });
@@ -1287,6 +1292,28 @@ describe('TaskViewCustomizerService', () => {
           done();
         });
       });
+    });
+  });
+
+  describe('collapsedGroupIds', () => {
+    it('should toggle group expansion', () => {
+      service.toggleGroupExpansion('group1');
+      expect(service.collapsedGroupIds()).toContain('group1');
+      service.toggleGroupExpansion('group1');
+      expect(service.collapsedGroupIds()).not.toContain('group1');
+    });
+
+    it('should persist collapsedGroupIds to localStorage', (done) => {
+      service.toggleGroupExpansion('group2');
+
+      // The effect is async, so we wait a bit
+      setTimeout(() => {
+        const stored = JSON.parse(
+          localStorage.getItem(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT) || '{}',
+        );
+        expect(stored['TAG:TODAY'].collapsedGroupIds).toContain('group2');
+        done();
+      }, 50);
     });
   });
 });

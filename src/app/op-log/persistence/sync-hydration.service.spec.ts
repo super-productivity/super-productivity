@@ -54,7 +54,6 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.loadStateCache.and.resolveTo(null);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
       'loadClientId',
-      'generateNewClientId',
       'getOrGenerateClientId',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
@@ -358,6 +357,31 @@ describe('SyncHydrationService', () => {
 
       // Should dispatch with the original (merged, stripped) data, not null
       expect(mockStore.dispatch).toHaveBeenCalled();
+    });
+
+    it('should normalize invalid startOfNextDay config before validation and persistence', async () => {
+      const downloadedData = {
+        globalConfig: {
+          ...DEFAULT_GLOBAL_CONFIG,
+          misc: {
+            ...DEFAULT_GLOBAL_CONFIG.misc,
+            startOfNextDay: 4,
+            startOfNextDayTime: '24:00',
+          },
+        },
+      };
+
+      await service.hydrateFromRemoteSync(downloadedData);
+
+      const validatedData = mockValidateStateService.validateAndRepair.calls.mostRecent()
+        .args[0] as any;
+      expect(validatedData.globalConfig.misc.startOfNextDay).toBe(4);
+      expect(validatedData.globalConfig.misc.startOfNextDayTime).toBe('04:00');
+
+      const saveCacheCall = mockOpLogStore.saveStateCache.calls.mostRecent();
+      const savedState = saveCacheCall.args[0].state as any;
+      expect(savedState.globalConfig.misc.startOfNextDay).toBe(4);
+      expect(savedState.globalConfig.misc.startOfNextDayTime).toBe('04:00');
     });
 
     it('should handle null downloadedMainModelData by using only DB data', async () => {

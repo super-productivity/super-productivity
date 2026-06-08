@@ -9,6 +9,7 @@ export interface AddTaskBarState {
   tagIdsFromTxt: string[];
   date: string | null;
   time: string | null;
+  isDateExplicitlyCleared?: boolean;
   spent: TimeSpentOnDay | null;
   estimate: number | null;
   newTagTitles: string[];
@@ -16,6 +17,9 @@ export interface AddTaskBarState {
   remindOption: TaskReminderOptionId | null;
   attachments: TaskAttachment[];
   repeatQuickSetting: RepeatQuickSetting | null;
+  deadlineDate?: string | null;
+  deadlineTime?: string | null;
+  deadlineRemindOption?: TaskReminderOptionId | null;
 }
 const M = 60 * 1000;
 const H = 60 * M;
@@ -37,6 +41,7 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   tagIdsFromTxt: [],
   date: null,
   time: null,
+  isDateExplicitlyCleared: false,
   spent: null,
   estimate: null,
   newTagTitles: [],
@@ -44,6 +49,9 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   remindOption: null,
   attachments: [],
   repeatQuickSetting: null,
+  deadlineDate: null,
+  deadlineTime: null,
+  deadlineRemindOption: null,
 };
 
 export const CHRONO_SUGGESTIONS: string[] = [

@@ -42,7 +42,10 @@ import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
-import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
+import {
+  CustomizedUndoneTasks,
+  TaskViewCustomizerService,
+} from '../task-view-customizer/task-view-customizer.service';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
@@ -85,6 +88,13 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
 import { dragDelayForTouch } from '../../util/input-intent';
 import { DateService } from '../../core/date/date.service';
+import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index.component';
+import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
+
+// Stable reference used as the toSignal initial value below so the deselect
+// effect can tell "the customized list hasn't emitted yet" apart from a
+// genuinely empty filtered result. See _getVisibleUndoneTasksForSelection.
+const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
 
 @Component({
   selector: 'work-view',
@@ -118,6 +128,7 @@ import { DateService } from '../../core/date/date.service';
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
+    PluginIndexComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -139,7 +150,40 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _matDialog = inject(MatDialog);
   private _destroyRef = inject(DestroyRef);
   private _dateService = inject(DateService);
+  private _pluginBridge = inject(PluginBridgeService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
+
+  isProjectContext = toSignal(this.workContextService.isActiveWorkContextProject$, {
+    initialValue: false,
+  });
+
+  private _isTodayContext = toSignal(
+    this.workContextService.activeWorkContext$.pipe(
+      map((ctx) => ctx.id === TODAY_TAG.id),
+    ),
+    { initialValue: false },
+  );
+
+  /**
+   * Whether the current work context allows a plugin embed in the work-view
+   * body. Mirrors the restriction documented on `PluginAPI.showInWorkContext`:
+   * project and TODAY contexts only — a plugin embed is never shown for a
+   * regular tag or a non-work-view route.
+   */
+  private _isEmbeddableContext = computed(
+    () => this.isProjectContext() || this._isTodayContext(),
+  );
+
+  /**
+   * Plugin id currently embedded in the work-view body, or null. The plugin
+   * iframe replaces the task list when a plugin has requested the embed
+   * (`showInWorkContext`) AND the active context is embeddable.
+   */
+  pluginEmbedId = computed(() => {
+    const id = this._pluginBridge.workContextEmbedPluginId();
+    if (!id) return null;
+    return this._isEmbeddableContext() ? id : null;
+  });
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,
@@ -155,7 +199,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
-    { initialValue: { list: [] } },
+    { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },
   );
   doneTasks = input.required<TaskWithSubTasks[]>();
   backlogTasks = input.required<TaskWithSubTasks[]>();
@@ -297,7 +341,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       const currentSelectedId = this.selectedTaskId();
       if (!currentSelectedId) return;
 
-      if (this._hasTaskInList(this.undoneTasks(), currentSelectedId)) return;
+      const visibleUndoneTasks = this._getVisibleUndoneTasksForSelection();
+      if (!visibleUndoneTasks) return;
+
+      if (this._hasTaskInList(visibleUndoneTasks, currentSelectedId)) return;
       if (this._hasTaskInList(this.doneTasks(), currentSelectedId)) return;
       if (this._hasTaskInList(this.laterTodayTasks(), currentSelectedId)) return;
 
@@ -486,6 +533,29 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         }
       }),
     );
+  }
+
+  /**
+   * The list of undone tasks actually visible to the user, used by the deselect
+   * effect to decide whether the selected task has been filtered out of view.
+   * Returns `null` while a customizer filter is active but its list has not
+   * emitted yet — the caller then skips deselecting for this run.
+   *
+   * `isCustomized()` is synchronous, but `customizeUndoneTasks` defers the
+   * customized branch by one animation frame (observeOn(animationFrameScheduler)),
+   * so the two can be momentarily out of step. Until the first emission `toSignal`
+   * still holds the exact INITIAL_CUSTOMIZED_UNDONE_TASKS reference; compare by
+   * identity (not by length) so a genuinely empty filtered result `{ list: [] }`
+   * still counts as "ready" and correctly deselects a now-hidden task.
+   */
+  private _getVisibleUndoneTasksForSelection(): TaskWithSubTasks[] | null {
+    if (!this.customizerService.isCustomized()) {
+      return this.undoneTasks();
+    }
+
+    const customized = this.customizedUndoneTasks();
+    const isCustomizedListReady = customized !== INITIAL_CUSTOMIZED_UNDONE_TASKS;
+    return isCustomizedListReady ? customized.list : null;
   }
 
   private _focusItemInWorkViewWhenReady(

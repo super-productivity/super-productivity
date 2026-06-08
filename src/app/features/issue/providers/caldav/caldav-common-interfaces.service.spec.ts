@@ -6,6 +6,8 @@ import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { CaldavIssue, CaldavIssueReduced } from './caldav-issue.model';
 import { IssueProviderCaldav } from '../../issue.model';
+import { CaldavCfg } from './caldav.model';
+import { CALDAV_POLL_INTERVAL } from './caldav.const';
 
 const BASE_ISSUE: CaldavIssue = {
   id: 'uid-1',
@@ -73,6 +75,20 @@ describe('CaldavCommonInterfacesService', () => {
       ],
     });
     service = TestBed.inject(CaldavCommonInterfacesService);
+  });
+
+  describe('pollInterval', () => {
+    it('falls back to CALDAV_POLL_INTERVAL when pollIntervalMinutes is unset', () => {
+      expect(service.pollInterval).toBe(CALDAV_POLL_INTERVAL);
+    });
+
+    it('derives from cfg.pollIntervalMinutes when set', () => {
+      (service as unknown as { _cachedCfg?: CaldavCfg })._cachedCfg = {
+        ...BASE_CFG,
+        pollIntervalMinutes: 3,
+      };
+      expect(service.pollInterval).toBe(3 * 60 * 1000);
+    });
   });
 
   describe('getAddTaskData - DTSTART mapping', () => {

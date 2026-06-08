@@ -41,6 +41,7 @@ import { CapacitorPlatformService } from '../platform/capacitor-platform.service
 import { Keyboard, KeyboardInfo } from '@capacitor/keyboard';
 import { PluginListenerHandle, registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
@@ -49,6 +50,7 @@ import { LayoutService } from '../../core-ui/layout/layout.service';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
+  setWebViewBackgroundColor(options: { color: string }): Promise<void>;
 }
 
 const NavigationBar = registerPlugin<NavigationBarPlugin>('NavigationBar');
@@ -194,6 +196,7 @@ export class GlobalThemeService {
       ['caldav', 'assets/icons/caldav.svg'],
       ['calendar', 'assets/icons/calendar.svg'],
       ['open_project', 'assets/icons/open-project.svg'],
+      ['remove_today', 'assets/icons/remove-today-48px.svg'],
       ['gitea', 'assets/icons/gitea.svg'],
       ['redmine', 'assets/icons/redmine.svg'],
       ['linear', 'assets/icons/linear.svg'],
@@ -339,7 +342,11 @@ export class GlobalThemeService {
 
     if (IS_ANDROID_WEB_VIEW) {
       androidInterface.isKeyboardShown$
-        .pipe(takeUntilDestroyed(this._destroyRef))
+        // The native OnGlobalLayoutListener pushes a value on every layout pass
+        // (i.e. every frame of the IME slide), so dedupe to actual transitions —
+        // otherwise we rewrite <body> classes and re-trigger change detection
+        // every frame while the keyboard animates.
+        .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
         .subscribe((isShown) => {
           Log.log('isShown', isShown);
 
@@ -357,6 +364,14 @@ export class GlobalThemeService {
         });
     }
 
+    // VisualViewport keyboard-height tracking covers every non-iOS touch
+    // build: Capacitor Android, the legacy F-Droid build, and Android
+    // mobile-web. iOS uses _initIOSKeyboardHandling above; its Capacitor
+    // plugin already drives the same CSS variable and the two would race.
+    if (IS_TOUCH_ONLY && !this._platformService.isIOS()) {
+      this._initVisualViewportKeyboardTracking();
+    }
+
     // Use effect to reactively update animation class
     effect(() => {
       const misc = this._globalConfigService.misc();
@@ -372,6 +387,15 @@ export class GlobalThemeService {
         this.document.body.classList.add(BodyClass.isObsidianStyleHeader);
       } else {
         this.document.body.classList.remove(BodyClass.isObsidianStyleHeader);
+      }
+    });
+
+    effect(() => {
+      const misc = this._globalConfigService.misc();
+      if (misc?.isVerticalActionBar) {
+        this.document.body.classList.add(BodyClass.isVerticalActionBar);
+      } else {
+        this.document.body.classList.remove(BodyClass.isVerticalActionBar);
       }
     });
 
@@ -606,6 +630,76 @@ export class GlobalThemeService {
     });
   }
 
+  /**
+   * Keyboard-height tracking via VisualViewport — the fallback path for any
+   * non-iOS touch build (Capacitor Android, F-Droid, mobile-web).
+   *
+   * Android's `adjustResize` is supposed to shrink the WebView when the IME
+   * appears, in which case `position: fixed; bottom: 0` would naturally sit
+   * above the keyboard. In practice it's inconsistent — depending on Chrome
+   * version, transient transitions, and edge-to-edge insets, the layout
+   * viewport sometimes does not shrink in step with the keyboard, leaving
+   * fixed-position UI hidden behind it.
+   *
+   * VisualViewport always reflects the actual visible area. The difference
+   * `window.innerHeight - visualViewport.height` is the obscured area —
+   * which is zero when adjustResize already handled it, and equals the
+   * keyboard height otherwise. Either way, `--keyboard-height` ends up
+   * correct without needing to know which path Android took.
+   */
+  private _initVisualViewportKeyboardTracking(): void {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = this.document.documentElement;
+    // Filter out small differences from URL bar / overlay UI rather than the
+    // IME — keeps us from setting a phantom keyboard offset.
+    const KEYBOARD_THRESHOLD_PX = 100;
+    // IME open/close on Android resizes the layout viewport (adjustResize)
+    // and the visual viewport at slightly different times, so per-event
+    // commits park fixed-position UI (e.g. the global add-task bar) at
+    // intermediate partial-keyboard amounts. Debounce the OPEN path so only
+    // the final value lands (200ms, just past `--transition-duration-m`:
+    // 225ms). Commit the CLOSE path synchronously so the bar drops the moment
+    // the IME is gone rather than parking at the old height for the debounce
+    // window — that would just invert the original symptom.
+    const KEYBOARD_RESIZE_DEBOUNCE_MS = 200;
+    let resizeTimer: number | null = null;
+
+    const commit = (): void => {
+      const obscured = window.innerHeight - vv.height;
+      const keyboardHeight = obscured > KEYBOARD_THRESHOLD_PX ? obscured : 0;
+      root.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, `${keyboardHeight}px`);
+    };
+
+    const onViewportResize = (): void => {
+      const obscured = window.innerHeight - vv.height;
+      if (obscured <= KEYBOARD_THRESHOLD_PX) {
+        if (resizeTimer !== null) {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = null;
+        }
+        commit();
+        return;
+      }
+      if (resizeTimer !== null) {
+        window.clearTimeout(resizeTimer);
+      }
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = null;
+        commit();
+      }, KEYBOARD_RESIZE_DEBOUNCE_MS);
+    };
+
+    commit();
+    vv.addEventListener('resize', onViewportResize, { passive: true });
+    this._destroyRef.onDestroy(() => {
+      vv.removeEventListener('resize', onViewportResize);
+      if (resizeTimer !== null) {
+        window.clearTimeout(resizeTimer);
+      }
+    });
+  }
+
   private _isInputElement(el: HTMLElement): boolean {
     const tagName = el.tagName.toLowerCase();
     return (
@@ -634,8 +728,7 @@ export class GlobalThemeService {
    */
   /**
    * Read native safe area insets and set CSS variables.
-   * Works around Capacitor 7's broken adjustMarginsForEdgeToEdge and
-   * Android WebView's unreliable env(safe-area-inset-*) values.
+   * Works around Android WebView's unreliable env(safe-area-inset-*) values.
    */
   private _initSafeAreaInsets(): void {
     const applyInsets = (insets: {
@@ -651,8 +744,24 @@ export class GlobalThemeService {
       root.style.setProperty(CSS_VAR_SAFE_AREA_RIGHT, `${insets.right}px`);
     };
 
-    SafeArea.getSafeAreaInsets().then(({ insets }) => applyInsets(insets));
-    SafeArea.addListener('safeAreaChanged', ({ insets }) => applyInsets(insets));
+    // On Android (targetSdk 35+, edge-to-edge enforced) the
+    // @capawesome/capacitor-android-edge-to-edge-support plugin already insets
+    // the WebView below the status bar and above the navigation bar via native
+    // margins. capacitor-plugin-safe-area reports the decorView's full
+    // system-bar insets regardless, so applying them as CSS padding on top of
+    // the native margin double-counts the inset (visible as excessive padding
+    // above the top bar). The WebView interior is fully safe there, so keep the
+    // safe-area CSS vars at 0; only iOS (contentInset: 'never') needs the
+    // WebView to pad itself. A few styles read env(safe-area-inset-bottom)
+    // directly (e.g. mobile-bottom-nav) rather than these vars; inside the
+    // natively-inset WebView that env value is expected to be ~0, keeping them
+    // consistent with the pinned vars here.
+    if (this._platformService.isAndroid()) {
+      applyInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+    } else {
+      SafeArea.getSafeAreaInsets().then(({ insets }) => applyInsets(insets));
+      SafeArea.addListener('safeAreaChanged', ({ insets }) => applyInsets(insets));
+    }
     this._patchCdkViewportForSafeArea();
   }
 
@@ -701,14 +810,31 @@ export class GlobalThemeService {
       });
       if (this._platformService.isAndroid()) {
         const bgColor = isDark ? '#131314' : '#f8f8f7';
-        StatusBar.setBackgroundColor({ color: bgColor }).catch((err) => {
-          Log.warn('Failed to set status bar background color', err);
+        // Under enforced edge-to-edge (targetSdk 35+) Window.setStatusBarColor /
+        // setNavigationBarColor are no-ops; the edge-to-edge support plugin owns
+        // the bar backgrounds via its own overlay views. Color them through it
+        // so the status bar and the bottom navigation/gesture area match the
+        // theme background.
+        EdgeToEdge.setStatusBarColor({ color: bgColor }).catch((err) => {
+          Log.warn('Failed to set status bar color', err);
         });
+        EdgeToEdge.setNavigationBarColor({ color: bgColor }).catch((err) => {
+          Log.warn('Failed to set navigation bar color', err);
+        });
+        // The custom NavigationBar plugin still drives the nav bar icon/pill
+        // appearance (light vs dark) via setSystemBarsAppearance, which remains
+        // effective on Android 15+; the window.navigationBarColor it also sets
+        // is a harmless no-op there.
         NavigationBar.setColor({
           color: bgColor,
           style: isDark ? 'DARK' : 'LIGHT',
         }).catch((err) => {
-          Log.warn('Failed to set navigation bar color', err);
+          Log.warn('Failed to set navigation bar appearance', err);
+        });
+        // Keep the native WebView surface matched to the theme so the
+        // adjustResize keyboard animation can't flash white between frames.
+        NavigationBar.setWebViewBackgroundColor({ color: bgColor }).catch((err) => {
+          Log.warn('Failed to set web view background color', err);
         });
       }
     });

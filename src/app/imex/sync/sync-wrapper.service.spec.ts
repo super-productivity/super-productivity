@@ -34,6 +34,7 @@ import {
   JsonParseError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
+  WebDavNativeRequestError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 
@@ -107,7 +108,11 @@ describe('SyncWrapperService', () => {
     mockSyncService = jasmine.createSpyObj('OperationLogSyncService', [
       'downloadRemoteOps',
       'uploadPendingOps',
+      'hasSyncedOps',
     ]);
+    // Steady-state default: this client has synced before. Tests that exercise the
+    // never-synced path override this.
+    mockSyncService.hasSyncedOps.and.resolveTo(true);
     mockSyncService.downloadRemoteOps.and.returnValue(
       Promise.resolve({
         kind: 'no_new_ops' as const,
@@ -262,6 +267,75 @@ describe('SyncWrapperService', () => {
       const result = await service.sync();
 
       expect(result).toBe(SyncStatus.InSync);
+    });
+
+    // discussion #7196: sync button must distinguish "data changed" from
+    // "already up to date" instead of always showing "Already in sync".
+    it('should return InSync when nothing changed (no download, nothing uploaded)', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({ kind: 'no_new_ops' as const }),
+      );
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.InSync);
+    });
+
+    it('should return UpdateRemote when local ops were uploaded', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({ kind: 'no_new_ops' as const }),
+      );
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 3,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.UpdateRemote);
+    });
+
+    it('should return UpdateRemote when remote ops were downloaded', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'ops_processed' as const,
+          newOpsCount: 5,
+          localWinOpsCreated: 0,
+        }),
+      );
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.UpdateRemote);
     });
   });
 
@@ -429,7 +503,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true },
+        { forceFromSeq0: true, isNeverSynced: false },
       );
     });
 
@@ -443,7 +517,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        undefined,
+        { forceFromSeq0: undefined, isNeverSynced: false },
       );
     });
 
@@ -454,7 +528,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        undefined,
+        { forceFromSeq0: undefined, isNeverSynced: false },
       );
     });
 
@@ -858,7 +932,8 @@ describe('SyncWrapperService', () => {
 
       const result = await service.sync();
 
-      expect(result).toBe(SyncStatus.InSync);
+      // 5 ops uploaded → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
     });
 
@@ -931,12 +1006,12 @@ describe('SyncWrapperService', () => {
       );
     });
 
-    it('should handle NetworkUnavailableSPError as transient with WARNING snackbar', async () => {
+    it('should handle NetworkUnavailableSPError with WARNING snackbar when user-triggered', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new NetworkUnavailableSPError()),
       );
 
-      const result = await service.sync();
+      const result = await service.sync(true);
 
       expect(result).toBe('HANDLED_ERROR');
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
@@ -950,11 +1025,140 @@ describe('SyncWrapperService', () => {
       );
     });
 
+    it('should handle NetworkUnavailableSPError silently for automatic syncs', async () => {
+      // The auto-sync fired on Android resume hits a not-yet-ready network and
+      // throws this transient error; the next cycle retries, so no snack should
+      // flash for the user (regression guard for the resume "network" snack).
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new NetworkUnavailableSPError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+        }),
+      );
+    });
+
+    it('should silence a generic transient network error (file-based providers) for automatic syncs', async () => {
+      // File-based providers (Dropbox/WebDAV) do NOT throw NetworkUnavailableSPError;
+      // a resume-time connectivity failure surfaces as a generic Error (here the
+      // Android UnknownHostException message). isTransientNetworkError() routes it
+      // to the same silent-for-automatic path so the resume snack is gone
+      // regardless of provider — not just SuperSync.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new Error('Unable to resolve host "example.com": No address associated'),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      // Neither the network WARNING nor the catch-all ERROR snack should fire.
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should show the WARNING snack for a generic transient network error when user-triggered', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new Error('Unable to resolve host "example.com": No address associated'),
+        ),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+          type: 'WARNING',
+        }),
+      );
+    });
+
+    it('should treat native WebDAV timeout codes as transient network errors', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new WebDavNativeRequestError('Network error: Request timeout', 'TIMEOUT_ERROR'),
+        ),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+          type: 'WARNING',
+        }),
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.TIMEOUT_ERROR,
+        }),
+      );
+    });
+
+    it('should surface a timeout error for user-triggered syncs', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('Request timeout after 90s')),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.TIMEOUT_ERROR,
+        }),
+      );
+    });
+
+    it('should silence a timeout error for automatic syncs', async () => {
+      // A timeout is self-healing like a transient network error; an automatic
+      // resume sync should not flash the "try again" snack nobody is waiting on.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('Request timeout after 90s')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should silence a server 504 / gateway timeout for automatic syncs', async () => {
+      // 504/gateway-timeout is matched by _isTimeoutError. Pin that it routes to
+      // the (now-silenced-for-automatic) timeout branch rather than the catch-all
+      // ERROR snack, so a future refactor that re-classifies 504 is caught.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('HTTP 504 Gateway Timeout')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
     it('should NOT treat a raw HTTP-status Error as a network error', async () => {
-      // Regression guard for the dropped string-shape classifier: an error
-      // whose message contains "500"/"Internal Server Error" used to slip
-      // through the broad regex. Now only `NetworkUnavailableSPError`
-      // qualifies, so this falls through to the catch-all ERROR branch.
+      // Regression guard: an error whose message contains "500"/"Internal Server
+      // Error" must NOT be classified as a transient *network* error
+      // (isTransientNetworkError checks connectivity phrases, not server status),
+      // so it falls through to the catch-all ERROR branch and is surfaced.
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new Error('HTTP 500 Internal Server Error — db down')),
       );
@@ -2024,7 +2228,155 @@ describe('SyncWrapperService', () => {
       // 1 initial upload + 1 retry (which returns 0) = 2 total
       // The retry returns 0 so no more retries needed
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
-      expect(result).toBe(SyncStatus.InSync);
+      // ops were uploaded → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
+    });
+
+    it('should pass the pre-sync never-synced snapshot into LWW re-upload retries', async () => {
+      mockSyncService.hasSyncedOps.and.resolveTo(false);
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        return {
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: uploadCallCount === 1 ? 1 : 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        };
+      });
+
+      await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(mockSyncService.uploadPendingOps.calls.argsFor(0)[1]).toEqual({
+        isNeverSynced: true,
+      });
+      expect(mockSyncService.uploadPendingOps.calls.argsFor(1)[1]).toEqual({
+        isNeverSynced: true,
+      });
+    });
+
+    it('should stop sync when an LWW re-upload is cancelled', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 1,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        return { kind: 'cancelled' as const };
+      });
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should stop sync when an LWW re-upload has permanent rejections', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'no_new_ops' as const,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 1,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        return {
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'lww-op', error: 'Validation failed' }],
+        };
+      });
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should stop sync when LWW re-upload is cancelled and the pending ops came from download', async () => {
+      // downloadResult.localWinOpsCreated > 0 means LWW work originated from
+      // the download path. The initial upload produces no LWW ops, so the
+      // very first retry is what cancels — guard against a regression where
+      // the cancel-path only triggers on upload-originated LWW work.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          kind: 'ops_processed' as const,
+          newOpsCount: 5,
+          localWinOpsCreated: 2,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            kind: 'completed' as const,
+            uploadedCount: 1,
+            piggybackedOpsCount: 0,
+            localWinOpsCreated: 0,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
+          };
+        }
+        return { kind: 'cancelled' as const };
+      });
+
+      const result = await service.sync();
+
+      // initial upload + 1 retry that cancels = 2 calls, no further retries
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
     it('should treat blocked_fresh_client reupload result as 0 localWinOpsCreated and exit loop', async () => {
@@ -2056,7 +2408,8 @@ describe('SyncWrapperService', () => {
 
       // 1 initial + 1 retry (returns blocked_fresh_client -> treated as 0) = 2 total
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
-      expect(result).toBe(SyncStatus.InSync);
+      // first upload moved 1 op → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
     });
 
     it('should enter while loop when both download and upload produce LWW ops', async () => {
@@ -2089,7 +2442,8 @@ describe('SyncWrapperService', () => {
       // Retry 1: upload returns 0 -> exits loop
       // Total uploads: 1 initial + 1 retry = 2
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
-      expect(result).toBe(SyncStatus.InSync);
+      // 5 ops downloaded + 3 uploaded → data changed this sync (discussion #7196)
+      expect(result).toBe(SyncStatus.UpdateRemote);
     });
   });
 });

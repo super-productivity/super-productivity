@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
-import { sanitizeRequestUrlForLog } from '../src/server';
+import {
+  escapeHtml,
+  sanitizeRequestUrlForLog,
+  SERVER_HELMET_CONFIG,
+} from '../src/server';
 
 describe('Server Security Configuration', () => {
   describe('request URL log sanitization', () => {
@@ -34,22 +38,7 @@ describe('Server Security Configuration', () => {
     });
 
     it('should include CSP headers in response', async () => {
-      // Register helmet with the same config as the server
-      await app.register(helmet, {
-        contentSecurityPolicy: {
-          directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", 'data:'],
-            fontSrc: ["'self'"],
-            objectSrc: ["'none'"],
-            frameAncestors: ["'none'"],
-            formAction: ["'self'"],
-            baseUri: ["'self'"],
-          },
-        },
-      });
+      await app.register(helmet, SERVER_HELMET_CONFIG);
 
       app.get('/test', async () => ({ status: 'ok' }));
       await app.ready();
@@ -99,16 +88,6 @@ describe('Server Security Configuration', () => {
   });
 
   describe('HTML Escape Function', () => {
-    // Test the escapeHtml function that prevents XSS in templates
-    const escapeHtml = (unsafe: string): string => {
-      return unsafe
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    };
-
     it('should escape < and > characters', () => {
       const input = '<script>alert("xss")</script>';
       const escaped = escapeHtml(input);

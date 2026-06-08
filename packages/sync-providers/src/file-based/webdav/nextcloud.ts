@@ -15,8 +15,10 @@ export type NextcloudDeps = WebdavBaseDeps<
 /**
  * Nextcloud sync provider.
  * Extends `WebdavBaseProvider` but auto-constructs the WebDAV base URL
- * from a simpler `serverUrl` + `userName`, so users don't need to know
- * the DAV path.
+ * from a simpler `serverUrl` + file-owner `userName`, so users don't
+ * need to know the DAV path. Authentication can use `loginName` when a
+ * Nextcloud instance accepts email login but keeps a different DAV
+ * username in /remote.php/dav/files/<userName>/.
  *
  * Uses its own `PROVIDER_ID_NEXTCLOUD` literal (not WebDAV) for
  * credential separation and UI distinction.
@@ -47,22 +49,28 @@ export class NextcloudProvider extends WebdavBaseProvider<
     return `${serverUrl}/remote.php/dav/files/${encodeURIComponent(cfg.userName.trim())}/`;
   }
 
+  static getAuthUserName(
+    cfg: Pick<NextcloudPrivateCfg, 'loginName' | 'userName'>,
+  ): string {
+    return cfg.loginName?.trim() || cfg.userName.trim();
+  }
+
   protected override async _cfgOrError(): Promise<WebdavPrivateCfg> {
     const cfg = await this.privateCfg.load();
     if (!cfg) {
       throw new MissingCredentialsSPError('Nextcloud configuration is missing.');
     }
-    if (!cfg.serverUrl) {
+    if (!cfg.serverUrl?.trim()) {
       throw new MissingCredentialsSPError(
         'Nextcloud server URL is not configured. Please check your sync settings.',
       );
     }
-    if (!/^https?:\/\//i.test(cfg.serverUrl)) {
+    if (!/^https?:\/\//i.test(cfg.serverUrl.trim())) {
       throw new MissingCredentialsSPError(
         'Nextcloud server URL must start with https:// or http://',
       );
     }
-    if (!cfg.userName) {
+    if (!cfg.userName?.trim()) {
       throw new MissingCredentialsSPError(
         'Nextcloud username is not configured. Please check your sync settings.',
       );
@@ -75,11 +83,18 @@ export class NextcloudProvider extends WebdavBaseProvider<
     return {
       ...cfg,
       baseUrl: NextcloudProvider.buildBaseUrl(cfg),
+      userName: NextcloudProvider.getAuthUserName(cfg),
     };
   }
 
   override async isReady(): Promise<boolean> {
     const cfg = await this.privateCfg.load();
-    return !!(cfg && cfg.serverUrl && cfg.userName && cfg.password && cfg.syncFolderPath);
+    return !!(
+      cfg &&
+      cfg.serverUrl?.trim() &&
+      cfg.userName?.trim() &&
+      cfg.password &&
+      cfg.syncFolderPath?.trim()
+    );
   }
 }

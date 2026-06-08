@@ -90,17 +90,17 @@ const addReplaySafeDoneFields = (
     return actionPayload;
   }
 
+  const hasDoneOn = typeof taskChanges['doneOn'] === 'number';
+  const hasDueDay = Object.prototype.hasOwnProperty.call(taskChanges, 'dueDay');
+  const isLegacyDoneOpWithoutDateFields = !hasDoneOn && !hasDueDay;
+
   const replaySafeChanges = {
     ...taskChanges,
-    doneOn:
-      typeof taskChanges['doneOn'] === 'number' ? taskChanges['doneOn'] : op.timestamp,
+    doneOn: hasDoneOn ? taskChanges['doneOn'] : op.timestamp,
     // Older done ops did not store the logical day, timezone, or start-of-next-day
     // offset. This timestamp fallback is replay-stable, but still uses the replaying
     // device's local calendar and can be off near custom day-start boundaries.
-    dueDay:
-      typeof taskChanges['dueDay'] === 'string'
-        ? taskChanges['dueDay']
-        : getDbDateStr(op.timestamp),
+    ...(isLegacyDoneOpWithoutDateFields ? { dueDay: getDbDateStr(op.timestamp) } : {}),
   };
 
   return {
@@ -110,6 +110,40 @@ const addReplaySafeDoneFields = (
       changes: replaySafeChanges,
     },
   };
+};
+
+/**
+ * `[Task Shared] convertToMainTask` carries `parentTagIds?: string[]`.
+ * A SuperSync fresh-client replay crashed at `task-shared-crud.reducer.ts`
+ * with `TypeError: r is not iterable` because a captured op's
+ * `parentTagIds` was truthy but not an array — bypassing the reducer's
+ * `parentTagIds ?? parentTask.tagIds` fallback and crashing the spread.
+ *
+ * The producing code path is unknown (current dispatch sites all pass an
+ * array or omit the field); strip the field on the read boundary so a
+ * single bad op cannot poison the bulk-replay loop, and warn with the op
+ * id/clientId so we can chase the producer next time it appears.
+ */
+const stripMalformedConvertToMainTaskParentTagIds = (
+  actionType: string,
+  actionPayload: Record<string, unknown>,
+  op: Operation,
+): Record<string, unknown> => {
+  if (actionType !== ActionType.TASK_SHARED_CONVERT_TO_MAIN) return actionPayload;
+  const ptt = actionPayload['parentTagIds'];
+  if (ptt === undefined || Array.isArray(ptt)) return actionPayload;
+  SyncLog.warn(
+    `[convertOpToAction] convertToMainTask: parentTagIds is not an array — stripping so the reducer falls back to parent.tagIds`,
+    {
+      opId: op.id,
+      clientId: op.clientId,
+      vectorClock: op.vectorClock,
+      parentTagIdsType: ptt === null ? 'null' : typeof ptt,
+    },
+  );
+  const rest = { ...actionPayload };
+  delete rest['parentTagIds'];
+  return rest;
 };
 
 /**
@@ -136,6 +170,11 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
 
   actionPayload = addLegacyPlanForTodayDate(actionType, actionPayload, op);
   actionPayload = addReplaySafeDoneFields(actionType, actionPayload, op);
+  actionPayload = stripMalformedConvertToMainTaskParentTagIds(
+    actionType,
+    actionPayload,
+    op,
+  );
 
   // Force `payload.id = op.entityId` for non-singleton LWW Update ops. The
   // op's `entityId` is the canonical identifier — producers also enforce

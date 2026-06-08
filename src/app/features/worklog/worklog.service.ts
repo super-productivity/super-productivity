@@ -1,22 +1,16 @@
 import { inject, Injectable } from '@angular/core';
-import {
-  Worklog,
-  WorklogDay,
-  WorklogWeek,
-  WorklogWeekSimple,
-  WorklogYearsWithWeeks,
-} from './worklog.model';
+import { Worklog, WorklogDay, WorklogWeek } from './worklog.model';
 import { dedupeByKey } from '../../util/de-dupe-by-key';
 import { BehaviorSubject, from, merge, Observable } from 'rxjs';
 import {
   concatMap,
+  distinctUntilChanged,
   filter,
   first,
   map,
   shareReplay,
   startWith,
   switchMap,
-  take,
 } from 'rxjs/operators';
 import { getWeekNumber } from '../../util/get-week-number';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -27,7 +21,6 @@ import { createEmptyEntity } from '../../util/create-empty-entity';
 import { getCompleteStateForWorkContext } from './util/get-complete-state-for-work-context.util';
 import { NavigationEnd, Router } from '@angular/router';
 import { WorklogTask } from '../tasks/task.model';
-import { mapArchiveToWorklogWeeks } from './util/map-archive-to-worklog-weeks';
 import { DateAdapter } from '@angular/material/core';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
@@ -55,28 +48,41 @@ export class WorklogService {
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(
       concatMap(() =>
         merge(
-          // this._workContextService.activeWorkContextOnceOnContextChange$,
           this.archiveUpdateManualTrigger$,
           this._router.events.pipe(
             filter((event: any) => event instanceof NavigationEnd),
             filter(
               ({ urlAfterRedirects }: NavigationEnd) =>
+                // 'history' also matches the legacy 'quick-history' substring
+                urlAfterRedirects.includes('history') ||
                 urlAfterRedirects.includes('worklog') ||
                 urlAfterRedirects.includes('daily-summary') ||
-                urlAfterRedirects.includes('quick-history'),
+                urlAfterRedirects.includes('metrics'),
             ),
           ),
         ),
       ),
     );
 
+  // Each trigger emission opens a fresh subscription to activeWorkContext$ that
+  // also lives until the next trigger, so:
+  //   - manual refreshes and URL-driven triggers always reload (the inner stream
+  //     is fresh, so distinctUntilChanged has no prior value and lets the first
+  //     emission through);
+  //   - subsequent context changes (e.g. switching projects on the metrics page,
+  //     where no trigger URL is crossed) also reload, because the inner
+  //     subscription is still alive and distinctUntilChanged sees a different id.
   // NOTE: task updates are not reflected
   // TODO improve to reflect task updates or load when route is changed to worklog or daily summary
   worklogData$: Observable<{
     worklog: Worklog;
     totalTimeSpent: number;
   }> = this._archiveUpdateTrigger$.pipe(
-    switchMap(() => this._workContextService.activeWorkContext$.pipe(take(1))),
+    switchMap(() =>
+      this._workContextService.activeWorkContext$.pipe(
+        distinctUntilChanged((a, b) => a.id === b.id),
+      ),
+    ),
     switchMap((curCtx) =>
       from(
         this._loadWorklogForWorkContext(curCtx).catch((e) => {
@@ -114,34 +120,6 @@ export class WorklogService {
       return null;
     }),
   );
-
-  _quickHistoryData$: Observable<WorklogYearsWithWeeks | null> =
-    this._archiveUpdateTrigger$.pipe(
-      switchMap(() => this._workContextService.activeWorkContext$.pipe(take(1))),
-      switchMap((curCtx) =>
-        from(
-          this._loadQuickHistoryForWorkContext(curCtx).catch((e) => {
-            Log.err('WorklogService: Failed to load quick history', e);
-            return null;
-          }),
-        ).pipe(startWith(null)),
-      ),
-    );
-
-  quickHistoryWeeks$: Observable<WorklogWeekSimple[] | null> =
-    this._quickHistoryData$.pipe(
-      map((worklogYearsWithWeeks) => {
-        const now = new Date();
-        const year = now.getFullYear();
-        if (!worklogYearsWithWeeks) {
-          return null;
-        }
-        if (!worklogYearsWithWeeks[year]) {
-          return [];
-        }
-        return worklogYearsWithWeeks[year].filter((v) => !!v).reverse();
-      }),
-    );
 
   worklogTasks$: Observable<WorklogTask[]> = this.worklog$.pipe(
     map((worklog) => {
@@ -256,32 +234,6 @@ export class WorklogService {
       worklog: {},
       totalTimeSpent: 0,
     };
-  }
-
-  private async _loadQuickHistoryForWorkContext(
-    workContext: WorkContext,
-  ): Promise<WorklogYearsWithWeeks | null> {
-    const archive = (await this._taskArchiveService.load()) || createEmptyEntity();
-    const taskState =
-      (await this._taskService.taskFeatureState$.pipe(first()).toPromise()) ||
-      createEmptyEntity();
-
-    const { completeStateForWorkContext, nonArchiveTaskIds } =
-      getCompleteStateForWorkContext(workContext, taskState, archive);
-
-    const workStartEndForWorkContext =
-      await this._timeTrackingService.getLegacyWorkStartEndForWorkContext(workContext);
-
-    if (completeStateForWorkContext) {
-      return mapArchiveToWorklogWeeks(
-        completeStateForWorkContext,
-        nonArchiveTaskIds,
-        workStartEndForWorkContext,
-        this._dateAdapter.getFirstDayOfWeek(),
-        this._dateTimeFormatService.currentLocale(),
-      );
-    }
-    return null;
   }
 
   private _createTasksForDay(data: WorklogDay): WorklogTask[] {

@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
 import {
   adjustForClockCorruption as adjustForClockCorruptionCore,
   buildEntityFrontier,
@@ -17,8 +17,8 @@ import {
   planLwwConflictResolutions,
   suggestConflictResolution,
   type LwwResolvedConflict,
-  type SelectByIdFactory,
 } from '@sp/sync-core';
+import type { SelectByIdFactory } from '../core/entity-registry-host.types';
 import { Store } from '@ngrx/store';
 import {
   ActionType,
@@ -34,6 +34,7 @@ import { OperationApplierService } from '../apply/operation-applier.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OpLog } from '../../core/log';
 import { toEntityKey } from '../util/entity-key.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -52,11 +53,16 @@ import { ENTITY_REGISTRY, isSingletonEntityId } from '../core/entity-registry';
 import { uuidv7 } from '../../util/uuid-v7';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 
 /**
  * Represents the result of LWW (Last-Write-Wins) conflict resolution.
  */
 type LWWResolution = LwwResolvedConflict<Operation, EntityConflict>;
+
+interface AutoResolveConflictsLwwOptions {
+  callerHoldsOperationLogLock?: boolean;
+}
 
 /**
  * Handles sync conflicts using Last-Write-Wins (LWW) automatic resolution.
@@ -95,6 +101,7 @@ export class ConflictResolutionService {
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
   private syncLogger = inject(SYNC_LOGGER);
   private entityRegistry = inject(ENTITY_REGISTRY);
+  private injector = inject(Injector);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LWW OPERATION FACTORY METHODS
@@ -252,11 +259,14 @@ export class ConflictResolutionService {
    *
    * @param conflicts - Entity conflicts to auto-resolve
    * @param nonConflictingOps - Remote ops that don't conflict (batched for dependency sorting)
+   * @param options - Lock context for deferred local actions flushed after
+   *                  remote clocks and local-win ops are recorded.
    * @returns Promise resolving when all resolutions are applied
    */
   async autoResolveConflictsLWW(
     conflicts: EntityConflict[],
     nonConflictingOps: Operation[] = [],
+    options: AutoResolveConflictsLwwOptions = {},
   ): Promise<{ localWinOpsCreated: number }> {
     if (conflicts.length === 0 && nonConflictingOps.length === 0) {
       return { localWinOpsCreated: 0 };
@@ -389,75 +399,93 @@ export class ConflictResolutionService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // STEP 5: Apply ALL remote operations in a single batch
+    // STEP 5+6: Apply remote ops (single batch) and append local-win update ops.
+    // The deferred-actions flush in `finally` runs whether the apply succeeded
+    // or threw — matches the pre-fix replayOperationBatch.finally semantics
+    // and guarantees buffered local actions don't leak to the next sync. (#7700)
     // ─────────────────────────────────────────────────────────────────────────
-    if (allOpsToApply.length > 0) {
-      OpLog.normal(
-        `ConflictResolutionService: Applying ${allOpsToApply.length} ops in single batch`,
-      );
-
-      const opIdToSeq = new Map(allStoredOps.map((o) => [o.id, o.seq]));
-      const applyResult = await this.operationApplier.applyOperations(allOpsToApply);
-
-      const appliedSeqs = applyResult.appliedOps
-        .map((op) => opIdToSeq.get(op.id))
-        .filter((seq): seq is number => seq !== undefined);
-
-      if (appliedSeqs.length > 0) {
-        await this.opLogStore.markApplied(appliedSeqs);
-
-        // CRITICAL: Merge remote ops' vector clocks into local clock.
-        // This ensures subsequent local operations have clocks that "dominate"
-        // the applied remote ops (GREATER_THAN instead of CONCURRENT).
-        // Without this, ops created after conflict resolution would have clocks
-        // that are CONCURRENT with the applied ops, causing them to be incorrectly
-        // filtered by SyncImportFilterService or rejected as conflicts on next sync.
-        await this.opLogStore.mergeRemoteOpClocks(applyResult.appliedOps);
-
+    let didApplyRemoteOps = false;
+    try {
+      if (allOpsToApply.length > 0) {
         OpLog.normal(
-          `ConflictResolutionService: Successfully applied ${appliedSeqs.length} ops`,
+          `ConflictResolutionService: Applying ${allOpsToApply.length} ops in single batch`,
         );
-      }
+        didApplyRemoteOps = true;
 
-      if (applyResult.failedOp) {
-        const failedOpIndex = allOpsToApply.findIndex(
-          (op) => op.id === applyResult.failedOp!.op.id,
-        );
-        const failedOps = allOpsToApply.slice(failedOpIndex);
-        const failedOpIds = failedOps.map((op) => op.id);
-
-        OpLog.err(
-          `ConflictResolutionService: ${applyResult.appliedOps.length} ops applied before failure. ` +
-            `Marking ${failedOpIds.length} ops as failed.`,
-          applyResult.failedOp.error,
-        );
-        await this.opLogStore.markFailed(failedOpIds, MAX_CONFLICT_RETRY_ATTEMPTS);
-
-        this.snackService.open({
-          type: 'ERROR',
-          msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
-          actionStr: T.PS.RELOAD,
-          actionFn: (): void => {
-            window.location.reload();
-          },
+        const opIdToSeq = new Map(allStoredOps.map((o) => [o.id, o.seq]));
+        const applyResult = await this.operationApplier.applyOperations(allOpsToApply, {
+          skipDeferredLocalActions: true,
         });
 
-        // FIX #6571: Throw on apply failure (parity with applyNonConflictingOps).
-        // Previously, apply failures during LWW resolution were logged but not
-        // thrown, causing sync to report IN_SYNC despite lost operations.
-        throw applyResult.failedOp.error;
-      }
-    }
+        const appliedSeqs = applyResult.appliedOps
+          .map((op) => opIdToSeq.get(op.id))
+          .filter((seq): seq is number => seq !== undefined);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 6: Append new update ops for local wins (will sync on next cycle)
-    // Uses appendWithVectorClockUpdate to ensure vector clock store stays in sync
-    // ─────────────────────────────────────────────────────────────────────────
-    for (const op of newLocalWinOps) {
-      await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
-      OpLog.normal(
-        `ConflictResolutionService: Appended local-win update op ${op.id} for ${op.entityType}:${op.entityId}`,
-      );
+        if (appliedSeqs.length > 0) {
+          await this.opLogStore.markApplied(appliedSeqs);
+
+          // CRITICAL: Merge remote ops' vector clocks into local clock.
+          // This ensures subsequent local operations have clocks that "dominate"
+          // the applied remote ops (GREATER_THAN instead of CONCURRENT).
+          // Without this, ops created after conflict resolution would have clocks
+          // that are CONCURRENT with the applied ops, causing them to be incorrectly
+          // filtered by SyncImportFilterService or rejected as conflicts on next sync.
+          await this.opLogStore.mergeRemoteOpClocks(applyResult.appliedOps);
+
+          OpLog.normal(
+            `ConflictResolutionService: Successfully applied ${appliedSeqs.length} ops`,
+          );
+        }
+
+        if (applyResult.failedOp) {
+          const failedOpIndex = allOpsToApply.findIndex(
+            (op) => op.id === applyResult.failedOp!.op.id,
+          );
+          const failedOps = allOpsToApply.slice(failedOpIndex);
+          const failedOpIds = failedOps.map((op) => op.id);
+
+          OpLog.err(
+            `ConflictResolutionService: ${applyResult.appliedOps.length} ops applied before failure. ` +
+              `Marking ${failedOpIds.length} ops as failed.`,
+            applyResult.failedOp.error,
+          );
+          await this.opLogStore.markFailed(failedOpIds, MAX_CONFLICT_RETRY_ATTEMPTS);
+
+          this.snackService.open({
+            type: 'ERROR',
+            msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
+            actionStr: T.PS.RELOAD,
+            actionFn: (): void => {
+              window.location.reload();
+            },
+          });
+
+          // FIX #6571: Throw on apply failure (parity with applyNonConflictingOps).
+          // Previously, apply failures during LWW resolution were logged but not
+          // thrown, causing sync to report IN_SYNC despite lost operations.
+          // Deferred-actions flush runs in the finally below before the throw
+          // propagates.
+          throw applyResult.failedOp.error;
+        }
+      }
+
+      // ───────────────────────────────────────────────────────────────────────
+      // Append new update ops for local wins (will sync on next cycle)
+      // Uses appendWithVectorClockUpdate to ensure vector clock store stays in sync
+      // ───────────────────────────────────────────────────────────────────────
+      for (const op of newLocalWinOps) {
+        await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
+        OpLog.normal(
+          `ConflictResolutionService: Appended local-win update op ${op.id} for ${op.entityType}:${op.entityId}`,
+        );
+      }
+    } finally {
+      if (didApplyRemoteOps) {
+        await processDeferredActionsAfterRemoteApply(
+          this.injector,
+          options.callerHoldsOperationLogLock ?? false,
+        );
+      }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -866,11 +894,7 @@ export class ConflictResolutionService {
       hasNoSnapshotClock: boolean;
     },
   ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
-    const entityIdsToCheck = remoteOp.entityIds?.length
-      ? remoteOp.entityIds
-      : remoteOp.entityId
-        ? [remoteOp.entityId]
-        : [];
+    const entityIdsToCheck = getOpEntityIds(remoteOp);
 
     for (const entityId of entityIdsToCheck) {
       const entityKey = toEntityKey(remoteOp.entityType, entityId);

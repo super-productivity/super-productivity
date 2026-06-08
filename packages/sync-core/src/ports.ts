@@ -1,5 +1,5 @@
 import type { ApplyOperationsOptions, ApplyOperationsResult } from './apply.types';
-import type { Operation, OperationLogEntry } from './operation.types';
+import type { Operation } from './operation.types';
 
 export type SyncPortMeta = Record<string, string | number | boolean | null | undefined>;
 
@@ -55,22 +55,6 @@ export interface DeferredLocalActionsPort {
  */
 export interface ArchiveSideEffectPort<TAction extends SyncActionLike = SyncActionLike> {
   handleOperation(action: TAction): Promise<void> | void;
-}
-
-/**
- * Port for operation-log persistence.
- *
- * This is intentionally small until orchestration code is moved. Add methods as
- * specific core coordinators need them rather than mirroring an app database
- * service wholesale.
- */
-export interface OperationStorePort<
-  TOperation extends Operation<string> = Operation,
-  TEntry extends OperationLogEntry<TOperation> = OperationLogEntry<TOperation>,
-> {
-  getUnsynced(): Promise<TEntry[]>;
-  markSynced(seqs: number[]): Promise<void>;
-  markRejected(opIds: string[]): Promise<void>;
 }
 
 /**

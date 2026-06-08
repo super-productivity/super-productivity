@@ -81,6 +81,11 @@ const globalSetup = async (config: FullConfig): Promise<void> => {
   process.env.SUPERSYNC_SERVER_HEALTHY = healthy ? 'true' : 'false';
   if (healthy) {
     console.log('SuperSync server healthy — supersync tests will run');
+  } else if (process.env.E2E_REQUIRE_SUPERSYNC === 'true') {
+    throw new Error(
+      'SuperSync server is required for this run but is not test-ready. ' +
+        'Use scripts/wait-for-supersync.sh before running required SuperSync E2E.',
+    );
   } else {
     console.log('SuperSync server not available — supersync tests will be skipped');
   }

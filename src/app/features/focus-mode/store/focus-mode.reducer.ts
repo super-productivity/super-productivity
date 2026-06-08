@@ -71,6 +71,15 @@ export const focusModeReducer = createReducer(
   on(a.setFocusModeMode, (state, { mode }) => ({
     ...state,
     mode,
+    timer:
+      mode === FocusModeMode.Flowtime
+        ? {
+            ...state.timer,
+            duration: 0,
+          }
+        : state.timer,
+    _isOvertimeEnabled:
+      mode === FocusModeMode.Flowtime ? false : state._isOvertimeEnabled,
   })),
 
   // Overlay control
@@ -123,11 +132,12 @@ export const focusModeReducer = createReducer(
   on(a.pauseFocusSession, (state, { pausedTaskId }) => {
     // Allow pausing both work sessions and breaks
     if (state.timer.purpose === null) return state;
+    const timer = updateTimer(state.timer);
 
     return {
       ...state,
       timer: {
-        ...state.timer,
+        ...timer,
         isRunning: false,
       },
       // Store paused task ID if provided (for sync feature)
@@ -161,8 +171,8 @@ export const focusModeReducer = createReducer(
     _isResumingBreak: false,
   })),
 
-  on(a.completeFocusSession, (state, { isManual }) => {
-    const duration = state.timer.elapsed;
+  on(a.completeFocusSession, (state, { completedDuration }) => {
+    const duration = completedDuration ?? state.timer.elapsed;
 
     return {
       ...state,
@@ -270,9 +280,13 @@ export const focusModeReducer = createReducer(
 
     const updatedTimer = updateTimer(state.timer);
 
-    // Check if timer completed - mark for completion but let effects handle the flow
-    if (updatedTimer.duration > 0 && updatedTimer.elapsed >= updatedTimer.duration) {
+    // Check if timer completed - mark for completion but let effects handle the flow.
+    if (updatedTimer.elapsed >= updatedTimer.duration) {
       if (updatedTimer.purpose === 'work') {
+        // Flowtime work sessions have no fixed duration and never auto-complete via tick.
+        if (state.mode === FocusModeMode.Flowtime) {
+          return { ...state, timer: updatedTimer };
+        }
         // When overtime is enabled, keep the timer running past duration
         if (state._isOvertimeEnabled) {
           return { ...state, timer: updatedTimer };
@@ -360,6 +374,57 @@ export const focusModeReducer = createReducer(
       },
     };
   }),
+
+  // Re-adopt a focus session that kept running in the native Android
+  // foreground service after the app was swiped from recents (#7855).
+  // The native service is the source of truth: `startedAt` is reconstructed as
+  // an absolute timestamp so the existing tick reducer keeps counting from the
+  // correct point. For Flowtime (duration 0) `remainingMs` carries elapsed.
+  on(
+    a.restoreFocusSessionFromNative,
+    (state, { durationMs, remainingMs, isBreak, isPaused }) => {
+      const purpose: TimerState['purpose'] = isBreak ? 'break' : 'work';
+      const isFlowtime = durationMs <= 0;
+      const elapsed = isFlowtime
+        ? Math.max(0, remainingMs)
+        : Math.max(0, durationMs - remainingMs);
+      const timer: TimerState = {
+        isRunning: !isPaused,
+        startedAt: Date.now() - elapsed,
+        elapsed,
+        duration: isFlowtime ? 0 : durationMs,
+        purpose,
+        // The native service only tracks `isBreak`, not long-vs-short, so a
+        // recovered break renders as a short break (cosmetic: notification
+        // title). Not round-tripped by design.
+        ...(isBreak ? { isLongBreak: false } : {}),
+      };
+
+      // Derive `mode` from the native duration rather than trusting the
+      // localStorage-seeded `state.mode`. A duration-0 session is Flowtime;
+      // without forcing this, a stale `state.mode` would make the tick reducer
+      // auto-complete the (durationless) session on its first tick. For a
+      // fixed-duration session, only guard against the inverse desync — never
+      // leave it as Flowtime (which would never auto-complete) — while
+      // preserving the Pomodoro-vs-Countdown distinction localStorage holds.
+      const mode = isFlowtime
+        ? FocusModeMode.Flowtime
+        : state.mode === FocusModeMode.Flowtime
+          ? FocusModeMode.Countdown
+          : state.mode;
+
+      return {
+        ...state,
+        timer,
+        mode,
+        // `isOverlayShown` is intentionally left untouched (not forced true):
+        // recovery should be non-intrusive — the header focus button shows the
+        // running timer; we don't pop the full-screen overlay on app reopen.
+        currentScreen: isBreak ? FocusScreen.Break : FocusScreen.Main,
+        mainState: FocusMainUIState.InProgress,
+      };
+    },
+  ),
 );
 
 // For backward compatibility, export the old State interface name
