@@ -103,6 +103,7 @@ describe('BackupService', () => {
     ]);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'saveImportBackup',
+      'loadImportBackup',
       'runDestructiveStateReplacement',
     ]);
     mockOperationWriteFlushService = jasmine.createSpyObj('OperationWriteFlushService', [
@@ -115,6 +116,7 @@ describe('BackupService', () => {
       createMinimalValidBackup() as any,
     );
     mockOpLogStore.saveImportBackup.and.resolveTo();
+    mockOpLogStore.loadImportBackup.and.resolveTo(null);
     mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
     mockOperationWriteFlushService.flushPendingWrites.and.resolveTo();
     mockLockService.request.and.callFake(async (_lockName, fn) => fn());
@@ -135,6 +137,47 @@ describe('BackupService', () => {
     });
 
     service = TestBed.inject(BackupService);
+  });
+
+  describe('captureImportBackup (#8107)', () => {
+    it('should snapshot current state into the import backup store', async () => {
+      const snapshot = createMinimalValidBackup();
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(snapshot as any);
+
+      await service.captureImportBackup();
+
+      expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot);
+    });
+
+    it('should propagate errors so the caller can abort the destructive op', async () => {
+      mockOpLogStore.saveImportBackup.and.rejectWith(new Error('IDB quota exceeded'));
+
+      await expectAsync(service.captureImportBackup()).toBeRejected();
+    });
+  });
+
+  describe('restoreImportBackup (#8107)', () => {
+    it('should import the saved snapshot and return true when one exists', async () => {
+      const saved = createMinimalValidBackup();
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, savedAt: 123 });
+      const importSpy = spyOn(service, 'importCompleteBackup').and.resolveTo();
+
+      const result = await service.restoreImportBackup();
+
+      expect(result).toBe(true);
+      expect(importSpy).toHaveBeenCalledWith(saved as any, true, true, true);
+    });
+
+    it('should return false and not import when no backup exists', async () => {
+      mockOpLogStore.loadImportBackup.and.resolveTo(null);
+      const importSpy = spyOn(service, 'importCompleteBackup').and.resolveTo();
+
+      const result = await service.restoreImportBackup();
+
+      expect(result).toBe(false);
+      expect(importSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('importCompleteBackup', () => {

@@ -173,6 +173,44 @@ export class BackupService {
     }
   }
 
+  /**
+   * Captures a snapshot of the current state into the single-slot import backup
+   * store, so it can be restored after a destructive state replacement (e.g. the
+   * sync "Use Server Data" path, which clears local ops and replaces NgRx state).
+   *
+   * Mirrors the pre-import backup taken in `_persistImportToOperationLog`. Errors
+   * propagate so the caller can abort the destructive operation rather than wipe
+   * local data without a recovery point. (#8107)
+   */
+  async captureImportBackup(): Promise<void> {
+    const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
+    await this._opLogStore.saveImportBackup(currentState);
+  }
+
+  /**
+   * Restores the most recent import backup — the snapshot saved by
+   * `captureImportBackup()` (or before a backup import) — if one exists. Returns
+   * false when there is nothing to restore. Used by the post-replace "Undo"
+   * affordance.
+   *
+   * The backup state is read BEFORE `importCompleteBackup` runs (which itself
+   * re-snapshots the current state into the same slot), so the good state is
+   * already in hand and round-trips correctly. (#8107)
+   */
+  async restoreImportBackup(): Promise<boolean> {
+    const backup = await this._opLogStore.loadImportBackup();
+    if (!backup) {
+      return false;
+    }
+    await this.importCompleteBackup(
+      backup.state as AppDataComplete,
+      true, // isSkipLegacyWarnings
+      true, // isSkipReload - loadAllData updates state live
+      true, // isForceConflict
+    );
+    return true;
+  }
+
   private async _persistImportToOperationLog(
     importedData: AppDataComplete,
   ): Promise<void> {

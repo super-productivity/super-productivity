@@ -1507,6 +1507,7 @@
         "LOCAL_CHANGES_DISCARDED": "{{count}} local change(s) discarded - item(s) were deleted on another device",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} unsaved local change(s) discarded - sync downloaded newer data",
         "LOCAL_DATA_REPLACE_CANCELLED": "Sync cancelled. Your local data has been preserved.",
+        "LOCAL_DATA_REPLACE_UNDO": "Your local data was replaced with the server's data.",
         "LOCK_TIMEOUT_ERROR": "Sync timed out waiting for a previous operation to finish. Please try again.",
         "LWW_CONFLICTS_AUTO_RESOLVED": "Sync conflicts auto-resolved: {{localWins}} local win(s), {{remoteWins}} remote win(s)",
         "MIGRATION_FAILED": "Some sync data could not be migrated and was skipped. This may indicate data corruption or a bug.",
