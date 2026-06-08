@@ -129,6 +129,17 @@
         ) | translate
       }}</span>
     </button>
+    @if (isShowResetBackgroundImage()) {
+      <button
+        mat-menu-item
+        (click)="resetBackgroundImage()"
+        class="background-menu-item"
+        style="width: 100%; overflow: hidden"
+      >
+        <mat-icon>hide_image</mat-icon>
+        <span>{{ T.APP.CONTEXT_MENU.RESET_BACKGROUND_IMAGE | translate }}</span>
+      </button>
+    }
     @if (
       workContextService.activeWorkContextType === 'PROJECT' ||
       workContextService.activeWorkContextId === TODAY_TAG_ID

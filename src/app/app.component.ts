@@ -68,7 +68,10 @@ import {
 import { SectionService } from './features/section/section.service';
 import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
 import { TODAY_TAG } from './features/tag/tag.const';
-import { normalizeBackgroundImageBlur } from './features/work-context/work-context.const';
+import {
+  hasAnyBackgroundImage,
+  normalizeBackgroundImageBlur,
+} from './features/work-context/work-context.const';
 import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
@@ -106,6 +109,17 @@ export const getBackgroundOverlayOpacity = (context: WorkContextThemeSource): nu
 
 export const getBackgroundImageBlur = (context: WorkContextThemeSource): number =>
   normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
+
+export const hasBackgroundImage = (context: WorkContextThemeSource): boolean =>
+  hasAnyBackgroundImage(context?.theme);
+
+export const resetBackgroundImageTheme = (
+  theme: WorkContextThemeCfg,
+): WorkContextThemeCfg => ({
+  ...theme,
+  backgroundImageDark: null,
+  backgroundImageLight: null,
+});
 
 @Component({
   selector: 'app-root',
@@ -438,6 +452,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return blur > 0 ? `blur(${blur}px)` : 'none';
   });
 
+  readonly isShowResetBackgroundImage = computed((): boolean =>
+    hasBackgroundImage(this._activeWorkContext()),
+  );
+
   async openSettings(): Promise<void> {
     const isForProject =
       this.workContextService.activeWorkContextType === WorkContextType.PROJECT;
@@ -456,6 +474,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       isProject: isForProject,
       entity,
     });
+  }
+
+  resetBackgroundImage(): void {
+    const context = this._activeWorkContext();
+    if (!context || !hasBackgroundImage(context)) {
+      return;
+    }
+
+    const theme = resetBackgroundImageTheme(context.theme);
+    if (context.type === WorkContextType.PROJECT) {
+      this._projectService.update(context.id, { theme });
+    } else {
+      this._tagService.updateTag(context.id, { theme });
+    }
   }
 
   async addSection(): Promise<void> {

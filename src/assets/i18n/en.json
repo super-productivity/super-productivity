@@ -8,7 +8,8 @@
     "B_OFFLINE": "You are disconnected from the internet. Syncing and requesting issue provider data will not work.",
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Change Project Settings",
-      "CHANGE_TAG_SETTINGS": "Change Tag Settings"
+      "CHANGE_TAG_SETTINGS": "Change Tag Settings",
+      "RESET_BACKGROUND_IMAGE": "Reset Background Image"
     },
     "SKIP_SYNC_WAIT": "Skip waiting for sync",
     "UPDATE_WEB_APP": "New version available. Load new version?"
