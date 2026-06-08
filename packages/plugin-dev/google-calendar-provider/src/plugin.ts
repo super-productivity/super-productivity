@@ -45,6 +45,7 @@ interface GoogleCalendarConfig {
   readCalendarIds?: string[];
   writeCalendarId?: string;
   syncRangeWeeks?: string;
+  syncRangePastWeeks?: string;
   showDeclinedEvents?: boolean;
   isAutoTimeBlock?: boolean;
   timeBlockCalendarId?: string;
@@ -190,6 +191,11 @@ const isHttpStatus = (err: unknown, status: number): boolean =>
 
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 const RATE_LIMIT_MAX_ATTEMPTS = 4;
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+const MAX_SYNC_RANGE_PAST_WEEKS = 12;
+const DEFAULT_SYNC_MAX_RESULTS = 100;
+const MAX_SYNC_MAX_RESULTS = 500;
+const SYNC_MAX_RESULTS_PER_WEEK = 50;
 
 /**
  * Read `error.errors[0].reason` from a Google Calendar API error response.
@@ -252,6 +258,29 @@ const isDeclined = (event: GoogleCalendarEvent): boolean =>
 const isSpManagedEvent = (event: GoogleCalendarEvent): boolean =>
   typeof event.extendedProperties?.private?.spTaskId === 'string';
 
+const parsePositiveInt = (value: string | undefined, fallback: number): number => {
+  const parsed = parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parsePastWeeks = (value: string | undefined): number => {
+  const parsed = parseInt(value || '', 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.min(parsed, MAX_SYNC_RANGE_PAST_WEEKS);
+};
+
+const getSyncMaxResults = (cfg: GoogleCalendarConfig): string => {
+  const syncRangePastWeeks = parsePastWeeks(cfg.syncRangePastWeeks);
+  if (syncRangePastWeeks === 0) return String(DEFAULT_SYNC_MAX_RESULTS);
+
+  const syncRangeWeeks = parsePositiveInt(cfg.syncRangeWeeks, 2);
+  const rangeMaxResults =
+    (syncRangeWeeks + syncRangePastWeeks) * SYNC_MAX_RESULTS_PER_WEEK;
+  return String(
+    Math.min(MAX_SYNC_MAX_RESULTS, Math.max(DEFAULT_SYNC_MAX_RESULTS, rangeMaxResults)),
+  );
+};
+
 /** Fetch events from a single calendar. */
 const fetchEventsForCalendar = async (
   http: PluginHttp,
@@ -259,12 +288,13 @@ const fetchEventsForCalendar = async (
   cfg: GoogleCalendarConfig,
   opts?: { query?: string; maxResults?: string },
 ): Promise<PluginSearchResult[]> => {
-  const syncRangeWeeks = parseInt(cfg.syncRangeWeeks || '', 10) || 2;
+  const syncRangeWeeks = parsePositiveInt(cfg.syncRangeWeeks, 2);
+  const syncRangePastWeeks = parsePastWeeks(cfg.syncRangePastWeeks);
   const now = new Date();
-  const timeMin = now.toISOString();
-  const timeMax = new Date(
-    now.getTime() + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000,
+  const timeMin = new Date(
+    now.getTime() - syncRangePastWeeks * MS_PER_WEEK,
   ).toISOString();
+  const timeMax = new Date(now.getTime() + syncRangeWeeks * MS_PER_WEEK).toISOString();
 
   const response = await http.get<GoogleCalendarListResponse>(eventUrl(calendarId), {
     params: {
@@ -369,6 +399,17 @@ PluginAPI.registerIssueProvider({
       label: 'Sync range (weeks)',
       description: 'How many weeks ahead to sync events. Defaults to 2.',
       required: false,
+      pattern: '^[0-9]*$',
+    },
+    {
+      key: 'syncRangePastWeeks',
+      type: 'input' as const,
+      label: 'Past events range (weeks)',
+      description:
+        'How many past weeks to keep visible in the Schedule view. Defaults to 0 and is capped at 12.',
+      required: false,
+      pattern: '^[0-9]*$',
+      advanced: true,
     },
     {
       key: 'showDeclinedEvents',
@@ -466,7 +507,8 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return fetchEvents(http, migrateConfig(config), { maxResults: '100' });
+    const cfg = migrateConfig(config);
+    return fetchEvents(http, cfg, { maxResults: getSyncMaxResults(cfg) });
   },
 
   issueDisplay: [

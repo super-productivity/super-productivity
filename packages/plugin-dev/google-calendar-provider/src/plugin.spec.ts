@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import type { IssueProviderPluginDefinition } from '@super-productivity/plugin-api';
+import type {
+  IssueProviderPluginDefinition,
+  PluginHttp,
+} from '@super-productivity/plugin-api';
 
 let definition: IssueProviderPluginDefinition;
 
@@ -39,6 +42,65 @@ describe('Google Calendar Plugin', () => {
       expect(oauthConfig?.scopes).not.toContain(
         'https://www.googleapis.com/auth/calendar.readonly',
       );
+    });
+  });
+
+  describe('calendar sync range', () => {
+    const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+    let mockHttp: PluginHttp;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-01T12:00:00.000Z'));
+      mockHttp = {
+        get: vi.fn().mockResolvedValue({ items: [] }),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+        request: vi.fn(),
+      };
+    });
+
+    it('exposes an advanced past events range config field', () => {
+      const field = definition.configFields.find(
+        (configField) => configField.key === 'syncRangePastWeeks',
+      );
+
+      expect(field).toMatchObject({
+        type: 'input',
+        label: 'Past events range (weeks)',
+        required: false,
+        pattern: '^[0-9]*$',
+        advanced: true,
+      });
+    });
+
+    it('keeps the default Google Calendar query window forward-only', async () => {
+      await definition.getNewIssuesForBacklog!({}, mockHttp);
+
+      const [, options] = vi.mocked(mockHttp.get).mock.calls[0];
+      expect(options?.params?.timeMin).toBe('2026-06-01T12:00:00.000Z');
+      expect(options?.params?.timeMax).toBe(
+        new Date(Date.now() + 2 * MS_PER_WEEK).toISOString(),
+      );
+      expect(options?.params?.maxResults).toBe('100');
+    });
+
+    it('moves timeMin back by the configured past range and caps it at 12 weeks', async () => {
+      await definition.getNewIssuesForBacklog!(
+        { syncRangeWeeks: '3', syncRangePastWeeks: '20' },
+        mockHttp,
+      );
+
+      const [, options] = vi.mocked(mockHttp.get).mock.calls[0];
+      expect(options?.params?.timeMin).toBe(
+        new Date(Date.now() - 12 * MS_PER_WEEK).toISOString(),
+      );
+      expect(options?.params?.timeMax).toBe(
+        new Date(Date.now() + 3 * MS_PER_WEEK).toISOString(),
+      );
+      expect(options?.params?.maxResults).toBe('500');
     });
   });
 

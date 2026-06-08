@@ -66,6 +66,7 @@ import { isCalendarProviderDisabledOnCurrentPlatform } from '../issue/providers/
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
 const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
+const PAST_EVENTS_RETENTION = 12 * ONE_WEEK;
 const PLUGIN_CALENDAR_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 @Injectable({
@@ -493,11 +494,12 @@ export class CalendarIntegrationService {
 
     return (
       cached
-        // filter out cached entries older than one week
+        // Keep this aligned with the Google Calendar provider's capped past sync window
+        // so cached plugin events remain visible after a reload.
         .map((provider) => ({
           ...provider,
           items: provider.items
-            .filter((item) => item.start + item.duration >= now - ONE_WEEK)
+            .filter((item) => item.start + item.duration >= now - PAST_EVENTS_RETENTION)
             // Backfill issueProviderKey for events cached before it became required
             .map((item) =>
               item.issueProviderKey ? item : { ...item, issueProviderKey: 'ICAL' },

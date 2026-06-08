@@ -299,15 +299,30 @@ describe('ScheduleComponent', () => {
       expect(newDate?.getHours()).toBe(0); // Normalized to midnight
     });
 
-    it('should not navigate backward when already viewing today', () => {
+    it('should navigate backward from today into the past window', () => {
       // Arrange - viewing today (null selected date)
       component['_selectedDate'].set(null);
 
       // Act
       component.goToPreviousPeriod();
 
-      // Assert - prev nav is disabled when today is in view
-      expect(component['_selectedDate']()).toBeNull();
+      // Assert - past calendar events can be inspected in the Schedule view
+      expect(component['_selectedDate']()).not.toBeNull();
+      expect(component['_selectedDate']()?.getTime()).toBeLessThan(Date.now());
+    });
+
+    it('should clamp backward navigation to the 12-week past window', () => {
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2025-10-01',
+        '2025-10-02',
+        '2025-10-03',
+      ]);
+      component['_selectedDate'].set(new Date(2025, 9, 1));
+
+      component.goToPreviousPeriod();
+
+      const limit = new Date(component['_pastNavLimitTime']());
+      expect(component['_selectedDate']()?.getTime()).toBe(limit.getTime());
     });
 
     it('should go to previous month in month view', () => {

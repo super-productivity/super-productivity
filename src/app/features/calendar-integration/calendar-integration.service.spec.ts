@@ -196,18 +196,31 @@ END:VCALENDAR`;
         discardPeriodicTasks();
       }));
 
-      it('should filter out events older than one week from cache', fakeAsync(() => {
+      it('should keep cached past events within the rolling history window', fakeAsync(() => {
         const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
+        const now = Date.now();
+        const twelveWeeks = 12 * ONE_WEEK;
+        const twoWeeks = 2 * ONE_WEEK;
+        const tooOldStart = now - twelveWeeks - 7_200_000;
+        const rollingHistoryStart = now - twoWeeks;
         const cachedProvider = createMockProvider({ id: 'provider-1' });
         const cachedData = [
           {
             items: [
               {
-                id: 'old-event',
+                id: 'too-old-event',
                 calProviderId: 'provider-1',
                 issueProviderKey: 'ICAL',
-                title: 'Old Event',
-                start: Date.now() - ONE_WEEK - 7200000, // more than 1 week ago
+                title: 'Too Old Event',
+                start: tooOldStart,
+                duration: 3600000,
+              },
+              {
+                id: 'rolling-history-event',
+                calProviderId: 'provider-1',
+                issueProviderKey: 'ICAL',
+                title: 'Rolling History Event',
+                start: rollingHistoryStart,
                 duration: 3600000,
               },
               {
@@ -242,10 +255,12 @@ END:VCALENDAR`;
         subscriptions.push(sub);
 
         tick(0);
-        // Old event (> 1 week) is filtered; recent past and future events are kept
-        expect((emittedValue as any[])[0].items.length).toBe(2);
-        expect((emittedValue as any[])[0].items[0].id).toBe('recent-past-event');
-        expect((emittedValue as any[])[0].items[1].id).toBe('future-event');
+        // Events inside the 12-week rolling history are kept; older cache is dropped.
+        expect((emittedValue as any[])[0].items.map((item: any) => item.id)).toEqual([
+          'rolling-history-event',
+          'recent-past-event',
+          'future-event',
+        ]);
         discardPeriodicTasks();
       }));
     });

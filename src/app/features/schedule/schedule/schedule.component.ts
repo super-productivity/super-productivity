@@ -44,6 +44,8 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { getWeekNumber } from '../../../util/get-week-number';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 
+const PAST_SCHEDULE_NAV_LIMIT_WEEKS = 12;
+
 @Component({
   selector: 'schedule',
   imports: [
@@ -113,6 +115,12 @@ export class ScheduleComponent {
     if (this._selectedDate() === null) return true;
     const todayStr = this._todayDateStr();
     return todayStr ? this.daysToShow().includes(todayStr) : false;
+  });
+
+  isAtPastNavLimit = computed(() => {
+    const days = this.daysToShow();
+    if (!days.length) return true;
+    return parseDbDateStr(days[0]).getTime() <= this._pastNavLimitTime();
   });
 
   protected _todayDateStr = toSignal(this._globalTrackingIntervalService.todayDateStr$);
@@ -286,9 +294,6 @@ export class ScheduleComponent {
   });
 
   goToPreviousPeriod(): void {
-    // Never navigate into the past — the displayed range must include today or later
-    if (this.isViewingToday()) return;
-
     const currentDate = this._selectedDate() || new Date();
     const selectedView = this._currentTimeViewMode();
 
@@ -298,21 +303,13 @@ export class ScheduleComponent {
         currentDate.getMonth() - 1,
         1,
       );
-      this._selectedDate.set(previousMonth);
+      this._selectedDate.set(this._clampToPastNavLimit(previousMonth));
     } else {
       const daysToSkip = this.daysToShow().length;
       const previousPeriod = new Date(currentDate);
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
       previousPeriod.setHours(0, 0, 0, 0);
-
-      // If going back would land on or before today, snap to "today view" (null)
-      const todayMidnight = new Date();
-      todayMidnight.setHours(0, 0, 0, 0);
-      if (previousPeriod.getTime() <= todayMidnight.getTime()) {
-        this._selectedDate.set(null);
-      } else {
-        this._selectedDate.set(previousPeriod);
-      }
+      this._selectedDate.set(this._clampToPastNavLimit(previousPeriod));
     }
   }
 
@@ -394,6 +391,19 @@ export class ScheduleComponent {
   private getTimeView(): 'week' | 'month' {
     const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
     return preservedView === 'month' ? 'month' : 'week';
+  }
+
+  private _pastNavLimitTime(): number {
+    const todayStr = this._todayDateStr();
+    const today = todayStr ? parseDbDateStr(todayStr) : new Date();
+    today.setHours(0, 0, 0, 0);
+    today.setDate(today.getDate() - PAST_SCHEDULE_NAV_LIMIT_WEEKS * 7);
+    return today.getTime();
+  }
+
+  private _clampToPastNavLimit(date: Date): Date {
+    const limit = new Date(this._pastNavLimitTime());
+    return date.getTime() < limit.getTime() ? limit : date;
   }
 
   constructor() {
