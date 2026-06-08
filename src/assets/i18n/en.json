@@ -26,6 +26,7 @@
     "RESTORE_FILE_BACKUP": "There seems to be NO DATA, but there are backups available at \"{{dir}}\". Do you want to restore the latest backup from {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "There seems to be NO DATA, but there is a backup available. Do you want to load it?",
     "RESTORE_FILE_BACKUP_MOBILE": "No data was found on this device, but a backup is available to restore (tasks: {{tasks}}, projects: {{projects}}). Restore it?",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Restore the latest automatic backup (tasks: {{tasks}}, projects: {{projects}})? This replaces all current local data on this device.",
     "RESTORE_STRAY_BACKUP": "During the last sync, there may have been an error. Do you want to restore the last backup?"
   },
   "DATETIME_SCHEDULE": {

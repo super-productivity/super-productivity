@@ -18,6 +18,7 @@ import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-s
 import {
   countAllTasks,
   countAllTasksInBackupStr,
+  isUsableBackupStr,
   selectBestBackupStr,
   summarizeBackupStr,
 } from './backup-ring.util';
@@ -187,7 +188,7 @@ export class LocalBackupService {
       ? await this.loadBackupAndroid()
       : await this.loadBackupIOS();
 
-    if (!backupData) {
+    if (!isUsableBackupStr(backupData)) {
       this._snackService.open({
         type: 'WARNING',
         msg: T.GCF.AUTO_BACKUPS.S_NO_BACKUP_AVAILABLE,
@@ -195,7 +196,7 @@ export class LocalBackupService {
       return;
     }
 
-    if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
+    if (confirmDialog(this._restoreMobileFromSettingsPromptMsg(backupData))) {
       Log.log('mobile backupData loaded from settings, length: ' + backupData.length);
       await this._importBackup(backupData);
     }
@@ -215,6 +216,17 @@ export class LocalBackupService {
       tasks: summary.taskCount,
       projects: summary.projectCount,
     });
+  }
+
+  private _restoreMobileFromSettingsPromptMsg(backupData: string): string {
+    const summary = summarizeBackupStr(backupData);
+    return this._translateService.instant(
+      T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS,
+      {
+        tasks: summary?.taskCount ?? 0,
+        projects: summary?.projectCount ?? 0,
+      },
+    );
   }
 
   private async _backup(): Promise<void> {

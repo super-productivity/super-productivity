@@ -674,7 +674,13 @@ describe('LocalBackupService', () => {
 
       await service.restoreLatestMobileBackupFromSettings();
 
-      expect(window.confirm).toHaveBeenCalledWith(T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE);
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS,
+        { tasks: 1, projects: 1 },
+      );
+      expect(window.confirm).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS,
+      );
       expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalledWith(
         jasmine.objectContaining({
           task: jasmine.objectContaining({ ids: ['task1'] }),
@@ -698,6 +704,36 @@ describe('LocalBackupService', () => {
       });
       expect(window.confirm).not.toHaveBeenCalled();
       expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+    });
+
+    [
+      {
+        label: 'corrupt',
+        backupData: '{broken',
+      },
+      {
+        label: 'data-less',
+        backupData: JSON.stringify({
+          task: { ids: [], entities: {} },
+          project: { ids: [], entities: {} },
+          tag: { ids: [], entities: {} },
+          note: { ids: [], entities: {} },
+        }),
+      },
+    ].forEach(({ label, backupData }) => {
+      it(`should not restore a ${label} Android backup`, async () => {
+        setAndroidMode();
+        spyOn(service, 'loadBackupAndroid').and.resolveTo(backupData);
+
+        await service.restoreLatestMobileBackupFromSettings();
+
+        expect(snackServiceSpy.open).toHaveBeenCalledWith({
+          type: 'WARNING',
+          msg: T.GCF.AUTO_BACKUPS.S_NO_BACKUP_AVAILABLE,
+        });
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+      });
     });
 
     it('should not import when the restore confirmation is cancelled', async () => {
