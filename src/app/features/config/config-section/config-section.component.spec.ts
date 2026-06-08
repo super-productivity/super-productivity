@@ -38,6 +38,8 @@ describe('ConfigSectionComponent onAction', () => {
     // isolation without rendering the heavy template / child components.
   });
 
+  afterEach(() => fixture?.destroy());
+
   it('does not enter pending state for a synchronous (void) action', () => {
     const onClick = jasmine.createSpy('onClick');
     const action = makeAction(onClick);
