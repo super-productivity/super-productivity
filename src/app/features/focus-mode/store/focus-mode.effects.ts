@@ -592,17 +592,6 @@ export class FocusModeEffects {
     ),
   );
 
-  // Stop tracking when exiting break to planning
-  // Without this, tracking continues running orphaned after the focus session is reset
-  stopTrackingOnExitBreakToPlanning$ = createEffect(() =>
-    this.actions$.pipe(
-      ofType(actions.exitBreakToPlanning),
-      withLatestFrom(this.taskService.currentTaskId$),
-      filter(([_, currentTaskId]) => !!currentTaskId),
-      map(() => unsetCurrentTask()),
-    ),
-  );
-
   // Pause on idle
   pauseOnIdle$ = createEffect(() =>
     this.actions$.pipe(

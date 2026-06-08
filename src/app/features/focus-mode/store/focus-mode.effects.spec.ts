@@ -950,36 +950,6 @@ describe('FocusModeEffects', () => {
     });
   });
 
-  describe('stopTrackingOnExitBreakToPlanning$', () => {
-    it('should dispatch unsetCurrentTask when a task is being tracked', (done) => {
-      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
-      store.overrideSelector(selectFocusModeConfig, {} as any);
-      store.refreshState();
-      currentTaskId$.next('task-123');
-
-      effects.stopTrackingOnExitBreakToPlanning$.subscribe((action) => {
-        expect(action).toEqual(unsetCurrentTask());
-        done();
-      });
-    });
-
-    it('should not dispatch when no task is being tracked', (done) => {
-      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
-      store.overrideSelector(selectFocusModeConfig, {} as any);
-      store.refreshState();
-      currentTaskId$.next(null);
-
-      const result: any[] = [];
-      effects.stopTrackingOnExitBreakToPlanning$.subscribe({
-        next: (action) => result.push(action),
-        complete: () => {
-          expect(result.length).toBe(0);
-          done();
-        },
-      });
-    });
-  });
-
   describe('pauseOnIdle$', () => {
     it('should dispatch pauseFocusSession when openIdleDialog is dispatched', (done) => {
       actions$ = of(

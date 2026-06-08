@@ -84,4 +84,54 @@ describe('InputDurationSliderComponent', () => {
 
     sub.unsubscribe();
   });
+
+  describe('flexible increment (hybrid drag)', () => {
+    // Apply a single drag tick at the given raw pointer angle and return the
+    // value emitted by modelChange.
+    const drag = (degrees: number): number => {
+      let emitted = Number.NaN;
+      const sub = component.modelChange.subscribe((v) => (emitted = v));
+      component.setValueFromRotation(degrees);
+      sub.unsubscribe();
+      return emitted;
+    };
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('useFlexibleIncrement', true);
+      fixture.detectChanges();
+    });
+
+    it('Mode A (<1h): 5-min snap at 1° = 1/6 min', () => {
+      component.setRotationFromValue(THIRTY_MINUTES); // raw angle 180, accumulator 30
+      // +30° at 1/6 min/° = +5 min
+      expect(drag(210)).toBe(35 * MINUTE);
+      expect(component._model()).toBe(35 * MINUTE);
+    });
+
+    it('Mode B (≥1h): 15-min snap at 1° = 1 min', () => {
+      component.setRotationFromValue(ONE_HOUR_AND_FIFTEEN_MINUTES); // raw angle 15, accumulator 75
+      // +15° at 1 min/° = +15 min
+      expect(drag(30)).toBe(ONE_HOUR_AND_THIRTY_MINUTES);
+    });
+
+    it('anchors exactly to 1h when crossing the A→B boundary', () => {
+      component.setRotationFromValue(FIFTY_FIVE_MINUTES); // raw angle 330, accumulator 55
+      // a forward drag whose rounded value reaches ≥60 snaps to exactly 60
+      expect(drag(355)).toBe(HOUR);
+      expect(component._model()).toBe(HOUR);
+    });
+
+    it('anchors to 55min crossing the B→A boundary (−delta via ±180° wrap)', () => {
+      component.setRotationFromValue(HOUR); // raw angle 0, accumulator 60
+      // 0° → 350° is a −10° move across the seam, not +350°
+      expect(drag(350)).toBe(FIFTY_FIVE_MINUTES);
+      expect(component._model()).toBe(FIFTY_FIVE_MINUTES);
+    });
+
+    it('reads a seam-crossing drag as a small forward delta (+wrap)', () => {
+      component.setRotationFromValue(FIFTY_FIVE_MINUTES); // raw angle 330, accumulator 55
+      // 330° → 10° is a +40° move across the seam, not −320°
+      expect(drag(10)).toBe(HOUR);
+    });
+  });
 });

@@ -1,12 +1,10 @@
 @use '../../../../styles/_globals.scss' as *;
 
 :host {
-  // Single source of truth for clock sizing. Consumers can override per-context.
-  // Fluid scaling: vmin tracks the smaller viewport dimension (clock is
-  // square), capped by vh so squat (wide-short) windows don't push the
-  // task title and pause/complete row off-screen. Floor keeps the clock
-  // legible on tiny windows; ceiling prevents it from dominating 4K displays.
-  --clock-face-size: clamp(180px, min(54vmin, 58vh), 640px);
+  // Clock sizing. Consumers can override --clock-face-size per-context; the
+  // fluid default lives in the shared --clock-face-size-default token
+  // (src/styles/_css-variables.scss) so the slider overlay stays in sync.
+  --clock-face-size: var(--clock-face-size-default);
 
   // Derived from the face size so everything scales together.
   // --clock-time-size: digits in the center.

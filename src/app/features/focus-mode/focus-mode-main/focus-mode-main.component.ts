@@ -9,10 +9,10 @@ import {
   signal,
 } from '@angular/core';
 import { Log } from '../../../core/log';
-import { from, Observable, of } from 'rxjs';
+import { from, Observable, of, Subject } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
-import { switchMap, take } from 'rxjs/operators';
+import { debounceTime, switchMap, take } from 'rxjs/operators';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { IssueService } from '../../issue/issue.service';
@@ -64,7 +64,7 @@ import {
   SegmentedButtonGroupComponent,
   SegmentedButtonOption,
 } from '../../../ui/segmented-button-group/segmented-button-group.component';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { ANI_STANDARD_TIMING } from '../../../ui/animations/animation.const';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
@@ -187,6 +187,11 @@ export class FocusModeMainComponent {
 
   displayDuration = signal(25 * 60 * 1000); // Default 25 minutes
   isTaskSelectorOpen = signal(false);
+
+  // Pomodoro's work duration lives in synced global config. Persisting on every
+  // keystroke emits one sync op per character, so coalesce rapid edits and write
+  // once the user pauses (or when the session starts — see startSession()).
+  private readonly _pomodoroDurationToPersist$ = new Subject<number>();
 
   // OS-level window focus. When the user tabs away (or focuses another app),
   // hide the muted control buttons so we don't blink at them.
@@ -317,6 +322,10 @@ export class FocusModeMainComponent {
         this.displayDuration.set(stored);
       }
     });
+
+    this._pomodoroDurationToPersist$
+      .pipe(debounceTime(400), takeUntilDestroyed())
+      .subscribe((duration) => this._persistPomodoroDuration(duration));
   }
 
   @HostListener('window:focus') onWindowFocus(): void {
@@ -435,6 +444,12 @@ export class FocusModeMainComponent {
   }
 
   startSession(): void {
+    // Persist any pending (debounced) Pomodoro duration edit before starting so
+    // a value typed within the debounce window isn't dropped.
+    if (this.mode() === FocusModeMode.Pomodoro) {
+      this._persistPomodoroDuration(this.displayDuration());
+    }
+
     const config = this.focusModeConfig();
 
     // Sync between focus session and tracking is always on — require a task
@@ -506,22 +521,22 @@ export class FocusModeMainComponent {
   onDurationChange(duration: number): void {
     this.displayDuration.set(duration);
 
-    // Pomodoro's duration is part of persistent config, not the session
-    // store; persist via globalConfigService so the next session also picks
-    // up the new value.
+    // Pomodoro's duration is persistent (synced) config, not session store.
+    // Debounce the write (see _pomodoroDurationToPersist$) so typing "25" emits
+    // one sync op rather than one per keystroke.
     if (this.mode() === FocusModeMode.Pomodoro) {
-      const current = this.focusModeService.pomodoroConfig();
-      if (current) {
-        this._globalConfigService.updateSection(
-          'pomodoro',
-          { ...current, duration },
-          true,
-        );
-      }
+      this._pomodoroDurationToPersist$.next(duration);
       return;
     }
 
     this._store.dispatch(setFocusSessionDuration({ focusSessionDuration: duration }));
+  }
+
+  private _persistPomodoroDuration(duration: number): void {
+    const current = this.focusModeService.pomodoroConfig();
+    if (current && current.duration !== duration) {
+      this._globalConfigService.updateSection('pomodoro', { ...current, duration }, true);
+    }
   }
 
   openTaskSelector(): void {

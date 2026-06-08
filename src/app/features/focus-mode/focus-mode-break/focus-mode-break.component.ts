@@ -89,10 +89,20 @@ export class FocusModeBreakComponent {
     getBreakCycle(this.focusModeService.currentCycle() ?? 1),
   );
 
-  // Which break-label translation key to show above the digits.
+  // Hide the focused task's title while tracking is paused for the break — the
+  // user has stepped away from the task, so showing it is just noise.
+  readonly isTrackingPausedDuringBreak = computed(
+    () => !!this.focusModeService.focusModeConfig()?.isPauseTrackingDuringBreak,
+  );
+
+  // Which break-label translation key to show above the digits. Flowtime breaks
+  // aren't Pomodoro short/long, so they read as a neutral "Break".
   readonly breakLabelKey = computed(() => {
     if (this.isBreakOffer()) {
       return T.F.FOCUS_MODE.FLOWTIME_BREAK_TITLE;
+    }
+    if (this.focusModeService.mode() === FocusModeMode.Flowtime) {
+      return T.F.FOCUS_MODE.BREAK_TITLE;
     }
     return this.focusModeService.isBreakLong()
       ? T.F.FOCUS_MODE.LONG_BREAK_TITLE

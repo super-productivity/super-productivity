@@ -8,6 +8,12 @@
   height: 100%;
   text-align: center;
   gap: var(--s2);
+  // Mirror focus-mode-main's :host padding so the circle's vertical baseline
+  // matches across the focus ↔ break transition. focus-mode-main reserves --s9
+  // at the top for its mode selector; break has no selector but keeps the same
+  // reservation so its circle doesn't sit higher than the focus circle.
+  padding-top: var(--s9);
+  padding-bottom: var(--s2);
 }
 
 // Mirrors focus-mode-main's .task-section so the circle's vertical baseline

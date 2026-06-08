@@ -2,7 +2,7 @@
   <!-- Task name above the circle — mirrors the focus-mode-main layout so the
        circle/digit baseline stays put across focus ↔ break transitions. -->
   <div class="task-section">
-    @if (displayedTask(); as t) {
+    @if (!isTrackingPausedDuringBreak() && displayedTask(); as t) {
       <div class="task-title">{{ t.title }}</div>
     }
   </div>

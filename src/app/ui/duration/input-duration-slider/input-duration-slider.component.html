@@ -22,7 +22,9 @@
       ></label>
     }
     <input
+      #durationInput
       (ngModelChange)="onInputChange($event)"
+      (keydown.enter)="$event.preventDefault(); durationInput.blur()"
       [id]="uid"
       [ngModel]="_model()"
       [placeholder]="T.G.EXAMPLE_VAL | translate"

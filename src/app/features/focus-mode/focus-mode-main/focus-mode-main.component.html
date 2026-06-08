@@ -169,11 +169,12 @@
         <div class="duration-slider-overlay-wrapper">
           <div
             class="duration-slider-overlay"
-            [class.is-handle-hidden]="isPomodoro()"
             [@modeSwitchFade]="mode()"
           >
             <input-duration-slider
               [model]="displayDuration()"
+              [bareRing]="true"
+              [hideHandle]="isPomodoro()"
               [useFlexibleIncrement]="!isPomodoro()"
               (modelChange)="onDurationChange($event)"
             ></input-duration-slider>

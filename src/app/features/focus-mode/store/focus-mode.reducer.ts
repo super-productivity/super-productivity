@@ -240,15 +240,6 @@ export const focusModeReducer = createReducer(
     pausedTaskId: null,
   })),
 
-  // Exit break to planning - same as skip/complete but doesn't trigger auto-start effect
-  on(a.exitBreakToPlanning, (state) => ({
-    ...state,
-    timer: createIdleTimer(),
-    currentScreen: FocusScreen.Main,
-    mainState: FocusMainUIState.Preparation,
-    pausedTaskId: null,
-  })),
-
   // Flowtime break offer - show break screen but don't start timer yet
   // Uses dedicated BreakOffer state so it can be distinguished from active/paused breaks
   on(a.offerFlowtimeBreak, (state, { duration, isLongBreak, pausedTaskId }) => {

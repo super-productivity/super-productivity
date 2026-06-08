@@ -25,6 +25,10 @@ import { TranslatePipe } from '@ngx-translate/core';
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [dotAnimation],
   imports: [InputDurationDirective, FormsModule, TranslatePipe],
+  host: {
+    ['[class.bare-ring]']: 'bareRing()',
+    ['[class.hide-handle]']: 'hideHandle()',
+  },
 })
 export class InputDurationSliderComponent implements OnInit, OnDestroy {
   private _el = inject(ElementRef);
@@ -45,6 +49,17 @@ export class InputDurationSliderComponent implements OnInit, OnDestroy {
   // = 6h once the value crosses the 60-min boundary. Default off; current
   // consumers keep the original linear-hours behavior.
   readonly useFlexibleIncrement = input(false);
+
+  // Bare-ring variant: strip the slider's own circular chrome (filled circle,
+  // dots, inner circle, drop shadow) so a ring rendered behind it shows through
+  // — only the draggable dot and the editable value remain. Opt-in so the other
+  // consumers (time-estimate dialogs etc.) keep the default chrome.
+  readonly bareRing = input(false);
+
+  // Type-only: hide the drag handle and swallow pointer events so the value
+  // can't be dragged; the editable input stays interactive. Pairs with bareRing
+  // for Pomodoro preparation, where the duration is typed rather than dragged.
+  readonly hideHandle = input(false);
 
   // Output remains the same
   readonly modelChange = output<number>();
