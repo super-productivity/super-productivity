@@ -7,14 +7,15 @@
  * (prose, headings, blank lines) are always preserved in place.
  */
 
-// Matches a GFM task-list item line, e.g. "- [ ] foo", "- [x] bar", "  - [X] baz".
-// The bracket must contain a marker (space, x, or X) — marked only renders a
-// checkbox for those, NOT for "- []" — so this stays in sync with what
-// marked-options-factory.ts `renderer.listitem` produces. This is the single
-// source of truth for "is this line a checklist item" across the feature
+// Matches a GFM task-list item line exactly as marked renders one: "- " + a
+// marker box ([ ], [x] or [X]) + whitespace + at least one non-space content
+// char. marked does NOT produce a checkbox for "- []", "- [x]a" (no space after
+// the box) or an empty "- [ ] " (no content), so neither do these — verified
+// against marked, see marked-options-factory.ts `renderer.listitem`. This is the
+// single source of truth for "is this line a checklist item" across the feature
 // (toggle, bulk actions, progress badge, is-markdown-checklist).
-const CHECKLIST_ITEM_RE = /^\s*- \[[ xX]\]/;
-const CHECKED_ITEM_RE = /^\s*- \[[xX]\]/;
+const CHECKLIST_ITEM_RE = /^\s*- \[[ xX]\]\s+\S/;
+const CHECKED_ITEM_RE = /^\s*- \[[xX]\]\s+\S/;
 
 export const isChecklistItemLine = (line: string): boolean =>
   CHECKLIST_ITEM_RE.test(line);

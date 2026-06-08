@@ -15,20 +15,24 @@ describe('checklist-operations', () => {
       expect(isChecklistItemLine('  - [ ] indented')).toBe(true);
     });
 
-    it('should not match prose, plain bullets, or empty brackets', () => {
+    it('should not match anything marked would not render as a checkbox', () => {
       expect(isChecklistItemLine('just text')).toBe(false);
       expect(isChecklistItemLine('- plain bullet')).toBe(false);
       expect(isChecklistItemLine('')).toBe(false);
-      // marked does NOT render "- []" (empty brackets) as a checkbox
+      // marked renders a checkbox only for "- [marker] <content>" — none of these:
       expect(isChecklistItemLine('- [] no marker')).toBe(false);
+      expect(isChecklistItemLine('- [ ]')).toBe(false); // empty, no content
+      expect(isChecklistItemLine('- [ ] ')).toBe(false); // empty, trailing space only
+      expect(isChecklistItemLine('- [x]nospace')).toBe(false); // no space after the box
     });
   });
 
   describe('isCheckedItemLine', () => {
-    it('should only match checked items', () => {
+    it('should only match checked items with content', () => {
       expect(isCheckedItemLine('- [x] done')).toBe(true);
       expect(isCheckedItemLine('- [X] done')).toBe(true);
       expect(isCheckedItemLine('- [ ] todo')).toBe(false);
+      expect(isCheckedItemLine('- [x] ')).toBe(false); // empty, not a rendered checkbox
     });
   });
 
@@ -86,6 +90,14 @@ describe('checklist-operations', () => {
     it('should map the Nth item past interleaved prose and blank lines', () => {
       const notes = 'Intro\n- [ ] a\n\nmid\n- [ ] b';
       expect(toggleChecklistItemAtIndex(notes, 1)).toBe('Intro\n- [ ] a\n\nmid\n- [x] b');
+    });
+
+    it('should skip an empty "- [ ] " line that marked does not render as a checkbox', () => {
+      // The empty placeholder line is not a rendered checkbox, so checkbox
+      // index 0 must map to the real item below it, not the placeholder.
+      expect(toggleChecklistItemAtIndex('- [ ] \n- [x] real', 0)).toBe(
+        '- [ ] \n- [ ] real',
+      );
     });
 
     it('should return the input unchanged for out-of-range or invalid indices', () => {
