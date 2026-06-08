@@ -124,7 +124,7 @@ export class NoteComponent implements OnChanges {
   moveToProjectList$: Observable<Project[]> = this._note$.pipe(
     map((note) => note.projectId),
     distinctUntilChanged(),
-    switchMap((pid) => this._projectService.getProjectsWithoutId$(pid)),
+    switchMap((pid) => this._projectService.getProjectsWithoutIdInTreeOrder$(pid)),
   );
 
   ngOnChanges(changes: SimpleChanges): void {

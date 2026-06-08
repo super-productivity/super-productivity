@@ -157,6 +157,22 @@ export class MenuTreeService {
     });
   }
 
+  buildProjectListInTreeOrder(projects: Project[]): Project[] {
+    return this._buildListInTreeOrder({
+      storedTree: this.projectTree(),
+      items: projects,
+      itemType: MenuTreeKind.PROJECT,
+    });
+  }
+
+  buildTagListInTreeOrder(tags: Tag[]): Tag[] {
+    return this._buildListInTreeOrder({
+      storedTree: this.tagTree(),
+      items: tags,
+      itemType: MenuTreeKind.TAG,
+    });
+  }
+
   setProjectTree(tree: MenuTreeTreeNode[]): void {
     this._store.dispatch(updateProjectTree({ tree }));
   }
@@ -326,6 +342,44 @@ export class MenuTreeService {
     return nodes
       .map((node) => mapNode(node))
       .filter((node): node is MenuTreeTreeNode => node !== null);
+  }
+
+  private _buildListInTreeOrder<T extends { id: string }>(options: {
+    storedTree: MenuTreeTreeNode[];
+    items: T[];
+    itemType: MenuTreeKind.PROJECT | MenuTreeKind.TAG;
+  }): T[] {
+    const { storedTree, items, itemType } = options;
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const usedIds = new Set<string>();
+    const result: T[] = [];
+
+    const walk = (nodes: MenuTreeTreeNode[]): void => {
+      for (const node of nodes) {
+        if (node.k === MenuTreeKind.FOLDER) {
+          walk(node.children);
+          continue;
+        }
+
+        if (node.k === itemType) {
+          const item = itemMap.get(node.id);
+          if (item && !usedIds.has(node.id)) {
+            result.push(item);
+            usedIds.add(node.id);
+          }
+        }
+      }
+    };
+
+    walk(storedTree);
+
+    for (const item of items) {
+      if (!usedIds.has(item.id)) {
+        result.push(item);
+      }
+    }
+
+    return result;
   }
 
   private _collectFolders(

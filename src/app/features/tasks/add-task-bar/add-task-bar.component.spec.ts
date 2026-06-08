@@ -31,7 +31,9 @@ type ProjectServiceSignals = {
   list$: Observable<Project[]>;
   listSorted$: Observable<Project[]>;
   listSortedForUI$: Observable<Project[]>;
+  listInTreeOrderForUI$: Observable<Project[]>;
   listSortedForUI: Signal<Project[]>;
+  listInTreeOrderForUI: Signal<Project[]>;
   listSorted: Signal<Project[]>;
 };
 
@@ -39,9 +41,11 @@ type TagServiceSignals = {
   tags$: Observable<any[]>;
   tagsNoMyDayAndNoList$: Observable<any[]>;
   tagsNoMyDayAndNoListSorted$: Observable<any[]>;
+  tagsNoMyDayAndNoListInTreeOrder$: Observable<any[]>;
   tagsSortedForUI$: Observable<any[]>;
   tagsSorted$: Observable<any[]>;
   tagsNoMyDayAndNoListSorted: Signal<any[]>;
+  tagsNoMyDayAndNoListInTreeOrder: Signal<any[]>;
   tagsSorted: Signal<any[]>;
   tagsSortedForUI: Signal<any[]>;
 };
@@ -132,7 +136,9 @@ describe('AddTaskBarComponent', () => {
       list$: projects$,
       listSorted$: projects$,
       listSortedForUI$: projects$,
+      listInTreeOrderForUI$: projects$,
       listSortedForUI: signal(projects),
+      listInTreeOrderForUI: signal(projects),
       listSorted: signal(projects),
     };
   };
@@ -143,9 +149,11 @@ describe('AddTaskBarComponent', () => {
       tags$,
       tagsNoMyDayAndNoList$: tags$,
       tagsNoMyDayAndNoListSorted$: tags$,
+      tagsNoMyDayAndNoListInTreeOrder$: tags$,
       tagsSortedForUI$: tags$,
       tagsSorted$: tags$,
       tagsNoMyDayAndNoListSorted: signal(tags),
+      tagsNoMyDayAndNoListInTreeOrder: signal(tags),
       tagsSorted: signal(tags),
       tagsSortedForUI: signal(tags),
     };

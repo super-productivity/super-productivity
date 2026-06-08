@@ -5,8 +5,16 @@ import { Store } from '@ngrx/store';
 import { Tag, TagState } from './tag.model';
 import { DEFAULT_TAG } from './tag.const';
 import { deleteTag, deleteTags, updateTag, updateTagOrder } from './store/tag.actions';
-import { selectAllTags, selectTagById, selectTagsByIds } from './store/tag.reducer';
+import {
+  selectAllTags,
+  selectAllTagsWithoutMyDay,
+  selectTagById,
+  selectTagsByIds,
+} from './store/tag.reducer';
 import { PRESET_COLORS } from '../work-context/work-context-color';
+import { selectMenuTreeTagTree } from '../menu-tree/store/menu-tree.selectors';
+import { MenuTreeKind } from '../menu-tree/store/menu-tree.model';
+import { menuTreeFeatureKey } from '../menu-tree/store/menu-tree.reducer';
 
 describe('TagService', () => {
   let service: TagService;
@@ -34,7 +42,18 @@ describe('TagService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [TagService, provideMockStore({ initialState })],
+      providers: [
+        TagService,
+        provideMockStore({
+          initialState: {
+            ...initialState,
+            [menuTreeFeatureKey]: {
+              projectTree: [],
+              tagTree: [],
+            },
+          },
+        }),
+      ],
     });
 
     service = TestBed.inject(TagService);
@@ -70,6 +89,58 @@ describe('TagService', () => {
       expect(service.tags).toBeDefined();
       expect(service.tagsSortedForUI).toBeDefined();
       expect(service.tagsNoMyDayAndNoList).toBeDefined();
+    });
+  });
+
+  describe('tree order lists', () => {
+    it('should expose tags in menu tree order', (done) => {
+      const tags = [
+        createTag({ id: 'tag-1', title: 'Tag 1' }),
+        createTag({ id: 'tag-2', title: 'Tag 2' }),
+        createTag({ id: 'tag-3', title: 'Tag 3' }),
+      ];
+      store.overrideSelector(selectAllTags, tags);
+      store.overrideSelector(selectMenuTreeTagTree, [
+        {
+          id: 'tag-2',
+          k: MenuTreeKind.TAG,
+        },
+        {
+          id: 'tag-1',
+          k: MenuTreeKind.TAG,
+        },
+      ]);
+      store.refreshState();
+
+      service.tagsInTreeOrder$.subscribe((result) => {
+        expect(result.map((tag) => tag.id)).toEqual(['tag-2', 'tag-1', 'tag-3']);
+        done();
+      });
+    });
+
+    it('should expose non-My-Day tags in menu tree order', (done) => {
+      const tags = [
+        createTag({ id: 'tag-1', title: 'Tag 1' }),
+        createTag({ id: 'tag-2', title: 'Tag 2' }),
+        createTag({ id: 'tag-3', title: 'Tag 3' }),
+      ];
+      store.overrideSelector(selectAllTagsWithoutMyDay, tags);
+      store.overrideSelector(selectMenuTreeTagTree, [
+        {
+          id: 'tag-3',
+          k: MenuTreeKind.TAG,
+        },
+        {
+          id: 'tag-1',
+          k: MenuTreeKind.TAG,
+        },
+      ]);
+      store.refreshState();
+
+      service.tagsNoMyDayAndNoListInTreeOrder$.subscribe((result) => {
+        expect(result.map((tag) => tag.id)).toEqual(['tag-3', 'tag-1', 'tag-2']);
+        done();
+      });
     });
   });
 

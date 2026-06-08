@@ -166,9 +166,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   moveToProjectList$: Observable<Project[]> = this._task$.pipe(
     map((t) => t.projectId),
     distinctUntilChanged(),
-    switchMap((pid) => this._projectService.getProjectsWithoutIdSorted$(pid || null)),
+    switchMap((pid) =>
+      this._projectService.getProjectsWithoutIdInTreeOrder$(pid || null),
+    ),
   );
-  toggleTagList = this._tagService.tagsNoMyDayAndNoListSorted;
+  toggleTagList = this._tagService.tagsNoMyDayAndNoListInTreeOrder;
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
