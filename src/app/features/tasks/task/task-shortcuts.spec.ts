@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
+import { DateAdapter } from '@angular/material/core';
 import { DateService } from '../../../core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -151,6 +152,13 @@ describe('TaskComponent shortcut handling', () => {
           useValue: {
             isTodayList: signal(false),
           },
+        },
+        {
+          provide: DateAdapter,
+          useValue: jasmine.createSpyObj('DateAdapter', [
+            'getFirstDayOfWeek',
+            'getDayOfWeek',
+          ]),
         },
       ],
     })

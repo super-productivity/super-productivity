@@ -37,7 +37,7 @@ describe('TaskShortcutService', () => {
     taskEditTags: 'G',
     taskOpenContextMenu: null,
     moveToBacklog: 'B',
-    moveToTodaysTasks: 'F',
+    taskScheduleToday: 'F',
     selectPreviousTask: 'K',
     selectNextTask: 'J',
     collapseSubTasks: 'H',

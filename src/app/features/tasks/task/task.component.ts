@@ -57,6 +57,7 @@ import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.serv
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { Update } from '@ngrx/entity';
+import { DateAdapter } from '@angular/material/core';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { DateService } from '../../../core/date/date.service';
 import { isTouchActive } from '../../../util/input-intent';
@@ -64,6 +65,7 @@ import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { KeyboardConfig } from '../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { PlannerActions } from '../../planner/store/planner.actions';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
@@ -148,6 +150,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _configService = inject(GlobalConfigService);
   private readonly _attachmentService = inject(TaskAttachmentService);
   private readonly _elementRef = inject(ElementRef);
+  private readonly _dateAdapter = inject(DateAdapter);
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
   private readonly _taskFocusService = inject(TaskFocusService);
@@ -504,6 +507,41 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       .subscribe(() => {
         this.focusSelfOrNextIfNotPossible();
       });
+  }
+
+  scheduleTaskTomorrow(): void {
+    const tDate = this._dateService.getLogicalTodayDate();
+    tDate.setDate(tDate.getDate() + 1);
+    this._scheduleForDay(getDbDateStr(tDate));
+  }
+
+  scheduleTaskNextWeek(): void {
+    const tDate = this._dateService.getLogicalTodayDate();
+    const dayOffset =
+      (this._dateAdapter.getFirstDayOfWeek() -
+        this._dateAdapter.getDayOfWeek(tDate) +
+        7) %
+        7 || 7;
+    tDate.setDate(tDate.getDate() + dayOffset);
+    this._scheduleForDay(getDbDateStr(tDate));
+  }
+
+  scheduleTaskNextMonth(): void {
+    const tDate = this._dateService.getLogicalTodayDate();
+    tDate.setDate(1);
+    tDate.setMonth(tDate.getMonth() + 1);
+    this._scheduleForDay(getDbDateStr(tDate));
+  }
+
+  private _scheduleForDay(day: string): void {
+    this._store.dispatch(
+      PlannerActions.planTaskForDay({
+        task: this.task() as TaskCopy,
+        day,
+        isShowSnack: true,
+      }),
+    );
+    this.focusSelfOrNextIfNotPossible();
   }
 
   async editTaskRepeatCfg(): Promise<void> {
