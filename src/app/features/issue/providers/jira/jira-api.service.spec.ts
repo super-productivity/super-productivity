@@ -7,7 +7,7 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { GlobalProgressBarService } from '../../../../core-ui/global-progress-bar/global-progress-bar.service';
 import { BannerService } from '../../../../core/banner/banner.service';
 import { MatDialog } from '@angular/material/dialog';
-import { DEFAULT_JIRA_CFG } from './jira.const';
+import { DEFAULT_JIRA_CFG, JIRA_MAX_AUTO_IMPORT_PAGES } from './jira.const';
 import { JiraCfg } from './jira.model';
 import { formatJiraDate } from '../../../../util/format-jira-date';
 import { JiraIssueOriginal } from './jira-api-responses';
@@ -389,6 +389,36 @@ describe('JiraApiService', () => {
       });
     });
 
+    it('caps Jira Cloud auto-import pagination', (done) => {
+      fetchSpy.and.returnValues(
+        ...Array.from({ length: JIRA_MAX_AUTO_IMPORT_PAGES + 1 }, (_, index) =>
+          jsonResponse({
+            issues: [makeJiraIssue(`TEST-${index + 1}`)],
+            maxResults: 100,
+            nextPageToken: `token-${index + 2}`,
+          }),
+        ),
+      );
+
+      service.findAutoImportIssues$(cfg).subscribe({
+        next: (issues) => {
+          expect(issues.map((issue) => issue.key)).toEqual([
+            'TEST-1',
+            'TEST-2',
+            'TEST-3',
+            'TEST-4',
+            'TEST-5',
+          ]);
+          expect(fetchSpy).toHaveBeenCalledTimes(JIRA_MAX_AUTO_IMPORT_PAGES);
+          expect(requestBodyAt(fetchSpy, JIRA_MAX_AUTO_IMPORT_PAGES - 1)).toEqual(
+            jasmine.objectContaining({ nextPageToken: 'token-5' }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+    });
+
     it('falls back to Jira Server/DC search pages via startAt', (done) => {
       fetchSpy.and.returnValues(
         jsonResponse({ errorMessages: ['not found'] }, 404),
@@ -430,6 +460,40 @@ describe('JiraApiService', () => {
           );
           expect(requestBodyAt(fetchSpy, 3)).toEqual(
             jasmine.objectContaining({ startAt: 200 }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+    });
+
+    it('caps Jira Server/DC auto-import pagination', (done) => {
+      fetchSpy.and.returnValues(
+        jsonResponse({ errorMessages: ['not found'] }, 404),
+        ...Array.from({ length: JIRA_MAX_AUTO_IMPORT_PAGES + 1 }, (_, index) => {
+          const startAt = index * 100;
+          const issueNumber = startAt + 1;
+          return jsonResponse({
+            issues: [makeJiraIssue(`TEST-${issueNumber}`)],
+            maxResults: 100,
+            startAt,
+            total: 1000,
+          });
+        }),
+      );
+
+      service.findAutoImportIssues$(cfg).subscribe({
+        next: (issues) => {
+          expect(issues.map((issue) => issue.key)).toEqual([
+            'TEST-1',
+            'TEST-101',
+            'TEST-201',
+            'TEST-301',
+            'TEST-401',
+          ]);
+          expect(fetchSpy).toHaveBeenCalledTimes(JIRA_MAX_AUTO_IMPORT_PAGES + 1);
+          expect(requestBodyAt(fetchSpy, JIRA_MAX_AUTO_IMPORT_PAGES)).toEqual(
+            jasmine.objectContaining({ startAt: 400 }),
           );
           done();
         },

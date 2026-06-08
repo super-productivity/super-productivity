@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { ChromeExtensionInterfaceService } from '../../../../core/chrome-extension-interface/chrome-extension-interface.service';
 import {
   JIRA_ADDITIONAL_ISSUE_FIELDS,
+  JIRA_MAX_AUTO_IMPORT_PAGES,
   JIRA_MAX_RESULTS,
   JIRA_REQUEST_TIMEOUT_DURATION,
 } from './jira.const';
@@ -422,6 +423,7 @@ export class JiraApiService {
           previousPage: firstPage,
           isCloudJqlSearch,
           suppressErrorSnack,
+          fetchedPages: 1,
         }).pipe(map((issues) => [...(firstPage.issues || []), ...issues]));
       }),
     );
@@ -434,6 +436,7 @@ export class JiraApiService {
     previousPage,
     isCloudJqlSearch,
     suppressErrorSnack,
+    fetchedPages,
   }: {
     cfg: JiraCfg;
     pathname: string;
@@ -441,7 +444,12 @@ export class JiraApiService {
     previousPage: JiraIssueSearchResponse;
     isCloudJqlSearch: boolean;
     suppressErrorSnack: boolean;
+    fetchedPages: number;
   }): Observable<JiraIssueOriginal[]> {
+    if (fetchedPages >= JIRA_MAX_AUTO_IMPORT_PAGES) {
+      return of([]);
+    }
+
     const nextPageBody = this._getNextJiraSearchPageBody({
       previousPage,
       baseBody,
@@ -466,6 +474,7 @@ export class JiraApiService {
           previousPage: page,
           isCloudJqlSearch,
           suppressErrorSnack,
+          fetchedPages: fetchedPages + 1,
         }).pipe(map((issues) => [...(page.issues || []), ...issues])),
       ),
     );
