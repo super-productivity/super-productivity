@@ -47,6 +47,8 @@ const getPluginSurfaceVar = (
   return isTransparentCssValue(fallbackSurface) ? baseSurface : fallbackSurface;
 };
 
+const HAS_DIALOG_BUTTON_HANDLER = '__hasDialogButtonHandler';
+
 /**
  * Create CSS injection for plugins - KISS approach
  */
@@ -218,22 +220,24 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
             const key = data.dialogCallId + ':' + data.buttonIndex;
             const handler = dialogButtonHandlers.get(key);
             if (handler) {
-              try {
-                const result = handler();
-                window.parent.postMessage({
-                  type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
-                  dialogCallId: data.dialogCallId,
-                  buttonIndex: data.buttonIndex,
-                  result: result
-                }, '*');
-              } catch (error) {
-                window.parent.postMessage({
-                  type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
-                  dialogCallId: data.dialogCallId,
-                  buttonIndex: data.buttonIndex,
-                  error: error.message
-                }, '*');
-              }
+              Promise.resolve()
+                .then(() => handler())
+                .then((result) => {
+                  window.parent.postMessage({
+                    type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
+                    dialogCallId: data.dialogCallId,
+                    buttonIndex: data.buttonIndex,
+                    result: result
+                  }, '*');
+                })
+                .catch((error) => {
+                  window.parent.postMessage({
+                    type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
+                    dialogCallId: data.dialogCallId,
+                    buttonIndex: data.buttonIndex,
+                    error: error instanceof Error ? error.message : 'Unknown dialog button error'
+                  }, '*');
+                });
             }
           } else if (data?.type === '${PluginIframeMessageType.WORK_CONTEXT_BTN_CLICK}') {
             const handler = workContextBtnHandlers.get(data.buttonHandlerId);
@@ -278,7 +282,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
                     dialogButtonHandlers.set(key, button.onClick);
                     // Remove onClick from serialized data
                     const { onClick, ...buttonWithoutHandler } = button;
-                    return buttonWithoutHandler;
+                    return { ...buttonWithoutHandler, ${HAS_DIALOG_BUTTON_HANDLER}: true };
                   }
                   return button;
                 })
@@ -670,15 +674,14 @@ export const handlePluginMessage = async (
         // Special handling for dialog with button onClick handlers
         const dialogCfg = args[0];
         if (dialogCfg.buttons) {
-          // Create a mapping of button indices to their handlers
-          const buttonHandlers = new Map();
           dialogCfg.buttons = dialogCfg.buttons.map(
             (button: Record<string, unknown>, index: number) => {
-              if (button.onClick) {
-                buttonHandlers.set(index, button.onClick);
+              if (button[HAS_DIALOG_BUTTON_HANDLER]) {
+                const buttonCfg = { ...button };
+                delete buttonCfg[HAS_DIALOG_BUTTON_HANDLER];
                 // Replace function with a proxy that sends message back to iframe
                 return {
-                  ...button,
+                  ...buttonCfg,
                   onClick: async () => {
                     // Send message to iframe to execute the button handler
                     (event.source as Window)?.postMessage(
@@ -690,7 +693,7 @@ export const handlePluginMessage = async (
                       { targetOrigin: '*' },
                     );
                     // Wait for response
-                    return new Promise((resolve) => {
+                    return new Promise((resolve, reject) => {
                       const handleResponse = (e: MessageEvent): void => {
                         if (
                           e.data?.type ===
@@ -699,7 +702,11 @@ export const handlePluginMessage = async (
                           e.data?.buttonIndex === index
                         ) {
                           window.removeEventListener('message', handleResponse);
-                          resolve(e.data.result);
+                          if (e.data.error) {
+                            reject(new Error(e.data.error));
+                          } else {
+                            resolve(e.data.result);
+                          }
                         }
                       };
                       window.addEventListener('message', handleResponse);

@@ -1,7 +1,12 @@
 import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { first, map, switchMap } from 'rxjs/operators';
 import { TestBed } from '@angular/core/testing';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialog,
+  MatDialogRef,
+  MatDialogState,
+} from '@angular/material/dialog';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
@@ -722,5 +727,313 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
     component.ngOnDestroy();
 
     expect(dispatchedClearIds()).toEqual([]);
+  });
+});
+
+/**
+ * Tests for dismissing the dialog when reminders disappear from the store while it
+ * is open — e.g. the reminder was dismissed, the task completed, or the task deleted
+ * on another device and then synced in.
+ *
+ * The reminder worker only ever signals reminders that ARE active, never that one is
+ * gone, so the dialog reconciles the displayed list against the live store and closes
+ * once the reminders it was showing no longer exist. A reminder that is already absent
+ * on the first store read (worker snapshot briefly ahead of the store) is never
+ * confirmed and therefore never auto-dismissed, preserving the open-time race fix.
+ */
+describe('DialogViewTaskRemindersComponent reconciles vanished reminders (sync)', () => {
+  let dispatchSpy: jasmine.Spy;
+  let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let projectServiceSpy: jasmine.SpyObj<ProjectService>;
+  let matDialogSpy: jasmine.SpyObj<MatDialog>;
+  let matDialogRefSpy: jasmine.SpyObj<MatDialogRef<DialogViewTaskRemindersComponent>>;
+  let reminderServiceStub: { onRemindersActive$: Subject<TaskWithReminderData[]> };
+  let storeTasks$: BehaviorSubject<Task[]>;
+
+  const buildTask = (id: string, overrides: Partial<Task> = {}): Task =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      title: `Task ${id}`,
+      remindAt: Date.now() - 1000,
+      ...overrides,
+    }) as Task;
+
+  const buildReminder = (
+    id: string,
+    opts: { isDeadline?: boolean; deadlineDay?: string } = {},
+  ): TaskWithReminderData =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      title: `Task ${id}`,
+      deadlineDay: opts.deadlineDay,
+      deadlineRemindAt: opts.isDeadline ? Date.now() - 1000 : undefined,
+      remindAt: opts.isDeadline ? undefined : Date.now() - 1000,
+      isDeadlineReminder: !!opts.isDeadline,
+      reminderData: { remindAt: Date.now() - 1000 },
+    }) as TaskWithReminderData;
+
+  const createComponent = (
+    reminders: TaskWithReminderData[],
+    initialStoreTasks: Task[],
+  ): DialogViewTaskRemindersComponent => {
+    TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { reminders } });
+    storeTasks$ = new BehaviorSubject<Task[]>(initialStoreTasks);
+    taskServiceSpy.getByIdsLive$.and.returnValue(storeTasks$);
+    const store = TestBed.inject(MockStore);
+    dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+    const fixture = TestBed.createComponent(DialogViewTaskRemindersComponent);
+    return fixture.componentInstance;
+  };
+
+  beforeEach(async () => {
+    matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close', 'getState']);
+    matDialogRefSpy.getState.and.returnValue(MatDialogState.OPEN);
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [
+      'getByIdsLive$',
+      'setDone',
+      'setCurrentId',
+    ]);
+    projectServiceSpy = jasmine.createSpyObj('ProjectService', ['moveTaskToTodayList']);
+    matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+    reminderServiceStub = {
+      onRemindersActive$: new Subject<TaskWithReminderData[]>(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        DialogViewTaskRemindersComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
+      providers: [
+        provideMockStore({ initialState: {} }),
+        { provide: MatDialogRef, useValue: matDialogRefSpy },
+        { provide: MAT_DIALOG_DATA, useValue: { reminders: [] } },
+        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: ProjectService, useValue: projectServiceSpy },
+        { provide: MatDialog, useValue: matDialogSpy },
+        { provide: ReminderService, useValue: reminderServiceStub },
+        TranslateService,
+        TranslateStore,
+      ],
+    })
+      .overrideComponent(DialogViewTaskRemindersComponent, {
+        set: { template: '' },
+      })
+      .compileComponents();
+  });
+
+  it('closes the dialog when the only reminder is cleared in the store', () => {
+    createComponent([buildReminder('task-1')], [buildTask('task-1')]);
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+
+    // Sync clears the reminder (e.g. dismissed on another device)
+    storeTasks$.next([buildTask('task-1', { remindAt: undefined })]);
+
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the dialog when the only reminder task is completed in the store', () => {
+    const component = createComponent([buildReminder('task-1')], [buildTask('task-1')]);
+
+    storeTasks$.next([buildTask('task-1', { isDone: true })]);
+
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
+    expect(component).toBeTruthy();
+  });
+
+  it('closes the dialog when the only reminder task is deleted from the store', () => {
+    createComponent([buildReminder('task-1')], [buildTask('task-1')]);
+
+    // Task removed entirely (deleted on another device)
+    storeTasks$.next([]);
+
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the dialog when a deadline reminder is cleared in the store', () => {
+    createComponent(
+      [buildReminder('task-1', { isDeadline: true, deadlineDay: '2026-04-25' })],
+      [
+        buildTask('task-1', {
+          remindAt: undefined,
+          deadlineDay: '2026-04-25',
+          deadlineRemindAt: Date.now() - 1000,
+        }),
+      ],
+    );
+
+    storeTasks$.next([
+      buildTask('task-1', {
+        remindAt: undefined,
+        deadlineDay: '2026-04-25',
+        deadlineRemindAt: undefined,
+      }),
+    ]);
+
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops only the vanished reminder and keeps the dialog open for the rest', () => {
+    const component = createComponent(
+      [buildReminder('task-1'), buildReminder('task-2')],
+      [buildTask('task-1'), buildTask('task-2')],
+    );
+
+    storeTasks$.next([buildTask('task-1', { remindAt: undefined }), buildTask('task-2')]);
+
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+    expect(component.taskIds$.getValue()).toEqual(['task-2']);
+  });
+
+  it('does NOT dismiss a reminder that is already absent on first store read (preserves open-time race fix)', () => {
+    createComponent(
+      [buildReminder('task-1')],
+      // remindAt already gone the moment the dialog reads the store
+      [buildTask('task-1', { remindAt: undefined })],
+    );
+
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+
+    // A subsequent unrelated store emission still must not close it
+    storeTasks$.next([buildTask('task-1', { remindAt: undefined })]);
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+  });
+
+  it('does not re-clear a vanished deadline reminder on destroy', () => {
+    const component = createComponent(
+      [buildReminder('task-1', { isDeadline: true, deadlineDay: '2026-04-25' })],
+      [
+        buildTask('task-1', {
+          remindAt: undefined,
+          deadlineDay: '2026-04-25',
+          deadlineRemindAt: Date.now() - 1000,
+        }),
+      ],
+    );
+
+    // Deadline reminder cleared via sync -> dialog reconciles & closes
+    storeTasks$.next([
+      buildTask('task-1', {
+        remindAt: undefined,
+        deadlineDay: '2026-04-25',
+        deadlineRemindAt: undefined,
+      }),
+    ]);
+    // Prove the reconcile path (not some other path) handled the disappearance.
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
+    dispatchSpy.calls.reset();
+
+    component.ngOnDestroy();
+
+    const clearedIds = dispatchSpy.calls
+      .allArgs()
+      .map(([action]) => action)
+      .filter((a) => a.type === TaskSharedActions.clearDeadlineReminder.type);
+    expect(clearedIds).toEqual([]);
+  });
+
+  it('keeps a reminder that is rescheduled to the future (still a valid reminder, not gone)', () => {
+    const component = createComponent([buildReminder('task-1')], [buildTask('task-1')]);
+
+    // Rescheduled (e.g. snoozed on another device): remindAt is still a number,
+    // just in the future. The reminder still exists, so it must NOT be dropped.
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    storeTasks$.next([buildTask('task-1', { remindAt: Date.now() + ONE_HOUR_MS })]);
+
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+    expect(component.taskIds$.getValue()).toEqual(['task-1']);
+  });
+
+  it('closes once when ALL reminders vanish in a single store emission', () => {
+    createComponent(
+      [buildReminder('task-1'), buildReminder('task-2')],
+      [buildTask('task-1'), buildTask('task-2')],
+    );
+
+    storeTasks$.next([
+      buildTask('task-1', { remindAt: undefined }),
+      buildTask('task-2', { remindAt: undefined }),
+    ]);
+
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('recomputes isAllDeadline when a schedule reminder is dropped leaving only a deadline one', () => {
+    const component = createComponent(
+      [
+        buildReminder('task-1'),
+        buildReminder('task-2', { isDeadline: true, deadlineDay: '2026-04-25' }),
+      ],
+      [
+        buildTask('task-1'),
+        buildTask('task-2', {
+          remindAt: undefined,
+          deadlineDay: '2026-04-25',
+          deadlineRemindAt: Date.now() - 1000,
+        }),
+      ],
+    );
+    expect(component.isAllDeadline).toBe(false);
+
+    // Schedule reminder for task-1 is cleared; only the deadline reminder remains.
+    storeTasks$.next([
+      buildTask('task-1', { remindAt: undefined }),
+      buildTask('task-2', {
+        remindAt: undefined,
+        deadlineDay: '2026-04-25',
+        deadlineRemindAt: Date.now() - 1000,
+      }),
+    ]);
+
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+    expect(component.taskIds$.getValue()).toEqual(['task-2']);
+    expect(component.isAllDeadline).toBe(true);
+  });
+
+  it('does not re-process or re-close on a redundant store emission after a partial drop', () => {
+    const component = createComponent(
+      [buildReminder('task-1'), buildReminder('task-2')],
+      [buildTask('task-1'), buildTask('task-2')],
+    );
+
+    storeTasks$.next([buildTask('task-1', { remindAt: undefined }), buildTask('task-2')]);
+    expect(component.taskIds$.getValue()).toEqual(['task-2']);
+
+    // The same surviving state arrives again (e.g. another unrelated sync tick).
+    storeTasks$.next([buildTask('task-2')]);
+
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+    expect(component.taskIds$.getValue()).toEqual(['task-2']);
+  });
+
+  it('does not re-add a dropped reminder if the store re-adds it (flap)', () => {
+    const component = createComponent(
+      [buildReminder('task-1'), buildReminder('task-2')],
+      [buildTask('task-1'), buildTask('task-2')],
+    );
+
+    // task-1 vanishes -> dropped
+    storeTasks$.next([buildTask('task-1', { remindAt: undefined }), buildTask('task-2')]);
+    expect(component.taskIds$.getValue()).toEqual(['task-2']);
+
+    // task-1 reappears in the store -> must NOT come back into the dialog
+    storeTasks$.next([buildTask('task-1'), buildTask('task-2')]);
+    expect(component.taskIds$.getValue()).toEqual(['task-2']);
+    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
+  });
+
+  it('stops reconciling after close: a later store emission does not call close again', () => {
+    createComponent([buildReminder('task-1')], [buildTask('task-1')]);
+
+    storeTasks$.next([buildTask('task-1', { remindAt: undefined })]);
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
+
+    // getState now reports a non-open dialog; further emissions must be inert.
+    matDialogRefSpy.getState.and.returnValue(MatDialogState.CLOSED);
+    storeTasks$.next([buildTask('task-1', { remindAt: undefined })]);
+    expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
   });
 });

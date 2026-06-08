@@ -13,6 +13,7 @@ import { AppDataComplete } from '../../op-log/model/model-config';
 import { T } from '../../t.const';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { Action } from '@ngrx/store';
+import { DEFAULT_MAX_BACKUP_FILES } from '../../../../electron/shared-with-frontend/backup-file-cleanup.util';
 
 const BACKUP_INTERVAL = 5 * 60 * 1000;
 const DATA_CHANGE_DEBOUNCE = 30 * 1000;
@@ -25,6 +26,10 @@ type LocalBackupServiceWithBackupIos = {
   _backupIOS: (data: AppDataComplete) => Promise<void>;
 };
 
+type LocalBackupServiceWithBackupElectron = {
+  _backupElectron: (data: AppDataComplete) => Promise<void>;
+};
+
 describe('LocalBackupService', () => {
   let service: LocalBackupService;
   let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
@@ -33,6 +38,7 @@ describe('LocalBackupService', () => {
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let translateServiceSpy: jasmine.SpyObj<TranslateService>;
   let platformServiceSpy: jasmine.SpyObj<CapacitorPlatformService>;
+  let originalElectronApi: typeof window.ea | undefined;
 
   const DEFAULT_ARCHIVE: ArchiveModel = {
     task: { ids: [], entities: {} },
@@ -73,6 +79,7 @@ describe('LocalBackupService', () => {
   };
 
   beforeEach(() => {
+    originalElectronApi = window.ea;
     stateSnapshotServiceSpy = jasmine.createSpyObj('StateSnapshotService', [
       'getAllSyncModelDataFromStore',
       'getAllSyncModelDataFromStoreAsync',
@@ -129,6 +136,10 @@ describe('LocalBackupService', () => {
     service = TestBed.inject(LocalBackupService);
   });
 
+  afterEach(() => {
+    window.ea = originalElectronApi as typeof window.ea;
+  });
+
   describe('backup data should include archives', () => {
     it('should use async method to get data with archives (not sync method)', async () => {
       // This test verifies that the service uses getAllSyncModelDataFromStoreAsync()
@@ -176,6 +187,61 @@ describe('LocalBackupService', () => {
           title: 'Old Archived Task',
         }),
       );
+    });
+
+    it('should pass the configured desktop backup file limit to Electron', async () => {
+      (window as unknown as { ea: { backupAppData: jasmine.Spy } }).ea = {
+        backupAppData: jasmine.createSpy('backupAppData'),
+      };
+
+      globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+        cfg$: of({ localBackup: { isEnabled: true, maxBackupFiles: 7 } }),
+      });
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          LocalBackupService,
+          { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
+          { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
+          { provide: BackupService, useValue: backupServiceSpy },
+          { provide: SnackService, useValue: snackServiceSpy },
+          { provide: TranslateService, useValue: translateServiceSpy },
+          { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+          { provide: LOCAL_ACTIONS, useValue: new Subject<Action>() },
+        ],
+      });
+      service = TestBed.inject(LocalBackupService);
+
+      const backupData =
+        (await stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync()) as AppDataComplete;
+      await (service as unknown as LocalBackupServiceWithBackupElectron)._backupElectron(
+        backupData,
+      );
+
+      expect(window.ea.backupAppData).toHaveBeenCalledOnceWith({
+        data: jasmine.objectContaining({
+          task: jasmine.objectContaining({ ids: ['task1'] }),
+        }),
+        maxBackupFiles: 7,
+      });
+    });
+
+    it('should use the default desktop backup file limit for legacy config', async () => {
+      (window as unknown as { ea: { backupAppData: jasmine.Spy } }).ea = {
+        backupAppData: jasmine.createSpy('backupAppData'),
+      };
+
+      const backupData =
+        (await stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync()) as AppDataComplete;
+      await (service as unknown as LocalBackupServiceWithBackupElectron)._backupElectron(
+        backupData,
+      );
+
+      expect(window.ea.backupAppData).toHaveBeenCalledOnceWith({
+        data: jasmine.any(Object),
+        maxBackupFiles: DEFAULT_MAX_BACKUP_FILES,
+      });
     });
   });
 

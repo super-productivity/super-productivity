@@ -1,0 +1,105 @@
+<section
+  class="complete-overlay"
+  [class.is-disable-background-tint]="isDisableBackgroundTint()"
+  [style.--project-complete-primary]="projectPrimaryColor()"
+>
+  @if (resolvedBgImage(); as bgImage) {
+    <div
+      class="project-bg-image"
+      [class.is-blurred]="backgroundImageBlur() > 0"
+      [style.background]="'url(' + bgImage + ')'"
+      [style.filter]="backgroundImageBlurFilter()"
+    ></div>
+    <div
+      class="project-bg-overlay"
+      [style.opacity]="backgroundOverlayOpacity()"
+    ></div>
+  }
+
+  <canvas
+    #confettiCanvas
+    class="confetti-canvas"
+    aria-hidden="true"
+  ></canvas>
+
+  <button
+    mat-icon-button
+    class="close-btn"
+    [attr.aria-label]="T.G.CLOSE | translate"
+    [matTooltip]="T.G.CLOSE | translate"
+    (click)="close()"
+  >
+    <mat-icon>close</mat-icon>
+  </button>
+
+  <div class="celebration-content">
+    <header class="hero">
+      <div class="trophy">
+        <mat-icon>emoji_events</mat-icon>
+      </div>
+      <h2
+        id="project-complete-title"
+        class="complete-title"
+      >
+        {{ T.F.PROJECT.COMPLETE.CELEBRATION.TITLE | translate }}
+      </h2>
+      <p class="project-title">{{ data.project.title }}</p>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat">
+        <span class="stat-value"
+          >{{ data.stats.nrOfTasksDone }}/{{ data.stats.nrOfTasksTotal }}</span
+        >
+        <span class="stat-label">{{
+          T.F.PROJECT.COMPLETE.CELEBRATION.TASKS_DONE | translate
+        }}</span>
+      </div>
+
+      @if (data.stats.timeSpent > 0) {
+        <div class="stat">
+          <span class="stat-value">{{ data.stats.timeSpent | msToString }}</span>
+          <span class="stat-label">{{
+            T.F.PROJECT.COMPLETE.CELEBRATION.TIME_SPENT | translate
+          }}</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">{{ data.stats.nrOfDaysWorked }}</span>
+          <span class="stat-label">{{
+            T.F.PROJECT.COMPLETE.CELEBRATION.DAYS_WORKED | translate
+          }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="details">
+      @if (data.stats.durationDays > 0) {
+        <p class="duration">
+          {{
+            T.F.PROJECT.COMPLETE.CELEBRATION.DURATION
+              | translate: { nr: data.stats.durationDays }
+          }}
+        </p>
+      }
+
+      @if (data.stats.startedOn) {
+        <p class="date-range">
+          {{ T.F.PROJECT.COMPLETE.CELEBRATION.STARTED | translate }}:
+          {{ data.stats.startedOn | date }} ·
+          {{ T.F.PROJECT.COMPLETE.CELEBRATION.FINISHED | translate }}:
+          {{ data.stats.doneOn | date }}
+        </p>
+      }
+    </div>
+
+    <div class="actions">
+      <button
+        mat-flat-button
+        color="primary"
+        (click)="close()"
+      >
+        {{ T.F.PROJECT.COMPLETE.CELEBRATION.DONE_BTN | translate }}
+      </button>
+    </div>
+  </div>
+</section>

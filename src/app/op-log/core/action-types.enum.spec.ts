@@ -12,8 +12,8 @@ describe('ActionType enum', () => {
   const enumValues = Object.values(ActionType) as string[];
   const mappingKeys = Object.keys(ACTION_TYPE_TO_CODE);
 
-  it('should have exactly 144 members', () => {
-    expect(enumValues.length).toBe(144);
+  it('should have exactly 146 members', () => {
+    expect(enumValues.length).toBe(146);
   });
 
   it('should have 1:1 correspondence with ACTION_TYPE_TO_CODE', () => {

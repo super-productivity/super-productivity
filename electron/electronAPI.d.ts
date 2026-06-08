@@ -204,7 +204,10 @@ export interface ElectronAPI {
 
   jiraSetupImgHeaders(args: { jiraCfg: JiraCfg }): void;
 
-  backupAppData(appData: AppDataCompleteLegacy | AppDataComplete): void;
+  backupAppData(args: {
+    data: AppDataCompleteLegacy | AppDataComplete;
+    maxBackupFiles?: number | null;
+  }): void;
 
   updateCurrentTask(
     task: Task | null,

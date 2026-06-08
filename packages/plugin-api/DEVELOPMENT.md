@@ -133,6 +133,7 @@ import type { PluginManifest } from '@super-productivity/plugin-api';
 ### UI Types
 
 - `DialogCfg` - Dialog configuration
+- `DialogResult` - Dialog return value
 - `DialogButtonCfg` - Dialog button configuration
 - `SnackCfg` - Notification configuration
 - `NotifyCfg` - System notification configuration

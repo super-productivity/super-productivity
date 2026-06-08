@@ -267,9 +267,11 @@
   }
 
   <button
+    #tagMenuTrigger="matMenuTrigger"
     [matMenuTriggerFor]="tagMenu"
     mat-menu-item
-    menuTouchFix
+    [menuTouchFix]="tagMenuTrigger"
+    (menuOpened)="focusFirstSubmenuItem(tagMenu)"
     class="e2e-edit-tags-btn"
   >
     <span class="menuItemLeft">
@@ -281,9 +283,11 @@
 
   @if (!task.parentId && ((moveToProjectList$ | async)?.length || 0) > 0) {
     <button
+      #projectMenuTrigger="matMenuTrigger"
       [matMenuTriggerFor]="projectMenu"
       mat-menu-item
-      menuTouchFix
+      [menuTouchFix]="projectMenuTrigger"
+      (menuOpened)="focusFirstSubmenuItem(projectMenu)"
     >
       <span class="menuItemLeft">
         <mat-icon>forward</mat-icon>

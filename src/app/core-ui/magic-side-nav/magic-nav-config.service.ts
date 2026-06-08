@@ -306,6 +306,13 @@ export class MagicNavConfigService {
           },
           {
             type: 'action',
+            id: 'tour-create-task',
+            label: T.MH.HM.CREATE_TASK,
+            icon: 'add_task',
+            action: () => this._startTour(TourId.CreateTask),
+          },
+          {
+            type: 'action',
             id: 'tour-keyboard',
             label: T.MH.HM.KEYBOARD,
             icon: 'directions',

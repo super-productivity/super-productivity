@@ -156,6 +156,7 @@ All configuration is done via environment variables.
 | Variable       | Default                              | Description                                                                     |
 | :------------- | :----------------------------------- | :------------------------------------------------------------------------------ |
 | `PORT`         | `1900`                               | Server port                                                                     |
+| `HOST`         | `0.0.0.0`                            | Server bind address. Use `::` for IPv6-only deployments.                        |
 | `DATABASE_URL` | -                                    | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/db`)  |
 | `JWT_SECRET`   | -                                    | **Required.** Secret for signing JWTs (min 32 chars)                            |
 | `PUBLIC_URL`   | -                                    | **Required.** Public URL used for email links (e.g. `https://sync.example.com`) |
