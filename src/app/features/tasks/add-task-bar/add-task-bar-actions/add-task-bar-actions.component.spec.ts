@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -245,6 +245,21 @@ describe('AddTaskBarActionsComponent', () => {
       expect(projectButton.textContent).toContain('Posteingang');
       expect(projectButton.textContent).not.toContain('Inbox');
     });
+
+    it('should translate the default inbox project title in the project menu', fakeAsync(() => {
+      mockProjectsSignal.set([INBOX_PROJECT]);
+      fixture.detectChanges();
+
+      const projectButton: HTMLElement =
+        fixture.nativeElement.querySelector('.action-btn');
+      projectButton.click();
+      fixture.detectChanges();
+      tick();
+
+      const menuPanel = document.querySelector('.cdk-overlay-container');
+      expect(menuPanel?.textContent).toContain('Posteingang');
+      expect(menuPanel?.textContent).not.toContain('Inbox');
+    }));
 
     it('should preserve a renamed inbox project title in the action button', () => {
       const renamedInboxProject = {
