@@ -373,7 +373,7 @@ export class DialogEditIssueProviderComponent {
       const detail = (e instanceof Error ? e.message : String(e))
         .replace(/\s+/g, ' ')
         .slice(0, 200);
-      IssueLog.err('OAuth connect failed', { message: detail });
+      IssueLog.err('OAuth connect failed', getSafeErrorLogMeta(e));
       this._snackService.open({
         type: 'ERROR',
         msg: detail ? T.F.ISSUE.S.OAUTH_FAILED_WITH_DETAIL : T.F.ISSUE.S.OAUTH_FAILED,
@@ -800,7 +800,7 @@ const getSafeCfgUpdateLogMeta = (
 
   return {
     updateCount: updateKeys.length,
-    hasCredentialLikeUpdate: hasCredentialLikeCfgKey(cfgUpdateRecord),
+    hasCredentialLikeUpdate: hasCredentialLikeCfgKey(cfgUpdateRecord, new WeakSet()),
     hasPluginConfigUpdate: updateKeys.includes('pluginConfig'),
     hasDefaultNoteUpdate: updateKeys.includes('defaultNote'),
     hasDefaultProjectUpdate: updateKeys.includes('defaultProjectId'),
@@ -808,14 +808,18 @@ const getSafeCfgUpdateLogMeta = (
   };
 };
 
-const hasCredentialLikeCfgKey = (value: unknown): boolean => {
+const hasCredentialLikeCfgKey = (value: unknown, seen: WeakSet<object>): boolean => {
   if (!value || typeof value !== 'object') {
     return false;
   }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
 
   return Object.entries(value as Record<string, unknown>).some(
     ([key, nestedValue]) =>
-      CREDENTIAL_LIKE_CFG_KEY_RE.test(key) || hasCredentialLikeCfgKey(nestedValue),
+      CREDENTIAL_LIKE_CFG_KEY_RE.test(key) || hasCredentialLikeCfgKey(nestedValue, seen),
   );
 };
 
