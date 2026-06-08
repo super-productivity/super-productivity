@@ -36,12 +36,15 @@ import { JIRA_TYPE } from '../../issue.const';
 import { IssueLog } from '../../../../core/log';
 
 export const mapToSearchResults = (res: JiraPickerSearchEnvelope): SearchResultItem[] => {
-  IssueLog.log(res);
+  const sourceIssues = res.response.sections.map((sec) => sec.issues).flat();
+  const uniqueIssues = dedupeByKey(sourceIssues, 'key');
+  IssueLog.log('Jira picker search response', {
+    sectionCount: res.response.sections.length,
+    issueCount: sourceIssues.length,
+    uniqueIssueCount: uniqueIssues.length,
+  });
 
-  const issues = dedupeByKey(
-    res.response.sections.map((sec) => sec.issues).flat(),
-    'key',
-  ).map((issue) => {
+  const issues = uniqueIssues.map((issue) => {
     return {
       title: issue.key + ' ' + issue.summaryText,
       titleHighlighted: issue.key + ' ' + issue.summary,
@@ -62,9 +65,13 @@ export const mapToSearchResults = (res: JiraPickerSearchEnvelope): SearchResultI
 export const mapToSearchResultsForJQL = (
   res: JiraJQLSearchEnvelope,
 ): SearchResultItem[] => {
-  IssueLog.log(res);
+  const uniqueIssues = dedupeByKey(res.response.issues, 'key');
+  IssueLog.log('Jira JQL search response', {
+    issueCount: res.response.issues.length,
+    uniqueIssueCount: uniqueIssues.length,
+  });
 
-  const issues = dedupeByKey(res.response.issues, 'key').map((issue) => {
+  const issues = uniqueIssues.map((issue) => {
     return {
       title: issue.key + ' ' + issue.summaryText,
       titleHighlighted: issue.key + ' ' + issue.summary,
@@ -94,7 +101,19 @@ export const mapIssueResponse = (res: JiraIssueEnvelope, cfg: JiraCfg): JiraIssu
 export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
   const issueCopy = Object.assign({}, issue);
   const fields = issueCopy.fields;
-  IssueLog.log(fields);
+  IssueLog.log('Jira issue fields mapped', {
+    issueKey: issueCopy.key,
+    componentCount: fields.components?.length ?? 0,
+    attachmentCount: fields.attachment?.length ?? 0,
+    commentCount: fields.comment?.comments?.length ?? 0,
+    subtaskCount: fields.subtasks?.length ?? 0,
+    issueLinkCount: fields.issuelinks?.length ?? 0,
+    hasDescription: !!fields.description,
+    hasAssignee: !!fields.assignee,
+    hasStoryPoints: !!(
+      cfg.storyPointFieldId && (fields as Record<string, unknown>)[cfg.storyPointFieldId]
+    ),
+  });
 
   return {
     key: issueCopy.key,
@@ -126,7 +145,11 @@ export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
 };
 
 const mapIssueLinks = (issueLinks: JiraOriginalIssueLink[]): JiraRelatedIssue[] => {
-  IssueLog.log(issueLinks);
+  IssueLog.log('Jira issue links mapped', {
+    issueLinkCount: issueLinks.length,
+    inwardIssueCount: issueLinks.filter((il) => !!il.inwardIssue).length,
+    outwardIssueCount: issueLinks.filter((il) => !!il.outwardIssue).length,
+  });
 
   return issueLinks.map((il) => {
     const isInwardIssue = !!il.inwardIssue;
