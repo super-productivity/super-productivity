@@ -1809,6 +1809,7 @@
         "DUE_TASKS": "Planned tasks reminder",
         "RESCHEDULE_EDIT": "Edit (reschedule)",
         "RESCHEDULE_UNTIL_TOMORROW": "Reschedule for tomorrow",
+        "SCHEDULED_FOR": "Scheduled for",
         "SNOOZE": "Snooze",
         "SNOOZE_ALL": "Snooze all",
         "START": "Start",

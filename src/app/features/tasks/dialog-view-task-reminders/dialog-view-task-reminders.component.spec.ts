@@ -22,7 +22,10 @@ import { ReminderService } from '../../reminder/reminder.service';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { DEFAULT_TASK, Task, TaskWithReminderData } from '../task.model';
 import { TaskService } from '../task.service';
-import { DialogViewTaskRemindersComponent } from './dialog-view-task-reminders.component';
+import {
+  DialogViewTaskRemindersComponent,
+  shouldShowDeadlineScheduleHint,
+} from './dialog-view-task-reminders.component';
 
 /**
  * Tests for the tasks$ filter logic in DialogViewTaskRemindersComponent.
@@ -191,6 +194,69 @@ describe('DialogViewTaskRemindersComponent planForTomorrow deadline clearing', (
     // planForTomorrow only calls _clearDeadlineReminder when isDeadlineReminder is true
     const shouldClear = !!task.isDeadlineReminder;
     expect(shouldClear).toBe(false);
+  });
+});
+
+describe('shouldShowDeadlineScheduleHint', () => {
+  const today = '2026-04-25';
+  const now = new Date(2026, 3, 25, 12, 0).getTime();
+
+  const buildTask = (overrides: Partial<TaskWithReminderData>): TaskWithReminderData =>
+    ({
+      ...DEFAULT_TASK,
+      id: 'task-1',
+      title: 'Test task',
+      ...overrides,
+    }) as TaskWithReminderData;
+
+  it('shows for deadline reminders scheduled with a future time', () => {
+    const task = buildTask({
+      isDeadlineReminder: true,
+      dueWithTime: now + 60_000,
+    });
+
+    expect(shouldShowDeadlineScheduleHint(task, today, now)).toBe(true);
+  });
+
+  it('shows for deadline reminders scheduled on a future day', () => {
+    const task = buildTask({
+      isDeadlineReminder: true,
+      dueDay: '2026-04-26',
+    });
+
+    expect(shouldShowDeadlineScheduleHint(task, today, now)).toBe(true);
+  });
+
+  it('does not show for normal task reminders', () => {
+    const task = buildTask({
+      isDeadlineReminder: false,
+      dueWithTime: now + 60_000,
+    });
+
+    expect(shouldShowDeadlineScheduleHint(task, today, now)).toBe(false);
+  });
+
+  it('does not show for today-only or past schedules', () => {
+    expect(
+      shouldShowDeadlineScheduleHint(
+        buildTask({
+          isDeadlineReminder: true,
+          dueDay: today,
+        }),
+        today,
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      shouldShowDeadlineScheduleHint(
+        buildTask({
+          isDeadlineReminder: true,
+          dueWithTime: now - 60_000,
+        }),
+        today,
+        now,
+      ),
+    ).toBe(false);
   });
 });
 
