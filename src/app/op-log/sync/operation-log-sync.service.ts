@@ -1062,12 +1062,16 @@ export class OperationLogSyncService {
   /**
    * Shows a non-blocking snack after a destructive "Use Server Data" replace,
    * offering to restore the local snapshot captured before the wipe. This is the
-   * recovery affordance that makes the otherwise-irreversible replace reversible.
-   * Kept open for 30s to give the user a real window to react. (#8107)
+   * immediate recovery affordance; a persistent button in the sync settings
+   * (gated on a remaining backup) is the durable fallback if the snack is missed.
+   *
+   * WARNING type (honest framing of a data-replacement + provides a dismiss
+   * control) and no auto-dismiss timer (duration: 0) so the undo isn't lost to a
+   * timeout. (#8107)
    */
   private _showRestorePreviousDataSnack(): void {
     this.snackService.open({
-      type: 'SUCCESS',
+      type: 'WARNING',
       msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_UNDO,
       actionStr: T.G.UNDO,
       actionFn: async (): Promise<void> => {
@@ -1084,7 +1088,7 @@ export class OperationLogSyncService {
           this.snackService.open({ type: 'ERROR', msg: T.F.SYNC.S.RESTORE_ERROR });
         }
       },
-      config: { duration: 30000 },
+      config: { duration: 0 },
     });
   }
 

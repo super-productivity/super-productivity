@@ -104,6 +104,8 @@ describe('BackupService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'saveImportBackup',
       'loadImportBackup',
+      'clearImportBackup',
+      'hasImportBackup',
       'runDestructiveStateReplacement',
     ]);
     mockOperationWriteFlushService = jasmine.createSpyObj('OperationWriteFlushService', [
@@ -117,6 +119,8 @@ describe('BackupService', () => {
     );
     mockOpLogStore.saveImportBackup.and.resolveTo();
     mockOpLogStore.loadImportBackup.and.resolveTo(null);
+    mockOpLogStore.clearImportBackup.and.resolveTo();
+    mockOpLogStore.hasImportBackup.and.resolveTo(false);
     mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
     mockOperationWriteFlushService.flushPendingWrites.and.resolveTo();
     mockLockService.request.and.callFake(async (_lockName, fn) => fn());
@@ -169,6 +173,18 @@ describe('BackupService', () => {
       expect(importSpy).toHaveBeenCalledWith(saved as any, true, true, true);
     });
 
+    it('should consume the slot (one-shot) after a successful restore', async () => {
+      mockOpLogStore.loadImportBackup.and.resolveTo({
+        state: createMinimalValidBackup(),
+        savedAt: 123,
+      });
+      spyOn(service, 'importCompleteBackup').and.resolveTo();
+
+      await service.restoreImportBackup();
+
+      expect(mockOpLogStore.clearImportBackup).toHaveBeenCalled();
+    });
+
     it('should return false and not import when no backup exists', async () => {
       mockOpLogStore.loadImportBackup.and.resolveTo(null);
       const importSpy = spyOn(service, 'importCompleteBackup').and.resolveTo();
@@ -177,6 +193,7 @@ describe('BackupService', () => {
 
       expect(result).toBe(false);
       expect(importSpy).not.toHaveBeenCalled();
+      expect(mockOpLogStore.clearImportBackup).not.toHaveBeenCalled();
     });
   });
 
