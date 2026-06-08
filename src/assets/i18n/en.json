@@ -2243,11 +2243,11 @@
     },
     "CALENDARS": {
       "AUTO_IMPORT_FOR_CURRENT_DAY": "Auto import events as tasks for current day",
-      "BROWSER_WARNING": "Due to cross-origin restrictions <b>this will likely NOT work with the web browser version of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
+      "BROWSER_WARNING": "Due to cross-origin and WebView restrictions <b>this will likely NOT work with the web browser or Android app versions of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
       "CAL_COLOR": "Calendar color",
       "CAL_PATH": "URL of the iCal source",
       "CHECK_UPDATES": "Check for remote updates every X",
-      "DISABLE_FOR_WEB_APP": "Disable when using web application",
+      "DISABLE_FOR_WEB_APP": "Disable in web or Android app",
       "FILTER_EXCLUDE_REGEX": "Exclude events matching regex (optional)",
       "FILTER_EXCLUDE_REGEX_DESCRIPTION": "Events whose title matches this regular expression will be hidden. Applied after the include filter. Example: Lunch|Daily|Blocker",
       "FILTER_INCLUDE_REGEX": "Include events matching regex (optional)",
