@@ -726,11 +726,38 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       this._taskService.update(this.task().id, { title: newVal });
     }
 
+    const isNewlyCreated = !this.task().title?.trim();
+    const isEmpty = !newVal.trim();
+
+    const nextFocusTarget = blurEvent?.relatedTarget as HTMLElement | null;
+    const isNextTargetInput =
+      !!nextFocusTarget &&
+      (nextFocusTarget.tagName.toLowerCase() === 'input' ||
+        nextFocusTarget.tagName.toLowerCase() === 'textarea' ||
+        !!nextFocusTarget.closest('task'));
+
     if (
       submitTrigger === 'modEnter' ||
-      (submitTrigger === 'enter' && this.task().parentId)
+      (submitTrigger === 'enter' && this.task().parentId && isNewlyCreated)
     ) {
+      if (submitTrigger === 'enter' && isEmpty) {
+        const previousTaskEl = this._getPreviousTaskEl();
+        this._taskService.remove(this.task());
+        this._focusTaskHost(previousTaskEl);
+        return;
+      }
       this._addSubTaskOrFocusEmpty(newVal);
+      return;
+    }
+
+    if (
+      submitTrigger === 'blur' &&
+      this.task().parentId &&
+      isNewlyCreated &&
+      isEmpty &&
+      !isNextTargetInput
+    ) {
+      this._taskService.remove(this.task());
       return;
     }
 
@@ -749,13 +776,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
     // Only focus self if no input/textarea is receiving focus next
     // This prevents stealing focus from any user input that was just clicked for editing
-    const nextFocusTarget = blurEvent?.relatedTarget as HTMLElement | null;
-    const isNextTargetInput =
-      nextFocusTarget &&
-      (nextFocusTarget.tagName.toLowerCase() === 'input' ||
-        nextFocusTarget.tagName.toLowerCase() === 'textarea' ||
-        nextFocusTarget.closest('task') !== null);
-
     if (!isNextTargetInput) {
       this.focusSelf();
     }

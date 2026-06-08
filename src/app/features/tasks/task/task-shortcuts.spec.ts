@@ -338,7 +338,7 @@ describe('TaskComponent shortcut handling', () => {
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
-  it('adds a sibling subtask on regular Enter when editing a subtask', () => {
+  it('does NOT add a sibling subtask on regular Enter when editing an existing subtask', () => {
     fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
 
     component.updateTaskTitleIfChanged({
@@ -347,7 +347,59 @@ describe('TaskComponent shortcut handling', () => {
       submitTrigger: 'enter',
     });
 
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+
+  it('adds a sibling subtask on regular Enter when editing a fresh subtask', () => {
+    // Initial title is empty for fresh subtasks
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'New subtask title',
+      wasChanged: true,
+      submitTrigger: 'enter',
+    });
+
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+  });
+
+  it('removes a fresh subtask on regular Enter if still empty', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: '',
+      wasChanged: false,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.remove).toHaveBeenCalled();
+  });
+
+  it('removes a fresh subtask on blur if still empty and focus leaves task list', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: '',
+      wasChanged: false,
+      submitTrigger: 'blur',
+      blurEvent: { relatedTarget: null } as any,
+    });
+
+    expect(taskServiceSpy.remove).toHaveBeenCalled();
+  });
+
+  it('does NOT remove a fresh subtask on blur if focus moves to another task', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    const otherTask = document.createElement('task');
+    component.updateTaskTitleIfChanged({
+      newVal: '',
+      wasChanged: false,
+      submitTrigger: 'blur',
+      blurEvent: { relatedTarget: otherTask } as any,
+    });
+
+    expect(taskServiceSpy.remove).not.toHaveBeenCalled();
   });
 
   it('does NOT add a subtask on regular Enter when editing a top-level task', () => {
