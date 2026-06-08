@@ -413,7 +413,7 @@ describe('FocusModeEffects', () => {
           });
       });
 
-      it('should dispatch both unsetCurrentTask and startBreak with pausedTaskId when isPauseTrackingDuringBreak is true and task is active', (done) => {
+      it('should dispatch startBreak before clearing tracking when isPauseTrackingDuringBreak is true and task is active', (done) => {
         actions$ = of(actions.incrementCycle());
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
         store.overrideSelector(selectors.selectCurrentCycle, 1);
@@ -428,9 +428,8 @@ describe('FocusModeEffects', () => {
         effects.autoStartBreakOnSessionComplete$
           .pipe(toArray())
           .subscribe((actionsArr) => {
-            expect(actionsArr.length).toBe(2);
-            expect(actionsArr[0]).toEqual(unsetCurrentTask());
-            expect(actionsArr[1]).toEqual(
+            expect(actionsArr.length).toBe(1);
+            expect(actionsArr[0]).toEqual(
               actions.startBreak({
                 duration: 5 * 60 * 1000,
                 isLongBreak: false,
@@ -1379,9 +1378,10 @@ describe('FocusModeEffects', () => {
       }, 50);
     });
 
-    it('should dispatch pauseFocusSession during break when tracking stops (Bug #5954)', (done) => {
+    it('should dispatch pauseFocusSession during break when tracking stops and tracking continues during breaks (Bug #5954)', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
+        isPauseTrackingDuringBreak: false,
       });
       store.overrideSelector(
         selectors.selectTimer,
@@ -1408,6 +1408,35 @@ describe('FocusModeEffects', () => {
         expect(dispatched).toBe(true);
         done();
       }, 100);
+    });
+
+    it('should NOT pause a running break when configured break-start tracking pause clears the task (Bug #4152)', (done) => {
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isPauseTrackingDuringBreak: true,
+      });
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({ isRunning: true, purpose: 'break' }),
+      );
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      const { emitted, subscription } = collectEmissions(
+        effects.syncTrackingStopToSession$,
+      );
+      currentTaskId$.next('task-123');
+
+      setTimeout(() => {
+        currentTaskId$.next(null);
+      }, 10);
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        subscription.unsubscribe();
+        done();
+      }, 50);
     });
 
     it('should NOT dispatch when switching to different task (not stopping)', (done) => {
@@ -2134,11 +2163,9 @@ describe('FocusModeEffects', () => {
     });
   });
 
-  describe('pauseTrackingDuringBreak (autoStartBreakOnSessionComplete$)', () => {
+  describe('pauseTrackingOnBreakStart$', () => {
     it('should dispatch unsetCurrentTask when break starts and isPauseTrackingDuringBreak is true', (done) => {
-      actions$ = of(actions.incrementCycle());
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectors.selectCurrentCycle, 1);
+      actions$ = of(actions.startBreak({ pausedTaskId: 'task-123' }));
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
@@ -2146,17 +2173,14 @@ describe('FocusModeEffects', () => {
       currentTaskId$.next('task-123');
       store.refreshState();
 
-      effects.autoStartBreakOnSessionComplete$.pipe(toArray()).subscribe((actionsArr) => {
-        const unsetAction = actionsArr.find((a) => a.type === '[Task] UnsetCurrentTask');
-        expect(unsetAction).toBeDefined();
+      effects.pauseTrackingOnBreakStart$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(unsetCurrentTask());
         done();
       });
     });
 
     it('should NOT dispatch unsetCurrentTask when isPauseTrackingDuringBreak is false', (done) => {
-      actions$ = of(actions.incrementCycle());
-      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectors.selectCurrentCycle, 1);
+      actions$ = of(actions.startBreak({ pausedTaskId: 'task-123' }));
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: false,
@@ -2164,9 +2188,8 @@ describe('FocusModeEffects', () => {
       currentTaskId$.next('task-123');
       store.refreshState();
 
-      effects.autoStartBreakOnSessionComplete$.pipe(toArray()).subscribe((actionsArr) => {
-        const unsetAction = actionsArr.find((a) => a.type === '[Task] UnsetCurrentTask');
-        expect(unsetAction).toBeUndefined();
+      effects.pauseTrackingOnBreakStart$.pipe(toArray()).subscribe((actionsArr) => {
+        expect(actionsArr).toEqual([]);
         done();
       });
     });
@@ -2663,6 +2686,7 @@ describe('FocusModeEffects', () => {
       it('should handle Pomodoro mode break correctly', (done) => {
         store.overrideSelector(selectFocusModeConfig, {
           isSkipPreparation: false,
+          isPauseTrackingDuringBreak: false,
         });
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
         store.overrideSelector(

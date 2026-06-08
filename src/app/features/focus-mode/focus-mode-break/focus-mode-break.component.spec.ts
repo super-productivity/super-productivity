@@ -21,7 +21,6 @@ import { of } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
 import { FocusModeConfig } from '../../config/global-config.model';
-import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 describe('FocusModeBreakComponent', () => {
   let component: FocusModeBreakComponent;
@@ -161,7 +160,7 @@ describe('FocusModeBreakComponent', () => {
       );
     });
 
-    it('should unset current task before starting break offer when pause-during-break is enabled', () => {
+    it('should start break offer without clearing tracking first when pause-during-break is enabled', () => {
       (mockFocusModeService.mainState as any).set(FocusMainUIState.BreakOffer);
       (mockFocusModeService.isSessionRunning as any).set(false);
       (mockFocusModeService.focusModeConfig as any).set({
@@ -170,7 +169,7 @@ describe('FocusModeBreakComponent', () => {
 
       component.resumeBreak();
 
-      expect(mockStore.dispatch).toHaveBeenCalledWith(unsetCurrentTask());
+      expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
       expect(mockStore.dispatch).toHaveBeenCalledWith(
         startBreak({
           duration: 300000,

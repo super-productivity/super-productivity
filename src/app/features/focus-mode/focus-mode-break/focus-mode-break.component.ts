@@ -22,7 +22,6 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TaskTrackingInfoComponent } from '../task-tracking-info/task-tracking-info.component';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
-import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 @Component({
   selector: 'focus-mode-break',
@@ -95,10 +94,6 @@ export class FocusModeBreakComponent {
       const currentTaskId = this._taskService.currentTaskId();
       const storePausedTaskId = this._pausedTaskId();
       const pausedTaskId = storePausedTaskId ?? currentTaskId;
-      const config = this.focusModeService.focusModeConfig();
-      if (config?.isPauseTrackingDuringBreak) {
-        this._store.dispatch(unsetCurrentTask());
-      }
 
       this._store.dispatch(
         startBreak({

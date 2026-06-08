@@ -136,7 +136,8 @@ export class FocusModeEffects {
     ),
   );
 
-  // Sync: When tracking stops → pause focus session (both work and break)
+  // Sync: When tracking stops → pause focus session (work, plus breaks while
+  // tracking is expected to continue during breaks)
   // Uses pairwise to capture the previous task ID before it's lost
   // Only triggers when focus mode feature is enabled
   // Bug #5954 fix: Also pause breaks when tracking stops
@@ -150,14 +151,18 @@ export class FocusModeEffects {
       withLatestFrom(
         this.store.select(selectors.selectTimer),
         this.store.select(selectIsFocusModeEnabled),
+        this.store.select(selectFocusModeConfig),
       ),
       filter(
-        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled]) =>
+        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled, config]) =>
           isFocusModeEnabled &&
           (timer.purpose === 'work' || timer.purpose === 'break') &&
           timer.isRunning &&
           !!prevTaskId &&
-          !currTaskId, // Was tracking (prevTaskId exists) and now stopped (currTaskId is null)
+          !currTaskId &&
+          // If tracking is intentionally paused for breaks, the app's own
+          // unsetCurrentTask after startBreak must not pause the new break.
+          !(timer.purpose === 'break' && config?.isPauseTrackingDuringBreak),
       ),
       map(([[prevTaskId]]) => actions.pauseFocusSession({ pausedTaskId: prevTaskId })),
     ),
@@ -376,11 +381,6 @@ export class FocusModeEffects {
         const shouldPauseTracking = config?.isPauseTrackingDuringBreak && currentTaskId;
         const actionsArr: Action[] = [];
 
-        // Pause tracking during break if configured
-        if (shouldPauseTracking) {
-          actionsArr.push(unsetCurrentTask());
-        }
-
         // Start break with appropriate duration
         if (breakInfo) {
           actionsArr.push(
@@ -401,6 +401,21 @@ export class FocusModeEffects {
 
         return of(...actionsArr);
       }),
+    ),
+  );
+
+  pauseTrackingOnBreakStart$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(actions.startBreak),
+      withLatestFrom(
+        this.store.select(selectFocusModeConfig),
+        this.taskService.currentTaskId$,
+      ),
+      filter(
+        ([_action, config, currentTaskId]) =>
+          !!config?.isPauseTrackingDuringBreak && !!currentTaskId,
+      ),
+      map(() => unsetCurrentTask()),
     ),
   );
 
