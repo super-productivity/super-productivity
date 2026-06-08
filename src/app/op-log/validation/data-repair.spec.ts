@@ -1193,6 +1193,7 @@ describe('dataRepair()', () => {
           issueAttachmentNr: 1,
           issueTimeTracked: { ['2026-06-08']: 456 },
           issuePoints: 3,
+          issueLastSyncedValues: { status: 'open' },
         },
         {
           ...DEFAULT_TASK,
@@ -1231,6 +1232,7 @@ describe('dataRepair()', () => {
         issueAttachmentNr: undefined,
         issueTimeTracked: undefined,
         issuePoints: undefined,
+        issueLastSyncedValues: undefined,
       }),
     );
     expect(result.data.task.entities.t2).toEqual(

@@ -22,6 +22,7 @@ const UNLINKED_PARTIAL_TASK: Partial<Task> = {
   issueAttachmentNr: undefined,
   issueTimeTracked: undefined,
   issuePoints: undefined,
+  issueLastSyncedValues: undefined,
 } as const;
 
 // =============================================================================

@@ -1047,6 +1047,7 @@ const _clearIssueProviderData = (task: TaskCopy): void => {
   task.issueAttachmentNr = undefined;
   task.issueTimeTracked = undefined;
   task.issuePoints = undefined;
+  task.issueLastSyncedValues = undefined;
 };
 
 const _removeNonExistentIssueProviderIdsFromTasks = (
