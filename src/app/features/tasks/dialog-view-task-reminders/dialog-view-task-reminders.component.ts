@@ -451,15 +451,6 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._matDialogRef.close();
   }
 
-  @HostListener('mouseover', ['$event'])
-  onMouseOver(ev: MouseEvent): void {
-    const target = ev.target as HTMLElement;
-    const button = target.closest('button');
-    if (button && (button.closest('.actions') || button.closest('.wrap-buttons'))) {
-      button.focus();
-    }
-  }
-
   @HostListener('keydown', ['$event'])
   onKeyDown(ev: KeyboardEvent): void {
     if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(ev.key)) {
@@ -472,24 +463,20 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       if (!taskRow && !wrapButtons) return;
 
       const allRows = Array.from(document.querySelectorAll('.task')) as HTMLElement[];
-      const footerButtons = Array.from(
-        document.querySelectorAll('.wrap-buttons button'),
-      ) as HTMLButtonElement[];
+      const footerButtons = this._getFocusableButtons(
+        document.querySelector('.wrap-buttons') as HTMLElement,
+      );
 
       if (taskRow) {
         const rowIndex = allRows.indexOf(taskRow);
-        const buttonsInRow = Array.from(
-          taskRow.querySelectorAll<HTMLButtonElement>('.actions button'),
-        );
+        const buttonsInRow = this._getFocusableButtons(taskRow);
         const btnIndex = buttonsInRow.indexOf(activeEl as HTMLButtonElement);
 
         if (ev.key === 'ArrowDown') {
           const nextRow = allRows[rowIndex + 1];
           if (nextRow) {
             ev.preventDefault();
-            const nextButtons = Array.from(
-              nextRow.querySelectorAll<HTMLButtonElement>('.actions button'),
-            );
+            const nextButtons = this._getFocusableButtons(nextRow);
             (nextButtons[btnIndex] || nextButtons[0])?.focus();
           } else if (footerButtons.length > 0) {
             ev.preventDefault();
@@ -499,9 +486,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
           const prevRow = allRows[rowIndex - 1];
           if (prevRow) {
             ev.preventDefault();
-            const prevButtons = Array.from(
-              prevRow.querySelectorAll<HTMLButtonElement>('.actions button'),
-            );
+            const prevButtons = this._getFocusableButtons(prevRow);
             (prevButtons[btnIndex] || prevButtons[0])?.focus();
           }
         } else if (ev.key === 'ArrowRight') {
@@ -522,9 +507,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
           if (allRows.length > 0) {
             ev.preventDefault();
             const lastRow = allRows[allRows.length - 1];
-            const lastRowButtons = Array.from(
-              lastRow.querySelectorAll<HTMLButtonElement>('.actions button'),
-            );
+            const lastRowButtons = this._getFocusableButtons(lastRow);
             // Try to match horizontal position if possible, otherwise last button
             (
               lastRowButtons[btnIndex] || lastRowButtons[lastRowButtons.length - 1]
@@ -545,6 +528,13 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     }
   }
 
+  private _getFocusableButtons(container: HTMLElement): HTMLButtonElement[] {
+    if (!container) return [];
+    return (
+      Array.from(container.querySelectorAll('button')) as HTMLButtonElement[]
+    ).filter((btn) => !btn.disabled && btn.offsetWidth > 0);
+  }
+
   private _removeTaskFromList(taskId: string): void {
     const activeEl = document.activeElement as HTMLElement;
     let rowIndex = -1;
@@ -554,9 +544,17 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       const taskRow = activeEl.closest('.task') as HTMLElement;
       const allRows = Array.from(document.querySelectorAll('.task')) as HTMLElement[];
       rowIndex = allRows.indexOf(taskRow);
-      btnIndex = Array.from(
-        taskRow.querySelectorAll<HTMLButtonElement>('.actions button'),
-      ).indexOf(activeEl as HTMLButtonElement);
+      btnIndex = this._getFocusableButtons(taskRow).indexOf(
+        activeEl as HTMLButtonElement,
+      );
+    } else {
+      const taskRow = document.querySelector(`.task[data-id="${taskId}"]`) as HTMLElement;
+      if (taskRow) {
+        const allRows = Array.from(document.querySelectorAll('.task')) as HTMLElement[];
+        rowIndex = allRows.indexOf(taskRow);
+        // Default to snooze button index (2) if it was likely a menu action
+        btnIndex = 2;
+      }
     }
 
     // Track dismissed ID to prevent stale data from worker re-adding it
@@ -575,15 +573,13 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
           ) as HTMLElement[];
           const nextRow = remainingRows[rowIndex] || remainingRows[rowIndex - 1];
           if (nextRow) {
-            const buttons = Array.from(
-              nextRow.querySelectorAll<HTMLButtonElement>('.actions button'),
-            );
+            const buttons = this._getFocusableButtons(nextRow);
             (buttons[btnIndex] || buttons[0])?.focus();
           } else {
             // Focus first footer button if no rows left
-            const footerButtons = Array.from(
-              document.querySelectorAll('.wrap-buttons button'),
-            ) as HTMLButtonElement[];
+            const footerButtons = this._getFocusableButtons(
+              document.querySelector('.wrap-buttons') as HTMLElement,
+            );
             footerButtons[0]?.focus();
           }
         });

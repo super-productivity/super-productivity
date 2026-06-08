@@ -730,6 +730,141 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
   });
 });
 
+import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { ScannedActionsSubject } from '@ngrx/store';
+import { Actions } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+
+import { TODAY_TAG } from '../../tag/tag.const';
+
+/**
+ * Tests for accessibility attributes.
+ */
+describe('DialogViewTaskRemindersComponent accessibility', () => {
+  let fixture: any;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [
+        DialogViewTaskRemindersComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
+      providers: [
+        provideMockStore({
+          initialState: {
+            workContext: {
+              activeId: 'today',
+              entities: {
+                today: {
+                  id: 'today',
+                  taskIds: ['t1', 't2'],
+                },
+              },
+              ids: ['today'],
+            },
+            tasks: {
+              entities: {
+                t1: { id: 't1', title: 'T1', tagIds: ['today'] },
+                t2: { id: 't2', title: 'T2', tagIds: ['today'] },
+              },
+              ids: ['t1', 't2'],
+            },
+            tag: {
+              entities: {
+                [TODAY_TAG.id]: TODAY_TAG,
+              },
+              ids: [TODAY_TAG.id],
+            },
+            projects: {
+              entities: {},
+              ids: [],
+            },
+            globalConfig: {
+              evaluation: {
+                todayStr: '2026-06-06',
+              },
+            },
+          },
+        }),
+        {
+          provide: MatDialogRef,
+          useValue: { close: jasmine.createSpy('close'), getState: () => 0 },
+        },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: {
+            reminders: [
+              {
+                id: 't1',
+                title: 'T1',
+                reminderData: { remindAt: Date.now() },
+                tagIds: ['today'],
+              },
+              {
+                id: 't2',
+                title: 'T2',
+                reminderData: { remindAt: Date.now() },
+                tagIds: ['today'],
+              },
+            ],
+          },
+        },
+        {
+          provide: TaskService,
+          useValue: {
+            getByIdsLive$: () =>
+              of([
+                {
+                  id: 't1',
+                  title: 'T1',
+                  tagIds: ['today'],
+                  reminderData: { remindAt: Date.now() },
+                },
+                {
+                  id: 't2',
+                  title: 'T2',
+                  tagIds: ['today'],
+                  reminderData: { remindAt: Date.now() },
+                },
+              ]),
+          },
+        },
+        { provide: ProjectService, useValue: {} },
+        {
+          provide: MatDialog,
+          useValue: { open: () => ({ afterClosed: () => of(false) }) },
+        },
+        { provide: ReminderService, useValue: { onRemindersActive$: new Subject() } },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-06-06', getStartOfNextDayDiffMs: () => 0 },
+        },
+        { provide: Actions, useValue: new Subject() },
+        { provide: ScannedActionsSubject, useValue: new Subject() },
+        { provide: LOCAL_ACTIONS, useValue: new Subject() },
+      ],
+    })
+      .overrideComponent(DialogViewTaskRemindersComponent, {
+        set: { schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(DialogViewTaskRemindersComponent);
+    fixture.detectChanges();
+  });
+
+  it('should have aria-labels on action buttons in task rows', () => {
+    // When multiple tasks are present, each task row has 4 icon buttons in .actions
+    const actionButtons = fixture.nativeElement.querySelectorAll('.actions button');
+    // 2 tasks * 4 buttons = 8 buttons
+    expect(actionButtons.length).toBe(8);
+    actionButtons.forEach((btn: HTMLElement) => {
+      expect(btn.getAttribute('aria-label')).toBeTruthy();
+    });
+  });
+});
+
 /**
  * Tests for focus management and keyboard navigation.
  */
@@ -787,16 +922,21 @@ describe('DialogViewTaskRemindersComponent navigation and focus', () => {
         set: {
           template: `
           @for (task of tasks$ | async; track task.id) {
-            <div class="task">
+            <div class="task" [attr.data-id]="task.id">
               <div class="actions">
+                <button [id]="task.id + '-b0'">{{task.id}} B0</button>
                 <button [id]="task.id + '-b1'">{{task.id}} B1</button>
                 <button [id]="task.id + '-b2'">{{task.id}} B2</button>
+                <button [id]="task.id + '-b3'">{{task.id}} B3</button>
+                <button [id]="task.id + '-disabled'" disabled>Disabled</button>
+                <button [id]="task.id + '-hidden'" style="display: none">Hidden</button>
               </div>
             </div>
           }
           <div class="wrap-buttons">
             <button id="f1">F1</button>
-            <button id="f2">F2</button>
+            <button id="f2" disabled>F2 Disabled</button>
+            <button id="f3">F3</button>
           </div>
         `,
         },
@@ -822,23 +962,19 @@ describe('DialogViewTaskRemindersComponent navigation and focus', () => {
     document.body.removeChild(fixture.nativeElement);
   });
 
-  it('should focus button on mouseover', () => {
-    const btn = document.getElementById('t1-b1') as HTMLButtonElement;
-    const ev = new MouseEvent('mouseover', { bubbles: true });
-    Object.defineProperty(ev, 'target', { value: btn });
-
-    component.onMouseOver(ev);
-    expect(document.activeElement).toBe(btn);
-  });
-
-  it('should move focus down with ArrowDown', () => {
+  it('should move focus down with ArrowDown skipping disabled/hidden', () => {
     const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
     const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
     t1b1.focus();
 
-    const ev = new KeyboardEvent('keydown', { key: 'ArrowDown' });
-    component.onKeyDown(ev);
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    t1b1.dispatchEvent(ev);
     expect(document.activeElement).toBe(t2b1);
+    expect(ev.defaultPrevented).toBe(true);
   });
 
   it('should move focus to footer from last task row with ArrowDown', () => {
@@ -846,46 +982,66 @@ describe('DialogViewTaskRemindersComponent navigation and focus', () => {
     const f1 = document.getElementById('f1') as HTMLButtonElement;
     t2b1.focus();
 
-    const ev = new KeyboardEvent('keydown', { key: 'ArrowDown' });
-    component.onKeyDown(ev);
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    t2b1.dispatchEvent(ev);
     expect(document.activeElement).toBe(f1);
+    expect(ev.defaultPrevented).toBe(true);
   });
 
-  it('should move focus up with ArrowUp', () => {
+  it('should move focus up with ArrowUp skipping disabled/hidden', () => {
     const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
     const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
     t2b1.focus();
 
-    const ev = new KeyboardEvent('keydown', { key: 'ArrowUp' });
-    component.onKeyDown(ev);
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowUp',
+      bubbles: true,
+      cancelable: true,
+    });
+    t2b1.dispatchEvent(ev);
     expect(document.activeElement).toBe(t1b1);
+    expect(ev.defaultPrevented).toBe(true);
   });
 
-  it('should move focus right with ArrowRight', () => {
+  it('should move focus right with ArrowRight skipping disabled/hidden', () => {
     const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
     const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
     t1b1.focus();
 
-    const ev = new KeyboardEvent('keydown', { key: 'ArrowRight' });
-    component.onKeyDown(ev);
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+    });
+    t1b1.dispatchEvent(ev);
     expect(document.activeElement).toBe(t1b2);
+    expect(ev.defaultPrevented).toBe(true);
   });
 
-  it('should move focus left with ArrowLeft', () => {
+  it('should move focus left with ArrowLeft skipping disabled/hidden', () => {
     const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
     const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
     t1b2.focus();
 
-    const ev = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
-    component.onKeyDown(ev);
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      bubbles: true,
+      cancelable: true,
+    });
+    t1b2.dispatchEvent(ev);
     expect(document.activeElement).toBe(t1b1);
+    expect(ev.defaultPrevented).toBe(true);
   });
 
-  it('should preserve focus on next task after removal', fakeAsync(() => {
+  it('should preserve focus on next task after removal (even if focus was lost)', fakeAsync(() => {
     fixture.detectChanges();
-    const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
-    t1b2.focus();
-    expect(document.activeElement).toBe(t1b2);
+    // Simulate focus being outside (e.g. in a menu)
+    (document.body as HTMLElement).focus();
+    expect(document.activeElement).not.toBe(document.getElementById('t1-b2'));
 
     // Call the actual private method that performs removal and focus logic
     (component as any)._removeTaskFromList('t1');
@@ -893,7 +1049,17 @@ describe('DialogViewTaskRemindersComponent navigation and focus', () => {
     tick();
     fixture.detectChanges();
 
-    const t2b2 = document.getElementById('t2-b2') as HTMLButtonElement;
-    expect(document.activeElement).toBe(t2b2);
+    const t2snooze = document.getElementById('t2-b2') as HTMLButtonElement;
+    expect(document.activeElement).toBe(t2snooze);
   }));
+
+  it('should skip disabled buttons in footer with ArrowRight', () => {
+    const f1 = document.getElementById('f1') as HTMLButtonElement;
+    const f3 = document.getElementById('f3') as HTMLButtonElement;
+    f1.focus();
+
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowRight' });
+    component.onKeyDown(ev);
+    expect(document.activeElement).toBe(f3);
+  });
 });

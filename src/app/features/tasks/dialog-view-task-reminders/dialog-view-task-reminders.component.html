@@ -192,7 +192,10 @@
     #taskRow
     let-task
   >
-    <div class="task">
+    <div
+      class="task"
+      [attr.data-id]="task.id"
+    >
       <div class="title-wrapper">
         <div
           class="due-for"
@@ -217,6 +220,7 @@
           <button
             (click)="markTaskAsDone(task)"
             [matTooltip]="T.F.TASK.D_REMINDER_VIEW.MARK_AS_DONE | translate"
+            [attr.aria-label]="T.F.TASK.D_REMINDER_VIEW.MARK_AS_DONE | translate"
             matTooltipShowDelay="0"
             color=""
             mat-icon-button
@@ -236,6 +240,12 @@
                 : T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE
               ) | translate
             "
+            [attr.aria-label]="
+              (task.isDeadlineReminder
+                ? T.F.TASK.D_REMINDER_VIEW.CLEAR_REMINDER
+                : T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE
+              ) | translate
+            "
             matTooltipShowDelay="0"
             class="hide-xs"
             color=""
@@ -250,6 +260,7 @@
             (dblclick)="snooze(task, 10)"
             [matMenuTriggerFor]="snoozeMenu"
             [matTooltip]="T.F.TASK.D_REMINDER_VIEW.SNOOZE | translate"
+            [attr.aria-label]="T.F.TASK.D_REMINDER_VIEW.SNOOZE | translate"
             matTooltipShowDelay="0"
             color=""
             mat-icon-button
@@ -260,6 +271,13 @@
           <button
             (click)="addToToday(task)"
             [matTooltip]="
+              ((todayTaskIds$ | async)?.includes(task.id) &&
+              (task.dueWithTime || 0) < overdueThreshold
+                ? T.F.TASK.D_REMINDER_VIEW.DROP_TIME_KEEP_TODAY
+                : T.F.TASK.D_REMINDER_VIEW.SCHEDULE_FOR_TODAY
+              ) | translate
+            "
+            [attr.aria-label]="
               ((todayTaskIds$ | async)?.includes(task.id) &&
               (task.dueWithTime || 0) < overdueThreshold
                 ? T.F.TASK.D_REMINDER_VIEW.DROP_TIME_KEEP_TODAY
