@@ -125,6 +125,48 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(component.model().breakRules).toEqual(initialRules);
   });
 
+  it('should keep rule fields when Formly mutates the model object while switching modes', () => {
+    fixture.destroy();
+    globalConfigServiceMock.cfg.and.returnValue({
+      flowtime: {
+        isBreakEnabled: false,
+        breakMode: 'ratio',
+        breakPercentage: 20,
+        breakRules: [],
+      },
+    });
+    fixture = TestBed.createComponent(DialogFlowtimeSettingsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const initialRules = component.model().breakRules;
+    const enabledModel = component.model();
+    enabledModel.isBreakEnabled = true;
+    component.updateModel(enabledModel);
+
+    const ruleModel = component.model();
+    ruleModel.breakMode = 'rule';
+    component.updateModel(ruleModel);
+
+    const ratioModel = component.model();
+    ratioModel.breakMode = 'ratio';
+    ratioModel.breakRules = [];
+    component.updateModel(ratioModel);
+
+    const restoredRuleModel = component.model();
+    restoredRuleModel.breakMode = 'rule';
+    restoredRuleModel.breakRules = [
+      {
+        minDuration: '' as unknown as number,
+        maxDuration: '' as unknown as number,
+        breakDuration: '' as unknown as number,
+      },
+    ];
+    component.updateModel(restoredRuleModel);
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
   describe('save()', () => {
     it('should convert minutes back to ms and save the config', () => {
       component.save();

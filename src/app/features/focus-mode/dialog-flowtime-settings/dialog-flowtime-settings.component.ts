@@ -71,6 +71,10 @@ export class DialogFlowtimeSettingsComponent {
     breakDuration: 5,
   };
   private readonly _initialFlowtimeConfig: FlowtimeConfig;
+  private _lastIsBreakEnabled: FlowtimeFormModel['isBreakEnabled'];
+  private _lastBreakMode: FlowtimeFormModel['breakMode'];
+  private _lastBreakPercentage: FlowtimeFormModel['breakPercentage'];
+  private _lastNonEmptyBreakRules: FlowtimeBreakRuleInMinutes[];
 
   T = T;
   form = new FormGroup({});
@@ -203,27 +207,37 @@ export class DialogFlowtimeSettingsComponent {
       ...DEFAULT_GLOBAL_CONFIG.flowtime,
       ...(cfg?.flowtime ?? {}),
     };
+    const breakRules = this._toBreakRulesInMinutes(flowtime);
     this._initialFlowtimeConfig = flowtime;
+    this._lastIsBreakEnabled = flowtime.isBreakEnabled;
+    this._lastBreakMode = flowtime.breakMode;
+    this._lastBreakPercentage = flowtime.breakPercentage;
+    this._lastNonEmptyBreakRules = this._copyBreakRules(breakRules);
 
     this.model.set({
       ...flowtime,
-      breakRules: this._toBreakRulesInMinutes(flowtime),
+      breakRules,
     });
   }
 
   updateModel(nextModel: FlowtimeFormModel): void {
-    const previousModel = this.model();
-    const breakMode = this._getNextBreakMode(previousModel, nextModel);
-
-    this.model.set({
+    const previousIsBreakEnabled = this._lastIsBreakEnabled;
+    const previousBreakMode = this._lastBreakMode;
+    const breakMode = this._getNextBreakMode(nextModel);
+    const nextModelToSet = {
       ...nextModel,
       breakMode,
-      breakPercentage: this._getNextBreakPercentage(previousModel, nextModel, breakMode),
-      breakRules: this._getNextBreakRules(previousModel, {
-        ...nextModel,
+      breakPercentage: this._getNextBreakPercentage(nextModel, breakMode),
+      breakRules: this._getNextBreakRules(
+        nextModel,
+        previousIsBreakEnabled,
+        previousBreakMode,
         breakMode,
-      }),
-    });
+      ),
+    };
+
+    this.model.set(nextModelToSet);
+    this._rememberModelState(nextModelToSet);
   }
 
   save(): void {
@@ -253,46 +267,45 @@ export class DialogFlowtimeSettingsComponent {
   }
 
   private _getNextBreakMode(
-    previousModel: FlowtimeFormModel,
     nextModel: FlowtimeFormModel,
   ): FlowtimeFormModel['breakMode'] {
     const isBreakModeHidden = !nextModel.isBreakEnabled;
 
     return nextModel.breakMode == null && isBreakModeHidden
-      ? (previousModel.breakMode ?? this._initialFlowtimeConfig.breakMode)
+      ? (this._lastBreakMode ?? this._initialFlowtimeConfig.breakMode)
       : nextModel.breakMode;
   }
 
   private _getNextBreakPercentage(
-    previousModel: FlowtimeFormModel,
     nextModel: FlowtimeFormModel,
     breakMode: FlowtimeFormModel['breakMode'],
   ): FlowtimeFormModel['breakPercentage'] {
     const isBreakPercentageHidden = !nextModel.isBreakEnabled || breakMode !== 'ratio';
 
     return nextModel.breakPercentage == null && isBreakPercentageHidden
-      ? (previousModel.breakPercentage ?? this._initialFlowtimeConfig.breakPercentage)
+      ? (this._lastBreakPercentage ?? this._initialFlowtimeConfig.breakPercentage)
       : nextModel.breakPercentage;
   }
 
   private _getNextBreakRules(
-    previousModel: FlowtimeFormModel,
     nextModel: FlowtimeFormModel,
+    previousIsBreakEnabled: FlowtimeFormModel['isBreakEnabled'],
+    previousBreakMode: FlowtimeFormModel['breakMode'],
+    breakMode: FlowtimeFormModel['breakMode'],
   ): FlowtimeBreakRuleInMinutes[] {
-    const previousRules =
-      previousModel.breakRules ??
-      this._toBreakRulesInMinutes(this._initialFlowtimeConfig);
     const nextRules = nextModel.breakRules;
 
     if (!this._isEmptyBreakRules(nextRules)) {
-      return nextRules!;
+      return this._copyBreakRules(nextRules!);
     }
 
     const didRuleFieldsVisibilityChange =
-      previousModel.isBreakEnabled !== nextModel.isBreakEnabled ||
-      previousModel.breakMode !== nextModel.breakMode;
+      previousIsBreakEnabled !== nextModel.isBreakEnabled ||
+      previousBreakMode !== breakMode;
 
-    return didRuleFieldsVisibilityChange ? previousRules : (nextRules ?? []);
+    return didRuleFieldsVisibilityChange
+      ? this._copyBreakRules(this._lastNonEmptyBreakRules)
+      : (nextRules ?? []);
   }
 
   private _isEmptyBreakRules(
@@ -312,6 +325,25 @@ export class DialogFlowtimeSettingsComponent {
 
   private _isBlankFormValue(value: unknown): boolean {
     return value == null || value === '';
+  }
+
+  private _rememberModelState(model: FlowtimeFormModel): void {
+    this._lastIsBreakEnabled = model.isBreakEnabled;
+    this._lastBreakMode = model.breakMode;
+
+    if (!this._isBlankFormValue(model.breakPercentage)) {
+      this._lastBreakPercentage = model.breakPercentage;
+    }
+
+    if (!this._isEmptyBreakRules(model.breakRules)) {
+      this._lastNonEmptyBreakRules = this._copyBreakRules(model.breakRules!);
+    }
+  }
+
+  private _copyBreakRules(
+    breakRules: FlowtimeBreakRuleInMinutes[],
+  ): FlowtimeBreakRuleInMinutes[] {
+    return breakRules.map((rule: FlowtimeBreakRuleInMinutes) => ({ ...rule }));
   }
 
   private _toBreakRulesInMinutes(
