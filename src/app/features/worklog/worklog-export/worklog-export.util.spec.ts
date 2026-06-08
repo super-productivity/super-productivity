@@ -373,7 +373,7 @@ describe('createRows', () => {
       expect(rows[2].dates).toEqual([dateKey2]);
     });
 
-    it('should not repeat day-level start and end times for each task row', () => {
+    it('should only show day-level start and end times on the first task row for a day', () => {
       const rows = createRows(
         createWorklogData({
           tasks: [task1, task2],
@@ -383,8 +383,16 @@ describe('createRows', () => {
       );
 
       expect(rows.length).toBe(3);
-      expect(rows.map((row) => row.workStart)).toEqual([0, 0, 0]);
-      expect(rows.map((row) => row.workEnd)).toEqual([0, 0, 0]);
+      expect(rows.map((row) => row.workStart)).toEqual([
+        workTimes.start[dateKey1],
+        0,
+        workTimes.start[dateKey2],
+      ]);
+      expect(rows.map((row) => row.workEnd)).toEqual([
+        workTimes.end[dateKey1],
+        0,
+        workTimes.end[dateKey2],
+      ]);
 
       const formattedRows = formatRows(rows, {
         roundWorkTimeTo: null,
@@ -396,9 +404,9 @@ describe('createRows', () => {
       });
 
       expect(formattedRows.map((row) => row.slice(0, 3))).toEqual([
+        [dateKey1, '10:00', '12:00'],
         [dateKey1, ' - ', ' - '],
-        [dateKey1, ' - ', ' - '],
-        [dateKey2, ' - ', ' - '],
+        [dateKey2, '14:00', '16:00'],
       ]);
     });
   });

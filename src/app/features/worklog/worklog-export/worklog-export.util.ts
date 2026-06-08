@@ -49,7 +49,7 @@ export const createRows = (
       rows.push(groups[key]);
     });
 
-  return rows;
+  return groupBy === WorklogGrouping.WORKLOG ? clearRepeatedWorklogDayTimes(rows) : rows;
 };
 
 /**
@@ -176,15 +176,29 @@ const handleWorklogGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
         dates: [day],
         timeEstimate: task.subTaskIds.length > 0 ? 0 : task.timeEstimate,
         timeSpent: task.subTaskIds.length > 0 ? 0 : task.timeSpentOnDay[day],
-        // Worklog rows are task/day rows. The stored start/end values are day-level
-        // work-context boundaries, so repeating them here would imply task session times.
-        workStart: 0,
-        workEnd: 0,
+        workStart: data.workTimes.start[day],
+        workEnd: data.workTimes.end[day],
         ...taskFields,
       };
     });
   }
   return taskGroups;
+};
+
+const clearRepeatedWorklogDayTimes = (rows: RowItem[]): RowItem[] => {
+  const seenDays = new Set<string>();
+  return rows.map((row) => {
+    const day = row.dates[0];
+    if (seenDays.has(day)) {
+      return {
+        ...row,
+        workStart: 0,
+        workEnd: 0,
+      };
+    }
+    seenDays.add(day);
+    return row;
+  });
 };
 
 /**
