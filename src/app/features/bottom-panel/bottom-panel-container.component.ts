@@ -79,6 +79,14 @@ export const getInitialBottomPanelHeightRatio = (
   }
 };
 
+export const isBottomPanelCloseButtonVisible = (
+  panelContent: PanelContentType | null,
+): boolean => panelContent === 'NOTES';
+
+export const stopBottomPanelHeaderEventPropagation = (event: Event): void => {
+  event.stopPropagation();
+};
+
 const KEYBOARD_DETECT_THRESHOLD = 100;
 const KEYBOARD_SAFE_HEIGHT_MIN = 200;
 const KEYBOARD_SAFE_HEIGHT_RATIO = 0.85;
@@ -123,7 +131,9 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     const dataContent = this.data?.panelContent ?? null;
     return dataContent ?? this._panelContentService.getCurrentPanelType();
   });
-  readonly isShowCloseButton = computed<boolean>(() => this.panelContent() === 'NOTES');
+  readonly isShowCloseButton = computed<boolean>(() =>
+    isBottomPanelCloseButtonVisible(this.panelContent()),
+  );
   readonly selectedTask = toSignal(this._taskService.selectedTask$, {
     initialValue: null,
   });
@@ -184,6 +194,10 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
 
   close(): void {
     this._bottomSheetRef.dismiss();
+  }
+
+  stopHeaderEventPropagation(event: Event): void {
+    stopBottomPanelHeaderEventPropagation(event);
   }
 
   private _setupDragListeners(): void {

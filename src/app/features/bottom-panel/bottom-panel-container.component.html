@@ -10,8 +10,8 @@
         mat-icon-button
         class="close-btn"
         [attr.aria-label]="T.G.CLOSE | translate"
-        (pointerdown)="$event.stopPropagation()"
-        (click)="close(); $event.stopPropagation()"
+        (pointerdown)="stopHeaderEventPropagation($event)"
+        (click)="close(); stopHeaderEventPropagation($event)"
       >
         <mat-icon>close</mat-icon>
       </button>
