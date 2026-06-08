@@ -85,7 +85,7 @@ export class TrelloCommonInterfacesService extends BaseIssueProviderService<Trel
       tap((results) =>
         IssueLog.log('Trello issue picker results fetched', {
           resultCount: results.length,
-          issueKeys: results.map((result) => result.issueData.key),
+          hasIssueKeys: results.some((result) => !!result.issueData.key),
           labelCount: results.reduce(
             (sum, result) => sum + result.issueData.labels.length,
             0,
