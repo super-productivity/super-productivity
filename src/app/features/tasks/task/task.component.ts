@@ -722,11 +722,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     blurEvent?: FocusEvent;
     submitTrigger: SubmitTrigger;
   }): void {
+    const isNewlyCreated = !this.task().title?.trim();
+
     if (wasChanged) {
       this._taskService.update(this.task().id, { title: newVal });
     }
 
-    const isNewlyCreated = !this.task().title?.trim();
     const isEmpty = !newVal.trim();
 
     const nextFocusTarget = blurEvent?.relatedTarget as HTMLElement | null;

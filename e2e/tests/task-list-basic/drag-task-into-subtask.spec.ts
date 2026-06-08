@@ -80,13 +80,14 @@ test.describe('Drag task into subtask list', () => {
     // Parent with one existing subtask → its subtask drop list is rendered.
     await workViewPage.addTask('DragParent');
     const parent = page.locator('task').filter({ hasText: 'DragParent' }).first();
-    await workViewPage.addSubTask(parent, 'ExistingSub');
-    await parent.locator('.sub-tasks task').first().waitFor({ state: 'visible' });
 
     // A second top-level task to drag in.
     await workViewPage.addTask('DragMover');
     const mover = page.locator('task').filter({ hasText: 'DragMover' }).first();
     await expect(mover).toBeVisible();
+
+    await workViewPage.addSubTask(parent, 'ExistingSub');
+    await parent.locator('.sub-tasks task').first().waitFor({ state: 'visible' });
 
     await disableAnimations(page);
 
