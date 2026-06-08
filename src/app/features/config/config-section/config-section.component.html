@@ -32,7 +32,7 @@
     </help-section>
   }
   <div class="form-wrapper {{ section?.key }}">
-    @if (section?.items) {
+    @if (section?.items && !section?.customSection) {
       <config-form
         (save)="onSave($event)"
         [cfg]="cfg"

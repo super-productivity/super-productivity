@@ -188,6 +188,10 @@ export class LocalBackupService {
       ? await this.loadBackupAndroid()
       : await this.loadBackupIOS();
 
+    // Not redundant with loadBackup*: selectBestBackupStr falls back to a
+    // non-empty *corrupt* blob when neither ring slot is usable, so this gate is
+    // what rejects corrupt data and surfaces the snack instead of attempting a
+    // doomed import. Don't "simplify" to `!backupData`.
     if (!isUsableBackupStr(backupData)) {
       this._snackService.open({
         type: 'WARNING',
