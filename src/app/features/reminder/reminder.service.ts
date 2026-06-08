@@ -3,7 +3,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { combineLatest, firstValueFrom, Observable, Subject } from 'rxjs';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { T } from '../../t.const';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import { distinctUntilChanged, filter, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { Log } from '../../core/log';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -131,12 +131,15 @@ export class ReminderService {
       );
 
       const currentTaskState = await firstValueFrom(
-        this._store.select(selectTaskFeatureState),
+        this._store
+          .select(selectTaskFeatureState)
+          .pipe(
+            filter(
+              (taskState): taskState is TaskState =>
+                !!taskState?.entities && taskState.isDataLoaded,
+            ),
+          ),
       );
-      if (!currentTaskState?.entities) {
-        Log.log('ReminderService: Cannot migrate legacy reminders without task state');
-        return;
-      }
 
       const taskState = _cloneTaskStateForMigration(currentTaskState);
       const migrationResult = migrateLegacyTaskRemindersIntoTasks(

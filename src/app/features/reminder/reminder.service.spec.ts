@@ -373,6 +373,56 @@ describe('ReminderService', () => {
       );
       expect(mockLegacyPfDb.save).toHaveBeenCalledWith('reminders', []);
     });
+
+    it('should wait for loaded task state before clearing legacy reminders', async () => {
+      taskStateSubject.next(_createTaskState({}, false));
+      mockLegacyPfDb.load.and.resolveTo([
+        {
+          id: 'reminder-active',
+          relatedId: 'active',
+          remindAt: 1704110400000,
+          title: 'Active Task',
+          type: 'TASK',
+        },
+      ]);
+
+      service.init();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: TaskSharedActions.updateTasks.type }),
+      );
+      expect(mockLegacyPfDb.save).not.toHaveBeenCalled();
+
+      taskStateSubject.next(
+        _createTaskState(
+          {
+            active: _createTask({
+              id: 'active',
+              reminderId: 'reminder-active',
+            }),
+          },
+          true,
+        ),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTasks({
+          tasks: [
+            {
+              id: 'active',
+              changes: {
+                remindAt: 1704110400000,
+                dueWithTime: 1704110400000,
+                reminderId: undefined,
+              },
+            },
+          ],
+        }),
+      );
+      expect(mockLegacyPfDb.save).toHaveBeenCalledWith('reminders', []);
+    });
   });
 
   describe('onRemindersActive$', () => {
@@ -555,14 +605,17 @@ describe('ReminderService', () => {
   // });
 });
 
-const _createTaskState = (entities: Record<string, TaskCopy> = {}): TaskState =>
+const _createTaskState = (
+  entities: Record<string, TaskCopy> = {},
+  isDataLoaded: boolean = true,
+): TaskState =>
   ({
     ids: Object.keys(entities),
     entities,
     currentTaskId: null,
     selectedTaskId: null,
     lastCurrentTaskId: null,
-    isDataLoaded: true,
+    isDataLoaded,
   }) as TaskState;
 
 const _createTask = (task: Partial<TaskCopy>): TaskCopy =>
