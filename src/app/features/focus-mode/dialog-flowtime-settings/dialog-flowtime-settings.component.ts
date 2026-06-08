@@ -11,6 +11,7 @@ import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { T } from '../../../t.const';
 import { FlowtimeBreakRule, FlowtimeConfig } from '../../config/global-config.model';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -69,6 +70,7 @@ export class DialogFlowtimeSettingsComponent {
     maxDuration: 25,
     breakDuration: 5,
   };
+  private readonly _initialFlowtimeConfig: FlowtimeConfig;
 
   T = T;
   form = new FormGroup({});
@@ -194,12 +196,11 @@ export class DialogFlowtimeSettingsComponent {
 
   constructor() {
     const cfg = this._globalConfigService.cfg();
-    const flowtime = cfg?.flowtime ?? {
-      isBreakEnabled: false,
-      breakMode: 'ratio',
-      breakPercentage: 20,
-      breakRules: [],
+    const flowtime = {
+      ...DEFAULT_GLOBAL_CONFIG.flowtime,
+      ...(cfg?.flowtime ?? {}),
     };
+    this._initialFlowtimeConfig = flowtime;
 
     const breakRulesInMinutes = (flowtime.breakRules ?? []).map(
       (rule: FlowtimeBreakRule) => ({
@@ -225,27 +226,16 @@ export class DialogFlowtimeSettingsComponent {
       return;
     }
     const currentModel = this.model();
+    const breakMode = currentModel.breakMode ?? this._initialFlowtimeConfig.breakMode;
     const flowtimeConfig: FlowtimeConfig = {
       isBreakEnabled: currentModel.isBreakEnabled,
-      breakMode: currentModel.breakMode,
-      breakPercentage: currentModel.breakPercentage,
-      breakRules: [...(currentModel.breakRules ?? [])]
-        .sort((a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0))
-        .map((rule: FlowtimeBreakRuleInMinutes) => {
-          const min = rule.minDuration ?? 0;
-
-          let max = rule.maxDuration == null ? null : rule.maxDuration;
-
-          if (max !== null && max < min) {
-            max = min;
-          }
-
-          return {
-            minDuration: Math.round(min * 60000),
-            maxDuration: max === null ? null : Math.round(max * 60000),
-            breakDuration: Math.round((rule.breakDuration ?? 0) * 60000),
-          };
-        }),
+      breakMode,
+      breakPercentage:
+        currentModel.breakPercentage ?? this._initialFlowtimeConfig.breakPercentage,
+      breakRules:
+        currentModel.isBreakEnabled && breakMode === 'rule' && currentModel.breakRules
+          ? this._toBreakRulesInMs(currentModel.breakRules)
+          : (this._initialFlowtimeConfig.breakRules ?? []),
     };
 
     this._globalConfigService.updateSection('flowtime', flowtimeConfig, true);
@@ -254,5 +244,27 @@ export class DialogFlowtimeSettingsComponent {
 
   close(): void {
     this._dialogRef.close();
+  }
+
+  private _toBreakRulesInMs(
+    breakRules: FlowtimeBreakRuleInMinutes[],
+  ): FlowtimeBreakRule[] {
+    return [...breakRules]
+      .sort((a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0))
+      .map((rule: FlowtimeBreakRuleInMinutes) => {
+        const min = rule.minDuration ?? 0;
+
+        let max = rule.maxDuration == null ? null : rule.maxDuration;
+
+        if (max !== null && max < min) {
+          max = min;
+        }
+
+        return {
+          minDuration: Math.round(min * 60000),
+          maxDuration: max === null ? null : Math.round(max * 60000),
+          breakDuration: Math.round((rule.breakDuration ?? 0) * 60000),
+        };
+      });
   }
 }

@@ -121,6 +121,22 @@ describe('DialogFlowtimeSettingsComponent', () => {
         breakDuration: 15 * 60000,
       });
     });
+
+    it('should preserve hidden break settings when Flowtime breaks are disabled', () => {
+      component.model.set({
+        isBreakEnabled: false,
+      });
+
+      component.save();
+      const savedConfig =
+        globalConfigServiceMock.updateSection.calls.mostRecent().args[1];
+      expect(savedConfig).toEqual({
+        isBreakEnabled: false,
+        breakMode: 'rule',
+        breakPercentage: 20,
+        breakRules: [{ minDuration: 0, maxDuration: 1500000, breakDuration: 300000 }],
+      });
+    });
   });
 
   describe('validator', () => {
