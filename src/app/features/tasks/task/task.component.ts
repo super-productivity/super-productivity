@@ -180,6 +180,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   // Determines if the toggle detail panel button should be visible
   isShowToggleButton = computed(() => {
     const t = this.task();
+    // A checklist already shows its own badge (which opens the notes panel), so
+    // suppress the redundant plain 'chat' notes indicator. The button is kept for
+    // the 'close' (panel open) and 'update' (issue changed) states.
+    if (this.checklistProgress() && this.toggleButtonIcon() === 'chat') {
+      return false;
+    }
     return (
       t.notes || (t.issueId && t.issueType !== ICAL_TYPE) || this.isShowCloseButton()
     );

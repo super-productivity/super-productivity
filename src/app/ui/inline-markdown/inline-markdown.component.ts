@@ -27,7 +27,6 @@ import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
 import {
-  moveChecklistItem,
   removeCheckedChecklistItems,
   setAllChecklistItemsChecked,
 } from '../../features/markdown-checklist/checklist-operations';
@@ -102,8 +101,8 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
 
-  // True when the current notes are a markdown checklist — gates checklist
-  // actions (bulk check/uncheck/clear and drag-to-reorder) in the UI.
+  // True when the current notes are a markdown checklist — gates the checklist
+  // bulk actions (check all / uncheck all / clear completed) in the UI.
   isCurrentlyChecklist = computed(
     () =>
       this.isShowChecklistToggle() &&
@@ -113,8 +112,6 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   readonly T = T;
   private _hideOverFlowTimeout: number | undefined;
-  private _dragFromIndex: number | null = null;
-  private _dragOverEl: HTMLElement | null = null;
 
   constructor() {
     this.resizeParsedToFit();
@@ -213,89 +210,6 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   clearCompletedChecklistItems(): void {
     this._applyChecklistTransform(removeCheckedChecklistItems);
-  }
-
-  /**
-   * Reorders checklist items via native drag-and-drop on the rendered preview.
-   * Each `.checkbox-wrapper` is tagged with its checklist index in
-   * `onMarkdownReady()`, mirroring the index mapping used for toggling.
-   */
-  onMarkdownReady(): void {
-    if (!this.isCurrentlyChecklist()) {
-      return;
-    }
-    const wrappers = this.previewEl()?.element.nativeElement.querySelectorAll(
-      '.checkbox-wrapper',
-    ) as NodeListOf<HTMLElement> | undefined;
-    wrappers?.forEach((el, i) => {
-      el.draggable = true;
-      el.dataset['checkIndex'] = String(i);
-    });
-  }
-
-  onChecklistDragStart(ev: DragEvent): void {
-    const wrapper = (ev.target as HTMLElement)?.closest?.(
-      '.checkbox-wrapper',
-    ) as HTMLElement | null;
-    if (!wrapper) {
-      return;
-    }
-    this._dragFromIndex = Number(wrapper.dataset['checkIndex']);
-    ev.dataTransfer?.setData('text/plain', String(this._dragFromIndex));
-    if (ev.dataTransfer) {
-      ev.dataTransfer.effectAllowed = 'move';
-    }
-  }
-
-  onChecklistDragOver(ev: DragEvent): void {
-    if (this._dragFromIndex === null) {
-      return;
-    }
-    const wrapper = (ev.target as HTMLElement)?.closest?.(
-      '.checkbox-wrapper',
-    ) as HTMLElement | null;
-    if (wrapper) {
-      // Allow dropping onto another checklist item and highlight the target row.
-      ev.preventDefault();
-      this._setDragOverEl(wrapper);
-    }
-  }
-
-  onChecklistDrop(ev: DragEvent): void {
-    if (this._dragFromIndex === null) {
-      return;
-    }
-    const wrapper = (ev.target as HTMLElement)?.closest?.(
-      '.checkbox-wrapper',
-    ) as HTMLElement | null;
-    const fromIndex = this._dragFromIndex;
-    this._resetDragState();
-    if (!wrapper) {
-      return;
-    }
-    ev.preventDefault();
-    const toIndex = Number(wrapper.dataset['checkIndex']);
-    this._applyChecklistTransform((notes) =>
-      moveChecklistItem(notes, fromIndex, toIndex),
-    );
-  }
-
-  onChecklistDragEnd(): void {
-    this._resetDragState();
-  }
-
-  private _setDragOverEl(el: HTMLElement | null): void {
-    if (this._dragOverEl === el) {
-      return;
-    }
-    this._dragOverEl?.classList.remove('drag-over');
-    el?.classList.add('drag-over');
-    this._dragOverEl = el;
-  }
-
-  private _resetDragState(): void {
-    this._dragFromIndex = null;
-    this._setDragOverEl(null);
   }
 
   private _applyChecklistTransform(transform: (notes: string) => string): void {

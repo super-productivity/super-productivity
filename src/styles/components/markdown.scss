@@ -131,22 +131,4 @@
       text-decoration: line-through;
     }
   }
-
-  // Drag-to-reorder affordance: only on checklists, where wrappers are made
-  // draggable (see inline-markdown.component onMarkdownReady).
-  &.is-checklist .checkbox-wrapper[draggable='true'] {
-    &:hover {
-      cursor: grab;
-    }
-
-    &:active {
-      cursor: grabbing;
-    }
-
-    // Highlight the row the dragged item will be dropped onto.
-    &.drag-over {
-      border-radius: var(--card-border-radius);
-      box-shadow: inset 0 0 0 2px var(--c-accent);
-    }
-  }
 }

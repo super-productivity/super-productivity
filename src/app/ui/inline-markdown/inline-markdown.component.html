@@ -26,15 +26,9 @@
     <markdown
       #previewEl
       (click)="clickPreview($event)"
-      (ready)="onMarkdownReady()"
-      (dragstart)="onChecklistDragStart($event)"
-      (dragover)="onChecklistDragOver($event)"
-      (drop)="onChecklistDrop($event)"
-      (dragend)="onChecklistDragEnd()"
       [data]="resolvedMarkdownData"
       [disableSanitizer]="true"
       [class.preview-while-editing]="isShowEdit()"
-      [class.is-checklist]="isCurrentlyChecklist()"
       class="mat-body-2 markdown-parsed markdown"
       tabindex="0"
     ></markdown>

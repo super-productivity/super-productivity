@@ -1,7 +1,6 @@
 import {
   isChecklistItemLine,
   isCheckedItemLine,
-  moveChecklistItem,
   removeCheckedChecklistItems,
   setAllChecklistItemsChecked,
 } from './checklist-operations';
@@ -59,38 +58,6 @@ describe('checklist-operations', () => {
     it('should keep prose lines', () => {
       const notes = 'Title\n- [x] done\n- [ ] todo';
       expect(removeCheckedChecklistItems(notes)).toBe('Title\n- [ ] todo');
-    });
-  });
-
-  describe('moveChecklistItem', () => {
-    it('should move an item down', () => {
-      const notes = '- [ ] a\n- [ ] b\n- [ ] c';
-      expect(moveChecklistItem(notes, 0, 2)).toBe('- [ ] b\n- [ ] c\n- [ ] a');
-    });
-
-    it('should move an item up', () => {
-      const notes = '- [ ] a\n- [x] b\n- [ ] c';
-      expect(moveChecklistItem(notes, 2, 0)).toBe('- [ ] c\n- [ ] a\n- [x] b');
-    });
-
-    it('should preserve interleaved prose slots', () => {
-      // Items occupy lines 1 and 3; prose stays on lines 0 and 2.
-      const notes = 'Intro\n- [ ] a\nmid\n- [x] b';
-      expect(moveChecklistItem(notes, 0, 1)).toBe('Intro\n- [x] b\nmid\n- [ ] a');
-    });
-
-    it('should return input unchanged for no-op or out-of-range moves', () => {
-      const notes = '- [ ] a\n- [ ] b';
-      expect(moveChecklistItem(notes, 1, 1)).toBe(notes);
-      expect(moveChecklistItem(notes, 0, 5)).toBe(notes);
-      expect(moveChecklistItem(notes, -1, 0)).toBe(notes);
-    });
-
-    it('should return input unchanged for NaN / non-integer indices', () => {
-      const notes = '- [ ] a\n- [ ] b\n- [ ] c';
-      expect(moveChecklistItem(notes, NaN, 1)).toBe(notes);
-      expect(moveChecklistItem(notes, 0, NaN)).toBe(notes);
-      expect(moveChecklistItem(notes, 0.5, 2)).toBe(notes);
     });
   });
 });

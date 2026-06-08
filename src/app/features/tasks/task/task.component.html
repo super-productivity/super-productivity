@@ -221,7 +221,8 @@
             </button>
           }
 
-          @if (checklistProgress(); as cp) {
+          <!-- Stands in for the notes icon; like it, yields to the close (X) button -->
+          @if (!isShowCloseButton() && checklistProgress(); as cp) {
             <button
               (click)="openNotesPanel()"
               [matTooltip]="
