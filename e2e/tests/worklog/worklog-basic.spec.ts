@@ -58,10 +58,13 @@ test.describe('Worklog', () => {
     await page.goto('/#/tag/TODAY/history');
     await page.waitForLoadState('networkidle');
 
-    // Worklog should show today's completed task
+    // Worklog should show today's completed task. The worklog is rebuilt from
+    // the archive on the history navigation, so the day row only appears once
+    // that async load + month expand animation settles — give it headroom for
+    // CI load instead of the default 15s action timeout.
     await expect(page.locator('history')).toBeVisible();
     const dayRow = page.locator('history .week-row').first();
-    await dayRow.waitFor({ state: 'visible' });
+    await expect(dayRow).toBeVisible({ timeout: 30000 });
     await dayRow.click();
     await expect(
       page.locator('.task-summary-table td.title button').filter({ hasText: taskName }),
