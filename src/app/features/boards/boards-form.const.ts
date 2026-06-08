@@ -144,25 +144,21 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           key: 'scheduledState',
           type: 'radio',
           props: {
-            // label: T.F.BOARDS.FORM.TASK_DONE_STATE,
-            label: 'Scheduled State',
+            label: T.F.BOARDS.FORM.SCHEDULED_STATE,
             required: true,
             defaultValue: BoardPanelCfgScheduledState.All,
             options: [
               {
                 value: BoardPanelCfgScheduledState.All,
-                // label: T.F.BOARDS.FORM.TASK_DONE_STATE_ALL,
-                label: 'All',
+                label: T.F.BOARDS.FORM.SCHEDULED_STATE_ALL,
               },
               {
                 value: BoardPanelCfgScheduledState.Scheduled,
-                // label: T.F.BOARDS.FORM.TASK_DONE_STATE_DONE,
-                label: 'Scheduled',
+                label: T.F.BOARDS.FORM.SCHEDULED_STATE_SCHEDULED,
               },
               {
                 value: BoardPanelCfgScheduledState.NotScheduled,
-                // label: T.F.BOARDS.FORM.TASK_DONE_STATE_UNDONE,
-                label: 'Not Scheduled',
+                label: T.F.BOARDS.FORM.SCHEDULED_STATE_NOT_SCHEDULED,
               },
             ],
           },
@@ -226,19 +222,16 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           key: 'projectId',
           type: 'project-select',
           props: {
-            // label: T.GCF.MISC.DEFAULT_PROJECT,
-            label: 'Project',
+            label: T.F.BOARDS.FORM.PROJECT,
             defaultValue: '',
-            // nullLabel: T.F,
-            nullLabel: 'All Projects',
+            nullLabel: T.F.BOARDS.FORM.PROJECT_ALL,
           },
         },
         {
           key: 'isParentTasksOnly',
           type: 'checkbox',
           props: {
-            // label: T.GCF.MISC.DEFAULT_PROJECT,
-            label: 'Only parent tasks',
+            label: T.F.BOARDS.FORM.ONLY_PARENT_TASKS,
             defaultValue: false,
           },
         },

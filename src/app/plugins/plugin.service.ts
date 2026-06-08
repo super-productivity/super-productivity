@@ -1076,7 +1076,10 @@ export class PluginService implements OnDestroy {
   }
 
   async loadPluginFromZip(file: File): Promise<PluginInstance> {
-    PluginLog.log(`Starting plugin load from ZIP: ${file.name}`);
+    PluginLog.log('Starting plugin load from ZIP', {
+      size: file.size,
+      type: file.type,
+    });
 
     // Import fflate dynamically for better bundle size
     const { unzip } = await import('fflate');
@@ -1114,7 +1117,14 @@ export class PluginService implements OnDestroy {
           });
         },
       );
-      PluginLog.log({ extractedFiles });
+      const extractedFileEntries = Object.entries(extractedFiles);
+      PluginLog.log('Plugin ZIP extracted', {
+        fileCount: extractedFileEntries.length,
+        totalBytes: extractedFileEntries.reduce((sum, [, data]) => sum + data.length, 0),
+        hasManifest: !!extractedFiles['manifest.json'],
+        hasPluginJs: !!extractedFiles['plugin.js'],
+        hasIndexHtml: !!extractedFiles['index.html'],
+      });
 
       // Find and extract manifest.json
       if (!extractedFiles['manifest.json']) {

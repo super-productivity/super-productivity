@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "18.8.0",
+  "version": "18.9.1",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -319,6 +319,9 @@
   "overrides": {
     "app-builder-lib": {
       "minimatch": "10.2.5"
+    },
+    "@electron/asar": {
+      "minimatch": "3.1.2"
     },
     "webpack-dev-server": "5.2.4"
   },

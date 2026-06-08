@@ -358,14 +358,20 @@ export class SyncPage extends BasePage {
 
     // Fill password field
     await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
+    await passwordInput.click();
     await passwordInput.fill(password);
+    await expect(passwordInput).toHaveValue(password);
 
-    // Fill confirm password field
+    // Fill confirm password field. In CI, fill() has occasionally left focus on
+    // the first password field, duplicating the value there and leaving confirm
+    // empty. Insert through the focused confirm input and assert both values.
     await confirmInput.waitFor({ state: 'visible', timeout: 5000 });
-    await confirmInput.fill(password);
-
-    // Wait a moment for validation
-    await this.page.waitForTimeout(300);
+    await confirmInput.click();
+    await expect(confirmInput).toBeFocused();
+    await this.page.keyboard.press('ControlOrMeta+A');
+    await this.page.keyboard.insertText(password);
+    await expect(confirmInput).toHaveValue(password);
+    await expect(passwordInput).toHaveValue(password);
 
     // Click the "Enable Encryption" button in this dialog
     // It's the mat-flat-button with a lock icon

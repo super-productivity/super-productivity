@@ -86,9 +86,9 @@ test.describe('@supersync Worklog Sync', () => {
       console.log('[Worklog Test] Client B synced');
 
       // Navigate to worklog
-      await clientB.page.goto('/#/tag/TODAY/worklog');
+      await clientB.page.goto('/#/tag/TODAY/history');
       await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('worklog', { timeout: 10000 });
+      await clientB.page.waitForSelector('history', { timeout: 10000 });
       console.log('[Worklog Test] Client B navigated to worklog');
 
       // Expand week to see tasks
@@ -179,9 +179,9 @@ test.describe('@supersync Worklog Sync', () => {
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
 
-      await clientB.page.goto('/#/tag/TODAY/worklog');
+      await clientB.page.goto('/#/tag/TODAY/history');
       await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('worklog', { timeout: 10000 });
+      await clientB.page.waitForSelector('history', { timeout: 10000 });
 
       // Expand week
       const weekRow = clientB.page.locator('.week-row').first();
@@ -293,9 +293,9 @@ test.describe('@supersync Worklog Sync', () => {
 
       // ============ PHASE 4: Verify All Archives in Worklog ============
       // Check Client A worklog
-      await clientA.page.goto('/#/tag/TODAY/worklog');
+      await clientA.page.goto('/#/tag/TODAY/history');
       await clientA.page.waitForLoadState('networkidle');
-      await clientA.page.waitForSelector('worklog', { timeout: 10000 });
+      await clientA.page.waitForSelector('history', { timeout: 10000 });
 
       const weekRowA = clientA.page.locator('.week-row').first();
       if (await weekRowA.isVisible()) {
@@ -315,9 +315,9 @@ test.describe('@supersync Worklog Sync', () => {
       console.log('[Multi Archive Test] Client A has both archives in worklog');
 
       // Check Client B worklog
-      await clientB.page.goto('/#/tag/TODAY/worklog');
+      await clientB.page.goto('/#/tag/TODAY/history');
       await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('worklog', { timeout: 10000 });
+      await clientB.page.waitForSelector('history', { timeout: 10000 });
 
       const weekRowB = clientB.page.locator('.week-row').first();
       if (await weekRowB.isVisible()) {

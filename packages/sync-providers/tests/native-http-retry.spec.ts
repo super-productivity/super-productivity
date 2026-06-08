@@ -68,6 +68,27 @@ describe('isTransientNetworkError', () => {
       });
       expect(isTransientNetworkError(error)).toBe(true);
     });
+
+    it('returns true for custom WebDavHttp NETWORK_ERROR', () => {
+      const error = Object.assign(new Error('connection reset'), {
+        code: 'NETWORK_ERROR',
+      });
+      expect(isTransientNetworkError(error)).toBe(true);
+    });
+
+    it('returns true for custom WebDavHttp TIMEOUT_ERROR', () => {
+      const error = Object.assign(new Error('request took too long'), {
+        code: 'TIMEOUT_ERROR',
+      });
+      expect(isTransientNetworkError(error)).toBe(true);
+    });
+
+    it('returns false for custom WebDavHttp SSL_ERROR', () => {
+      const error = Object.assign(new Error('certificate rejected'), {
+        code: 'SSL_ERROR',
+      });
+      expect(isTransientNetworkError(error)).toBe(false);
+    });
   });
 
   describe('Fallback string matching', () => {
@@ -329,10 +350,14 @@ describe('executeNativeRequestWithRetry', () => {
       .fn<NativeHttpExecutor>()
       .mockRejectedValueOnce(transientError)
       .mockResolvedValueOnce(successResponse);
+    const config: NativeHttpRequestConfig = {
+      ...baseConfig,
+      url: 'https://user:secret@example.com:8443/private/sync.json?token=abc#frag',
+    };
     const { delay } = collectDelays();
     const logger = noopLogger();
 
-    await executeNativeRequestWithRetry(baseConfig, {
+    await executeNativeRequestWithRetry(config, {
       executor,
       label: 'Test',
       logger,
@@ -343,13 +368,18 @@ describe('executeNativeRequestWithRetry', () => {
     const [message, meta] = (logger.warn as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(message).toContain('Test transient network error');
     expect(meta).toMatchObject({
-      url: baseConfig.url,
+      url: 'example.com:8443',
       attempt: 1,
       maxRetries: 2,
       delayMs: 1500,
       errorName: 'Error',
       errorCode: 'NSURLErrorDomain',
     });
+    expect(JSON.stringify(meta)).not.toContain('user');
+    expect(JSON.stringify(meta)).not.toContain('secret');
+    expect(JSON.stringify(meta)).not.toContain('private');
+    expect(JSON.stringify(meta)).not.toContain('token');
+    expect(JSON.stringify(meta)).not.toContain('frag');
   });
 
   it('does not retry when maxRetries is 0', async () => {

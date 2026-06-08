@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorMeta, urlPathOnly } from '../../src/log';
+import { errorMeta, urlHostOnly, urlPathOnly } from '../../src/log';
 
 describe('urlPathOnly', () => {
   it('strips query string', () => {
@@ -70,6 +70,33 @@ describe('urlPathOnly', () => {
     expect(stripped).not.toContain('access_token');
     expect(stripped).not.toContain('SECRETTOKENVALUE');
     expect(stripped).not.toContain('refresh_token');
+  });
+});
+
+describe('urlHostOnly', () => {
+  it('keeps only the host', () => {
+    expect(urlHostOnly('https://api.dropbox.com/2/files/upload?token=abc123')).toBe(
+      'api.dropbox.com',
+    );
+  });
+
+  it('strips userinfo, path, query, and fragment', () => {
+    const host = urlHostOnly(
+      'https://user:secret@host.example.com:8443/path/to/file?token=abc#anchor',
+    );
+
+    expect(host).toBe('host.example.com:8443');
+    expect(host).not.toContain('user');
+    expect(host).not.toContain('secret');
+    expect(host).not.toContain('/path');
+    expect(host).not.toContain('token');
+    expect(host).not.toContain('anchor');
+  });
+
+  it('returns a fixed placeholder for invalid URLs', () => {
+    expect(urlHostOnly('/relative/path?token=x')).toBe('[invalid-url]');
+    expect(urlHostOnly('not a url')).toBe('[invalid-url]');
+    expect(urlHostOnly('')).toBe('[invalid-url]');
   });
 });
 

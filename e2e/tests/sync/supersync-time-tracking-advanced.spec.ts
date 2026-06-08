@@ -118,9 +118,9 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
 
       // ============ PHASE 5: Verify Time in Worklog ============
       // Navigate to worklog on Client A
-      await clientA.page.goto('/#/tag/TODAY/worklog');
+      await clientA.page.goto('/#/tag/TODAY/history');
       await clientA.page.waitForLoadState('networkidle');
-      await clientA.page.waitForSelector('worklog', { timeout: 10000 });
+      await clientA.page.waitForSelector('history', { timeout: 10000 });
 
       // Expand week to see tasks
       const weekRow = clientA.page.locator('.week-row').first();

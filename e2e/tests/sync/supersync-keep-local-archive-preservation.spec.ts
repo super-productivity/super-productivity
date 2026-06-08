@@ -389,7 +389,7 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
 
       // Navigate around to trigger any lazy validation
       await navigateToWorkView(clientB);
-      await clientB.page.goto('/#/tag/TODAY/worklog');
+      await clientB.page.goto('/#/tag/TODAY/history');
       await clientB.page.waitForLoadState('networkidle');
       await navigateToWorkView(clientB);
 

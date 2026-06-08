@@ -1,0 +1,25 @@
+@if (counters().length) {
+  <div class="day-meta">
+    @for (sc of counters(); track sc.id) {
+      <span
+        [matTooltip]="sc.title"
+        class="simple-counter-item"
+      >
+        @if (sc.icon && sc.icon.startsWith(':')) {
+          <mat-icon [svgIcon]="sc.icon"></mat-icon>
+        } @else if (sc.icon) {
+          <mat-icon>{{ sc.icon }}</mat-icon>
+        } @else {
+          <span class="habit-initial">{{ sc.title.charAt(0).toUpperCase() }}</span>
+        }
+        @if (sc.type === 'StopWatch') {
+          <span class="count">{{
+            countForDay(sc, dateStr()) | msToMinuteClockString
+          }}</span>
+        } @else {
+          <span class="count">{{ countForDay(sc, dateStr()) }}</span>
+        }
+      </span>
+    }
+  </div>
+}

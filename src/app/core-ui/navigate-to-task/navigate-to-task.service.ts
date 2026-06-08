@@ -80,7 +80,7 @@ export class NavigateToTaskService {
   }
 
   private async _getLocation(task: Task, isArchiveTask: boolean): Promise<string> {
-    const tasksOrWorklog = isArchiveTask ? 'worklog' : 'tasks';
+    const tasksOrWorklog = isArchiveTask ? 'history' : 'tasks';
 
     let taskToCheck = task;
     if (task.parentId) {

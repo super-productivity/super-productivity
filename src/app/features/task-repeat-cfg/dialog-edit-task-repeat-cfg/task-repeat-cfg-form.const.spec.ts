@@ -73,4 +73,59 @@ describe('TaskRepeatCfgFormConfig', () => {
       expect(remindAtField?.templateOptions?.required).toBe(true);
     });
   });
+
+  describe('weekdays group visibility (issue #8025)', () => {
+    const repeatContainer = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.find(
+      (field) => field.fieldGroupClassName === 'repeat-config-container',
+    );
+    const weekdaysGroup = repeatContainer?.fieldGroup?.find(
+      (field) => field.fieldGroupClassName === 'weekdays',
+    );
+    const WEEKDAY_KEYS = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+
+    it('should locate the weekdays group', () => {
+      expect(weekdaysGroup).toBeDefined();
+      expect(weekdaysGroup?.fieldGroup?.length).toBe(7);
+    });
+
+    // Regression guard for #8025: a `hideExpression` makes formly destroy and
+    // recreate the checkbox views on every cycle switch, which breaks their
+    // wiring to the FormControls (clicks stop updating the model after a
+    // Week -> Month -> Week round-trip). Visibility must be driven by CSS instead.
+    it('should NOT use hideExpression (it would re-freeze the checkboxes)', () => {
+      expect(weekdaysGroup?.hideExpression).toBeUndefined();
+    });
+
+    it('should toggle visibility via a dynamic className bound to repeatCycle', () => {
+      const className = weekdaysGroup?.expressionProperties?.['className'] as (model: {
+        repeatCycle: string;
+      }) => string;
+      expect(className).toEqual(jasmine.any(Function));
+      expect(className({ repeatCycle: 'WEEKLY' })).toBe('');
+      expect(className({ repeatCycle: 'MONTHLY' })).toBe('repeat-cfg-hidden');
+      expect(className({ repeatCycle: 'YEARLY' })).toBe('repeat-cfg-hidden');
+      expect(className({ repeatCycle: 'DAILY' })).toBe('repeat-cfg-hidden');
+    });
+
+    // The group stays mounted, but the CUSTOM container above it still hides via
+    // hideExpression. Each checkbox needs resetOnHide:false so the selection
+    // survives a quickSetting != CUSTOM round-trip instead of being wiped.
+    it('should keep every weekday checkbox value across hide (resetOnHide:false)', () => {
+      WEEKDAY_KEYS.forEach((key) => {
+        const field = weekdaysGroup?.fieldGroup?.find((f) => f.key === key);
+        expect(field).withContext(`weekday field "${key}" exists`).toBeDefined();
+        expect(field?.resetOnHide)
+          .withContext(`weekday field "${key}" resetOnHide`)
+          .toBe(false);
+      });
+    });
+  });
 });

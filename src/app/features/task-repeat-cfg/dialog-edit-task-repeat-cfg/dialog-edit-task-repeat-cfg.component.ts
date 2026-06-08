@@ -64,6 +64,18 @@ const RELEVANT_KEYS_FOR_UPDATE_ALL_TASKS: (keyof TaskRepeatCfgCopy)[] = [
   'tagIds',
 ];
 
+// A CUSTOM weekly recurrence with no weekday checked never produces an
+// occurrence, so it must be blocked at save time (#8025).
+const WEEKDAY_KEYS: (keyof TaskRepeatCfgCopy)[] = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+];
+
 // TASK_REPEAT_CFG_FORM_CFG
 @Component({
   selector: 'dialog-edit-task-repeat-cfg',
@@ -111,6 +123,17 @@ export class DialogEditTaskRepeatCfgComponent {
     if (this._data.repeatCfg) return true;
     if (this._data.task?.repeatCfgId) return true;
     return false;
+  });
+
+  // A CUSTOM weekly config with zero weekdays selected would never recur;
+  // surface it as a blocking validation error (#8025). Derived from the
+  // `repeatCfg` signal so it re-evaluates on every checkbox toggle.
+  isWeekdaySelectionInvalid = computed(() => {
+    const cfg = this.repeatCfg();
+    if (cfg.quickSetting !== 'CUSTOM' || cfg.repeatCycle !== 'WEEKLY') {
+      return false;
+    }
+    return !WEEKDAY_KEYS.some((day) => cfg[day]);
   });
 
   repeatCfgId = computed(() => {
@@ -289,6 +312,11 @@ export class DialogEditTaskRepeatCfgComponent {
         form1Errors: formGroup1.errors,
         form2Errors: formGroup2.errors,
       });
+      return;
+    }
+
+    // Enter-key submit bypasses the disabled Save button, so re-check here (#8025).
+    if (this.isWeekdaySelectionInvalid()) {
       return;
     }
 

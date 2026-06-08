@@ -158,6 +158,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     taskOpenNotesFullscreen: null,
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
+    taskScheduleDeadline: 'Shift+S',
     taskUnschedule: 'U',
     taskToggleDone: 'D',
     taskAddSubTask: 'A',

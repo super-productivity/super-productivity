@@ -48,10 +48,6 @@ export interface WorklogYear {
   };
 }
 
-export interface WorklogYearsWithWeeks {
-  [key: number]: WorklogWeekSimple[];
-}
-
 export interface Worklog {
   [key: number]: WorklogYear;
 }
