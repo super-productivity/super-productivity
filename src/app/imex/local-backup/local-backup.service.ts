@@ -128,6 +128,11 @@ export class LocalBackupService {
     return selectBestBackupStr(primary, prev) ?? '';
   }
 
+  /** Newest usable backup blob for the current mobile platform ('' if none). */
+  private _loadBestMobileBackupStr(): Promise<string> {
+    return this._isAndroidWebView ? this.loadBackupAndroid() : this.loadBackupIOS();
+  }
+
   private async _checkBackupAvailableIOS(): Promise<boolean> {
     // Available if either ring slot exists (#7901).
     const [primary, prev] = await Promise.all([
@@ -166,9 +171,7 @@ export class LocalBackupService {
     // can tell the user what they would restore (#7901). Loading is cheap and
     // lets a blind "discard my data?" dialog become an informed one — they should
     // never dismiss the only copy of their data without seeing it exists.
-    const backupData = this._isAndroidWebView
-      ? await this.loadBackupAndroid()
-      : await this.loadBackupIOS();
+    const backupData = await this._loadBestMobileBackupStr();
     if (!backupData) {
       // Nothing usable to restore — stay silent rather than prompt for nothing.
       return;
@@ -187,9 +190,7 @@ export class LocalBackupService {
       return;
     }
 
-    const backupData = this._isAndroidWebView
-      ? await this.loadBackupAndroid()
-      : await this.loadBackupIOS();
+    const backupData = await this._loadBestMobileBackupStr();
 
     // Not redundant with loadBackup*: selectBestBackupStr falls back to a
     // non-empty *corrupt* blob when neither ring slot is usable, so this gate is
