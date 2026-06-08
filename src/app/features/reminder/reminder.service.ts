@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { SnackService } from '../../core/snack/snack.service';
-import { combineLatest, Observable, Subject } from 'rxjs';
+import { combineLatest, firstValueFrom, Observable, Subject } from 'rxjs';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { T } from '../../t.const';
 import { distinctUntilChanged, map } from 'rxjs/operators';
@@ -11,10 +11,23 @@ import { Store } from '@ngrx/store';
 import {
   selectAllTasksWithReminder,
   selectAllTasksWithDeadlineReminder,
+  selectTaskFeatureState,
 } from '../tasks/store/task.selectors';
-import { Task, TaskWithReminder, TaskWithReminderData } from '../tasks/task.model';
+import {
+  Task,
+  TaskCopy,
+  TaskState,
+  TaskWithReminder,
+  TaskWithReminderData,
+} from '../tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
+import { Update } from '@ngrx/entity';
+import {
+  LegacyTaskReminder,
+  migrateLegacyTaskRemindersIntoTasks,
+} from './migrate-legacy-task-reminders.util';
+import { getRemindersToActivate } from './due-reminders.util';
 
 interface WorkerReminder {
   id: string;
@@ -23,17 +36,8 @@ interface WorkerReminder {
   type: 'TASK';
 }
 
-interface WorkerReminderUpdate {
-  reminders: WorkerReminder[];
-  isCheckImmediately: true;
-}
-
-interface LegacyReminder {
-  id: string;
-  remindAt: number;
+interface LegacyReminder extends LegacyTaskReminder {
   title: string;
-  type: 'NOTE' | 'TASK';
-  relatedId: string;
 }
 
 @Injectable({
@@ -126,38 +130,32 @@ export class ReminderService {
         `ReminderService: Migrating ${legacyReminders.length} legacy reminders to task.remindAt`,
       );
 
-      let migratedCount = 0;
-      let skippedNotes = 0;
-
-      for (const reminder of legacyReminders) {
-        if (reminder.type === 'NOTE') {
-          // Note reminders are discontinued
-          skippedNotes++;
-          Log.log(`ReminderService: Skipping NOTE reminder: ${reminder.id}`);
-          continue;
-        }
-
-        if (reminder.type === 'TASK') {
-          // Dispatch action to reschedule with remindAt
-          // This will update the task's remindAt field through the reducer
-          this._store.dispatch(
-            TaskSharedActions.reScheduleTaskWithTime({
-              task: { id: reminder.relatedId, title: reminder.title } as TaskWithReminder,
-              dueWithTime: reminder.remindAt,
-              remindAt: reminder.remindAt,
-              isMoveToBacklog: false,
-            }),
-          );
-          migratedCount++;
-          Log.log(`ReminderService: Migrated reminder for task: ${reminder.relatedId}`);
-        }
+      const currentTaskState = await firstValueFrom(
+        this._store.select(selectTaskFeatureState),
+      );
+      if (!currentTaskState?.entities) {
+        Log.log('ReminderService: Cannot migrate legacy reminders without task state');
+        return;
       }
 
+      const taskState = _cloneTaskStateForMigration(currentTaskState);
+      const migrationResult = migrateLegacyTaskRemindersIntoTasks(
+        taskState,
+        legacyReminders,
+      );
+      const updates = _getLegacyReminderMigrationUpdates(
+        taskState,
+        migrationResult.migratedTaskIds,
+      );
+
+      if (updates.length > 0) {
+        this._store.dispatch(TaskSharedActions.updateTasks({ tasks: updates }));
+      }
       // Clear legacy reminders after migration
       await this._legacyPfDb.save('reminders', []);
 
       Log.log(
-        `ReminderService: Migration complete - ${migratedCount} migrated, ${skippedNotes} NOTE reminders skipped`,
+        `ReminderService: Migration complete - ${updates.length} migrated, ${migrationResult.skippedNoteCount} NOTE reminders skipped`,
       );
     } catch (err) {
       Log.err('ReminderService: Failed to migrate legacy reminders', err);
@@ -188,6 +186,10 @@ export class ReminderService {
 
   private _onReminderActivated(msg: MessageEvent): void {
     const reminders = msg.data as WorkerReminder[];
+    this._emitActiveReminders(reminders);
+  }
+
+  private _emitActiveReminders(reminders: WorkerReminder[]): void {
     Log.log(`ReminderService: Worker activated ${reminders.length} reminder(s)`);
 
     if (this._isDataImportInProgress) {
@@ -247,18 +249,15 @@ export class ReminderService {
     Log.log('ReminderService: data import finished, rechecking reminders', {
       count: this._latestWorkerReminders.length,
     });
-    this._updateRemindersInWorker(this._latestWorkerReminders, true);
+    const remindersToActivate = getRemindersToActivate(this._latestWorkerReminders);
+    if (remindersToActivate.length > 0) {
+      this._emitActiveReminders(remindersToActivate);
+    }
   }
 
-  private _updateRemindersInWorker(
-    reminders: WorkerReminder[],
-    isCheckImmediately: boolean = false,
-  ): void {
+  private _updateRemindersInWorker(reminders: WorkerReminder[]): void {
     this._latestWorkerReminders = reminders;
-    const msg: WorkerReminder[] | WorkerReminderUpdate = isCheckImmediately
-      ? { reminders, isCheckImmediately: true }
-      : reminders;
-    this._w.postMessage(msg);
+    this._w.postMessage(reminders);
   }
 
   private _handleError(err: unknown): void {
@@ -266,3 +265,34 @@ export class ReminderService {
     this._snackService.open({ type: 'ERROR', msg: T.F.REMINDER.S_REMINDER_ERR });
   }
 }
+
+const _cloneTaskStateForMigration = (
+  taskState: TaskState,
+): {
+  ids: string[];
+  entities: Record<string, TaskCopy | undefined>;
+} => ({
+  ids: [...taskState.ids],
+  entities: Object.fromEntries(
+    Object.entries(taskState.entities).map(([taskId, task]) => [
+      taskId,
+      task ? ({ ...task } as TaskCopy) : undefined,
+    ]),
+  ),
+});
+
+const _getLegacyReminderMigrationUpdates = (
+  taskState: { entities: Record<string, TaskCopy | undefined> },
+  migratedTaskIds: string[],
+): Update<Task>[] =>
+  migratedTaskIds
+    .map((taskId) => taskState.entities[taskId])
+    .filter((task): task is TaskCopy => !!task)
+    .map((task) => ({
+      id: task.id,
+      changes: {
+        remindAt: task.remindAt,
+        dueWithTime: task.dueWithTime,
+        reminderId: undefined,
+      } as Partial<Task>,
+    }));

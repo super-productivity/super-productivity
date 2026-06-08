@@ -45,6 +45,7 @@ import {
 } from '../../plugins/plugin-persistence.model';
 import { AppDataComplete } from '../model/model-config';
 import { OpLog } from '../../core/log';
+import { migrateLegacyTaskRemindersIntoTasks } from '../../features/reminder/migrate-legacy-task-reminders.util';
 
 const LEGACY_INBOX_PROJECT_ID = 'INBOX' as const;
 
@@ -600,51 +601,9 @@ function _migrationLegacyTaskReminders(data: Record<string, any>): Record<string
     return data;
   }
 
-  for (const reminder of data.reminders) {
-    if (
-      reminder?.type !== 'TASK' ||
-      typeof reminder.remindAt !== 'number' ||
-      typeof reminder.id !== 'string'
-    ) {
-      continue;
-    }
-
-    const task = _findTaskForLegacyReminder(data.task, reminder);
-    if (!task || task.isDone) {
-      continue;
-    }
-
-    task.remindAt = reminder.remindAt;
-    if (task.reminderId) {
-      delete task.reminderId;
-    }
-  }
-
+  migrateLegacyTaskRemindersIntoTasks(data.task, data.reminders);
   data.reminders = [];
   return data;
-}
-
-function _findTaskForLegacyReminder(
-  taskState: Record<string, any>,
-  reminder: Record<string, any>,
-): Record<string, any> | null {
-  const taskByRelatedId =
-    typeof reminder.relatedId === 'string'
-      ? taskState.entities[reminder.relatedId]
-      : null;
-
-  if (taskByRelatedId) {
-    return taskByRelatedId;
-  }
-
-  for (const taskId of taskState.ids || []) {
-    const task = taskState.entities[taskId];
-    if (task?.reminderId === reminder.id) {
-      return task;
-    }
-  }
-
-  return null;
 }
 
 // ---------------------------------------------------------------------------
