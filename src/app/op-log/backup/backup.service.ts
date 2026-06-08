@@ -208,20 +208,7 @@ export class BackupService {
       true, // isSkipReload - loadAllData updates state live
       true, // isForceConflict
     );
-    // One-shot recovery point: consume the slot after a successful restore so a
-    // second restore can't toggle back to the just-replaced state, and no stale
-    // plaintext snapshot lingers. (importCompleteBackup re-saved the current
-    // state into the same slot above, so this clears that too.) (#8107)
-    await this._opLogStore.clearImportBackup();
     return true;
-  }
-
-  /**
-   * Whether a pre-replace/import backup snapshot currently exists in the
-   * single-slot store. Gates the manual "restore previous data" affordance. (#8107)
-   */
-  async hasImportBackup(): Promise<boolean> {
-    return this._opLogStore.hasImportBackup();
   }
 
   private async _persistImportToOperationLog(

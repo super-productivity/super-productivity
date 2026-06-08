@@ -12,7 +12,6 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfig } from '../../../features/config/global-config.model';
 import { SnackService } from '../../../core/snack/snack.service';
-import { BackupService } from '../../../op-log/backup/backup.service';
 
 describe('DialogSyncCfgComponent', () => {
   let component: DialogSyncCfgComponent;
@@ -24,7 +23,6 @@ describe('DialogSyncCfgComponent', () => {
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
-  let mockBackupService: jasmine.SpyObj<BackupService>;
 
   const baseSyncConfig: SyncConfig = {
     isEnabled: false,
@@ -63,13 +61,6 @@ describe('DialogSyncCfgComponent', () => {
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
 
-    mockBackupService = jasmine.createSpyObj('BackupService', [
-      'hasImportBackup',
-      'restoreImportBackup',
-    ]);
-    mockBackupService.hasImportBackup.and.resolveTo(false);
-    mockBackupService.restoreImportBackup.and.resolveTo(true);
-
     TestBed.configureTestingModule({
       imports: [
         DialogSyncCfgComponent,
@@ -85,7 +76,6 @@ describe('DialogSyncCfgComponent', () => {
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: SnackService, useValue: mockSnackService },
         { provide: MatDialog, useValue: mockMatDialog },
-        { provide: BackupService, useValue: mockBackupService },
       ],
     });
     // Replace the Formly-based template with a minimal placeholder so we can
@@ -265,26 +255,6 @@ describe('DialogSyncCfgComponent', () => {
 
       expect(mockSyncConfigService.updateSettingsFromForm).toHaveBeenCalled();
       expect(mockDialogRef.close).toHaveBeenCalled();
-    });
-  });
-
-  describe('restorePreReplaceBackup() (#8107)', () => {
-    it('should restore and notify when confirmed', async () => {
-      (window.confirm as jasmine.Spy).and.returnValue(true);
-      mockBackupService.restoreImportBackup.and.resolveTo(true);
-
-      await component.restorePreReplaceBackup();
-
-      expect(mockBackupService.restoreImportBackup).toHaveBeenCalled();
-      expect(mockSnackService.open).toHaveBeenCalled();
-    });
-
-    it('should abort without restoring when not confirmed', async () => {
-      (window.confirm as jasmine.Spy).and.returnValue(false);
-
-      await component.restorePreReplaceBackup();
-
-      expect(mockBackupService.restoreImportBackup).not.toHaveBeenCalled();
     });
   });
 });

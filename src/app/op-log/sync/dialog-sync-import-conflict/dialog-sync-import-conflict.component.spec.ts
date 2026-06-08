@@ -74,15 +74,6 @@ describe('DialogSyncImportConflictComponent', () => {
       expect(closeSpy).not.toHaveBeenCalled();
     });
 
-    it('does NOT confirm for USE_REMOTE even when isNeverSynced is true', () => {
-      const cmp = setup({ isNeverSynced: true }).componentInstance;
-
-      cmp.close('USE_REMOTE');
-
-      expect(confirmSpy).not.toHaveBeenCalled();
-      expect(closeSpy).toHaveBeenCalledOnceWith('USE_REMOTE');
-    });
-
     it('does NOT confirm USE_LOCAL for an established (already-synced) client', () => {
       const cmp = setup({ isNeverSynced: false }).componentInstance;
 
@@ -90,6 +81,57 @@ describe('DialogSyncImportConflictComponent', () => {
 
       expect(confirmSpy).not.toHaveBeenCalled();
       expect(closeSpy).toHaveBeenCalledOnceWith('USE_LOCAL');
+    });
+  });
+
+  describe('USE_REMOTE guard (#8107)', () => {
+    it('requires confirmation before USE_REMOTE discards local changes', () => {
+      confirmSpy.and.returnValue(true);
+      const cmp = setup({
+        scenario: 'INCOMING_IMPORT',
+        filteredOpCount: 4,
+      }).componentInstance;
+
+      cmp.close('USE_REMOTE');
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(closeSpy).toHaveBeenCalledOnceWith('USE_REMOTE');
+    });
+
+    it('does NOT close when the user cancels the USE_REMOTE confirmation', () => {
+      confirmSpy.and.returnValue(false);
+      const cmp = setup({
+        scenario: 'INCOMING_IMPORT',
+        filteredOpCount: 4,
+      }).componentInstance;
+
+      cmp.close('USE_REMOTE');
+
+      expect(closeSpy).not.toHaveBeenCalled();
+    });
+
+    it('does NOT confirm USE_REMOTE when there are no local changes to lose', () => {
+      const cmp = setup({
+        scenario: 'INCOMING_IMPORT',
+        filteredOpCount: 0,
+      }).componentInstance;
+
+      cmp.close('USE_REMOTE');
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(closeSpy).toHaveBeenCalledOnceWith('USE_REMOTE');
+    });
+
+    it('does NOT confirm USE_REMOTE outside the incoming-import scenario', () => {
+      const cmp = setup({
+        scenario: 'LOCAL_IMPORT_FILTERS_REMOTE',
+        filteredOpCount: 4,
+      }).componentInstance;
+
+      cmp.close('USE_REMOTE');
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(closeSpy).toHaveBeenCalledOnceWith('USE_REMOTE');
     });
   });
 

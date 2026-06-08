@@ -17,7 +17,7 @@ import {
 } from '@angular/material/dialog';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import {
   SYNC_FORM,
@@ -41,8 +41,6 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { isOnline } from '../../../util/is-online';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
-import { BackupService } from '../../../op-log/backup/backup.service';
-import { confirmDialog } from '../../../util/native-dialogs';
 import {
   NextcloudProvider,
   type NextcloudPrivateCfg,
@@ -74,17 +72,11 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _snackService = inject(SnackService);
-  private _backupService = inject(BackupService);
-  private _translateService = inject(TranslateService);
 
   private _destroyRef = inject(DestroyRef);
 
   T = T;
   isWasEnabled = signal(false);
-  // True when a pre-replace safety snapshot exists (captured before a
-  // "Use Server Data" sync). Drives the durable "restore previous data"
-  // button so recovery survives a missed Undo snack. (#8107)
-  private _hasPreReplaceBackup = signal(false);
   // Single source of truth — buttons appear/disappear automatically when
   // edit mode flips, no manual fields.set() required.
   fields = computed<FormlyFieldConfig[]>(() => {
@@ -130,7 +122,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           ...(item.fieldGroup ?? []),
           this._reauthBtn(),
           this._forceOverwriteBtn(),
-          ...(this._hasPreReplaceBackup() ? [this._restorePreReplaceBtn()] : []),
         ],
       };
     }
@@ -146,7 +137,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
                   ...(child.fieldGroup ?? []),
                   this._forceOverwriteBtn(),
                   this._restoreBtn(),
-                  ...(this._hasPreReplaceBackup() ? [this._restorePreReplaceBtn()] : []),
                 ],
               }
             : child,
@@ -211,13 +201,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     return this._actionBtn({
       text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
       onClick: () => this.restoreFromHistory(),
-    });
-  }
-
-  private _restorePreReplaceBtn(): FormlyFieldConfig {
-    return this._actionBtn({
-      text: T.F.SYNC.BTN_RESTORE_PRE_REPLACE,
-      onClick: () => this.restorePreReplaceBackup(),
     });
   }
 
@@ -317,7 +300,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   private _matDialogRef = inject<MatDialogRef<DialogSyncCfgComponent>>(MatDialogRef);
 
   constructor() {
-    void this._refreshHasPreReplaceBackup();
     this.syncConfigService.syncSettingsForm$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((v) => {
@@ -596,32 +578,6 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       width: '500px',
       maxWidth: '90vw',
     });
-  }
-
-  /**
-   * Restores the local snapshot captured before the last "Use Server Data" sync
-   * replace. Confirmed because it overwrites current state; the backup is a
-   * one-shot recovery point (consumed on success), so the button then hides. (#8107)
-   */
-  async restorePreReplaceBackup(): Promise<void> {
-    if (!confirmDialog(this._translateService.instant(T.F.SYNC.C.RESTORE_PRE_REPLACE))) {
-      return;
-    }
-    try {
-      const didRestore = await this._backupService.restoreImportBackup();
-      this._snackService.open({
-        type: didRestore ? 'SUCCESS' : 'ERROR',
-        msg: didRestore ? T.F.SYNC.S.RESTORE_SUCCESS : T.F.SYNC.S.RESTORE_ERROR,
-      });
-    } catch (e) {
-      SyncLog.err('Failed to restore pre-replace backup', { name: _redactErrorName(e) });
-      this._snackService.open({ type: 'ERROR', msg: T.F.SYNC.S.RESTORE_ERROR });
-    }
-    await this._refreshHasPreReplaceBackup();
-  }
-
-  private async _refreshHasPreReplaceBackup(): Promise<void> {
-    this._hasPreReplaceBackup.set(await this._backupService.hasImportBackup());
   }
 }
 

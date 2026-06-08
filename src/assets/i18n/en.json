@@ -1140,12 +1140,10 @@
         "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!"
       },
       "BTN_RESTORE_FROM_HISTORY": "Restore from History",
-      "BTN_RESTORE_PRE_REPLACE": "Restore data from before last sync replace",
       "BTN_SYNC_NOW": "Sync Now",
       "C": {
         "FORCE_UPLOAD": "This will REPLACE all data on the server and on every other device with this device's local copy. Any unsynced changes on those devices will be permanently lost. Continue?",
-        "DECRYPT_OVERWRITE": "This will REPLACE the encrypted data on the server with this device's local copy and re-encrypt it with the new password. All other devices will need to re-enter the password and download the replaced data. Any unsynced changes on those devices will be permanently lost. Continue?",
-        "RESTORE_PRE_REPLACE": "This will replace the current data with the snapshot saved automatically before your last \"Use Server Data\" sync. Continue?"
+        "DECRYPT_OVERWRITE": "This will REPLACE the encrypted data on the server with this device's local copy and re-encrypt it with the new password. All other devices will need to re-enter the password and download the replaced data. Any unsynced changes on those devices will be permanently lost. Continue?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Please open the following link and copy the auth code provided there into the input field below.",
@@ -1284,7 +1282,8 @@
         "RECOMMEND_SERVER": "Recommended: Accept the server data to stay in sync with the other device.",
         "TITLE": "Sync Conflict Detected",
         "USE_LOCAL": "Use My Data",
-        "USE_REMOTE": "Use Server Data"
+        "USE_REMOTE": "Use Server Data",
+        "USE_REMOTE_CONFIRM": "This replaces this device's data with the server's and discards {{count}} local change(s). Continue?"
       },
       "FORM": {
         "BTN_CHANGE_PASSWORD": "Change Password",

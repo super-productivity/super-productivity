@@ -1061,9 +1061,8 @@ export class OperationLogSyncService {
 
   /**
    * Shows a non-blocking snack after a destructive "Use Server Data" replace,
-   * offering to restore the local snapshot captured before the wipe. This is the
-   * immediate recovery affordance; a persistent button in the sync settings
-   * (gated on a remaining backup) is the durable fallback if the snack is missed.
+   * offering to restore the local snapshot captured before the wipe — making the
+   * otherwise-irreversible replace reversible.
    *
    * WARNING type (honest framing of a data-replacement + provides a dismiss
    * control) and no auto-dismiss timer (duration: 0) so the undo isn't lost to a
