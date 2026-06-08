@@ -73,6 +73,12 @@ describe('LayoutService', () => {
     });
 
     afterEach(() => {
+      // Restore the native getter: the tests below clobber document.activeElement
+      // via Object.defineProperty. Without this, the static override leaks into
+      // other specs in the shared Karma session (e.g. TaskService.focusTaskById
+      // then reads a stale activeElement and its focus assertions fail). Mirrors
+      // the cleanup already done in task-shortcut.service.spec.
+      delete (document as unknown as { activeElement?: unknown }).activeElement;
       if (mockTaskElement && mockTaskElement.parentNode) {
         mockTaskElement.parentNode.removeChild(mockTaskElement);
       }
