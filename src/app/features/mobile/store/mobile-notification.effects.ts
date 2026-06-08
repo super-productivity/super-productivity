@@ -72,6 +72,8 @@ export class MobileNotificationEffects {
   private _scheduledDeadlineIds = new Set<string>();
   // Track pre-scheduled recurring reminder IDs (the predicted task instance IDs)
   private _scheduledRepeatReminderIds = new Set<string>();
+  // One-shot guard: the Android exact-alarm check runs at most once per session.
+  // See _warnIfExactAlarmPermissionDeniedOnce().
   private _exactAlarmPermissionCheckPromise?: Promise<void>;
 
   // Narrowed cfg slice so the scheduling effects only re-run on reminder-config
@@ -597,6 +599,18 @@ export class MobileNotificationEffects {
     return result;
   }
 
+  /**
+   * Run the Android exact-alarm check at most once per app session, warning the
+   * user when it is denied. Memoized via `_exactAlarmPermissionCheckPromise` so
+   * the underlying `ensureExactAlarmPermission()` — which can open the Android
+   * system settings page — never re-fires across the many scheduling effects
+   * that call this. A later in-session grant is intentionally not re-detected
+   * (it resets next launch); the trade-off avoids repeatedly opening that page.
+   *
+   * Gated on `isAndroid()`, the superset of native + legacy WebView: on legacy
+   * WebView `ensureExactAlarmPermission()` self-guards and returns true, so no
+   * spurious warning fires there.
+   */
   private _warnIfExactAlarmPermissionDeniedOnce(): Promise<void> {
     if (!this._platformService.isAndroid()) {
       return Promise.resolve();
@@ -614,12 +628,12 @@ export class MobileNotificationEffects {
             });
           }
         })
+        // `ensureExactAlarmPermission()` swallows its own errors today, but keep
+        // a resolving catch so a future throw can't cache a rejected promise
+        // here (which every scheduling effect would then re-await). Log-only: a
+        // thrown check is not an explicit denial, so don't show the snack.
         .catch((error: unknown) => {
           Log.warn('MobileEffects: exact alarm permission check failed', error);
-          this._snackService.open({
-            type: 'ERROR',
-            msg: T.NOTIFICATION.EXACT_ALARM_DENIED,
-          });
         });
 
     return this._exactAlarmPermissionCheckPromise;
