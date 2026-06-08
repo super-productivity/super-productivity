@@ -79,6 +79,8 @@
       "FORM": {
         "HOST": "Host (organization or collection URL)",
         "HOST_DESCRIPTION": "Use the full Azure DevOps URL, for example https://dev.azure.com/your-org or https://server:8080/tfs/DefaultCollection.",
+        "AUTO_IMPORT_LIMIT": "Auto import limit",
+        "AUTO_IMPORT_LIMIT_DESCRIPTION": "Maximum number of Azure DevOps work items to fetch for automatic backlog import. Max {{max}}.",
         "PROJECT": "Project",
         "SCOPE": "Scope (Auto Import only)",
         "SCOPE_ALL": "All",

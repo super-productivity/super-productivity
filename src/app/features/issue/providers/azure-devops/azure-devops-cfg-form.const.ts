@@ -67,8 +67,11 @@ export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg>
           defaultValue: AZURE_DEVOPS_DEFAULT_WORK_ITEM_LIMIT,
           templateOptions: {
             required: true,
-            label: 'Auto import limit',
-            description: `Maximum number of Azure DevOps work items to fetch for automatic backlog import. Max ${AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT}.`,
+            label: T.F.AZURE_DEVOPS.FORM.AUTO_IMPORT_LIMIT,
+            description: T.F.AZURE_DEVOPS.FORM.AUTO_IMPORT_LIMIT_DESCRIPTION,
+            descriptionTranslateParams: {
+              max: AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT,
+            },
             type: 'number',
             min: 1,
             max: AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT,
