@@ -690,6 +690,26 @@ describe('LocalBackupService', () => {
         true,
         true,
       );
+      expect(snackServiceSpy.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.GCF.AUTO_BACKUPS.S_RESTORE_SUCCESS,
+      });
+    });
+
+    it('should not show a success snackbar when the import fails', async () => {
+      setAndroidMode();
+      spyOn(service, 'loadBackupAndroid').and.resolveTo(
+        JSON.stringify({ task: { ids: ['task1'], entities: {} } }),
+      );
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+      backupServiceSpy.importCompleteBackup.and.rejectWith(new Error('boom'));
+
+      await service.restoreLatestMobileBackupFromSettings();
+
+      expect(snackServiceSpy.open).not.toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.GCF.AUTO_BACKUPS.S_RESTORE_SUCCESS,
+      });
     });
 
     it('should show a snackbar when no Android backup exists', async () => {

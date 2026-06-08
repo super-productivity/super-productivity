@@ -180,6 +180,9 @@ export class LocalBackupService {
   }
 
   async restoreLatestMobileBackupFromSettings(): Promise<void> {
+    // iOS is supported here so the method works on either mobile platform, but
+    // the Settings action is currently only wired up for Android (#8066 scope);
+    // see config-page.component.ts. iOS stays future-proof, not dead.
     if (!this._isAndroidWebView && !this._platformService.isIOS()) {
       return;
     }
@@ -202,7 +205,13 @@ export class LocalBackupService {
 
     if (confirmDialog(this._restoreMobileFromSettingsPromptMsg(backupData))) {
       Log.log('mobile backupData loaded from settings, length: ' + backupData.length);
-      await this._importBackup(backupData);
+      const didImport = await this._importBackup(backupData);
+      if (didImport) {
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.GCF.AUTO_BACKUPS.S_RESTORE_SUCCESS,
+        });
+      }
     }
   }
 
@@ -354,7 +363,7 @@ export class LocalBackupService {
     }
   }
 
-  private async _importBackup(backupData: string): Promise<void> {
+  private async _importBackup(backupData: string): Promise<boolean> {
     try {
       // isForceConflict=true only gates page reload; fresh clock is always generated
       await this._backupService.importCompleteBackup(
@@ -363,12 +372,13 @@ export class LocalBackupService {
         true,
         true,
       );
+      return true;
     } catch (e) {
       this._snackService.open({
         type: 'ERROR',
         msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED,
       });
-      return;
+      return false;
     }
   }
 }
