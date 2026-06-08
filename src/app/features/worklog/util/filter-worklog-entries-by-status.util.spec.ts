@@ -54,8 +54,10 @@ describe('getTimeSpentForWorklogEntries', () => {
     expect(getTimeSpentForWorklogEntries(entries)).toBe(3000);
   });
 
-  it('keeps parent summary time when no child row is visible', () => {
-    expect(getTimeSpentForWorklogEntries([createEntry('parent', true, 3000)])).toBe(3000);
+  it('skips parent summary rows even when no child row is visible', () => {
+    expect(
+      getTimeSpentForWorklogEntries([createEntry('parent', true, 3000, ['child'])]),
+    ).toBe(0);
   });
 });
 
@@ -132,5 +134,63 @@ describe('filterWorklogByTaskStatus', () => {
     expect(filtered.worklog[2026].monthWorked).toBe(1);
     expect(filtered.worklog[2026].ent[2].weeks.length).toBe(1);
     expect(filtered.worklog[2026].ent[2].ent[1].logEntries).toEqual([undoneEntry]);
+  });
+
+  it('does not inflate filtered totals when only a parent summary row remains visible', () => {
+    const parentDone = createEntry('parent', true, 3000, ['child']);
+    const childUndone = createEntry('child', false, 3000);
+    const data: Worklog = {
+      2026: {
+        daysWorked: 1,
+        monthWorked: 1,
+        timeSpent: 3000,
+        ent: {
+          2: {
+            daysWorked: 1,
+            timeSpent: 3000,
+            ent: {
+              1: {
+                dateStr: '2026-02-01',
+                dayStr: 'Sun',
+                logEntries: [parentDone, childUndone],
+                timeSpent: 3000,
+                workEnd: 2,
+                workStart: 1,
+              },
+            },
+            weeks: [
+              {
+                daysWorked: 1,
+                end: 7,
+                ent: {
+                  1: {
+                    dateStr: '2026-02-01',
+                    dayStr: 'Sun',
+                    logEntries: [parentDone, childUndone],
+                    timeSpent: 3000,
+                    workEnd: 2,
+                    workStart: 1,
+                  },
+                },
+                start: 1,
+                timeSpent: 3000,
+                weekNr: 6,
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const filtered = filterWorklogByTaskStatus(
+      { worklog: data, totalTimeSpent: 3000 },
+      'DONE',
+    );
+
+    expect(filtered.totalTimeSpent).toBe(0);
+    expect(filtered.worklog[2026].timeSpent).toBe(0);
+    expect(filtered.worklog[2026].ent[2].timeSpent).toBe(0);
+    expect(filtered.worklog[2026].ent[2].weeks[0].timeSpent).toBe(0);
+    expect(filtered.worklog[2026].ent[2].ent[1].logEntries).toEqual([parentDone]);
   });
 });

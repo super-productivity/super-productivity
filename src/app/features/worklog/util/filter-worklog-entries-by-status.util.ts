@@ -26,12 +26,8 @@ export const filterWorklogEntriesByStatus = (
 
 export const getTimeSpentForWorklogEntries = (entries: WorklogDataForDay[]): number =>
   entries.reduce((total, entry) => {
-    const hasVisibleSubTask = entries.some(
-      (otherEntry) =>
-        otherEntry.parentId === entry.task.id ||
-        entry.task.subTaskIds?.includes(otherEntry.task.id),
-    );
-    return hasVisibleSubTask ? total : total + entry.timeSpent;
+    const isLeafTask = (entry.task.subTaskIds?.length ?? 0) === 0;
+    return isLeafTask ? total + entry.timeSpent : total;
   }, 0);
 
 const _getTimeSpentForDays = (days: { [key: number]: WorklogDay }): number =>
