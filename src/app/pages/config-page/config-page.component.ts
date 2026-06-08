@@ -33,7 +33,7 @@ import { ProjectCfgFormKey } from '../../features/project/project.model';
 import { T } from '../../t.const';
 import { versions } from '../../../environments/versions';
 import { IS_ELECTRON } from '../../app.constants';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { getAutomaticBackUpFormCfg } from '../../features/config/form-cfgs/automatic-backups-form.const';
 import { getAppVersionStr } from '../../util/get-app-version-str';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
@@ -61,6 +61,7 @@ import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
+import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 
 @Component({
   selector: 'config-page',
@@ -91,6 +92,8 @@ export class ConfigPageComponent implements OnInit {
   private readonly _shareService = inject(ShareService);
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _localBackupService = inject(LocalBackupService);
+  private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
@@ -161,8 +164,18 @@ export class ConfigPageComponent implements OnInit {
     this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
 
     // NOTE: needs special handling cause of the async stuff
-    if (IS_ANDROID_WEB_VIEW) {
-      this.globalImexFormCfg = [...this.globalImexFormCfg, getAutomaticBackUpFormCfg()];
+    if (this._isAndroidWebView) {
+      this.globalImexFormCfg = [
+        ...this.globalImexFormCfg,
+        getAutomaticBackUpFormCfg(undefined, [
+          {
+            label: T.GCF.AUTO_BACKUPS.RESTORE_LATEST,
+            icon: 'settings_backup_restore',
+            onClick: () =>
+              this._localBackupService.restoreLatestMobileBackupFromSettings(),
+          },
+        ]),
+      ];
     } else if (IS_ELECTRON) {
       window.ea.getBackupPath().then((backupPath) => {
         this.globalImexFormCfg = [

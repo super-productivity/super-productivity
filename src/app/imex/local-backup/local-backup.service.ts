@@ -6,7 +6,7 @@ import { LocalBackupConfig } from '../../features/config/global-config.model';
 import { debounceTime, map, switchMap, tap } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { LocalBackupMeta } from './local-backup.model';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../app.constants';
 import { androidInterface } from '../../features/android/android-interface';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
@@ -55,6 +55,7 @@ export class LocalBackupService {
   private _translateService = inject(TranslateService);
   private _platformService = inject(CapacitorPlatformService);
   private _localActions$ = inject(LOCAL_ACTIONS);
+  private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   private _cfg$: Observable<LocalBackupConfig> = this._configService.cfg$.pipe(
     map((cfg) => cfg.localBackup),
@@ -80,7 +81,7 @@ export class LocalBackupService {
   }
 
   checkBackupAvailable(): Promise<boolean | LocalBackupMeta> {
-    if (IS_ANDROID_WEB_VIEW) {
+    if (this._isAndroidWebView) {
       // Available if either ring slot holds a backup (#7901).
       return androidInterface.loadFromDbWrapped(ANDROID_DB_KEY).then(async (primary) => {
         if (primary) {
@@ -136,7 +137,7 @@ export class LocalBackupService {
   }
 
   async askForFileStoreBackupIfAvailable(): Promise<void> {
-    if (!IS_ELECTRON && !IS_ANDROID_WEB_VIEW && !this._platformService.isIOS()) {
+    if (!IS_ELECTRON && !this._isAndroidWebView && !this._platformService.isIOS()) {
       return;
     }
 
@@ -164,7 +165,7 @@ export class LocalBackupService {
     // can tell the user what they would restore (#7901). Loading is cheap and
     // lets a blind "discard my data?" dialog become an informed one — they should
     // never dismiss the only copy of their data without seeing it exists.
-    const backupData = IS_ANDROID_WEB_VIEW
+    const backupData = this._isAndroidWebView
       ? await this.loadBackupAndroid()
       : await this.loadBackupIOS();
     if (!backupData) {
@@ -173,6 +174,29 @@ export class LocalBackupService {
     }
     if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
       Log.log('mobile backupData loaded, length: ' + backupData.length);
+      await this._importBackup(backupData);
+    }
+  }
+
+  async restoreLatestMobileBackupFromSettings(): Promise<void> {
+    if (!this._isAndroidWebView && !this._platformService.isIOS()) {
+      return;
+    }
+
+    const backupData = this._isAndroidWebView
+      ? await this.loadBackupAndroid()
+      : await this.loadBackupIOS();
+
+    if (!backupData) {
+      this._snackService.open({
+        type: 'WARNING',
+        msg: T.GCF.AUTO_BACKUPS.S_NO_BACKUP_AVAILABLE,
+      });
+      return;
+    }
+
+    if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
+      Log.log('mobile backupData loaded from settings, length: ' + backupData.length);
       await this._importBackup(backupData);
     }
   }
@@ -211,7 +235,7 @@ export class LocalBackupService {
       // needed (the bug class A3 protects against doesn't apply).
       await this._backupElectron(data);
     }
-    if (IS_ANDROID_WEB_VIEW) {
+    if (this._isAndroidWebView) {
       await this._backupAndroid(data);
     }
     if (this._platformService.isIOS()) {

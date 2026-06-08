@@ -32,7 +32,7 @@
     </help-section>
   }
   <div class="form-wrapper {{ section?.key }}">
-    @if (section?.items && !section?.customSection) {
+    @if (section?.items) {
       <config-form
         (save)="onSave($event)"
         [cfg]="cfg"
@@ -45,5 +45,24 @@
       #customForm
       class="custom-form"
     ></ng-template>
+
+    @if (section?.actions?.length) {
+      <div class="section-actions">
+        @for (action of section?.actions || []; track action.label) {
+          <button
+            (click)="onAction(action)"
+            [disabled]="isActionPending(action)"
+            color="primary"
+            mat-stroked-button
+            type="button"
+          >
+            @if (action.icon) {
+              <mat-icon>{{ action.icon }}</mat-icon>
+            }
+            {{ action.label | translate }}
+          </button>
+        }
+      </div>
+    }
   </div>
 </collapsible>
