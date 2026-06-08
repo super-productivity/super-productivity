@@ -52,6 +52,7 @@
     cdkDrag
     [cdkDragData]="node.id"
     [cdkDragStartDelay]="dragDelayForTouch()"
+    cdkDragPreviewClass="tree-dnd-drag-preview"
     cdkDragLockAxis="y"
     [ngClass]="{
       'is-folder': folder,
