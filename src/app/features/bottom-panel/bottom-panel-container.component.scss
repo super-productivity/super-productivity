@@ -38,7 +38,20 @@
   }
 
   .close-btn {
-    display: none; // Hidden for now
+    display: none; // Hidden by default to keep task panel autofocus behavior unchanged.
+  }
+
+  &.has-close-btn {
+    justify-content: center;
+
+    .close-btn {
+      display: inline-flex;
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: auto;
+    }
   }
 }
 
