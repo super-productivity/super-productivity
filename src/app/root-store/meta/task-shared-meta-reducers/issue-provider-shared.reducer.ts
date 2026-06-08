@@ -30,12 +30,22 @@ const UNLINKED_PARTIAL_TASK: Partial<Task> = {
 
 const handleDeleteIssueProvider = (
   state: RootState,
+  issueProviderIds: string[],
   taskIdsToUnlink: string[],
 ): RootState => {
   const taskState = state[TASK_FEATURE_NAME];
+  const issueProviderIdSet = new Set(issueProviderIds);
+  const idsToUnlink = new Set(taskIdsToUnlink);
+
+  for (const taskId of taskState.ids as string[]) {
+    const task = taskState.entities[taskId];
+    if (task?.issueProviderId && issueProviderIdSet.has(task.issueProviderId)) {
+      idsToUnlink.add(taskId);
+    }
+  }
 
   // Filter to only existing tasks in current state
-  const existingTaskIds = taskIdsToUnlink.filter((id) => !!taskState.entities[id]);
+  const existingTaskIds = [...idsToUnlink].filter((id) => !!taskState.entities[id]);
 
   if (existingTaskIds.length === 0) {
     return state;
@@ -61,13 +71,16 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     const { taskIdsToUnlink } = action as ReturnType<
       typeof TaskSharedActions.deleteIssueProvider
     >;
-    return handleDeleteIssueProvider(state, taskIdsToUnlink);
+    const { issueProviderId } = action as ReturnType<
+      typeof TaskSharedActions.deleteIssueProvider
+    >;
+    return handleDeleteIssueProvider(state, [issueProviderId], taskIdsToUnlink);
   },
   [TaskSharedActions.deleteIssueProviders.type]: () => {
-    const { taskIdsToUnlink } = action as ReturnType<
+    const { ids, taskIdsToUnlink } = action as ReturnType<
       typeof TaskSharedActions.deleteIssueProviders
     >;
-    return handleDeleteIssueProvider(state, taskIdsToUnlink);
+    return handleDeleteIssueProvider(state, ids, taskIdsToUnlink);
   },
 });
 

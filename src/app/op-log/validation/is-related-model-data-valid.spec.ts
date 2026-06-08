@@ -208,6 +208,51 @@ describe('isRelatedModelDataValid', () => {
     expect(result).toBe(true);
   });
 
+  it('should fail validation when task has non-existent issueProviderId', () => {
+    const dataWithOrphanedIssueProviderId: any = {
+      project: {
+        ids: ['p1'],
+        entities: {
+          p1: { id: 'p1', taskIds: ['t1'], backlogTaskIds: [], noteIds: [] },
+        },
+      },
+      tag: { ids: [], entities: {} },
+      task: {
+        ids: ['t1'],
+        entities: {
+          t1: {
+            id: 't1',
+            projectId: 'p1',
+            tagIds: [],
+            subTaskIds: [],
+            issueId: 'ISSUE-1',
+            issueProviderId: 'NON_EXISTENT_PROVIDER',
+            issueType: 'JIRA',
+          },
+        },
+      },
+      taskRepeatCfg: { ids: [], entities: {} },
+      archiveYoung: { task: { ids: [], entities: {} } },
+      archiveOld: { task: { ids: [], entities: {} } },
+      note: { ids: [], entities: {}, todayOrder: [] },
+      issueProvider: { ids: [], entities: {} },
+      reminders: [],
+      menuTree: { projectTree: [], tagTree: [] },
+    };
+
+    const result = isRelatedModelDataValid(dataWithOrphanedIssueProviderId);
+
+    expect(result).toBe(false);
+    expect(OP_LOG_SYNC_LOGGER.log).toHaveBeenCalledWith(
+      '[is-related-model-data-valid] Validity error info',
+      jasmine.objectContaining({
+        error: 'issueProviderId "NON_EXISTENT_PROVIDER" from task "t1" not existing',
+        taskId: 't1',
+        ipId: 'NON_EXISTENT_PROVIDER',
+      }),
+    );
+  });
+
   describe('stale references in archived tasks (issue #6270)', () => {
     const baseData = (): any => ({
       project: {
