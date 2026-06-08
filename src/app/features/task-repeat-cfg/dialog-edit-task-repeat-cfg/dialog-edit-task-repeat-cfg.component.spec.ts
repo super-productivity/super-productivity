@@ -894,6 +894,58 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
     });
 
+    it('clears repeatFromCompletionDate when switching a completion-relative cfg to a preset', async () => {
+      // The "from completion" toggle lives only in the RRULE builder, so picking
+      // a preset (which hides it) must clear the flag — otherwise it persists
+      // with no visible control and keeps firing relative to completion.
+      const completionCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-switch',
+        title: 'After done daily',
+        quickSetting: 'DAILY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY',
+      };
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const component = fixture.componentInstance;
+      // Completion-relative cfgs open in the builder regardless of preset match.
+      expect(component.repeatCfg().quickSetting).toBe('RRULE');
+      // User picks a plain preset, hiding the from-completion control.
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'DAILY' }) as any);
+      component.save();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalled();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.repeatFromCompletionDate).toBe(false);
+    });
+
+    it('does NOT inject repeatFromCompletionDate on a preset save when it was never set', async () => {
+      // Guards the conditional clear: an untouched (falsy) flag must stay out of
+      // the change set so a title-only preset save stays an empty-diff no-op
+      // (#7373 class) instead of dispatching a spurious undefined→false op.
+      const presetCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-preset-plain',
+        title: 'Plain daily',
+        quickSetting: 'DAILY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY',
+      };
+      const fixture = await setupTestBed({ repeatCfg: presetCfg });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, title: 'Renamed' }) as any);
+      component.save();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.title).toBe('Renamed');
+      expect('repeatFromCompletionDate' in changes).toBe(false);
+    });
+
     it('still opens the builder for a CUSTOM cfg whose rrule matches no preset', async () => {
       const handBuilt: TaskRepeatCfg = {
         ...DEFAULT_TASK_REPEAT_CFG,

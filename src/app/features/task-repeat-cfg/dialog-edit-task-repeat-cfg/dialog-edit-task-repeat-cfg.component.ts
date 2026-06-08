@@ -381,7 +381,18 @@ export class DialogEditTaskRepeatCfgComponent {
         referenceDate,
       );
       if (updatesForQuickSetting) {
-        this.repeatCfg.update((cfg) => ({ ...cfg, ...updatesForQuickSetting }));
+        this.repeatCfg.update((cfg) => ({
+          ...cfg,
+          ...updatesForQuickSetting,
+          // A preset is always start-date-relative: the "from completion"
+          // toggle lives ONLY inside the RRULE builder, which a preset hides.
+          // So a stale `repeatFromCompletionDate` left over from a previous
+          // RRULE cfg would persist with no visible control and silently keep
+          // firing relative to completion. Clear it — but only when actually
+          // set, so an untouched preset save stays an empty-diff no-op (#7373)
+          // instead of dispatching a spurious undefined→false change.
+          ...(cfg.repeatFromCompletionDate ? { repeatFromCompletionDate: false } : {}),
+        }));
       }
     }
 

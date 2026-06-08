@@ -128,12 +128,17 @@ export interface TaskRepeatCfgCopy {
   // `null` here, so a null must never be persisted (clearing happens via
   // `undefined`; a stale anchor on remote clients is inert once `rrule` is
   // set, since the occurrence engine routes on it). Issue #6040.
-  // KNOWN GAP: an `undefined` clear is dropped by the op-log's JSON wire, so
-  // remote LEGACY clients (which ignore `rrule`) keep scheduling from a stale
-  // anchor after an nth-weekday → day-of-month switch. Making the clear
-  // wire-durable requires a sequenced migration: (1) ship `| null` on both
-  // fields in a release, (2) only then switch the reset value to `null` —
-  // see the "op-log JSON round-trip" spec pinning this behavior.
+  // INHERENT GAP (not fixable, don't try): an `undefined` clear is dropped by
+  // the op-log's JSON partial-update merge, so a remote PRE-rrule client (which
+  // ignores `rrule`) keeps scheduling from a stale anchor after an nth-weekday →
+  // day-of-month switch. There is no in-schema value meaning "no anchor" to send
+  // instead (0 is a valid weekday; null/0 trip released clients' repair dialog).
+  // A `| null` migration would NOT help: it only benefits a client that is
+  // null-aware yet rrule-UNAWARE, but null can only ship with-or-after rrule, so
+  // that band is empty — any client new enough to accept the null clear already
+  // routes on `rrule`, where the stale anchor is inert. Only the UPDATE path is
+  // affected (ADD sends the field absent → no anchor remotely). See the op-log
+  // JSON round-trip spec pinning this behavior.
   monthlyWeekOfMonth?: MonthlyWeekOfMonth;
   monthlyWeekday?: MonthlyWeekday;
 

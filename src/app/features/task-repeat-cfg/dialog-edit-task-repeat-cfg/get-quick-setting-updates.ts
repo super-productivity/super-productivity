@@ -29,9 +29,11 @@ const _buildWeeklyForDay = (date: Date): Partial<TaskRepeatCfg> => {
 // field would silently take effect. The numeric anchors clear via `undefined`
 // (NOT `null` — released clients' typia schema only allows absent-or-numeric,
 // so null must never reach the wire); remote clients keep a stale anchor on
-// the update path (JSON drops the key), which is inert because every preset
-// also carries an `rrule` the engine routes on. `monthlyLastDay` clears via
-// `false`, a master-safe value that DOES survive the JSON wire.
+// the update path (JSON drops the key) — inert on rrule-aware clients (the
+// engine routes on the `rrule` every preset also carries), an inherent and
+// unfixable gap on PRE-rrule clients (see the op-log round-trip spec).
+// `monthlyLastDay` clears via `false`, a master-safe value that DOES survive
+// the JSON wire.
 const MONTHLY_ANCHOR_RESET: Partial<TaskRepeatCfg> = {
   monthlyWeekOfMonth: undefined,
   monthlyWeekday: undefined,

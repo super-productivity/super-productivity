@@ -182,21 +182,24 @@ describe('task-repeat-cfg op-log JSON round-trip (remote-apply durability)', () 
     rrule: 'FREQ=MONTHLY;BYDAY=2TU',
   });
 
-  const applyRemotely = (changes: Partial<TaskRepeatCfg>): TaskRepeatCfg | undefined => {
+  const applyRemotely = (
+    changes: Partial<TaskRepeatCfg>,
+    base: TaskRepeatCfg = baseEntity,
+  ): TaskRepeatCfg | undefined => {
     // Same creator the local client dispatches; the whole ACTION is then
     // wire-round-tripped (like the op-log payload) and replayed through the
     // real reducer — exactly what a remote client does.
     const replayed = wireRoundTrip(
-      updateTaskRepeatCfg({ taskRepeatCfg: { id: baseEntity.id, changes } }),
+      updateTaskRepeatCfg({ taskRepeatCfg: { id: base.id, changes } }),
     );
     const state = taskRepeatCfgReducer(
       {
-        ids: [baseEntity.id],
-        entities: { [baseEntity.id]: baseEntity },
+        ids: [base.id],
+        entities: { [base.id]: base },
       } as never,
       replayed,
     );
-    return state.entities[baseEntity.id];
+    return state.entities[base.id];
   };
 
   it('rrule REPLACEMENT (preset switch) survives the wire', () => {
@@ -208,19 +211,38 @@ describe('task-repeat-cfg op-log JSON round-trip (remote-apply durability)', () 
   });
 
   it('monthlyLastDay clearing via `false` survives the wire', () => {
-    const remote = applyRemotely({ monthlyLastDay: false });
+    // Start from `true` so this proves `false` actually overwrites the stored
+    // flag over the wire — against an already-false base the assertion would
+    // pass even if the update were dropped/ignored.
+    const lastDayBase = cfg({
+      ...baseEntity,
+      // A coherent "last day of month" base (no Nth-weekday anchor).
+      monthlyWeekOfMonth: undefined,
+      monthlyWeekday: undefined,
+      monthlyLastDay: true,
+      rrule: 'FREQ=MONTHLY;BYMONTHDAY=-1',
+    });
+    const remote = applyRemotely({ monthlyLastDay: false }, lastDayBase);
     expect(remote?.monthlyLastDay).toBe(false);
   });
 
-  it('DOCUMENTED GAP: anchor clearing via `undefined` does NOT survive the wire', () => {
-    // `null` is not an option: released clients' typia schema has no `| null`
-    // on these fields, and an out-of-schema value triggers their blocking
-    // data-repair confirm dialog on every sync. The stale anchor is inert on
-    // rrule-aware clients (the engine routes on `rrule`); legacy clients keep
-    // a best-effort approximation. Making this durable requires first SHIPPING
-    // `| null` on both anchor fields in a release, then switching the reset
-    // value to null — if this test starts failing because the anchors now
-    // clear remotely, that migration happened and this pin can be inverted.
+  it('INHERENT LIMITATION: anchor clearing via `undefined` does NOT survive the wire', () => {
+    // This is unfixable for the affected clients, not a deferred TODO:
+    //  - The clear can only reach a remote client as a concrete in-schema
+    //    value. `hasNthWeekdayAnchor` accepts only {1,2,3,4,-1} × {0..6}, so no
+    //    in-schema value means "no anchor" (0 is a valid weekday). `undefined`
+    //    is dropped by the op-log's JSON partial-update merge; `null`/`0` trip
+    //    released clients' blocking data-repair dialog on every sync.
+    //  - The only clients that misfire here are those with the #6040 anchor but
+    //    PRE-rrule. They run released code, so no payload we send disables their
+    //    anchor path — the engine routes on the anchor, ignoring `rrule`.
+    //  - A `| null` migration does NOT help: it would only benefit a client
+    //    that is null-aware yet rrule-UNAWARE, but `| null` can only ship
+    //    with-or-after rrule (rrule lands first, here), so that band is empty —
+    //    any client new enough to accept a null clear already routes on `rrule`,
+    //    where the stale anchor is inert. Don't spend a release on it.
+    // Only the UPDATE path is affected; ADD sends the field absent (no anchor
+    // remotely), which is already durable.
     const remote = applyRemotely({
       rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
       monthlyWeekOfMonth: undefined,
