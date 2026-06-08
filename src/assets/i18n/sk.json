@@ -1874,6 +1874,56 @@
       "PASTE_SUCCESS": "Obrázok bol úspešne vložený",
       "SIZE_EXCEEDED": "Veľkosť obrázka ({{actualSize}}) presahuje maximálnu povolenú veľkosť ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Kvóta úložiska bola prekročená. Uvoľnite miesto alebo zmenšite veľkosť obrázkov."
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Hostiteľ (napr.: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Používateľské meno alebo názov organizácie/projektu",
+        "REPO_FULL_NAME_DESCRIPTION": "Možno ho nájsť ako súčasť URL adresy pri zobrazení projektu v Prieskumníkovi.",
+        "SCOPE": "Rozsah pôsobnosti",
+        "SCOPE_ALL": "Všetky",
+        "SCOPE_ASSIGNED": "Pridelené mne",
+        "SCOPE_CREATED": "Vytvorené mnou",
+        "TOKEN": "Prístupový token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov Forgejo pre konkrétny repozitár. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p> <p>Okrem toho môžete automaticky pridať a importovať všetky otvorené problémy.</p><p>Ak chcete obísť obmedzenia používania a získať prístup, môžete zadať prístupový token."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Príjemca",
+        "DESCRIPTION": "Popis",
+        "LABELS": "Štítky",
+        "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
+        "PROJECT": "Projekt",
+        "STATUS": "Stav",
+        "SUMMARY": "Zhrnutie",
+        "WRITE_A_COMMENT": "Napíšte komentár"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Hostiteľ (napr.: https://codeberg.org)",
+        "REPO_FULL_NAME": "Používateľské meno alebo názov organizácie/projektu",
+        "REPO_FULL_NAME_DESCRIPTION": "Možno ho nájsť ako súčasť URL adresy pri zobrazení projektu v Prieskumníkovi.",
+        "SCOPE": "Rozsah pôsobnosti",
+        "SCOPE_ALL": "Všetky",
+        "SCOPE_ASSIGNED": "Pridelené mne",
+        "SCOPE_CREATED": "Vytvorené mnou",
+        "TOKEN": "Prístupový token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov Codeberg pre konkrétny repozitár. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p> <p>Okrem toho môžete automaticky pridať a importovať všetky otvorené problémy.</p><p>Ak chcete obísť obmedzenia používania a získať prístup, môžete zadať prístupový token."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Príjemca",
+        "DESCRIPTION": "Popis",
+        "LABELS": "Štítky",
+        "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
+        "PROJECT": "Projekt",
+        "STATUS": "Stav",
+        "SUMMARY": "Zhrnutie",
+        "WRITE_A_COMMENT": "Napíšte komentár"
+      }
     }
   },
   "FILE_IMEX": {

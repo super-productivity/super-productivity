@@ -2002,6 +2002,64 @@
       "PASTE_SUCCESS": "Imagem colada com sucesso",
       "SIZE_EXCEEDED": "O tamanho da imagem ({{actualSize}}) excede o tamanho máximo permitido ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Quota de armazenamento excedida. Liberte espaço ou reduza o tamanho das imagens."
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Endereço do servidor (ex: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Nome do usuário ou organização/projeto",
+        "REPO_FULL_NAME_DESCRIPTION": "Pode ser encontrado como parte da URL, ao acessar o projeto no navegador",
+        "SCOPE": "Escopo",
+        "SCOPE_ALL": "Todos",
+        "SCOPE_ASSIGNED": "Atribuídos a mim",
+        "SCOPE_CREATED": "Criados por mim",
+        "TOKEN": "Token de acesso",
+        "EXCLUDE_LABELS": "Excluir etiquetas (opcional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Lista de nomes de etiquetas separados por vírgulas. Problemas com qualquer uma destas etiquetas serão excluídos.",
+        "FILTER_LABELS": "Filtrar por etiquetas (opcional)",
+        "FILTER_LABELS_DESCRIPTION": "Lista de nomes de etiquetas separados por vírgulas. Apenas problemas com todas estas etiquetas serão sincronizados. Deixe em branco para sincronizar todos os problemas que correspondem ao âmbito."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aqui você pode configurar o SuperProductivity para listar tarefas do Forgejo de um repositório específico no painel de tarefas na tela de planejamento diário. Elas também serão listadas como sugestões e será disponibilizado um link para a tarefa bem como mais informações sobre a mesma.</p> <p>Além disso você pode adicionar e sincronizar todas as tarefas abertas para o seu backlog.</p><p>"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsável",
+        "DESCRIPTION": "Descrição",
+        "LABELS": "Etiquetas",
+        "MARK_AS_CHECKED": "Marcar atualizações como verificadas",
+        "PROJECT": "Projeto",
+        "STATUS": "Estado",
+        "SUMMARY": "Resumo",
+        "WRITE_A_COMMENT": "Escreva um comentário"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Endereço do servidor (ex: https://codeberg.org)",
+        "REPO_FULL_NAME": "Nome do usuário ou organização/projeto",
+        "REPO_FULL_NAME_DESCRIPTION": "Pode ser encontrado como parte da URL, ao acessar o projeto no navegador",
+        "SCOPE": "Escopo",
+        "SCOPE_ALL": "Todos",
+        "SCOPE_ASSIGNED": "Atribuídos a mim",
+        "SCOPE_CREATED": "Criados por mim",
+        "TOKEN": "Token de acesso",
+        "EXCLUDE_LABELS": "Excluir etiquetas (opcional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Lista de nomes de etiquetas separados por vírgulas. Problemas com qualquer uma destas etiquetas serão excluídos.",
+        "FILTER_LABELS": "Filtrar por etiquetas (opcional)",
+        "FILTER_LABELS_DESCRIPTION": "Lista de nomes de etiquetas separados por vírgulas. Apenas problemas com todas estas etiquetas serão sincronizados. Deixe em branco para sincronizar todos os problemas que correspondem ao âmbito."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aqui você pode configurar o SuperProductivity para listar tarefas do Codeberg de um repositório específico no painel de tarefas na tela de planejamento diário. Elas também serão listadas como sugestões e será disponibilizado um link para a tarefa bem como mais informações sobre a mesma.</p> <p>Além disso você pode adicionar e sincronizar todas as tarefas abertas para o seu backlog.</p><p>"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsável",
+        "DESCRIPTION": "Descrição",
+        "LABELS": "Etiquetas",
+        "MARK_AS_CHECKED": "Marcar atualizações como verificadas",
+        "PROJECT": "Projeto",
+        "STATUS": "Estado",
+        "SUMMARY": "Resumo",
+        "WRITE_A_COMMENT": "Escreva um comentário"
+      }
     }
   },
   "FILE_IMEX": {

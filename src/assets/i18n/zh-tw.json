@@ -2002,6 +2002,64 @@
         "NO_DATA": "本週還沒有工作。",
         "TITLE": "標題"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "主機（例如：https://forgejo.example.org）",
+        "REPO_FULL_NAME": "使用者名稱或組織名稱/專案",
+        "REPO_FULL_NAME_DESCRIPTION": "可在瀏覽器中檢視專案時，於網址的一部分找到。",
+        "SCOPE": "範圍",
+        "SCOPE_ALL": "全部",
+        "SCOPE_ASSIGNED": "指派給我",
+        "SCOPE_CREATED": "由我建立",
+        "TOKEN": "存取權杖",
+        "EXCLUDE_LABELS": "排除標籤（選填）",
+        "EXCLUDE_LABELS_DESCRIPTION": "以逗號分隔的標籤名稱清單。含有其中任一標籤的議題將被排除。",
+        "FILTER_LABELS": "依標籤篩選（選填）",
+        "FILTER_LABELS_DESCRIPTION": "以逗號分隔的標籤名稱清單。只會同步含有所有這些標籤的議題。留空則同步符合範圍的所有議題。"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 Forgejo 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動新增和匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "指派人",
+        "DESCRIPTION": "描述",
+        "LABELS": "標籤",
+        "MARK_AS_CHECKED": "標記更新為已檢查",
+        "PROJECT": "專案",
+        "STATUS": "狀態",
+        "SUMMARY": "摘要",
+        "WRITE_A_COMMENT": "撰寫評論"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "主機（例如：https://codeberg.org）",
+        "REPO_FULL_NAME": "使用者名稱或組織名稱/專案",
+        "REPO_FULL_NAME_DESCRIPTION": "可在瀏覽器中檢視專案時，於網址的一部分找到。",
+        "SCOPE": "範圍",
+        "SCOPE_ALL": "全部",
+        "SCOPE_ASSIGNED": "指派給我",
+        "SCOPE_CREATED": "由我建立",
+        "TOKEN": "存取權杖",
+        "EXCLUDE_LABELS": "排除標籤（選填）",
+        "EXCLUDE_LABELS_DESCRIPTION": "以逗號分隔的標籤名稱清單。含有其中任一標籤的議題將被排除。",
+        "FILTER_LABELS": "依標籤篩選（選填）",
+        "FILTER_LABELS_DESCRIPTION": "以逗號分隔的標籤名稱清單。只會同步含有所有這些標籤的議題。留空則同步符合範圍的所有議題。"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 Codeberg 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動新增和匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "指派人",
+        "DESCRIPTION": "描述",
+        "LABELS": "標籤",
+        "MARK_AS_CHECKED": "標記更新為已檢查",
+        "PROJECT": "專案",
+        "STATUS": "狀態",
+        "SUMMARY": "摘要",
+        "WRITE_A_COMMENT": "撰寫評論"
+      }
     }
   },
   "FILE_IMEX": {

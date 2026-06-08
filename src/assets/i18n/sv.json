@@ -1869,6 +1869,56 @@
         "ERR_CREDENTIALS_MISSING": "Ange Nextcloud-URL, användarnamn och lösenord först.",
         "ERR_LOAD_BOARDS": "Kunde inte ladda Deck-tavlor. Kontrollera dina autentiseringsuppgifter."
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Värd (t.ex. https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Användarnamn eller organisationsnamn/projekt",
+        "REPO_FULL_NAME_DESCRIPTION": "Kan finnas som del av URL:en när projektet visas i webbläsaren",
+        "SCOPE": "Omfattning",
+        "SCOPE_ALL": "Alla",
+        "SCOPE_ASSIGNED": "Ålagda mig",
+        "SCOPE_CREATED": "Skapade av mig",
+        "TOKEN": "Åtkomsttoken"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Forgejo-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt lägga till och importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Mottagare",
+        "DESCRIPTION": "Beskrivning",
+        "LABELS": "Etiketter",
+        "MARK_AS_CHECKED": "Markera uppdateringar som kontrollerade",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Sammanfattning",
+        "WRITE_A_COMMENT": "Skriv en kommentar"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Värd (t.ex. https://codeberg.org)",
+        "REPO_FULL_NAME": "Användarnamn eller organisationsnamn/projekt",
+        "REPO_FULL_NAME_DESCRIPTION": "Kan finnas som del av URL:en när projektet visas i webbläsaren",
+        "SCOPE": "Omfattning",
+        "SCOPE_ALL": "Alla",
+        "SCOPE_ASSIGNED": "Ålagda mig",
+        "SCOPE_CREATED": "Skapade av mig",
+        "TOKEN": "Åtkomsttoken"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Codeberg-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt lägga till och importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Mottagare",
+        "DESCRIPTION": "Beskrivning",
+        "LABELS": "Etiketter",
+        "MARK_AS_CHECKED": "Markera uppdateringar som kontrollerade",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Sammanfattning",
+        "WRITE_A_COMMENT": "Skriv en kommentar"
+      }
     }
   },
   "FILE_IMEX": {

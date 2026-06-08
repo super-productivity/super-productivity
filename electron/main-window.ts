@@ -223,14 +223,38 @@ export const createWindow = async ({
     removeKeyInAnyCase(requestHeaders, 'priority');
     removeKeyInAnyCase(requestHeaders, 'accept');
 
+    const issueProviderMarkerHeaderKey = Object.keys(requestHeaders).find(
+      (key) => key.toLowerCase() === 'x-super-productivity-issue-provider',
+    );
+    const issueProviderMarker = issueProviderMarkerHeaderKey
+      ? String(requestHeaders[issueProviderMarkerHeaderKey]).toLowerCase()
+      : '';
+    const accessControlRequestHeadersKey = Object.keys(requestHeaders).find(
+      (key) => key.toLowerCase() === 'access-control-request-headers',
+    );
+    const accessControlRequestHeaders = accessControlRequestHeadersKey
+      ? String(requestHeaders[accessControlRequestHeadersKey]).toLowerCase()
+      : '';
+    const isForgejoOrCodebergRequest =
+      issueProviderMarker === 'forgejo' ||
+      issueProviderMarker === 'codeberg' ||
+      accessControlRequestHeaders.includes('x-super-productivity-issue-provider');
+
     // NOTE this is needed for GitHub api requests to work :(
     // office365 needs a User-Agent as well (#4677)
+    // Some Forgejo frontends/proxies reject Electron's default browser-like UA;
+    // Forgejo/Codeberg API services mark their Electron requests so we can strip
+    // the marker before it leaves the app and avoid leaking SP-internal headers.
     if (
       ['github.com', 'office365.com', 'outlook.live.com'].includes(
         new URL(details.url).hostname,
-      )
+      ) ||
+      isForgejoOrCodebergRequest
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
+    }
+    if (isForgejoOrCodebergRequest) {
+      removeKeyInAnyCase(requestHeaders, 'X-Super-Productivity-Issue-Provider');
     }
     callback({ requestHeaders });
   });

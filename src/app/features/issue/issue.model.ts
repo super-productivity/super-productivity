@@ -11,6 +11,10 @@ import {
 } from './providers/open-project/open-project-issue.model';
 import { GiteaCfg } from './providers/gitea/gitea.model';
 import { GiteaIssue } from './providers/gitea/gitea-issue.model';
+import { ForgejoCfg } from './providers/forgejo/forgejo.model';
+import { ForgejoIssue } from './providers/forgejo/forgejo-issue.model';
+import { CodebergCfg } from './providers/codeberg/codeberg.model';
+import { CodebergIssue } from './providers/codeberg/codeberg-issue.model';
 import { RedmineCfg } from './providers/redmine/redmine.model';
 import { RedmineIssue } from './providers/redmine/redmine-issue.model';
 import { TrelloCfg } from './providers/trello/trello.model';
@@ -50,6 +54,8 @@ export type BuiltInIssueProviderKey =
   | 'ICAL'
   | 'OPEN_PROJECT'
   | 'GITEA'
+  | 'FORGEJO'
+  | 'CODEBERG'
   | 'TRELLO'
   | 'REDMINE'
   | 'LINEAR'
@@ -81,6 +87,8 @@ const BUILT_IN_KEYS: ReadonlySet<string> = new Set<BuiltInIssueProviderKey>([
   'ICAL',
   'OPEN_PROJECT',
   'GITEA',
+  'FORGEJO',
+  'CODEBERG',
   'TRELLO',
   'REDMINE',
   'LINEAR',
@@ -104,6 +112,8 @@ export type IssueIntegrationCfg =
   | CalendarProviderCfg
   | OpenProjectCfg
   | GiteaCfg
+  | ForgejoCfg
+  | CodebergCfg
   | TrelloCfg
   | RedmineCfg
   | LinearCfg
@@ -125,6 +135,8 @@ export interface IssueIntegrationCfgs {
   OPEN_PROJECT?: OpenProjectCfg;
   TRELLO?: TrelloCfg;
   GITEA?: GiteaCfg;
+  FORGEJO?: ForgejoCfg;
+  CODEBERG?: CodebergCfg;
   REDMINE?: RedmineCfg;
   LINEAR?: LinearCfg;
   AZURE_DEVOPS?: AzureDevOpsCfg;
@@ -138,6 +150,8 @@ export type IssueData =
   | ICalIssue
   | OpenProjectWorkPackage
   | GiteaIssue
+  | ForgejoIssue
+  | CodebergIssue
   | RedmineIssue
   | TrelloIssue
   | LinearIssue
@@ -152,6 +166,8 @@ export type IssueDataReduced =
   | CaldavIssueReduced
   | ICalIssueReduced
   | GiteaIssue
+  | ForgejoIssue
+  | CodebergIssue
   | RedmineIssue
   | TrelloIssueReduced
   | LinearIssueReduced
@@ -172,7 +188,11 @@ export type IssueDataReducedMap = {
             ? OpenProjectWorkPackageReduced
             : K extends 'GITEA'
               ? GiteaIssue
-              : K extends 'TRELLO'
+              : K extends 'FORGEJO'
+                ? ForgejoIssue
+                : K extends 'CODEBERG'
+                  ? CodebergIssue
+                  : K extends 'TRELLO'
                 ? TrelloIssueReduced
                 : K extends 'REDMINE'
                   ? RedmineIssue
@@ -258,6 +278,14 @@ export interface IssueProviderGitea extends IssueProviderBase, GiteaCfg {
   issueProviderKey: 'GITEA';
 }
 
+export interface IssueProviderForgejo extends IssueProviderBase, ForgejoCfg {
+  issueProviderKey: 'FORGEJO';
+}
+
+export interface IssueProviderCodeberg extends IssueProviderBase, CodebergCfg {
+  issueProviderKey: 'CODEBERG';
+}
+
 export interface IssueProviderRedmine extends IssueProviderBase, RedmineCfg {
   issueProviderKey: 'REDMINE';
 }
@@ -296,6 +324,8 @@ export type IssueProvider =
   | IssueProviderCalendar
   | IssueProviderOpenProject
   | IssueProviderGitea
+  | IssueProviderForgejo
+  | IssueProviderCodeberg
   | IssueProviderRedmine
   | IssueProviderTrello
   | IssueProviderLinear
@@ -311,7 +341,11 @@ export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
       ? IssueProviderGitlab
       : T extends 'GITEA'
         ? IssueProviderGitea
-        : T extends 'OPEN_PROJECT'
+        : T extends 'FORGEJO'
+          ? IssueProviderForgejo
+          : T extends 'CODEBERG'
+            ? IssueProviderCodeberg
+            : T extends 'OPEN_PROJECT'
           ? IssueProviderOpenProject
           : T extends 'REDMINE'
             ? IssueProviderRedmine

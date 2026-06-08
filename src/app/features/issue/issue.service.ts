@@ -16,6 +16,8 @@ import { firstValueFrom, forkJoin, from, merge, Observable, of, Subject } from '
 import {
   CALDAV_TYPE,
   GITEA_TYPE,
+  FORGEJO_TYPE,
+  CODEBERG_TYPE,
   GITLAB_TYPE,
   ICAL_TYPE,
   ISSUE_PROVIDER_HUMANIZED,
@@ -41,6 +43,8 @@ import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
+import { ForgejoCommonInterfacesService } from './providers/forgejo/forgejo-common-interfaces.service';
+import { CodebergCommonInterfacesService } from './providers/codeberg/codeberg-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
 // ClickUp is now a plugin — no built-in service needed
@@ -80,6 +84,8 @@ export class IssueService {
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
   private _giteaInterfaceService = inject(GiteaCommonInterfacesService);
+  private _forgejoInterfaceService = inject(ForgejoCommonInterfacesService);
+  private _codebergInterfaceService = inject(CodebergCommonInterfacesService);
   private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
   private _linearCommonInterfaceService = inject(LinearCommonInterfacesService);
   private _azureDevOpsCommonInterfaceService = inject(AzureDevOpsCommonInterfacesService);
@@ -105,6 +111,8 @@ export class IssueService {
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
     [GITEA_TYPE]: this._giteaInterfaceService,
+    [FORGEJO_TYPE]: this._forgejoInterfaceService,
+    [CODEBERG_TYPE]: this._codebergInterfaceService,
     [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
     [LINEAR_TYPE]: this._linearCommonInterfaceService,

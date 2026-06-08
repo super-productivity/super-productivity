@@ -2015,6 +2015,64 @@
         "NO_DATA": "Chưa có việc tuần này.",
         "TITLE": "Tiêu đề"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Loại trừ nhãn (tùy chọn)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Danh sách tên nhãn cách nhau bằng dấu phẩy. Các sự cố có nhãn này sẽ bị loại trừ.",
+        "FILTER_LABELS": "Lọc theo nhãn (tùy chọn)",
+        "FILTER_LABELS_DESCRIPTION": "Danh sách tên nhãn cách nhau bằng dấu phẩy. Chỉ đồng bộ sự cố có tất cả nhãn này.",
+        "HOST": "Máy chủ (ví dụ: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Tên người dùng hoặc Tổ chức/kho lưu trữ",
+        "REPO_FULL_NAME_DESCRIPTION": "Có thể tìm thấy trong URL khi xem kho lưu trữ trên trình duyệt web.",
+        "SCOPE": "Phạm vi",
+        "SCOPE_ALL": "Tất cả",
+        "SCOPE_ASSIGNED": "Được giao cho tôi",
+        "SCOPE_CREATED": "Do tôi tạo",
+        "TOKEN": "Token truy cập"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tại đây bạn có thể cấu hình Super Productivity để liệt kê các sự cố Forgejo mở cho một kho lưu trữ cụ thể trong bảng tạo công việc ở chế độ xem lên kế hoạch hàng ngày. Chúng sẽ được liệt kê làm gợi ý và cung cấp liên kết đến sự cố cũng như thêm thông tin về nó.</p><p>Ngoài ra, bạn có thể tự động thêm và nhập tất cả sự cố mở.</p><p>Để vượt qua giới hạn sử dụng và truy cập, bạn có thể cung cấp token truy cập."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Người được giao",
+        "DESCRIPTION": "Mô tả",
+        "LABELS": "Nhãn",
+        "MARK_AS_CHECKED": "Đánh dấu cập nhật đã kiểm tra",
+        "PROJECT": "Dự án",
+        "STATUS": "Trạng thái",
+        "SUMMARY": "Tóm tắt",
+        "WRITE_A_COMMENT": "Viết bình luận"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Loại trừ nhãn (tùy chọn)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Danh sách tên nhãn cách nhau bằng dấu phẩy. Các sự cố có nhãn này sẽ bị loại trừ.",
+        "FILTER_LABELS": "Lọc theo nhãn (tùy chọn)",
+        "FILTER_LABELS_DESCRIPTION": "Danh sách tên nhãn cách nhau bằng dấu phẩy. Chỉ đồng bộ sự cố có tất cả nhãn này.",
+        "HOST": "Máy chủ (ví dụ: https://codeberg.org)",
+        "REPO_FULL_NAME": "Tên người dùng hoặc Tổ chức/kho lưu trữ",
+        "REPO_FULL_NAME_DESCRIPTION": "Có thể tìm thấy trong URL khi xem kho lưu trữ trên trình duyệt web.",
+        "SCOPE": "Phạm vi",
+        "SCOPE_ALL": "Tất cả",
+        "SCOPE_ASSIGNED": "Được giao cho tôi",
+        "SCOPE_CREATED": "Do tôi tạo",
+        "TOKEN": "Token truy cập"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tại đây bạn có thể cấu hình Super Productivity để liệt kê các sự cố Codeberg mở cho một kho lưu trữ cụ thể trong bảng tạo công việc ở chế độ xem lên kế hoạch hàng ngày. Chúng sẽ được liệt kê làm gợi ý và cung cấp liên kết đến sự cố cũng như thêm thông tin về nó.</p><p>Ngoài ra, bạn có thể tự động thêm và nhập tất cả sự cố mở.</p><p>Để vượt qua giới hạn sử dụng và truy cập, bạn có thể cung cấp token truy cập."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Người được giao",
+        "DESCRIPTION": "Mô tả",
+        "LABELS": "Nhãn",
+        "MARK_AS_CHECKED": "Đánh dấu cập nhật đã kiểm tra",
+        "PROJECT": "Dự án",
+        "STATUS": "Trạng thái",
+        "SUMMARY": "Tóm tắt",
+        "WRITE_A_COMMENT": "Viết bình luận"
+      }
     }
   },
   "FILE_IMEX": {

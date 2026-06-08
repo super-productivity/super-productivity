@@ -2002,6 +2002,64 @@
       "PASTE_SUCCESS": "Image collée avec succès",
       "SIZE_EXCEEDED": "La taille de l'image ({{actualSize}}) dépasse la taille maximale autorisée ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Quota de stockage dépassé. Veuillez libérer de l'espace ou réduire la taille des images."
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Hôte (e.g.: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Nom d'utilisateur ou nom de l'organisation/projet",
+        "REPO_FULL_NAME_DESCRIPTION": "Peut être trouvé comme partie de l'URL, lors de la visualisation du projet dans le navigateur.",
+        "SCOPE": "Portée",
+        "SCOPE_ALL": "Tout",
+        "SCOPE_ASSIGNED": "Attribués à moi",
+        "SCOPE_CREATED": "Créé par moi",
+        "TOKEN": "Jeton d'accès",
+        "EXCLUDE_LABELS": "Exclure des étiquettes (facultatif)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Liste de noms d'étiquettes séparés par des virgules. Les tickets portant l'une de ces étiquettes seront exclus.",
+        "FILTER_LABELS": "Filtrer par étiquettes (facultatif)",
+        "FILTER_LABELS_DESCRIPTION": "Liste de noms d'étiquettes séparés par des virgules. Seuls les tickets portant toutes ces étiquettes seront synchronisés. Laissez vide pour synchroniser tous les tickets correspondant au périmètre."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Ici, vous pouvez configurer SuperProductivity pour lister les problèmes ouverts de Forgejo pour un dépôt spécifique dans le panneau de création de tâches dans la vue de planification quotidienne. Ils seront listés comme suggestions et fourniront un lien vers le problème ainsi que plus d'informations à son sujet.</p> <p>En plus, vous pouvez automatiquement ajouter et importer tous les problèmes ouverts.</p><p>Pour contourner les limites d'utilisation et pour accéder, vous pouvez fournir un jeton d'accès.</p>"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsable",
+        "DESCRIPTION": "Description",
+        "LABELS": "Étiquettes",
+        "MARK_AS_CHECKED": "Marquer les mises à jour comme cochées",
+        "PROJECT": "Projet",
+        "STATUS": "Statut",
+        "SUMMARY": "Résumé",
+        "WRITE_A_COMMENT": "Écrire un commentaire"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Hôte (e.g.: https://codeberg.org)",
+        "REPO_FULL_NAME": "Nom d'utilisateur ou nom de l'organisation/projet",
+        "REPO_FULL_NAME_DESCRIPTION": "Peut être trouvé comme partie de l'URL, lors de la visualisation du projet dans le navigateur.",
+        "SCOPE": "Portée",
+        "SCOPE_ALL": "Tout",
+        "SCOPE_ASSIGNED": "Attribués à moi",
+        "SCOPE_CREATED": "Créé par moi",
+        "TOKEN": "Jeton d'accès",
+        "EXCLUDE_LABELS": "Exclure des étiquettes (facultatif)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Liste de noms d'étiquettes séparés par des virgules. Les tickets portant l'une de ces étiquettes seront exclus.",
+        "FILTER_LABELS": "Filtrer par étiquettes (facultatif)",
+        "FILTER_LABELS_DESCRIPTION": "Liste de noms d'étiquettes séparés par des virgules. Seuls les tickets portant toutes ces étiquettes seront synchronisés. Laissez vide pour synchroniser tous les tickets correspondant au périmètre."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Ici, vous pouvez configurer SuperProductivity pour lister les problèmes ouverts de Codeberg pour un dépôt spécifique dans le panneau de création de tâches dans la vue de planification quotidienne. Ils seront listés comme suggestions et fourniront un lien vers le problème ainsi que plus d'informations à son sujet.</p> <p>En plus, vous pouvez automatiquement ajouter et importer tous les problèmes ouverts.</p><p>Pour contourner les limites d'utilisation et pour accéder, vous pouvez fournir un jeton d'accès.</p>"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsable",
+        "DESCRIPTION": "Description",
+        "LABELS": "Étiquettes",
+        "MARK_AS_CHECKED": "Marquer les mises à jour comme cochées",
+        "PROJECT": "Projet",
+        "STATUS": "Statut",
+        "SUMMARY": "Résumé",
+        "WRITE_A_COMMENT": "Écrire un commentaire"
+      }
     }
   },
   "FILE_IMEX": {

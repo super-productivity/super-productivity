@@ -2002,6 +2002,64 @@
         "NO_DATA": "No hay tareas esta semana todavía.",
         "TITLE": "Título"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Host (p. ej.: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Nombre de usuario o nombre de la organización/proyecto",
+        "REPO_FULL_NAME_DESCRIPTION": "Puede encontrarse como parte de la URL, al visualizar el proyecto en el Navegador.",
+        "SCOPE": "Alcance",
+        "SCOPE_ALL": "Todos",
+        "SCOPE_ASSIGNED": "Asignado a mí",
+        "SCOPE_CREATED": "Creado por mí",
+        "TOKEN": "Token de acceso",
+        "EXCLUDE_LABELS": "Excluir etiquetas (opcional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Lista de nombres de etiquetas separados por comas. Se excluirán los issues que tengan cualquiera de estas etiquetas.",
+        "FILTER_LABELS": "Filtrar por etiquetas (opcional)",
+        "FILTER_LABELS_DESCRIPTION": "Lista de nombres de etiquetas separados por comas. Solo se sincronizarán los issues que tengan todas estas etiquetas. Déjalo vacío para sincronizar todos los issues que coincidan con el alcance."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar las incidencias de Forgejo abiertas para un repositorio específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la incidencia así como más información sobre ella.</p> <p>Además, puedes añadir e importar automáticamente todas las incidencias abiertas.</p><p>Para superar los límites de uso y acceder puedes proporcionar un token de acceso."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsable",
+        "DESCRIPTION": "Descripción",
+        "LABELS": "Etiquetas",
+        "MARK_AS_CHECKED": "Marcar actualizaciones como verificadas",
+        "PROJECT": "Proyecto",
+        "STATUS": "Estado",
+        "SUMMARY": "Resumen",
+        "WRITE_A_COMMENT": "Escribir un comentario"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Host (p. ej.: https://codeberg.org)",
+        "REPO_FULL_NAME": "Nombre de usuario o nombre de la organización/proyecto",
+        "REPO_FULL_NAME_DESCRIPTION": "Puede encontrarse como parte de la URL, al visualizar el proyecto en el Navegador.",
+        "SCOPE": "Alcance",
+        "SCOPE_ALL": "Todos",
+        "SCOPE_ASSIGNED": "Asignado a mí",
+        "SCOPE_CREATED": "Creado por mí",
+        "TOKEN": "Token de acceso",
+        "EXCLUDE_LABELS": "Excluir etiquetas (opcional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Lista de nombres de etiquetas separados por comas. Se excluirán los issues que tengan cualquiera de estas etiquetas.",
+        "FILTER_LABELS": "Filtrar por etiquetas (opcional)",
+        "FILTER_LABELS_DESCRIPTION": "Lista de nombres de etiquetas separados por comas. Solo se sincronizarán los issues que tengan todas estas etiquetas. Déjalo vacío para sincronizar todos los issues que coincidan con el alcance."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar las incidencias de Codeberg abiertas para un repositorio específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la incidencia así como más información sobre ella.</p> <p>Además, puedes añadir e importar automáticamente todas las incidencias abiertas.</p><p>Para superar los límites de uso y acceder puedes proporcionar un token de acceso."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsable",
+        "DESCRIPTION": "Descripción",
+        "LABELS": "Etiquetas",
+        "MARK_AS_CHECKED": "Marcar actualizaciones como verificadas",
+        "PROJECT": "Proyecto",
+        "STATUS": "Estado",
+        "SUMMARY": "Resumen",
+        "WRITE_A_COMMENT": "Escribir un comentario"
+      }
     }
   },
   "FILE_IMEX": {

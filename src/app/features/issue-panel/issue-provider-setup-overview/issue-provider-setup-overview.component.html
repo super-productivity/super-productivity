@@ -116,6 +116,22 @@
   <button
     class="provider-tile focus-ring"
     type="button"
+    (click)="openSetupDialog('FORGEJO')"
+  >
+    <mat-icon svgIcon="forgejo"></mat-icon>
+    <span>Forgejo</span>
+  </button>
+  <button
+    class="provider-tile focus-ring"
+    type="button"
+    (click)="openSetupDialog('CODEBERG')"
+  >
+    <mat-icon svgIcon="codeberg"></mat-icon>
+    <span>Codeberg</span>
+  </button>
+  <button
+    class="provider-tile focus-ring"
+    type="button"
     (click)="openSetupDialog('LINEAR')"
   >
     <mat-icon svgIcon="linear"></mat-icon>

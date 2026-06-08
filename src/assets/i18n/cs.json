@@ -1874,6 +1874,56 @@
         "ERR_CREDENTIALS_MISSING": "Nejprve zadejte URL Nextcloud, uživatelské jméno a heslo.",
         "ERR_LOAD_BOARDS": "Načtení nástěnek Deck selhalo. Zkontrolujte přihlašovací údaje."
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Hostitel (např.: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Uživatelské jméno nebo název organizace/projektu",
+        "REPO_FULL_NAME_DESCRIPTION": "Lze nalézt jako část adresy URL při prohlížení projektu v prohlížeči.",
+        "SCOPE": "Rozsah",
+        "SCOPE_ALL": "Všechny",
+        "SCOPE_ASSIGNED": "Přiřazeno mně",
+        "SCOPE_CREATED": "Vytvořeno mnou",
+        "TOKEN": "Přístupový token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Forgejo pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a importovat všechny otevřené problémy.</p><p>Pro překročení omezení a přístup můžete poskytnout přístupový token."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Přiřazený",
+        "DESCRIPTION": "Popis",
+        "LABELS": "Štítky",
+        "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
+        "PROJECT": "Projekt",
+        "STATUS": "Stav",
+        "SUMMARY": "Shrnutí",
+        "WRITE_A_COMMENT": "Napsat komentář"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Hostitel (např.: https://codeberg.org)",
+        "REPO_FULL_NAME": "Uživatelské jméno nebo název organizace/projektu",
+        "REPO_FULL_NAME_DESCRIPTION": "Lze nalézt jako část adresy URL při prohlížení projektu v prohlížeči.",
+        "SCOPE": "Rozsah",
+        "SCOPE_ALL": "Všechny",
+        "SCOPE_ASSIGNED": "Přiřazeno mně",
+        "SCOPE_CREATED": "Vytvořeno mnou",
+        "TOKEN": "Přístupový token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Codeberg pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a importovat všechny otevřené problémy.</p><p>Pro překročení omezení a přístup můžete poskytnout přístupový token."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Přiřazený",
+        "DESCRIPTION": "Popis",
+        "LABELS": "Štítky",
+        "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
+        "PROJECT": "Projekt",
+        "STATUS": "Stav",
+        "SUMMARY": "Shrnutí",
+        "WRITE_A_COMMENT": "Napsat komentář"
+      }
     }
   },
   "FILE_IMEX": {

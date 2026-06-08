@@ -1874,6 +1874,56 @@
       "PASTE_SUCCESS": "Bilde limt inn",
       "SIZE_EXCEEDED": "Bildestørrelsen ({{actualSize}}) overskrider maks tillatt størrelse ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Lagringskvoten er overskredet. Frigjør plass eller reduser bildestørrelsene."
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Vert (f.eks.: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Brukernavn eller organisasjonsnavn/prosjekt",
+        "REPO_FULL_NAME_DESCRIPTION": "Kan finnes som en del av URL-en når du viser prosjektet i nettleseren.",
+        "SCOPE": "Omfang",
+        "SCOPE_ALL": "Alle",
+        "SCOPE_ASSIGNED": "Tildelt til meg",
+        "SCOPE_CREATED": "Laget av meg",
+        "TOKEN": "Access Token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Forgejo-problemer for et spesifikt repository i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.<\\/p> <p>I tillegg kan du automatisk legge til og importere alle åpne problemer.<\\/p><p>For å komme forbi bruksgrensene og få tilgang kan du gi et tilgangstoken."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Mottaker",
+        "DESCRIPTION": "Beskrivelse",
+        "LABELS": "Etiketter",
+        "MARK_AS_CHECKED": "Merk oppdateringer som sjekket",
+        "PROJECT": "Prosjekt",
+        "STATUS": "Status",
+        "SUMMARY": "Sammendrag",
+        "WRITE_A_COMMENT": "Skriv en kommentar"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Vert (f.eks.: https://codeberg.org)",
+        "REPO_FULL_NAME": "Brukernavn eller organisasjonsnavn/prosjekt",
+        "REPO_FULL_NAME_DESCRIPTION": "Kan finnes som en del av URL-en når du viser prosjektet i nettleseren.",
+        "SCOPE": "Omfang",
+        "SCOPE_ALL": "Alle",
+        "SCOPE_ASSIGNED": "Tildelt til meg",
+        "SCOPE_CREATED": "Laget av meg",
+        "TOKEN": "Access Token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Codeberg-problemer for et spesifikt repository i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.<\\/p> <p>I tillegg kan du automatisk legge til og importere alle åpne problemer.<\\/p><p>For å komme forbi bruksgrensene og få tilgang kan du gi et tilgangstoken."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Mottaker",
+        "DESCRIPTION": "Beskrivelse",
+        "LABELS": "Etiketter",
+        "MARK_AS_CHECKED": "Merk oppdateringer som sjekket",
+        "PROJECT": "Prosjekt",
+        "STATUS": "Status",
+        "SUMMARY": "Sammendrag",
+        "WRITE_A_COMMENT": "Skriv en kommentar"
+      }
     }
   },
   "FILE_IMEX": {

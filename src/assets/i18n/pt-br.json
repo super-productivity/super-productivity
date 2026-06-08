@@ -1981,6 +1981,64 @@
         "NO_DATA": "Ainda não há tarefas esta semana.",
         "TITLE": "Título"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Servidor (ex: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Nome do Usuário ou Organização/repositório",
+        "REPO_FULL_NAME_DESCRIPTION": "Pode ser encontrado como parte da URL ao visualizar o repositório em um navegador.",
+        "SCOPE": "Escopo",
+        "SCOPE_ALL": "Todos",
+        "SCOPE_ASSIGNED": "Atribuído a mim",
+        "SCOPE_CREATED": "Criado por mim",
+        "TOKEN": "Token de Acesso",
+        "EXCLUDE_LABELS": "Excluir rótulos (opcional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Lista de nomes de rótulos separados por vírgula. Issues com qualquer um desses rótulos serão excluídas.",
+        "FILTER_LABELS": "Filtrar por rótulos (opcional)",
+        "FILTER_LABELS_DESCRIPTION": "Lista de nomes de rótulos separados por vírgula. Somente issues com todos esses rótulos serão sincronizadas. Deixe em branco para sincronizar todas as issues que correspondem ao escopo."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do Forgejo de um repositório específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode adicionar e importar automaticamente todas as issues abertas.</p><p>Para contornar limites de uso e para ter acesso, você pode fornecer um token de acesso."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsável",
+        "DESCRIPTION": "Descrição",
+        "LABELS": "Etiquetas",
+        "MARK_AS_CHECKED": "Marcar atualizações como verificadas",
+        "PROJECT": "Projeto",
+        "STATUS": "Status",
+        "SUMMARY": "Resumo",
+        "WRITE_A_COMMENT": "Escrever um comentário"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Servidor (ex: https://codeberg.org)",
+        "REPO_FULL_NAME": "Nome do Usuário ou Organização/repositório",
+        "REPO_FULL_NAME_DESCRIPTION": "Pode ser encontrado como parte da URL ao visualizar o repositório em um navegador.",
+        "SCOPE": "Escopo",
+        "SCOPE_ALL": "Todos",
+        "SCOPE_ASSIGNED": "Atribuído a mim",
+        "SCOPE_CREATED": "Criado por mim",
+        "TOKEN": "Token de Acesso",
+        "EXCLUDE_LABELS": "Excluir rótulos (opcional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Lista de nomes de rótulos separados por vírgula. Issues com qualquer um desses rótulos serão excluídas.",
+        "FILTER_LABELS": "Filtrar por rótulos (opcional)",
+        "FILTER_LABELS_DESCRIPTION": "Lista de nomes de rótulos separados por vírgula. Somente issues com todos esses rótulos serão sincronizadas. Deixe em branco para sincronizar todas as issues que correspondem ao escopo."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do Codeberg de um repositório específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode adicionar e importar automaticamente todas as issues abertas.</p><p>Para contornar limites de uso e para ter acesso, você pode fornecer um token de acesso."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Responsável",
+        "DESCRIPTION": "Descrição",
+        "LABELS": "Etiquetas",
+        "MARK_AS_CHECKED": "Marcar atualizações como verificadas",
+        "PROJECT": "Projeto",
+        "STATUS": "Status",
+        "SUMMARY": "Resumo",
+        "WRITE_A_COMMENT": "Escrever um comentário"
+      }
     }
   },
   "FILE_IMEX": {
