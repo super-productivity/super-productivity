@@ -205,21 +205,24 @@ export class DialogFlowtimeSettingsComponent {
     };
     this._initialFlowtimeConfig = flowtime;
 
-    const breakRulesInMinutes = (flowtime.breakRules ?? []).map(
-      (rule: FlowtimeBreakRule) => ({
-        minDuration: Math.round(rule.minDuration / 60000),
-        maxDuration:
-          rule.maxDuration === null ? null : Math.round(rule.maxDuration / 60000),
-        breakDuration: Math.round(rule.breakDuration / 60000),
-      }),
-    );
-
     this.model.set({
       ...flowtime,
-      breakRules:
-        breakRulesInMinutes.length > 0
-          ? breakRulesInMinutes
-          : [{ ...this._defaultRuleInMinutes }],
+      breakRules: this._toBreakRulesInMinutes(flowtime),
+    });
+  }
+
+  updateModel(nextModel: FlowtimeFormModel): void {
+    const previousModel = this.model();
+    const breakMode = this._getNextBreakMode(previousModel, nextModel);
+
+    this.model.set({
+      ...nextModel,
+      breakMode,
+      breakPercentage: this._getNextBreakPercentage(previousModel, nextModel, breakMode),
+      breakRules: this._getNextBreakRules(previousModel, {
+        ...nextModel,
+        breakMode,
+      }),
     });
   }
 
@@ -247,6 +250,81 @@ export class DialogFlowtimeSettingsComponent {
 
   close(): void {
     this._dialogRef.close();
+  }
+
+  private _getNextBreakMode(
+    previousModel: FlowtimeFormModel,
+    nextModel: FlowtimeFormModel,
+  ): FlowtimeFormModel['breakMode'] {
+    const isBreakModeHidden = !nextModel.isBreakEnabled;
+
+    return nextModel.breakMode == null && isBreakModeHidden
+      ? (previousModel.breakMode ?? this._initialFlowtimeConfig.breakMode)
+      : nextModel.breakMode;
+  }
+
+  private _getNextBreakPercentage(
+    previousModel: FlowtimeFormModel,
+    nextModel: FlowtimeFormModel,
+    breakMode: FlowtimeFormModel['breakMode'],
+  ): FlowtimeFormModel['breakPercentage'] {
+    const isBreakPercentageHidden = !nextModel.isBreakEnabled || breakMode !== 'ratio';
+
+    return nextModel.breakPercentage == null && isBreakPercentageHidden
+      ? (previousModel.breakPercentage ?? this._initialFlowtimeConfig.breakPercentage)
+      : nextModel.breakPercentage;
+  }
+
+  private _getNextBreakRules(
+    previousModel: FlowtimeFormModel,
+    nextModel: FlowtimeFormModel,
+  ): FlowtimeBreakRuleInMinutes[] {
+    const previousRules =
+      previousModel.breakRules ??
+      this._toBreakRulesInMinutes(this._initialFlowtimeConfig);
+    const nextRules = nextModel.breakRules;
+
+    if (!this._isEmptyBreakRules(nextRules)) {
+      return nextRules!;
+    }
+
+    const didRuleFieldsVisibilityChange =
+      previousModel.isBreakEnabled !== nextModel.isBreakEnabled ||
+      previousModel.breakMode !== nextModel.breakMode;
+
+    return didRuleFieldsVisibilityChange ? previousRules : (nextRules ?? []);
+  }
+
+  private _isEmptyBreakRules(
+    breakRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): boolean {
+    return (
+      !breakRules ||
+      breakRules.length === 0 ||
+      breakRules.every(
+        (rule: FlowtimeBreakRuleInMinutes) =>
+          rule.minDuration == null &&
+          rule.maxDuration == null &&
+          rule.breakDuration == null,
+      )
+    );
+  }
+
+  private _toBreakRulesInMinutes(
+    flowtime: Pick<FlowtimeConfig, 'breakRules'>,
+  ): FlowtimeBreakRuleInMinutes[] {
+    const breakRulesInMinutes = (flowtime.breakRules ?? []).map(
+      (rule: FlowtimeBreakRule) => ({
+        minDuration: Math.round(rule.minDuration / 60000),
+        maxDuration:
+          rule.maxDuration === null ? null : Math.round(rule.maxDuration / 60000),
+        breakDuration: Math.round(rule.breakDuration / 60000),
+      }),
+    );
+
+    return breakRulesInMinutes.length > 0
+      ? breakRulesInMinutes
+      : [{ ...this._defaultRuleInMinutes }];
   }
 
   private _toBreakRulesInMs(

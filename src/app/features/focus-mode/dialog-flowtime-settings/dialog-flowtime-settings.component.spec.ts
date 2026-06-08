@@ -75,6 +75,32 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(fields.find((field) => field.key === 'breakRules')?.resetOnHide).toBe(false);
   });
 
+  it('should keep rule fields while switching Rule-based -> Ratio-based -> Rule-based', () => {
+    const initialRules = component.model().breakRules;
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: null as unknown as number,
+          maxDuration: null,
+          breakDuration: null as unknown as number,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
   describe('save()', () => {
     it('should convert minutes back to ms and save the config', () => {
       component.save();
