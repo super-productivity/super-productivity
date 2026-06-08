@@ -917,8 +917,9 @@ export class OperationLogSyncService {
     // snapshot — is reversible via the Undo affordance shown on success below.
     // Fail-safe: if the backup can't be written, abort rather than wipe without a
     // recovery point (mirrors BackupService._persistImportToOperationLog).
+    let backupSavedAt: number;
     try {
-      await this.backupService.captureImportBackup();
+      backupSavedAt = await this.backupService.captureImportBackup();
     } catch (e) {
       OpLog.warn(
         'OperationLogSyncService: Pre-replace safety backup failed; aborting force download.',
@@ -1009,7 +1010,7 @@ export class OperationLogSyncService {
       OpLog.normal(
         'OperationLogSyncService: Force download snapshot hydration complete.',
       );
-      this._showRestorePreviousDataSnack();
+      this._showRestorePreviousDataSnack(backupSavedAt);
       return;
     }
 
@@ -1056,7 +1057,7 @@ export class OperationLogSyncService {
     OpLog.normal(
       `OperationLogSyncService: Force download complete. Processed ${result.newOps.length} ops.`,
     );
-    this._showRestorePreviousDataSnack();
+    this._showRestorePreviousDataSnack(backupSavedAt);
   }
 
   /**
@@ -1068,14 +1069,14 @@ export class OperationLogSyncService {
    * control) and no auto-dismiss timer (duration: 0) so the undo isn't lost to a
    * timeout. (#8107)
    */
-  private _showRestorePreviousDataSnack(): void {
+  private _showRestorePreviousDataSnack(backupSavedAt: number): void {
     this.snackService.open({
       type: 'WARNING',
       msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_UNDO,
       actionStr: T.G.UNDO,
       actionFn: async (): Promise<void> => {
         try {
-          const didRestore = await this.backupService.restoreImportBackup();
+          const didRestore = await this.backupService.restoreImportBackup(backupSavedAt);
           this.snackService.open({
             type: didRestore ? 'SUCCESS' : 'ERROR',
             msg: didRestore ? T.F.SYNC.S.RESTORE_SUCCESS : T.F.SYNC.S.RESTORE_ERROR,

@@ -104,6 +104,7 @@ describe('BackupService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'saveImportBackup',
       'loadImportBackup',
+      'clearImportBackup',
       'runDestructiveStateReplacement',
     ]);
     mockOperationWriteFlushService = jasmine.createSpyObj('OperationWriteFlushService', [
@@ -115,8 +116,9 @@ describe('BackupService', () => {
     mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
       createMinimalValidBackup() as any,
     );
-    mockOpLogStore.saveImportBackup.and.resolveTo();
+    mockOpLogStore.saveImportBackup.and.resolveTo(123);
     mockOpLogStore.loadImportBackup.and.resolveTo(null);
+    mockOpLogStore.clearImportBackup.and.resolveTo();
     mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
     mockOperationWriteFlushService.flushPendingWrites.and.resolveTo();
     mockLockService.request.and.callFake(async (_lockName, fn) => fn());
@@ -150,6 +152,14 @@ describe('BackupService', () => {
       expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot);
     });
 
+    it('should return the savedAt provenance token from the store', async () => {
+      mockOpLogStore.saveImportBackup.and.resolveTo(456);
+
+      const token = await service.captureImportBackup();
+
+      expect(token).toBe(456);
+    });
+
     it('should propagate errors so the caller can abort the destructive op', async () => {
       mockOpLogStore.saveImportBackup.and.rejectWith(new Error('IDB quota exceeded'));
 
@@ -177,6 +187,42 @@ describe('BackupService', () => {
 
       expect(result).toBe(false);
       expect(importSpy).not.toHaveBeenCalled();
+    });
+
+    it('should clear the single-slot backup after a successful restore', async () => {
+      const saved = createMinimalValidBackup();
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, savedAt: 123 });
+      spyOn(service, 'importCompleteBackup').and.resolveTo();
+
+      await service.restoreImportBackup();
+
+      expect(mockOpLogStore.clearImportBackup).toHaveBeenCalled();
+    });
+
+    it('should restore when the provenance token matches the stored backup', async () => {
+      const saved = createMinimalValidBackup();
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, savedAt: 777 });
+      const importSpy = spyOn(service, 'importCompleteBackup').and.resolveTo();
+
+      const result = await service.restoreImportBackup(777);
+
+      expect(result).toBe(true);
+      expect(importSpy).toHaveBeenCalledWith(saved as any, true, true, true);
+    });
+
+    it('should refuse to restore (and not clear) when the backup was superseded since capture', async () => {
+      // The single slot is shared with the backup-import flow; an intervening
+      // write changes savedAt. Restoring it would silently roll back to the
+      // wrong snapshot, so we must refuse. (#8107)
+      const saved = createMinimalValidBackup();
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, savedAt: 999 });
+      const importSpy = spyOn(service, 'importCompleteBackup').and.resolveTo();
+
+      const result = await service.restoreImportBackup(777);
+
+      expect(result).toBe(false);
+      expect(importSpy).not.toHaveBeenCalled();
+      expect(mockOpLogStore.clearImportBackup).not.toHaveBeenCalled();
     });
   });
 

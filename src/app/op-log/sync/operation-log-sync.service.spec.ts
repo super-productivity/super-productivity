@@ -95,7 +95,7 @@ describe('OperationLogSyncService', () => {
       'captureImportBackup',
       'restoreImportBackup',
     ]);
-    backupServiceSpy.captureImportBackup.and.resolveTo();
+    backupServiceSpy.captureImportBackup.and.resolveTo(1);
     backupServiceSpy.restoreImportBackup.and.resolveTo(true);
 
     remoteOpsProcessingServiceSpy = jasmine.createSpyObj('RemoteOpsProcessingService', [
@@ -1871,6 +1871,7 @@ describe('OperationLogSyncService', () => {
       const callOrder: string[] = [];
       backupServiceSpy.captureImportBackup.and.callFake(async () => {
         callOrder.push('captureImportBackup');
+        return 1;
       });
       opLogStoreSpy.clearUnsyncedOps.and.callFake(async () => {
         callOrder.push('clearUnsyncedOps');

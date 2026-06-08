@@ -180,26 +180,39 @@ export class BackupService {
    *
    * Mirrors the pre-import backup taken in `_persistImportToOperationLog`. Errors
    * propagate so the caller can abort the destructive operation rather than wipe
-   * local data without a recovery point. (#8107)
+   * local data without a recovery point. Returns the backup's `savedAt` token so
+   * the caller can later verify the (single-slot) backup hasn't been replaced by
+   * an unrelated write before restoring it. (#8107)
    */
-  async captureImportBackup(): Promise<void> {
+  async captureImportBackup(): Promise<number> {
     const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
-    await this._opLogStore.saveImportBackup(currentState);
+    return this._opLogStore.saveImportBackup(currentState);
   }
 
   /**
-   * Restores the most recent import backup — the snapshot saved by
-   * `captureImportBackup()` (or before a backup import) — if one exists. Returns
-   * false when there is nothing to restore. Used by the post-replace "Undo"
-   * affordance.
+   * Restores the import backup snapshot saved by `captureImportBackup()` (or
+   * before a backup import) — if one exists. Returns false when there is nothing
+   * to restore. Used by the post-replace "Undo" affordance.
    *
    * The backup state is read BEFORE `importCompleteBackup` runs (which itself
    * re-snapshots the current state into the same slot), so the good state is
-   * already in hand and round-trips correctly. (#8107)
+   * already in hand and round-trips correctly.
+   *
+   * @param expectedSavedAt - When provided, only restore if the stored backup
+   *   still carries this `savedAt` token. The slot is shared with the backup-
+   *   import flow, so an intervening import (or a second "Use Server Data")
+   *   would overwrite it; restoring that wrong snapshot is silent data loss, so
+   *   we refuse instead. (#8107)
    */
-  async restoreImportBackup(): Promise<boolean> {
+  async restoreImportBackup(expectedSavedAt?: number): Promise<boolean> {
     const backup = await this._opLogStore.loadImportBackup();
     if (!backup) {
+      return false;
+    }
+    if (expectedSavedAt !== undefined && backup.savedAt !== expectedSavedAt) {
+      OpLog.warn(
+        'BackupService: Import backup was superseded since capture; skipping restore to avoid restoring the wrong snapshot.',
+      );
       return false;
     }
     await this.importCompleteBackup(
@@ -208,6 +221,9 @@ export class BackupService {
       true, // isSkipReload - loadAllData updates state live
       true, // isForceConflict
     );
+    // Restored data is now live; drop the (now stale) single-slot backup so a
+    // full copy of the replaced state doesn't linger in IndexedDB. (#8107)
+    await this._opLogStore.clearImportBackup();
     return true;
   }
 
