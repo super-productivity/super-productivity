@@ -14,3 +14,7 @@
     box-shadow: none;
   }
 }
+
+:host.hasVisibleTimeProgress progress-bar.sub-task-progress::after {
+  top: 0;
+}
