@@ -20,10 +20,16 @@ import { PluginSecurityService } from './plugin-security';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginInstance, PluginManifest } from './plugin-api.model';
 import { PluginService } from './plugin.service';
+import { PluginState } from './plugin-state.model';
+import { PluginBridgeService } from './plugin-bridge.service';
+import { T } from '../t.const';
 
 describe('PluginService', () => {
   let service: PluginService;
   let pluginMetaPersistenceService: jasmine.SpyObj<PluginMetaPersistenceService>;
+  let pluginLoader: jasmine.SpyObj<PluginLoaderService>;
+  let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
+  let pluginRunner: jasmine.SpyObj<PluginRunner>;
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -49,14 +55,34 @@ describe('PluginService', () => {
         'hasPluginMetadata',
         'isPluginEnabled',
         'setPluginEnabled',
-        'getNodeExecutionConsent',
-        'setNodeExecutionConsent',
         'removePluginMetadata',
       ],
     );
     pluginMetaPersistenceService.getAllPluginMetadata.and.resolveTo([]);
     pluginMetaPersistenceService.hasPluginMetadata.and.resolveTo(false);
     pluginMetaPersistenceService.isPluginEnabled.and.resolveTo(false);
+    pluginLoader = jasmine.createSpyObj<PluginLoaderService>('PluginLoaderService', [
+      'loadPluginAssets',
+      'loadUploadedPluginAssets',
+      'clearAllCaches',
+    ]);
+    pluginBridge = jasmine.createSpyObj<PluginBridgeService>('PluginBridgeService', [
+      'hasNodeExecutionGrantToken',
+      'requestNodeExecutionGrant',
+      'setNodeExecutionGrantToken',
+      'revokeNodeExecutionGrantToken',
+      'revokeNodeExecutionGrant',
+    ]);
+    pluginBridge.hasNodeExecutionGrantToken.and.returnValue(false);
+    pluginBridge.requestNodeExecutionGrant.and.resolveTo(null);
+    pluginRunner = jasmine.createSpyObj<PluginRunner>('PluginRunner', [
+      'loadPlugin',
+      'unloadPlugin',
+      'getLoadedPlugin',
+      'triggerReady',
+      'pingNodeBridge',
+      'sendMessageToPlugin',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -66,14 +92,7 @@ describe('PluginService', () => {
         provideMockStore(),
         {
           provide: PluginRunner,
-          useValue: jasmine.createSpyObj<PluginRunner>('PluginRunner', [
-            'loadPlugin',
-            'unloadPlugin',
-            'getLoadedPlugin',
-            'triggerReady',
-            'pingNodeBridge',
-            'sendMessageToPlugin',
-          ]),
+          useValue: pluginRunner,
         },
         {
           provide: PluginHooksService,
@@ -95,7 +114,10 @@ describe('PluginService', () => {
         },
         {
           provide: GlobalThemeService,
-          useValue: { darkMode$: new BehaviorSubject('light') },
+          useValue: {
+            darkMode$: new BehaviorSubject('light'),
+            darkMode: () => 'light',
+          },
         },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistenceService },
         {
@@ -116,11 +138,11 @@ describe('PluginService', () => {
         },
         {
           provide: PluginLoaderService,
-          useValue: jasmine.createSpyObj<PluginLoaderService>('PluginLoaderService', [
-            'loadPluginAssets',
-            'loadUploadedPluginAssets',
-            'clearAllCaches',
-          ]),
+          useValue: pluginLoader,
+        },
+        {
+          provide: PluginBridgeService,
+          useValue: pluginBridge,
         },
         {
           provide: PluginCleanupService,
@@ -148,7 +170,7 @@ describe('PluginService', () => {
           provide: PluginIssueProviderRegistryService,
           useValue: jasmine.createSpyObj<PluginIssueProviderRegistryService>(
             'PluginIssueProviderRegistryService',
-            ['register', 'unregister'],
+            ['register', 'unregister', 'getRegisteredKey'],
           ),
         },
         {
@@ -205,5 +227,213 @@ describe('PluginService', () => {
         isEnabled: false,
       }),
     ]);
+  });
+
+  it('does not persist nodeExecution plugins as enabled when permission is denied', async () => {
+    const runtime = service as unknown as { _isElectronRuntime: () => boolean };
+    spyOn(runtime, '_isElectronRuntime').and.returnValue(true);
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      permissions: ['nodeExecution'],
+    };
+    const state: PluginState = {
+      manifest,
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/node-plugin',
+      type: 'built-in',
+      isEnabled: false,
+    };
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(manifest.id, state);
+
+    const result = await service.enableAndActivatePlugin(manifest.id);
+
+    expect(result).toBeNull();
+    expect(pluginBridge.requestNodeExecutionGrant).toHaveBeenCalledOnceWith(manifest.id);
+    expect(pluginMetaPersistenceService.setPluginEnabled).not.toHaveBeenCalled();
+    expect(pluginLoader.loadPluginAssets).not.toHaveBeenCalled();
+    expect(service.getAllPluginStates().get(manifest.id)).toEqual(
+      jasmine.objectContaining({
+        status: 'not-loaded',
+        isEnabled: false,
+      }),
+    );
+  });
+
+  it('stores main-issued nodeExecution grants for Electron plugins', async () => {
+    pluginBridge.requestNodeExecutionGrant.and.resolveTo({ token: 'token-1' });
+    const runtime = service as unknown as { _isElectronRuntime: () => boolean };
+    spyOn(runtime, '_isElectronRuntime').and.returnValue(true);
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      permissions: ['nodeExecution'],
+    };
+
+    await expectAsync(service.checkNodeExecutionPermission(manifest)).toBeResolvedTo(
+      true,
+    );
+
+    expect(pluginBridge.requestNodeExecutionGrant).toHaveBeenCalledOnceWith(manifest.id);
+    expect(pluginBridge.setNodeExecutionGrantToken).toHaveBeenCalledOnceWith(
+      manifest.id,
+      'token-1',
+    );
+  });
+
+  it('treats runner loaded:false activation results as failures', async () => {
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'broken-plugin',
+      name: 'Broken Plugin',
+    };
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(manifest.id, {
+      manifest,
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/broken-plugin',
+      type: 'built-in',
+      isEnabled: true,
+    });
+    pluginLoader.loadPluginAssets.and.resolveTo({
+      manifest,
+      code: 'throw new Error("broken")',
+    });
+    pluginRunner.loadPlugin.and.resolveTo({
+      manifest,
+      loaded: false,
+      isEnabled: true,
+      error: 'broken',
+    });
+    pluginBridge.revokeNodeExecutionGrantToken.and.returnValue('grant-token');
+
+    const result = await service.activatePlugin(manifest.id);
+
+    expect(result).toBeNull();
+    expect(pluginRunner.unloadPlugin).toHaveBeenCalledOnceWith(manifest.id);
+    expect(pluginRunner.triggerReady).not.toHaveBeenCalled();
+    expect(pluginBridge.revokeNodeExecutionGrantToken).toHaveBeenCalledWith(manifest.id);
+    expect(service.getLoadedPlugins()).toEqual([]);
+    expect(service.getAllPluginStates().get(manifest.id)).toEqual(
+      jasmine.objectContaining({
+        status: 'error',
+        instance: undefined,
+        error: 'broken',
+      }),
+    );
+  });
+
+  it('does not serve iframe HTML for plugins that are not loaded and enabled', () => {
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'blocked-iframe',
+      name: 'Blocked Iframe',
+      iFrame: true,
+    };
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+        _pluginIndexHtml: Map<string, string>;
+      }
+    )._setPluginState(manifest.id, {
+      manifest,
+      status: 'error',
+      path: 'uploaded://blocked-iframe',
+      type: 'uploaded',
+      isEnabled: false,
+      error: T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED,
+    });
+    (
+      service as unknown as {
+        _pluginIndexHtml: Map<string, string>;
+      }
+    )._pluginIndexHtml.set(manifest.id, '<html>blocked</html>');
+
+    expect(service.getPluginIndexHtml(manifest.id)).toBeNull();
+  });
+
+  it('bumps iframe generation when unloading a plugin runtime', () => {
+    const instance: PluginInstance = {
+      manifest: mockManifest,
+      loaded: true,
+      isEnabled: true,
+    };
+    (
+      service as unknown as {
+        _loadedPlugins: PluginInstance[];
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._loadedPlugins = [instance];
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(mockManifest.id, {
+      manifest: mockManifest,
+      status: 'loaded',
+      path: 'uploaded://test-plugin',
+      type: 'uploaded',
+      isEnabled: true,
+      instance,
+    });
+
+    const generationBeforeUnload = service.getPluginIframeGeneration(mockManifest.id);
+
+    service.unloadPlugin(mockManifest.id);
+
+    expect(service.getPluginIframeGeneration(mockManifest.id)).toBe(
+      generationBeforeUnload + 1,
+    );
+  });
+
+  it('clears stale instances when ready handling fails', () => {
+    const instance: PluginInstance = {
+      manifest: mockManifest,
+      loaded: true,
+      isEnabled: true,
+    };
+    (
+      service as unknown as {
+        _loadedPlugins: PluginInstance[];
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._loadedPlugins = [instance];
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(mockManifest.id, {
+      manifest: mockManifest,
+      status: 'loaded',
+      path: 'uploaded://test-plugin',
+      type: 'uploaded',
+      isEnabled: true,
+      instance,
+    });
+
+    (
+      service as unknown as {
+        _handleReadyFailure: (instance: PluginInstance, error: unknown) => void;
+      }
+    )._handleReadyFailure(instance, new Error('ready failed'));
+
+    expect(pluginRunner.unloadPlugin).toHaveBeenCalledOnceWith(mockManifest.id);
+    expect(service.getAllPluginStates().get(mockManifest.id)).toEqual(
+      jasmine.objectContaining({
+        status: 'error',
+        instance: undefined,
+        error: 'ready failed',
+      }),
+    );
+    expect(service.getLoadedPlugins()).toEqual([]);
   });
 });

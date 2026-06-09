@@ -79,7 +79,7 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
   it('uses translation keys for board modal labels (#8070)', () => {
     const fields = panelFieldGroup();
     const scheduledState = fieldByKey(fields, 'scheduledState');
-    const project = fieldByKey(fields, 'projectId');
+    const project = fieldByKey(fields, 'projectIds');
     const isParentTasksOnly = fieldByKey(fields, 'isParentTasksOnly');
 
     expect(scheduledState.props?.label).toBe('F.BOARDS.FORM.SCHEDULED_STATE');
@@ -93,7 +93,7 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
       'F.BOARDS.FORM.SCHEDULED_STATE_NOT_SCHEDULED',
     ]);
     expect(project.props?.label).toBe('F.BOARDS.FORM.PROJECT');
-    expect(project.props?.nullLabel).toBe('F.BOARDS.FORM.PROJECT_ALL');
+    expect(project.props?.defaultLabel).toBe('F.BOARDS.FORM.PROJECT_ALL');
     expect(isParentTasksOnly.props?.label).toBe('F.BOARDS.FORM.ONLY_PARENT_TASKS');
   });
 

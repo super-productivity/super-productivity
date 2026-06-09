@@ -3,7 +3,7 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { HttpClient, HttpHeaders, HttpParams, HttpRequest } from '@angular/common/http';
 import { RedmineCfg } from './redmine.model';
 import { catchError, filter, map } from 'rxjs/operators';
-import { Observable } from 'rxjs';
+import { forkJoin, Observable, of, throwError } from 'rxjs';
 import { throwHandledError } from '../../../../util/throw-handled-error';
 import { T } from '../../../../t.const';
 import { ISSUE_PROVIDER_HUMANIZED, REDMINE_TYPE } from '../../issue.const';
@@ -16,12 +16,17 @@ import {
   RedmineSearchResultItem,
   RedmineTimeEntriesResult,
 } from './redmine-issue.model';
-import { mapRedmineSearchResultItemToSearchResult } from './redmine-issue-map.util';
+import {
+  mapRedmineIssueToSearchResult,
+  mapRedmineSearchResultItemToSearchResult,
+} from './redmine-issue-map.util';
 import { SearchResultItem } from '../../issue.model';
 import { ScopeOptions } from './redmine.const';
 import { handleIssueProviderHttpError$ } from '../../handle-issue-provider-http-error';
 
 /* eslint-disable @typescript-eslint/naming-convention */
+
+const ISSUE_ID_QUERY_RGX = /^#?(\d+)$/;
 
 @Injectable({
   providedIn: 'root',
@@ -31,7 +36,7 @@ export class RedmineApiService {
   private _http = inject(HttpClient);
 
   searchIssuesInProject$(query: string, cfg: RedmineCfg): Observable<SearchResultItem[]> {
-    return this._sendRequest$(
+    const textSearch$: Observable<SearchResultItem[]> = this._sendRequest$(
       {
         url: `${cfg.host}/projects/${cfg.projectId}/search.json`,
         params: ParamsBuilder.create()
@@ -51,6 +56,53 @@ export class RedmineApiService {
           : [];
       }),
     );
+
+    // Redmine's search API only does full text search and does not match issue ids,
+    // so for numeric queries (e.g. "1234" or "#1234") we additionally try to fetch
+    // the issue by its id and merge it into the results.
+    const idMatch = query.trim().match(ISSUE_ID_QUERY_RGX);
+    if (!idMatch) {
+      return textSearch$;
+    }
+
+    const issueId = Number(idMatch[1]);
+    return forkJoin([
+      this._getIssueByIdInProject$(issueId, cfg).pipe(catchError(() => of(null))),
+      textSearch$,
+    ]).pipe(
+      map(([issueById, textResults]) =>
+        issueById
+          ? [
+              mapRedmineIssueToSearchResult(issueById),
+              ...textResults.filter((result) => result.issueData.id !== issueId),
+            ]
+          : textResults,
+      ),
+    );
+  }
+
+  // Looks up a single issue by id but stays scoped to the configured project, so a
+  // provider for one project can never surface (or add) an issue from another project
+  // the API key happens to have access to. Redmine resolves the project from the URL,
+  // so this works whether `cfg.projectId` is the numeric id or the identifier slug.
+  // `status_id=*` ensures closed issues are found too. A cross-project (or unknown) id
+  // simply yields an empty list -> null, and the caller falls back to text search.
+  private _getIssueByIdInProject$(
+    issueId: number,
+    cfg: RedmineCfg,
+  ): Observable<RedmineIssue | null> {
+    return this._sendRequest$(
+      {
+        url: `${cfg.host}/projects/${cfg.projectId}/issues.json`,
+        params: ParamsBuilder.create()
+          .withParam('issue_id', String(issueId))
+          .withState('*')
+          .withLimit(1)
+          .build(),
+      },
+      cfg,
+      { isSkipErrorHandling: true },
+    ).pipe(map((res: RedmineIssueResult) => res?.issues?.[0] ?? null));
   }
 
   getLast100IssuesForCurrentRedmineProject$(cfg: RedmineCfg): Observable<RedmineIssue[]> {
@@ -137,6 +189,7 @@ export class RedmineApiService {
   private _sendRequest$(
     params: HttpRequest<string> | any,
     cfg: RedmineCfg,
+    { isSkipErrorHandling = false }: { isSkipErrorHandling?: boolean } = {},
   ): Observable<any> {
     this._checkSettings(cfg);
     params.headers = {
@@ -169,7 +222,9 @@ export class RedmineApiService {
       filter((res) => !(res === Object(res) && res.type === 0)),
       map((res: any) => (res && res.body ? res.body : res)),
       catchError((err) =>
-        handleIssueProviderHttpError$(REDMINE_TYPE, this._snackService, err),
+        isSkipErrorHandling
+          ? throwError(() => err)
+          : handleIssueProviderHttpError$(REDMINE_TYPE, this._snackService, err),
       ),
     );
   }

@@ -13,12 +13,14 @@ import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-in
 import * as path from 'path';
 import { join, normalize } from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { readFileSync, stat, writeFileSync } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC, IS_GNOME_DESKTOP } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
+  getIsTaskWidgetUserForcedVisible,
   hideTaskWidget,
   showTaskWidget,
 } from './task-widget/task-widget';
@@ -413,6 +415,14 @@ export const setWasMaximizedBeforeHide = (value: boolean): void => {
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function initWinEventListeners(app: Electron.App): void {
   const openUrlInBrowser = (url: string): void => {
+    // Defense in depth: never hand an unsafe scheme to the OS handler, even if
+    // a renderer-side guard is bypassed (e.g. a link click that falls through
+    // to navigation rather than the explicit openExternalUrl IPC). The blocked
+    // schemes are OS protocol handlers / UNC paths. See GHSA-hr87-735w-hfq3.
+    if (!isExternalUrlSchemeAllowed(url)) {
+      error('Refused to open URL with disallowed scheme via openExternal');
+      return;
+    }
     // needed for mac; especially for jira urls we might have a host like this www.host.de//
     const urlObj = new URL(url);
     urlObj.pathname = urlObj.pathname.replace('//', '/');
@@ -452,21 +462,27 @@ function initWinEventListeners(app: Electron.App): void {
   appCloseHandler(app);
   appMinimizeHandler(app);
 
-  // Handle restore and show events to hide task widget
+  // Handle restore and show events to hide task widget. `getIsTaskWidgetUserForcedVisible()`
+  // keeps the widget up when the user explicitly revealed it via the global shortcut.
   mainWin.on('restore', () => {
-    if (!getIsTaskWidgetAlwaysShow()) {
+    if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
       hideTaskWidget();
     }
   });
 
   mainWin.on('show', () => {
-    if (!getIsTaskWidgetAlwaysShow()) {
+    if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
       hideTaskWidget();
     }
   });
 
   mainWin.on('focus', () => {
-    if (mainWin.isVisible() && !mainWin.isMinimized() && !getIsTaskWidgetAlwaysShow()) {
+    if (
+      mainWin.isVisible() &&
+      !mainWin.isMinimized() &&
+      !getIsTaskWidgetAlwaysShow() &&
+      !getIsTaskWidgetUserForcedVisible()
+    ) {
       hideTaskWidget();
     }
   });

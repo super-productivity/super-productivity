@@ -16,6 +16,7 @@ import { PluginI18nService } from './plugin-i18n.service';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { PluginLoaderService } from './plugin-loader.service';
 import { PluginManifest } from './plugin-api.model';
+import { PluginBridgeService } from './plugin-bridge.service';
 import { PluginMetaPersistenceService } from './plugin-meta-persistence.service';
 import { PluginRunner } from './plugin-runner';
 import { PluginSecurityService } from './plugin-security';
@@ -26,6 +27,11 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
   let service: PluginService;
   let pluginRunner: jasmine.SpyObj<PluginRunner>;
   let pluginCache: jasmine.SpyObj<PluginCacheService>;
+  let pluginMetaPersistence: jasmine.SpyObj<PluginMetaPersistenceService>;
+  let pluginHooks: jasmine.SpyObj<PluginHooksService>;
+  let pluginI18n: jasmine.SpyObj<PluginI18nService>;
+  let pluginIssueProviderRegistry: jasmine.SpyObj<PluginIssueProviderRegistryService>;
+  let issueSyncAdapterRegistry: jasmine.SpyObj<IssueSyncAdapterRegistryService>;
 
   const iframeManifest: PluginManifest = {
     id: 'iframe-only',
@@ -79,7 +85,7 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
     ]);
     pluginCache.storePlugin.and.resolveTo();
 
-    const pluginMetaPersistence = jasmine.createSpyObj<PluginMetaPersistenceService>(
+    pluginMetaPersistence = jasmine.createSpyObj<PluginMetaPersistenceService>(
       'PluginMetaPersistenceService',
       ['isPluginEnabled', 'setPluginEnabled'],
     );
@@ -91,13 +97,29 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
     translateService.instant.and.callFake((key: string | string[]) =>
       Array.isArray(key) ? key.join(',') : key,
     );
+    pluginHooks = jasmine.createSpyObj<PluginHooksService>('PluginHooksService', [
+      'unregisterPluginHooks',
+    ]);
+    pluginI18n = jasmine.createSpyObj<PluginI18nService>('PluginI18nService', [
+      'loadPluginTranslationsFromContent',
+      'unloadPluginTranslations',
+    ]);
+    pluginIssueProviderRegistry =
+      jasmine.createSpyObj<PluginIssueProviderRegistryService>(
+        'PluginIssueProviderRegistryService',
+        ['getRegisteredKey', 'unregister'],
+      );
+    issueSyncAdapterRegistry = jasmine.createSpyObj<IssueSyncAdapterRegistryService>(
+      'IssueSyncAdapterRegistryService',
+      ['unregister'],
+    );
 
     TestBed.configureTestingModule({
       providers: [
         PluginService,
         { provide: HttpClient, useValue: { get: () => of(null) } },
         { provide: PluginRunner, useValue: pluginRunner },
-        { provide: PluginHooksService, useValue: {} },
+        { provide: PluginHooksService, useValue: pluginHooks },
         { provide: PluginSecurityService, useValue: pluginSecurity },
         { provide: GlobalThemeService, useValue: { darkMode: () => 'light' } },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistence },
@@ -106,11 +128,24 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
         { provide: MatDialog, useValue: {} },
         { provide: PluginCleanupService, useValue: {} },
         { provide: PluginLoaderService, useValue: {} },
+        {
+          provide: PluginBridgeService,
+          useValue: jasmine.createSpyObj<PluginBridgeService>('PluginBridgeService', [
+            'hasNodeExecutionGrantToken',
+            'requestNodeExecutionGrant',
+            'setNodeExecutionGrantToken',
+            'revokeNodeExecutionGrantToken',
+            'revokeNodeExecutionGrant',
+          ]),
+        },
         { provide: TranslateService, useValue: translateService },
-        { provide: PluginI18nService, useValue: {} },
+        { provide: PluginI18nService, useValue: pluginI18n },
         { provide: Store, useValue: {} },
-        { provide: PluginIssueProviderRegistryService, useValue: {} },
-        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        {
+          provide: PluginIssueProviderRegistryService,
+          useValue: pluginIssueProviderRegistry,
+        },
+        { provide: IssueSyncAdapterRegistryService, useValue: issueSyncAdapterRegistry },
         { provide: SnackService, useValue: {} },
       ],
     });
@@ -165,5 +200,41 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
     await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
       T.PLUGINS.INDEX_HTML_NOT_LOADED,
     );
+  });
+
+  it('rejects uploaded plugin ids reserved by bundled plugins', async () => {
+    const reservedManifest: PluginManifest = {
+      ...iframeManifest,
+      id: 'sync-md',
+      name: 'Bundled Collision',
+    };
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(reservedManifest);
+    files['index.html'] = '<!doctype html><html><body>Plugin UI</body></html>';
+    const file = createZipFile(files);
+
+    await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
+      T.PLUGINS.PLUGIN_ID_RESERVED,
+    );
+    expect(pluginCache.storePlugin).not.toHaveBeenCalled();
+  });
+
+  it('rejects uploaded plugins that declare nodeExecution before storing or loading code', async () => {
+    const nodeExecutionManifest: PluginManifest = {
+      ...iframeManifest,
+      id: 'uploaded-node-plugin',
+      name: 'Uploaded Node Plugin',
+      permissions: ['nodeExecution'],
+    };
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(nodeExecutionManifest);
+    files['plugin.js'] = 'PluginAPI.log.log("should not run")';
+    const file = createZipFile(files);
+
+    await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
+      T.PLUGINS.NODE_EXECUTION_BUILT_IN_ONLY,
+    );
+    expect(pluginCache.storePlugin).not.toHaveBeenCalled();
+    expect(pluginRunner.loadPlugin).not.toHaveBeenCalled();
   });
 });

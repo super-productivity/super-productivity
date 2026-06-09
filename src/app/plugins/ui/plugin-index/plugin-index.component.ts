@@ -207,6 +207,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
         throw new Error('Plugin does not support iframes');
       }
 
+      if (plugin.error) {
+        throw new Error(plugin.error);
+      }
+
       throw new Error('Plugin index.html not loaded');
     }
 
@@ -226,6 +230,8 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       indexHtml: indexContent,
       baseCfg,
       pluginBridge: this._pluginBridge,
+      bridgeToken: this._createBridgeToken(),
+      bridgeGeneration: this._pluginService.getPluginIframeGeneration(pluginId),
       boundMethods: this._pluginBridge.createBoundMethods(pluginId, plugin.manifest),
     };
 
@@ -242,6 +248,15 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       const msgEvent = event as MessageEvent;
       const iframeWin = this.iframeRef?.nativeElement?.contentWindow;
       if (!iframeWin || msgEvent.source !== iframeWin) {
+        return;
+      }
+      if (
+        this._pluginService.getPluginIframeGeneration(config.pluginId) !==
+        config.bridgeGeneration
+      ) {
+        return;
+      }
+      if (!this._pluginService.getPluginIndexHtml(config.pluginId)) {
         return;
       }
       await handlePluginMessage(msgEvent, config);
@@ -261,6 +276,12 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     this.iframeSrc.set(safeUrl);
     this.isLoading.set(false);
     PluginLog.log(`Plugin ${pluginId} iframe src set, loading complete`);
+  }
+
+  private _createBridgeToken(): string {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
   }
 
   private _cleanupIframeCommunication(): void {

@@ -90,6 +90,19 @@ describe('PluginAPI', () => {
     });
   });
 
+  describe('runtime API surface', () => {
+    it('does not expose bridge internals as object properties', () => {
+      expect(Object.getOwnPropertyNames(pluginAPI)).not.toContain('_pluginBridge');
+      expect(Object.getOwnPropertyNames(pluginAPI)).not.toContain('_boundMethods');
+      expect(
+        (pluginAPI as unknown as { _pluginBridge?: unknown })._pluginBridge,
+      ).toBeUndefined();
+      expect(
+        (pluginAPI as unknown as { _boundMethods?: unknown })._boundMethods,
+      ).toBeUndefined();
+    });
+  });
+
   describe('dispatchAction()', () => {
     beforeEach(() => Log.clearLogHistory());
     afterEach(() => Log.clearLogHistory());

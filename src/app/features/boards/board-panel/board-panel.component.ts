@@ -14,7 +14,12 @@ import {
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
-import { buildComparator, rewriteTagIdsForPanel } from '../boards.util';
+import {
+  buildComparator,
+  firstSpecificProjectId,
+  isAllProjects,
+  rewriteTagIdsForPanel,
+} from '../boards.util';
 import { select, Store } from '@ngrx/store';
 import {
   selectAllTasksInActiveProjects,
@@ -131,6 +136,9 @@ export class BoardPanelComponent {
   additionalTaskFields = computed(() => {
     const panelCfg = this.panelCfg();
     const tagsToAdd = this.tagsToAddForInlineCreate();
+    const firstProjectId = isAllProjects(panelCfg.projectIds)
+      ? undefined
+      : firstSpecificProjectId(panelCfg.projectIds);
 
     return {
       ...(tagsToAdd.length ? { tagIds: tagsToAdd } : {}),
@@ -140,9 +148,7 @@ export class BoardPanelComponent {
       ...(panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.UnDone
         ? { isDone: false }
         : {}),
-      ...(panelCfg.projectId && panelCfg.projectId.length
-        ? { projectId: panelCfg.projectId }
-        : {}),
+      ...(firstProjectId ? { projectId: firstProjectId } : {}),
       // TODO scheduledState
     };
   });
@@ -181,9 +187,13 @@ export class BoardPanelComponent {
         isTaskIncluded = isTaskIncluded && !task.isDone;
       }
 
-      if (panelCfg.projectId) {
+      if (
+        panelCfg.projectIds &&
+        panelCfg.projectIds.length > 0 &&
+        !isAllProjects(panelCfg.projectIds)
+      ) {
         // TODO check parentId case thoroughly
-        isTaskIncluded = isTaskIncluded && task.projectId === panelCfg.projectId;
+        isTaskIncluded = isTaskIncluded && panelCfg.projectIds.includes(task.projectId);
       }
 
       if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
@@ -259,7 +269,14 @@ export class BoardPanelComponent {
       updates.isDone = false;
     }
 
-    if (panelCfg.projectId?.length && task.projectId !== panelCfg.projectId) {
+    const firstProjectId = firstSpecificProjectId(panelCfg.projectIds);
+    if (
+      firstProjectId &&
+      panelCfg.projectIds &&
+      panelCfg.projectIds.length > 0 &&
+      !isAllProjects(panelCfg.projectIds) &&
+      !panelCfg.projectIds.includes(task.projectId)
+    ) {
       const taskWithSubTasks = await this.store
         .pipe(
           select(selectTaskByIdWithSubTaskData, { id: task.parentId || task.id }),
@@ -270,7 +287,7 @@ export class BoardPanelComponent {
       this.store.dispatch(
         TaskSharedActions.moveToOtherProject({
           task: taskWithSubTasks,
-          targetProjectId: panelCfg.projectId,
+          targetProjectId: firstProjectId,
         }),
       );
     }

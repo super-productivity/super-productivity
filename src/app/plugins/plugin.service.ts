@@ -19,12 +19,7 @@ import {
   MAX_PLUGIN_MANIFEST_SIZE,
   MAX_PLUGIN_ZIP_SIZE,
 } from './plugin.const';
-import { MatDialog } from '@angular/material/dialog';
-import {
-  PluginNodeConsentDialogComponent,
-  PluginNodeConsentDialogData,
-} from './ui/plugin-node-consent-dialog/plugin-node-consent-dialog-simple.component';
-import { first, take } from 'rxjs/operators';
+import { take } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLoaderService } from './plugin-loader.service';
@@ -40,10 +35,7 @@ import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issu
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { SnackService } from '../core/snack/snack.service';
 import { pingWithRetry } from './util/ping-with-retry.util';
-import {
-  decideNodeExecutionConsent,
-  NodeExecutionConsentDialogResult,
-} from './util/plugin-consent.util';
+import { PluginBridgeService } from './plugin-bridge.service';
 
 // Each plugin's `id` (from its manifest.json, distinct from the asset path
 // here) becomes the entityId prefix for all data it persists via
@@ -68,6 +60,22 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/doc-mode',
 ] as const;
 
+const BUNDLED_PLUGIN_IDS = new Set<string>([
+  'ai-productivity-prompts',
+  'api-test-plugin',
+  'automations',
+  'brain-dump',
+  'caldav-calendar-provider',
+  'clickup-issue-provider',
+  'doc-mode',
+  'github-issue-provider',
+  'google-calendar-provider',
+  'procrastination-buster',
+  'sync-md',
+  'voice-reminder',
+  'yesterday-tasks',
+]);
+
 @Injectable({
   providedIn: 'root',
 })
@@ -80,9 +88,9 @@ export class PluginService implements OnDestroy {
   private readonly _pluginMetaPersistenceService = inject(PluginMetaPersistenceService);
   private readonly _pluginUserPersistenceService = inject(PluginUserPersistenceService);
   private readonly _pluginCacheService = inject(PluginCacheService);
-  private readonly _dialog = inject(MatDialog);
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _pluginLoader = inject(PluginLoaderService);
+  private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _translateService = inject(TranslateService);
   private readonly _pluginI18nService = inject(PluginI18nService);
   private readonly _store = inject(Store);
@@ -97,6 +105,7 @@ export class PluginService implements OnDestroy {
   private _pluginPaths: Map<string, string> = new Map(); // Store plugin ID -> path mapping
   private _pluginIndexHtml: Map<string, string> = new Map(); // Store plugin ID -> index.html content
   private _pluginIcons: Map<string, string> = new Map(); // Store plugin ID -> SVG icon content
+  private _pluginIframeGenerations: Map<string, number> = new Map();
   private _pluginIconsSignal = signal<Map<string, string>>(new Map());
 
   // Lazy loading state management
@@ -255,6 +264,13 @@ export class PluginService implements OnDestroy {
 
           // Parse the manifest from JSON string
           const manifest: PluginManifest = JSON.parse(cachedPlugin.manifest);
+          if (manifest.id !== cachedPlugin.id) {
+            PluginLog.err(
+              `Ignoring cached plugin ${cachedPlugin.id}: manifest id ${manifest.id} does not match cache id`,
+            );
+            continue;
+          }
+          this._assertUploadedPluginAllowed(manifest);
 
           // Create plugin state without loading code
           const state: PluginState = {
@@ -389,6 +405,17 @@ export class PluginService implements OnDestroy {
    * Enable and activate a plugin. Returns the activated instance.
    */
   async enableAndActivatePlugin(pluginId: string): Promise<PluginInstance | null> {
+    const state = this._getPluginState(pluginId);
+    if (!state) {
+      PluginLog.err(`Plugin ${pluginId} not found`);
+      return null;
+    }
+
+    const hasConsent = await this.checkNodeExecutionPermission(state.manifest);
+    if (!hasConsent) {
+      return null;
+    }
+
     await this._pluginMetaPersistenceService.setPluginEnabled(pluginId, true);
     return this.activatePlugin(pluginId, true);
   }
@@ -434,6 +461,13 @@ export class PluginService implements OnDestroy {
     if (!state) {
       PluginLog.err(`Plugin ${pluginId} not found`);
       return null;
+    }
+
+    if (isManualActivation) {
+      const hasConsent = await this.checkNodeExecutionPermission(state.manifest);
+      if (!hasConsent) {
+        return null;
+      }
     }
 
     // If manually activated, ensure the state reflects that it's enabled
@@ -503,8 +537,8 @@ export class PluginService implements OnDestroy {
       return null;
     }
 
-    // Load the plugin (nodeExecution authorization is registered in _fireOnReady,
-    // the common chokepoint for all load paths — see GHSA-78rv-m663-4fph).
+    // Load the plugin. nodeExecution plugins must have a main-issued session
+    // grant before onReady is fired.
     this._setPluginState(pluginId, {
       ...currentState,
       status: 'loading',
@@ -513,6 +547,12 @@ export class PluginService implements OnDestroy {
     try {
       PluginLog.log(`Activating plugin: ${pluginId}`);
       const instance = await this._loadPluginLazy(currentState);
+      if (!instance.loaded) {
+        throw new Error(
+          instance.error ||
+            this._translateService.instant(T.PLUGINS.ERROR_LOADING_PLUGIN),
+        );
+      }
 
       this._setPluginState(pluginId, {
         ...currentState,
@@ -540,10 +580,12 @@ export class PluginService implements OnDestroy {
           unloadError,
         );
       }
+      void this._revokeNodeExecutionGrant(pluginId);
 
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
+        instance: undefined,
         error: errorMsg,
       });
       // Only surface a snack on user-initiated activation. Startup auto-activation
@@ -598,20 +640,21 @@ export class PluginService implements OnDestroy {
 
   /**
    * Fire onReady for a successfully loaded plugin. For nodeExecution plugins on
-   * Electron, pings the IPC bridge first (with retry); throws if the bridge stays
-   * unavailable. Called after every plugin load path.
+   * Electron, obtains a main-issued execution grant and pings the IPC bridge
+   * first (with retry); throws if the bridge stays unavailable. Called after
+   * every plugin load path.
    */
   private async _fireOnReady(instance: PluginInstance): Promise<void> {
     if (!instance.loaded) {
       return;
     }
     if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
-      // SECURITY: authorize this plugin for Node execution in the main process
-      // BEFORE the first node call (the ping). This is the single chokepoint for
-      // every load path (startup, manual activation, zip upload), and reaching
-      // onReady for a nodeExecution plugin means activation already verified
-      // consent. See GHSA-78rv-m663-4fph.
-      await this._setNodeExecutionGrant(instance.manifest.id, true);
+      const hasGrant = await this._ensureNodeExecutionGrant(instance.manifest);
+      if (!hasGrant) {
+        throw new Error(
+          this._translateService.instant(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
+        );
+      }
       await this._pingNodeBridge(instance.manifest);
     }
     await this._pluginRunner.triggerReady(instance.manifest.id);
@@ -639,6 +682,7 @@ export class PluginService implements OnDestroy {
     const pluginId = instance.manifest.id;
     const errorMsg = error instanceof Error ? error.message : String(error);
     PluginLog.err(`onReady failed for plugin ${pluginId}:`, error);
+    this._bumpPluginIframeGeneration(pluginId);
 
     try {
       this._pluginRunner.unloadPlugin(pluginId);
@@ -653,12 +697,14 @@ export class PluginService implements OnDestroy {
     if (idx !== -1) {
       this._loadedPlugins.splice(idx, 1);
     }
+    void this._revokeNodeExecutionGrant(pluginId);
 
     const currentState = this._pluginStates().get(pluginId);
     if (currentState) {
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
+        instance: undefined,
         error: errorMsg,
       });
     }
@@ -733,6 +779,9 @@ export class PluginService implements OnDestroy {
       // Use the loader service for lazy loading
       const assets = await this._pluginLoader.loadPluginAssets(pluginPath);
       const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
+      if (pluginPath.startsWith('uploaded://')) {
+        this._assertUploadedPluginAllowed(manifest);
+      }
 
       // Store assets if loaded
       if (indexHtml) {
@@ -953,6 +1002,10 @@ export class PluginService implements OnDestroy {
     return this._pluginPaths.get(pluginId);
   }
 
+  getPluginIframeGeneration(pluginId: string): number {
+    return this._pluginIframeGenerations.get(pluginId) ?? 0;
+  }
+
   isInitialized(): boolean {
     return this._isInitialized;
   }
@@ -961,6 +1014,9 @@ export class PluginService implements OnDestroy {
    * Get index.html content for a plugin
    */
   getPluginIndexHtml(pluginId: string): string | null {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
     return this._pluginIndexHtml.get(pluginId) || null;
   }
 
@@ -1035,6 +1091,10 @@ export class PluginService implements OnDestroy {
    * Load plugin index.html content
    */
   async loadPluginIndexHtml(pluginId: string): Promise<string | null> {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
+
     // First check if we already have it cached
     const cached = this._pluginIndexHtml.get(pluginId);
     if (cached) {
@@ -1046,12 +1106,26 @@ export class PluginService implements OnDestroy {
     if (pluginPath?.startsWith('uploaded://')) {
       const cachedPlugin = await this._pluginCacheService.getPlugin(pluginId);
       if (cachedPlugin?.indexHtml) {
+        if (!this._canServePluginIndexHtml(pluginId)) {
+          return null;
+        }
         this._pluginIndexHtml.set(pluginId, cachedPlugin.indexHtml);
         return cachedPlugin.indexHtml;
       }
     }
 
     return null;
+  }
+
+  private _canServePluginIndexHtml(pluginId: string): boolean {
+    const state = this._getPluginState(pluginId);
+    return (
+      !!state &&
+      state.status === 'loaded' &&
+      state.isEnabled &&
+      state.instance?.loaded === true &&
+      !state.error
+    );
   }
 
   async dispatchHook(hookName: Hooks, payload?: unknown): Promise<void> {
@@ -1162,6 +1236,7 @@ export class PluginService implements OnDestroy {
           }),
         );
       }
+      this._assertUploadedPluginAllowed(manifest);
 
       // Extract index.html if it exists (optional) and iFrame is true
       let indexHtml: string | null = null;
@@ -1524,6 +1599,8 @@ export class PluginService implements OnDestroy {
    * without changing isEnabled or _pluginStates. Used for re-upload and reload.
    */
   private _teardownPluginRuntime(pluginId: string): void {
+    this._bumpPluginIframeGeneration(pluginId);
+
     // Close the side panel if this plugin is active
     const activePluginId = this.getActiveSidePanelPluginId();
     if (activePluginId === pluginId) {
@@ -1548,12 +1625,18 @@ export class PluginService implements OnDestroy {
     this._pluginI18nService.unloadPluginTranslations(pluginId);
     this._pluginRunner.unloadPlugin(pluginId);
 
-    // SECURITY: revoke the main-process nodeExecution grant on teardown, so a
+    // SECURITY: revoke the main-process nodeExecution token on teardown, so a
     // disabled/uninstalled plugin cannot run Node for the rest of the session.
-    // Best-effort and fire-and-forget (teardown is synchronous); revoking by id
-    // is a no-op for plugins that never held a grant. See GHSA-78rv-m663-4fph.
-    void this._setNodeExecutionGrant(pluginId, false).catch((e) =>
+    // Best-effort and fire-and-forget because teardown is synchronous.
+    void this._revokeNodeExecutionGrant(pluginId).catch((e) =>
       PluginLog.err(`Failed to revoke nodeExecution grant for ${pluginId}`, e),
+    );
+  }
+
+  private _bumpPluginIframeGeneration(pluginId: string): void {
+    this._pluginIframeGenerations.set(
+      pluginId,
+      this.getPluginIframeGeneration(pluginId) + 1,
     );
   }
 
@@ -1602,6 +1685,10 @@ export class PluginService implements OnDestroy {
       // Use the loader service for uploaded plugins
       const assets = await this._pluginLoader.loadUploadedPluginAssets(pluginId);
       const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
+      if (manifest.id !== pluginId) {
+        throw new Error(`Cached plugin ${pluginId} manifest id mismatch`);
+      }
+      this._assertUploadedPluginAllowed(manifest);
 
       // Store assets if loaded
       if (indexHtml) {
@@ -1693,21 +1780,34 @@ export class PluginService implements OnDestroy {
     }
   }
 
-  /**
-   * Register (or revoke) a plugin's nodeExecution grant with the Electron main
-   * process, so the main process authorizes Node execution from its own state
-   * rather than the per-call manifest the renderer passes (CWE-501). The full
-   * rationale (and the "defense in depth, not a hard boundary" caveat) lives on
-   * the executor — see electron/plugin-node-executor.ts and GHSA-78rv-m663-4fph.
-   * No-op outside Electron.
-   */
-  private async _setNodeExecutionGrant(
-    pluginId: string,
-    isGranted: boolean,
-  ): Promise<void> {
-    if (IS_ELECTRON) {
-      await window.ea.pluginSetNodeConsent(pluginId, isGranted);
+  private async _ensureNodeExecutionGrant(manifest: PluginManifest): Promise<boolean> {
+    if (!this._isElectronRuntime() || !manifest.permissions?.includes('nodeExecution')) {
+      return true;
     }
+    if (this._pluginBridge.hasNodeExecutionGrantToken(manifest.id)) {
+      return true;
+    }
+    let grant: { token: string } | null;
+    try {
+      grant = await this._pluginBridge.requestNodeExecutionGrant(manifest.id);
+    } catch (error) {
+      PluginLog.err(`Failed to get nodeExecution grant for ${manifest.id}:`, error);
+      return false;
+    }
+    if (!grant) {
+      return false;
+    }
+
+    this._pluginBridge.setNodeExecutionGrantToken(manifest.id, grant.token);
+    return true;
+  }
+
+  private async _revokeNodeExecutionGrant(pluginId: string): Promise<void> {
+    const grantToken = this._pluginBridge.revokeNodeExecutionGrantToken(pluginId);
+    if (!grantToken || !this._isElectronRuntime()) {
+      return;
+    }
+    await this._pluginBridge.revokeNodeExecutionGrant(pluginId, grantToken);
   }
 
   /**
@@ -1720,14 +1820,14 @@ export class PluginService implements OnDestroy {
     }
 
     // Only check consent in Electron environment
-    if (!IS_ELECTRON) {
+    if (!this._isElectronRuntime()) {
       PluginLog.err(
         `Plugin ${manifest.id} requires nodeExecution permission which is not available in web environment`,
       );
       return false;
     }
 
-    return this._getNodeExecutionConsent(manifest);
+    return this._ensureNodeExecutionGrant(manifest);
   }
 
   /**
@@ -1745,7 +1845,8 @@ export class PluginService implements OnDestroy {
   }
 
   /**
-   * Check node execution permission on startup (uses stored consent)
+   * Startup only checks platform availability. Main-owned session grants are
+   * requested later, immediately before onReady fires.
    */
   private async _checkNodeExecutionPermissionForStartup(
     manifest: PluginManifest,
@@ -1755,50 +1856,39 @@ export class PluginService implements OnDestroy {
       return true; // No node execution permission needed
     }
 
-    // Only check consent in Electron environment
-    if (!IS_ELECTRON) {
+    // Only check platform availability in Electron environment
+    if (!this._isElectronRuntime()) {
       console.warn(
         `Plugin ${manifest.id} requires nodeExecution permission which is not available in web environment`,
       );
       return false;
     }
 
-    // On startup, use stored consent if available
-    const storedConsent =
-      await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
-
-    // Only allow if consent was explicitly granted and stored
-    return storedConsent === true;
+    // Startup may request a main-owned session grant during _fireOnReady.
+    return true;
   }
 
-  /**
-   * Get consent for Node.js execution permissions (KISS approach)
-   */
-  private async _getNodeExecutionConsent(manifest: PluginManifest): Promise<boolean> {
-    // Check if we should pre-check the "remember" checkbox based on previous consent
-    const previousConsent =
-      await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
+  private _isElectronRuntime(): boolean {
+    return IS_ELECTRON;
+  }
 
-    // Always show dialog for nodeExecution permission
-    const result = (await this._dialog
-      .open(PluginNodeConsentDialogComponent, {
-        data: {
-          manifest,
-          rememberChoice: previousConsent === true, // Pre-check if previously consented
-        } as PluginNodeConsentDialogData,
-        disableClose: false,
-        width: '500px',
-      })
-      .afterClosed()
-      .pipe(first())
-      .toPromise()) as NodeExecutionConsentDialogResult | undefined;
+  private _isBundledPluginId(pluginId: string): boolean {
+    return BUNDLED_PLUGIN_IDS.has(pluginId);
+  }
 
-    const decision = decideNodeExecutionConsent(result);
-    await this._pluginMetaPersistenceService.setNodeExecutionConsent(
-      manifest.id,
-      decision.consentToStore,
-    );
-    return decision.granted;
+  private _assertUploadedPluginAllowed(manifest: PluginManifest): void {
+    if (this._isBundledPluginId(manifest.id)) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.PLUGIN_ID_RESERVED, {
+          pluginId: manifest.id,
+        }),
+      );
+    }
+    if (manifest.permissions?.includes('nodeExecution')) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BUILT_IN_ONLY),
+      );
+    }
   }
 
   /**

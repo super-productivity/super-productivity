@@ -1,5 +1,30 @@
-import { Component } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EnvironmentInjector,
+  runInInjectionContext,
+  signal,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { EMPTY, of } from 'rxjs';
+
+import { MainHeaderComponent } from './main-header.component';
+import { ProjectService } from '../../features/project/project.service';
+import { LayoutService } from '../layout/layout.service';
+import { TaskService } from '../../features/tasks/task.service';
+import { WorkContextService } from '../../features/work-context/work-context.service';
+import { SimpleCounterService } from '../../features/simple-counter/simple-counter.service';
+import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
+import { SnackService } from '../../core/snack/snack.service';
+import { Router } from '@angular/router';
+import { GlobalConfigService } from '../../features/config/global-config.service';
+import { MatDialog } from '@angular/material/dialog';
+import { Store } from '@ngrx/store';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { MetricService } from '../../features/metric/metric.service';
+import { DateService } from '../../core/date/date.service';
+import { UserProfileService } from '../../features/user-profile/user-profile.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 
 // Regression test for #7477: in a project view a long title pushed the
 // right-side header actions (simple-counter / habit buttons) off screen.
@@ -86,5 +111,122 @@ describe('MainHeaderComponent layout', () => {
     } finally {
       document.body.removeChild(fixture.nativeElement);
     }
+  });
+});
+
+describe('MainHeaderComponent focus button visibility', () => {
+  let component: MainHeaderComponent;
+  let isXs = signal(false);
+  let isXxxs = signal(false);
+  let appFeatures = signal(DEFAULT_GLOBAL_CONFIG.appFeatures);
+
+  const createComponent = (): MainHeaderComponent => {
+    const cfg = {
+      ...DEFAULT_GLOBAL_CONFIG,
+      appFeatures: appFeatures(),
+    };
+
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: ElementRef,
+          useValue: {
+            nativeElement: {
+              querySelector: () => null,
+            },
+          },
+        },
+        { provide: ProjectService, useValue: { getByIdOnce$: () => of(null) } },
+        {
+          provide: LayoutService,
+          useValue: {
+            isXs,
+            isXxxs,
+            isShowIssuePanel: signal(false),
+            isShowNotes: signal(false),
+            isShowScheduleDayPanel: signal(false),
+          },
+        },
+        {
+          provide: TaskService,
+          useValue: {
+            currentTaskParentOrCurrent$: of(null),
+            currentTask$: of(null),
+            currentTaskId: signal(null),
+          },
+        },
+        {
+          provide: WorkContextService,
+          useValue: {
+            activeWorkContextId$: of(null),
+            undoneTasks$: of([]),
+          },
+        },
+        { provide: SimpleCounterService, useValue: { enabledSimpleCounters$: of([]) } },
+        {
+          provide: SyncWrapperService,
+          useValue: {
+            isEnabledAndReady$: of(false),
+            syncState$: of('IN_SYNC'),
+            isSyncInProgress$: of(false),
+            hasNoPendingOps$: of(true),
+            superSyncIsConfirmedInSync$: of(false),
+          },
+        },
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
+        { provide: Router, useValue: { events: EMPTY } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg$: of(cfg),
+            cfg: signal(cfg),
+            appFeatures,
+            misc: signal({ isVerticalActionBar: false }),
+          },
+        },
+        { provide: MatDialog, useValue: { open: jasmine.createSpy('open') } },
+        { provide: Store, useValue: { dispatch: jasmine.createSpy('dispatch') } },
+        {
+          provide: DataInitStateService,
+          useValue: { isAllDataLoadedInitially$: of(true) },
+        },
+        { provide: MetricService, useValue: { getFocusSummaryForDay: () => null } },
+        { provide: DateService, useValue: { todayStr: () => '2026-06-09' } },
+        { provide: UserProfileService, useValue: { isInitialized: () => false } },
+      ],
+    });
+
+    return runInInjectionContext(TestBed.inject(EnvironmentInjector), () => {
+      return new MainHeaderComponent();
+    });
+  };
+
+  afterEach(() => {
+    component?.ngOnDestroy();
+  });
+
+  it('keeps the focus mode entry visible on narrow mobile screens (#8157)', () => {
+    isXs = signal(true);
+    isXxxs = signal(true);
+    appFeatures = signal({
+      ...DEFAULT_GLOBAL_CONFIG.appFeatures,
+      isFocusModeEnabled: true,
+    });
+
+    component = createComponent();
+
+    expect(component.showDesktopButtons()).toBe(false);
+    expect(component.isFocusButtonVisible()).toBe(true);
+  });
+
+  it('hides the focus button when the app feature is disabled', () => {
+    appFeatures = signal({
+      ...DEFAULT_GLOBAL_CONFIG.appFeatures,
+      isFocusModeEnabled: false,
+    });
+
+    component = createComponent();
+
+    expect(component.isFocusButtonVisible()).toBe(false);
   });
 });

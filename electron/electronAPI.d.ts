@@ -13,13 +13,22 @@ import { AppDataComplete } from '../src/app/op-log/model/model-config';
 import {
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
-  PluginManifest,
 } from '../packages/plugin-api/src/types';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+
+export interface PluginNodeExecutionElectronApi {
+  requestGrant(pluginId: string): Promise<{ token: string } | null>;
+  executeScript(
+    pluginId: string,
+    grantToken: string,
+    request: PluginNodeScriptRequest,
+  ): Promise<PluginNodeScriptResult>;
+  revokeGrant(pluginId: string, grantToken: string): Promise<void>;
+}
 
 export interface ElectronAPI {
   on(
@@ -226,16 +235,7 @@ export interface ElectronAPI {
 
   exec(command: string): void;
 
-  pluginExecNodeScript(
-    pluginId: string,
-    manifest: PluginManifest,
-    request: PluginNodeScriptRequest,
-  ): Promise<PluginNodeScriptResult>;
-
-  // Register/revoke a plugin's nodeExecution grant with the main process so the
-  // executor authorizes from its own state, not the per-call manifest.
-  // See GHSA-78rv-m663-4fph.
-  pluginSetNodeConsent(pluginId: string, isGranted: boolean): Promise<void>;
+  consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 
   // Plugin OAuth
   pluginOAuthPrepare(): Promise<{ port: number }>;

@@ -47,11 +47,14 @@ import {
  */
 export class PluginAPI implements PluginAPIInterface {
   readonly Hooks = PluginHooks;
-  private _hookHandlers = new Map<string, Map<Hooks, Array<PluginHookHandler<Hooks>>>>();
-  private _messageHandler?: (message: unknown) => Promise<unknown>;
-  private _boundMethods: ReturnType<
-    typeof PluginBridgeService.prototype.createBoundMethods
-  >;
+  #pluginId: string;
+  #pluginBridge: PluginBridgeService;
+  #pluginI18nService: PluginI18nService;
+  #manifest?: PluginManifest;
+  #onReadyRegister?: (fn: () => void | Promise<void>) => void;
+  #hookHandlers = new Map<string, Map<Hooks, Array<PluginHookHandler<Hooks>>>>();
+  #messageHandler?: (message: unknown) => Promise<unknown>;
+  #boundMethods: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
 
   /**
    * Logger instance for this plugin
@@ -65,57 +68,63 @@ export class PluginAPI implements PluginAPIInterface {
 
   constructor(
     public cfg: PluginBaseCfg,
-    private _pluginId: string,
-    private _pluginBridge: PluginBridgeService,
-    private _pluginI18nService: PluginI18nService,
-    private _manifest?: PluginManifest,
-    private _onReadyRegister?: (fn: () => void | Promise<void>) => void,
+    pluginId: string,
+    pluginBridge: PluginBridgeService,
+    pluginI18nService: PluginI18nService,
+    manifest?: PluginManifest,
+    onReadyRegister?: (fn: () => void | Promise<void>) => void,
   ) {
+    this.#pluginId = pluginId;
+    this.#pluginBridge = pluginBridge;
+    this.#pluginI18nService = pluginI18nService;
+    this.#manifest = manifest;
+    this.#onReadyRegister = onReadyRegister;
+
     // Get bound methods for this plugin
-    this._boundMethods = this._pluginBridge.createBoundMethods(
-      this._pluginId,
-      this._manifest,
+    this.#boundMethods = this.#pluginBridge.createBoundMethods(
+      this.#pluginId,
+      this.#manifest,
     );
 
     // Set executeNodeScript if available
-    if (this._boundMethods.executeNodeScript) {
-      this.executeNodeScript = this._boundMethods.executeNodeScript;
+    if (this.#boundMethods.executeNodeScript) {
+      this.executeNodeScript = this.#boundMethods.executeNodeScript;
     }
 
     // Set up logging for this plugin
-    this.log = this._boundMethods.log;
+    this.log = this.#boundMethods.log;
   }
 
   registerHook<T extends Hooks>(hook: T, fn: PluginHookHandler<T>): void {
-    if (!this._hookHandlers.has(this._pluginId)) {
-      this._hookHandlers.set(this._pluginId, new Map());
+    if (!this.#hookHandlers.has(this.#pluginId)) {
+      this.#hookHandlers.set(this.#pluginId, new Map());
     }
 
-    const pluginHooks = this._hookHandlers.get(this._pluginId)!;
+    const pluginHooks = this.#hookHandlers.get(this.#pluginId)!;
     if (!pluginHooks.has(hook)) {
       pluginHooks.set(hook, []);
     }
 
     pluginHooks.get(hook)!.push(fn as PluginHookHandler<Hooks>);
-    PluginLog.log(`Plugin ${this._pluginId} registered hook: ${hook}`);
+    PluginLog.log(`Plugin ${this.#pluginId} registered hook: ${hook}`);
 
     // Register hook with bridge
-    this._pluginBridge.registerHook(this._pluginId, hook, fn as PluginHookHandler<Hooks>);
+    this.#pluginBridge.registerHook(this.#pluginId, hook, fn as PluginHookHandler<Hooks>);
   }
 
   registerHeaderButton(headerBtnCfg: PluginHeaderBtnCfg): void {
-    PluginLog.log(`Plugin ${this._pluginId} registered header button`);
-    this._boundMethods.registerHeaderButton(headerBtnCfg);
+    PluginLog.log(`Plugin ${this.#pluginId} registered header button`);
+    this.#boundMethods.registerHeaderButton(headerBtnCfg);
   }
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void {
-    PluginLog.log(`Plugin ${this._pluginId} registered menu entry`);
-    this._boundMethods.registerMenuEntry(menuEntryCfg);
+    PluginLog.log(`Plugin ${this.#pluginId} registered menu entry`);
+    this.#boundMethods.registerMenuEntry(menuEntryCfg);
   }
 
   registerConfigHandler(handler: () => void): void {
-    PluginLog.log(`Plugin ${this._pluginId} registered config handler`);
-    this._boundMethods.registerConfigHandler(handler);
+    PluginLog.log(`Plugin ${this.#pluginId} registered config handler`);
+    this.#boundMethods.registerConfigHandler(handler);
   }
 
   registerShortcut(
@@ -128,130 +137,130 @@ export class PluginAPI implements PluginAPIInterface {
     const shortcut: PluginShortcutCfg = {
       ...shortcutCfg,
       id,
-      pluginId: this._pluginId,
+      pluginId: this.#pluginId,
     };
 
-    PluginLog.log(`Plugin ${this._pluginId} registered shortcut`);
+    PluginLog.log(`Plugin ${this.#pluginId} registered shortcut`);
 
     // Register shortcut with bridge
-    this._boundMethods.registerShortcut(shortcut);
+    this.#boundMethods.registerShortcut(shortcut);
   }
 
   registerSidePanelButton(
     sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>,
   ): void {
-    PluginLog.log(`Plugin ${this._pluginId} registered side panel button`);
-    this._boundMethods.registerSidePanelButton(sidePanelBtnCfg);
+    PluginLog.log(`Plugin ${this.#pluginId} registered side panel button`);
+    this.#boundMethods.registerSidePanelButton(sidePanelBtnCfg);
   }
 
   registerWorkContextHeaderButton(
     cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
   ): void {
-    PluginLog.log(`Plugin ${this._pluginId} registered work-context header button`, cfg);
-    this._boundMethods.registerWorkContextHeaderButton(cfg);
+    PluginLog.log(`Plugin ${this.#pluginId} registered work-context header button`, cfg);
+    this.#boundMethods.registerWorkContextHeaderButton(cfg);
   }
 
   registerIssueProvider(definition: IssueProviderPluginDefinition): void {
-    PluginLog.log(`Plugin ${this._pluginId} registering issue provider`);
-    this._boundMethods.registerIssueProvider(definition);
+    PluginLog.log(`Plugin ${this.#pluginId} registering issue provider`);
+    this.#boundMethods.registerIssueProvider(definition);
   }
 
   showIndexHtmlAsView(): void {
-    PluginLog.log(`Plugin ${this._pluginId} requested to show index.html`);
-    return this._boundMethods.showIndexHtmlAsView();
+    PluginLog.log(`Plugin ${this.#pluginId} requested to show index.html`);
+    return this.#boundMethods.showIndexHtmlAsView();
   }
 
   showInWorkContext(): void {
-    PluginLog.log(`Plugin ${this._pluginId} requested work-context embed`);
-    this._boundMethods.showInWorkContext();
+    PluginLog.log(`Plugin ${this.#pluginId} requested work-context embed`);
+    this.#boundMethods.showInWorkContext();
   }
 
   closeWorkContextView(): void {
-    PluginLog.log(`Plugin ${this._pluginId} closed work-context embed`);
-    this._boundMethods.closeWorkContextView();
+    PluginLog.log(`Plugin ${this.#pluginId} closed work-context embed`);
+    this.#boundMethods.closeWorkContextView();
   }
 
   async getActiveWorkContext(): Promise<ActiveWorkContext | null> {
-    return this._boundMethods.getActiveWorkContext();
+    return this.#boundMethods.getActiveWorkContext();
   }
 
   async getTasks(): Promise<Task[]> {
-    PluginLog.log(`Plugin ${this._pluginId} requested all tasks`);
-    const tasks = await this._pluginBridge.getTasks();
+    PluginLog.log(`Plugin ${this.#pluginId} requested all tasks`);
+    const tasks = await this.#pluginBridge.getTasks();
     return tasks.map(taskCopyToTaskData);
   }
 
   async getArchivedTasks(): Promise<Task[]> {
-    PluginLog.log(`Plugin ${this._pluginId} requested archived tasks`);
-    const tasks = await this._pluginBridge.getArchivedTasks();
+    PluginLog.log(`Plugin ${this.#pluginId} requested archived tasks`);
+    const tasks = await this.#pluginBridge.getArchivedTasks();
     return tasks.map(taskCopyToTaskData);
   }
 
   async getCurrentContextTasks(): Promise<Task[]> {
-    PluginLog.log(`Plugin ${this._pluginId} requested current context tasks`);
-    const tasks = await this._pluginBridge.getCurrentContextTasks();
+    PluginLog.log(`Plugin ${this.#pluginId} requested current context tasks`);
+    const tasks = await this.#pluginBridge.getCurrentContextTasks();
     return tasks.map(taskCopyToTaskData);
   }
 
   async getAppState(): Promise<PluginAppState> {
-    PluginLog.log(`Plugin ${this._pluginId} requested app state snapshot`);
-    return this._pluginBridge.getAppState();
+    PluginLog.log(`Plugin ${this.#pluginId} requested app state snapshot`);
+    return this.#pluginBridge.getAppState();
   }
 
   async reInitData(): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested data re-init`);
-    return this._pluginBridge.reInitData();
+    PluginLog.log(`Plugin ${this.#pluginId} requested data re-init`);
+    return this.#pluginBridge.reInitData();
   }
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to update task ${taskId}`);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to update task ${taskId}`);
     const taskCopyUpdates = taskDataToPartialTaskCopy(updates);
-    return this._pluginBridge.updateTask(taskId, taskCopyUpdates);
+    return this.#pluginBridge.updateTask(taskId, taskCopyUpdates);
   }
 
   async addTask(taskData: PluginCreateTaskData): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add task`);
-    return this._pluginBridge.addTask(taskData);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to add task`);
+    return this.#pluginBridge.addTask(taskData);
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to delete task ${taskId}`);
-    return this._pluginBridge.deleteTask(taskId);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to delete task ${taskId}`);
+    return this.#pluginBridge.deleteTask(taskId);
   }
 
   async getAllProjects(): Promise<Project[]> {
-    PluginLog.log(`Plugin ${this._pluginId} requested all projects`);
-    const projects = await this._pluginBridge.getAllProjects();
+    PluginLog.log(`Plugin ${this.#pluginId} requested all projects`);
+    const projects = await this.#pluginBridge.getAllProjects();
     return projects.map(projectCopyToProjectData);
   }
 
   async addProject(projectData: Partial<Project>): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add project`);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to add project`);
     const projectCopyData = projectDataToPartialProjectCopy(projectData);
-    return this._pluginBridge.addProject(projectCopyData);
+    return this.#pluginBridge.addProject(projectCopyData);
   }
 
   async updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to update project ${projectId}`);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to update project ${projectId}`);
     const projectCopyUpdates = projectDataToPartialProjectCopy(updates);
-    return this._pluginBridge.updateProject(projectId, projectCopyUpdates);
+    return this.#pluginBridge.updateProject(projectId, projectCopyUpdates);
   }
 
   async getAllTags(): Promise<Tag[]> {
-    PluginLog.log(`Plugin ${this._pluginId} requested all tags`);
-    const tags = await this._pluginBridge.getAllTags();
+    PluginLog.log(`Plugin ${this.#pluginId} requested all tags`);
+    const tags = await this.#pluginBridge.getAllTags();
     return tags.map(tagCopyToTagData);
   }
 
   async addTag(tagData: Partial<Tag>): Promise<string> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to add tag`);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to add tag`);
     const tagCopyData = tagDataToPartialTagCopy(tagData);
-    return this._pluginBridge.addTag(tagCopyData);
+    return this.#pluginBridge.addTag(tagCopyData);
   }
 
   async updateTag(tagId: string, updates: Partial<Tag>): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to update tag ${tagId}`);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to update tag ${tagId}`);
     const tagCopyUpdates = tagDataToPartialTagCopy(updates);
-    return this._pluginBridge.updateTag(tagId, tagCopyUpdates);
+    return this.#pluginBridge.updateTag(tagId, tagCopyUpdates);
   }
 
   async reorderTasks(
@@ -260,68 +269,68 @@ export class PluginAPI implements PluginAPIInterface {
     contextType: 'project' | 'task',
   ): Promise<void> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested to reorder tasks in ${contextType} ${contextId}:`,
+      `Plugin ${this.#pluginId} requested to reorder tasks in ${contextType} ${contextId}:`,
       taskIds,
     );
-    return this._pluginBridge.reorderTasks(taskIds, contextId, contextType);
+    return this.#pluginBridge.reorderTasks(taskIds, contextId, contextType);
   }
 
   async selectTask(taskId: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to select task ${taskId}`);
-    return this._pluginBridge.selectTask(taskId);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to select task ${taskId}`);
+    return this.#pluginBridge.selectTask(taskId);
   }
 
   async batchUpdateForProject(request: BatchUpdateRequest): Promise<BatchUpdateResult> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested batch update for project ${(request as { projectId: string }).projectId}`,
+      `Plugin ${this.#pluginId} requested batch update for project ${(request as { projectId: string }).projectId}`,
     );
-    return this._pluginBridge.batchUpdateForProject(request);
+    return this.#pluginBridge.batchUpdateForProject(request);
   }
 
   showSnack(snackCfg: SnackCfg): void {
-    this._pluginBridge.showSnack(snackCfg);
+    this.#pluginBridge.showSnack(snackCfg);
   }
 
   async notify(notifyCfg: NotifyCfg): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested notification`);
-    return this._pluginBridge.notify(notifyCfg);
+    PluginLog.log(`Plugin ${this.#pluginId} requested notification`);
+    return this.#pluginBridge.notify(notifyCfg);
   }
 
   persistDataSynced(dataStr: string, key?: string): Promise<void> {
     // Log keyLen, not key — plugins may use user-supplied content as keys
     // (search queries, document titles), and the log history is exportable.
     // CLAUDE.md rule 9: only ids, never user content.
-    PluginLog.log(`Plugin ${this._pluginId} requested to persist data`, {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to persist data`, {
       keyLen: key?.length ?? 0,
     });
-    return this._boundMethods.persistDataSynced(dataStr, key);
+    return this.#boundMethods.persistDataSynced(dataStr, key);
   }
 
   loadSyncedData(key?: string): Promise<string | null> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to load persisted data`, {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to load persisted data`, {
       keyLen: key?.length ?? 0,
     });
-    return this._boundMethods.loadPersistedData(key);
+    return this.#boundMethods.loadPersistedData(key);
   }
 
   async getConfig(): Promise<any> {
-    PluginLog.log(`Plugin ${this._pluginId} requested configuration`);
-    return this._boundMethods.getConfig();
+    PluginLog.log(`Plugin ${this.#pluginId} requested configuration`);
+    return this.#boundMethods.getConfig();
   }
 
   async downloadFile(filename: string, data: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to download file "${filename}"`);
-    return this._boundMethods.downloadFile(filename, data);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to download file "${filename}"`);
+    return this.#boundMethods.downloadFile(filename, data);
   }
 
   async openDialog(dialogCfg: DialogCfg): Promise<DialogResult> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to open dialog`);
-    return this._pluginBridge.openDialog(dialogCfg);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to open dialog`);
+    return this.#pluginBridge.openDialog(dialogCfg);
   }
 
   async triggerSync(): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to trigger sync`);
-    return this._boundMethods.triggerSync();
+    PluginLog.log(`Plugin ${this.#pluginId} requested to trigger sync`);
+    return this.#boundMethods.triggerSync();
   }
 
   /**
@@ -331,7 +340,7 @@ export class PluginAPI implements PluginAPIInterface {
    * IPC ping — guaranteeing the bridge is available.
    */
   onReady(fn: () => void | Promise<void>): void {
-    this._onReadyRegister?.(fn);
+    this.#onReadyRegister?.(fn);
   }
 
   /**
@@ -339,8 +348,8 @@ export class PluginAPI implements PluginAPIInterface {
    * This allows the plugin's iframe to communicate with the plugin code
    */
   onMessage(handler: (message: unknown) => Promise<unknown>): void {
-    this._messageHandler = handler;
-    PluginLog.log(`Plugin ${this._pluginId} registered message handler`);
+    this.#messageHandler = handler;
+    PluginLog.log(`Plugin ${this.#pluginId} registered message handler`);
   }
 
   /**
@@ -348,16 +357,16 @@ export class PluginAPI implements PluginAPIInterface {
    * Used internally by the plugin system
    */
   async __sendMessage(message: unknown): Promise<unknown> {
-    if (!this._messageHandler) {
-      throw new Error(`Plugin ${this._pluginId} has no message handler registered`);
+    if (!this.#messageHandler) {
+      throw new Error(`Plugin ${this.#pluginId} has no message handler registered`);
     }
 
-    return await this._messageHandler(message);
+    return await this.#messageHandler(message);
   }
 
   // Internal methods for the plugin system
   __getHookHandlers(): Map<string, Map<Hooks, Array<PluginHookHandler>>> {
-    return this._hookHandlers;
+    return this.#hookHandlers;
   }
 
   /**
@@ -366,30 +375,30 @@ export class PluginAPI implements PluginAPIInterface {
   dispatchAction(action: { type: string; [key: string]: unknown }): void {
     // Log the action TYPE only — the full action carries user content
     // and the log history is user-exportable. See core/log.ts header / rule #9.
-    PluginLog.log(`Plugin ${this._pluginId} requested to execute action: ${action.type}`);
-    return this._boundMethods.dispatchAction(action);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to execute action: ${action.type}`);
+    return this.#boundMethods.dispatchAction(action);
   }
 
   /**
    * Check if the application window is currently focused
    */
   isWindowFocused(): boolean {
-    return this._pluginBridge.isWindowFocused();
+    return this.#pluginBridge.isWindowFocused();
   }
 
   /**
    * Register a handler for window focus changes
    */
   onWindowFocusChange(handler: (isFocused: boolean) => void): void {
-    this._pluginBridge.onWindowFocusChange(this._pluginId, handler);
+    this.#pluginBridge.onWindowFocusChange(this.#pluginId, handler);
   }
 
   /**
    * Gets all simple counters as { [key: string]: number }.
    */
   async getAllCounters(): Promise<{ [key: string]: number }> {
-    PluginLog.log(`Plugin ${this._pluginId} requested all simple counters`);
-    return this._pluginBridge.getAllCounters();
+    PluginLog.log(`Plugin ${this.#pluginId} requested all simple counters`);
+    return this.#pluginBridge.getAllCounters();
   }
 
   /**
@@ -397,8 +406,8 @@ export class PluginAPI implements PluginAPIInterface {
    * @param id The counter id (e.g., 'daily-commits').
    */
   async getCounter(id: string): Promise<number | null> {
-    PluginLog.log(`Plugin ${this._pluginId} requested counter value for id: ${id}`);
-    const value = await this._pluginBridge.getCounter(id);
+    PluginLog.log(`Plugin ${this.#pluginId} requested counter value for id: ${id}`);
+    const value = await this.#pluginBridge.getCounter(id);
     return value ?? null;
   }
 
@@ -408,8 +417,8 @@ export class PluginAPI implements PluginAPIInterface {
    * @param value The numeric value.
    */
   async setCounter(id: string, value: number): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to set counter ${id} to ${value}`);
-    return this._pluginBridge.setCounter(id, value);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to set counter ${id} to ${value}`);
+    return this.#pluginBridge.setCounter(id, value);
   }
 
   /**
@@ -419,9 +428,9 @@ export class PluginAPI implements PluginAPIInterface {
    */
   async incrementCounter(id: string, incrementBy = 1): Promise<number> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested to increment counter ${id} by ${incrementBy}`,
+      `Plugin ${this.#pluginId} requested to increment counter ${id} by ${incrementBy}`,
     );
-    const newValue = await this._pluginBridge.incrementCounter(id, incrementBy);
+    const newValue = await this.#pluginBridge.incrementCounter(id, incrementBy);
     return newValue;
   }
 
@@ -432,9 +441,9 @@ export class PluginAPI implements PluginAPIInterface {
    */
   async decrementCounter(id: string, decrementBy = 1): Promise<number> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested to decrement counter ${id} by ${decrementBy}`,
+      `Plugin ${this.#pluginId} requested to decrement counter ${id} by ${decrementBy}`,
     );
-    const newValue = await this._pluginBridge.decrementCounter(id, decrementBy);
+    const newValue = await this.#pluginBridge.decrementCounter(id, decrementBy);
     return newValue;
   }
 
@@ -443,16 +452,16 @@ export class PluginAPI implements PluginAPIInterface {
    * @param id The counter ID.
    */
   async deleteCounter(id: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to delete counter ${id}`);
-    return this._pluginBridge.deleteSimpleCounter(id);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to delete counter ${id}`);
+    return this.#pluginBridge.deleteSimpleCounter(id);
   }
 
   /**
    * Gets all simple counters as SimpleCounter[].
    */
   async getAllSimpleCounters(): Promise<any[]> {
-    PluginLog.log(`Plugin ${this._pluginId} requested all simple counters (full model)`);
-    return this._pluginBridge.getAllSimpleCounters();
+    PluginLog.log(`Plugin ${this.#pluginId} requested all simple counters (full model)`);
+    return this.#pluginBridge.getAllSimpleCounters();
   }
 
   /**
@@ -460,8 +469,8 @@ export class PluginAPI implements PluginAPIInterface {
    * @param id The counter ID.
    */
   async getSimpleCounter(id: string): Promise<any | undefined> {
-    PluginLog.log(`Plugin ${this._pluginId} requested simple counter ${id}`);
-    return this._pluginBridge.getSimpleCounter(id);
+    PluginLog.log(`Plugin ${this.#pluginId} requested simple counter ${id}`);
+    return this.#pluginBridge.getSimpleCounter(id);
   }
 
   /**
@@ -471,10 +480,10 @@ export class PluginAPI implements PluginAPIInterface {
    */
   async updateSimpleCounter(id: string, updates: Partial<any>): Promise<void> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested to update simple counter ${id}`,
+      `Plugin ${this.#pluginId} requested to update simple counter ${id}`,
       updates,
     );
-    return this._pluginBridge.updateSimpleCounter(id, updates);
+    return this.#pluginBridge.updateSimpleCounter(id, updates);
   }
 
   /**
@@ -482,8 +491,8 @@ export class PluginAPI implements PluginAPIInterface {
    * @param id The counter ID.
    */
   async toggleSimpleCounter(id: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to toggle simple counter ${id}`);
-    return this._pluginBridge.toggleSimpleCounter(id);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to toggle simple counter ${id}`);
+    return this.#pluginBridge.toggleSimpleCounter(id);
   }
 
   /**
@@ -493,9 +502,9 @@ export class PluginAPI implements PluginAPIInterface {
    */
   async setSimpleCounterEnabled(id: string, isEnabled: boolean): Promise<void> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested to set simple counter ${id} enabled: ${isEnabled}`,
+      `Plugin ${this.#pluginId} requested to set simple counter ${id} enabled: ${isEnabled}`,
     );
-    return this._pluginBridge.setSimpleCounterEnabled(id, isEnabled);
+    return this.#pluginBridge.setSimpleCounterEnabled(id, isEnabled);
   }
 
   /**
@@ -503,8 +512,8 @@ export class PluginAPI implements PluginAPIInterface {
    * @param id The counter ID.
    */
   async deleteSimpleCounter(id: string): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested to delete simple counter ${id}`);
-    return this._pluginBridge.deleteSimpleCounter(id);
+    PluginLog.log(`Plugin ${this.#pluginId} requested to delete simple counter ${id}`);
+    return this.#pluginBridge.deleteSimpleCounter(id);
   }
 
   /**
@@ -514,9 +523,9 @@ export class PluginAPI implements PluginAPIInterface {
    */
   async setSimpleCounterToday(id: string, value: number): Promise<void> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested to set simple counter ${id} today to ${value}`,
+      `Plugin ${this.#pluginId} requested to set simple counter ${id} today to ${value}`,
     );
-    return this._pluginBridge.setSimpleCounterToday(id, value);
+    return this.#pluginBridge.setSimpleCounterToday(id, value);
   }
 
   /**
@@ -527,9 +536,9 @@ export class PluginAPI implements PluginAPIInterface {
    */
   async setSimpleCounterDate(id: string, date: string, value: number): Promise<void> {
     PluginLog.log(
-      `Plugin ${this._pluginId} requested to set simple counter ${id} on ${date} to ${value}`,
+      `Plugin ${this.#pluginId} requested to set simple counter ${id} on ${date} to ${value}`,
     );
-    return this._pluginBridge.setSimpleCounterDate(id, date, value);
+    return this.#pluginBridge.setSimpleCounterDate(id, date, value);
   }
 
   /**
@@ -537,7 +546,7 @@ export class PluginAPI implements PluginAPIInterface {
    * Falls back to English, then to the key itself if not found
    */
   translate(key: string, params?: Record<string, string | number>): string {
-    return this._pluginI18nService.translate(this._pluginId, key, params);
+    return this.#pluginI18nService.translate(this.#pluginId, key, params);
   }
 
   /**
@@ -548,7 +557,7 @@ export class PluginAPI implements PluginAPIInterface {
     date: Date | string | number,
     format: 'short' | 'medium' | 'long' | 'time' | 'datetime',
   ): string {
-    const locale = this._pluginI18nService.getCurrentLanguage();
+    const locale = this.#pluginI18nService.getCurrentLanguage();
     return formatDateForPlugin(date, format, locale);
   }
 
@@ -556,21 +565,21 @@ export class PluginAPI implements PluginAPIInterface {
    * Get the current app language code
    */
   getCurrentLanguage(): string {
-    return this._pluginI18nService.getCurrentLanguage();
+    return this.#pluginI18nService.getCurrentLanguage();
   }
 
   async startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult> {
-    PluginLog.log(`Plugin ${this._pluginId} requested OAuth flow`);
-    return this._boundMethods.startOAuthFlow(config);
+    PluginLog.log(`Plugin ${this.#pluginId} requested OAuth flow`);
+    return this.#boundMethods.startOAuthFlow(config);
   }
 
   async getOAuthToken(): Promise<string | null> {
-    return this._boundMethods.getOAuthToken();
+    return this.#boundMethods.getOAuthToken();
   }
 
   async clearOAuthToken(): Promise<void> {
-    PluginLog.log(`Plugin ${this._pluginId} requested OAuth token clear`);
-    return this._boundMethods.clearOAuthToken();
+    PluginLog.log(`Plugin ${this.#pluginId} requested OAuth token clear`);
+    return this.#boundMethods.clearOAuthToken();
   }
 
   /**
@@ -578,13 +587,13 @@ export class PluginAPI implements PluginAPIInterface {
    * Called when the plugin is being unloaded
    */
   cleanup(): void {
-    PluginLog.log(`Cleaning up PluginAPI for plugin ${this._pluginId}`);
+    PluginLog.log(`Cleaning up PluginAPI for plugin ${this.#pluginId}`);
 
     // Clear all hook handlers
-    this._hookHandlers.clear();
+    this.#hookHandlers.clear();
 
     // Unregister issue provider if one was registered
-    this._boundMethods.unregisterIssueProvider();
+    this.#boundMethods.unregisterIssueProvider();
 
     // Notify bridge service to clean up its registrations
     // This is handled by the plugin runner calling unregisterPluginHooks

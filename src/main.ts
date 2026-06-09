@@ -44,6 +44,7 @@ import {
   MatDateFormats,
   DateAdapter,
 } from '@angular/material/core';
+import { MatDatepickerIntl } from '@angular/material/datepicker';
 import { FormlyConfigModule } from './app/ui/formly-config.module';
 import { markedOptionsFactory } from './app/ui/marked-options-factory';
 import { MaterialCssVarsModule } from 'angular-material-css-vars';
@@ -89,6 +90,7 @@ import { GlobalConfigService } from './app/features/config/global-config.service
 import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
+import { TranslateMatDatepickerIntl } from './app/core/date-time-format/translate-mat-datepicker-intl';
 import { unlockAudioContext } from './app/util/audio-context';
 import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 
@@ -202,6 +204,7 @@ bootstrapApplication(AppComponent, {
     ShortTimeHtmlPipe,
     ShortTimePipe,
     { provide: DateAdapter, useClass: CustomDateAdapter },
+    { provide: MatDatepickerIntl, useClass: TranslateMatDatepickerIntl },
     {
       provide: MAT_DATE_FORMATS,
       useFactory: (dateTimeFormatService: DateTimeFormatService): MatDateFormats => {
@@ -217,7 +220,7 @@ bootstrapApplication(AppComponent, {
             get dateInput(): string {
               return dateTimeFormatService.dateFormat().raw;
             },
-            monthYearLabel: { year: 'numeric', month: 'short' },
+            monthYearLabel: { year: 'numeric', month: 'long' },
             dateA11yLabel: { year: 'numeric', month: 'long', day: 'numeric' },
             monthYearA11yLabel: { year: 'numeric', month: 'long' },
             timeInput: { hour: 'numeric', minute: 'numeric' },

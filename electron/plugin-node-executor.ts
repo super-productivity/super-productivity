@@ -1,5 +1,9 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import type { WebContents } from 'electron';
 import { spawn } from 'child_process';
+import { randomBytes } from 'crypto';
+import { existsSync, readFileSync } from 'fs';
+import { join, resolve as resolvePath } from 'path';
 import * as vm from 'vm';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import {
@@ -10,38 +14,112 @@ import {
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const MAX_TIMEOUT = 300000; // 5 minutes
+const BUILT_IN_PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+interface NodeExecutionGrant {
+  token: string;
+  webContentsId: number;
+}
+
+interface WebContentsGrantCleanup {
+  webContents: WebContents;
+  cleanup: () => void;
+  didStartNavigation: (
+    event: Electron.Event,
+    url: string,
+    isInPlace: boolean,
+    isMainFrame: boolean,
+  ) => void;
+}
 
 class PluginNodeExecutor {
   /**
-   * Authoritative set of plugin IDs the renderer has registered as having
-   * user-granted nodeExecution consent. Held in the main process so node
-   * execution is authorized from our own state — NOT from the manifest the
-   * renderer passes on each call, which a compromised/XSS'd renderer could
-   * forge ({ permissions: ['nodeExecution'] }). See GHSA-78rv-m663-4fph.
-   *
-   * In-memory by design: it resets on app restart and the renderer re-registers
-   * each consented plugin when it re-activates it on boot.
+   * Main-owned per-session execution grants. Renderer code may request a grant,
+   * but it cannot set one silently; the main process issues the token only after
+   * a native consent dialog. Execution never trusts renderer-provided manifests.
    */
-  private readonly grantedPlugins = new Set<string>();
+  private readonly grants = new Map<string, NodeExecutionGrant>();
+  private readonly grantCleanupByWebContents = new Map<number, WebContentsGrantCleanup>();
 
   constructor() {
     this.setupIpcHandler();
   }
 
   private setupIpcHandler(): void {
-    // Trusted out-of-band channel: the renderer registers (or revokes) a
-    // plugin's nodeExecution grant here, separately from the exec call, after
-    // it has verified user consent.
     ipcMain.handle(
-      IPC.PLUGIN_SET_NODE_CONSENT,
-      (_event, pluginId: string, isGranted: boolean) => {
-        if (typeof pluginId !== 'string' || !pluginId) {
-          throw new Error('Invalid pluginId');
+      IPC.PLUGIN_REQUEST_NODE_EXECUTION_GRANT,
+      async (event, pluginId: string) => {
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (!window) {
+          throw new Error('No window found for event sender');
         }
-        if (isGranted) {
-          this.grantedPlugins.add(pluginId);
-        } else {
-          this.grantedPlugins.delete(pluginId);
+
+        const webContentsId = event.sender.id;
+        const existingGrant = this.grants.get(pluginId);
+        if (existingGrant) {
+          if (existingGrant.webContentsId === webContentsId) {
+            return { token: existingGrant.token };
+          }
+          this.grants.delete(pluginId);
+          this.releaseGrantCleanupIfUnused(existingGrant.webContentsId);
+        }
+
+        const manifest = this.getVerifiedBuiltInNodeExecutionManifest(pluginId);
+        const requestUrl = event.sender.getURL();
+        this.registerGrantCleanup(event.sender);
+
+        let result;
+        try {
+          result = await dialog.showMessageBox(window, {
+            type: 'warning',
+            buttons: ['Allow', 'Deny'],
+            defaultId: 1,
+            cancelId: 1,
+            title: 'Allow plugin Node.js execution?',
+            message: `Allow "${manifest.name}" to run Node.js scripts?`,
+            detail: [
+              `Plugin ID: ${pluginId}`,
+              `Version: ${manifest.version}`,
+              '',
+              'This permission is valid for the current app session. Node.js execution can access local files and desktop APIs. Only allow plugins you trust.',
+            ].join('\n'),
+          });
+        } catch (error) {
+          this.releaseGrantCleanupIfUnused(webContentsId);
+          throw error;
+        }
+
+        if (
+          event.sender.isDestroyed() ||
+          !this.grantCleanupByWebContents.has(webContentsId) ||
+          event.sender.getURL() !== requestUrl
+        ) {
+          this.grants.delete(pluginId);
+          this.releaseGrantCleanupIfUnused(webContentsId);
+          return null;
+        }
+
+        if (result.response !== 0) {
+          this.grants.delete(pluginId);
+          this.releaseGrantCleanupIfUnused(webContentsId);
+          return null;
+        }
+
+        const token = randomBytes(32).toString('base64url');
+        this.grants.set(pluginId, {
+          token,
+          webContentsId,
+        });
+        return { token };
+      },
+    );
+
+    ipcMain.handle(
+      IPC.PLUGIN_REVOKE_NODE_EXECUTION_GRANT,
+      (event, pluginId: string, grantToken: string) => {
+        const grant = this.grants.get(pluginId);
+        if (grant?.token === grantToken && grant.webContentsId === event.sender.id) {
+          this.grants.delete(pluginId);
         }
       },
     );
@@ -51,7 +129,7 @@ class PluginNodeExecutor {
       async (
         event,
         pluginId: string,
-        manifest: PluginManifest,
+        grantToken: string,
         request: PluginNodeScriptRequest,
       ) => {
         const window = BrowserWindow.fromWebContents(event.sender);
@@ -59,19 +137,135 @@ class PluginNodeExecutor {
           throw new Error('No window found for event sender');
         }
 
-        // SECURITY: authorize from main-process-held state, not the per-call
-        // manifest the renderer supplies (the renderer-supplied manifest is not
-        // trustworthy — CWE-501). The manifest check is kept only as a secondary
-        // sanity gate. See GHSA-78rv-m663-4fph.
-        if (!this.grantedPlugins.has(pluginId)) {
+        const grant = this.grants.get(pluginId);
+        if (
+          !grant ||
+          grant.token !== grantToken ||
+          grant.webContentsId !== event.sender.id
+        ) {
           throw new Error('Plugin is not authorized for nodeExecution');
-        }
-        if (!manifest.permissions?.includes('nodeExecution')) {
-          throw new Error('Plugin does not have nodeExecution permission');
         }
 
         return await this.executeScript(pluginId, request);
       },
+    );
+  }
+
+  private registerGrantCleanup(webContents: WebContents): void {
+    const webContentsId = webContents.id;
+    if (this.grantCleanupByWebContents.has(webContentsId)) {
+      return;
+    }
+
+    const cleanup = (): void => {
+      for (const [pluginId, grant] of this.grants.entries()) {
+        if (grant.webContentsId === webContentsId) {
+          this.grants.delete(pluginId);
+        }
+      }
+      const registration = this.grantCleanupByWebContents.get(webContentsId);
+      if (registration) {
+        this.unregisterGrantCleanup(webContentsId);
+      }
+    };
+    const didStartNavigation = (
+      _event: Electron.Event,
+      _url: string,
+      isInPlace: boolean,
+      isMainFrame: boolean,
+    ): void => {
+      if (isMainFrame && !isInPlace) {
+        cleanup();
+      }
+    };
+
+    this.grantCleanupByWebContents.set(webContentsId, {
+      webContents,
+      cleanup,
+      didStartNavigation,
+    });
+    webContents.once('destroyed', cleanup);
+    webContents.on('will-navigate', cleanup);
+    webContents.on('did-navigate', cleanup);
+    webContents.on('did-start-navigation', didStartNavigation);
+  }
+
+  private unregisterGrantCleanup(webContentsId: number): void {
+    const registration = this.grantCleanupByWebContents.get(webContentsId);
+    if (!registration) {
+      return;
+    }
+
+    const { webContents } = registration;
+    webContents.removeListener('destroyed', registration.cleanup);
+    webContents.removeListener('will-navigate', registration.cleanup);
+    webContents.removeListener('did-navigate', registration.cleanup);
+    webContents.removeListener('did-start-navigation', registration.didStartNavigation);
+    this.grantCleanupByWebContents.delete(webContentsId);
+  }
+
+  private releaseGrantCleanupIfUnused(webContentsId: number): void {
+    for (const grant of this.grants.values()) {
+      if (grant.webContentsId === webContentsId) {
+        return;
+      }
+    }
+    this.unregisterGrantCleanup(webContentsId);
+  }
+
+  private getVerifiedBuiltInNodeExecutionManifest(pluginId: string): PluginManifest {
+    if (typeof pluginId !== 'string' || !pluginId) {
+      throw new Error('Invalid pluginId');
+    }
+    if (!BUILT_IN_PLUGIN_ID_RE.test(pluginId)) {
+      throw new Error('Invalid pluginId');
+    }
+
+    const manifestPath = this.getBuiltInManifestPath(pluginId);
+    if (!manifestPath) {
+      throw new Error('Plugin is not a verified built-in plugin');
+    }
+
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PluginManifest;
+    if (!manifest || manifest.id !== pluginId) {
+      throw new Error('Verified plugin manifest does not match requested plugin');
+    }
+    if (typeof manifest.name !== 'string' || !manifest.name) {
+      throw new Error('Invalid plugin manifest name');
+    }
+    if (typeof manifest.version !== 'string' || !manifest.version) {
+      throw new Error('Invalid plugin manifest version');
+    }
+    if (!manifest.permissions?.includes('nodeExecution')) {
+      throw new Error('Plugin does not have nodeExecution permission');
+    }
+    return manifest;
+  }
+
+  private getBuiltInManifestPath(pluginId: string): string | null {
+    for (const baseDir of this.getBuiltInPluginBaseDirs()) {
+      const manifestPath = join(baseDir, pluginId, 'manifest.json');
+      if (existsSync(manifestPath)) {
+        return manifestPath;
+      }
+    }
+    return null;
+  }
+
+  private getBuiltInPluginBaseDirs(): string[] {
+    return Array.from(
+      new Set(
+        [
+          join(__dirname, '../.tmp/angular-dist/browser/assets/bundled-plugins'),
+          join(__dirname, '../src/assets/bundled-plugins'),
+          ...(app.isPackaged
+            ? []
+            : [
+                join(process.cwd(), '.tmp/angular-dist/browser/assets/bundled-plugins'),
+                join(process.cwd(), 'src/assets/bundled-plugins'),
+              ]),
+        ].map((p) => resolvePath(p)),
+      ),
     );
   }
 

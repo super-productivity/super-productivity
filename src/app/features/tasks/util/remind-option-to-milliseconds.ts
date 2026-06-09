@@ -1,6 +1,4 @@
 import { TaskReminderOptionId } from '../task.model';
-import { devError } from '../../../util/dev-error';
-import { TaskLog } from '../../../core/log';
 
 export const remindOptionToMilliseconds = (
   due: number,
@@ -42,21 +40,20 @@ export const millisecondsDiffToRemindOption = (
     return TaskReminderOptionId.DoNotRemind;
   }
   const diff: number = due - remindAt;
-  if (diff >= 60 * 60 * 1000) {
+  const diffInMinutes = diff / (60 * 1000);
+
+  if (diffInMinutes >= 45) {
     return TaskReminderOptionId.h1;
-  } else if (diff >= 30 * 60 * 1000) {
+  } else if (diffInMinutes >= 22.5) {
     return TaskReminderOptionId.m30;
-  } else if (diff >= 15 * 60 * 1000) {
+  } else if (diffInMinutes >= 12.5) {
     return TaskReminderOptionId.m15;
-  } else if (diff >= 10 * 60 * 1000) {
+  } else if (diffInMinutes >= 7.5) {
     return TaskReminderOptionId.m10;
-  } else if (diff >= 5 * 60 * 1000) {
+  } else if (diffInMinutes >= 2.5) {
     return TaskReminderOptionId.m5;
-  } else if (diff <= 0) {
-    return TaskReminderOptionId.AtStart;
   } else {
-    TaskLog.log(due, remindAt);
-    devError('Cannot determine remind option. Invalid params');
-    return TaskReminderOptionId.DoNotRemind;
+    // Also handles diff <= 0
+    return TaskReminderOptionId.AtStart;
   }
 };

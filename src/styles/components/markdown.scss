@@ -136,4 +136,16 @@
   .checkbox-label {
     cursor: pointer;
   }
+
+  // A markdown link with a disallowed URL scheme, or an image with an unsafe
+  // (remote file:// / UNC) src, renders as inert text instead of an anchor/img
+  // (security: GHSA-hr87-735w-hfq3, see marked-options-factory.ts). Style it as
+  // muted, non-interactive text with a help cursor so blocked content reads as
+  // intentionally disabled, not body copy (the title attribute explains why on
+  // hover).
+  .markdown-blocked-link {
+    color: var(--text-color-muted);
+    text-decoration: underline dotted;
+    cursor: help;
+  }
 }

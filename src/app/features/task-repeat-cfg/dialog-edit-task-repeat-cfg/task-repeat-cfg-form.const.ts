@@ -1,11 +1,7 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { T } from '../../../t.const';
-import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
-import { TaskReminderOptionId } from '../../tasks/task.model';
 
 const updateParent = (
   field: FormlyFieldConfig,
@@ -26,19 +22,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
       label: T.F.TASK_REPEAT.F.TITLE,
     },
   },
-  {
-    key: 'startDate',
-    type: 'date',
-    // Default to a 'YYYY-MM-DD' string (not a Date): Formly skips `parsers` on
-    // `defaultValue`, so a raw Date would slip into the model and downstream
-    // `dateStrToUtcDate` would choke on it, crashing the dialog (#7945).
-    defaultValue: getDbDateStr(),
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.START_DATE,
-      required: true,
-    },
-    parsers: [(val: unknown) => (val instanceof Date ? getDbDateStr(val) : val)],
-  },
+
   {
     key: 'quickSetting',
     type: 'select',
@@ -234,38 +218,7 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       updateOn: 'blur',
     },
   },
-  {
-    fieldGroupClassName: 'formly-row',
-    fieldGroup: [
-      {
-        key: 'startTime',
-        type: 'input',
-        templateOptions: {
-          label: T.F.TASK_REPEAT.F.START_TIME,
-          description: T.F.TASK_REPEAT.F.START_TIME_DESCRIPTION,
-        },
-        validators: {
-          validTimeString: (c: { value: string | undefined }) => {
-            return !c.value || isValidSplitTime(c.value);
-          },
-        },
-      },
-      {
-        key: 'remindAt',
-        type: 'select',
-        defaultValue: TaskReminderOptionId.AtStart,
-        hideExpression: '!model.startTime',
-        templateOptions: {
-          required: true,
-          label: T.F.TASK_REPEAT.F.REMIND_AT,
-          options: TASK_REMINDER_OPTIONS,
-          valueProp: 'value',
-          labelProp: 'label',
-          placeholder: T.F.TASK_REPEAT.F.REMIND_AT_PLACEHOLDER,
-        },
-      },
-    ],
-  },
+
   {
     key: 'notes',
     type: 'textarea',

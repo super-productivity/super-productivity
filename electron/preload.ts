@@ -13,7 +13,6 @@ import {
 } from './shared-with-frontend/get-dist-channel';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
-  PluginManifest,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
 } from '../packages/plugin-api/src/types';
@@ -21,6 +20,8 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+
+let pluginNodeExecutionApiConsumed = false;
 
 const _send: (channel: IPCEventValue, ...args: unknown[]) => void = (channel, ...args) =>
   ipcRenderer.send(channel, ...args);
@@ -248,23 +249,35 @@ const ea: ElectronAPI = {
   },
 
   // Plugin API
-  pluginExecNodeScript: (
-    pluginId: string,
-    manifest: PluginManifest,
-    request: PluginNodeScriptRequest,
-  ) =>
-    _invoke(
-      'PLUGIN_EXEC_NODE_SCRIPT',
-      pluginId,
-      manifest,
-      request,
-    ) as Promise<PluginNodeScriptResult>,
-
-  // Register/revoke a plugin's nodeExecution grant with the main process. The
-  // executor authorizes from this out-of-band state, not the per-call manifest.
-  // See GHSA-78rv-m663-4fph.
-  pluginSetNodeConsent: (pluginId: string, isGranted: boolean) =>
-    _invoke('PLUGIN_SET_NODE_CONSENT', pluginId, isGranted) as Promise<void>,
+  consumePluginNodeExecutionApi: () => {
+    if (pluginNodeExecutionApiConsumed) {
+      return null;
+    }
+    pluginNodeExecutionApiConsumed = true;
+    return {
+      requestGrant: (pluginId: string) =>
+        _invoke('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', pluginId) as Promise<{
+          token: string;
+        } | null>,
+      executeScript: (
+        pluginId: string,
+        grantToken: string,
+        request: PluginNodeScriptRequest,
+      ) =>
+        _invoke(
+          'PLUGIN_EXEC_NODE_SCRIPT',
+          pluginId,
+          grantToken,
+          request,
+        ) as Promise<PluginNodeScriptResult>,
+      revokeGrant: (pluginId: string, grantToken: string) =>
+        _invoke(
+          'PLUGIN_REVOKE_NODE_EXECUTION_GRANT',
+          pluginId,
+          grantToken,
+        ) as Promise<void>,
+    };
+  },
 
   // Plugin OAuth
   pluginOAuthPrepare: () => _invoke('PLUGIN_OAUTH_PREPARE') as Promise<{ port: number }>,

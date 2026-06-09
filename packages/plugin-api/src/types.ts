@@ -652,7 +652,8 @@ export interface PluginAPI {
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 
-  // node execution (only available in Electron with nodeExecution permission)
+  // node execution (Electron desktop only; currently grantable only to packaged
+  // built-in plugins with nodeExecution permission after main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
   // action execution - dispatch NgRx actions (limited to allowed subset)

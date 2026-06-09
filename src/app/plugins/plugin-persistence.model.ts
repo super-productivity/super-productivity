@@ -36,7 +36,6 @@ export interface PluginUserData {
 export interface PluginMetadata {
   id: string;
   isEnabled: boolean;
-  nodeExecutionConsent?: boolean;
   // Future metadata can be added here:
   // installDate?: number;
   // lastUsed?: number;

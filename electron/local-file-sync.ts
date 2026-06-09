@@ -8,9 +8,17 @@ import {
   unlinkSync,
 } from 'fs';
 import { error, log } from 'electron-log/main';
-import { dialog, ipcMain } from 'electron';
+import { app, dialog, ipcMain } from 'electron';
 import { getWin } from './main-window';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { assertPathOutside } from './file-path-guard';
+
+// SECURITY: file-sync must never read/write/list inside the app's private dir,
+// which holds settings/grants/db — touching it is a privilege-escalation
+// primitive (e.g. forging the nodeExecution grant file). The path is
+// renderer-supplied (untrusted plugin/XSS). Lazy getter — userData can be
+// changed at startup (--user-data-dir, Snap). See file-path-guard.ts.
+const getAppPrivateDir = (): string => app.getPath('userData');
 
 export const initLocalFileSyncAdapter = (): void => {
   ipcMain.handle(
@@ -20,6 +28,10 @@ export const initLocalFileSyncAdapter = (): void => {
         const normalized = filePathOrUrl.startsWith('file://')
           ? fileURLToPath(filePathOrUrl)
           : filePathOrUrl;
+
+        // SECURITY: never inline a file from the app's private dir (the path is
+        // renderer-supplied background-image config).
+        assertPathOutside(getAppPrivateDir(), normalized);
 
         const ext = normalized.toLowerCase().split('.').pop() || '';
 
@@ -79,6 +91,7 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): string | Error => {
       try {
+        assertPathOutside(getAppPrivateDir(), filePath);
         log(IPC.FILE_SYNC_SAVE, {
           dataLength: dataStr.length,
           hasData: dataStr.length > 0,
@@ -112,6 +125,7 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): { rev: string; dataStr: string | undefined } | Error => {
       try {
+        assertPathOutside(getAppPrivateDir(), filePath);
         log(IPC.FILE_SYNC_LOAD, {
           hasLocalRev: !!localRev,
         });
@@ -141,6 +155,7 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): void | Error => {
       try {
+        assertPathOutside(getAppPrivateDir(), filePath);
         log(IPC.FILE_SYNC_REMOVE);
         unlinkSync(filePath);
         return;
@@ -162,6 +177,7 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): true | Error => {
       try {
+        assertPathOutside(getAppPrivateDir(), dirPath);
         const dirEntries = readdirSync(dirPath);
         log(IPC.CHECK_DIR_EXISTS, {
           dirEntryCount: dirEntries.length,
@@ -190,6 +206,7 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): string[] | Error => {
       try {
+        assertPathOutside(getAppPrivateDir(), dirPath);
         return readdirSync(dirPath);
       } catch (e) {
         error('Local file sync list files failed', getSafeErrorMeta(e));
