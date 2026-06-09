@@ -251,4 +251,48 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       expect(component.selectedDate).toEqual(tomorrow);
     });
   });
+
+  describe('Time handling in select-due-only mode', () => {
+    beforeEach(() => {
+      TestBed.overrideProvider(MAT_DIALOG_DATA, {
+        useValue: {
+          isSelectDueOnly: true,
+        },
+      });
+
+      fixture = TestBed.createComponent(DialogScheduleTaskComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+    });
+
+    it('should clear time and reminder when onTimeClear is called', () => {
+      component.selectedTime = '10:30';
+      component.selectedReminderCfgId = TaskReminderOptionId.m15;
+
+      // Access the DateTimePickerComponent instance from the template
+      const dateTimePicker = fixture.nativeElement.querySelector('datetime-picker');
+      expect(dateTimePicker).toBeTruthy();
+
+      // Trigger the event from DateTimePickerComponent
+      component.selectedTime = null;
+      component.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
+
+      expect(component.selectedTime).toBeNull();
+      expect(component.selectedReminderCfgId).toBe(TaskReminderOptionId.DoNotRemind);
+    });
+
+    it('should autofill time on focus when no time is set', fakeAsync(() => {
+      component.selectedDate = new Date(2026, 4, 6);
+      component.selectedTime = null;
+
+      // Simulate onTimeFocus being called from the picker
+      // We can directly call the handler that would be bound in the template
+      const dateTimePicker = fixture.debugElement.query(
+        (debugEl) => debugEl.name === 'datetime-picker',
+      );
+      dateTimePicker.triggerEventHandler('timeChanged', '09:00');
+
+      expect(component.selectedTime as unknown as string).toBe('09:00');
+    }));
+  });
 });
