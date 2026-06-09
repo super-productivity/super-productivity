@@ -197,7 +197,7 @@
 :host-context(.isDarkTheme) {
   .heatmap-container {
     --heatmap-container-bg: var(--c-light-05);
-    --heatmap-cell-border: var(--c-light-10);
+    --heatmap-cell-border: transparent;
     --heatmap-hover-outline: var(--c-light-60);
     --heatmap-level-0-bg: rgba(var(--ink-on-channel), 0.16);
     --heatmap-level-1-bg: color-mix(

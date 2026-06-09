@@ -42,7 +42,6 @@ describe('HeatmapComponent', () => {
   beforeEach(async () => {
     document.body.classList.add('isDarkTheme');
     document.body.style.setProperty('--c-light-05', 'rgba(255, 255, 255, 0.05)');
-    document.body.style.setProperty('--c-light-10', 'rgba(255, 255, 255, 0.1)');
     document.body.style.setProperty('--ink-on-channel', '255, 255, 255');
     document.body.style.setProperty('--c-primary', 'rgb(90, 150, 255)');
 
@@ -58,7 +57,6 @@ describe('HeatmapComponent', () => {
   afterEach(() => {
     document.body.classList.remove('isDarkTheme');
     document.body.style.removeProperty('--c-light-05');
-    document.body.style.removeProperty('--c-light-10');
     document.body.style.removeProperty('--ink-on-channel');
     document.body.style.removeProperty('--c-primary');
     fixture.destroy();
@@ -71,23 +69,23 @@ describe('HeatmapComponent', () => {
     expect(getComputedStyle(emptyDay).boxShadow).toBe('none');
   });
 
-  it('adds a subtle dark-theme boundary to inactive heatmap days', () => {
+  it('keeps dark-theme inactive heatmap days borderless', () => {
     const inactiveDay = fixture.nativeElement.querySelector(
       '.day.level-0',
     ) as HTMLElement;
 
     const computed = getComputedStyle(inactiveDay);
     expect(computed.backgroundColor).toBe('rgba(255, 255, 255, 0.16)');
-    expect(computed.boxShadow).toContain('rgba(255, 255, 255, 0.1)');
+    expect(computed.boxShadow).not.toContain('rgba(255, 255, 255');
   });
 
-  it('uses the same subtle boundary for the dark-theme legend', () => {
+  it('keeps the dark-theme legend borderless', () => {
     const inactiveLegendItem = fixture.nativeElement.querySelector(
       '.legend-item.level-0',
     ) as HTMLElement;
 
-    expect(getComputedStyle(inactiveLegendItem).boxShadow).toContain(
-      'rgba(255, 255, 255, 0.1)',
+    expect(getComputedStyle(inactiveLegendItem).boxShadow).not.toContain(
+      'rgba(255, 255, 255',
     );
   });
 });
