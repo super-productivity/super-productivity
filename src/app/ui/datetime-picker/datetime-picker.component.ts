@@ -142,8 +142,15 @@ export class DateTimePickerComponent implements AfterViewInit {
     return this.pickerSelectedDate || cal.activeDate;
   }
 
+  private _lastSyncedDate: number | null = null;
   private _syncActiveDateEffect = effect(() => {
     const date = this.selectedDate();
+    const dateMs = date ? new Date(date).getTime() : null;
+    if (dateMs === this._lastSyncedDate) {
+      return;
+    }
+    this._lastSyncedDate = dateMs;
+
     const cal = this.calendar();
     if (cal) {
       cal.activeDate = new Date(date || new Date());
