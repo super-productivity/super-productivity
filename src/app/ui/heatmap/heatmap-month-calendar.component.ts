@@ -49,9 +49,15 @@ export class HeatmapMonthCalendarComponent {
   readonly legendMode = input<'hours' | 'occurrences' | 'none'>('hours');
   readonly dayClick = output<DayData>();
 
-  // Explicit user navigation; null → the computed default month.
+  // Explicit user navigation; null → the computed default month. A navigated
+  // month that falls OUTSIDE the current data range (the inputs changed under
+  // us, e.g. the metric year select) is discarded — otherwise the calendar
+  // would strand the user on an all-empty month with the nav buttons disabled.
   private readonly _viewMonth = signal<{ y: number; m: number } | null>(null);
-  readonly viewMonth = computed(() => this._viewMonth() ?? this._defaultMonth());
+  readonly viewMonth = computed(() => {
+    const vm = this._viewMonth();
+    return vm && this._isMonthInRange(vm) ? vm : this._defaultMonth();
+  });
 
   readonly monthLabel = computed(() => {
     const { y, m } = this.viewMonth();
@@ -111,7 +117,12 @@ export class HeatmapMonthCalendarComponent {
   }
 
   onCellClick(cell: CalCell): void {
-    if (cell.data) this.dayClick.emit(cell.data);
+    // Other-month spill-over cells render greyed with no level/completed
+    // styling — emitting for them would trigger consumer actions (e.g. setting
+    // a simulation) with zero visual feedback on the clicked cell.
+    if (cell.data && !cell.isOtherMonth) {
+      this.dayClick.emit(cell.data);
+    }
   }
 
   getCellClass(cell: CalCell): string {
@@ -139,10 +150,21 @@ export class HeatmapMonthCalendarComponent {
   }
 
   private _defaultMonth(): { y: number; m: number } {
-    const today = new Date();
-    const inRange = today >= this.rangeStart() && today <= this.rangeEnd();
+    // Compare calendar DAYS, not instants: rangeStart is often anchored at
+    // local noon (the projection preview), so an instant comparison before
+    // noon put "today" outside the range and defaulted the view to the month
+    // of rangeEnd — a year ahead.
+    const today = this._dayStart(new Date());
+    const inRange =
+      today >= this._dayStart(this.rangeStart()) && today <= this.rangeEnd();
     const ref = inRange ? today : this.rangeEnd();
     return { y: ref.getFullYear(), m: ref.getMonth() };
+  }
+  /** True when any day of month `vm` overlaps `[rangeStart, rangeEnd]`. */
+  private _isMonthInRange(vm: { y: number; m: number }): boolean {
+    const monthStart = new Date(vm.y, vm.m, 1);
+    const monthEnd = new Date(vm.y, vm.m + 1, 0, 23, 59, 59);
+    return monthEnd >= this._dayStart(this.rangeStart()) && monthStart <= this.rangeEnd();
   }
   private _dayStart(d: Date): Date {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());

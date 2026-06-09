@@ -213,6 +213,13 @@ export class DialogEditTaskRepeatCfgComponent {
     if (!day?.dateStr) {
       return;
     }
+    // Only a "repeat from completion" schedule re-anchors when a task is
+    // completed — for a fixed-calendar schedule completing a day never shifts
+    // the rest, so there is nothing to simulate: ignore the click instead of
+    // rendering a misleading "completed" marker on a day the rule never fires.
+    if (!this.repeatCfg().repeatFromCompletionDate) {
+      return;
+    }
     // Tap the already-simulated day again to clear it. Otherwise simulate
     // completing on the clicked day — ANY day, not only scheduled occurrences:
     // re-anchoring to an on-schedule day is a no-op (next = same grid), so the
@@ -222,6 +229,33 @@ export class DialogEditTaskRepeatCfgComponent {
       day.dateStr === this.simulatedCompletion() ? null : day.dateStr,
     );
   }
+  // Only the schedule-relevant slice of the working cfg, with value equality —
+  // formly emits a CLONED model on every keystroke in ANY field (title, notes,
+  // …), so hanging the projection directly off `repeatCfg()` rebuilt the full
+  // 365-day calendar per character typed. This memo recomputes downstream only
+  // when a field that actually changes the projection changes.
+  private readonly _previewScheduleCfg = computed(
+    () => {
+      const cfg = this.repeatCfg();
+      return {
+        rrule: cfg.rrule,
+        startDate: cfg.startDate,
+        lastTaskCreationDay: cfg.lastTaskCreationDay,
+        repeatFromCompletionDate: cfg.repeatFromCompletionDate,
+        // join: the cloned model produces a NEW array reference per keystroke,
+        // so compare by content.
+        exdatesKey: (cfg.deletedInstanceDates ?? []).join(','),
+      };
+    },
+    {
+      equal: (a, b) =>
+        a.rrule === b.rrule &&
+        a.startDate === b.startDate &&
+        a.lastTaskCreationDay === b.lastTaskCreationDay &&
+        a.repeatFromCompletionDate === b.repeatFromCompletionDate &&
+        a.exdatesKey === b.exdatesKey,
+    },
+  );
   resultHeatmapData = computed<
     | (HeatmapData & { dayMap: Map<string, DayData>; rangeStart: Date; rangeEnd: Date })
     | null
@@ -229,19 +263,21 @@ export class DialogEditTaskRepeatCfgComponent {
     if (!this.isRRuleMode() || !this.showResultHeatmap()) {
       return null;
     }
-    const cfg = this.repeatCfg();
+    const cfg = this._previewScheduleCfg();
     if (!isRRuleValid(cfg.rrule)) {
       return null;
     }
     const rrule = cfg.rrule as string;
     // Per-instance overrides (moves / RDATE) are Phase 8; here only EXDATE skips
     // (deletedInstanceDates) apply to the projection.
-    const exdates = cfg.deletedInstanceDates ?? [];
+    const exdates = cfg.exdatesKey ? cfg.exdatesKey.split(',') : [];
     const from = new Date();
     from.setHours(12, 0, 0, 0);
     const to = new Date(from);
     to.setDate(to.getDate() + this._PREVIEW_HEATMAP_DAYS);
-    const baseStart = getEffectiveRepeatStartDate(cfg as TaskRepeatCfg);
+    // The util only reads repeatFromCompletionDate / lastTaskCreationDay /
+    // startDate — all carried by the narrow schedule slice.
+    const baseStart = getEffectiveRepeatStartDate(cfg);
     const sim = this.simulatedCompletion();
     // Only a "repeat from completion" schedule re-anchors when you finish a task
     // (the completion effect rewrites startDate/lastTaskCreationDay to the
@@ -396,6 +432,12 @@ export class DialogEditTaskRepeatCfgComponent {
 
   /** The RRULE builder emits a new rule string; store it + keep repeatCycle in sync. */
   onRRuleChange(rrule: string): void {
+    // A simulation belongs to the rule it was clicked on — keeping it across an
+    // edit would split/re-anchor the NEW rule's series at a day picked for the
+    // old one, silently distorting the preview.
+    if (this.repeatCfg().rrule !== rrule) {
+      this.simulatedCompletion.set(null);
+    }
     this.repeatCfg.update((cfg) => ({
       ...cfg,
       rrule,
@@ -413,6 +455,8 @@ export class DialogEditTaskRepeatCfgComponent {
   // Schedule-type toggle lives in the rrule-builder (RRULE mode). It's separate
   // from the rrule string — re-anchors the interval to the completion day.
   onRepeatFromCompletionChange(repeatFromCompletionDate: boolean): void {
+    // Switching schedule type changes what a simulation MEANS — drop it.
+    this.simulatedCompletion.set(null);
     this.repeatCfg.update((cfg) => ({ ...cfg, repeatFromCompletionDate }));
   }
 

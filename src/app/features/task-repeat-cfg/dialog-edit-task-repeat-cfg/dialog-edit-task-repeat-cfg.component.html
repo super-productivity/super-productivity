@@ -103,22 +103,27 @@
           legendMode="occurrences"
           (dayClick)="onPreviewDayClick($event)"
         />
-        @if (simulatedCompletion(); as sim) {
-          <div class="rrule-result__sim">
-            {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }}
-            {{ sim }}
-            <button
-              type="button"
-              class="rrule-result__sim-reset"
-              (click)="clearSimulation()"
-            >
-              {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
-            </button>
-          </div>
-        } @else {
-          <div class="rrule-result__sim-hint">
-            {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
-          </div>
+        <!-- Simulation only exists for "repeat from completion" schedules — a
+             fixed calendar never re-anchors, so the hint would invite clicks
+             that (correctly) do nothing. -->
+        @if (repeatCfg().repeatFromCompletionDate) {
+          @if (simulatedCompletion(); as sim) {
+            <div class="rrule-result__sim">
+              {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }}
+              {{ sim }}
+              <button
+                type="button"
+                class="rrule-result__sim-reset"
+                (click)="clearSimulation()"
+              >
+                {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
+              </button>
+            </div>
+          } @else {
+            <div class="rrule-result__sim-hint">
+              {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
+            </div>
+          }
         }
       }
     </div>

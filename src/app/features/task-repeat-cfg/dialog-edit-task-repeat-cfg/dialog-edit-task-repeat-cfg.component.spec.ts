@@ -606,8 +606,15 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(hasProjected).toBe(true);
     });
 
-    it('toggles the simulated completion day on click', async () => {
-      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+    // Simulation only exists for repeat-from-completion schedules.
+    const completionCfg: TaskRepeatCfg = {
+      ...rruleCfg,
+      id: 'rr-cal-completion',
+      repeatFromCompletionDate: true,
+    };
+
+    it('toggles the simulated completion day on click (from-completion cfg)', async () => {
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
       const c = fixture.componentInstance;
       c.toggleResultHeatmap();
       c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
@@ -617,8 +624,45 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(c.simulatedCompletion()).toBeNull();
     });
 
-    it('hiding the calendar also clears an active simulation', async () => {
+    it('ignores simulation clicks for a fixed-calendar schedule', async () => {
+      // A fixed calendar never re-anchors on completion — marking the clicked
+      // day "completed" would show a completion on a day the rule never fires
+      // and inflate the month's occurrence count.
       const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('clears an active simulation when the rule is edited', async () => {
+      // A sim belongs to the rule it was clicked on; keeping it across an edit
+      // would re-anchor the NEW rule's series at a day picked for the old one.
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      c.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('does not rebuild the projection when an unrelated field changes', async () => {
+      // formly emits a cloned model per keystroke in ANY field; the projection
+      // must only recompute when a schedule-relevant field changes.
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const before = c.resultHeatmapData();
+      expect(before).not.toBeNull();
+      c.repeatCfg.update((cfg) => ({ ...cfg, title: 'typing…' }) as any);
+      expect(c.resultHeatmapData()).toBe(before); // same reference — no rebuild
+      c.repeatCfg.update((cfg) => ({ ...cfg, rrule: 'FREQ=DAILY' }) as any);
+      expect(c.resultHeatmapData()).not.toBe(before); // schedule change rebuilds
+    });
+
+    it('hiding the calendar also clears an active simulation', async () => {
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
       const c = fixture.componentInstance;
       c.toggleResultHeatmap();
       c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
