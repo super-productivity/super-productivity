@@ -1761,6 +1761,21 @@ export class PluginBridgeService implements OnDestroy {
     return IS_ELECTRON;
   }
 
+  /**
+   * Consume the one-shot node-execution IPC handed off by the preload.
+   *
+   * SECURITY INVARIANT — must run at app bootstrap, before any plugin code
+   * executes. The handoff lives on the shared `window.ea`, and plugin code
+   * runs via `new Function` in this same renderer realm, so whoever calls
+   * `consumePluginNodeExecutionApi()` first owns the privileged node channel.
+   * This service is constructed during startup (PluginService injects it)
+   * and plugins only load later (post-sync, in `initializePlugins`), so the
+   * trusted side wins the race. The preload makes the handoff one-shot
+   * (returns null after the first read) as a backstop, but the ordering is
+   * the real guarantee: do NOT make this service lazy, and do not run plugin
+   * code before it is instantiated. Real fix = plugin realm isolation
+   * (tracked with the broader window.ea hardening).
+   */
   private _consumeNodeExecutionApi(): PluginNodeExecutionElectronApi | null {
     if (!window.ea || typeof window.ea.consumePluginNodeExecutionApi !== 'function') {
       return null;
