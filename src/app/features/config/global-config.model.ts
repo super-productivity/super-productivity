@@ -67,6 +67,7 @@ export type TasksConfig = Readonly<{
   isMarkdownFormattingInNotesEnabled: boolean;
   defaultProjectId?: string | null | false; // allow 'false' because of #569
   notesTemplate: string;
+  isSetDefaultDayForTodayTasks: boolean;
 }>;
 
 export type ShortSyntaxConfig = Readonly<{

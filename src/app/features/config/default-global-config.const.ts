@@ -44,6 +44,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeDelete: true,
     isAutoAddWorkedOnToToday: true,
     isAutoMarkParentAsDone: false,
+    isSetDefaultDayForTodayTasks: true,
     isTrayShowCurrent: true,
     defaultProjectId: INBOX_PROJECT.id,
     isMarkdownFormattingInNotesEnabled: true,
