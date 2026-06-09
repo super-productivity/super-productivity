@@ -55,19 +55,6 @@ export const removeTagsForAllTasks = createAction(
   props<{ tagIdsToRemove: string[] }>(),
 );
 
-export const toggleTaskHideSubTasks = createAction(
-  '[Task] Toggle Show Sub Tasks',
-  (taskProps: { taskId: string; isShowLess: boolean; isEndless: boolean }) => ({
-    ...taskProps,
-    meta: {
-      isPersistent: true,
-      entityType: 'TASK',
-      entityId: taskProps.taskId,
-      opType: OpType.Update,
-    } satisfies PersistentActionMeta,
-  }),
-);
-
 export const moveSubTask = createAction(
   '[Task] Move sub task',
   (taskProps: {

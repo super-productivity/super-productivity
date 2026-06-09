@@ -188,7 +188,6 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.TASK_UPDATE_UI]: 'TUU',
   [ActionType.TASK_ADD_SUB]: 'TA',
   [ActionType.TASK_MOVE_SUB]: 'TMS',
-  [ActionType.TASK_TOGGLE_HIDE_SUB]: 'THS',
   [ActionType.TASK_MOVE_UP]: 'TMU',
   [ActionType.TASK_MOVE_DOWN]: 'TMD',
   [ActionType.TASK_MOVE_TOP]: 'TMT',

@@ -1115,7 +1115,7 @@ describe('Task Reducer', () => {
     });
   });
 
-  describe('subtask hide/show actions - persistent meta', () => {
+  describe('subtask hide/show - persistent meta', () => {
     it('updateTaskUi should be persistent with correct meta', () => {
       const action = fromActions.updateTaskUi({
         task: { id: 'task-1', changes: { _hideSubTasksMode: 1 } },
@@ -1127,17 +1127,15 @@ describe('Task Reducer', () => {
       expect(action.meta.opType).toBe('UPD');
     });
 
-    it('toggleTaskHideSubTasks should be persistent with correct meta', () => {
-      const action = fromActions.toggleTaskHideSubTasks({
-        taskId: 'task-1',
-        isShowLess: true,
-        isEndless: true,
+    it('updateTaskUi payload survives JSON round-trip for the "show all" transition', () => {
+      // The synced payload is JSON-encoded. `undefined` is dropped by JSON.stringify,
+      // so callers must use the explicit Show (0) sentinel to make a "show all"
+      // transition replay correctly on remote devices.
+      const action = fromActions.updateTaskUi({
+        task: { id: 'task-1', changes: { _hideSubTasksMode: 0 } },
       });
-
-      expect(action.meta.isPersistent).toBe(true);
-      expect(action.meta.entityType).toBe('TASK');
-      expect(action.meta.entityId).toBe('task-1');
-      expect(action.meta.opType).toBe('UPD');
+      const roundTripped = JSON.parse(JSON.stringify(action));
+      expect(roundTripped.task.changes._hideSubTasksMode).toBe(0);
     });
   });
 });
