@@ -455,6 +455,7 @@ export class OperationLogUploadService {
       actionPayload['sectionCfg'] as Record<string, unknown>,
     );
     if (Object.keys(sectionCfg).length === 0) {
+      // GLOBAL_CONFIG_UPDATE_SECTION replays from actionPayload; entityChanges are empty.
       return null;
     }
 

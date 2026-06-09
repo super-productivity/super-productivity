@@ -24,9 +24,9 @@ export const stripLocalOnlySyncScheduleSettings = <T extends Record<string, unkn
   return stripped;
 };
 
-export const applyLocalOnlySyncSettingsToAppData = <T>(
+const _updateSyncConfigInAppData = <T>(
   data: T,
-  localOnlySettings: LocalOnlySyncSettings,
+  updateSyncConfig: (syncConfig: Record<string, unknown>) => Record<string, unknown>,
 ): T => {
   if (!data || typeof data !== 'object') {
     return data;
@@ -46,39 +46,24 @@ export const applyLocalOnlySyncSettingsToAppData = <T>(
     ...typedData,
     globalConfig: {
       ...globalConfig,
-      sync: {
-        ...(globalConfig['sync'] as Record<string, unknown>),
-        ...localOnlySettings,
-      },
+      sync: updateSyncConfig(globalConfig['sync'] as Record<string, unknown>),
     },
   } as T;
 };
 
+export const applyLocalOnlySyncSettingsToAppData = <T>(
+  data: T,
+  localOnlySettings: LocalOnlySyncSettings,
+): T => {
+  return _updateSyncConfigInAppData(data, (syncConfig) => ({
+    ...syncConfig,
+    ...localOnlySettings,
+  }));
+};
+
 export const stripLocalOnlySyncSettingsFromAppData = (data: unknown): unknown => {
-  if (!data || typeof data !== 'object') {
-    return data;
-  }
-
-  const typedData = data as Record<string, unknown>;
-  if (!typedData['globalConfig'] || typeof typedData['globalConfig'] !== 'object') {
-    return data;
-  }
-
-  const globalConfig = typedData['globalConfig'] as Record<string, unknown>;
-  if (!globalConfig['sync'] || typeof globalConfig['sync'] !== 'object') {
-    return data;
-  }
-
-  const sync = globalConfig['sync'] as Record<string, unknown>;
-
-  return {
-    ...typedData,
-    globalConfig: {
-      ...globalConfig,
-      sync: {
-        ...stripLocalOnlySyncScheduleSettings(sync),
-        syncProvider: null,
-      },
-    },
-  };
+  return _updateSyncConfigInAppData(data, (syncConfig) => ({
+    ...stripLocalOnlySyncScheduleSettings(syncConfig),
+    syncProvider: null,
+  }));
 };
