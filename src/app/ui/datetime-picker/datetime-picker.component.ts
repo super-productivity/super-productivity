@@ -125,10 +125,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   private _syncActiveDateEffect = effect(() => {
     const date = this.selectedDate();
     const dateMs = date ? new Date(date).getTime() : null;
-    if (dateMs === this._lastSyncedDate) {
-      return;
-    }
-    this._lastSyncedDate = dateMs;
 
     const cal = this.calendar();
     if (cal) {
@@ -138,6 +134,11 @@ export class DateTimePickerComponent implements AfterViewInit {
         this._el.nativeElement.querySelector('mat-calendar')?.contains(activeEl);
 
       if (!isCalendarFocused) {
+        if (dateMs === this._lastSyncedDate) {
+          return;
+        }
+        this._lastSyncedDate = dateMs;
+
         const newActiveDate = new Date(date || new Date());
         if (cal.activeDate.getTime() !== newActiveDate.getTime()) {
           cal.activeDate = newActiveDate;
