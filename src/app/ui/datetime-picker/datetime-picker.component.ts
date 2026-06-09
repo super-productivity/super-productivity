@@ -117,7 +117,17 @@ export class DateTimePickerComponent implements AfterViewInit {
 
     const cal = this.calendar();
     if (cal) {
-      cal.activeDate = new Date(date || new Date());
+      const activeEl = document.activeElement;
+      const isCalendarFocused =
+        activeEl &&
+        this._el.nativeElement.querySelector('mat-calendar')?.contains(activeEl);
+
+      if (!isCalendarFocused) {
+        const newActiveDate = new Date(date || new Date());
+        if (cal.activeDate.getTime() !== newActiveDate.getTime()) {
+          cal.activeDate = newActiveDate;
+        }
+      }
     }
   });
 
