@@ -76,6 +76,11 @@ describe('LayoutService', () => {
       if (mockTaskElement && mockTaskElement.parentNode) {
         mockTaskElement.parentNode.removeChild(mockTaskElement);
       }
+      // These tests override document.activeElement via Object.defineProperty,
+      // which shadows the native (inherited) getter with an own property.
+      // Delete it so the override doesn't leak into later specs (e.g. the
+      // task.service focusTaskById tests, which then see a stale activeElement).
+      delete (document as unknown as Record<string, unknown>).activeElement;
     });
 
     it('should store focused task element when showing add task bar', () => {
