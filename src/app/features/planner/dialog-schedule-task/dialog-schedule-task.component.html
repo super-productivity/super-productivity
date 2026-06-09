@@ -64,6 +64,7 @@
           [disabled]="!selectedDate"
           (click)="submit()"
           type="button"
+          data-test-id="schedule-submit-btn"
         >
           @if (selectedTime) {
             <mat-icon>alarm</mat-icon>
@@ -79,6 +80,7 @@
         color="default"
         (click)="close()"
         type="button"
+        data-test-id="schedule-cancel-btn"
       >
         {{ T.G.CANCEL | translate }}
       </button>
