@@ -77,6 +77,36 @@ test('prod: rejects different file:// targets', () => {
   );
 });
 
+test('prod: rejects UNC / remote-host file:// even when pathname matches', () => {
+  // Regression: `file://` URLs carry a host. A pathname-only check matched
+  // `file://192.168.1.100/Applications/SP.app/Contents/Resources/index.html`
+  // against the local `file:///…/index.html` because both pathnames are
+  // `/Applications/SP.app/Contents/Resources/index.html` — letting an
+  // attacker-controlled UNC host load in the privileged window.
+  assert.equal(
+    isAppOriginUrl(
+      'file://192.168.1.100/Applications/SP.app/Contents/Resources/index.html',
+      PROD_APP_URL,
+    ),
+    false,
+    'UNC host with matching pathname must be rejected',
+  );
+  assert.equal(
+    isAppOriginUrl(
+      'file://attacker.example.com/Applications/SP.app/Contents/Resources/index.html',
+      PROD_APP_URL,
+    ),
+    false,
+    'remote-host file:// with matching pathname must be rejected',
+  );
+  // Even an empty-but-malformed authority pattern should not bypass it.
+  assert.equal(
+    isAppOriginUrl('file://localhost/etc/passwd', PROD_APP_URL),
+    false,
+    'localhost-host file:// pointing elsewhere is rejected',
+  );
+});
+
 test('non-http(s)/file schemes are rejected', () => {
   // data:/blob:/javascript:/etc must never land in the privileged window.
   assert.equal(isAppOriginUrl('data:text/html,<h1>x</h1>', DEV_APP_URL), false);

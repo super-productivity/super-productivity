@@ -11,9 +11,17 @@
  * - Protocols must match exactly.
  * - http/https: exact host (incl. port) match. Subdomains differ → different
  *   origin. This is what blocks `localhost.evil.com` and `http://127.0.0.1:1`.
- * - file: pathname equality with the app's loaded html file. Hash-only changes
- *   do not fire `will-navigate`, so a same-document hash route never reaches
- *   this check; a real cross-document file:// nav must point to the same html.
+ * - file: BOTH host AND pathname must match the app's loaded html file.
+ *   `file://` URLs may carry a host (UNC paths / remote shares), and Chromium
+ *   resolves the pathname relative to that host — so a target like
+ *   `file://192.168.1.100/Applications/SP.app/Contents/Resources/index.html`
+ *   has the same `.pathname` as the local app start URL. A pathname-only
+ *   check would let an attacker-controlled UNC host load in the privileged
+ *   window. The app's loaded file:// URL is always local (empty host), so we
+ *   require `target.host === ''` explicitly rather than relying on the
+ *   host-equality compare to coincidentally match.
+ *   Hash-only changes do not fire `will-navigate`, so a same-document hash
+ *   route never reaches this check.
  * - Anything else (data:, blob:, javascript:, ftp:, …): rejected.
  */
 export const isAppOriginUrl = (targetUrl: string, appUrl: string): boolean => {
@@ -30,7 +38,9 @@ export const isAppOriginUrl = (targetUrl: string, appUrl: string): boolean => {
     return target.host === expected.host;
   }
   if (target.protocol === 'file:') {
-    return target.pathname === expected.pathname;
+    return (
+      target.host === '' && expected.host === '' && target.pathname === expected.pathname
+    );
   }
   return false;
 };
