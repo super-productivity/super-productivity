@@ -13,7 +13,7 @@
         cursor: none !important;
       }
       // Suppress hover-only styling (when not focused) when cursor is hidden
-      .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus)
+      .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus-visible)
         > .mat-calendar-body-cell-content {
         outline: none !important;
 
