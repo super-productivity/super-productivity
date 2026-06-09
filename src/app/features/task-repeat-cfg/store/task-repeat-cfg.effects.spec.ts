@@ -27,6 +27,7 @@ import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-mi
 import { isToday } from '../../../util/is-today.util';
 import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
+import { setRRuleEngineEnabled } from '../../config/rrule-engine-flag';
 
 describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   let actions$: Observable<Action>;
@@ -2058,6 +2059,60 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   });
 
   describe('rescheduleTaskOnRepeatCfgUpdate$', () => {
+    // Some cases here enable the RRULE engine (off by default, per-device flag);
+    // reset after each so it never leaks into other suites.
+    afterEach(() => setRRuleEngineEnabled(false));
+
+    // Regression guard: `rrule` must be in SCHEDULE_AFFECTING_FIELDS, so editing
+    // ONLY the rule re-anchors the live instance. If it were dropped from that
+    // list, an RRULE edit would not re-enter this effect and the stale (often
+    // future) lastTaskCreationDay would silently suppress every later occurrence
+    // — the recurring task just stops. Mirrors the #7951 DAILY case, but the sole
+    // change is the rrule string and the engine is enabled so the rule drives it.
+    it('re-anchors on an rrule-only change so an RRULE edit does not silently stop the task', (done) => {
+      setRRuleEngineEnabled(true);
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+        rrule: 'FREQ=DAILY',
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { rrule: 'FREQ=DAILY' },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({ task: liveTask as any, day: todayStr }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
+        );
+        done();
+      });
+    });
+
     it('should dispatch planTaskForDay when schedule-affecting field changes and first occurrence is future', (done) => {
       const today = new Date();
       const todayStr = getDbDateStr(today);
