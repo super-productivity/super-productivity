@@ -12,6 +12,11 @@ import * as path from 'path';
  * `path.relative` is used instead of a `startsWith` string compare so that
  * `..` traversal is collapsed and a sibling directory sharing a name prefix
  * (e.g. `backups` vs `backups-evil`) is not mistaken for a child.
+ *
+ * Containment is purely lexical (no `fs.realpath`): a symlink planted *inside*
+ * `dir` pointing outside would pass. That requires pre-existing local
+ * filesystem write access, which is outside the threat model here (untrusted
+ * renderer/plugin-supplied path strings), so symlink resolution is omitted.
  */
 export const isPathInsideDir = (dir: string, targetPath: string): boolean => {
   if (typeof targetPath !== 'string' || targetPath.length === 0) {
