@@ -45,6 +45,8 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'showSnack',
   'notify',
   'translate',
+  'formatDate',
+  'getCurrentLanguage',
   'openDialog',
   'showIndexHtmlAsView',
   'showIndexHtmlInSidePanel',
