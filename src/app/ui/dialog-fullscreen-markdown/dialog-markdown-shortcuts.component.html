@@ -9,70 +9,25 @@
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td class="action-name">{{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate }}</td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> + <span class="shortcut-key">B</span>
-        </td>
-      </tr>
-      <tr>
-        <td class="action-name">
-          {{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate }}
-        </td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> + <span class="shortcut-key">I</span>
-        </td>
-      </tr>
-      <tr>
-        <td class="action-name">
-          {{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate }}
-        </td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> + <span class="shortcut-key">K</span>
-        </td>
-      </tr>
-      <tr>
-        <td class="action-name">
-          {{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate }}
-        </td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> +
-          <span class="shortcut-key">Shift</span> + <span class="shortcut-key">S</span>
-        </td>
-      </tr>
-      <tr>
-        <td class="action-name">
-          {{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate }}
-        </td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> +
-          <span class="shortcut-key">Shift</span> + <span class="shortcut-key">8</span>
-        </td>
-      </tr>
-      <tr>
-        <td class="action-name">
-          {{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate }}
-        </td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> +
-          <span class="shortcut-key">Shift</span> + <span class="shortcut-key">7</span>
-        </td>
-      </tr>
-      <tr>
-        <td class="action-name">{{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate }}</td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> +
-          <span class="shortcut-key">Shift</span> + <span class="shortcut-key">9</span>
-        </td>
-      </tr>
-      <tr>
-        <td class="action-name">
-          {{ T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate }}
-        </td>
-        <td class="shortcut-cell">
-          <span class="shortcut-key">Ctrl/Cmd</span> + <span class="shortcut-key">E</span>
-        </td>
-      </tr>
+      @for (shortcut of _shortcuts; track shortcut.name) {
+        <tr>
+          <td class="action-name">
+            {{ 'F.NOTE.D_FULLSCREEN.TOOLBAR.' + shortcut.translationKey | translate }}
+          </td>
+          <td class="shortcut-cell">
+            @for (
+              key of shortcut.shortcutLabel.split('+');
+              track $index;
+              let last = $last
+            ) {
+              <span class="shortcut-key">{{ key }}</span>
+              @if (!last) {
+                +
+              }
+            }
+          </td>
+        </tr>
+      }
     </tbody>
   </table>
 </mat-dialog-content>

@@ -40,7 +40,7 @@
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBold()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate) + ' (Ctrl/Cmd+B)'
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate) + getShortcutLabel('bold')
           "
           aria-label="Bold"
         >
@@ -51,7 +51,8 @@
           (mousedown)="$event.preventDefault()"
           (click)="onApplyItalic()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate) + ' (Ctrl/Cmd+I)'
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate) +
+            getShortcutLabel('italic')
           "
           aria-label="Italic"
         >
@@ -63,7 +64,7 @@
           (click)="onApplyStrikethrough()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate) +
-            ' (Ctrl/Cmd+Shift+X)'
+            getShortcutLabel('strikethrough')
           "
           aria-label="Strikethrough"
         >
@@ -78,7 +79,7 @@
           (click)="onApplyBulletList()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate) +
-            ' (Ctrl/Cmd+Shift+8)'
+            getShortcutLabel('bullet')
           "
           aria-label="Bulleted list"
         >
@@ -90,7 +91,7 @@
           (click)="onApplyNumberedList()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate) +
-            ' (Ctrl/Cmd+Shift+7)'
+            getShortcutLabel('numbered')
           "
           aria-label="Numbered list"
         >
@@ -113,7 +114,7 @@
           (mousedown)="$event.preventDefault()"
           (click)="onApplyQuote()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate) + ' (Ctrl/Cmd+Shift+9)'
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate) + getShortcutLabel('quote')
           "
           aria-label="Quote"
         >
@@ -124,7 +125,8 @@
           (mousedown)="$event.preventDefault()"
           (click)="onApplyInlineCode()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate) + ' (Ctrl/Cmd+E)'
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate) +
+            getShortcutLabel('code')
           "
           aria-label="Inline code"
         >
@@ -147,7 +149,8 @@
           (mousedown)="$event.preventDefault()"
           (click)="onInsertLink()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate) + ' (Ctrl/Cmd+K)'
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate) +
+            getShortcutLabel('link')
           "
           aria-label="Insert link"
         >

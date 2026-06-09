@@ -53,6 +53,7 @@ import { IS_MOBILE } from 'src/app/util/is-mobile';
 import { IS_IOS } from 'src/app/util/is-ios';
 import { Keyboard } from '@capacitor/keyboard';
 import { DialogMarkdownShortcutsComponent } from './dialog-markdown-shortcuts.component';
+import { MARKDOWN_SHORTCUTS, ShortcutNames } from './markdown-shortcuts.const';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -92,6 +93,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
   private readonly _matDialog = inject(MatDialog);
+  private readonly _shortcuts = MARKDOWN_SHORTCUTS;
 
   /**
    * Resolved content with blob URLs for images (for preview rendering).
@@ -190,6 +192,40 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     });
   }
 
+  getShortcutLabel(name: ShortcutNames): string {
+    const shortcut = this._shortcuts.find((s) => s.name === name);
+    return shortcut ? ` (${shortcut.shortcutLabel})` : '';
+  }
+
+  private _executeShortcutByName(name: ShortcutNames): void {
+    switch (name) {
+      case 'bold':
+        this.onApplyBold();
+        break;
+      case 'italic':
+        this.onApplyItalic();
+        break;
+      case 'link':
+        this.onInsertLink();
+        break;
+      case 'strikethrough':
+        this.onApplyStrikethrough();
+        break;
+      case 'bullet':
+        this.onApplyBulletList(true);
+        break;
+      case 'numbered':
+        this.onApplyNumberedList(true);
+        break;
+      case 'code':
+        this.onApplyInlineCode();
+        break;
+      case 'quote':
+        this.onApplyQuote(true);
+        break;
+    }
+  }
+
   keydownHandler(ev: KeyboardEvent): void {
     if (ev.key === 'Enter' && ev.ctrlKey) {
       this.close();
@@ -202,52 +238,19 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       return;
     }
 
-    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'b') {
-      ev.preventDefault();
-      this.onApplyBold();
-      return;
+    if (hasModifier) {
+      const shortcut = this._shortcuts.find((s) => {
+        const keyMatch = s.code ? ev.code === s.code : ev.key.toLowerCase() === s.key;
+        return keyMatch && ev.shiftKey === s.shiftKey;
+      });
+
+      if (shortcut) {
+        ev.preventDefault();
+        this._executeShortcutByName(shortcut?.name);
+        return;
+      }
     }
 
-    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'i') {
-      ev.preventDefault();
-      this.onApplyItalic();
-      return;
-    }
-
-    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'e') {
-      ev.preventDefault();
-      this.onApplyInlineCode();
-      return;
-    }
-
-    if (hasModifier && !ev.shiftKey && ev.key.toLowerCase() == 'k') {
-      ev.preventDefault();
-      this.onInsertLink();
-      return;
-    }
-    if (hasModifier && ev.shiftKey && ev.key.toLowerCase() == 's') {
-      ev.preventDefault();
-      this.onApplyStrikethrough();
-      return;
-    }
-
-    if (hasModifier && ev.shiftKey && ev.code === 'Digit8') {
-      ev.preventDefault();
-      this.onApplyBulletList(true);
-      return;
-    }
-
-    if (hasModifier && ev.shiftKey && ev.code === 'Digit7') {
-      ev.preventDefault();
-      this.onApplyNumberedList(true);
-      return;
-    }
-
-    if (hasModifier && ev.shiftKey && ev.code === 'Digit9') {
-      ev.preventDefault();
-      this.onApplyQuote(true);
-      return;
-    }
     const result = handleListKeydown(
       textarea.value,
       textarea.selectionStart,
