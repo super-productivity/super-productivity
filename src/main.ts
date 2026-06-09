@@ -366,9 +366,11 @@ bootstrapApplication(AppComponent, {
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {
-        LocaleImportFns[locale as keyof typeof LocaleImportFns]().then((m) => {
-          registerLocaleData(m.default, locale);
-        });
+        LocaleImportFns[locale as keyof typeof LocaleImportFns]()
+          .then((m) => {
+            registerLocaleData(m.default, locale);
+          })
+          .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
       }
     });
   };
