@@ -9,6 +9,20 @@ require('ts-node/register/transpile-only');
 const originalModuleLoad = Module._load;
 const pluginNodeExecutorModulePath = path.resolve(__dirname, 'plugin-node-executor.ts');
 
+// The executor verifies grants against the on-disk built-in plugin manifest.
+// That manifest is a build artifact (only present after the frontend/plugin build),
+// so the unit test stubs the manifest read instead of depending on built assets.
+const BUILT_IN_PLUGIN_MANIFEST = {
+  id: 'sync-md',
+  name: 'Sync.md',
+  version: '1.0.0',
+  permissions: ['nodeExecution'],
+};
+
+const isBuiltInManifestPath = (filePath) =>
+  typeof filePath === 'string' &&
+  filePath.replace(/\\/g, '/').endsWith(`${BUILT_IN_PLUGIN_MANIFEST.id}/manifest.json`);
+
 let ipcHandlers;
 let dialogCalls;
 let nextDialogResult;
@@ -62,6 +76,26 @@ const resetModule = () => {
 
 const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
+    // Stub the built-in plugin manifest read, scoped to the executor module so
+    // every other `require('fs')` (ts-node, node:test, ...) keeps the real fs.
+    if (
+      request === 'fs' &&
+      parent &&
+      typeof parent.filename === 'string' &&
+      parent.filename.endsWith('plugin-node-executor.ts')
+    ) {
+      const realFs = originalModuleLoad.call(this, request, parent, isMain);
+      return {
+        ...realFs,
+        existsSync: (filePath) =>
+          isBuiltInManifestPath(filePath) ? true : realFs.existsSync(filePath),
+        readFileSync: (filePath, ...rest) =>
+          isBuiltInManifestPath(filePath)
+            ? JSON.stringify(BUILT_IN_PLUGIN_MANIFEST)
+            : realFs.readFileSync(filePath, ...rest),
+      };
+    }
+
     if (request === 'electron') {
       return {
         app: {
