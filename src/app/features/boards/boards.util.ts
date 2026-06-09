@@ -9,6 +9,11 @@ const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'timeEstimate',
 ]);
 
+export const isAllProjects = (projectIds: string[]): boolean => projectIds.includes('');
+
+export const firstSpecificProjectId = (projectIds: string[]): string | undefined =>
+  projectIds.find((id) => id !== '');
+
 /**
  * Normalizes a panel cfg for persistence and hydration:
  * - Migrates legacy `sortByDue` → `sortBy`/`sortDir`.
