@@ -38,13 +38,19 @@ describe('ExecBeforeCloseService', () => {
     }
   });
 
-  it('does not throw when the Electron bridge is missing', () => {
+  it('throws when the Electron bridge is missing', () => {
     setElectronApi(undefined);
     const service = new ExecBeforeCloseService();
 
-    expect(() => service.schedule('SYNC')).not.toThrow();
-    expect(() => service.unschedule('SYNC')).not.toThrow();
-    expect(() => service.setDone('SYNC')).not.toThrow();
+    expect(() => service.schedule('SYNC')).toThrowError(
+      'Electron API bridge is not available',
+    );
+    expect(() => service.unschedule('SYNC')).toThrowError(
+      'Electron API bridge is not available',
+    );
+    expect(() => service.setDone('SYNC')).toThrowError(
+      'Electron API bridge is not available',
+    );
   });
 
   it('delegates before-close calls to the Electron bridge when available', () => {

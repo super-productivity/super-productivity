@@ -23,18 +23,21 @@ export class ExecBeforeCloseService {
     : EMPTY;
 
   schedule(id: string): void {
-    this._electronApi?.scheduleRegisterBeforeClose(id);
+    this._electronApi.scheduleRegisterBeforeClose(id);
   }
 
   unschedule(id: string): void {
-    this._electronApi?.unscheduleRegisterBeforeClose(id);
+    this._electronApi.unscheduleRegisterBeforeClose(id);
   }
 
   setDone(id: string): void {
-    this._electronApi?.setDoneRegisterBeforeClose(id);
+    this._electronApi.setDoneRegisterBeforeClose(id);
   }
 
-  private get _electronApi(): typeof window.ea | undefined {
-    return typeof window === 'undefined' ? undefined : window.ea;
+  private get _electronApi(): typeof window.ea {
+    if (!window.ea) {
+      throw new Error('Electron API bridge is not available');
+    }
+    return window.ea;
   }
 }
