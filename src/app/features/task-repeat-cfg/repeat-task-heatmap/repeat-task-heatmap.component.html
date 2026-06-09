@@ -14,6 +14,27 @@
     >
   </div>
 }
+@if (availableYears().length > 1) {
+  <div class="year-nav">
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="!canPrevYear()"
+      (click)="prevYear()"
+    >
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <span class="year-nav__label">{{ selectedYear() }}</span>
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="!canNextYear()"
+      (click)="nextYear()"
+    >
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+}
 @if (heatmapData(); as data) {
   <heatmap-switcher
     [data]="data"
@@ -21,5 +42,6 @@
     [rangeStart]="data.rangeStart"
     [rangeEnd]="data.rangeEnd"
     legendMode="hours"
+    persistKey="repeat-history"
   />
 }

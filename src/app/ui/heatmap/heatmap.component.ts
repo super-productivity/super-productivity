@@ -10,7 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { T } from '../../t.const';
 
@@ -49,9 +49,10 @@ export interface HeatmapData {
   styleUrls: ['./heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [],
+  imports: [TranslatePipe],
 })
 export class HeatmapComponent {
+  readonly T = T;
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
 
@@ -62,6 +63,9 @@ export class HeatmapComponent {
   /** Render `data.months` as spaced per-month blocks instead of the continuous
    *  GitHub-style strip. */
   readonly groupByMonth = input<boolean>(false);
+  /** Legend under the month-grouped layout: relative intensity (Low→High) for
+   *  activity data, projected/completed swatches for projections, or none. */
+  readonly legendMode = input<'hours' | 'occurrences' | 'none'>('none');
   /** Emits the clicked day (non-empty cells only). Consumers decide what to do. */
   readonly dayClick = output<DayData>();
 

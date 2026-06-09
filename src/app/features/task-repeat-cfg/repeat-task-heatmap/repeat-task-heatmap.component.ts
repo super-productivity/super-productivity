@@ -4,7 +4,10 @@ import {
   computed,
   inject,
   input,
+  signal,
 } from '@angular/core';
+import { MatIcon } from '@angular/material/icon';
+import { MatIconButton } from '@angular/material/button';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../archive/task-archive.service';
@@ -31,18 +34,13 @@ import { legacyTaskRepeatCfgToRRule } from '../util/legacy-cfg-to-rrule.util';
 import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
 import { isRRuleEngineEnabled } from '../../config/rrule-engine-flag';
 
-// How far ahead the heatmap projects upcoming occurrences. Only applied when the
-// RRULE engine flag is on (Phase 2); otherwise the heatmap stays the past-year
-// history-only view it was before.
-const PROJECTION_DAYS = 92;
-
 @Component({
   selector: 'repeat-task-heatmap',
   templateUrl: './repeat-task-heatmap.component.html',
   styleUrls: ['./repeat-task-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [HeatmapSwitcherComponent, TranslateModule],
+  imports: [HeatmapSwitcherComponent, TranslateModule, MatIcon, MatIconButton],
 })
 export class RepeatTaskHeatmapComponent {
   readonly T = T;
@@ -74,9 +72,49 @@ export class RepeatTaskHeatmapComponent {
     { initialValue: null },
   );
 
+  // Year filter: navigate the series one calendar year at a time. Years with
+  // tracked data plus the current year are reachable (newest first).
+  readonly selectedYear = signal<number>(new Date().getFullYear());
+  readonly availableYears = computed<number[]>(() => {
+    const years = new Set<number>([new Date().getFullYear()]);
+    for (const task of this._loadedTasks() ?? []) {
+      for (const dateStr of Object.keys(task.timeSpentOnDay ?? {})) {
+        const y = +dateStr.slice(0, 4);
+        if (y) {
+          years.add(y);
+        }
+      }
+    }
+    return [...years].sort((a, b) => b - a);
+  });
+  readonly canPrevYear = computed(() => {
+    const years = this.availableYears();
+    const i = years.indexOf(this.selectedYear());
+    return i !== -1 && i < years.length - 1;
+  });
+  readonly canNextYear = computed(
+    () => this.availableYears().indexOf(this.selectedYear()) > 0,
+  );
+  prevYear(): void {
+    const years = this.availableYears();
+    const i = years.indexOf(this.selectedYear());
+    if (i !== -1 && i < years.length - 1) {
+      this.selectedYear.set(years[i + 1]);
+    }
+  }
+  nextYear(): void {
+    const years = this.availableYears();
+    const i = years.indexOf(this.selectedYear());
+    if (i > 0) {
+      this.selectedYear.set(years[i - 1]);
+    }
+  }
+
   private readonly _rawHeatmapData = computed(() => {
     const tasks = this._loadedTasks();
-    return tasks ? this._buildHeatmapData(tasks, this._loadedCfg()) : null;
+    return tasks
+      ? this._buildHeatmapData(tasks, this._loadedCfg(), this.selectedYear())
+      : null;
   });
 
   readonly formattedTimeSummary = computed(() => {
@@ -164,6 +202,7 @@ export class RepeatTaskHeatmapComponent {
   private _buildHeatmapData(
     tasks: Task[],
     cfg: TaskRepeatCfg | null | undefined,
+    year: number,
   ): {
     dayMap: Map<string, DayData>;
     startDate: Date;
@@ -172,19 +211,18 @@ export class RepeatTaskHeatmapComponent {
   } {
     const dayMap = new Map<string, DayData>();
     const now = new Date();
-    const oneYearAgo = new Date(now);
-    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    // One calendar year per view (the year filter navigates) — this also keeps
+    // every month label unambiguous (no two "Jun" blocks from different years).
+    const yearStart = new Date(year, 0, 1);
+    const horizon = new Date(year, 11, 31);
 
-    // Project a few months ahead only when the RRULE engine is enabled; with the
-    // flag off the heatmap is the unchanged past-year history view.
+    // Overlay upcoming occurrences on the selected year's remaining days, only
+    // when the RRULE engine is enabled; with the flag off the heatmap is the
+    // unchanged history-only view.
     const isProjecting = !!cfg && isRRuleEngineEnabled();
-    const horizon = new Date(now);
-    if (isProjecting) {
-      horizon.setDate(horizon.getDate() + PROJECTION_DAYS);
-    }
 
-    // Initialize all days from a year ago through the (possibly projected) end.
-    const currentDate = new Date(oneYearAgo);
+    // Initialize all days of the selected year.
+    const currentDate = new Date(yearStart);
     while (currentDate <= horizon) {
       const dateStr = getDbDateStr(currentDate);
       dayMap.set(dateStr, {
@@ -253,17 +291,20 @@ export class RepeatTaskHeatmapComponent {
     // Overlay projected future occurrences (Phase 2). For legacy cfgs (no rrule)
     // derive an equivalent rule so the projection still works. Per-instance
     // overrides (moves/RDATE) are Phase 8 — here only EXDATE skips apply.
-    if (isProjecting && cfg) {
+    // Projection covers the selected year's days strictly after today — for a
+    // past year the window is empty by construction.
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const projectFrom = tomorrow > yearStart ? tomorrow : yearStart;
+    if (isProjecting && cfg && projectFrom <= horizon) {
       const rrule = cfg.rrule || legacyTaskRepeatCfgToRRule(cfg);
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
       const occurrences = getRRuleOccurrencesInRange(
         {
           rrule,
           startDate: getEffectiveRepeatStartDate(cfg),
           exdates: cfg.deletedInstanceDates ?? [],
         },
-        tomorrow,
+        projectFrom,
         horizon,
       );
       for (const occ of occurrences) {
@@ -279,7 +320,7 @@ export class RepeatTaskHeatmapComponent {
 
     return {
       dayMap,
-      startDate: oneYearAgo,
+      startDate: yearStart,
       endDate: horizon,
       hasData,
     };

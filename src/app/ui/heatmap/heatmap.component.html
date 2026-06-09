@@ -1,32 +1,58 @@
 @if (data(); as heatmapData) {
   @if (groupByMonth() && heatmapData.months; as months) {
     <div class="heatmap-container">
-      <div class="heatmap-month-blocks">
-        @for (m of months; track $index) {
-          <div class="heatmap-month">
-            <div class="weeks">
-              @for (week of m.weeks; track $index) {
-                <div class="week">
-                  @for (day of week.days; track $index) {
-                    <div
-                      [class]="getDayClass(day)"
-                      [title]="getDayTitle(day)"
-                      (click)="day && dayClick.emit(day)"
-                    ></div>
-                  }
-                </div>
+      <div class="heatmap-month-row">
+        <div class="day-labels day-labels--blocks">
+          @for (label of dayLabels(); track $index) {
+            <div class="day-label">{{ label }}</div>
+          }
+        </div>
+        <div class="heatmap-month-blocks">
+          @for (m of months; track $index) {
+            <div class="heatmap-month">
+              <div class="weeks">
+                @for (week of m.weeks; track $index) {
+                  <div class="week">
+                    @for (day of week.days; track $index) {
+                      <div
+                        [class]="getDayClass(day)"
+                        [title]="getDayTitle(day)"
+                        (click)="day && dayClick.emit(day)"
+                      ></div>
+                    }
+                  </div>
+                }
+              </div>
+              <div class="heatmap-month__label">{{ m.label }}</div>
+              @if (m.total) {
+                <div class="heatmap-month__total">{{ m.total }}</div>
               }
             </div>
-            <div class="heatmap-month__label">{{ m.label }}</div>
-            @if (m.total) {
-              <div class="heatmap-month__total">{{ m.total }}</div>
-            }
-          </div>
-        }
+          }
+        </div>
       </div>
 
       @if (label()) {
         <div class="heatmap-label">{{ label() }}</div>
+      }
+
+      @if (legendMode() === 'hours') {
+        <div class="heatmap-legend">
+          <span>{{ T.G.HEATMAP_LOW | translate }}</span>
+          <div class="legend-item level-0"></div>
+          <div class="legend-item level-1"></div>
+          <div class="legend-item level-2"></div>
+          <div class="legend-item level-3"></div>
+          <div class="legend-item level-4"></div>
+          <span>{{ T.G.HEATMAP_HIGH | translate }}</span>
+        </div>
+      } @else if (legendMode() === 'occurrences') {
+        <div class="heatmap-legend">
+          <div class="legend-item projected"></div>
+          <span>{{ T.G.HEATMAP_PROJECTED | translate }}</span>
+          <div class="legend-item completed"></div>
+          <span>{{ T.G.HEATMAP_COMPLETED_SIM | translate }}</span>
+        </div>
       }
     </div>
   } @else {

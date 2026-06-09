@@ -21,21 +21,24 @@
 
   @if (heatmapData(); as data) {
     @if (availableYears().length > 0) {
-      <div class="select-menu">
-        <mat-form-field
-          appearance="outline"
-          subscriptSizing="dynamic"
+      <div class="year-nav">
+        <button
+          mat-icon-button
+          type="button"
+          [disabled]="!canPrevYear()"
+          (click)="prevYear()"
         >
-          <mat-label>{{ T.F.METRIC.CMP.YEAR | translate }}</mat-label>
-          <mat-select
-            [value]="selectedYear()"
-            (selectionChange)="onYearChange($event.value)"
-          >
-            @for (year of availableYears(); track year) {
-              <mat-option [value]="year">{{ year }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
+          <mat-icon>chevron_left</mat-icon>
+        </button>
+        <span class="year-nav__label">{{ selectedYear() }}</span>
+        <button
+          mat-icon-button
+          type="button"
+          [disabled]="!canNextYear()"
+          (click)="nextYear()"
+        >
+          <mat-icon>chevron_right</mat-icon>
+        </button>
       </div>
     }
 
@@ -45,6 +48,7 @@
       [rangeStart]="data.rangeStart"
       [rangeEnd]="data.rangeEnd"
       legendMode="hours"
+      persistKey="metrics"
     />
   } @else {
     <p>{{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}</p>

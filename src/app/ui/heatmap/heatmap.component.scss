@@ -50,13 +50,40 @@
   }
 }
 
-// Month-grouped layout (groupByMonth): each month is its own mini-grid, the
-// blocks spaced in a wrapping row with a label + total beneath each.
+// Month-grouped layout (groupByMonth): each month is its own mini-grid, all
+// months in ONE row (Jan–Dec side by side) with a label + total beneath each;
+// the row scrolls horizontally when it doesn't fit, with the weekday labels
+// pinned outside the scroll area.
+.heatmap-month-row {
+  display: flex;
+  gap: var(--s);
+  align-items: flex-start;
+}
+
 .heatmap-month-blocks {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
   gap: var(--s2);
+  overflow-x: auto;
+  padding-bottom: var(--s-half);
+
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--c-dark-10);
+    border-radius: var(--card-border-radius);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--c-dark-20);
+    border-radius: var(--card-border-radius);
+
+    &:hover {
+      background: var(--c-dark-30);
+    }
+  }
 }
 
 .heatmap-month {
@@ -112,6 +139,12 @@
     height: 12px;
     line-height: 12px;
     flex-shrink: 0;
+  }
+
+  // Month-block variant: the mini-grids start at the very top (labels/totals
+  // sit BELOW them), so no month-spacer offset is needed.
+  &--blocks {
+    width: auto;
   }
 }
 
@@ -219,6 +252,18 @@
 
     &.level-4 {
       background: var(--c-primary);
+    }
+
+    &.projected {
+      background: transparent;
+      outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+      outline-offset: -1px;
+    }
+
+    &.completed {
+      background: var(--c-primary);
+      outline: 2px solid var(--c-primary);
+      outline-offset: 1px;
     }
   }
 }

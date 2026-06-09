@@ -11,9 +11,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { combineLatestWith, map, tap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconButton } from '@angular/material/button';
-import { MatSelectModule } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -40,15 +38,7 @@ interface YearlyActivityData {
   templateUrl: './activity-heatmap.component.html',
   styleUrls: ['./activity-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    HeatmapSwitcherComponent,
-    TranslatePipe,
-    MatFormFieldModule,
-    MatIconButton,
-    MatSelectModule,
-    MatTooltip,
-    MatIcon,
-  ],
+  imports: [HeatmapSwitcherComponent, TranslatePipe, MatIconButton, MatTooltip, MatIcon],
 })
 export class ActivityHeatmapComponent {
   private readonly _worklogService = inject(WorklogService);
@@ -78,6 +68,32 @@ export class ActivityHeatmapComponent {
 
   onYearChange(year: number): void {
     this._userSelectedYear.set(year); // Only update user selection
+  }
+
+  // Prev/next navigation over the years that actually have data
+  // (availableYears is sorted newest-first).
+  readonly canPrevYear = computed(() => {
+    const years = this.availableYears();
+    const i = years.indexOf(this.selectedYear());
+    return i !== -1 && i < years.length - 1;
+  });
+  readonly canNextYear = computed(() => {
+    const i = this.availableYears().indexOf(this.selectedYear());
+    return i > 0;
+  });
+  prevYear(): void {
+    const years = this.availableYears();
+    const i = years.indexOf(this.selectedYear());
+    if (i !== -1 && i < years.length - 1) {
+      this._userSelectedYear.set(years[i + 1]);
+    }
+  }
+  nextYear(): void {
+    const years = this.availableYears();
+    const i = years.indexOf(this.selectedYear());
+    if (i > 0) {
+      this._userSelectedYear.set(years[i - 1]);
+    }
   }
 
   // Day labels adjusted for first day of week

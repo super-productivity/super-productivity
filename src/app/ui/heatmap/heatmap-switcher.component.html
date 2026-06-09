@@ -2,7 +2,7 @@
   <mat-button-toggle-group
     class="heatmap-switcher__toggle"
     [value]="view()"
-    (change)="view.set($event.value)"
+    (change)="setView($event.value)"
     hideSingleSelectionIndicator
   >
     <mat-button-toggle value="year">
@@ -26,6 +26,7 @@
       [data]="d"
       [showLegend]="false"
       [groupByMonth]="true"
+      [legendMode]="legendMode()"
       (dayClick)="dayClick.emit($event)"
     />
   }
