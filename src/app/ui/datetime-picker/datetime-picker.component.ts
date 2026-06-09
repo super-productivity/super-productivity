@@ -99,6 +99,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   isInitValOnTimeFocus = true;
   isShowEnterMsg = false;
   @HostBinding('class.sp-hide-cursor') isKeyboardNavigating = false;
+  @HostBinding('class.sp-initial-focus') isInitialFocus = true;
 
   readonly calendar = viewChild(MatCalendar);
 
@@ -135,6 +136,7 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   onKeyDownOnCalendar(ev: KeyboardEvent): void {
     this._timeCheckVal = null;
+    this.isInitialFocus = false;
     if (ev.code === 'Enter' || ev.code === 'Space') {
       this.isShowEnterMsg = true;
       const cal = this.calendar();
@@ -246,6 +248,7 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   @HostListener('mousemove', ['$event'])
   onHostMouseMove(ev: MouseEvent): void {
+    this.isInitialFocus = false;
     this._resetKeyboardNav(ev);
   }
 
