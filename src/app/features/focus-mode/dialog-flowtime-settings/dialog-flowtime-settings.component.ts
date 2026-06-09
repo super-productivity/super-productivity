@@ -225,19 +225,23 @@ export class DialogFlowtimeSettingsComponent {
     const previousIsBreakEnabled = this._lastIsBreakEnabled;
     const previousBreakMode = this._lastBreakMode;
     const breakMode = this._getNextBreakMode(nextModel);
+    const breakRules = this._getNextBreakRules(
+      nextModel,
+      previousIsBreakEnabled,
+      previousBreakMode,
+      breakMode,
+    );
     const nextModelToSet = {
       ...nextModel,
       breakMode,
       breakPercentage: this._getNextBreakPercentage(nextModel, breakMode),
-      breakRules: this._getNextBreakRules(
-        nextModel,
-        previousIsBreakEnabled,
-        previousBreakMode,
-        breakMode,
-      ),
+      breakRules,
     };
 
     this.model.set(nextModelToSet);
+    if (this._hasBreakRuleValueDiff(nextModel.breakRules, breakRules)) {
+      this._patchBreakRulesFormValue(breakRules);
+    }
     this._rememberModelState(nextModelToSet);
   }
 
@@ -378,6 +382,34 @@ export class DialogFlowtimeSettingsComponent {
           ? fallbackRule.breakDuration
           : nextRule!.breakDuration,
       };
+    });
+  }
+
+  private _hasBreakRuleValueDiff(
+    nextRules: FlowtimeBreakRuleInMinutes[] | undefined,
+    restoredRules: FlowtimeBreakRuleInMinutes[],
+  ): boolean {
+    if ((nextRules?.length ?? 0) !== restoredRules.length) {
+      return true;
+    }
+
+    return restoredRules.some((restoredRule, index) => {
+      const nextRule = nextRules?.[index];
+
+      return (
+        !nextRule ||
+        nextRule.minDuration !== restoredRule.minDuration ||
+        nextRule.maxDuration !== restoredRule.maxDuration ||
+        nextRule.breakDuration !== restoredRule.breakDuration
+      );
+    });
+  }
+
+  private _patchBreakRulesFormValue(breakRules: FlowtimeBreakRuleInMinutes[]): void {
+    const breakRulesControl = this.form.get('breakRules') as AbstractControl | null;
+
+    breakRulesControl?.patchValue(this._copyBreakRules(breakRules), {
+      emitEvent: false,
     });
   }
 

@@ -202,6 +202,32 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(component.model().breakRules).toEqual(initialRules);
   });
 
+  it('should patch restored partially blank rule values back to the form controls', () => {
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 5,
+        },
+      ],
+    });
+
+    const firstRule = (component.form.get('breakRules') as any).at(0);
+    expect(firstRule.value).toEqual({
+      minDuration: 0,
+      maxDuration: 25,
+      breakDuration: 5,
+    });
+  });
+
   it('should keep rule fields when Formly mutates the model object while switching modes', () => {
     fixture.destroy();
     globalConfigServiceMock.cfg.and.returnValue({
