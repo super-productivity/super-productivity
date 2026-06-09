@@ -24,7 +24,6 @@ import { DataInitStateService } from '../../core/data-init/data-init-state.servi
 import { MetricService } from '../../features/metric/metric.service';
 import { DateService } from '../../core/date/date.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
-import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 
 // Regression test for #7477: in a project view a long title pushed the
@@ -120,9 +119,6 @@ describe('MainHeaderComponent focus button visibility', () => {
   let isXs = signal(false);
   let isXxxs = signal(false);
   let appFeatures = signal(DEFAULT_GLOBAL_CONFIG.appFeatures);
-  let isSessionRunning = signal(false);
-  let isSessionPaused = signal(false);
-  let isBreakActive = signal(false);
 
   const createComponent = (): MainHeaderComponent => {
     const cfg = {
@@ -197,14 +193,6 @@ describe('MainHeaderComponent focus button visibility', () => {
         { provide: MetricService, useValue: { getFocusSummaryForDay: () => null } },
         { provide: DateService, useValue: { todayStr: () => '2026-06-09' } },
         { provide: UserProfileService, useValue: { isInitialized: () => false } },
-        {
-          provide: FocusModeService,
-          useValue: {
-            isSessionRunning,
-            isSessionPaused,
-            isBreakActive,
-          },
-        },
       ],
     });
 
@@ -224,14 +212,10 @@ describe('MainHeaderComponent focus button visibility', () => {
       ...DEFAULT_GLOBAL_CONFIG.appFeatures,
       isFocusModeEnabled: true,
     });
-    isSessionRunning = signal(false);
-    isSessionPaused = signal(false);
-    isBreakActive = signal(false);
 
     component = createComponent();
 
     expect(component.showDesktopButtons()).toBe(false);
-    expect(component.isFocusSessionActive()).toBe(false);
     expect(component.isFocusButtonVisible()).toBe(true);
   });
 
