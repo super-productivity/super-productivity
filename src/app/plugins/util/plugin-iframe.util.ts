@@ -404,6 +404,11 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           deleteCounter: (id) => callApi('deleteCounter', [id]),
           getAllCounters: () => callApi('getAllCounters'),
 
+          // i18n
+          translate: (key, params) => callApi('translate', [key, params]),
+          formatDate: (date, format) => callApi('formatDate', [date, format]),
+          getCurrentLanguage: () => callApi('getCurrentLanguage'),
+
           // Readiness signal for iframe plugins.
           //
           // NOTE — semantic difference from host-side onReady:

@@ -8,11 +8,26 @@ import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { of } from 'rxjs';
 import { Task } from '../../../tasks/task.model';
 import { CalendarIntegrationEvent } from '../../../calendar-integration/calendar-integration.model';
+import { IssueProviderCalendar } from '../../issue.model';
+import { DEFAULT_CALENDAR_CFG } from './calendar.const';
 
 describe('CalendarCommonInterfacesService', () => {
   let service: CalendarCommonInterfacesService;
   let calendarIntegrationServiceSpy: jasmine.SpyObj<CalendarIntegrationService>;
   let issueProviderServiceSpy: jasmine.SpyObj<IssueProviderService>;
+  const createCalendarProvider = (
+    overrides: Partial<IssueProviderCalendar> = {},
+  ): IssueProviderCalendar => ({
+    id: 'provider-1',
+    issueProviderKey: 'ICAL',
+    isEnabled: true,
+    icalUrl: 'https://example.com/calendar.ics',
+    checkUpdatesEvery: DEFAULT_CALENDAR_CFG.checkUpdatesEvery,
+    showBannerBeforeThreshold: DEFAULT_CALENDAR_CFG.showBannerBeforeThreshold,
+    isAutoImportForCurrentDay: DEFAULT_CALENDAR_CFG.isAutoImportForCurrentDay,
+    isDisabledForWebApp: false,
+    ...overrides,
+  });
 
   beforeEach(() => {
     calendarIntegrationServiceSpy = jasmine.createSpyObj('CalendarIntegrationService', [
@@ -37,6 +52,22 @@ describe('CalendarCommonInterfacesService', () => {
       ],
     });
     service = TestBed.inject(CalendarCommonInterfacesService);
+  });
+
+  describe('isEnabled', () => {
+    it('should disable iCal providers marked as disabled for web app in browser tests', () => {
+      expect(
+        service.isEnabled(
+          createCalendarProvider({
+            isDisabledForWebApp: true,
+          }),
+        ),
+      ).toBe(false);
+    });
+
+    it('should keep enabled iCal providers active when the platform disable flag is off', () => {
+      expect(service.isEnabled(createCalendarProvider())).toBe(true);
+    });
   });
 
   describe('getAddTaskData', () => {

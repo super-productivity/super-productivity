@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Hostitel (např.: https://try.gitea.io)",
+    "TOKEN": "Přístupový token",
+    "REPO_FULL_NAME": "Uživatelské jméno nebo název organizace/projektu",
+    "SCOPE": "Rozsah",
+    "SCOPE_ALL": "Všechny",
+    "SCOPE_CREATED": "Vytvořeno mnou",
+    "SCOPE_ASSIGNED": "Přiřazeno mně",
+    "FILTER_LABELS": "Filter by labels (optional)",
+    "EXCLUDE_LABELS": "Exclude labels (optional)",
+    "HOW_TO_GET_TOKEN": "Jak získat token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Shrnutí",
+    "STATE": "Stav",
+    "ASSIGNEE": "Přiřazený",
+    "LABELS": "Štítky",
+    "DESCRIPTION": "Popis"
+  },
+  "FORM_HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Gitea pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a importovat všechny otevřené problémy.</p><p>Pro překročení omezení a přístup můžete poskytnout přístupový token."
+}

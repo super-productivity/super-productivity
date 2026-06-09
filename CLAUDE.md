@@ -44,7 +44,7 @@ For SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/CLAUDE.
 
 ## Sync-correctness rules
 
-Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing. Rules 1–3 and 6 are one invariant — *one user intent = one op; replayed/remote ops must not re-trigger effects* — fully explained in [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md).
+Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing. Rules 1–3 and 6 are one invariant — _one user intent = one op; replayed/remote ops must not re-trigger effects_ — fully explained in [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md).
 
 **Every change to the sync system is high-risk:** a subtle bug can silently corrupt or lose user data across devices and is hard to recover from. Carefully check each change for correctness and possible failure modes (replay determinism, concurrent/remote edits, vector-clock conflicts) and call out the risks before reporting work as done.
 
@@ -64,12 +64,12 @@ Angular format `type(scope): description`. Types: `feat`, `fix`, `docs`, `style`
 
 ## Anti-patterns
 
-| Avoid                                                                      | Do instead                               |
-| -------------------------------------------------------------------------- | ---------------------------------------- |
-| `any` type                                                                 | proper types, `unknown` if truly unknown |
-| Direct DOM access                                                          | Angular bindings, `viewChild()`          |
-| Side effects in constructors                                               | `async` pipe or `toSignal`               |
-| Subscribing without cleanup                                                | `takeUntilDestroyed()` or async pipe     |
-| `NgModules` for new code                                                   | standalone components                    |
-| Re-declaring Material theme styles                                         | existing theme variables                 |
+| Avoid                                                                      | Do instead                                |
+| -------------------------------------------------------------------------- | ----------------------------------------- |
+| `any` type                                                                 | proper types, `unknown` if truly unknown  |
+| Direct DOM access                                                          | Angular bindings, `viewChild()`           |
+| Side effects in constructors                                               | `async` pipe or `toSignal`                |
+| Subscribing without cleanup                                                | `takeUntilDestroyed()` or async pipe      |
+| `NgModules` for new code                                                   | standalone components                     |
+| Re-declaring Material theme styles                                         | existing theme variables                  |
 | One-off `.mat-*`, `.mdc-*`, `button[mat-*]`, or shared component overrides | reusable inputs, tokens, or shared styles |

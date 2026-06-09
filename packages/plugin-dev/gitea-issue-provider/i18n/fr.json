@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Hôte (e.g.: https://try.gitea.io)",
+    "TOKEN": "Jeton d'accès",
+    "REPO_FULL_NAME": "Nom d'utilisateur ou nom de l'organisation/projet",
+    "SCOPE": "Portée",
+    "SCOPE_ALL": "Tout",
+    "SCOPE_CREATED": "Créé par moi",
+    "SCOPE_ASSIGNED": "Attribués à moi",
+    "FILTER_LABELS": "Filtrer par étiquettes (facultatif)",
+    "EXCLUDE_LABELS": "Exclure des étiquettes (facultatif)",
+    "HOW_TO_GET_TOKEN": "Comment obtenir un jeton ?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Résumé",
+    "STATE": "Statut",
+    "ASSIGNEE": "Bénéficiaire",
+    "LABELS": "Étiquettes",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Ici, vous pouvez configurer SuperProductivity pour lister les problèmes ouverts de Gitea pour un dépôt spécifique dans le panneau de création de tâches dans la vue de planification quotidienne. Ils seront listés comme suggestions et fourniront un lien vers le problème ainsi que plus d'informations à son sujet.</p> <p>En plus, vous pouvez automatiquement ajouter et importer tous les problèmes ouverts.</p><p>Pour contourner les limites d'utilisation et pour accéder, vous pouvez fournir un jeton d'accès.</p>"
+}

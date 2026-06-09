@@ -312,6 +312,63 @@ describe('TaskShortcutService', () => {
       expect(mockTaskComponent.openDeadlineDialog).toHaveBeenCalled();
     });
 
+    it('should open the task context menu when the native Menu key is pressed', () => {
+      const mockTaskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        openContextMenu: jasmine.createSpy('openContextMenu'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('ContextMenu', 'ContextMenu');
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockTaskComponent.openContextMenu).toHaveBeenCalledWith(event);
+    });
+
+    it('should recognize Linux Menu key events by physical ContextMenu code', () => {
+      const mockTaskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        openContextMenu: jasmine.createSpy('openContextMenu'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('Unidentified', 'ContextMenu');
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockTaskComponent.openContextMenu).toHaveBeenCalledWith(event);
+    });
+
+    it('should not treat modified Menu key presses as the native context menu key', () => {
+      const mockTaskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        openContextMenu: jasmine.createSpy('openContextMenu'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const event = createKeyboardEvent('ContextMenu', 'ContextMenu', {
+        ctrlKey: true,
+      });
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(false);
+      expect(mockTaskComponent.openContextMenu).not.toHaveBeenCalled();
+    });
+
     it('should return false for non-togglePlay shortcuts when no focused task', () => {
       // Arrange
       mockTaskFocusService.focusedTaskId.set(null);

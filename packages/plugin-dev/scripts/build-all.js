@@ -175,6 +175,10 @@ const plugins = [
           fs.copyFileSync(src, dest);
         }
       }
+      const i18nSrc = path.join(pluginPath, 'i18n');
+      if (fs.existsSync(i18nSrc)) {
+        copyRecursive(i18nSrc, path.join(targetDir, 'i18n'));
+      }
       return 'Copied to assets';
     },
   },

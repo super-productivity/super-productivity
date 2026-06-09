@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (es.: https://try.gitea.io)",
+    "TOKEN": "Token di accesso",
+    "REPO_FULL_NAME": "Username o nome Organizzazione/Progetto",
+    "SCOPE": "Scopo",
+    "SCOPE_ALL": "Tutti",
+    "SCOPE_CREATED": "Create da me",
+    "SCOPE_ASSIGNED": "Assegnate a me",
+    "FILTER_LABELS": "Filtra per etichette (facoltativo)",
+    "EXCLUDE_LABELS": "Escludi etichette (facoltativo)",
+    "HOW_TO_GET_TOKEN": "Come ottenere un token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Riepilogo",
+    "STATE": "Stato",
+    "ASSIGNEE": "Assegnatario",
+    "LABELS": "Etichette",
+    "DESCRIPTION": "Descrizione"
+  },
+  "FORM_HELP": "<p>Qui è possibile configurare SuperProductivity in modo che elenchi le issue aperte di Gitea per uno specifico repository nel pannello di creazione delle attività nella vista di pianificazione giornaliera. Saranno elencati come suggerimenti e forniranno un link all'issue e ulteriori informazioni su di esso.</p> <p>Inoltre è possibile aggiungere e importare automaticamente tutte le issue aperte.</p><p>Per superare i limiti di utilizzo e accedere è possibile fornire un token di accesso."
+}

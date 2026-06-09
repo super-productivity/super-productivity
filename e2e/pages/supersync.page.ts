@@ -371,9 +371,16 @@ export class SuperSyncPage extends BasePage {
           `[SuperSyncPage] Handling encryption dialog (${encCount} open, round ${round})`,
         );
         const topDialog = enableEncryptionDialog.nth(encCount - 1);
-        await topDialog.locator('input[type="password"]').first().fill(defaultPw);
-        await topDialog.locator('input[type="password"]').nth(1).fill(defaultPw);
-        await topDialog.locator('button[mat-flat-button]').click();
+        const confirmBtn = topDialog.locator('button[mat-flat-button]');
+        // Re-fill until the value-accessor binds and the button enables — a
+        // fill() on a freshly-opened dialog can land before [(ngModel)] is wired,
+        // leaving the field empty and the confirm button permanently disabled.
+        await expect(async () => {
+          await topDialog.locator('input[type="password"]').first().fill(defaultPw);
+          await topDialog.locator('input[type="password"]').nth(1).fill(defaultPw);
+          await expect(confirmBtn).toBeEnabled({ timeout: 1000 });
+        }).toPass({ timeout: 10000 });
+        await confirmBtn.click();
         await expect(enableEncryptionDialog).toHaveCount(encCount - 1, {
           timeout: 15000,
         });
@@ -995,9 +1002,16 @@ export class SuperSyncPage extends BasePage {
           '[SuperSyncPage] Late enable-encryption dialog appeared — setting password',
         );
         const topEncDlg = enableEncryptionDialog.last();
-        await topEncDlg.locator('input[type="password"]').first().fill(defaultPassword);
-        await topEncDlg.locator('input[type="password"]').nth(1).fill(defaultPassword);
-        await topEncDlg.locator('button[mat-flat-button]').click();
+        const confirmBtn = topEncDlg.locator('button[mat-flat-button]');
+        // Re-fill until the value-accessor binds and the button enables — a
+        // fill() on a freshly-opened dialog can land before [(ngModel)] is wired,
+        // leaving the field empty and the confirm button permanently disabled.
+        await expect(async () => {
+          await topEncDlg.locator('input[type="password"]').first().fill(defaultPassword);
+          await topEncDlg.locator('input[type="password"]').nth(1).fill(defaultPassword);
+          await expect(confirmBtn).toBeEnabled({ timeout: 1000 });
+        }).toPass({ timeout: 10000 });
+        await confirmBtn.click();
         await topEncDlg.waitFor({ state: 'hidden', timeout: 15000 });
       }
 
@@ -1325,16 +1339,20 @@ export class SuperSyncPage extends BasePage {
   ): Promise<void> {
     const passwordInput = dialog.locator('input[type="password"]').first();
     const confirmPasswordInput = dialog.locator('input[type="password"]').nth(1);
-    await passwordInput.fill(password);
-    await confirmPasswordInput.fill(password);
 
     // Click the confirm button (mat-flat-button with color="primary")
     // In setup mode the button text is "Set Password", in full mode it's "Enable Encryption"
     const confirmBtn = dialog.locator('button[mat-flat-button][color="primary"]');
-    // Wait for [(ngModel)] propagation to flip [disabled]="!isPasswordValid"
-    // — fill() resolves before Angular CD ticks, so the click can otherwise
-    // burn the full retry window against a still-disabled button.
-    await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
+    // On the late/async dialog path a fill() can land before the input's
+    // [(ngModel)] value-accessor is wired, so the typed value never reaches the
+    // model (and the first writeValue('') erases the DOM value). The confirm
+    // field then stays empty, isPasswordValid is false, and [disabled] never
+    // flips. Re-fill both fields until they stick and the button enables.
+    await expect(async () => {
+      await passwordInput.fill(password);
+      await confirmPasswordInput.fill(password);
+      await expect(confirmBtn).toBeEnabled({ timeout: 1000 });
+    }).toPass({ timeout: 10000 });
     await confirmBtn.click();
 
     await this.page.waitForTimeout(500);

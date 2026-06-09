@@ -73,7 +73,12 @@
       ></div>
 
       <div id="content">
-        <div class="loading">Loading tasks...</div>
+        <div
+          class="loading"
+          data-i18n="MESSAGES.LOADING_TASKS"
+        >
+          Loading tasks...
+        </div>
       </div>
     </div>
 
@@ -128,12 +133,56 @@
         return minutes + 'm';
       }
 
-      // Wait for plugin API to be available
-      function waitForPlugin() {
-        if (typeof PluginAPI !== 'undefined') {
-          init();
+      async function translate(key, params) {
+        if (
+          typeof PluginAPI !== 'undefined' &&
+          typeof PluginAPI.translate === 'function'
+        ) {
+          return await PluginAPI.translate(key, params);
+        }
+        return key;
+      }
+
+      async function formatPluginDate(date, format) {
+        if (
+          typeof PluginAPI !== 'undefined' &&
+          typeof PluginAPI.formatDate === 'function'
+        ) {
+          return await PluginAPI.formatDate(date, format);
+        }
+        return date.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+      }
+
+      async function applyStaticTranslations() {
+        await Promise.all(
+          Array.from(document.querySelectorAll('[data-i18n]')).map(async (el) => {
+            el.textContent = await translate(el.dataset.i18n);
+          }),
+        );
+      }
+
+      async function updateDateDisplay(result) {
+        const dateEl = document.getElementById('yesterday-date');
+        if (result.tasks.length > 0) {
+          const dateText = await formatPluginDate(result.date, 'long');
+
+          if (result.daysBack === 1) {
+            dateEl.textContent =
+              dateText + ' (' + (await translate('DATE.YESTERDAY')) + ')';
+          } else {
+            dateEl.textContent =
+              dateText +
+              ' (' +
+              (await translate('DATE.DAYS_AGO', { count: result.daysBack })) +
+              ')';
+          }
         } else {
-          setTimeout(waitForPlugin, 100);
+          dateEl.textContent = await translate('MESSAGES.NO_RECENT_TASKS_FOUND');
         }
       }
 
@@ -257,42 +306,27 @@
 
       async function init() {
         try {
+          await applyStaticTranslations();
           const result = await getLastAvailableTasks();
           const projects = await PluginAPI.getAllProjects();
 
-          // Update the date display based on what was found
-          const dateEl = document.getElementById('yesterday-date');
-          if (result.tasks.length > 0) {
-            const dateText = result.date.toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            });
+          await updateDateDisplay(result);
 
-            if (result.daysBack === 1) {
-              dateEl.textContent = dateText + ' (Yesterday)';
-            } else {
-              dateEl.textContent = dateText + ` (${result.daysBack} days ago)`;
-            }
-          } else {
-            dateEl.textContent = 'No recent tasks found';
-          }
-
-          displayTasks(result.tasks, projects);
+          await displayTasks(result.tasks, projects);
         } catch (error) {
           console.error('Error loading tasks:', error);
+          const errorMsg = await translate('MESSAGES.ERROR_LOADING_TASKS');
           document.getElementById('content').innerHTML =
-            '<div class="no-tasks">Error loading tasks. Please try again.</div>';
+            `<div class="no-tasks">${escapeHtml(errorMsg)}</div>`;
         }
       }
 
-      function displayTasks(tasks, projects = []) {
+      async function displayTasks(tasks, projects = []) {
         const contentEl = document.getElementById('content');
 
         if (tasks.length === 0) {
-          contentEl.innerHTML =
-            '<div class="no-tasks">No tasks tracked in the last 30 days.</div>';
+          const noTasksMsg = await translate('MESSAGES.NO_TASKS_LAST_30_DAYS');
+          contentEl.innerHTML = `<div class="no-tasks">${escapeHtml(noTasksMsg)}</div>`;
           return;
         }
 
@@ -339,26 +373,9 @@
         const result = await getLastAvailableTasks();
         const projects = await PluginAPI.getAllProjects();
 
-        // Update the date display
-        const dateEl = document.getElementById('yesterday-date');
-        if (result.tasks.length > 0) {
-          const dateText = result.date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          });
+        await updateDateDisplay(result);
 
-          if (result.daysBack === 1) {
-            dateEl.textContent = dateText + ' (Yesterday)';
-          } else {
-            dateEl.textContent = dateText + ` (${result.daysBack} days ago)`;
-          }
-        } else {
-          dateEl.textContent = 'No recent tasks found';
-        }
-
-        displayTasks(result.tasks, projects);
+        await displayTasks(result.tasks, projects);
       }
 
       // Register hooks to refresh on task changes
@@ -371,6 +388,10 @@
         });
         PluginAPI.registerHook(PluginAPI.Hooks.TASK_DELETE, (taskData) => {
           refreshTasks();
+        });
+        PluginAPI.registerHook(PluginAPI.Hooks.LANGUAGE_CHANGE, async () => {
+          await applyStaticTranslations();
+          await refreshTasks();
         });
       }
 

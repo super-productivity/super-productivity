@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (np. https://try.gitea.io)",
+    "TOKEN": "Token dostępu",
+    "REPO_FULL_NAME": "Nazwa użytkownika lub nazwa organizacji/projektu",
+    "SCOPE": "Zakres",
+    "SCOPE_ALL": "Wszystkie",
+    "SCOPE_CREATED": "Stworzony przeze mnie",
+    "SCOPE_ASSIGNED": "Przydzielony do mnie",
+    "FILTER_LABELS": "Filtruj według etykiet (opcjonalnie)",
+    "EXCLUDE_LABELS": "Wyklucz etykiety (opcjonalnie)",
+    "HOW_TO_GET_TOKEN": "Jak zdobyć token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Podsumowanie",
+    "STATE": "Status",
+    "ASSIGNEE": "Osoba przypisana",
+    "LABELS": "Etykiety",
+    "DESCRIPTION": "Opis"
+  },
+  "FORM_HELP": "<p>Tutaj można skonfigurować SuperProductivity tak, aby wyświetlał listę otwartych zgłoszeń Gitea dla określonego repozytorium w panelu tworzenia zadań w widoku planowania dziennego. Będą one wyświetlane jako sugestie i będą zawierać link do zgłoszenia oraz więcej informacji na jego temat.</p> <p>Ponadto możesz automatycznie dodawać i importować wszystkie otwarte zgłoszenia.</p><p>Aby ominąć limity użytkowania i uzyskać dostęp, możesz podać token dostępu."
+}

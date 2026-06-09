@@ -106,6 +106,13 @@ export type JiraOriginalStatus = Readonly<{
   statusCategory: JiraOriginalCategory;
 }>;
 
+export type JiraOriginalPriority = Readonly<{
+  self: string;
+  id: string;
+  iconUrl: string;
+  name: string;
+}>;
+
 export type JiraOriginalFields = Readonly<{
   summary: string;
   components: JiraOriginalComponent[];
@@ -123,6 +130,7 @@ export type JiraOriginalFields = Readonly<{
   assignee: JiraOriginalAuthor;
   updated: string;
   status: JiraOriginalStatus;
+  priority?: JiraOriginalPriority | null;
   issuelinks: JiraOriginalIssueLink[];
 }>;
 
