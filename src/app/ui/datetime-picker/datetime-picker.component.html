@@ -39,7 +39,7 @@
 @if (isConfigReady()) {
   <mat-calendar
     (keydown)="onKeyDownOnCalendar($event)"
-    [selected]="calendarSelectedDate"
+    [selected]="selectedDate()"
     [minDate]="minDate()"
     (selectedChange)="dateSelected.emit($event)"
   ></mat-calendar>

@@ -74,27 +74,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   private readonly _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
 
-  pickerSelectedDate: Date | null = null;
-
-  constructor() {
-    effect((onCleanup) => {
-      const cal = this.calendar();
-      if (cal) {
-        // Set initial view and date
-        if (cal.currentView !== 'month') {
-          this.pickerSelectedDate = cal.activeDate;
-        }
-
-        const sub = cal.stateChanges.subscribe(() => {
-          if (cal.currentView !== 'month') {
-            this.pickerSelectedDate = cal.activeDate;
-          }
-          this._cdr.markForCheck();
-        });
-        onCleanup(() => sub.unsubscribe());
-      }
-    });
-  }
+  constructor() {}
 
   // Inputs
   selectedDate = input<Date | null>(null);
@@ -125,17 +105,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   readonly isConfigReady = computed(
     () => this._globalConfigService.localization() !== undefined,
   );
-
-  get calendarSelectedDate(): Date | null {
-    const cal = this.calendar();
-    if (!cal) {
-      return this.selectedDate();
-    }
-    if (cal.currentView === 'month') {
-      return this.selectedDate();
-    }
-    return this.pickerSelectedDate || cal.activeDate;
-  }
 
   private _lastSyncedDate: number | null = null;
   private _syncActiveDateEffect = effect(() => {
