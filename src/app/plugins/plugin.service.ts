@@ -1006,6 +1006,9 @@ export class PluginService implements OnDestroy {
    * Get index.html content for a plugin
    */
   getPluginIndexHtml(pluginId: string): string | null {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
     return this._pluginIndexHtml.get(pluginId) || null;
   }
 
@@ -1080,6 +1083,10 @@ export class PluginService implements OnDestroy {
    * Load plugin index.html content
    */
   async loadPluginIndexHtml(pluginId: string): Promise<string | null> {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
+
     // First check if we already have it cached
     const cached = this._pluginIndexHtml.get(pluginId);
     if (cached) {
@@ -1091,12 +1098,26 @@ export class PluginService implements OnDestroy {
     if (pluginPath?.startsWith('uploaded://')) {
       const cachedPlugin = await this._pluginCacheService.getPlugin(pluginId);
       if (cachedPlugin?.indexHtml) {
+        if (!this._canServePluginIndexHtml(pluginId)) {
+          return null;
+        }
         this._pluginIndexHtml.set(pluginId, cachedPlugin.indexHtml);
         return cachedPlugin.indexHtml;
       }
     }
 
     return null;
+  }
+
+  private _canServePluginIndexHtml(pluginId: string): boolean {
+    const state = this._getPluginState(pluginId);
+    return (
+      !!state &&
+      state.status === 'loaded' &&
+      state.isEnabled &&
+      state.instance?.loaded === true &&
+      !state.error
+    );
   }
 
   async dispatchHook(hookName: Hooks, payload?: unknown): Promise<void> {

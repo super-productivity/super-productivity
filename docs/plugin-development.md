@@ -171,7 +171,11 @@ Iframe-only plugins do not need a `plugin.js` file if all plugin behavior lives 
 `index.html`. Super Productivity automatically adds the default menu or side-panel entry
 from the manifest when the plugin is loaded.
 
-**Important:** When using iframes, you must inline all CSS and JavaScript directly in the HTML file. External stylesheets and scripts are blocked for security reasons.
+**Important:** Iframe plugins are served from a sandboxed blob document and talk to
+the host only through the filtered Plugin API message bridge. Inline CSS, JavaScript,
+and small assets directly in `index.html`; arbitrary extra files from the ZIP are not
+served to the iframe. External URLs can work when the app/runtime CSP allows them, but
+they are not part of the portable plugin contract.
 
 **Example index.html:**
 
@@ -585,23 +589,23 @@ not fire.
 You can also use `onReady` for any other startup work that should run after the plugin
 script has finished setting up its hooks and registrations — not just for `nodeExecution`.
 
-**Iframe plugins:** `plugin.onReady()` is also available inside iframe plugins, but it
-fires on the next microtask after `plugin.js` finishes evaluating — without an IPC bridge
-ping. This is fine in practice because iframe plugins are rendered on user navigation
-(well after host startup, when the bridge is already up). If your iframe plugin needs the
-bridge from `onReady`, it will be available; cold-boot races affect host-side plugin code
-only.
+**Iframe plugins:** `PluginAPI.onReady()` is available inside `index.html`. It fires on
+the next microtask after the callback is registered — without an IPC bridge ping. This is
+fine in practice because iframe plugins are rendered on user navigation (well after host
+startup). Iframe API calls still go through the host bridge when they are made;
+cold-boot bridge pings are only performed for host-side plugin code.
 
 ### 4. Don't spam the logs
 
 `console.logs` should be kept to a minimum.
 
-### 5. Iframe plugins: inline everything
+### 5. Iframe plugins: keep assets self-contained
 
-1. **Inline everything**: CSS and JavaScript must be in the HTML file
+1. **Prefer self-contained HTML**: inline CSS, JavaScript, and small assets are the
+   most portable option for iframe plugins
 
 ```html
-<!-- Good: Everything inlined -->
+<!-- Portable: Everything needed by the iframe is in index.html -->
 <!DOCTYPE html>
 <html>
   <head>
@@ -626,22 +630,22 @@ only.
 - Iframe plugins run in sandboxed iframes with restricted permissions
 - No access to file system unless through API
 
-### API Restrictions
+### Iframe API Surface
 
-In iframe context, these methods are NOT available:
+Iframe plugins receive a filtered `window.PluginAPI` object injected into `index.html`.
+The iframe can use the injected task/project/tag APIs, dialog and notification APIs,
+navigation helpers, persistence helpers, registration helpers, counters, and action
+dispatch. APIs not injected into the iframe are unavailable, even if they exist on the
+host-side plugin bridge.
 
-- `registerHeaderButton()`
-- `registerMenuEntry()`
-- `registerSidePanelButton()`
-- `registerShortcut()`
-- `registerHook()`
-- `execNodeScript()`
+`executeNodeScript()` is proxied through the host bridge for iframe plugins when
+the desktop app grants the plugin `nodeExecution` permission.
 
-### Content Security Policy
+### Iframe Boundary
 
-- External scripts/styles are blocked in iframes
-- Only same-origin resources are allowed
-- Inline scripts must be within the HTML file
+- Iframe plugins run without `allow-same-origin`, so they have an opaque origin
+- Host access is limited to the filtered Plugin API `postMessage` bridge
+- Remote assets depend on the app/runtime CSP and should not be relied on
 
 ## Testing Your Plugin
 

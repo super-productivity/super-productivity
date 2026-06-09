@@ -15,12 +15,59 @@ export interface PluginIframeConfig {
   indexHtml: string;
   baseCfg: PluginBaseCfg;
   pluginBridge: PluginBridgeService;
+  bridgeToken: string;
   boundMethods?: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
 }
 
-// Simple sandbox - allow what plugins need
+// Keep iframe plugin UIs on an opaque origin. `allow-same-origin` would let blob
+// iframes access `window.parent.ea` and bypass the filtered postMessage bridge.
 export const PLUGIN_IFRAME_SANDBOX =
-  'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
+  'allow-scripts allow-forms allow-popups allow-modals';
+
+const ALLOWED_IFRAME_API_METHODS = new Set([
+  'getTasks',
+  'getArchivedTasks',
+  'getCurrentContextTasks',
+  'selectTask',
+  'reInitData',
+  'updateTask',
+  'addTask',
+  'deleteTask',
+  'batchUpdateForProject',
+  'reorderTasks',
+  'getAllProjects',
+  'addProject',
+  'updateProject',
+  'getAllTags',
+  'addTag',
+  'updateTag',
+  'showSnack',
+  'notify',
+  'openDialog',
+  'showIndexHtmlAsView',
+  'showIndexHtmlInSidePanel',
+  'showInWorkContext',
+  'closeWorkContextView',
+  'getActiveWorkContext',
+  'getAppState',
+  'persistDataSynced',
+  'loadPersistedData',
+  'registerHook',
+  'registerHeaderButton',
+  'registerMenuEntry',
+  'registerConfigHandler',
+  'registerShortcut',
+  'registerSidePanelButton',
+  'registerWorkContextHeaderButton',
+  'executeNodeScript',
+  'dispatchAction',
+  'setCounter',
+  'getCounter',
+  'incrementCounter',
+  'decrementCounter',
+  'deleteCounter',
+  'getAllCounters',
+]);
 
 const isTransparentCssValue = (value: string): boolean => {
   const normalized = value.trim().replace(/\s+/g, '').toLowerCase();
@@ -189,6 +236,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
     <script>
       (function() {
         let callId = 0;
+        const bridgeToken = ${JSON.stringify(config.bridgeToken)};
         const pendingCalls = new Map();
         const dialogButtonHandlers = new Map();
         const hookHandlers = new Map(); // Store hook handlers by hook type
@@ -225,6 +273,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
                 .then((result) => {
                   window.parent.postMessage({
                     type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
+                    bridgeToken: bridgeToken,
                     dialogCallId: data.dialogCallId,
                     buttonIndex: data.buttonIndex,
                     result: result
@@ -233,6 +282,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
                 .catch((error) => {
                   window.parent.postMessage({
                     type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
+                    bridgeToken: bridgeToken,
                     dialogCallId: data.dialogCallId,
                     buttonIndex: data.buttonIndex,
                     error: error instanceof Error ? error.message : 'Unknown dialog button error'
@@ -308,6 +358,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
 
             window.parent.postMessage({
               type: '${PluginIframeMessageType.API_CALL}',
+              bridgeToken: bridgeToken,
               method: method,
               args: processedArgs || [],
               callId: id
@@ -459,6 +510,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         // Notify parent that plugin is ready
         window.parent.postMessage({
           type: '${PluginIframeMessageType.READY}',
+          bridgeToken: bridgeToken,
           pluginId: '${config.pluginId}'
         }, '*');
       })();
@@ -539,6 +591,7 @@ export const handlePluginMessage = async (
   const { data } = event;
 
   if (!data || typeof data !== 'object') return;
+  if (!isValidBridgeMessage(data, config)) return;
 
   // Ensure we have bound methods
   if (!config.boundMethods) {
@@ -550,9 +603,13 @@ export const handlePluginMessage = async (
 
   // Handle API calls
   if (data.type === PluginIframeMessageType.API_CALL && data.callId) {
-    const { method, args, callId } = data;
+    const { method, args = [], callId } = data;
 
     try {
+      if (!ALLOWED_IFRAME_API_METHODS.has(method)) {
+        throw new Error(`Unknown API method: ${method}`);
+      }
+
       // For iframe plugins, we need to handle API calls differently
       // Some methods need special handling because the bridge methods have different signatures
 
@@ -626,9 +683,7 @@ export const handlePluginMessage = async (
             };
             result = await bridge.registerHook(config.pluginId, hook, handler);
           } else {
-            // Legacy string handler support
-            const handler = new Function('return ' + handlerPlaceholder)();
-            result = await bridge.registerHook(config.pluginId, hook, handler);
+            throw new Error('Iframe registerHook calls must use IFRAME_HANDLER');
           }
           event.source?.postMessage(
             {
@@ -696,6 +751,8 @@ export const handlePluginMessage = async (
                     return new Promise((resolve, reject) => {
                       const handleResponse = (e: MessageEvent): void => {
                         if (
+                          e.source === event.source &&
+                          e.data?.bridgeToken === config.bridgeToken &&
                           e.data?.type ===
                             PluginIframeMessageType.DIALOG_BUTTON_RESPONSE &&
                           e.data?.dialogCallId === callId &&
@@ -785,4 +842,19 @@ export const handlePluginMessage = async (
   if (data.type === PluginIframeMessageType.READY && data.pluginId === config.pluginId) {
     PluginLog.log(`Plugin ${config.pluginId} is ready`);
   }
+};
+
+const isValidBridgeMessage = (
+  data: Record<string, unknown>,
+  config: PluginIframeConfig,
+): boolean => {
+  const hostHandledTypes = new Set<unknown>([
+    PluginIframeMessageType.API_CALL,
+    PluginIframeMessageType.MESSAGE,
+    PluginIframeMessageType.READY,
+  ]);
+  if (!hostHandledTypes.has(data.type)) {
+    return true;
+  }
+  return data.bridgeToken === config.bridgeToken;
 };

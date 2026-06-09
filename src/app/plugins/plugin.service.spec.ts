@@ -22,6 +22,7 @@ import { PluginInstance, PluginManifest } from './plugin-api.model';
 import { PluginService } from './plugin.service';
 import { PluginState } from './plugin-state.model';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { T } from '../t.const';
 
 describe('PluginService', () => {
   let service: PluginService;
@@ -329,6 +330,35 @@ describe('PluginService', () => {
         error: 'broken',
       }),
     );
+  });
+
+  it('does not serve iframe HTML for plugins that are not loaded and enabled', () => {
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'blocked-iframe',
+      name: 'Blocked Iframe',
+      iFrame: true,
+    };
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+        _pluginIndexHtml: Map<string, string>;
+      }
+    )._setPluginState(manifest.id, {
+      manifest,
+      status: 'error',
+      path: 'uploaded://blocked-iframe',
+      type: 'uploaded',
+      isEnabled: false,
+      error: T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED,
+    });
+    (
+      service as unknown as {
+        _pluginIndexHtml: Map<string, string>;
+      }
+    )._pluginIndexHtml.set(manifest.id, '<html>blocked</html>');
+
+    expect(service.getPluginIndexHtml(manifest.id)).toBeNull();
   });
 
   it('clears stale instances when ready handling fails', () => {
