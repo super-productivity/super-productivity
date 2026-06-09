@@ -91,7 +91,7 @@ test.describe('Add subtask with detail panel open', () => {
     );
   });
 
-  test('adds and focuses multiple subtasks via repeated "a"', async ({
+  test('adds and focuses multiple subtasks via Enter (creation help)', async ({
     page,
     workViewPage,
     taskPage,
@@ -109,12 +109,13 @@ test.describe('Add subtask with detail panel open', () => {
     await textarea.fill('First');
     await page.keyboard.press('Enter');
 
-    await page.keyboard.press('a');
+    // Second subtask is already focused by the creation help feature
     textarea = focusedField(page);
     await textarea.waitFor({ state: 'visible', timeout: 3000 });
     await textarea.fill('Second');
     await page.keyboard.press('Enter');
 
-    await expect(parent.locator('.sub-tasks task')).toHaveCount(2);
+    // We expect 3 tasks: 'First', 'Second', and the trailing empty one
+    await expect(parent.locator('.sub-tasks task')).toHaveCount(3);
   });
 });
