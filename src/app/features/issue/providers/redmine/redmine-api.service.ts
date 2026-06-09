@@ -59,7 +59,7 @@ export class RedmineApiService {
 
     // Redmine's search API only does full text search and does not match issue ids,
     // so for numeric queries (e.g. "1234" or "#1234") we additionally try to fetch
-    // the issue directly by its id and merge it into the results.
+    // the issue by its id and merge it into the results.
     const idMatch = query.trim().match(ISSUE_ID_QUERY_RGX);
     if (!idMatch) {
       return textSearch$;
@@ -67,9 +67,7 @@ export class RedmineApiService {
 
     const issueId = Number(idMatch[1]);
     return forkJoin([
-      this.getById$(issueId, cfg, { isSkipErrorHandling: true }).pipe(
-        catchError(() => of(null)),
-      ),
+      this._getIssueByIdInProject$(issueId, cfg).pipe(catchError(() => of(null))),
       textSearch$,
     ]).pipe(
       map(([issueById, textResults]) =>
@@ -81,6 +79,30 @@ export class RedmineApiService {
           : textResults,
       ),
     );
+  }
+
+  // Looks up a single issue by id but stays scoped to the configured project, so a
+  // provider for one project can never surface (or add) an issue from another project
+  // the API key happens to have access to. Redmine resolves the project from the URL,
+  // so this works whether `cfg.projectId` is the numeric id or the identifier slug.
+  // `status_id=*` ensures closed issues are found too. A cross-project (or unknown) id
+  // simply yields an empty list -> null, and the caller falls back to text search.
+  private _getIssueByIdInProject$(
+    issueId: number,
+    cfg: RedmineCfg,
+  ): Observable<RedmineIssue | null> {
+    return this._sendRequest$(
+      {
+        url: `${cfg.host}/projects/${cfg.projectId}/issues.json`,
+        params: ParamsBuilder.create()
+          .withParam('issue_id', String(issueId))
+          .withState('*')
+          .withLimit(1)
+          .build(),
+      },
+      cfg,
+      { isSkipErrorHandling: true },
+    ).pipe(map((res: RedmineIssueResult) => res?.issues?.[0] ?? null));
   }
 
   getLast100IssuesForCurrentRedmineProject$(cfg: RedmineCfg): Observable<RedmineIssue[]> {
@@ -153,17 +175,12 @@ export class RedmineApiService {
     );
   }
 
-  getById$(
-    issueId: number,
-    cfg: RedmineCfg,
-    { isSkipErrorHandling = false }: { isSkipErrorHandling?: boolean } = {},
-  ): Observable<RedmineIssue> {
+  getById$(issueId: number, cfg: RedmineCfg): Observable<RedmineIssue> {
     return this._sendRequest$(
       {
         url: `${cfg.host}/issues/${issueId}.json`,
       },
       cfg,
-      { isSkipErrorHandling },
     ).pipe(
       map(({ issue }) => Object.assign({ url: `${cfg.host}/issues/${issueId}` }, issue)),
     );
