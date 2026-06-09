@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Servidor (ex: https://try.gitea.io)",
+    "TOKEN": "Token de Acesso",
+    "REPO_FULL_NAME": "Nome do Usuário ou Organização/repositório",
+    "SCOPE": "Escopo",
+    "SCOPE_ALL": "Todos",
+    "SCOPE_CREATED": "Criado por mim",
+    "SCOPE_ASSIGNED": "Atribuído a mim",
+    "FILTER_LABELS": "Filtrar por rótulos (opcional)",
+    "EXCLUDE_LABELS": "Excluir rótulos (opcional)",
+    "HOW_TO_GET_TOKEN": "Como obter um token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumo",
+    "STATE": "Status",
+    "ASSIGNEE": "Responsável",
+    "LABELS": "Etiquetas",
+    "DESCRIPTION": "Descrição"
+  },
+  "FORM_HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do Gitea de um repositório específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode adicionar e importar automaticamente todas as issues abertas.</p><p>Para contornar limites de uso e para ter acesso, você pode fornecer um token de acesso."
+}

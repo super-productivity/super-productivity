@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Máy chủ (ví dụ: https://try.gitea.io)",
+    "TOKEN": "Token truy cập",
+    "REPO_FULL_NAME": "Tên người dùng hoặc Tổ chức/kho lưu trữ",
+    "SCOPE": "Phạm vi",
+    "SCOPE_ALL": "Tất cả",
+    "SCOPE_CREATED": "Do tôi tạo",
+    "SCOPE_ASSIGNED": "Được giao cho tôi",
+    "FILTER_LABELS": "Lọc theo nhãn (tùy chọn)",
+    "EXCLUDE_LABELS": "Loại trừ nhãn (tùy chọn)",
+    "HOW_TO_GET_TOKEN": "Cách lấy token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Tóm tắt",
+    "STATE": "Trạng thái",
+    "ASSIGNEE": "Người được giao",
+    "LABELS": "Nhãn",
+    "DESCRIPTION": "Mô tả"
+  },
+  "FORM_HELP": "<p>Tại đây bạn có thể cấu hình Super Productivity để liệt kê các sự cố Gitea mở cho một kho lưu trữ cụ thể trong bảng tạo công việc ở chế độ xem lên kế hoạch hàng ngày. Chúng sẽ được liệt kê làm gợi ý và cung cấp liên kết đến sự cố cũng như thêm thông tin về nó.</p><p>Ngoài ra, bạn có thể tự động thêm và nhập tất cả sự cố mở.</p><p>Để vượt qua giới hạn sử dụng và truy cập, bạn có thể cung cấp token truy cập."
+}

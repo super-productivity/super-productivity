@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Sağlayıcı (örneğin: https://try.gitea.io)",
+    "TOKEN": "Erişim Jetonu",
+    "REPO_FULL_NAME": "Kullanıcı adı veya Organizasyon adı/projesi",
+    "SCOPE": "Kapsam",
+    "SCOPE_ALL": "Hepsi",
+    "SCOPE_CREATED": "Benim tarafımdan oluşturuldu",
+    "SCOPE_ASSIGNED": "Bana atanan",
+    "FILTER_LABELS": "Etiketlere göre filtrele (isteğe bağlı)",
+    "EXCLUDE_LABELS": "Etiketleri hariç tut (isteğe bağlı)",
+    "HOW_TO_GET_TOKEN": "Bir token nasıl alınır?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Özet",
+    "STATE": "Durum",
+    "ASSIGNEE": "Atanan",
+    "LABELS": "Etiketler",
+    "DESCRIPTION": "Açıklama"
+  },
+  "FORM_HELP": "<p>Burada SuperProductivity'yi, günlük planlama görünümündeki görev oluşturma panelinde belirli bir depo için açık Gitea sorunlarını listeleyecek şekilde yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili bir bağlantının yanı sıra konuyla ilgili daha fazla bilgi sağlayacaklar.</p> <p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listenize ekleyebilir ve senkronize edebilirsiniz.</p><p>Kullanım sınırlarını aşmak ve erişim sağlamak için bir erişim jetonu sağlayabilirsiniz."
+}

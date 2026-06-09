@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (z. B. : https://try.gitea.io)",
+    "TOKEN": "Zugangstoken",
+    "REPO_FULL_NAME": "Benutzername oder Organisationsname/Projekt",
+    "SCOPE": "Umfang",
+    "SCOPE_ALL": "Alle",
+    "SCOPE_CREATED": "Von mir erstellt",
+    "SCOPE_ASSIGNED": "Mir zugewiesen",
+    "FILTER_LABELS": "Nach Labels filtern (optional)",
+    "EXCLUDE_LABELS": "Labels ausschließen (optional)",
+    "HOW_TO_GET_TOKEN": "Wie bekomme ich einen Token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Zusammenfassung",
+    "STATE": "Status",
+    "ASSIGNEE": "Zuständiger",
+    "LABELS": "Beschriftungen",
+    "DESCRIPTION": "Beschreibung"
+  },
+  "FORM_HELP": "<p>Hier kannst du SuperProductivity so konfigurieren, dass offene Gitea-Issues für ein bestimmtes Repository im Aufgabenerstellungsfenster in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu.</p><p> Darüber hinaus kannst du alle offenen Issues automatisch hinzufügen und importieren.</p><p> Um Nutzungsbeschränkungen zu umgehen und Zugriff zu erhalten, kannst du ein Zugriffstoken bereitstellen."
+}
