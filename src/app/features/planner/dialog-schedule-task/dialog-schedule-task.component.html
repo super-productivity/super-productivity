@@ -6,6 +6,7 @@
       [selectedReminderCfgId]="selectedReminderCfgId"
       [reminderOptions]="remindAvailableOptions"
       [minDate]="minDate"
+      [showQuickAccess]="data.showQuickAccess !== false"
       [timeLabel]="T.F.TASK.D_SELECT_DATE_AND_TIME.TIME | translate"
       (dateSelected)="dateSelected($event)"
       (timeChanged)="selectedTime = $event"

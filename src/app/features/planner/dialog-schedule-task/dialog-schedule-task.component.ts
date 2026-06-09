@@ -442,6 +442,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         break;
     }
 
-    this.submit();
+    if (!this.data.isSelectDueOnly) {
+      this.submit();
+    }
   }
 }
