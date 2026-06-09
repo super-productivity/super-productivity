@@ -137,6 +137,43 @@ describe('InlineMarkdownComponent', () => {
     }));
   });
 
+  describe('XSS sanitization (GHSA-4rrp-xhp8-hf4p)', () => {
+    it('should not render an executable event handler from a malicious note', fakeAsync(() => {
+      component.model = '<img src=x onerror="alert(document.domain)">';
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      tick();
+
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      expect(preview).toBeTruthy();
+      expect(preview.innerHTML).not.toContain('onerror');
+      // The sanitizer keeps the (now inert) <img>, just without the handler.
+      const img = preview.querySelector('img');
+      if (img) {
+        expect(img.getAttribute('onerror')).toBeNull();
+      }
+    }));
+
+    it('should still render a normal note (sanitizer does not break rendering)', fakeAsync(() => {
+      component.model = '**bold** and [link](https://example.com)';
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      tick();
+
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      expect(preview.querySelector('strong')?.textContent).toBe('bold');
+      expect(preview.querySelector('a')?.getAttribute('href')).toBe(
+        'https://example.com',
+      );
+    }));
+  });
+
   describe('ngOnDestroy', () => {
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange

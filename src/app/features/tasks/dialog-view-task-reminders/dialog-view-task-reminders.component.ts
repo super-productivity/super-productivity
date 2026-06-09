@@ -1,6 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  HostListener,
   inject,
   OnDestroy,
   viewChildren,
@@ -38,6 +40,7 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DateService } from '../../../core/date/date.service';
+import { MatTooltip } from '@angular/material/tooltip';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -63,6 +66,7 @@ const MINUTES_TO_MILLISECONDS = 1000 * 60;
     TagListComponent,
     LocaleDatePipe,
     LocalDateStrPipe,
+    MatTooltip,
   ],
 })
 export class DialogViewTaskRemindersComponent implements OnDestroy {
@@ -75,6 +79,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _store = inject(Store);
   private _reminderService = inject(ReminderService);
   private _dateService = inject(DateService);
+  private _elementRef = inject(ElementRef);
   data = inject<{
     reminders: TaskWithReminderData[];
   }>(MAT_DIALOG_DATA);
@@ -109,9 +114,10 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       ),
     ),
   );
+  todayTaskIds$: Observable<string[]> = this._store.select(selectTodayTaskIds);
   isSingleOnToday$: Observable<boolean> = combineLatest([
     this.tasks$,
-    this._store.select(selectTodayTaskIds),
+    this.todayTaskIds$,
   ]).pipe(
     map(
       ([tasks, todayTaskIds]) =>
@@ -543,7 +549,133 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._matDialogRef.close();
   }
 
+  @HostListener('keydown', ['$event'])
+  onKeyDown(ev: KeyboardEvent): void {
+    if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(ev.key)) {
+      const activeEl = document.activeElement as HTMLElement;
+      if (!activeEl) return;
+
+      const taskRow = activeEl.closest('.task') as HTMLElement;
+      const wrapButtons = activeEl.closest('.wrap-buttons') as HTMLElement;
+
+      if (!taskRow && !wrapButtons) return;
+
+      const allRows = this._getTaskRows();
+      const footerButtons = this._getFooterButtons();
+
+      if (taskRow) {
+        const rowIndex = allRows.indexOf(taskRow);
+        const buttonsInRow = this._getFocusableButtons(taskRow);
+        const btnIndex = buttonsInRow.indexOf(activeEl as HTMLButtonElement);
+
+        if (ev.key === 'ArrowDown') {
+          const nextRow = allRows[rowIndex + 1];
+          if (nextRow) {
+            ev.preventDefault();
+            const nextButtons = this._getFocusableButtons(nextRow);
+            (nextButtons[btnIndex] || nextButtons[0])?.focus();
+          } else if (footerButtons.length > 0) {
+            ev.preventDefault();
+            footerButtons[0].focus();
+          }
+        } else if (ev.key === 'ArrowUp') {
+          const prevRow = allRows[rowIndex - 1];
+          if (prevRow) {
+            ev.preventDefault();
+            const prevButtons = this._getFocusableButtons(prevRow);
+            (prevButtons[btnIndex] || prevButtons[0])?.focus();
+          }
+        } else if (ev.key === 'ArrowRight') {
+          if (btnIndex < buttonsInRow.length - 1) {
+            ev.preventDefault();
+            buttonsInRow[btnIndex + 1]?.focus();
+          }
+        } else if (ev.key === 'ArrowLeft') {
+          if (btnIndex > 0) {
+            ev.preventDefault();
+            buttonsInRow[btnIndex - 1]?.focus();
+          }
+        }
+      } else if (wrapButtons) {
+        const btnIndex = footerButtons.indexOf(activeEl as HTMLButtonElement);
+
+        if (ev.key === 'ArrowUp') {
+          if (allRows.length > 0) {
+            ev.preventDefault();
+            const lastRow = allRows[allRows.length - 1];
+            const lastRowButtons = this._getFocusableButtons(lastRow);
+            // Try to match horizontal position if possible, otherwise last button
+            (
+              lastRowButtons[btnIndex] || lastRowButtons[lastRowButtons.length - 1]
+            )?.focus();
+          }
+        } else if (ev.key === 'ArrowRight') {
+          if (btnIndex < footerButtons.length - 1) {
+            ev.preventDefault();
+            footerButtons[btnIndex + 1].focus();
+          }
+        } else if (ev.key === 'ArrowLeft') {
+          if (btnIndex > 0) {
+            ev.preventDefault();
+            footerButtons[btnIndex - 1].focus();
+          }
+        }
+      }
+    }
+  }
+
+  private _getFocusableButtons(container: HTMLElement): HTMLButtonElement[] {
+    if (!container) return [];
+    return (
+      Array.from(container.querySelectorAll('button')) as HTMLButtonElement[]
+    ).filter((btn) => !btn.disabled && btn.offsetWidth > 0);
+  }
+
+  // Scope DOM lookups to this dialog's host. `.task` / `.wrap-buttons` are not
+  // unique across the app (many dialogs use `.wrap-buttons`) and a reminder can
+  // open on top of another dialog, so a global query could target the wrong one.
+  private _getTaskRows(): HTMLElement[] {
+    return Array.from(
+      (this._elementRef.nativeElement as HTMLElement).querySelectorAll('.task'),
+    );
+  }
+
+  private _getFooterButtons(): HTMLButtonElement[] {
+    return this._getFocusableButtons(
+      (this._elementRef.nativeElement as HTMLElement).querySelector(
+        '.wrap-buttons',
+      ) as HTMLElement,
+    );
+  }
+
   private _removeTaskFromList(taskId: string): void {
+    const activeEl = document.activeElement as HTMLElement;
+    let rowIndex = -1;
+    let btnIndex = -1;
+
+    if (activeEl?.closest('.task')) {
+      const taskRow = activeEl.closest('.task') as HTMLElement;
+      rowIndex = this._getTaskRows().indexOf(taskRow);
+      btnIndex = this._getFocusableButtons(taskRow).indexOf(
+        activeEl as HTMLButtonElement,
+      );
+    } else {
+      // Menu action: focus is in the menu overlay, not the row. Fall back to the
+      // row's snooze button (the menu trigger) so the next-row focus lands on the
+      // equivalent control, regardless of which actions are hidden/disabled.
+      const taskRow = (this._elementRef.nativeElement as HTMLElement).querySelector(
+        `.task[data-id="${taskId}"]`,
+      ) as HTMLElement | null;
+      if (taskRow) {
+        rowIndex = this._getTaskRows().indexOf(taskRow);
+        const rowButtons = this._getFocusableButtons(taskRow);
+        const snoozeBtn = taskRow.querySelector(
+          'button[aria-haspopup="menu"]',
+        ) as HTMLButtonElement | null;
+        btnIndex = snoozeBtn ? rowButtons.indexOf(snoozeBtn) : 0;
+      }
+    }
+
     // Track dismissed ID to prevent stale data from worker re-adding it
     this._dismissedReminderIds.add(taskId);
     const newTaskIds = this.taskIds$.getValue().filter((id) => id !== taskId);
@@ -551,6 +683,21 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       this._close();
     } else {
       this.taskIds$.next(newTaskIds);
+
+      if (rowIndex !== -1) {
+        // Wait for DOM update
+        setTimeout(() => {
+          const remainingRows = this._getTaskRows();
+          const nextRow = remainingRows[rowIndex] || remainingRows[rowIndex - 1];
+          if (nextRow) {
+            const buttons = this._getFocusableButtons(nextRow);
+            (buttons[btnIndex] || buttons[0])?.focus();
+          } else {
+            // Focus first footer button if no rows left
+            this._getFooterButtons()[0]?.focus();
+          }
+        });
+      }
     }
   }
 

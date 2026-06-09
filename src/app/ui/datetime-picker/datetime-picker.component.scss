@@ -1,0 +1,164 @@
+@use '../../../styles/_globals.scss' as *;
+
+:host {
+  display: block;
+  user-select: none;
+  width: 100%;
+
+  &.sp-hide-cursor {
+    cursor: none !important;
+
+    ::ng-deep {
+      .mat-calendar-body-cell-content {
+        cursor: none !important;
+      }
+      // Suppress hover-only styling (when not focused) when cursor is hidden
+      .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus)
+        > .mat-calendar-body-cell-content {
+        outline: none !important;
+
+        &:not(.mat-calendar-body-selected) {
+          background-color: transparent !important;
+        }
+      }
+    }
+  }
+
+  ::ng-deep {
+    mat-calendar {
+      height: 400px;
+    }
+
+    .mat-calendar-header {
+      padding-top: 0;
+    }
+
+    .mat-calendar-body-selected {
+      background: var(--c-primary) !important;
+      color: var(--c-contrast) !important;
+    }
+
+    .mat-calendar-controls {
+      margin-top: var(--s);
+      margin-bottom: var(--s);
+    }
+
+    // Hide extra month name inside the calendar body
+    // NOTE: visibility: hidden (not display: none) is intentional — the cell must
+    // stay in the grid flow so the first week's day numbers are offset to the
+    // correct weekday column. display: none collapses it and left-aligns all days.
+    .mat-calendar-body-label {
+      visibility: hidden !important;
+      padding: 0 !important;
+    }
+
+    .mat-calendar-period-button {
+      cursor: pointer !important;
+      transition: background-color var(--transition-duration-s) ease;
+
+      &:hover {
+        background-color: var(--calendar-hover-bg) !important;
+        border-radius: var(--card-border-radius) !important;
+      }
+    }
+
+    // Style previous/next buttons hover circles
+    .mat-calendar-previous-button:not(:disabled):hover,
+    .mat-calendar-next-button:not(:disabled):hover {
+      background-color: var(--calendar-hover-bg) !important;
+      border-radius: 50% !important;
+    }
+  }
+
+  :host-context([dir='rtl']) {
+    ::ng-deep {
+      .mat-calendar-previous-button,
+      .mat-calendar-next-button {
+        transform: rotate(180deg);
+      }
+    }
+  }
+}
+
+.quick-access {
+  display: flex;
+  justify-content: space-evenly;
+  @include extraBorder('-bottom');
+  height: 48px;
+
+  > button {
+    height: 48px;
+    flex-grow: 1;
+    border-radius: var(--card-border-radius) !important;
+
+    ::ng-deep .mat-mdc-button-persistent-ripple {
+      border-radius: var(--card-border-radius) !important;
+    }
+  }
+
+  button + button {
+    @include extraBorder('-left');
+  }
+}
+
+:host ::ng-deep mat-month-view .mat-calendar-body-today {
+  color: transparent !important;
+  border: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+
+  &:after {
+    @include materialIcon('wb_sunny');
+    @include center;
+    color: var(--c-accent) !important;
+  }
+
+  &.mat-calendar-body-selected:after {
+    color: var(--c-contrast) !important;
+  }
+}
+
+:host ::ng-deep {
+  mat-year-view .mat-calendar-body-today,
+  mat-multi-year-view .mat-calendar-body-today {
+    border: none !important;
+    border-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+
+    &:not(.mat-calendar-body-selected) {
+      color: var(--c-accent) !important;
+    }
+  }
+}
+
+.press-enter-msg {
+  text-align: center;
+  font-weight: bold;
+  padding: var(--s-half) 12px;
+  position: absolute;
+  left: 50%;
+  z-index: 11;
+  box-shadow: var(--whiteframe-shadow-1dp);
+  border-radius: 8px;
+  margin-top: -12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  background: var(--bg-lighter);
+}
+
+.form-ctrl-wrapper {
+  margin: var(--s2) var(--s2) var(--s2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+
+  mat-form-field {
+    width: 100%;
+  }
+
+  .time-clear-btn {
+    cursor: pointer;
+  }
+}

@@ -59,6 +59,8 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/automations',
   'assets/bundled-plugins/github-issue-provider',
   'assets/bundled-plugins/clickup-issue-provider',
+  'assets/bundled-plugins/gitea-issue-provider',
+  'assets/bundled-plugins/linear-issue-provider',
   'assets/bundled-plugins/brain-dump',
   'assets/bundled-plugins/voice-reminder',
   'assets/bundled-plugins/google-calendar-provider',

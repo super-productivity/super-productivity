@@ -40,6 +40,7 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
           kbField('globalToggleTaskStart', T.GCF.KEYBOARD.GLOBAL_TOGGLE_TASK_START),
           kbField('globalAddNote', T.GCF.KEYBOARD.GLOBAL_ADD_NOTE),
           kbField('globalAddTask', T.GCF.KEYBOARD.GLOBAL_ADD_TASK),
+          kbField('globalToggleTaskWidget', T.GCF.KEYBOARD.GLOBAL_TOGGLE_TASK_WIDGET),
         ]
       : []),
     // APP WIDE

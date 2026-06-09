@@ -84,9 +84,14 @@ export class PluginRunner {
 
         // Register UI components for iframe plugins
         // Skip menu entry if this is a side panel plugin
+        const pluginDisplayName = this._translatePluginText(
+          manifest,
+          'PLUGIN.NAME',
+          manifest.name,
+        );
         if (manifest.iFrame && !manifest.isSkipMenuEntry && !manifest.sidePanel) {
           pluginAPI.registerMenuEntry({
-            label: manifest.name,
+            label: pluginDisplayName,
             icon: manifest.icon || 'extension',
             onClick: () => pluginAPI.showIndexHtmlAsView(),
           });
@@ -95,7 +100,7 @@ export class PluginRunner {
         // Auto-register side panel if configured
         if (manifest.sidePanel) {
           pluginAPI.registerSidePanelButton({
-            label: manifest.name,
+            label: pluginDisplayName,
             icon: manifest.icon || 'extension',
             onClick: () => {
               // No-op: the side panel toggle is handled by PluginSidePanelBtnsComponent
@@ -115,6 +120,18 @@ export class PluginRunner {
       PluginLog.err(`Failed to load plugin ${manifest.id}:`, error);
       throw error;
     }
+  }
+
+  private _translatePluginText(
+    manifest: PluginManifest,
+    key: string,
+    fallback: string,
+  ): string {
+    if (!manifest.i18n?.languages?.length) {
+      return fallback;
+    }
+    const translated = this._pluginI18nService.translate(manifest.id, key);
+    return translated === key ? fallback : translated;
   }
 
   /**

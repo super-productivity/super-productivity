@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "ホスト (例:https://try.gitea.io)",
+    "TOKEN": "アクセストークン",
+    "REPO_FULL_NAME": "ユーザー名または組織名/プロジェクト名",
+    "SCOPE": "範囲",
+    "SCOPE_ALL": "全て",
+    "SCOPE_CREATED": "私が作った",
+    "SCOPE_ASSIGNED": "私に割り当てられた",
+    "FILTER_LABELS": "ラベルで絞り込み（任意）",
+    "EXCLUDE_LABELS": "ラベルを除外（任意）",
+    "HOW_TO_GET_TOKEN": "トークンの入手方法は？"
+  },
+  "DISPLAY": {
+    "SUMMARY": "概要",
+    "STATE": "地位",
+    "ASSIGNEE": "担当者",
+    "LABELS": "ラベル",
+    "DESCRIPTION": "形容"
+  },
+  "FORM_HELP": "<p>ここで SuperProductivity を設定し、日次計画ビューのタスク作成パネルで特定のリポジトリに対して未解決の Gitea 課題を一覧表示させることができます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報が提供されます。</p> <p>さらに、すべてのオープン課題を自動的に追加してインポートすることもできます。</p><p>利用制限を通過してアクセスするには、アクセストークンを提供することができます。"
+}

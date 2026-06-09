@@ -2,6 +2,7 @@ import { globalShortcut, ipcMain } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { KeyboardConfig } from '../../src/app/features/config/keyboard-config.model';
 import { getWin, setWasMaximizedBeforeHide } from '../main-window';
+import { toggleTaskWidgetVisibility } from '../task-widget/task-widget';
 import { showOrFocus } from '../various-shared';
 import { ensureIndicator } from '../indicator';
 import { getIsMinimizeToTray } from '../shared-state';
@@ -22,6 +23,7 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
     'globalToggleTaskStart',
     'globalAddNote',
     'globalAddTask',
+    'globalToggleTaskWidget',
   ];
 
   if (cfg) {
@@ -80,6 +82,10 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
               // NOTE: delay slightly to make sure app is ready
               mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
             };
+            break;
+
+          case 'globalToggleTaskWidget':
+            actionFn = toggleTaskWidgetVisibility;
             break;
 
           default:

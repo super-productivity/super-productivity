@@ -58,6 +58,7 @@ export const JIRA_DATE_FORMAT = 'YYYY-MM-DDTHH:mm:ss.SSZZ';
 export const JIRA_ISSUE_TYPE = 'JIRA';
 export const JIRA_REQUEST_TIMEOUT_DURATION = 20000;
 export const JIRA_MAX_RESULTS = 100;
+export const JIRA_MAX_AUTO_IMPORT_PAGES = 5;
 export const JIRA_ADDITIONAL_ISSUE_FIELDS = [
   'assignee',
   'summary',

@@ -30,7 +30,16 @@
     "RESTORE_STRAY_BACKUP": "During the last sync, there may have been an error. Do you want to restore the last backup?"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Press enter again to save"
+    "MONTH": "Month",
+    "NEXT_24_YEARS": "Next 24 years",
+    "NEXT_MONTH": "Next month",
+    "NEXT_YEAR": "Next year",
+    "PRESS_ENTER_AGAIN": "Press enter again to save",
+    "PREVIOUS_24_YEARS": "Previous 24 years",
+    "PREVIOUS_MONTH": "Previous month",
+    "PREVIOUS_YEAR": "Previous year",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Choose year",
+    "SWITCH_TO_YEAR_VIEW": "Choose month"
   },
   "DIALOG_LOGS": {
     "COPY": "Copy",
@@ -1787,6 +1796,9 @@
         "CLEAR_REMINDER": "Clear reminder",
         "COMPLETE": "Complete",
         "COMPLETE_ALL": "Complete all",
+        "MARK_AS_DONE": "Mark as done",
+        "SCHEDULE_FOR_TODAY": "Schedule for today",
+        "DROP_TIME_KEEP_TODAY": "Drop time, keep in Today",
         "DEADLINE_REMINDER": "Deadline Reminder",
         "DEADLINE_SECTION": "Deadlines",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Today)",
@@ -2346,6 +2358,7 @@
       "GLOBAL_ADD_TASK": "Add new task",
       "GLOBAL_SHOW_HIDE": "Show/hide Super Productivity",
       "GLOBAL_TOGGLE_TASK_START": "Start/stop time tracking for last active task",
+      "GLOBAL_TOGGLE_TASK_WIDGET": "Show/hide task widget",
       "GO_TO_DAILY_AGENDA": "Go to agenda",
       "GO_TO_FOCUS_MODE": "Enter focus mode",
       "GO_TO_SCHEDULE": "Go to Today",
@@ -2788,6 +2801,7 @@
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",
     "ALREADY_INITIALIZED": "Plugin is already initialized",
+    "AUTHORED_BY": "by {{author}}",
     "CANCEL": "Cancel",
     "CAPABILITIES": {
       "ACCESS_FILES": "Access and modify files on your system",

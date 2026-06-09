@@ -36,15 +36,24 @@ test('should not crash when a repeat config has an invalid startTime in the stor
     .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) })
     .click();
 
-  const repeatDialog = page.locator('mat-dialog-container');
+  const repeatDialog = page.locator('mat-dialog-container').first();
   await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
   // Set a valid startTime so the config has startTime + remindAt in the store
-  await repeatDialog.locator('collapsible .collapsible-header').last().click();
-  const startTimeField = repeatDialog.getByLabel(/Scheduled start time/i);
+  await repeatDialog.locator('.planned-start-date-btn').click();
+  const scheduleDialog = page
+    .locator('mat-dialog-container')
+    .filter({ has: page.locator('datetime-picker') });
+  await expect(scheduleDialog).toBeVisible();
+
+  const startTimeField = scheduleDialog.getByLabel('Time');
   await expect(startTimeField).toBeVisible({ timeout: 5000 });
   await startTimeField.fill('10:30');
   await startTimeField.blur();
+
+  const scheduleBtn = scheduleDialog.locator('[data-test-id="schedule-submit-btn"]');
+  await scheduleBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden' });
   await page.waitForTimeout(300);
 
   const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });

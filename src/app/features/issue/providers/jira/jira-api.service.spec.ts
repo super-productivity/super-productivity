@@ -7,9 +7,10 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { GlobalProgressBarService } from '../../../../core-ui/global-progress-bar/global-progress-bar.service';
 import { BannerService } from '../../../../core/banner/banner.service';
 import { MatDialog } from '@angular/material/dialog';
-import { DEFAULT_JIRA_CFG } from './jira.const';
+import { DEFAULT_JIRA_CFG, JIRA_MAX_AUTO_IMPORT_PAGES } from './jira.const';
 import { JiraCfg } from './jira.model';
 import { formatJiraDate } from '../../../../util/format-jira-date';
+import { JiraIssueOriginal } from './jira-api-responses';
 
 const makeMockExtensionService = (
   onReady$: Subject<boolean> | ReplaySubject<boolean>,
@@ -56,6 +57,44 @@ const baseCfg: JiraCfg = {
   userName: 'user',
   password: 'pass',
 };
+
+const makeJiraIssue = (key: string): JiraIssueOriginal => ({
+  key,
+  id: key.replace(/\D/g, '') || key,
+  expand: '',
+  self: `https://jira.example.com/rest/api/latest/issue/${key}`,
+  fields: {
+    summary: `Summary ${key}`,
+    components: [],
+    attachment: [],
+    timeestimate: 0,
+    timespent: 0,
+    description: null,
+    assignee: null as any,
+    updated: '2026-06-08T00:00:00.000+0000',
+    status: {
+      self: '',
+      id: '1',
+      description: '',
+      iconUrl: '',
+      name: 'Open',
+      statusCategory: {
+        self: '',
+        id: '1',
+        key: 'new',
+        colorName: 'blue-gray',
+        name: 'To Do',
+      },
+    },
+    issuelinks: [],
+  },
+});
+
+const jsonResponse = (body: unknown, status = 200): Promise<Response> =>
+  Promise.resolve(new Response(JSON.stringify(body), { status }));
+
+const requestBodyAt = (fetchSpy: jasmine.Spy, index: number): Record<string, unknown> =>
+  JSON.parse((fetchSpy.calls.argsFor(index)[1] as RequestInit).body as string);
 
 describe('JiraApiService', () => {
   describe('addWorklog$ date formatting', () => {
@@ -288,6 +327,178 @@ describe('JiraApiService', () => {
       );
 
       expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAutoImportIssues$ pagination', () => {
+    let service: JiraApiService;
+    let fetchSpy: jasmine.Spy;
+    const cfg = {
+      ...baseCfg,
+      allowFetchFallback: true,
+      autoAddBacklogJqlQuery: 'project = TEST ORDER BY updated DESC',
+    };
+
+    beforeEach(() => {
+      service = setupService(new Subject<boolean>());
+      fetchSpy = spyOn(window, 'fetch');
+    });
+
+    it('fetches all Jira Cloud search/jql pages via nextPageToken', (done) => {
+      fetchSpy.and.returnValues(
+        jsonResponse({
+          issues: [makeJiraIssue('TEST-1')],
+          maxResults: 100,
+          nextPageToken: 'token-2',
+        }),
+        jsonResponse({
+          issues: [makeJiraIssue('TEST-2')],
+          maxResults: 100,
+          nextPageToken: 'token-3',
+        }),
+        jsonResponse({
+          issues: [makeJiraIssue('TEST-3')],
+          maxResults: 100,
+        }),
+      );
+
+      service.findAutoImportIssues$(cfg).subscribe({
+        next: (issues) => {
+          expect(issues.map((issue) => issue.key)).toEqual([
+            'TEST-1',
+            'TEST-2',
+            'TEST-3',
+          ]);
+          expect(fetchSpy).toHaveBeenCalledTimes(3);
+          expect(String(fetchSpy.calls.argsFor(0)[0])).toContain('/search/jql');
+          expect(requestBodyAt(fetchSpy, 0)).toEqual(
+            jasmine.objectContaining({
+              jql: cfg.autoAddBacklogJqlQuery,
+              maxResults: 100,
+            }),
+          );
+          expect(requestBodyAt(fetchSpy, 1)).toEqual(
+            jasmine.objectContaining({ nextPageToken: 'token-2' }),
+          );
+          expect(requestBodyAt(fetchSpy, 2)).toEqual(
+            jasmine.objectContaining({ nextPageToken: 'token-3' }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+    });
+
+    it('caps Jira Cloud auto-import pagination', (done) => {
+      fetchSpy.and.returnValues(
+        ...Array.from({ length: JIRA_MAX_AUTO_IMPORT_PAGES + 1 }, (_, index) =>
+          jsonResponse({
+            issues: [makeJiraIssue(`TEST-${index + 1}`)],
+            maxResults: 100,
+            nextPageToken: `token-${index + 2}`,
+          }),
+        ),
+      );
+
+      service.findAutoImportIssues$(cfg).subscribe({
+        next: (issues) => {
+          expect(issues.map((issue) => issue.key)).toEqual([
+            'TEST-1',
+            'TEST-2',
+            'TEST-3',
+            'TEST-4',
+            'TEST-5',
+          ]);
+          expect(fetchSpy).toHaveBeenCalledTimes(JIRA_MAX_AUTO_IMPORT_PAGES);
+          expect(requestBodyAt(fetchSpy, JIRA_MAX_AUTO_IMPORT_PAGES - 1)).toEqual(
+            jasmine.objectContaining({ nextPageToken: 'token-5' }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+    });
+
+    it('falls back to Jira Server/DC search pages via startAt', (done) => {
+      fetchSpy.and.returnValues(
+        jsonResponse({ errorMessages: ['not found'] }, 404),
+        jsonResponse({
+          issues: [makeJiraIssue('TEST-1')],
+          maxResults: 100,
+          startAt: 0,
+          total: 250,
+        }),
+        jsonResponse({
+          issues: [makeJiraIssue('TEST-101')],
+          maxResults: 100,
+          startAt: 100,
+          total: 250,
+        }),
+        jsonResponse({
+          issues: [makeJiraIssue('TEST-201')],
+          maxResults: 100,
+          startAt: 200,
+          total: 250,
+        }),
+      );
+
+      service.findAutoImportIssues$(cfg).subscribe({
+        next: (issues) => {
+          expect(issues.map((issue) => issue.key)).toEqual([
+            'TEST-1',
+            'TEST-101',
+            'TEST-201',
+          ]);
+          expect(fetchSpy).toHaveBeenCalledTimes(4);
+          expect(String(fetchSpy.calls.argsFor(0)[0])).toContain('/search/jql');
+          expect(String(fetchSpy.calls.argsFor(1)[0])).toContain('/search');
+          expect(requestBodyAt(fetchSpy, 1)).not.toEqual(
+            jasmine.objectContaining({ startAt: jasmine.any(Number) }),
+          );
+          expect(requestBodyAt(fetchSpy, 2)).toEqual(
+            jasmine.objectContaining({ startAt: 100 }),
+          );
+          expect(requestBodyAt(fetchSpy, 3)).toEqual(
+            jasmine.objectContaining({ startAt: 200 }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+    });
+
+    it('caps Jira Server/DC auto-import pagination', (done) => {
+      fetchSpy.and.returnValues(
+        jsonResponse({ errorMessages: ['not found'] }, 404),
+        ...Array.from({ length: JIRA_MAX_AUTO_IMPORT_PAGES + 1 }, (_, index) => {
+          const startAt = index * 100;
+          const issueNumber = startAt + 1;
+          return jsonResponse({
+            issues: [makeJiraIssue(`TEST-${issueNumber}`)],
+            maxResults: 100,
+            startAt,
+            total: 1000,
+          });
+        }),
+      );
+
+      service.findAutoImportIssues$(cfg).subscribe({
+        next: (issues) => {
+          expect(issues.map((issue) => issue.key)).toEqual([
+            'TEST-1',
+            'TEST-101',
+            'TEST-201',
+            'TEST-301',
+            'TEST-401',
+          ]);
+          expect(fetchSpy).toHaveBeenCalledTimes(JIRA_MAX_AUTO_IMPORT_PAGES + 1);
+          expect(requestBodyAt(fetchSpy, JIRA_MAX_AUTO_IMPORT_PAGES)).toEqual(
+            jasmine.objectContaining({ startAt: 400 }),
+          );
+          done();
+        },
+        error: done.fail,
+      });
     });
   });
 });

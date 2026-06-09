@@ -1,0 +1,19 @@
+{
+  "PLUGIN": {
+    "NAME": "Yesterday's Tasks",
+    "DESCRIPTION": "Shows all tasks you worked on yesterday with time spent on each."
+  },
+  "SHORTCUT": {
+    "SHOW_YESTERDAY_TASKS": "Show Yesterday's Tasks"
+  },
+  "DATE": {
+    "YESTERDAY": "Yesterday",
+    "DAYS_AGO": "{{count}} days ago"
+  },
+  "MESSAGES": {
+    "LOADING_TASKS": "Loading tasks...",
+    "NO_RECENT_TASKS_FOUND": "No recent tasks found",
+    "NO_TASKS_LAST_30_DAYS": "No tasks tracked in the last 30 days.",
+    "ERROR_LOADING_TASKS": "Error loading tasks. Please try again."
+  }
+}

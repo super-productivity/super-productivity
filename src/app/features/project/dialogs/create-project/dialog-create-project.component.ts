@@ -25,7 +25,6 @@ import {
   loadFromSessionStorage,
   saveToSessionStorage,
 } from '../../../../core/persistence/local-storage';
-import { GiteaCfg } from '../../../issue/providers/gitea/gitea.model';
 import { RedmineCfg } from '../../../issue/providers/redmine/redmine.model';
 import { T } from '../../../../t.const';
 import { WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG } from '../../../work-context/work-context.const';
@@ -69,7 +68,6 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
   gitlabCfg?: GitlabCfg;
   caldavCfg?: CaldavCfg;
   openProjectCfg?: OpenProjectCfg;
-  giteaCfg?: GiteaCfg;
   redmineCfg?: RedmineCfg;
 
   formBasic: UntypedFormGroup = new UntypedFormGroup({});

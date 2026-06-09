@@ -1,4 +1,5 @@
 import {
+  escapeHtmlAttr,
   markedOptionsFactory,
   parseImageDimensionsFromTitle,
   preprocessMarkdown,
@@ -327,6 +328,30 @@ describe('markedOptionsFactory', () => {
       } as any);
       expect(result).toContain('title=""');
     });
+
+    it('should add rel="noopener noreferrer"', () => {
+      const mockParser = { parseInline: () => 'x' };
+      const result = options.renderer!.link.bind({ parser: mockParser })({
+        href: 'http://example.com',
+        title: null,
+        tokens: [],
+      } as any);
+      expect(result).toContain('rel="noopener noreferrer"');
+    });
+
+    // Defense-in-depth: parity with the image renderer (XSS, GHSA-4rrp-xhp8-hf4p).
+    it('should escape a malicious href/title so they cannot inject an attribute', () => {
+      const mockParser = { parseInline: () => 'x' };
+      const result = options.renderer!.link.bind({ parser: mockParser })({
+        href: 'http://x" onmouseover="alert(1)',
+        title: '" onfocus="alert(2)',
+        tokens: [],
+      } as any);
+      expect(result).not.toContain('onmouseover="');
+      expect(result).not.toContain('onfocus="');
+      expect(result).toContain('href="http://x&quot; onmouseover=&quot;alert(1)"');
+      expect(result).toContain('title="&quot; onfocus=&quot;alert(2)"');
+    });
   });
 
   describe('image renderer', () => {
@@ -391,6 +416,61 @@ describe('markedOptionsFactory', () => {
       } as any);
       expect(result).not.toContain('title=');
       expect(result).toContain('alt="No title"');
+    });
+
+    // Defense-in-depth: the raw renderer output must not be attribute-injectable
+    // even before the Angular HTML sanitizer runs over it (XSS, GHSA-4rrp-xhp8-hf4p).
+    describe('attribute escaping', () => {
+      it('should escape a malicious alt that tries to break out of the attribute', () => {
+        const result = options.renderer!.image({
+          href: 'http://example.com/x.png',
+          title: null,
+          text: '" onerror="alert(1)',
+        } as any);
+        expect(result).not.toContain('onerror="');
+        expect(result).toContain('alt="&quot; onerror=&quot;alert(1)"');
+      });
+
+      it('should escape a malicious href', () => {
+        const result = options.renderer!.image({
+          href: 'x" onerror="alert(1)',
+          title: null,
+          text: 'a',
+        } as any);
+        expect(result).not.toContain('onerror="');
+        expect(result).toContain('src="x&quot; onerror=&quot;alert(1)"');
+      });
+
+      it('should escape a malicious (non-dimension) title', () => {
+        const result = options.renderer!.image({
+          href: 'http://example.com/x.png',
+          title: '" onmouseover="alert(1)',
+          text: 'a',
+        } as any);
+        expect(result).not.toContain('onmouseover="');
+        expect(result).toContain('title="&quot; onmouseover=&quot;alert(1)"');
+      });
+
+      it('should escape & < > so they cannot start a new tag/entity', () => {
+        const result = options.renderer!.image({
+          href: 'http://example.com/x.png?a=1&b=2',
+          title: null,
+          text: '<b>x</b> & y',
+        } as any);
+        expect(result).toContain('src="http://example.com/x.png?a=1&amp;b=2"');
+        expect(result).toContain('alt="&lt;b&gt;x&lt;/b&gt; &amp; y"');
+      });
+
+      it('should still render legitimate images unchanged', () => {
+        const result = options.renderer!.image({
+          href: 'blob:https://app/abc-123',
+          title: null,
+          text: 'pasted image',
+        } as any);
+        expect(result).toBe(
+          '<img alt="pasted image" src="blob:https://app/abc-123" loading="lazy">',
+        );
+      });
     });
   });
 
@@ -527,5 +607,19 @@ describe('preprocessMarkdown', () => {
     const input = '# Header\n\n![img](url.png =50x50)\n\nParagraph';
     const result = preprocessMarkdown(input);
     expect(result).toBe('# Header\n\n![img](url.png "50|50")\n\nParagraph');
+  });
+});
+
+describe('escapeHtmlAttr', () => {
+  it('should escape the five significant HTML attribute characters', () => {
+    expect(escapeHtmlAttr(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&#39;');
+  });
+
+  it('should escape & first so existing entities are not double-broken', () => {
+    expect(escapeHtmlAttr('a & "b"')).toBe('a &amp; &quot;b&quot;');
+  });
+
+  it('should leave safe values unchanged', () => {
+    expect(escapeHtmlAttr('blob:https://app/abc-123')).toBe('blob:https://app/abc-123');
   });
 });
