@@ -78,7 +78,9 @@ export class SelectProjectComponent
     const val = this.val();
     if (this.to.multiple && Array.isArray(val)) {
       if (val.includes('')) {
-        return this.to.defaultLabel || this._translateService.instant(T.G.NONE);
+        return this.to.defaultLabel
+          ? this._translateService.instant(this.to.defaultLabel)
+          : this._translateService.instant(T.G.NONE);
       }
       if (val.length > 0) {
         const projects = this.projects();
