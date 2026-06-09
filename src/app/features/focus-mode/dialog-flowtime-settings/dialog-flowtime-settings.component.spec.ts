@@ -125,6 +125,83 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(component.model().breakRules).toEqual(initialRules);
   });
 
+  it('should restore partially blank rule rows while switching back to Rule-based', () => {
+    const initialRules = [
+      { minDuration: 0, maxDuration: 25, breakDuration: 5 },
+      { minDuration: 25, maxDuration: null, breakDuration: 10 },
+    ];
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: initialRules,
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: '' as unknown as number,
+        },
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 10,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
+  it('should keep restoring if Formly emits a delayed partially blank rule payload', () => {
+    const initialRules = [
+      { minDuration: 0, maxDuration: 25, breakDuration: 5 },
+      { minDuration: 25, maxDuration: null, breakDuration: 10 },
+    ];
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: initialRules,
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: '' as unknown as number,
+        },
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 10,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
   it('should keep rule fields when Formly mutates the model object while switching modes', () => {
     fixture.destroy();
     globalConfigServiceMock.cfg.and.returnValue({

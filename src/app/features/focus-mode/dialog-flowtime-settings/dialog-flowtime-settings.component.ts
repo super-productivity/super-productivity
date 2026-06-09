@@ -75,6 +75,7 @@ export class DialogFlowtimeSettingsComponent {
   private _lastBreakMode: FlowtimeFormModel['breakMode'];
   private _lastBreakPercentage: FlowtimeFormModel['breakPercentage'];
   private _lastNonEmptyBreakRules: FlowtimeBreakRuleInMinutes[];
+  private _isRestoringBreakRules = false;
 
   T = T;
   form = new FormGroup({});
@@ -294,17 +295,24 @@ export class DialogFlowtimeSettingsComponent {
     breakMode: FlowtimeFormModel['breakMode'],
   ): FlowtimeBreakRuleInMinutes[] {
     const nextRules = nextModel.breakRules;
-
-    if (!this._isEmptyBreakRules(nextRules)) {
-      return this._copyBreakRules(nextRules!);
-    }
-
     const didRuleFieldsVisibilityChange =
       previousIsBreakEnabled !== nextModel.isBreakEnabled ||
       previousBreakMode !== breakMode;
+    const isRuleModeVisible = nextModel.isBreakEnabled === true && breakMode === 'rule';
+    const shouldRestoreBreakRules =
+      didRuleFieldsVisibilityChange || this._isRestoringBreakRules;
+    const hasRestorableBlankBreakRuleFields =
+      this._hasRestorableBlankBreakRuleFields(nextRules);
 
-    return didRuleFieldsVisibilityChange
-      ? this._copyBreakRules(this._lastNonEmptyBreakRules)
+    this._isRestoringBreakRules =
+      isRuleModeVisible && shouldRestoreBreakRules && hasRestorableBlankBreakRuleFields;
+
+    if (shouldRestoreBreakRules && hasRestorableBlankBreakRuleFields) {
+      return this._restoreBreakRulesFromLastNonEmpty(nextRules);
+    }
+
+    return !this._isEmptyBreakRules(nextRules)
+      ? this._copyBreakRules(nextRules!)
       : (nextRules ?? []);
   }
 
@@ -325,6 +333,52 @@ export class DialogFlowtimeSettingsComponent {
 
   private _isBlankFormValue(value: unknown): boolean {
     return value == null || value === '';
+  }
+
+  private _hasRestorableBlankBreakRuleFields(
+    breakRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): boolean {
+    const fallbackRules = this._lastNonEmptyBreakRules.length
+      ? this._lastNonEmptyBreakRules
+      : [this._defaultRuleInMinutes];
+
+    return fallbackRules.some((fallbackRule, index) => {
+      const rule = breakRules?.[index];
+
+      return (
+        !rule ||
+        this._isBlankFormValue(rule.minDuration) ||
+        this._isBlankFormValue(rule.breakDuration) ||
+        (fallbackRule.maxDuration !== null && this._isBlankFormValue(rule.maxDuration))
+      );
+    });
+  }
+
+  private _restoreBreakRulesFromLastNonEmpty(
+    nextRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): FlowtimeBreakRuleInMinutes[] {
+    const fallbackRules = this._lastNonEmptyBreakRules.length
+      ? this._lastNonEmptyBreakRules
+      : [this._defaultRuleInMinutes];
+    const rowCount = Math.max(nextRules?.length ?? 0, fallbackRules.length);
+
+    return Array.from({ length: rowCount }, (_, index) => {
+      const nextRule = nextRules?.[index];
+      const fallbackRule =
+        fallbackRules[index] ?? fallbackRules[fallbackRules.length - 1];
+
+      return {
+        minDuration: this._isBlankFormValue(nextRule?.minDuration)
+          ? fallbackRule.minDuration
+          : nextRule!.minDuration,
+        maxDuration: this._isBlankFormValue(nextRule?.maxDuration)
+          ? fallbackRule.maxDuration
+          : nextRule!.maxDuration,
+        breakDuration: this._isBlankFormValue(nextRule?.breakDuration)
+          ? fallbackRule.breakDuration
+          : nextRule!.breakDuration,
+      };
+    });
   }
 
   private _rememberModelState(model: FlowtimeFormModel): void {
