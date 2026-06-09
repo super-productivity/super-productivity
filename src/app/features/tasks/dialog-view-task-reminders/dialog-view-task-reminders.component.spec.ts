@@ -1,22 +1,28 @@
-import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
-import { first, map, switchMap } from 'rxjs/operators';
-import { TestBed } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
   MatDialogRef,
   MatDialogState,
 } from '@angular/material/dialog';
-import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { Actions } from '@ngrx/effects';
+import { ScannedActionsSubject } from '@ngrx/store';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
-import { Reminder } from '../../reminder/reminder.model';
-import { DEFAULT_TASK, Task, TaskWithReminderData } from '../task.model';
-import { DialogViewTaskRemindersComponent } from './dialog-view-task-reminders.component';
-import { TaskService } from '../task.service';
-import { ProjectService } from '../../project/project.service';
-import { ReminderService } from '../../reminder/reminder.service';
+import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
+import { first, map, switchMap } from 'rxjs/operators';
+import { DateService } from '../../../core/date/date.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { ProjectService } from '../../project/project.service';
+import { Reminder } from '../../reminder/reminder.model';
+import { ReminderService } from '../../reminder/reminder.service';
+import { TODAY_TAG } from '../../tag/tag.const';
+import { DEFAULT_TASK, Task, TaskWithReminderData } from '../task.model';
+import { TaskService } from '../task.service';
+import { DialogViewTaskRemindersComponent } from './dialog-view-task-reminders.component';
 
 /**
  * Tests for the tasks$ filter logic in DialogViewTaskRemindersComponent.
@@ -593,6 +599,10 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: ReminderService, useValue: reminderServiceStub },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-06-06', getStartOfNextDayDiffMs: () => 0 },
+        },
         TranslateService,
         TranslateStore,
       ],
@@ -727,6 +737,336 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
     component.ngOnDestroy();
 
     expect(dispatchedClearIds()).toEqual([]);
+  });
+});
+
+/**
+ * Tests for accessibility attributes.
+ */
+describe('DialogViewTaskRemindersComponent accessibility', () => {
+  let fixture: any;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [
+        DialogViewTaskRemindersComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
+      providers: [
+        provideMockStore({
+          initialState: {
+            workContext: {
+              activeId: 'today',
+              entities: {
+                today: {
+                  id: 'today',
+                  taskIds: ['t1', 't2'],
+                },
+              },
+              ids: ['today'],
+            },
+            tasks: {
+              entities: {
+                t1: { id: 't1', title: 'T1', tagIds: ['today'] },
+                t2: { id: 't2', title: 'T2', tagIds: ['today'] },
+              },
+              ids: ['t1', 't2'],
+            },
+            tag: {
+              entities: {
+                [TODAY_TAG.id]: TODAY_TAG,
+              },
+              ids: [TODAY_TAG.id],
+            },
+            projects: {
+              entities: {},
+              ids: [],
+            },
+            globalConfig: {
+              evaluation: {
+                todayStr: '2026-06-06',
+              },
+            },
+          },
+        }),
+        {
+          provide: MatDialogRef,
+          useValue: { close: jasmine.createSpy('close'), getState: () => 0 },
+        },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: {
+            reminders: [
+              {
+                id: 't1',
+                title: 'T1',
+                reminderData: { remindAt: Date.now() },
+                tagIds: ['today'],
+              },
+              {
+                id: 't2',
+                title: 'T2',
+                reminderData: { remindAt: Date.now() },
+                tagIds: ['today'],
+              },
+            ],
+          },
+        },
+        {
+          provide: TaskService,
+          useValue: {
+            getByIdsLive$: () =>
+              of([
+                {
+                  id: 't1',
+                  title: 'T1',
+                  tagIds: ['today'],
+                  reminderData: { remindAt: Date.now() },
+                },
+                {
+                  id: 't2',
+                  title: 'T2',
+                  tagIds: ['today'],
+                  reminderData: { remindAt: Date.now() },
+                },
+              ]),
+          },
+        },
+        { provide: ProjectService, useValue: {} },
+        {
+          provide: MatDialog,
+          useValue: { open: () => ({ afterClosed: () => of(false) }) },
+        },
+        { provide: ReminderService, useValue: { onRemindersActive$: new Subject() } },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-06-06', getStartOfNextDayDiffMs: () => 0 },
+        },
+        { provide: Actions, useValue: new Subject() },
+        { provide: ScannedActionsSubject, useValue: new Subject() },
+        { provide: LOCAL_ACTIONS, useValue: new Subject() },
+      ],
+    })
+      .overrideComponent(DialogViewTaskRemindersComponent, {
+        set: { schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(DialogViewTaskRemindersComponent);
+    fixture.detectChanges();
+  });
+
+  it('should have aria-labels on action buttons in task rows', () => {
+    // When multiple tasks are present, each task row has 4 icon buttons in .actions
+    const actionButtons = fixture.nativeElement.querySelectorAll('.actions button');
+    // 2 tasks * 4 buttons = 8 buttons
+    expect(actionButtons.length).toBe(8);
+    actionButtons.forEach((btn: HTMLElement) => {
+      expect(btn.getAttribute('aria-label')).toBeTruthy();
+    });
+  });
+});
+
+/**
+ * Tests for focus management and keyboard navigation.
+ */
+describe('DialogViewTaskRemindersComponent navigation and focus', () => {
+  let component: DialogViewTaskRemindersComponent;
+  let fixture: any;
+  let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let reminderServiceStub: { onRemindersActive$: Subject<TaskWithReminderData[]> };
+
+  const buildTask = (id: string): Task =>
+    ({ ...DEFAULT_TASK, id, title: `Task ${id}` }) as Task;
+  const buildReminder = (id: string): TaskWithReminderData =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      title: `Task ${id}`,
+      reminderData: { remindAt: Date.now() },
+    }) as TaskWithReminderData;
+
+  beforeEach(async () => {
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [
+      'getByIdsLive$',
+      'setDone',
+      'setCurrentId',
+    ]);
+    reminderServiceStub = { onRemindersActive$: new Subject<TaskWithReminderData[]>() };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        DialogViewTaskRemindersComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
+      providers: [
+        provideMockStore({ initialState: {} }),
+        {
+          provide: MatDialogRef,
+          useValue: { close: jasmine.createSpy('close'), getState: () => 0 },
+        },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: { reminders: [buildReminder('t1'), buildReminder('t2')] },
+        },
+        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: ProjectService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: ReminderService, useValue: reminderServiceStub },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-06-06', getStartOfNextDayDiffMs: () => 0 },
+        },
+      ],
+    })
+      .overrideComponent(DialogViewTaskRemindersComponent, {
+        set: {
+          template: `
+          @for (task of tasks$ | async; track task.id) {
+            <div class="task" [attr.data-id]="task.id">
+              <div class="actions">
+                <button [id]="task.id + '-b0'">{{task.id}} B0</button>
+                <button [id]="task.id + '-b1'">{{task.id}} B1</button>
+                <button
+                  [id]="task.id + '-b2'"
+                  aria-haspopup="menu"
+                >{{task.id}} B2 (snooze)</button>
+                <button [id]="task.id + '-b3'">{{task.id}} B3</button>
+                <button [id]="task.id + '-disabled'" disabled>Disabled</button>
+                <button [id]="task.id + '-hidden'" style="display: none">Hidden</button>
+              </div>
+            </div>
+          }
+          <div class="wrap-buttons">
+            <button id="f1">F1</button>
+            <button id="f2" disabled>F2 Disabled</button>
+            <button id="f3">F3</button>
+          </div>
+        `,
+        },
+      })
+      .compileComponents();
+
+    taskServiceSpy.getByIdsLive$.and.callFake((ids: string[]) => {
+      return ids.includes('t1') && ids.includes('t2')
+        ? of([buildTask('t1'), buildTask('t2')])
+        : ids.includes('t2')
+          ? of([buildTask('t2')])
+          : of([]);
+    });
+
+    fixture = TestBed.createComponent(DialogViewTaskRemindersComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    // Must be in document for focus tests
+    document.body.appendChild(fixture.nativeElement);
+  });
+
+  afterEach(() => {
+    document.body.removeChild(fixture.nativeElement);
+  });
+
+  it('should move focus down with ArrowDown skipping disabled/hidden', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
+    t1b1.focus();
+
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    t1b1.dispatchEvent(ev);
+    expect(document.activeElement).toBe(t2b1);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it('should move focus to footer from last task row with ArrowDown', () => {
+    const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
+    const f1 = document.getElementById('f1') as HTMLButtonElement;
+    t2b1.focus();
+
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    t2b1.dispatchEvent(ev);
+    expect(document.activeElement).toBe(f1);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it('should move focus up with ArrowUp skipping disabled/hidden', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t2b1 = document.getElementById('t2-b1') as HTMLButtonElement;
+    t2b1.focus();
+
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowUp',
+      bubbles: true,
+      cancelable: true,
+    });
+    t2b1.dispatchEvent(ev);
+    expect(document.activeElement).toBe(t1b1);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it('should move focus right with ArrowRight skipping disabled/hidden', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
+    t1b1.focus();
+
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+    });
+    t1b1.dispatchEvent(ev);
+    expect(document.activeElement).toBe(t1b2);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it('should move focus left with ArrowLeft skipping disabled/hidden', () => {
+    const t1b1 = document.getElementById('t1-b1') as HTMLButtonElement;
+    const t1b2 = document.getElementById('t1-b2') as HTMLButtonElement;
+    t1b2.focus();
+
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      bubbles: true,
+      cancelable: true,
+    });
+    t1b2.dispatchEvent(ev);
+    expect(document.activeElement).toBe(t1b1);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it('should preserve focus on next task after removal (even if focus was lost)', fakeAsync(() => {
+    fixture.detectChanges();
+    // Simulate focus being outside (e.g. in a menu)
+    (document.body as HTMLElement).focus();
+    expect(document.activeElement).not.toBe(document.getElementById('t1-b2'));
+
+    // Call the actual private method that performs removal and focus logic
+    (component as any)._removeTaskFromList('t1');
+
+    tick();
+    fixture.detectChanges();
+
+    const t2snooze = document.getElementById('t2-b2') as HTMLButtonElement;
+    expect(document.activeElement).toBe(t2snooze);
+  }));
+
+  it('should skip disabled buttons in footer with ArrowRight', () => {
+    const f1 = document.getElementById('f1') as HTMLButtonElement;
+    const f3 = document.getElementById('f3') as HTMLButtonElement;
+    f1.focus();
+
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowRight' });
+    component.onKeyDown(ev);
+    expect(document.activeElement).toBe(f3);
   });
 });
 

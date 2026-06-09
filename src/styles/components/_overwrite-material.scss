@@ -13,6 +13,7 @@
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-700);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-700);
   --mat-tab-header-inactive-label-text-color: var(--text-color-muted);
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 35%, transparent);
 }
 
 // Dark theme tab overrides for better contrast - use lighter shade
@@ -22,6 +23,7 @@ body.isDarkTheme {
   --mat-tab-header-active-focus-label-text-color: var(--palette-primary-300);
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-300);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-300);
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 20%, transparent);
 }
 
 // Apply tab colors explicitly to tab components
@@ -482,4 +484,21 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
   padding-bottom: 6px !important;
   display: flex !important;
   align-items: center !important;
+}
+
+// Shared calendar hover and focus overrides
+.mat-calendar:not(.no-hover-effects) {
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+    > .mat-calendar-body-cell-content,
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+    .mat-calendar-body-cell-content {
+    outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
+  }
+
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+    > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected),
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+    > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
+    background-color: var(--calendar-hover-bg) !important;
+  }
 }

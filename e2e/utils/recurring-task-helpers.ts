@@ -45,32 +45,63 @@ export const openRecurDialogFromProjection = async (
 };
 
 /**
- * Set the recurring "Start date" by typing into the matInput. The input parses
- * the locale's display format (en-GB → "DD/MM/YYYY") on blur, which is more
- * robust than driving the calendar overlay across Material versions.
- *
- * Flake guard: the Material datepicker input intermittently drops the typed
- * value while the dialog is still binding/animating. On blur the (dateChange)
- * handler clears `innerValue` whenever the field hasn't yet parsed to a valid
- * date, and the one-way `[ngModel]="innerValue()"` binding then re-renders the
- * input as empty (`toHaveValue("")`). The previous guard wrapped only the
- * fill — so the value still vanished on the Tab-triggered blur. Retry the WHOLE
- * type-and-commit cycle (fill + Tab) until the committed value sticks.
+ * Set the recurring "Start date" by using the calendar datepicker.
  */
 export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
-  const dialog = page.locator(DIALOG_CONTAINER);
-  const startDateInput = dialog
-    .locator('mat-form-field')
-    .filter({ hasText: /Start date/i })
-    .locator('input')
+  const dialog = page.locator(DIALOG_CONTAINER).first();
+  const scheduleBtn = dialog.locator('.planned-start-date-btn');
+  await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+  await scheduleBtn.click();
+
+  const scheduleDialog = page
+    .locator(DIALOG_CONTAINER)
+    .filter({ has: page.locator('datetime-picker') });
+  await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+  const calendar = scheduleDialog.locator('mat-calendar');
+  await expect(calendar).toBeVisible({ timeout: 5000 });
+
+  const [dayStr, monthStr, yearStr] = ddmmyyyy.split('/');
+  const day = parseInt(dayStr, 10);
+  const month = parseInt(monthStr, 10) - 1; // 0-indexed
+  const year = parseInt(yearStr, 10);
+
+  // Navigate to correct year
+  await scheduleDialog.locator('.mat-calendar-period-button').click();
+  const yearCell = scheduleDialog
+    .locator('.mat-calendar-body-cell')
+    .filter({ hasText: new RegExp(`^\\s*${year}\\s*$`) })
     .first();
-  await expect(startDateInput).toBeVisible({ timeout: 5000 });
-  await expect(async () => {
-    await startDateInput.fill('');
-    await startDateInput.fill(ddmmyyyy);
-    await startDateInput.press('Tab');
-    await expect(startDateInput).toHaveValue(ddmmyyyy, { timeout: 1000 });
-  }).toPass({ timeout: 10000 });
+  await expect(yearCell).toBeVisible({ timeout: 5000 });
+  await yearCell.click();
+
+  // Navigate to correct month
+  const monthCell = scheduleDialog
+    .locator('.mat-calendar-body-cell')
+    .filter({
+      hasText: new RegExp(
+        `^\\s*${new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(year, month, 1))}\\s*$`,
+        'i',
+      ),
+    })
+    .first();
+  await expect(monthCell).toBeVisible({ timeout: 5000 });
+  await monthCell.click();
+
+  // Select day
+  const dayCell = scheduleDialog
+    .locator('.mat-calendar-body-cell')
+    .filter({ hasText: new RegExp(`^\\s*${day}\\s*$`) })
+    .first();
+  await expect(dayCell).toBeVisible({ timeout: 5000 });
+  await dayCell.click();
+
+  // Click Schedule button
+  const scheduleSubmitBtn = scheduleDialog.locator(
+    '[data-test-id="schedule-submit-btn"]',
+  );
+  await scheduleSubmitBtn.click();
+  await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 };
 
 /** Switch the recurring-config quick-setting select (e.g. Daily → Mon-Fri). */

@@ -43,11 +43,16 @@ plugin-icon {
 mat-card-subtitle {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--s);
 
   mat-chip {
     margin-left: var(--s);
   }
+}
+
+.plugin-author {
+  overflow-wrap: anywhere;
 }
 
 .empty-state {

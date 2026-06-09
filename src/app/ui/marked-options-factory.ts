@@ -6,18 +6,19 @@ import {
 } from '../../../electron/shared-with-frontend/is-external-url-allowed';
 
 /**
- * Escape a value before interpolating it into a double-quoted HTML attribute.
- * Notes render with `[disableSanitizer]="true"`, and marked passes link
- * destinations through verbatim — so an unescaped `"` in an href/title breaks
- * out of the attribute and injects markup (e.g. an `onmouseover` handler).
- * `&` must be replaced first to avoid double-escaping. See GHSA-hr87-735w-hfq3.
+ * Escape a string for safe interpolation into a double-quoted HTML attribute.
+ *
+ * Defense-in-depth: note renders are sanitized as HTML before display, but the
+ * raw renderer output still must not be attribute-injectable on its own.
+ * `&` must be replaced first.
  */
-const escapeHtmlAttr = (value: string): string =>
+export const escapeHtmlAttr = (value: string): string =>
   value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 /**
  * Parses image sizing syntax from title attribute.
@@ -123,7 +124,7 @@ export const markedOptionsFactory = (): MarkedOptions => {
     if (!isExternalUrlSchemeAllowed(href)) {
       return `<span class="markdown-blocked-link" title="Link blocked: unsafe URL scheme">${text}</span>`;
     }
-    return `<a target="_blank" href="${escapeHtmlAttr(href)}" title="${escapeHtmlAttr(title || '')}">${text}</a>`;
+    return `<a target="_blank" rel="noopener noreferrer" href="${escapeHtmlAttr(href)}" title="${escapeHtmlAttr(title || '')}">${text}</a>`;
   };
 
   // Custom image renderer with support for sizing syntax
@@ -155,12 +156,15 @@ export const markedOptionsFactory = (): MarkedOptions => {
     const widthAttr = width ? ` width="${width}"` : '';
     const heightAttr = height ? ` height="${height}"` : '';
 
-    // Only include title if it's not our custom dimension format
+    // Only include title if it's not our custom dimension format.
+    // width/height are digit-only (parsed via regex above), so they need no escaping;
+    // href/title/alt are attacker-controllable and must be escaped.
     const isCustomDimensionTitle = title && /^(\d*)?\|(\d*)?$/.test(title);
-    const titleAttr = title && !isCustomDimensionTitle ? ` title="${title}"` : '';
-    const srcAttr = ` src="${href}"`;
+    const titleAttr =
+      title && !isCustomDimensionTitle ? ` title="${escapeHtmlAttr(title)}"` : '';
+    const srcAttr = ` src="${escapeHtmlAttr(href)}"`;
 
-    return `<img alt="${text}"${srcAttr}${titleAttr}${widthAttr}${heightAttr} loading="lazy">`;
+    return `<img alt="${escapeHtmlAttr(text)}"${srcAttr}${titleAttr}${widthAttr}${heightAttr} loading="lazy">`;
   };
 
   // In marked v17, paragraph renderer receives tokens that need to be parsed
