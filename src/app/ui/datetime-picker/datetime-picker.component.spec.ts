@@ -120,6 +120,23 @@ describe('DateTimePickerComponent', () => {
     expect(component.isKeyboardNavigating).toBeFalse();
   });
 
+  it('should reset isInitialFocus on keyboard navigation or mouse move', () => {
+    expect(component.isInitialFocus).toBeTrue();
+
+    // Trigger keyboard navigation key down on calendar
+    const arrowDownEvent = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+    component.onKeyDownOnCalendar(arrowDownEvent);
+    expect(component.isInitialFocus).toBeFalse();
+
+    // Reset for next test
+    component.isInitialFocus = true;
+
+    // Trigger mousemove
+    const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
+    component.onHostMouseMove(mouseMoveEvent);
+    expect(component.isInitialFocus).toBeFalse();
+  });
+
   it('should only update calendar activeDate when selectedDate changes', () => {
     const calendar = component.calendar()!;
     const initialDate = new Date(2026, 4, 6);
@@ -143,6 +160,27 @@ describe('DateTimePickerComponent', () => {
     fixture.componentRef.setInput('selectedDate', differentDate);
     fixture.detectChanges();
     expect(calendar.activeDate).toEqual(differentDate);
+  });
+
+  it('should not update activeDate when calendar is focused', () => {
+    const calendar = component.calendar()!;
+    const initialDate = new Date(2026, 4, 6);
+    const differentDate = new Date(2026, 4, 7);
+
+    fixture.componentRef.setInput('selectedDate', initialDate);
+    fixture.detectChanges();
+    expect(calendar.activeDate).toEqual(initialDate);
+
+    // Mock calendar focus
+    const calendarEl = fixture.nativeElement.querySelector('mat-calendar');
+    spyOnProperty(document, 'activeElement', 'get').and.returnValue(calendarEl);
+    spyOn(calendarEl, 'contains').and.returnValue(true);
+
+    fixture.componentRef.setInput('selectedDate', differentDate);
+    fixture.detectChanges();
+
+    // Should NOT have updated activeDate because it was focused
+    expect(calendar.activeDate).toEqual(initialDate);
   });
 
   it('should emit enterSubmit when Enter is pressed on the calendar and date matches', () => {
