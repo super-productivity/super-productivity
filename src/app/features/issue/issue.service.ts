@@ -15,7 +15,6 @@ import { TaskAttachment } from '../tasks/task-attachment/task-attachment.model';
 import { firstValueFrom, forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
 import {
   CALDAV_TYPE,
-  GITEA_TYPE,
   GITLAB_TYPE,
   ICAL_TYPE,
   ISSUE_PROVIDER_HUMANIZED,
@@ -26,7 +25,6 @@ import {
   OPEN_PROJECT_TYPE,
   TRELLO_TYPE,
   REDMINE_TYPE,
-  LINEAR_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
 } from './issue.const';
@@ -40,9 +38,9 @@ import { IssueLog } from '../../core/log';
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
-import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
+// Gitea is now a plugin — no built-in service needed
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
-import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
+// Linear is now a plugin — no built-in service needed
 // ClickUp is now a plugin — no built-in service needed
 import { AzureDevOpsCommonInterfacesService } from './providers/azure-devops/azure-devops-common-interfaces.service';
 import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
@@ -79,9 +77,7 @@ export class IssueService {
   private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
-  private _giteaInterfaceService = inject(GiteaCommonInterfacesService);
   private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
-  private _linearCommonInterfaceService = inject(LinearCommonInterfacesService);
   private _azureDevOpsCommonInterfaceService = inject(AzureDevOpsCommonInterfacesService);
   private _nextcloudDeckCommonInterfaceService = inject(
     NextcloudDeckCommonInterfacesService,
@@ -104,10 +100,8 @@ export class IssueService {
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
-    [GITEA_TYPE]: this._giteaInterfaceService,
     [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
-    [LINEAR_TYPE]: this._linearCommonInterfaceService,
     [AZURE_DEVOPS_TYPE]: this._azureDevOpsCommonInterfaceService,
     [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
 
