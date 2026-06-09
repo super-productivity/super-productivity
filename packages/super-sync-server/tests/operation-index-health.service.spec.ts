@@ -3,6 +3,7 @@ import {
   CRITICAL_OPERATION_INDEX_NAMES,
   OperationIndexHealthService,
 } from '../src/sync/services/operation-index-health.service';
+import { readFileSync } from 'fs';
 
 vi.mock('../src/db', () => ({
   prisma: {
@@ -72,15 +73,27 @@ describe('OperationIndexHealthService', () => {
 
     await service.assertCriticalOperationIndexesValid();
 
-    const [queryParts] = vi.mocked(prisma.$queryRaw).mock.calls[0] as unknown as [
+    const [queryParts, requiredIndexValues] = vi.mocked(prisma.$queryRaw).mock
+      .calls[0] as unknown as [
       TemplateStringsArray,
+      { values: string[]; strings: string[] },
     ];
     const query = Array.from(queryParts).join('');
 
     expect(query).toContain('pg_index.indisvalid');
     expect(query).toContain("table_class.relname = 'operations'");
-    for (const indexName of CRITICAL_OPERATION_INDEX_NAMES) {
-      expect(query).toContain(indexName);
-    }
+    expect(query).toContain('WITH required(index_name) AS (VALUES');
+    expect(requiredIndexValues.values).toEqual([...CRITICAL_OPERATION_INDEX_NAMES]);
+  });
+
+  it('creates the partial full-state index in the SuperSync test image setup', () => {
+    const script = readFileSync('scripts/start-test-server.sh', 'utf8');
+
+    expect(script).toContain(
+      'CREATE INDEX IF NOT EXISTS "operations_user_id_full_state_server_seq_idx"',
+    );
+    expect(script).toContain(
+      'npx prisma db execute --stdin --schema prisma/schema.prisma',
+    );
   });
 });

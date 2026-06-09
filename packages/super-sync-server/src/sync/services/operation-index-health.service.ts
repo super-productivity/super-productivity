@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 
 export const CRITICAL_OPERATION_INDEX_NAMES = [
@@ -14,15 +15,13 @@ type OperationIndexHealthRow = {
 
 export class OperationIndexHealthService {
   async assertCriticalOperationIndexesValid(): Promise<void> {
+    const requiredIndexValues = Prisma.join(
+      CRITICAL_OPERATION_INDEX_NAMES.map((indexName) => Prisma.sql`(${indexName})`),
+    );
     const rows: OperationIndexHealthRow[] = await prisma.$queryRaw<
       OperationIndexHealthRow[]
     >`
-      WITH required(index_name) AS (
-        VALUES
-          ('operations_user_id_entity_type_entity_id_server_seq_idx'),
-          ('operations_user_id_server_seq_key'),
-          ('operations_user_id_full_state_server_seq_idx')
-      ),
+      WITH required(index_name) AS (VALUES ${requiredIndexValues}),
       operation_indexes AS (
         SELECT
           index_class.relname AS index_name,
@@ -32,6 +31,7 @@ export class OperationIndexHealthService {
         JOIN pg_class table_class ON table_class.oid = pg_index.indrelid
         JOIN pg_namespace table_namespace ON table_namespace.oid = table_class.relnamespace
         WHERE table_class.relname = 'operations'
+          -- SuperSync uses Prisma's default public schema; keep the self-check scoped there.
           AND table_namespace.nspname = current_schema()
       )
       SELECT
