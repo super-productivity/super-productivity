@@ -260,6 +260,15 @@ export const createServer = (
         options: { maxPayload: 1024 },
       });
 
+      // Critical operations-index self-check: these indexes guard SuperSync's
+      // hot paths from silently degrading into multi-GB sequential scans.
+      try {
+        await getSyncService().assertCriticalOperationIndexesValid();
+      } catch (err) {
+        Logger.error('Startup self-check failed', err);
+        throw err;
+      }
+
       // Backfill self-check: paired with the env-flag enforcement in
       // loadConfigFromEnv. The env flag (SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE)
       // is operator-set; if it is flipped to true before the migrate-payload-bytes

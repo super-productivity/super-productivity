@@ -21,6 +21,10 @@ export type {
 } from './request-deduplication.service';
 export { DeviceService } from './device.service';
 export { OperationDownloadService } from './operation-download.service';
+export {
+  OperationIndexHealthService,
+  CRITICAL_OPERATION_INDEX_NAMES,
+} from './operation-index-health.service';
 export { OperationUploadService } from './operation-upload.service';
 export { StorageQuotaService } from './storage-quota.service';
 export { SnapshotGenerationService } from './snapshot-generation.service';

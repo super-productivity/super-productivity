@@ -17,6 +17,7 @@ import {
   RequestDeduplicationService,
   DeviceService,
   OperationDownloadService,
+  OperationIndexHealthService,
   OperationUploadService,
   StorageQuotaService,
   SnapshotService,
@@ -80,6 +81,7 @@ export class SyncService {
   private requestDeduplicationService: RequestDeduplicationService;
   private deviceService: DeviceService;
   private operationDownloadService: OperationDownloadService;
+  private operationIndexHealthService: OperationIndexHealthService;
   private storageQuotaService: StorageQuotaService;
   private snapshotService: SnapshotService;
   private operationUploadService: OperationUploadService;
@@ -91,6 +93,7 @@ export class SyncService {
     this.requestDeduplicationService = new RequestDeduplicationService();
     this.deviceService = new DeviceService();
     this.operationDownloadService = new OperationDownloadService();
+    this.operationIndexHealthService = new OperationIndexHealthService();
     this.storageQuotaService = new StorageQuotaService();
     this.snapshotService = new SnapshotService();
     this.operationUploadService = new OperationUploadService(
@@ -535,6 +538,10 @@ export class SyncService {
 
   async assertPayloadBytesBackfillComplete(): Promise<void> {
     return this.storageQuotaService.assertPayloadBytesBackfillComplete();
+  }
+
+  async assertCriticalOperationIndexesValid(): Promise<void> {
+    return this.operationIndexHealthService.assertCriticalOperationIndexesValid();
   }
 
   async checkStorageQuota(
