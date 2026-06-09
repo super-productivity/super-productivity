@@ -87,6 +87,61 @@ mat-dialog-actions {
     opacity: 0.7;
     word-break: break-all;
   }
+
+  &__cal-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-quarter, 4px);
+    margin-top: var(--s);
+    padding: 2px var(--s);
+    color: var(--c-primary);
+    background: transparent;
+    border: none;
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+    font-size: 12px;
+
+    .mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      background: var(--c-primary-10, rgba(0, 0, 0, 0.06));
+    }
+  }
+
+  &__cal {
+    display: block;
+    margin-top: var(--s);
+  }
+
+  &__sim-hint {
+    margin-top: var(--s-quarter, 4px);
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  &__sim {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+    margin-top: var(--s-quarter, 4px);
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--c-primary);
+  }
+
+  &__sim-reset {
+    padding: 2px var(--s);
+    color: var(--text-color);
+    background: transparent;
+    border: 1px solid var(--extra-border-color);
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+    font-size: 11px;
+  }
 }
 
 :host collapsible {

@@ -85,6 +85,39 @@
         </div>
       }
       <div class="rrule-result__expr">{{ p.rrule }}</div>
+      <button
+        type="button"
+        class="rrule-result__cal-toggle"
+        (click)="toggleResultHeatmap()"
+      >
+        <mat-icon>{{ showResultHeatmap() ? 'expand_less' : 'calendar_month' }}</mat-icon>
+        <span>{{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW | translate }}</span>
+      </button>
+      @if (resultHeatmapData(); as hd) {
+        <heatmap
+          class="rrule-result__cal"
+          [data]="hd"
+          [showLegend]="false"
+          (dayClick)="onPreviewDayClick($event)"
+        />
+        @if (simulatedCompletion(); as sim) {
+          <div class="rrule-result__sim">
+            {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }}
+            {{ sim }}
+            <button
+              type="button"
+              class="rrule-result__sim-reset"
+              (click)="clearSimulation()"
+            >
+              {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
+            </button>
+          </div>
+        } @else {
+          <div class="rrule-result__sim-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
+          </div>
+        }
+      }
     </div>
   }
 

@@ -42,7 +42,12 @@ import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { SnackService } from '../../../core/snack/snack.service';
-import { getFirstRRuleOccurrence, isRRuleValid } from '../store/rrule-occurrence.util';
+import {
+  getFirstRRuleOccurrence,
+  getRRuleOccurrencesInRange,
+  isRRuleValid,
+} from '../store/rrule-occurrence.util';
+import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
 import { FREQ_TO_CYCLE, safeParseRRuleOptions } from '../util/rrule-parse.util';
 import {
   getAlignedStartDate,
@@ -65,6 +70,16 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
+import { DateAdapter } from '@angular/material/core';
+import {
+  DayData,
+  HeatmapComponent,
+  HeatmapData,
+} from '../../../ui/heatmap/heatmap.component';
+import {
+  buildHeatmapWeeks,
+  buildProjectionDayMap,
+} from '../../../ui/heatmap/build-heatmap-data.util';
 
 // Fields whose change requires offering "Update all task instances?" — covers
 // what propagates to existing tasks (vs. schedule fields, which only affect
@@ -99,6 +114,7 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     MatButton,
     MatIcon,
     RepeatTaskHeatmapComponent,
+    HeatmapComponent,
     CollapsibleComponent,
     RruleBuilderComponent,
     DatePipe,
@@ -107,6 +123,7 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
 export class DialogEditTaskRepeatCfgComponent {
   private _globalConfigService = inject(GlobalConfigService);
   private _rruleFlag = inject(RRuleFeatureFlagService);
+  private _dateAdapter = inject(DateAdapter);
   private _tagService = inject(TagService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
@@ -174,6 +191,113 @@ export class DialogEditTaskRepeatCfgComponent {
         )
       : null,
   );
+
+  // Togglable calendar (heatmap) preview of the next year's occurrences for the
+  // live rule — built from the in-progress rrule, no saved cfg required (so it
+  // works while authoring a brand-new recurrence).
+  private readonly _PREVIEW_HEATMAP_DAYS = 365;
+  showResultHeatmap = signal(false);
+  // A clicked projected day (YYYY-MM-DD): "simulate completing here" → for a
+  // repeat-from-completion schedule the rule re-anchors from that day (the
+  // After-completion behavior, made interactive).
+  simulatedCompletion = signal<string | null>(null);
+  toggleResultHeatmap(): void {
+    this.showResultHeatmap.update((v) => !v);
+    if (!this.showResultHeatmap()) {
+      this.simulatedCompletion.set(null);
+    }
+  }
+  clearSimulation(): void {
+    this.simulatedCompletion.set(null);
+  }
+  onPreviewDayClick(day: DayData): void {
+    if (!day?.dateStr) {
+      return;
+    }
+    // Tap the already-simulated day again to clear it. Otherwise simulate
+    // completing on the clicked day — ANY day, not only scheduled occurrences:
+    // re-anchoring to an on-schedule day is a no-op (next = same grid), so the
+    // series only visibly rebuilds when you complete off-schedule (early/late),
+    // which is exactly the "repeat from completion" what-if.
+    this.simulatedCompletion.set(
+      day.dateStr === this.simulatedCompletion() ? null : day.dateStr,
+    );
+  }
+  resultHeatmapData = computed<HeatmapData | null>(() => {
+    if (!this.isRRuleMode() || !this.showResultHeatmap()) {
+      return null;
+    }
+    const cfg = this.repeatCfg();
+    if (!isRRuleValid(cfg.rrule)) {
+      return null;
+    }
+    const rrule = cfg.rrule as string;
+    // Per-instance overrides (moves / RDATE) are Phase 8; here only EXDATE skips
+    // (deletedInstanceDates) apply to the projection.
+    const exdates = cfg.deletedInstanceDates ?? [];
+    const from = new Date();
+    from.setHours(12, 0, 0, 0);
+    const to = new Date(from);
+    to.setDate(to.getDate() + this._PREVIEW_HEATMAP_DAYS);
+    const baseStart = getEffectiveRepeatStartDate(cfg as TaskRepeatCfg);
+    const sim = this.simulatedCompletion();
+    // Only a "repeat from completion" schedule re-anchors when you finish a task
+    // (the completion effect rewrites startDate/lastTaskCreationDay to the
+    // completion day). A fixed-calendar schedule keeps its dates, so completing a
+    // day must NOT shift the rest.
+    const reAnchors = !!cfg.repeatFromCompletionDate;
+
+    let occ: Date[];
+    if (sim && reAnchors) {
+      // Keep the original occurrences up to the completion day, then re-anchor
+      // the rest of the series to that day (next fires from the completion).
+      const [y, m, d] = sim.split('-').map(Number);
+      const simDay = new Date(y, m - 1, d, 12, 0, 0);
+      const beforeEnd = new Date(simDay);
+      beforeEnd.setDate(beforeEnd.getDate() - 1);
+      const afterFrom = new Date(simDay);
+      afterFrom.setDate(afterFrom.getDate() + 1);
+      const before = getRRuleOccurrencesInRange(
+        { rrule, startDate: baseStart, exdates },
+        from,
+        beforeEnd,
+      );
+      const after = getRRuleOccurrencesInRange(
+        { rrule, startDate: sim, exdates },
+        afterFrom,
+        to,
+      );
+      occ = [...before, ...after];
+    } else {
+      // No re-anchor: calendar stays fixed (no simulation, or a non
+      // from-completion schedule where finishing a task never shifts dates).
+      occ = getRRuleOccurrencesInRange(
+        { rrule, startDate: baseStart, exdates },
+        from,
+        to,
+      );
+    }
+    if (!occ.length && !sim) {
+      return null;
+    }
+
+    const dayMap = buildProjectionDayMap(occ, from, to);
+    if (sim) {
+      const day = dayMap.get(sim);
+      if (day) {
+        day.isProjected = false;
+        day.isCompleted = true;
+        day.level = 4;
+      }
+    }
+    return buildHeatmapWeeks(
+      dayMap,
+      from,
+      to,
+      this._dateAdapter.getFirstDayOfWeek(),
+      this._dateAdapter.getMonthNames('short'),
+    );
+  });
 
   canRemoveInstance = signal<boolean>(false);
   skipInstanceButtonText = computed(() => {

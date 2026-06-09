@@ -18,6 +18,7 @@ import { TagService } from '../../tag/tag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
+import { DayData } from '../../../ui/heatmap/heatmap.component';
 import { TaskCopy } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -82,6 +83,9 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
+      // CustomDateAdapter.getFirstDayOfWeek() reads this — needed by the result
+      // calendar preview (heatmap) build.
+      localization: () => ({ firstDayOfWeek: 0 }),
     });
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
       currentLocale: () => 'en-US',
@@ -571,6 +575,55 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       // Now the button is disabled until isLoading becomes false,
       // which only happens after repeatCfgInitial is set
     }));
+  });
+
+  describe('result calendar preview (Phase 2)', () => {
+    const rruleCfg: TaskRepeatCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'rr-cal-preview',
+      title: 'Biweekly Mon',
+      startDate: '2024-06-03',
+      quickSetting: 'RRULE',
+      repeatCycle: 'WEEKLY',
+      rrule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO',
+    };
+
+    it('keeps the calendar hidden until toggled on', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      expect(fixture.componentInstance.resultHeatmapData()).toBeNull();
+    });
+
+    it('projects future occurrences once the calendar is toggled on', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const hd = c.resultHeatmapData();
+      expect(hd).not.toBeNull();
+      expect(hd!.weeks.length).toBeGreaterThan(0);
+      const hasProjected = hd!.weeks.some((w) => w.days.some((d) => !!d?.isProjected));
+      expect(hasProjected).toBe(true);
+    });
+
+    it('toggles the simulated completion day on click', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      // Re-clicking the same day clears it.
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('hiding the calendar also clears an active simulation', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      c.toggleResultHeatmap(); // off
+      expect(c.simulatedCompletion()).toBeNull();
+      expect(c.resultHeatmapData()).toBeNull();
+    });
   });
 
   describe('RRULE builder mode', () => {
