@@ -52,6 +52,9 @@ describe('TaskAttachmentListComponent', () => {
       [
         'file://192.168.1.100/share/pixel.png',
         'file:////host/share/pixel.png',
+        'file:///%5C%5Chost/share/pixel.png',
+        'file:///%2F%2Fhost/share/pixel.png',
+        'file:///%2e%2e/%2F%2Fhost/share/pixel.png',
         '\\\\host\\share\\pixel.png',
         '//host/share/pixel.png',
       ].forEach((path) => {

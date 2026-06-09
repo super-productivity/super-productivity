@@ -29,7 +29,7 @@
   <button
     (click)="parent.addToMyDay()"
     title="{{ T.F.TASK.CMP.ADD_TO_MY_DAY | translate }} {{
-      kb.moveToTodaysTasks ? '[' + kb.moveToTodaysTasks + ']' : ''
+      kb.taskScheduleToday ? '[' + kb.taskScheduleToday + ']' : ''
     }}"
     class="ico-btn"
     color=""

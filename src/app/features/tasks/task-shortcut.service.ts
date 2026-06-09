@@ -169,6 +169,21 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskScheduleTomorrow)) {
+      this._handleTaskShortcut(focusedTaskId, 'scheduleTaskTomorrow');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskScheduleNextWeek)) {
+      this._handleTaskShortcut(focusedTaskId, 'scheduleTaskNextWeek');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskScheduleNextMonth)) {
+      this._handleTaskShortcut(focusedTaskId, 'scheduleTaskNextMonth');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskScheduleDeadline)) {
       this._handleTaskShortcut(focusedTaskId, 'openDeadlineDialog');
       ev.preventDefault();
@@ -229,7 +244,7 @@ export class TaskShortcutService {
       return true;
     }
 
-    if (checkKeyCombo(ev, keys.moveToTodaysTasks)) {
+    if (checkKeyCombo(ev, keys.taskScheduleToday)) {
       this._handleTaskShortcut(focusedTaskId, 'moveToTodayWithFocus');
       ev.preventDefault();
       ev.stopPropagation();

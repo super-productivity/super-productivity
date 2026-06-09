@@ -50,6 +50,17 @@ describe('isExternalUrlSchemeAllowed', () => {
       'file://192.168.1.100/share/x',
       'file:////host/share', // path-based UNC, empty host
       'file://///host/share',
+      'file:///%5C%5Chost/share', // percent-encoded \\host/share
+      'file:///%5c%5chost/share',
+      'file:///%5Chost/share',
+      'file:///%2F%2Fhost/share', // percent-encoded //host/share
+      'file:///%2f%2fhost/share',
+      'file:///%2Fhost/share',
+      'file:///%2e//host/share', // dot-segment normalizes to file:////host/share
+      'file:///%2e%2e/%2F%2Fhost/share',
+      'file:///a/..//host/share',
+      'file:///./%2F%2Fhost/share',
+      'file:///\t//host/share',
       'file:\\\\host\\share',
       'FILE://HOST/share', // case-insensitive
     ];
@@ -96,6 +107,17 @@ describe('isExternalUrlSchemeAllowed', () => {
         'file://host/share',
         'file://192.168.1.100/share/x',
         'file:////host/share',
+        'file:///%5C%5Chost/share',
+        'file:///%5c%5chost/share',
+        'file:///%5Chost/share',
+        'file:///%2F%2Fhost/share',
+        'file:///%2f%2fhost/share',
+        'file:///%2Fhost/share',
+        'file:///%2e//host/share',
+        'file:///%2e%2e/%2F%2Fhost/share',
+        'file:///a/..//host/share',
+        'file:///./%2F%2Fhost/share',
+        'file:///\t//host/share',
         '',
         undefined,
         null,

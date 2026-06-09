@@ -159,4 +159,95 @@ describe('RedmineApiService', () => {
       expect(result?.length).toBe(0);
     });
   });
+
+  describe('global mode (no projectId)', () => {
+    // When projectId is empty the service queries the whole Redmine instance: requests hit
+    // the instance-wide endpoints (no `/projects/<id>` URL segment).
+    const globalCfg: RedmineCfg = { ...mockCfg, projectId: null };
+
+    const globalSearchUrl = (query: string): string =>
+      `${globalCfg.host}/search.json?limit=100&q=${query}&issues=1&open_issues=1`;
+
+    // by-id lookup against the instance-wide /issues.json (no project segment)
+    const byIdGlobalMatcher =
+      (issueId: number) =>
+      (req: HttpRequest<unknown>): boolean =>
+        req.method === 'GET' &&
+        req.url === `${globalCfg.host}/issues.json` &&
+        req.params.get('issue_id') === String(issueId) &&
+        req.params.get('status_id') === '*';
+
+    it('should run text search against the instance-wide /search.json', () => {
+      let result: SearchResultItem[] | undefined;
+      service
+        .searchIssuesInProject$('some text', globalCfg)
+        .subscribe((r) => (result = r));
+
+      const req = httpMock.expectOne(globalSearchUrl('some%20text'));
+      expect(req.request.method).toBe('GET');
+      req.flush(mockSearchResponse);
+
+      httpMock.expectNone(byIdGlobalMatcher(100));
+      expect(result?.length).toBe(1);
+      expect(result?.[0].title).toBe('Bug #100: Some text issue');
+    });
+
+    it('should additionally fetch the issue by id (instance-wide) for numeric queries', () => {
+      let result: SearchResultItem[] | undefined;
+      service.searchIssuesInProject$('22899', globalCfg).subscribe((r) => (result = r));
+
+      const byIdReq = httpMock.expectOne(byIdGlobalMatcher(22899));
+      byIdReq.flush({ issues: [{ id: 22899, subject: 'Issue found by id' }] });
+
+      const searchReq = httpMock.expectOne(globalSearchUrl('22899'));
+      searchReq.flush(mockSearchResponse);
+
+      expect(result?.length).toBe(2);
+      expect(result?.[0].title).toBe('#22899 Issue found by id');
+      expect((result?.[0].issueData as { id: number }).id).toBe(22899);
+    });
+
+    it('should support queries prefixed with # in global mode', () => {
+      let result: SearchResultItem[] | undefined;
+      service.searchIssuesInProject$('#22899', globalCfg).subscribe((r) => (result = r));
+
+      const byIdReq = httpMock.expectOne(byIdGlobalMatcher(22899));
+      byIdReq.flush({ issues: [{ id: 22899, subject: 'Issue found by id' }] });
+
+      const searchReq = httpMock.expectOne(globalSearchUrl('%2322899'));
+      searchReq.flush({ ...mockSearchResponse, results: [] });
+
+      expect(result?.length).toBe(1);
+      expect(result?.[0].title).toBe('#22899 Issue found by id');
+    });
+
+    it('should surface an issue from any project in global mode', () => {
+      let result: SearchResultItem[] | undefined;
+      service.searchIssuesInProject$('424242', globalCfg).subscribe((r) => (result = r));
+
+      // In global mode the instance-wide lookup intentionally returns the issue regardless
+      // of which project it belongs to (the inverse of the project-scoped behaviour).
+      const byIdReq = httpMock.expectOne(byIdGlobalMatcher(424242));
+      byIdReq.flush({ issues: [{ id: 424242, subject: 'Cross-project issue' }] });
+
+      const searchReq = httpMock.expectOne(globalSearchUrl('424242'));
+      searchReq.flush({ ...mockSearchResponse, results: [] });
+
+      expect(result?.length).toBe(1);
+      expect(result?.[0].title).toBe('#424242 Cross-project issue');
+    });
+
+    it('should fetch the last 100 issues from the instance-wide /issues.json', () => {
+      let result: unknown[] | undefined;
+      service
+        .getLast100IssuesForCurrentRedmineProject$(globalCfg)
+        .subscribe((r) => (result = r));
+
+      const req = httpMock.expectOne(`${globalCfg.host}/issues.json?limit=100`);
+      expect(req.request.method).toBe('GET');
+      req.flush({ issues: [{ id: 1, subject: 'Latest issue' }] });
+
+      expect(result?.length).toBe(1);
+    });
+  });
 });

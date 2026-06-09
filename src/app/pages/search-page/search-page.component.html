@@ -57,6 +57,9 @@
                       class="issue-icon"
                     ></mat-icon>
                   }
+                  @if (item.isNote) {
+                    <mat-icon class="issue-icon">comment</mat-icon>
+                  }
                   @if (item.isArchiveTask) {
                     <mat-icon class="archive-icon">archive</mat-icon>
                     <button

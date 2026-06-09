@@ -26,6 +26,7 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { getNextWeekDayOffset } from '../../../util/get-next-week-day-offset';
 import { DateService } from '../../../core/date/date.service';
 import { DateAdapter } from '@angular/material/core';
 import { MatButton } from '@angular/material/button';
@@ -235,11 +236,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
         d.setDate(d.getDate() + 1);
         return d;
       case 'nextWeek': {
-        const dayOffset =
-          (this._dateAdapter.getFirstDayOfWeek() -
-            this._dateAdapter.getDayOfWeek(d) +
-            7) %
-            7 || 7;
+        const dayOffset = getNextWeekDayOffset(this._dateAdapter, d);
         d.setDate(d.getDate() + dayOffset);
         return d;
       }

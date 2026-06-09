@@ -38,7 +38,7 @@ export class RedmineApiService {
   searchIssuesInProject$(query: string, cfg: RedmineCfg): Observable<SearchResultItem[]> {
     const textSearch$: Observable<SearchResultItem[]> = this._sendRequest$(
       {
-        url: `${cfg.host}/projects/${cfg.projectId}/search.json`,
+        url: `${cfg.host}${this._projectScopePath(cfg)}/search.json`,
         params: ParamsBuilder.create()
           .withLimit(100)
           .withQuery(query)
@@ -81,19 +81,22 @@ export class RedmineApiService {
     );
   }
 
-  // Looks up a single issue by id but stays scoped to the configured project, so a
-  // provider for one project can never surface (or add) an issue from another project
-  // the API key happens to have access to. Redmine resolves the project from the URL,
-  // so this works whether `cfg.projectId` is the numeric id or the identifier slug.
-  // `status_id=*` ensures closed issues are found too. A cross-project (or unknown) id
-  // simply yields an empty list -> null, and the caller falls back to text search.
+  // Looks up a single issue by id. When a project is configured the lookup stays scoped
+  // to it (via the `/projects/<id>` URL segment), so a provider for one project can never
+  // surface (or add) an issue from another project the API key happens to have access to.
+  // When no project is configured (global mode) the lookup runs against the instance-wide
+  // `/issues.json`, intentionally surfacing the matching issue from whatever project it
+  // belongs to. Redmine resolves the project from the URL, so the scoped form works whether
+  // `cfg.projectId` is the numeric id or the identifier slug. `status_id=*` ensures closed
+  // issues are found too. An unknown (or out-of-scope) id simply yields an empty list ->
+  // null, and the caller falls back to text search.
   private _getIssueByIdInProject$(
     issueId: number,
     cfg: RedmineCfg,
   ): Observable<RedmineIssue | null> {
     return this._sendRequest$(
       {
-        url: `${cfg.host}/projects/${cfg.projectId}/issues.json`,
+        url: `${cfg.host}${this._projectScopePath(cfg)}/issues.json`,
         params: ParamsBuilder.create()
           .withParam('issue_id', String(issueId))
           .withState('*')
@@ -108,7 +111,7 @@ export class RedmineApiService {
   getLast100IssuesForCurrentRedmineProject$(cfg: RedmineCfg): Observable<RedmineIssue[]> {
     return this._sendRequest$(
       {
-        url: `${cfg.host}/projects/${cfg.projectId}/issues.json`,
+        url: `${cfg.host}${this._projectScopePath(cfg)}/issues.json`,
         params: ParamsBuilder.create().withLimit(100).withScopeFrom(cfg).build(),
       },
       cfg,
@@ -186,6 +189,14 @@ export class RedmineApiService {
     );
   }
 
+  // Returns the project URL segment to prefix scoped endpoints with: `/projects/<id>` when a
+  // project is configured, or '' when it is not. An empty segment makes requests hit Redmine's
+  // instance-wide endpoints (`/search.json`, `/issues.json`), so a single connection can search
+  // across the whole Redmine instead of a single project.
+  private _projectScopePath(cfg: RedmineCfg): string {
+    return cfg.projectId ? `/projects/${cfg.projectId}` : '';
+  }
+
   private _sendRequest$(
     params: HttpRequest<string> | any,
     cfg: RedmineCfg,
@@ -242,13 +253,15 @@ export class RedmineApiService {
     }
   }
 
+  // `projectId` is intentionally not required: when it is empty the service operates in
+  // global mode and queries the whole Redmine instance instead of a single project.
   private _isValidSettings(cfg: RedmineCfg): boolean {
     return (
       !!cfg &&
       !!cfg.host &&
       cfg.host.length > 0 &&
-      !!cfg.projectId &&
-      cfg.projectId.length > 0
+      !!cfg.api_key &&
+      cfg.api_key.length > 0
     );
   }
 }

@@ -27,6 +27,7 @@ export interface SearchItem {
   searchText: string;
   // jira only
   titleHighlighted?: string;
+  isNote?: boolean;
 }
 
 export interface SearchQueryParams {

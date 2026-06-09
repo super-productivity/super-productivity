@@ -13,7 +13,21 @@
  */
 export const ALLOWED_EXTERNAL_URL_SCHEMES = ['http:', 'https:', 'mailto:', 'file:'];
 
+const LOCAL_FILE_URL_PREFIX = 'file:///';
+const ASCII_CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 const _isSlash = (char: string): boolean => char === '/' || char === '\\';
+const _isEncodedSlashAt = (value: string, index: number): boolean =>
+  value.startsWith('%2f', index) || value.startsWith('%5c', index);
+const _hasUncLikeLocalFilePathStart = (value: string): boolean => {
+  const firstLocalPathCharIndex = LOCAL_FILE_URL_PREFIX.length;
+  return (
+    value[firstLocalPathCharIndex] === '/' ||
+    value[firstLocalPathCharIndex] === '\\' ||
+    _isEncodedSlashAt(value, firstLocalPathCharIndex)
+  );
+};
+const _isLocalFileUrlWithoutUncPrefix = (value: string): boolean =>
+  value.startsWith(LOCAL_FILE_URL_PREFIX) && !_hasUncLikeLocalFilePathStart(value);
 
 /**
  * True for a UNC / network path such as `\\host\share` or `//host/share` — i.e.
@@ -60,11 +74,18 @@ export const isExternalUrlSchemeAllowed = (url: unknown): boolean => {
   if (parsed.protocol === 'file:') {
     // Allow ONLY the canonical local form `file:///<path>`. Anything with an
     // authority (`file://host/…`) or a path-based UNC (`file:////host`) is a
-    // remote SMB reference and leaks the user's NTLM hash. Gate on the RAW
-    // string: Chromium (renderer) and Node (main) parse file: hosts/paths
-    // differently, so `parsed.host` / `parsed.pathname` are not portable.
+    // remote SMB reference and leaks the user's NTLM hash. Gate on both the RAW
+    // string and the parser-normalized href: raw catches parser differences,
+    // normalized catches dot-segment/control-character rewrites.
     const lower = trimmed.toLowerCase();
-    return lower.startsWith('file:///') && lower[8] !== '/' && lower[8] !== '\\';
+    if (ASCII_CONTROL_CHAR_RE.test(lower)) {
+      return false;
+    }
+    const normalizedLower = parsed.href.toLowerCase();
+    return (
+      _isLocalFileUrlWithoutUncPrefix(lower) &&
+      _isLocalFileUrlWithoutUncPrefix(normalizedLower)
+    );
   }
   return true;
 };

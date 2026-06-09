@@ -56,7 +56,7 @@ export const REDMINE_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderRedmine>
     templateOptions: {
       label: T.F.REDMINE.FORM.PROJECT_ID,
       type: 'text',
-      required: true,
+      required: false,
       description: T.F.REDMINE.FORM.PROJECT_ID_DESCRIPTION,
     },
   },

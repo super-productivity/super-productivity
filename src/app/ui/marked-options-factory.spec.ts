@@ -361,21 +361,25 @@ describe('markedOptionsFactory', () => {
           tokens.map((t: any) => t.raw || t.text || '').join(''),
       };
 
-      ['ms-calculator:', 'javascript:alert(1)', 'ssh://h', '\\\\host\\share'].forEach(
-        (href) => {
-          it(`renders "${href}" as inert text, not an anchor`, () => {
-            const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
-            const result = linkRenderer({
-              href,
-              title: 'x',
-              tokens: [{ type: 'text', raw: 'Click here', text: 'Click here' }],
-            } as any);
-            expect(result).not.toContain('<a ');
-            expect(result).not.toContain(`href="${href}"`);
-            expect(result).toContain('Click here');
-          });
-        },
-      );
+      [
+        'ms-calculator:',
+        'javascript:alert(1)',
+        'ssh://h',
+        '\\\\host\\share',
+        'file:///%2e%2e/%2F%2Fhost/share',
+      ].forEach((href) => {
+        it(`renders "${href}" as inert text, not an anchor`, () => {
+          const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
+          const result = linkRenderer({
+            href,
+            title: 'x',
+            tokens: [{ type: 'text', raw: 'Click here', text: 'Click here' }],
+          } as any);
+          expect(result).not.toContain('<a ');
+          expect(result).not.toContain(`href="${href}"`);
+          expect(result).toContain('Click here');
+        });
+      });
 
       it('still renders allowed schemes (mailto:, file:) as anchors', () => {
         const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
@@ -531,6 +535,9 @@ describe('markedOptionsFactory', () => {
       [
         'file://192.168.1.100/share/pixel.png',
         'file:////host/share/pixel.png',
+        'file:///%5C%5Chost/share/pixel.png',
+        'file:///%2F%2Fhost/share/pixel.png',
+        'file:///%2e%2e/%2F%2Fhost/share/pixel.png',
         '\\\\host\\share\\pixel.png',
         '//host/share/pixel.png',
       ].forEach((href) => {

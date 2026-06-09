@@ -3,6 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
+import { DateAdapter } from '@angular/material/core';
+import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -15,6 +17,10 @@ import { DEFAULT_TASK, HideSubTasksMode, TaskWithSubTasks } from '../task.model'
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskComponent } from './task.component';
+import { SnackService } from '../../../core/snack/snack.service';
+import { TranslateService } from '@ngx-translate/core';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { PlannerService } from '../../planner/planner.service';
 
 describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
@@ -65,6 +71,7 @@ describe('TaskComponent shortcut handling', () => {
         'pauseCurrent',
         'getByIdWithSubTaskData$',
         'focusTaskById',
+        'scheduleTask',
       ],
       {
         currentTaskId: signal<string | null>(null),
@@ -101,7 +108,7 @@ describe('TaskComponent shortcut handling', () => {
         {
           provide: GlobalConfigService,
           useValue: jasmine.createSpyObj('GlobalConfigService', ['cfg'], {
-            cfg: () => ({ keyboard: {}, tasks: {} }),
+            cfg: () => ({ keyboard: {}, tasks: {}, reminder: {} }),
           }),
         },
         {
@@ -112,6 +119,22 @@ describe('TaskComponent shortcut handling', () => {
           ]),
         },
         { provide: Store, useValue: storeSpy },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+        {
+          provide: TranslateService,
+          useValue: jasmine.createSpyObj('TranslateService', ['instant']),
+        },
+        {
+          provide: LocaleDatePipe,
+          useValue: jasmine.createSpyObj('LocaleDatePipe', ['transform']),
+        },
+        {
+          provide: PlannerService,
+          useValue: jasmine.createSpyObj('PlannerService', ['getSnackExtraStr']),
+        },
         {
           provide: ProjectService,
           useValue: jasmine.createSpyObj('ProjectService', [
@@ -130,9 +153,13 @@ describe('TaskComponent shortcut handling', () => {
         },
         {
           provide: DateService,
-          useValue: jasmine.createSpyObj('DateService', ['isToday'], {
-            isToday: () => false,
-          }),
+          useValue: jasmine.createSpyObj(
+            'DateService',
+            ['isToday', 'getLogicalTodayDate'],
+            {
+              isToday: () => false,
+            },
+          ),
         },
         {
           provide: GlobalTrackingIntervalService,
@@ -151,6 +178,13 @@ describe('TaskComponent shortcut handling', () => {
           useValue: {
             isTodayList: signal(false),
           },
+        },
+        {
+          provide: DateAdapter,
+          useValue: jasmine.createSpyObj('DateAdapter', [
+            'getFirstDayOfWeek',
+            'getDayOfWeek',
+          ]),
         },
       ],
     })
@@ -336,5 +370,117 @@ describe('TaskComponent shortcut handling', () => {
     });
 
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+
+  describe('Scheduling shortcuts', () => {
+    let dateService: jasmine.SpyObj<DateService>;
+    let dateAdapter: jasmine.SpyObj<DateAdapter<unknown>>;
+    let plannerService: jasmine.SpyObj<PlannerService>;
+
+    beforeEach(() => {
+      dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
+      dateAdapter = TestBed.inject(DateAdapter) as jasmine.SpyObj<DateAdapter<unknown>>;
+      plannerService = TestBed.inject(PlannerService) as jasmine.SpyObj<PlannerService>;
+      // Mock "logical today" to 2026-06-01 (a Monday)
+      dateService.getLogicalTodayDate.and.returnValue(new Date('2026-06-01T12:00:00'));
+      dateAdapter.getDayOfWeek.and.callFake((d: any) => (d as Date).getDay());
+      dateAdapter.getFirstDayOfWeek.and.returnValue(1); // Monday
+      plannerService.getSnackExtraStr.and.returnValue(Promise.resolve(''));
+    });
+
+    it('schedules for tomorrow', () => {
+      component.scheduleTaskTomorrow();
+
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({
+          task: component.task() as any,
+          day: '2026-06-02',
+          isShowSnack: true,
+        }),
+      );
+    });
+
+    it('schedules for next week (next Monday)', () => {
+      component.scheduleTaskNextWeek();
+
+      // Next week from Monday June 1st should be June 8th
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({
+          task: component.task() as any,
+          day: '2026-06-08',
+          isShowSnack: true,
+        }),
+      );
+    });
+
+    it('schedules for next week (from Sunday, next Monday)', () => {
+      dateService.getLogicalTodayDate.and.returnValue(new Date('2026-06-07T12:00:00')); // Sunday
+
+      component.scheduleTaskNextWeek();
+
+      // Next week from Sunday June 7th (first day Monday) should be June 8th
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({
+          task: component.task() as any,
+          day: '2026-06-08',
+          isShowSnack: true,
+        }),
+      );
+    });
+
+    it('schedules for next week (from Sunday, next Monday) - US locale (Sunday first)', () => {
+      dateAdapter.getFirstDayOfWeek.and.returnValue(0); // Sunday
+      dateService.getLogicalTodayDate.and.returnValue(new Date('2026-06-07T12:00:00')); // Sunday
+
+      component.scheduleTaskNextWeek();
+
+      // Next week from Sunday June 7th (first day Sunday) should be June 14th
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({
+          task: component.task() as any,
+          day: '2026-06-14',
+          isShowSnack: true,
+        }),
+      );
+    });
+
+    it('schedules for next month (first of next month)', () => {
+      component.scheduleTaskNextMonth();
+
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({
+          task: component.task() as any,
+          day: '2026-07-01',
+          isShowSnack: true,
+        }),
+      );
+    });
+
+    it('preserves time and reminder when scheduling a timed task for tomorrow', async () => {
+      const timedTask = {
+        ...component.task(),
+        dueWithTime: new Date('2026-06-01T10:00:00').getTime(),
+      };
+      fixture.componentRef.setInput('task', timedTask);
+
+      await component.scheduleTaskTomorrow();
+
+      // Should call taskService.scheduleTask instead of dispatching planTaskForDay
+      // June 2nd at 10:00:00
+      expect(taskServiceSpy.scheduleTask).toHaveBeenCalledWith(
+        timedTask as any,
+        new Date('2026-06-02T10:00:00').getTime(),
+        jasmine.any(String),
+        false,
+      );
+      expect(TestBed.inject(SnackService).open).toHaveBeenCalled();
+      expect(storeSpy.dispatch).not.toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({
+          task: timedTask as any,
+          day: '2026-06-02',
+          isShowSnack: true,
+        }),
+      );
+    });
   });
 });

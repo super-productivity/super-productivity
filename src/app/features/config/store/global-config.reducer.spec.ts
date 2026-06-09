@@ -234,6 +234,98 @@ describe('GlobalConfigReducer', () => {
         expect(result.keyboard.addNewNote).toBe('N');
         expect(result.keyboard.taskOpenNotesPanel).toBe('Alt+Shift+N');
       });
+
+      describe('moveToTodaysTasks migration', () => {
+        it('should migrate moveToTodaysTasks to taskScheduleToday', () => {
+          const legacyConfig = {
+            ...initialGlobalConfigState,
+            keyboard: {
+              ...initialGlobalConfigState.keyboard,
+              moveToTodaysTasks: 'Shift+T',
+              taskScheduleToday: null,
+            },
+          };
+
+          const result = globalConfigReducer(
+            initialGlobalConfigState,
+            loadAllData({
+              appDataComplete: {
+                globalConfig: legacyConfig,
+              } as unknown as AppDataComplete,
+            }),
+          );
+
+          expect(result.keyboard.taskScheduleToday).toBe('Shift+T');
+          expect((result.keyboard as any).moveToTodaysTasks).toBeUndefined();
+        });
+
+        it('should NOT re-migrate if taskScheduleToday is already null (manually disabled)', () => {
+          const legacyConfigWithBoth = {
+            ...initialGlobalConfigState,
+            keyboard: {
+              ...initialGlobalConfigState.keyboard,
+              moveToTodaysTasks: 'Shift+T',
+              taskScheduleToday: null,
+            },
+          };
+
+          // First migration
+          const result1 = globalConfigReducer(
+            initialGlobalConfigState,
+            loadAllData({
+              appDataComplete: {
+                globalConfig: legacyConfigWithBoth,
+              } as unknown as AppDataComplete,
+            }),
+          );
+          expect(result1.keyboard.taskScheduleToday).toBe('Shift+T');
+          expect((result1.keyboard as any).moveToTodaysTasks).toBeUndefined();
+
+          // User disables it
+          const configWithDisabled = {
+            ...result1,
+            keyboard: {
+              ...result1.keyboard,
+              taskScheduleToday: null,
+            },
+          };
+
+          // Second load (e.g. restart)
+          const result2 = globalConfigReducer(
+            initialGlobalConfigState,
+            loadAllData({
+              appDataComplete: {
+                globalConfig: configWithDisabled,
+              } as unknown as AppDataComplete,
+            }),
+          );
+
+          expect(result2.keyboard.taskScheduleToday).toBeNull();
+        });
+
+        it('should strip moveToTodaysTasks even if no migration is needed', () => {
+          const legacyConfig = {
+            ...initialGlobalConfigState,
+            keyboard: {
+              ...initialGlobalConfigState.keyboard,
+              moveToTodaysTasks: 'Shift+T',
+              taskScheduleToday: 'Ctrl+T',
+            },
+          };
+
+          const result = globalConfigReducer(
+            initialGlobalConfigState,
+            loadAllData({
+              appDataComplete: {
+                globalConfig: legacyConfig,
+              } as unknown as AppDataComplete,
+            }),
+          );
+
+          expect(result.keyboard.taskScheduleToday).toBe('Ctrl+T');
+          expect((result.keyboard as any).moveToTodaysTasks).toBeUndefined();
+        });
+      });
     });
 
     it('should use syncProvider from snapshot when oldState has null (initial load)', () => {

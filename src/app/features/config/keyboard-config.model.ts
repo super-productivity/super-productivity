@@ -37,6 +37,10 @@ export type KeyboardConfig = Readonly<{
   taskOpenContextMenu?: string | null;
   taskDelete?: string | null;
   taskSchedule?: string | null;
+  taskScheduleToday?: string | null;
+  taskScheduleTomorrow?: string | null;
+  taskScheduleNextWeek?: string | null;
+  taskScheduleNextMonth?: string | null;
   taskScheduleDeadline?: string | null;
   taskUnschedule?: string | null;
   selectPreviousTask?: string | null;
@@ -46,7 +50,6 @@ export type KeyboardConfig = Readonly<{
   moveTaskToTop?: string | null;
   moveTaskToBottom?: string | null;
   moveToBacklog?: string | null;
-  moveToTodaysTasks?: string | null;
   expandSubTasks?: string | null;
   collapseSubTasks?: string | null;
   togglePlay?: string | null;

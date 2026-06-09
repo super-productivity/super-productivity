@@ -448,7 +448,21 @@ function initWinEventListeners(app: Electron.App): void {
 
   // open new window links in browser
   mainWin.webContents.on('will-navigate', (ev, url) => {
-    if (!url.includes('localhost')) {
+    // Navigate in-window only for the app's own dev-server origin
+    // (http://localhost:4200). Prod serves from file:// (start URL above) and
+    // routes via hash (withHashLocation, src/main.ts), so will-navigate never
+    // fires for the app's own routes there — only for real external links,
+    // which we hand to the (scheme-guarded) browser. Compare the host exactly:
+    // a substring match let hosts like `https://localhost.evil.com` navigate
+    // the main window directly.
+    let isInternalNavigation = false;
+    try {
+      const { hostname } = new URL(url);
+      isInternalNavigation = hostname === 'localhost' || hostname === '127.0.0.1';
+    } catch {
+      isInternalNavigation = false;
+    }
+    if (!isInternalNavigation) {
       ev.preventDefault();
       openUrlInBrowser(url);
     }

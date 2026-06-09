@@ -1066,8 +1066,8 @@
         "IS_SHOW_TIME_TRACKING_DIALOG": "Show time tracking dialog to report to Redmine",
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requires time tracking module to be enabled for Redmine project",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when subtasks are completed",
-        "PROJECT_ID": "Project Identifier",
-        "PROJECT_ID_DESCRIPTION": "Can be found as part of the URL when viewing the project in a web browser.",
+        "PROJECT_ID": "Project Identifier (optional)",
+        "PROJECT_ID_DESCRIPTION": "Can be found as part of the URL when viewing the project in a web browser. Leave empty to search across the whole Redmine instance.",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
@@ -1131,9 +1131,9 @@
       "START": "Work Start"
     },
     "SEARCH_BAR": {
-      "INFO": "Start typing to search for tasks",
-      "NO_RESULTS": "No tasks found matching your search",
-      "PLACEHOLDER": "Search for task or task notes"
+      "INFO": "Start typing to search for tasks or notes",
+      "NO_RESULTS": "No tasks or notes found matching your search",
+      "PLACEHOLDER": "Search for task, task notes or project notes"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -2377,7 +2377,6 @@
       "MOVE_TASK_TO_TOP": "Move task to the top of the list",
       "MOVE_TASK_UP": "Move task up in the list",
       "MOVE_TO_BACKLOG": "Move task to project backlog",
-      "MOVE_TO_REGULARS_TASKS": "Move task to Today",
       "OPEN_PROJECT_NOTES": "Show/hide notes",
       "PLUGIN_SHORTCUTS": "Plugin Shortcuts",
       "SELECT_NEXT_TASK": "Select next task",
@@ -2393,6 +2392,10 @@
       "TASK_OPEN_CONTEXT_MENU": "Open task context menu",
       "TASK_OPEN_ESTIMATION_DIALOG": "Edit estimate/time spent",
       "TASK_SCHEDULE": "Schedule task",
+      "TASK_SCHEDULE_TODAY": "Schedule task for today",
+      "TASK_SCHEDULE_TOMORROW": "Schedule task for tomorrow",
+      "TASK_SCHEDULE_NEXT_WEEK": "Schedule task for next week",
+      "TASK_SCHEDULE_NEXT_MONTH": "Schedule task for next month",
       "TASK_SCHEDULE_DEADLINE": "Set task deadline",
       "TASK_SHORTCUTS": "Tasks",
       "TASK_SHORTCUTS_INFO": "The following shortcuts apply to the currently selected task (selected via tab or mouse).",

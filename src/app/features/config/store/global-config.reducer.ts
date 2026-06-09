@@ -106,14 +106,24 @@ export const initialGlobalConfigState: GlobalConfigState = {
 };
 
 const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {
-  const keyboard: KeyboardConfig = {
+  const { moveToTodaysTasks, ...rest } =
+    (cfg as (KeyboardConfig & { moveToTodaysTasks?: string | null }) | undefined) ?? {};
+
+  let keyboard: KeyboardConfig = {
     ...DEFAULT_GLOBAL_CONFIG.keyboard,
-    ...cfg,
+    ...rest,
   };
 
+  if (moveToTodaysTasks != null && rest.taskScheduleToday == null) {
+    keyboard = {
+      ...keyboard,
+      taskScheduleToday: moveToTodaysTasks,
+    };
+  }
+
   if (
-    cfg?.addNewNote === 'N' &&
-    (cfg.taskOpenNotesPanel === undefined || cfg.taskOpenNotesPanel === null)
+    rest.addNewNote === 'N' &&
+    (rest.taskOpenNotesPanel === undefined || rest.taskOpenNotesPanel === null)
   ) {
     return {
       ...keyboard,
