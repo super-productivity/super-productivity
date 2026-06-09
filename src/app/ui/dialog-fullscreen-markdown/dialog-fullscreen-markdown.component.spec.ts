@@ -111,4 +111,78 @@ describe('DialogFullscreenMarkdownComponent', () => {
       expect(component.contentChanged.emit).not.toHaveBeenCalled();
     });
   });
+
+  describe('keydownHandler', () => {
+    it('should call close() on Ctrl+Enter', () => {
+      spyOn(component, 'close');
+
+      component.keydownHandler(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }),
+      );
+
+      expect(component.close).toHaveBeenCalled();
+    });
+
+    it('should call onApplyBold and preventDefault on Ctrl+B', () => {
+      const mockTextarea = document.createElement('textarea');
+      spyOn(component, 'textareaEl').and.returnValue({
+        nativeElement: mockTextarea,
+      } as any);
+
+      spyOn(component, 'onApplyBold');
+
+      const event = {
+        key: 'b',
+        code: 'KeyB',
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: false,
+        preventDefault: jasmine.createSpy('preventDefault'),
+      } as unknown as KeyboardEvent;
+
+      component.keydownHandler(event);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(component.onApplyBold).toHaveBeenCalled();
+    });
+  });
+
+  describe('caret placement after transform', () => {
+    let mockTextarea: HTMLTextAreaElement;
+
+    beforeEach(() => {
+      mockTextarea = document.createElement('textarea');
+      mockTextarea.value = 'item one';
+      mockTextarea.selectionStart = 0;
+      mockTextarea.selectionEnd = 8;
+
+      spyOn(component, 'textareaEl').and.returnValue({
+        nativeElement: mockTextarea,
+      } as any);
+    });
+
+    it('toolbar call (isKeyboard=false) preserves a selection range', fakeAsync(() => {
+      spyOn(mockTextarea, 'setSelectionRange').and.callThrough();
+
+      component.onApplyBulletList(false);
+      tick();
+
+      const [start, end] = (
+        mockTextarea.setSelectionRange as jasmine.Spy
+      ).calls.mostRecent().args;
+      expect(start).toBeLessThan(end);
+    }));
+
+    it('keyboard call (isKeyboard=true) collapses caret to end', fakeAsync(() => {
+      spyOn(mockTextarea, 'setSelectionRange').and.callThrough();
+
+      component.onApplyBulletList(true);
+      tick();
+
+      const [start, end] = (
+        mockTextarea.setSelectionRange as jasmine.Spy
+      ).calls.mostRecent().args;
+      expect(start).toEqual(end);
+    }));
+  });
 });
