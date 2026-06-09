@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Endereço do servidor (ex: https://try.gitea.io)",
+    "TOKEN": "Token de acesso",
+    "REPO_FULL_NAME": "Nome do usuário ou organização/projeto",
+    "SCOPE": "Escopo",
+    "SCOPE_ALL": "Todos",
+    "SCOPE_CREATED": "Criados por mim",
+    "SCOPE_ASSIGNED": "Atribuídos a mim",
+    "FILTER_LABELS": "Filtrar por etiquetas (opcional)",
+    "EXCLUDE_LABELS": "Excluir etiquetas (opcional)",
+    "HOW_TO_GET_TOKEN": "Como obter um token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumo",
+    "STATE": "Estado",
+    "ASSIGNEE": "Atribuído",
+    "LABELS": "Etiquetas",
+    "DESCRIPTION": "Descrição"
+  },
+  "FORM_HELP": "<p>Aqui você pode configurar o SuperProductivity para listar tarefas do Gitea de um repositório específico no painel de tarefas na tela de planejamento diário. Elas também serão listadas como sugestões e será disponibilizado um link para a tarefa bem como mais informações sobre a mesma.</p> <p>Além disso você pode adicionar e sincronizar todas as tarefas abertas para o seu backlog.</p><p>"
+}

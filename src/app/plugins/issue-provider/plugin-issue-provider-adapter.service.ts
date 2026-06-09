@@ -73,10 +73,25 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       return '';
     }
     try {
-      return await provider.definition.getIssueLink(String(issueId), cfg.pluginConfig);
+      const link = provider.definition.getIssueLink(String(issueId), cfg.pluginConfig);
+      if (link) {
+        return link;
+      }
     } catch (e) {
       console.error(
         `[PluginIssueAdapter] getIssueLink failed for ${cfg.issueProviderKey}:`,
+        e,
+      );
+    }
+    // Fallback for providers whose links can't be derived from id + config
+    // (e.g. Linear, whose URL needs the workspace slug): the canonical URL is
+    // carried on the issue itself, so fetch it on demand.
+    try {
+      const issue = (await this.getById(issueId, issueProviderId)) as PluginIssue | null;
+      return issue?.url ?? '';
+    } catch (e) {
+      console.error(
+        `[PluginIssueAdapter] getIssueLink url fallback failed for ${cfg.issueProviderKey}:`,
         e,
       );
       return '';

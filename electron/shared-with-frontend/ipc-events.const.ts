@@ -83,6 +83,10 @@ export enum IPC {
 
   // Plugin Node Execution
   PLUGIN_EXEC_NODE_SCRIPT = 'PLUGIN_EXEC_NODE_SCRIPT',
+  // Renderer registers/revokes a plugin's nodeExecution grant in the main
+  // process, so the executor authorizes from its own state instead of trusting
+  // the per-call manifest. See GHSA-78rv-m663-4fph.
+  PLUGIN_SET_NODE_CONSENT = 'PLUGIN_SET_NODE_CONSENT',
 
   // Plugin OAuth
   PLUGIN_OAUTH_PREPARE = 'PLUGIN_OAUTH_PREPARE',

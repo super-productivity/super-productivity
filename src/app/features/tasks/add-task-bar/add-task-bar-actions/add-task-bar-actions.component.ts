@@ -32,7 +32,8 @@ import { isValidSplitTime } from '../../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../../util/normalize-clock-str';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isSingleEmoji } from '../../../../util/extract-first-emoji';
-import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
+import { DEFAULT_PROJECT_ICON, INBOX_PROJECT } from '../../../project/project.const';
+import { Project } from '../../../project/project.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.model';
 import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
@@ -205,6 +206,10 @@ export class AddTaskBarActionsComponent {
     const icon = project?.icon || 'folder';
     return isSingleEmoji(icon);
   });
+
+  isDefaultInboxProject(project: Project | null | undefined): boolean {
+    return project?.id === INBOX_PROJECT.id && project.title === INBOX_PROJECT.title;
+  }
 
   openScheduleDialog(): void {
     const state = this.state();

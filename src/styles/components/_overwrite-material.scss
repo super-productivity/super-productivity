@@ -341,6 +341,32 @@ body .mat-mdc-button-base .mat-icon {
   background: var(--bg-lightest) !important;
 }
 
+.cdk-drag-preview.tree-dnd-drag-preview {
+  box-sizing: border-box;
+  max-width: calc(100vw - var(--s2));
+  border-radius: var(--card-border-radius);
+  color: var(--sidenav-text);
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  .nav-child-item,
+  nav-item,
+  .nav-link {
+    min-width: 0;
+  }
+
+  .nav-link,
+  .nav-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .drag-preview-time-badge {
   position: absolute;
   right: 6px;

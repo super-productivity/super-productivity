@@ -111,6 +111,98 @@ describe('AzureDevOpsApiService', () => {
         ],
       });
     });
+
+    it('should keep search result mapping at the default work item limit', () => {
+      service
+        .searchIssues$('test', { ...mockCfg, autoImportLimit: 120 })
+        .subscribe((issues) => {
+          expect(issues.length).toBe(50);
+        });
+
+      const req = httpMock.expectOne(
+        `${mockCfg.host}/${mockCfg.project}/_apis/wit/wiql?api-version=6.0`,
+      );
+      req.flush({
+        workItems: Array.from({ length: 75 }, (_, i) => ({ id: i + 1 })),
+      });
+
+      const detailsReq = httpMock.expectOne((r) =>
+        r.url.includes(`${mockCfg.host}/${mockCfg.project}/_apis/wit/workitems`),
+      );
+      expect(getRequestedIds(detailsReq.request.urlWithParams).length).toBe(50);
+      detailsReq.flush({
+        value: Array.from({ length: 50 }, (_, i) => makeWorkItem(i + 1)),
+      });
+    });
+  });
+
+  describe('getNewIssuesToAddToBacklog$', () => {
+    it('should default auto import mapping to 50 work items', () => {
+      service.getNewIssuesToAddToBacklog$(mockCfg).subscribe((issues) => {
+        expect(issues.length).toBe(50);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockCfg.host}/${mockCfg.project}/_apis/wit/wiql?api-version=6.0`,
+      );
+      req.flush({
+        workItems: Array.from({ length: 75 }, (_, i) => ({ id: i + 1 })),
+      });
+
+      const detailsReq = httpMock.expectOne((r) =>
+        r.url.includes(`${mockCfg.host}/${mockCfg.project}/_apis/wit/workitems`),
+      );
+      expect(getRequestedIds(detailsReq.request.urlWithParams).length).toBe(50);
+      detailsReq.flush({
+        value: Array.from({ length: 50 }, (_, i) => makeWorkItem(i + 1)),
+      });
+    });
+
+    it('should respect a custom auto import limit', () => {
+      service
+        .getNewIssuesToAddToBacklog$({ ...mockCfg, autoImportLimit: 120 })
+        .subscribe((issues) => {
+          expect(issues.length).toBe(120);
+        });
+
+      const req = httpMock.expectOne(
+        `${mockCfg.host}/${mockCfg.project}/_apis/wit/wiql?api-version=6.0`,
+      );
+      req.flush({
+        workItems: Array.from({ length: 150 }, (_, i) => ({ id: i + 1 })),
+      });
+
+      const detailsReq = httpMock.expectOne((r) =>
+        r.url.includes(`${mockCfg.host}/${mockCfg.project}/_apis/wit/workitems`),
+      );
+      expect(getRequestedIds(detailsReq.request.urlWithParams).length).toBe(120);
+      detailsReq.flush({
+        value: Array.from({ length: 120 }, (_, i) => makeWorkItem(i + 1)),
+      });
+    });
+
+    it('should cap the custom auto import limit to the Azure DevOps API maximum', () => {
+      service
+        .getNewIssuesToAddToBacklog$({ ...mockCfg, autoImportLimit: 500 })
+        .subscribe((issues) => {
+          expect(issues.length).toBe(200);
+        });
+
+      const req = httpMock.expectOne(
+        `${mockCfg.host}/${mockCfg.project}/_apis/wit/wiql?api-version=6.0`,
+      );
+      req.flush({
+        workItems: Array.from({ length: 250 }, (_, i) => ({ id: i + 1 })),
+      });
+
+      const detailsReq = httpMock.expectOne((r) =>
+        r.url.includes(`${mockCfg.host}/${mockCfg.project}/_apis/wit/workitems`),
+      );
+      expect(getRequestedIds(detailsReq.request.urlWithParams).length).toBe(200);
+      detailsReq.flush({
+        value: Array.from({ length: 200 }, (_, i) => makeWorkItem(i + 1)),
+      });
+    });
   });
 
   describe('getCurrentUser$', () => {
@@ -143,3 +235,18 @@ describe('AzureDevOpsApiService', () => {
     });
   });
 });
+
+const makeWorkItem = (id: number): unknown => ({
+  id,
+  fields: {
+    /* eslint-disable @typescript-eslint/naming-convention */
+    'System.Title': `Test Issue ${id}`,
+    'System.WorkItemType': 'Bug',
+    'System.State': 'To Do',
+    /* eslint-enable @typescript-eslint/naming-convention */
+  },
+});
+
+const getRequestedIds = (urlWithParams: string): string[] => {
+  return new URL(urlWithParams).searchParams.get('ids')?.split(',') || [];
+};

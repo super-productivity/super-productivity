@@ -14,6 +14,7 @@ import { selectAllProjects } from '../project/store/project.selectors';
 import { AppFeaturesConfig } from '../config/global-config.model';
 import { getStartPageUrlPath } from '../config/default-start-page.util';
 import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
+import { LayoutService } from '../../core-ui/layout/layout.service';
 
 const TODAY_URL = `/tag/${TODAY_TAG.id}/tasks`;
 
@@ -31,6 +32,10 @@ describe('AndroidBackButtonService (#7972)', () => {
   let misc: { defaultStartPage?: number | string } | undefined;
   let appFeatures: Record<string, boolean>;
   let openDialogs: MatDialogRef<unknown>[];
+  let isShowAddTaskBar: jasmine.Spy<() => boolean>;
+  let isShowIssuePanel: jasmine.Spy<() => boolean>;
+  let hideAddTaskBar: jasmine.Spy;
+  let hideAddTaskPanel: jasmine.Spy;
 
   const setProjects = (projects: Project[]): void => {
     store.overrideSelector(selectAllProjects, projects);
@@ -56,6 +61,10 @@ describe('AndroidBackButtonService (#7972)', () => {
       isSchedulerEnabled: true,
       isBoardsEnabled: true,
     };
+    isShowAddTaskBar = jasmine.createSpy('isShowAddTaskBar').and.returnValue(false);
+    isShowIssuePanel = jasmine.createSpy('isShowIssuePanel').and.returnValue(false);
+    hideAddTaskBar = jasmine.createSpy('hideAddTaskBar');
+    hideAddTaskPanel = jasmine.createSpy('hideAddTaskPanel');
 
     TestBed.configureTestingModule({
       providers: [
@@ -83,6 +92,15 @@ describe('AndroidBackButtonService (#7972)', () => {
             get openDialogs(): MatDialogRef<unknown>[] {
               return openDialogs;
             },
+          },
+        },
+        {
+          provide: LayoutService,
+          useValue: {
+            isShowAddTaskBar,
+            isShowIssuePanel,
+            hideAddTaskBar,
+            hideAddTaskPanel,
           },
         },
       ],
@@ -198,6 +216,55 @@ describe('AndroidBackButtonService (#7972)', () => {
 
       expect(historyBack).toHaveBeenCalled();
       expect(dialog.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('store-backed layout popups', () => {
+    it('hides the add-task bar before exiting from the start page', () => {
+      isShowAddTaskBar.and.returnValue(true);
+
+      service.handleBackButton();
+
+      expect(hideAddTaskBar).toHaveBeenCalled();
+      expect(hideAddTaskPanel).not.toHaveBeenCalled();
+      expect(minimizeApp).not.toHaveBeenCalled();
+      expect(navigateByUrl).not.toHaveBeenCalled();
+      expect(historyBack).not.toHaveBeenCalled();
+    });
+
+    it('hides the issue panel before exiting from the start page', () => {
+      isShowIssuePanel.and.returnValue(true);
+
+      service.handleBackButton();
+
+      expect(hideAddTaskPanel).toHaveBeenCalled();
+      expect(hideAddTaskBar).not.toHaveBeenCalled();
+      expect(minimizeApp).not.toHaveBeenCalled();
+      expect(navigateByUrl).not.toHaveBeenCalled();
+      expect(historyBack).not.toHaveBeenCalled();
+    });
+
+    it('lets history-backed overlays take precedence over store-backed popups', () => {
+      (
+        service as unknown as { _isHistoryOverlayOpen: jasmine.Spy }
+      )._isHistoryOverlayOpen.and.returnValue(true);
+      isShowAddTaskBar.and.returnValue(true);
+
+      service.handleBackButton();
+
+      expect(historyBack).toHaveBeenCalled();
+      expect(hideAddTaskBar).not.toHaveBeenCalled();
+    });
+
+    it('closes a modal dialog before store-backed popups', () => {
+      const dialog = fakeDialog();
+      openDialogs = [dialog];
+      isShowAddTaskBar.and.returnValue(true);
+
+      service.handleBackButton();
+
+      expect(dialog.close).toHaveBeenCalled();
+      expect(hideAddTaskBar).not.toHaveBeenCalled();
     });
   });
 

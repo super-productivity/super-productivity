@@ -1,4 +1,8 @@
-import { ConfigFormSection, LocalBackupConfig } from '../global-config.model';
+import {
+  ConfigFormSection,
+  ConfigSectionAction,
+  LocalBackupConfig,
+} from '../global-config.model';
 import { T } from '../../../t.const';
 import {
   DEFAULT_MAX_BACKUP_FILES,
@@ -7,10 +11,12 @@ import {
 
 export const getAutomaticBackUpFormCfg = (
   backupPath?: string,
+  actions?: ConfigSectionAction[],
 ): ConfigFormSection<LocalBackupConfig> => ({
   title: T.GCF.AUTO_BACKUPS.TITLE,
   key: 'localBackup',
   help: T.GCF.AUTO_BACKUPS.HELP,
+  actions,
   items: [
     ...(backupPath
       ? [

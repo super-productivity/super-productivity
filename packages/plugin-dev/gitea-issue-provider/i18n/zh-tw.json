@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "主機（例如：https://try.gitea.io）",
+    "TOKEN": "存取權杖",
+    "REPO_FULL_NAME": "使用者名稱或組織名稱/專案",
+    "SCOPE": "範圍",
+    "SCOPE_ALL": "全部",
+    "SCOPE_CREATED": "由我建立",
+    "SCOPE_ASSIGNED": "指派給我",
+    "FILTER_LABELS": "依標籤篩選（選填）",
+    "EXCLUDE_LABELS": "排除標籤（選填）",
+    "HOW_TO_GET_TOKEN": "如何取得權杖？"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "STATE": "狀態",
+    "ASSIGNEE": "指派人",
+    "LABELS": "標籤",
+    "DESCRIPTION": "描述"
+  },
+  "FORM_HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 Gitea 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動新增和匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。"
+}

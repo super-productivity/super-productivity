@@ -465,7 +465,6 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     Log.log('[DailySummary] Moving done tasks to archive:', {
       count: doneTasks.length,
       taskIds: doneTasks.map((t) => t.id),
-      tasks: doneTasks,
     });
 
     if (doneTasks.length === 0) {

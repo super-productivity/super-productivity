@@ -14,6 +14,7 @@ describe('PluginRunner', () => {
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockCleanupService: jasmine.SpyObj<PluginCleanupService>;
   let mockI18nService: jasmine.SpyObj<PluginI18nService>;
+  let registerSidePanelButtonSpy: jasmine.Spy;
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -39,7 +40,10 @@ describe('PluginRunner', () => {
       'pingNodeBridge',
     ]);
     // createBoundMethods should return an empty object (no additional bound methods)
-    mockPluginBridge.createBoundMethods.and.returnValue({} as any);
+    registerSidePanelButtonSpy = jasmine.createSpy('registerSidePanelButton');
+    mockPluginBridge.createBoundMethods.and.returnValue({
+      registerSidePanelButton: registerSidePanelButtonSpy,
+    } as any);
     mockPluginBridge.pingNodeBridge.and.resolveTo(false);
 
     mockSecurityService = jasmine.createSpyObj('PluginSecurityService', [
@@ -57,6 +61,7 @@ describe('PluginRunner', () => {
       'unloadPluginTranslations',
     ]);
     mockI18nService.getCurrentLanguage.and.returnValue('en');
+    mockI18nService.translate.and.callFake((_pluginId, key) => key);
 
     TestBed.configureTestingModule({
       providers: [
@@ -153,6 +158,42 @@ describe('PluginRunner', () => {
       expect(mockSecurityService.analyzePluginCode).toHaveBeenCalledWith(
         pluginCode,
         mockManifest,
+      );
+    });
+
+    it('uses plugin i18n for auto-registered side panel labels', async () => {
+      mockI18nService.translate
+        .withArgs('test-plugin', 'PLUGIN.NAME')
+        .and.returnValue('Aufgaben von gestern');
+
+      await service.loadPlugin(
+        {
+          ...mockManifest,
+          sidePanel: true,
+          i18n: { languages: ['en', 'de'] },
+        },
+        `/* no-op */`,
+        mockBaseCfg,
+      );
+
+      expect(registerSidePanelButtonSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ label: 'Aufgaben von gestern' }),
+      );
+    });
+
+    it('falls back to manifest name when plugin name i18n is missing', async () => {
+      await service.loadPlugin(
+        {
+          ...mockManifest,
+          sidePanel: true,
+          i18n: { languages: ['en', 'de'] },
+        },
+        `/* no-op */`,
+        mockBaseCfg,
+      );
+
+      expect(registerSidePanelButtonSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ label: 'Test Plugin' }),
       );
     });
   });

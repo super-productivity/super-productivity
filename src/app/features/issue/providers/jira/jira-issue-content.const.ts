@@ -21,6 +21,12 @@ export const JIRA_ISSUE_CONTENT_CONFIG: IssueContentConfig<JiraIssue> = {
       value: (issue: JiraIssue) => issue.status?.name,
     },
     {
+      label: T.F.ISSUE.ISSUE_CONTENT.PRIORITY,
+      type: IssueFieldType.TEXT,
+      value: (issue: JiraIssue) => issue.priority?.name,
+      isVisible: (issue: JiraIssue) => !!issue.priority?.name,
+    },
+    {
       label: T.F.ISSUE.ISSUE_CONTENT.STORY_POINTS,
       value: 'storyPoints',
       type: IssueFieldType.TEXT,

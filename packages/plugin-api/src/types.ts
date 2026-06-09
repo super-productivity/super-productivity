@@ -168,6 +168,7 @@ export interface FinishDayPayload {
 
 export interface LanguageChangePayload {
   code: string;
+  newLanguage: string;
 
   [key: string]: unknown;
 }
@@ -472,6 +473,7 @@ export interface PluginAppState {
 
 export interface PluginAPI {
   cfg: PluginBaseCfg;
+  readonly Hooks: typeof PluginHooks;
 
   registerHook<T extends Hooks>(hook: T, fn: PluginHookHandler<T>): void;
 
@@ -629,6 +631,16 @@ export interface PluginAPI {
   loadSyncedData(key?: string): Promise<string | null>;
 
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
+
+  // i18n
+  translate(key: string, params?: Record<string, string | number>): string;
+
+  formatDate(
+    date: Date | string | number,
+    format: 'short' | 'medium' | 'long' | 'time' | 'datetime',
+  ): string;
+
+  getCurrentLanguage(): string;
 
   // oauth
   startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;

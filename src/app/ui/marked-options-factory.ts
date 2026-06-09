@@ -81,7 +81,9 @@ export const markedOptionsFactory = (): MarkedOptions => {
 
       const isChecked = checked === true;
       const checkboxHtml = `<span class="checkbox material-icons">${isChecked ? 'check_box' : 'check_box_outline_blank'}</span>`;
-      return `<li class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml} ${renderedText}</li>`;
+      // Wrap the text in its own element so only the checkbox and the label —
+      // not the empty rest of the row — are clickable (see clickPreview).
+      return `<li class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml} <span class="checkbox-label">${renderedText}</span></li>`;
     }
     return `<li>${renderedText}</li>`;
   };

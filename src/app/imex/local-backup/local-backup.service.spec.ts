@@ -30,6 +30,10 @@ type LocalBackupServiceWithBackupElectron = {
   _backupElectron: (data: AppDataComplete) => Promise<void>;
 };
 
+type LocalBackupServiceWithPlatformFlags = {
+  _isAndroidWebView: boolean;
+};
+
 describe('LocalBackupService', () => {
   let service: LocalBackupService;
   let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
@@ -643,6 +647,126 @@ describe('LocalBackupService', () => {
         true,
         true,
       );
+    });
+  });
+
+  describe('restoreLatestMobileBackupFromSettings()', () => {
+    const setAndroidMode = (): void => {
+      (service as unknown as LocalBackupServiceWithPlatformFlags)._isAndroidWebView =
+        true;
+    };
+
+    beforeEach(() => {
+      backupServiceSpy.importCompleteBackup.and.resolveTo();
+      (window.confirm as jasmine.Spy).calls.reset();
+      snackServiceSpy.open.calls.reset();
+      translateServiceSpy.instant.and.callFake((key: string) => key);
+    });
+
+    it('should restore the latest Android backup after confirmation', async () => {
+      setAndroidMode();
+      const backupData = JSON.stringify({
+        task: { ids: ['task1'], entities: {} },
+        project: { ids: ['project1'], entities: {} },
+      });
+      spyOn(service, 'loadBackupAndroid').and.resolveTo(backupData);
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+
+      await service.restoreLatestMobileBackupFromSettings();
+
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS,
+        { tasks: 1, projects: 1 },
+      );
+      expect(window.confirm).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS,
+      );
+      expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          task: jasmine.objectContaining({ ids: ['task1'] }),
+          project: jasmine.objectContaining({ ids: ['project1'] }),
+        }),
+        false,
+        true,
+        true,
+      );
+      expect(snackServiceSpy.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.GCF.AUTO_BACKUPS.S_RESTORE_SUCCESS,
+      });
+    });
+
+    it('should not show a success snackbar when the import fails', async () => {
+      setAndroidMode();
+      spyOn(service, 'loadBackupAndroid').and.resolveTo(
+        JSON.stringify({ task: { ids: ['task1'], entities: {} } }),
+      );
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+      backupServiceSpy.importCompleteBackup.and.rejectWith(new Error('boom'));
+
+      await service.restoreLatestMobileBackupFromSettings();
+
+      expect(snackServiceSpy.open).not.toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.GCF.AUTO_BACKUPS.S_RESTORE_SUCCESS,
+      });
+    });
+
+    it('should show a snackbar when no Android backup exists', async () => {
+      setAndroidMode();
+      spyOn(service, 'loadBackupAndroid').and.resolveTo('');
+
+      await service.restoreLatestMobileBackupFromSettings();
+
+      expect(snackServiceSpy.open).toHaveBeenCalledWith({
+        type: 'WARNING',
+        msg: T.GCF.AUTO_BACKUPS.S_NO_BACKUP_AVAILABLE,
+      });
+      expect(window.confirm).not.toHaveBeenCalled();
+      expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+    });
+
+    [
+      {
+        label: 'corrupt',
+        backupData: '{broken',
+      },
+      {
+        label: 'data-less',
+        backupData: JSON.stringify({
+          task: { ids: [], entities: {} },
+          project: { ids: [], entities: {} },
+          tag: { ids: [], entities: {} },
+          note: { ids: [], entities: {} },
+        }),
+      },
+    ].forEach(({ label, backupData }) => {
+      it(`should not restore a ${label} Android backup`, async () => {
+        setAndroidMode();
+        spyOn(service, 'loadBackupAndroid').and.resolveTo(backupData);
+
+        await service.restoreLatestMobileBackupFromSettings();
+
+        expect(snackServiceSpy.open).toHaveBeenCalledWith({
+          type: 'WARNING',
+          msg: T.GCF.AUTO_BACKUPS.S_NO_BACKUP_AVAILABLE,
+        });
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+      });
+    });
+
+    it('should not import when the restore confirmation is cancelled', async () => {
+      setAndroidMode();
+      spyOn(service, 'loadBackupAndroid').and.resolveTo(
+        JSON.stringify({ task: { ids: ['task1'], entities: {} } }),
+      );
+      (window.confirm as jasmine.Spy).and.returnValue(false);
+
+      await service.restoreLatestMobileBackupFromSettings();
+
+      expect(window.confirm).toHaveBeenCalled();
+      expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
     });
   });
 });

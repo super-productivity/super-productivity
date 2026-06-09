@@ -9,6 +9,7 @@ import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../features/planner/store/planner.actions';
 import { TaskWithSubTasks } from '../features/tasks/task.model';
 import { PluginHooks } from './plugin-api.model';
+import { PluginI18nService } from './plugin-i18n.service';
 import {
   selectCurrentTask,
   selectTaskById,
@@ -17,11 +18,15 @@ import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reduc
 import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
 import { HydrationStateService } from '../op-log/apply/hydration-state.service';
 import { PluginUserData } from './plugin-persistence.model';
+import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
+import { LanguageCode } from '../core/locale.constants';
 
 describe('PluginHooksEffects', () => {
   let effects: PluginHooksEffects;
   let actions$: Observable<any>;
   let pluginServiceMock: jasmine.SpyObj<PluginService>;
+  let pluginI18nServiceMock: jasmine.SpyObj<PluginI18nService>;
   let store: MockStore;
   let gateSubject: ReplaySubject<boolean>;
 
@@ -64,6 +69,9 @@ describe('PluginHooksEffects', () => {
       'dispatchHook',
       'dispatchHookToPlugin',
     ]);
+    pluginI18nServiceMock = jasmine.createSpyObj('PluginI18nService', [
+      'setCurrentLanguage',
+    ]);
 
     // MUST be a ReplaySubject(1) / Subject — NOT BehaviorSubject(true) or
     // of(true). The boot-suppression spec depends on the gate being un-emitted
@@ -87,6 +95,7 @@ describe('PluginHooksEffects', () => {
           },
         }),
         { provide: PluginService, useValue: pluginServiceMock },
+        { provide: PluginI18nService, useValue: pluginI18nServiceMock },
         // workContextChange$ reads activeWorkContext$ at construction; an
         // empty stream keeps that effect inert for the other effects' tests.
         { provide: WorkContextService, useValue: { activeWorkContext$: EMPTY } },
@@ -377,6 +386,36 @@ describe('PluginHooksEffects', () => {
         sub.unsubscribe();
         done();
       }, 0);
+    });
+  });
+
+  describe('languageChange$', () => {
+    it('updates plugin i18n and dispatches a language hook payload compatible with documented and typed plugins', (done) => {
+      store.overrideSelector(selectLocalizationConfig, {
+        lng: LanguageCode.de,
+        dateTimeLocale: undefined,
+        firstDayOfWeek: undefined,
+      });
+      actions$ = of(
+        updateGlobalConfigSection({
+          sectionKey: 'localization',
+          sectionCfg: {},
+        }),
+      );
+
+      effects.languageChange$.subscribe(() => {
+        expect(pluginI18nServiceMock.setCurrentLanguage).toHaveBeenCalledOnceWith(
+          LanguageCode.de,
+        );
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.LANGUAGE_CHANGE,
+          {
+            code: LanguageCode.de,
+            newLanguage: LanguageCode.de,
+          },
+        );
+        done();
+      });
     });
   });
 
