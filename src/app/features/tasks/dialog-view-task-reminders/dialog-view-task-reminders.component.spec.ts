@@ -600,7 +600,7 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: ReminderService, useValue: reminderServiceStub },
         {
-          provide: 'DateService',
+          provide: DateService,
           useValue: { todayStr: () => '2026-06-06', getStartOfNextDayDiffMs: () => 0 },
         },
         TranslateService,
@@ -929,7 +929,10 @@ describe('DialogViewTaskRemindersComponent navigation and focus', () => {
               <div class="actions">
                 <button [id]="task.id + '-b0'">{{task.id}} B0</button>
                 <button [id]="task.id + '-b1'">{{task.id}} B1</button>
-                <button [id]="task.id + '-b2'">{{task.id}} B2</button>
+                <button
+                  [id]="task.id + '-b2'"
+                  aria-haspopup="menu"
+                >{{task.id}} B2 (snooze)</button>
                 <button [id]="task.id + '-b3'">{{task.id}} B3</button>
                 <button [id]="task.id + '-disabled'" disabled>Disabled</button>
                 <button [id]="task.id + '-hidden'" style="display: none">Hidden</button>

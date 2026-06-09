@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   HostListener,
   inject,
   OnDestroy,
@@ -78,6 +79,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _store = inject(Store);
   private _reminderService = inject(ReminderService);
   private _dateService = inject(DateService);
+  private _elementRef = inject(ElementRef);
   data = inject<{
     reminders: TaskWithReminderData[];
   }>(MAT_DIALOG_DATA);
@@ -558,10 +560,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
 
       if (!taskRow && !wrapButtons) return;
 
-      const allRows = Array.from(document.querySelectorAll('.task')) as HTMLElement[];
-      const footerButtons = this._getFocusableButtons(
-        document.querySelector('.wrap-buttons') as HTMLElement,
-      );
+      const allRows = this._getTaskRows();
+      const footerButtons = this._getFooterButtons();
 
       if (taskRow) {
         const rowIndex = allRows.indexOf(taskRow);
@@ -631,6 +631,23 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     ).filter((btn) => !btn.disabled && btn.offsetWidth > 0);
   }
 
+  // Scope DOM lookups to this dialog's host. `.task` / `.wrap-buttons` are not
+  // unique across the app (many dialogs use `.wrap-buttons`) and a reminder can
+  // open on top of another dialog, so a global query could target the wrong one.
+  private _getTaskRows(): HTMLElement[] {
+    return Array.from(
+      (this._elementRef.nativeElement as HTMLElement).querySelectorAll('.task'),
+    );
+  }
+
+  private _getFooterButtons(): HTMLButtonElement[] {
+    return this._getFocusableButtons(
+      (this._elementRef.nativeElement as HTMLElement).querySelector(
+        '.wrap-buttons',
+      ) as HTMLElement,
+    );
+  }
+
   private _removeTaskFromList(taskId: string): void {
     const activeEl = document.activeElement as HTMLElement;
     let rowIndex = -1;
@@ -638,18 +655,24 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
 
     if (activeEl?.closest('.task')) {
       const taskRow = activeEl.closest('.task') as HTMLElement;
-      const allRows = Array.from(document.querySelectorAll('.task')) as HTMLElement[];
-      rowIndex = allRows.indexOf(taskRow);
+      rowIndex = this._getTaskRows().indexOf(taskRow);
       btnIndex = this._getFocusableButtons(taskRow).indexOf(
         activeEl as HTMLButtonElement,
       );
     } else {
-      const taskRow = document.querySelector(`.task[data-id="${taskId}"]`) as HTMLElement;
+      // Menu action: focus is in the menu overlay, not the row. Fall back to the
+      // row's snooze button (the menu trigger) so the next-row focus lands on the
+      // equivalent control, regardless of which actions are hidden/disabled.
+      const taskRow = (this._elementRef.nativeElement as HTMLElement).querySelector(
+        `.task[data-id="${taskId}"]`,
+      ) as HTMLElement | null;
       if (taskRow) {
-        const allRows = Array.from(document.querySelectorAll('.task')) as HTMLElement[];
-        rowIndex = allRows.indexOf(taskRow);
-        // Default to snooze button index (2) if it was likely a menu action
-        btnIndex = 2;
+        rowIndex = this._getTaskRows().indexOf(taskRow);
+        const rowButtons = this._getFocusableButtons(taskRow);
+        const snoozeBtn = taskRow.querySelector(
+          'button[aria-haspopup="menu"]',
+        ) as HTMLButtonElement | null;
+        btnIndex = snoozeBtn ? rowButtons.indexOf(snoozeBtn) : 0;
       }
     }
 
@@ -664,19 +687,14 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       if (rowIndex !== -1) {
         // Wait for DOM update
         setTimeout(() => {
-          const remainingRows = Array.from(
-            document.querySelectorAll('.task'),
-          ) as HTMLElement[];
+          const remainingRows = this._getTaskRows();
           const nextRow = remainingRows[rowIndex] || remainingRows[rowIndex - 1];
           if (nextRow) {
             const buttons = this._getFocusableButtons(nextRow);
             (buttons[btnIndex] || buttons[0])?.focus();
           } else {
             // Focus first footer button if no rows left
-            const footerButtons = this._getFocusableButtons(
-              document.querySelector('.wrap-buttons') as HTMLElement,
-            );
-            footerButtons[0]?.focus();
+            this._getFooterButtons()[0]?.focus();
           }
         });
       }
