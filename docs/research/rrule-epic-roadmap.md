@@ -61,16 +61,19 @@ Work happens on the fork (`omega-tree/super-productivity`) and lands via PRs:
 
 ## Phases
 
-Each phase = a PR `feat/rrule-epic-pN-<slug> → feat/rrule-epic`, body `Part of` the epic
-PR (never `Closes`).
+Phase 1 is the **base** of `feat/rrule-epic`: Core was built on its own branch, merged to
+master then reverted, and the integration branch was created from that state — so it is
+not a merge into `feat/rrule-epic`, it is its starting content. Phases 2+ each = a PR
+`feat/rrule-epic-pN-<slug> → feat/rrule-epic`, body `Part of` the epic PR (never `Closes`).
 
-- [x] **1 — Core** · `feat/rrule-epic` — RFC 5545 occurrence engine (UTC/local-noon,
-      DST-safe, fail-soft), structured RRULE builder, legacy⇄RRULE migration (both
-      directions), live text preview, quick-setting presets, forward-compat clamp,
-      property/invariant/fuzz tests, off-by-default per-device flag, follow-ups
-      (from-completion flip, `isRRuleValid` never-fire/freeze, deterministic
-      `_parseStart`, rrule re-anchor test). _✅ on branch — follow-ups: fork→origin
-      PR pending._
+- [x] **1 — Core** · built on `feat/cron-recurring-schedules` (PR #7948, merged
+      `1718b0a8b`, reverted `3d2c811e7`) → **base of `feat/rrule-epic`** — RFC 5545
+      occurrence engine (UTC/local-noon, DST-safe, fail-soft), structured RRULE builder,
+      legacy⇄RRULE migration (both directions), live text preview, quick-setting presets,
+      forward-compat clamp, property/invariant/fuzz tests. Follow-ups committed directly
+      on `feat/rrule-epic` (off-by-default per-device flag, from-completion flip,
+      `isRRuleValid` never-fire/freeze, deterministic `_parseStart`, rrule re-anchor test)
+      — fork→origin PR pending. _✅_
 - [ ] **2 — Heatmap + simulation** · `feat/rrule-epic-p2-heatmap` — 365-day occurrence
       heatmap; click a day to simulate completing it and re-anchor. _⏸ on waypoint._
 - [ ] **3 — Natural language `@+`** · `feat/rrule-epic-p3-nl` — `@+<phrase>` → RRULE +
