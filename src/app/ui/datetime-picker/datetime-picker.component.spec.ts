@@ -151,6 +151,27 @@ describe('DateTimePickerComponent', () => {
     expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeFalse();
   });
 
+  it('should reset isInitialFocus to true when calendar view changes', () => {
+    fixture.detectChanges();
+    const calendar = component.calendar()!;
+
+    // Initial state
+    expect(component.isInitialFocus).toBeTrue();
+
+    // Reset it to false first
+    component.isInitialFocus = false;
+    fixture.detectChanges();
+    expect(component.isInitialFocus).toBeFalse();
+
+    // Change view
+    calendar.currentView = 'year';
+    calendar.stateChanges.next();
+    fixture.detectChanges();
+
+    expect(component.isInitialFocus).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeTrue();
+  });
+
   it('should only update calendar activeDate when selectedDate changes', () => {
     const calendar = component.calendar()!;
     const initialDate = new Date(2026, 4, 6);
