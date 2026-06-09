@@ -40,6 +40,38 @@ describe('TaskAttachmentListComponent', () => {
     snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
   });
 
+  describe('resolvedAttachments img src safety (GHSA-hr87-735w-hfq3)', () => {
+    const imgAttachment = (path: string): TaskAttachment => ({
+      id: 'a',
+      type: 'IMG',
+      title: 'x',
+      path,
+    });
+
+    it('drops remote file:// / UNC src so the <img> cannot auto-load and leak NTLM', () => {
+      [
+        'file://192.168.1.100/share/pixel.png',
+        'file:////host/share/pixel.png',
+        '\\\\host\\share\\pixel.png',
+        '//host/share/pixel.png',
+      ].forEach((path) => {
+        fixture.componentRef.setInput('attachments', [imgAttachment(path)]);
+        expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBeUndefined();
+      });
+    });
+
+    it('keeps safe srcs (local file://, http(s), data:)', () => {
+      [
+        'file:///home/user/img.png',
+        'https://example.com/img.png',
+        'data:image/png;base64,iVBORw0KGgo=',
+      ].forEach((path) => {
+        fixture.componentRef.setInput('attachments', [imgAttachment(path)]);
+        expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBe(path);
+      });
+    });
+  });
+
   describe('copy', () => {
     let attachment: TaskAttachment;
     let originalClipboardDescriptor: PropertyDescriptor | undefined;

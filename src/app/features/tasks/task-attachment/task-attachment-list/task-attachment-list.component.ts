@@ -19,6 +19,7 @@ import { MatIcon } from '@angular/material/icon';
 import { EnlargeImgDirective } from '../../../../ui/enlarge-img/enlarge-img.directive';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { ClipboardImageService } from '../../../../core/clipboard-image/clipboard-image.service';
+import { isPathSafeToOpen } from '../../../../../../electron/shared-with-frontend/is-external-url-allowed';
 
 interface ResolvedAttachment extends TaskAttachment {
   resolvedPath?: string;
@@ -66,9 +67,15 @@ export class TaskAttachmentListComponent {
         : att.path;
 
       const imgPath = att.originalImgPath || att.path;
-      const resolvedOriginalPath = imgPath?.startsWith('indexeddb://clipboard-images/')
+      const rawOriginalPath = imgPath?.startsWith('indexeddb://clipboard-images/')
         ? urlMap.get(imgPath) || imgPath
         : imgPath;
+      // The <img> src auto-loads on render (no click), so a synced remote
+      // file://host / UNC path would silently leak the user's NTLM hash. Drop
+      // such srcs so they never reach the binding. See GHSA-hr87-735w-hfq3.
+      const resolvedOriginalPath = isPathSafeToOpen(rawOriginalPath)
+        ? rawOriginalPath
+        : undefined;
 
       const isLoading =
         att.path?.startsWith('indexeddb://clipboard-images/') &&
