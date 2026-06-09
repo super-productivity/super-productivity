@@ -23,6 +23,7 @@ import { GlobalConfigState } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { AppDataComplete } from '../../../op-log/model/model-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
+import { LOCAL_ONLY_SYNC_KEYS } from '../local-only-sync-settings.util';
 import { INBOX_PROJECT } from '../../project/project.const';
 
 describe('GlobalConfigReducer', () => {
@@ -919,6 +920,46 @@ describe('GlobalConfigReducer', () => {
       expect(result.sync.syncInterval).toBe(300000);
       expect(result.sync.isManualSyncOnly).toBe(true);
       expect(result.sync.isCompressionEnabled).toBe(true);
+    });
+
+    // Round-trip pin (issue #8233): iterates LOCAL_ONLY_SYNC_KEYS so adding a
+    // new local-only key grows coverage here automatically.
+    it('preserves every LOCAL_ONLY_SYNC_KEYS value on remote section updates (round-trip)', () => {
+      const localSync = {
+        ...initialGlobalConfigState.sync,
+        isEnabled: true,
+        isEncryptionEnabled: true,
+        syncProvider: SyncProviderId.WebDAV,
+        syncInterval: 300000,
+        isManualSyncOnly: true,
+      };
+      const remoteSync = {
+        isEnabled: false,
+        isEncryptionEnabled: false,
+        syncProvider: SyncProviderId.Dropbox,
+        syncInterval: 60000,
+        isManualSyncOnly: false,
+      };
+      const oldState: GlobalConfigState = {
+        ...initialGlobalConfigState,
+        sync: localSync,
+      };
+      const remoteAction = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: remoteSync,
+      });
+      const remoteReplayAction = {
+        ...remoteAction,
+        meta: { ...remoteAction.meta, isRemote: true },
+      };
+
+      const result = globalConfigReducer(oldState, remoteReplayAction);
+
+      for (const key of LOCAL_ONLY_SYNC_KEYS) {
+        expect(result.sync[key])
+          .withContext(`sync.${key} must survive remote section update`)
+          .toBe(localSync[key]);
+      }
     });
 
     it('should update shared sync settings for remote sync section updates', () => {

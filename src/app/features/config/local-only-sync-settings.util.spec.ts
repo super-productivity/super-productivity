@@ -1,11 +1,25 @@
 import {
   applyLocalOnlySyncSettingsToAppData,
+  LOCAL_ONLY_SYNC_DEVICE_KEYS,
+  LOCAL_ONLY_SYNC_KEYS,
+  LOCAL_ONLY_SYNC_SCHEDULE_KEYS,
   stripLocalOnlySyncScheduleSettings,
   stripLocalOnlySyncSettingsFromAppData,
 } from './local-only-sync-settings.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 
 describe('local-only sync settings utils', () => {
+  it('schedule and device key sets are disjoint and exhaust LOCAL_ONLY_SYNC_KEYS', () => {
+    const union = new Set<string>([
+      ...LOCAL_ONLY_SYNC_SCHEDULE_KEYS,
+      ...LOCAL_ONLY_SYNC_DEVICE_KEYS,
+    ]);
+    expect(union.size).toBe(
+      LOCAL_ONLY_SYNC_SCHEDULE_KEYS.length + LOCAL_ONLY_SYNC_DEVICE_KEYS.length,
+    );
+    expect(union.size).toBe(LOCAL_ONLY_SYNC_KEYS.length);
+  });
+
   it('should strip sync schedule settings from a sync config object', () => {
     const result = stripLocalOnlySyncScheduleSettings({
       syncInterval: 300000,
