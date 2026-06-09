@@ -81,11 +81,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   private _lastView: 'month' | 'year' | 'multi-year' | null = null;
 
   constructor() {
-    effect(() => {
-      const locale = this._dateTimeFormatService.currentLocale();
-      this._dateAdapter.setLocale(locale);
-    });
-
     effect((onCleanup) => {
       const cal = this.calendar();
       if (cal) {
