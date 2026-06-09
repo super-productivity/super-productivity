@@ -131,10 +131,9 @@ export class BoardPanelComponent {
   additionalTaskFields = computed(() => {
     const panelCfg = this.panelCfg();
     const tagsToAdd = this.tagsToAddForInlineCreate();
-    const isAllProjects = panelCfg.projectIds?.includes('');
-    const firstProjectId = isAllProjects
+    const firstProjectId = panelCfg.projectIds?.includes('')
       ? undefined
-      : panelCfg.projectIds?.find((id) => id !== '');
+      : panelCfg.projectIds?.[0];
 
     return {
       ...(tagsToAdd.length ? { tagIds: tagsToAdd } : {}),

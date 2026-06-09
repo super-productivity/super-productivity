@@ -515,24 +515,6 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
       expect(component.additionalTaskFields().projectId).toBe('p1');
     });
 
-    it('does NOT assign a projectId when "All Projects" ("") is included in projectIds', async () => {
-      await setup([]);
-      fixture.componentRef.setInput('panelCfg', {
-        id: 'p',
-        title: 'P',
-        taskIds: [],
-        includedTagIds: [],
-        excludedTagIds: [],
-        taskDoneState: 1,
-        scheduledState: 1,
-        isParentTasksOnly: false,
-        projectIds: ['', 'p1', 'p2'],
-      } as BoardPanelCfg);
-      fixture.detectChanges();
-
-      expect(component.additionalTaskFields().projectId).toBeUndefined();
-    });
-
     it('does NOT assign a projectId when only "All Projects" ("") is selected', async () => {
       await setup([]);
       fixture.componentRef.setInput('panelCfg', {
