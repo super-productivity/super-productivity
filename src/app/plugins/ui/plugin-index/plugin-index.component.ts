@@ -21,7 +21,6 @@ import {
   createPluginIframeUrl,
   handlePluginMessage,
   cleanupPluginIframeUrl,
-  PLUGIN_IFRAME_SANDBOX,
 } from '../../util/plugin-iframe.util';
 import {
   MatCard,
@@ -90,7 +89,6 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   private readonly _layoutService = inject(LayoutService);
 
   T = T;
-  readonly iframeSandbox = PLUGIN_IFRAME_SANDBOX;
 
   readonly pluginId = signal<string>('');
   readonly isLoading = signal<boolean>(true);
