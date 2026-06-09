@@ -16,7 +16,7 @@ import {
 import { EMPTY_SIMPLE_COUNTER } from '../features/simple-counter/simple-counter.const';
 import { SnackService } from '../core/snack/snack.service';
 import { NotifyService } from '../core/notify/notify.service';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
 import { WorkContextService } from '../features/work-context/work-context.service';
@@ -36,6 +36,7 @@ import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -345,6 +346,80 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
     });
 
     expect(Log.exportLogHistory()).toContain(updateGlobalConfigSection.type);
+  });
+});
+
+describe('PluginBridgeService - openDialog', () => {
+  let service: PluginBridgeService;
+  let matDialog: jasmine.SpyObj<MatDialog>;
+
+  beforeEach(() => {
+    matDialog = jasmine.createSpyObj('MatDialog', ['open']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: matDialog },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  it('resolves with the dialog close result', async () => {
+    matDialog.open.and.returnValue({
+      afterClosed: () => of('Confirm'),
+    } as unknown as MatDialogRef<PluginDialogComponent>);
+
+    const dialogCfg = {
+      htmlContent: '<p>Continue?</p>',
+      buttons: [{ label: 'Confirm' }],
+    };
+
+    const result = await service.openDialog(dialogCfg);
+
+    expect(result).toBe('Confirm');
+    expect(matDialog.open).toHaveBeenCalledOnceWith(
+      PluginDialogComponent,
+      jasmine.objectContaining({
+        data: dialogCfg,
+        autoFocus: true,
+        restoreFocus: true,
+        disableClose: false,
+        closeOnNavigation: false,
+      }),
+    );
+  });
+
+  it('resolves with undefined when the dialog is dismissed', async () => {
+    matDialog.open.and.returnValue({
+      afterClosed: () => of(undefined),
+    } as unknown as MatDialogRef<PluginDialogComponent>);
+
+    const result = await service.openDialog({
+      htmlContent: '<p>Continue?</p>',
+    });
+
+    expect(result).toBeUndefined();
   });
 });
 

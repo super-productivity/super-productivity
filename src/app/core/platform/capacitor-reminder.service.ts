@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, PermissionState } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Log } from '../log';
 import { CapacitorPlatformService } from './capacitor-platform.service';
@@ -287,8 +287,34 @@ export class CapacitorReminderService {
   }
 
   /**
+   * Read notification permission state WITHOUT prompting the user.
+   *
+   * Used at startup to decide whether to warn (explicit 'denied') while
+   * deferring the actual OS prompt to the first real schedule (see
+   * `initialize()` — contextual prompts have better grant rates than an
+   * unprompted launch-time dialog).
+   *
+   * Legacy Android WebView: the upfront Capacitor check is unreliable there
+   * (no Capacitor bridge → stale `Notification.permission`, issue #7408), so
+   * report 'granted' and let the OS gate POST_NOTIFICATIONS at fire time —
+   * matching `ensurePermissions()`.
+   */
+  async getPermissionState(): Promise<PermissionState> {
+    if (!this.isAvailable) {
+      return 'denied';
+    }
+
+    if (this._isLegacyAndroidWebView()) {
+      return 'granted';
+    }
+
+    return this._notificationService.getPermissionState();
+  }
+
+  /**
    * Ensure notification permissions are granted.
-   * Also handles Android 12+ exact alarm permissions.
+   * Android exact-alarm permission is checked separately once notification
+   * permission is available.
    */
   async ensurePermissions(): Promise<boolean> {
     if (!this.isAvailable) {
@@ -310,10 +336,10 @@ export class CapacitorReminderService {
       return false;
     }
 
-    // Note: exact alarm permission is checked once at startup via
-    // askPermissionsIfNotGiven$ in mobile-notification.effects.ts.
-    // We intentionally do NOT check it here to avoid repeatedly
-    // opening the Android settings page on every scheduling cycle.
+    // Note: exact alarm permission is checked once by MobileNotificationEffects
+    // after notification permission is actually available. We intentionally do
+    // NOT check it here to avoid repeatedly opening the Android settings page
+    // on every scheduling cycle.
 
     return true;
   }

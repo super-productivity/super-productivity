@@ -827,26 +827,6 @@ export class SyncWrapperService {
           config: { duration: 15000 },
         });
         return 'HANDLED_ERROR';
-      } else if (this._isTimeoutError(error)) {
-        // Like the transient-network branch below, a sync timeout is
-        // self-healing (the next cycle retries) and its "Please try again"
-        // message only makes sense for someone actively waiting — so only
-        // surface it for user-triggered syncs. This also closes the gap where a
-        // connectivity error phrased "timeout" (one word, caught here) would
-        // otherwise still flash on automatic resume syncs while "timed out"
-        // (caught by the transient-network branch) stayed silent.
-        if (isUserTriggered) {
-          this._snackService.open({
-            msg: T.F.SYNC.S.TIMEOUT_ERROR,
-            type: 'ERROR',
-            config: { duration: 12000 },
-            translateParams: {
-              suggestion:
-                'Large sync operations may take up to 90 seconds. Please try again.',
-            },
-          });
-        }
-        return 'HANDLED_ERROR';
       } else if (
         error instanceof NetworkUnavailableSPError ||
         isTransientNetworkError(error)
@@ -866,6 +846,24 @@ export class SyncWrapperService {
           this._snackService.open({
             msg: T.F.SYNC.S.NETWORK_ERROR,
             type: 'WARNING',
+          });
+        }
+        return 'HANDLED_ERROR';
+      } else if (this._isTimeoutError(error)) {
+        // Like transient network failures, a sync timeout is self-healing (the
+        // next cycle retries) and its "Please try again" message only makes
+        // sense for someone actively waiting. Structured native transport
+        // timeouts are handled by the network branch above so status is marked
+        // UNKNOWN_OR_CHANGED consistently.
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.TIMEOUT_ERROR,
+            type: 'ERROR',
+            config: { duration: 12000 },
+            translateParams: {
+              suggestion:
+                'Large sync operations may take up to 90 seconds. Please try again.',
+            },
           });
         }
         return 'HANDLED_ERROR';

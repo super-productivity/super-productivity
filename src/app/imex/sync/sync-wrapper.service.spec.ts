@@ -34,6 +34,7 @@ import {
   JsonParseError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
+  WebDavNativeRequestError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 
@@ -1081,6 +1082,32 @@ describe('SyncWrapperService', () => {
         jasmine.objectContaining({
           msg: T.F.SYNC.S.NETWORK_ERROR,
           type: 'WARNING',
+        }),
+      );
+    });
+
+    it('should treat native WebDAV timeout codes as transient network errors', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new WebDavNativeRequestError('Network error: Request timeout', 'TIMEOUT_ERROR'),
+        ),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.NETWORK_ERROR,
+          type: 'WARNING',
+        }),
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.TIMEOUT_ERROR,
         }),
       );
     });

@@ -55,7 +55,7 @@ export const initLocalFileSyncAdapter = (): void => {
 
         return `data:${mimeType};base64,${buffer.toString('base64')}`;
       } catch (e) {
-        error(e);
+        error('Read local image as data URL failed', getSafeErrorMeta(e));
         return null;
       }
     },
@@ -79,8 +79,10 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): string | Error => {
       try {
-        console.log(IPC.FILE_SYNC_SAVE, filePath);
-        console.log('writeFileSync', filePath, !!dataStr);
+        log(IPC.FILE_SYNC_SAVE, {
+          dataLength: dataStr.length,
+          hasData: dataStr.length > 0,
+        });
 
         // Atomic write: write to temp file first, then rename.
         // renameSync is atomic on ext4/APFS/NTFS, so a crash mid-write
@@ -91,9 +93,8 @@ export const initLocalFileSyncAdapter = (): void => {
 
         return getRev(filePath);
       } catch (e) {
-        log('ERR: Sync error while writing to ' + filePath);
-        error(e);
-        return e instanceof Error ? e : new Error(String(e));
+        error('Local file sync save failed', getSafeErrorMeta(e));
+        return createSafeIpcError(IPC.FILE_SYNC_SAVE, e);
       }
     },
   );
@@ -111,17 +112,20 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): { rev: string; dataStr: string | undefined } | Error => {
       try {
-        console.log(IPC.FILE_SYNC_LOAD, filePath, localRev);
+        log(IPC.FILE_SYNC_LOAD, {
+          hasLocalRev: !!localRev,
+        });
         const dataStr = readFileSync(filePath, { encoding: 'utf-8' });
-        console.log('READ ', dataStr.length);
+        log('Local file sync load completed', {
+          dataLength: dataStr.length,
+        });
         return {
           rev: getRev(filePath),
           dataStr,
         };
       } catch (e) {
-        log('ERR: Sync error while loading file from ' + filePath);
-        error(e);
-        return e instanceof Error ? e : new Error(String(e));
+        error('Local file sync load failed', getSafeErrorMeta(e));
+        return createSafeIpcError(IPC.FILE_SYNC_LOAD, e);
       }
     },
   );
@@ -137,13 +141,12 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): void | Error => {
       try {
-        console.log(IPC.FILE_SYNC_REMOVE, filePath);
+        log(IPC.FILE_SYNC_REMOVE);
         unlinkSync(filePath);
         return;
       } catch (e) {
-        log('ERR: Sync error while loading file from ' + filePath);
-        error(e);
-        return e instanceof Error ? e : new Error(String(e));
+        error('Local file sync remove failed', getSafeErrorMeta(e));
+        return createSafeIpcError(IPC.FILE_SYNC_REMOVE, e);
       }
     },
   );
@@ -159,18 +162,19 @@ export const initLocalFileSyncAdapter = (): void => {
       },
     ): true | Error => {
       try {
-        const r = readdirSync(dirPath);
-        console.log(r);
+        const dirEntries = readdirSync(dirPath);
+        log(IPC.CHECK_DIR_EXISTS, {
+          dirEntryCount: dirEntries.length,
+        });
         return true;
       } catch (e) {
-        log('ERR: error while checking dir ' + dirPath);
+        error('Local file sync directory check failed', getSafeErrorMeta(e));
         if ((e as NodeJS.ErrnoException).code === 'EACCES') {
           log(
             'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
           );
         }
-        error(e);
-        return e instanceof Error ? e : new Error(String(e));
+        return createSafeIpcError(IPC.CHECK_DIR_EXISTS, e);
       }
     },
   );
@@ -188,14 +192,13 @@ export const initLocalFileSyncAdapter = (): void => {
       try {
         return readdirSync(dirPath);
       } catch (e) {
-        log('ERR: Sync error while listing files in ' + dirPath);
+        error('Local file sync list files failed', getSafeErrorMeta(e));
         if ((e as NodeJS.ErrnoException).code === 'EACCES') {
           log(
             'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
           );
         }
-        error(e);
-        return e instanceof Error ? e : new Error(String(e));
+        return createSafeIpcError(IPC.FILE_SYNC_LIST_FILES, e);
       }
     },
   );
@@ -248,4 +251,42 @@ export const initLocalFileSyncAdapter = (): void => {
 const getRev = (filePath: string): string => {
   const fileStat = statSync(filePath);
   return fileStat.mtime.getTime().toString();
+};
+
+const getSafeErrorMeta = (
+  e: unknown,
+): {
+  errorName: string;
+  errorCode?: string | number;
+} => {
+  const errorName =
+    e instanceof Error
+      ? e.name
+      : typeof e === 'object' && e !== null && 'name' in e && typeof e.name === 'string'
+        ? e.name
+        : 'UnknownError';
+  const errorCode =
+    typeof e === 'object' &&
+    e !== null &&
+    'code' in e &&
+    (typeof e.code === 'string' || typeof e.code === 'number')
+      ? e.code
+      : undefined;
+
+  return errorCode === undefined ? { errorName } : { errorName, errorCode };
+};
+
+const createSafeIpcError = (operation: IPC, e: unknown): Error => {
+  const { errorName, errorCode } = getSafeErrorMeta(e);
+  const codeMessagePart = errorCode === undefined ? '' : ` (code: ${errorCode})`;
+  const safeError = new Error(`${operation} failed: ${errorName}${codeMessagePart}`, {
+    cause: { name: errorName, code: errorCode },
+  }) as Error & { code?: string | number };
+  safeError.name = errorName;
+  if (errorCode !== undefined) {
+    safeError.code = errorCode;
+  }
+  delete safeError.stack;
+
+  return safeError;
 };

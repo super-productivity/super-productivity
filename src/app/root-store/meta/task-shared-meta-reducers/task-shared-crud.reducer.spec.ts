@@ -11,6 +11,7 @@ import { Project } from '../../../features/project/project.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { Action, ActionReducer } from '@ngrx/store';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { IN_PROGRESS_TAG } from '../../../features/tag/tag.const';
 import {
   createBaseState,
   createMockTag,
@@ -1564,6 +1565,67 @@ describe('taskSharedCrudMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+
+    it('should remove Kanban in-progress tag when marking task done', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).tagIds = [
+        'tag1',
+        IN_PROGRESS_TAG.id,
+      ];
+      (testState[TAG_FEATURE_NAME].ids as string[]) = [
+        ...(testState[TAG_FEATURE_NAME].ids as string[]),
+        IN_PROGRESS_TAG.id,
+      ];
+      testState[TAG_FEATURE_NAME].entities[IN_PROGRESS_TAG.id] = {
+        ...IN_PROGRESS_TAG,
+        taskIds: ['task1'],
+      };
+      const action = createUpdateTaskAction('task1', {
+        isDone: true,
+      });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
+      const updatedTask = resultState[TASK_FEATURE_NAME].entities['task1'] as Task;
+      const inProgressTag = resultState[TAG_FEATURE_NAME].entities[
+        IN_PROGRESS_TAG.id
+      ] as Tag;
+
+      expect(updatedTask.tagIds).toEqual(['tag1']);
+      expect(inProgressTag.taskIds).not.toContain('task1');
+      expect((resultState[TAG_FEATURE_NAME].entities['tag1'] as Tag).taskIds).toContain(
+        'task1',
+      );
+    });
+
+    it('should keep Kanban in-progress tag when marking task undone', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], []);
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).tagIds = [
+        IN_PROGRESS_TAG.id,
+      ];
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).isDone = true;
+      (testState[TAG_FEATURE_NAME].ids as string[]) = [
+        ...(testState[TAG_FEATURE_NAME].ids as string[]),
+        IN_PROGRESS_TAG.id,
+      ];
+      testState[TAG_FEATURE_NAME].entities[IN_PROGRESS_TAG.id] = {
+        ...IN_PROGRESS_TAG,
+        taskIds: ['task1'],
+      };
+      const action = createUpdateTaskAction('task1', {
+        isDone: false,
+      });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
+
+      expect((resultState[TASK_FEATURE_NAME].entities['task1'] as Task).tagIds).toEqual([
+        IN_PROGRESS_TAG.id,
+      ]);
+      expect(
+        (resultState[TAG_FEATURE_NAME].entities[IN_PROGRESS_TAG.id] as Tag).taskIds,
+      ).toContain('task1');
     });
 
     it('should not duplicate task in TODAY_TAG.taskIds if already present', () => {

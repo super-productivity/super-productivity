@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { SHEPHERD_STEPS, TourId } from './shepherd-steps.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
@@ -32,7 +33,7 @@ export class ShepherdService {
     }
     this._initialize();
 
-    const cfg = await this.globalConfigService.cfg$.pipe(first()).toPromise();
+    const cfg = await firstValueFrom(this.globalConfigService.cfg$.pipe(first()));
     this.addSteps(
       SHEPHERD_STEPS(
         this,

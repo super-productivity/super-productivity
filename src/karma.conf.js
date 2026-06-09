@@ -13,9 +13,14 @@ const SQL_JS_DIST = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist')
 const SQL_JS_WASM_ABS = '/absolute' + path.join(SQL_JS_DIST, 'sql-wasm.wasm');
 
 module.exports = function (config) {
-  // NOTE: necessary to fix some of the unit tests with a timezone in them
-  // NOTE2: won't work for wallaby, but that's maybe ok for now
-  // process.env.TZ = 'Europe/Berlin';
+  // Pin the browser timezone so timezone-sensitive specs run deterministically.
+  // Chrome inherits TZ from the environment on Linux/macOS (covers CI and most
+  // dev machines) — but IGNORES it on Windows (verified empirically: headless
+  // Chrome with TZ=Europe/Berlin still reports the host zone there). The
+  // *.tz.spec.ts files therefore branch on the offset at their test instants
+  // instead of assuming a fixed zone, as the Windows backstop.
+  // (Also won't apply under wallaby.)
+  process.env.TZ = process.env.TZ || 'Europe/Berlin';
   const isCodeCoverage = Boolean(config.buildWebpack?.options?.codeCoverage);
   const reporters = ['spec', 'running-spec'];
 

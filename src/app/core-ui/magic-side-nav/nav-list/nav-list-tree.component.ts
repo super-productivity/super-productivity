@@ -33,11 +33,17 @@ import {
 import { MenuTreeService } from '../../../features/menu-tree/menu-tree.service';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
+import { Project } from '../../../features/project/project.model';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
 import { Router } from '@angular/router';
 
 const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
+
+export const getProjectVisibilityIconColor = (project: Project): string | null =>
+  isSingleEmoji(project.icon || DEFAULT_PROJECT_ICON)
+    ? null
+    : (project.theme.primary ?? null);
 
 @Component({
   selector: 'nav-list-tree',
@@ -76,6 +82,7 @@ export class NavListTreeComponent implements OnDestroy {
   readonly WorkContextType = WorkContextType;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
   readonly isSingleEmoji = isSingleEmoji;
+  readonly getProjectVisibilityIconColor = getProjectVisibilityIconColor;
   readonly MenuTreeKind = MenuTreeKind;
 
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)

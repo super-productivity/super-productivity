@@ -51,6 +51,11 @@ const SCHEDULE_AFFECTING_FIELDS: (keyof TaskRepeatCfgCopy)[] = [
   'startDate',
   'repeatCycle',
   'repeatEvery',
+  // RRULE: the rule string alone determines which days fire, so editing it
+  // must re-anchor lastTaskCreationDay like any other schedule change. Omitting
+  // it left a stale (often future) anchor that silently suppressed all
+  // occurrences after an RRULE edit.
+  'rrule',
   'monday',
   'tuesday',
   'wednesday',
@@ -706,8 +711,13 @@ export class TaskRepeatCfgEffects {
               ),
               tap(([isConfirm, completeCfg]) => {
                 if (isConfirm) {
-                  Log.log(changes);
-                  Log.log(todayTasks, archiveTasks);
+                  // Log keys/ids only — `changes` carries user content (title,
+                  // notes, rrule body) and the log history is exportable.
+                  Log.log({
+                    changedKeys: Object.keys(changes),
+                    todayTaskIds: todayTasks.map((t) => t.id),
+                    archiveTaskIds: archiveTasks.map((t) => t.id),
+                  });
                   // NOTE: keep in mind that it's very likely that there will be only one task for today
                   // TODO update reminders if given
                   todayTasks.forEach((task) =>

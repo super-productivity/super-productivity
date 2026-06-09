@@ -1,8 +1,138 @@
-import { Subject } from 'rxjs';
+import { fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { EntityState } from '@ngrx/entity';
+import { firstValueFrom, Observable, of, Subject } from 'rxjs';
+import { TODAY_TAG } from '../../features/tag/tag.const';
+import { Task } from '../../features/tasks/task.model';
+import { createTask } from '../../features/tasks/task.test-helper';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import { T } from '../../t.const';
-import { DailySummaryComponent } from './daily-summary.component';
+import {
+  DailySummaryComponent,
+  FINISH_DAY_FINAL_SYNC_TIMEOUT_MS,
+} from './daily-summary.component';
+
+const callFinishDayForGood = (
+  receiver: DailySummaryComponent,
+  cb?: () => void,
+): Promise<void> =>
+  (
+    DailySummaryComponent.prototype as unknown as {
+      _finishDayForGood: (cb?: () => void) => Promise<void>;
+    }
+  )._finishDayForGood.call(receiver, cb);
+
+const callGetDailySummaryTasksFlat = (
+  receiver: DailySummaryComponent,
+  dayStr: string,
+): Observable<Task[]> =>
+  (
+    DailySummaryComponent.prototype as unknown as {
+      _getDailySummaryTasksFlat$: (dayStr: string) => Observable<Task[]>;
+    }
+  )._getDailySummaryTasksFlat$.call(receiver, dayStr);
+
+const buildTaskState = (tasks: Task[]): EntityState<Task> => ({
+  ids: tasks.map((task) => task.id),
+  entities: tasks.reduce<Record<string, Task>>((acc, task) => {
+    acc[task.id] = task;
+    return acc;
+  }, {}),
+});
+
+const buildFinishDayForGoodReceiver = (
+  sync: () => Promise<unknown>,
+): {
+  receiver: DailySummaryComponent;
+  sync: jasmine.Spy;
+  flushPendingWrites: jasmine.Spy;
+  snackOpen: jasmine.Spy;
+} => {
+  const syncSpy = jasmine.createSpy('sync').and.callFake(sync);
+  const flushPendingWrites = jasmine
+    .createSpy('flushPendingWrites')
+    .and.resolveTo(undefined);
+  const snackOpen = jasmine.createSpy('snackOpen');
+  const receiver = Object.assign(Object.create(DailySummaryComponent.prototype), {
+    configService: {
+      cfg: () => ({
+        sync: {
+          isEnabled: true,
+        },
+      }),
+    },
+    _operationWriteFlushService: {
+      flushPendingWrites,
+    },
+    _syncWrapperService: {
+      sync: syncSpy,
+    },
+    _snackService: {
+      open: snackOpen,
+    },
+  }) as DailySummaryComponent;
+
+  return {
+    receiver,
+    sync: syncSpy,
+    flushPendingWrites,
+    snackOpen,
+  };
+};
 
 describe('DailySummaryComponent', () => {
+  describe('_getDailySummaryTasksFlat$()', () => {
+    it('should exclude future recurring task instances from the finish day summary', async () => {
+      const dayStr = '2026-01-15';
+      const todayDoneOn = new Date('2026-01-15T12:00:00').getTime();
+      const todayRecurringTask = createTask({
+        id: 'today-repeat',
+        title: 'Repeat today',
+        dueDay: dayStr,
+        repeatCfgId: 'repeat-1',
+        isDone: true,
+        doneOn: todayDoneOn,
+      });
+      const futureRecurringTask = createTask({
+        id: 'future-repeat',
+        title: 'Repeat future',
+        dueDay: '2026-01-19',
+        repeatCfgId: 'repeat-1',
+      });
+      const receiver = Object.assign(Object.create(DailySummaryComponent.prototype), {
+        isIncludeYesterday: false,
+        isArchiveLoaded: {
+          set: jasmine.createSpy('setArchiveLoaded'),
+        },
+        _taskService: {
+          taskFeatureState$: of(
+            buildTaskState([todayRecurringTask, futureRecurringTask]),
+          ),
+        },
+        workContextService: {
+          activeWorkContextTypeAndId$: of({
+            activeId: TODAY_TAG.id,
+            activeType: WorkContextType.TAG,
+          }),
+        },
+        _taskArchiveService: {
+          load: jasmine.createSpy('loadArchive').and.resolveTo(buildTaskState([])),
+        },
+        _worklogService: {
+          archiveUpdateManualTrigger$: new Subject<void>(),
+        },
+        _dateService: {
+          isToday: jasmine
+            .createSpy('isToday')
+            .and.callFake((timestamp: number) => timestamp === todayDoneOn),
+        },
+      }) as DailySummaryComponent;
+
+      const tasks = await firstValueFrom(callGetDailySummaryTasksFlat(receiver, dayStr));
+
+      expect(tasks.map((task) => task.id)).toEqual(['today-repeat']);
+    });
+  });
+
   describe('finishDay()', () => {
     it('should wait for sync to complete before archiving tasks', async () => {
       const syncDone$ = new Subject<void>();
@@ -79,6 +209,74 @@ describe('DailySummaryComponent', () => {
         type: 'ERROR',
       });
     });
+  });
+
+  describe('_finishDayForGood()', () => {
+    it('should still execute the callback when the final sync fails', async () => {
+      const cb = jasmine.createSpy('cb');
+      const { receiver, sync, flushPendingWrites, snackOpen } =
+        buildFinishDayForGoodReceiver(() => Promise.reject(new Error('sync failed')));
+
+      await callFinishDayForGood(receiver, cb);
+
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(sync).toHaveBeenCalled();
+      expect(cb).toHaveBeenCalled();
+      expect(snackOpen).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.FINISH_DAY_SYNC_ERROR,
+        type: 'ERROR',
+      });
+    });
+
+    it('should not execute the callback when pending operation writes cannot be flushed', async () => {
+      const cb = jasmine.createSpy('cb');
+      const { receiver, sync, flushPendingWrites, snackOpen } =
+        buildFinishDayForGoodReceiver(() => Promise.resolve());
+      flushPendingWrites.and.rejectWith(new Error('flush failed'));
+
+      await callFinishDayForGood(receiver, cb);
+
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(cb).not.toHaveBeenCalled();
+      expect(snackOpen).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.FINISH_DAY_SYNC_ERROR,
+        type: 'ERROR',
+      });
+    });
+
+    it('should still execute the callback when the final sync times out', fakeAsync(() => {
+      const cb = jasmine.createSpy('cb');
+      let isResolved = false;
+      const { receiver, sync, flushPendingWrites, snackOpen } =
+        buildFinishDayForGoodReceiver(() => new Promise(() => undefined));
+
+      callFinishDayForGood(receiver, cb).then(() => {
+        isResolved = true;
+      });
+      flushMicrotasks();
+
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(sync).toHaveBeenCalled();
+      expect(cb).not.toHaveBeenCalled();
+      expect(isResolved).toBeFalse();
+
+      tick(FINISH_DAY_FINAL_SYNC_TIMEOUT_MS - 1);
+      flushMicrotasks();
+
+      expect(cb).not.toHaveBeenCalled();
+      expect(isResolved).toBeFalse();
+
+      tick(1);
+      flushMicrotasks();
+
+      expect(cb).toHaveBeenCalled();
+      expect(isResolved).toBeTrue();
+      expect(snackOpen).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.FINISH_DAY_SYNC_ERROR,
+        type: 'ERROR',
+      });
+    }));
   });
 });
 

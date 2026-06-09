@@ -1265,13 +1265,17 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * Migrated to route through `_adapter` (Phase A). Behavior is identical:
    * the adapter operates on the same connection adopted in `init()`.
    */
-  async saveImportBackup(state: unknown): Promise<void> {
+  async saveImportBackup(state: unknown): Promise<number> {
     await this._ensureInit();
+    const savedAt = Date.now();
     await this._adapter.put(STORE_NAMES.IMPORT_BACKUP, {
       id: SINGLETON_KEY,
       state,
-      savedAt: Date.now(),
+      savedAt,
     });
+    // Returned so callers can later confirm the (single-slot) backup is still
+    // the one they captured before restoring it — see BackupService. (#8107)
+    return savedAt;
   }
 
   /**

@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Directory, Filesystem } from '@capacitor/filesystem';
+import { firstValueFrom } from 'rxjs';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { IS_IOS } from '../../util/is-ios';
 import { SnackService } from '../snack/snack.service';
@@ -299,7 +300,7 @@ export class ShareService {
         },
       });
 
-      const result = await dialogRef.afterClosed().toPromise();
+      const result = await firstValueFrom(dialogRef.afterClosed());
 
       if (result) {
         return result;

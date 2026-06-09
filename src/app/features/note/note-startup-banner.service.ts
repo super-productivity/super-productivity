@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
 import { take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { devError } from '../../util/dev-error';
@@ -20,10 +21,9 @@ export class NoteStartupBannerService {
 
   async showLastNoteIfNeeded(): Promise<void> {
     const todayStr = getDbDateStr();
-    const metric = await this._metricService
-      .getMetricForDay$(todayStr)
-      .pipe(take(1))
-      .toPromise();
+    const metric = await firstValueFrom(
+      this._metricService.getMetricForDay$(todayStr).pipe(take(1)),
+    );
 
     const reflection = metric?.reflections?.[0];
     if (!reflection?.text?.trim()) {

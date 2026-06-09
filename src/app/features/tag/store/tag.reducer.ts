@@ -353,7 +353,10 @@ export const tagReducer = createReducer<TagState>(
 
   on(updateTagOrder, (state: TagState, { ids }) => {
     if (ids.length !== state.ids.length) {
-      Log.log({ state, ids });
+      Log.log({
+        currentTagCount: state.ids.length,
+        nextTagCount: ids.length,
+      });
       throw new Error('Tag length should not change on re-order');
     }
 

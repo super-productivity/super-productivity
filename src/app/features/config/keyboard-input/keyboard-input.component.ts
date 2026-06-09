@@ -5,6 +5,19 @@ import { MatInput } from '@angular/material/input';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { prepareKeyCode } from '../../../util/check-key-combo';
 
+const CLEAR_SHORTCUT_KEY_CODES = ['Backspace', 'Delete'];
+const MODIFIER_KEY_CODES = [
+  'ShiftLeft',
+  'ShiftRight',
+  'ControlLeft',
+  'ControlRight',
+  'AltLeft',
+  'AltRight',
+];
+
+const hasModifier = (ev: KeyboardEvent): boolean =>
+  ev.ctrlKey || ev.altKey || ev.shiftKey || ev.metaKey;
+
 @Component({
   selector: 'keyboard-input',
   templateUrl: './keyboard-input.component.html',
@@ -33,15 +46,12 @@ export class KeyboardInputComponent extends FieldType<FormlyFieldConfig> {
       this.formControl.setValue(null);
       if (ev.target instanceof HTMLElement) ev.target.blur();
     } else if (
-      [
-        'ShiftLeft',
-        'ShiftRight',
-        'ControlLeft',
-        'ControlRight',
-        'AltLeft',
-        'AltRight',
-      ].includes(keyCode)
+      CLEAR_SHORTCUT_KEY_CODES.includes(keyCode) &&
+      !hasModifier(ev) &&
+      this.formControl.value
     ) {
+      this.formControl.setValue(null);
+    } else if (MODIFIER_KEY_CODES.includes(keyCode)) {
       // Don't update if event is for ctrl alt or shift down itself
       return;
     } else {

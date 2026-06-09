@@ -222,6 +222,16 @@ export class NetworkUnavailableSPError extends Error {
   }
 }
 
+export class WebDavNativeRequestError extends Error {
+  override name = 'WebDavNativeRequestError';
+  readonly code?: string | number;
+
+  constructor(message: string, code?: string | number) {
+    super(message);
+    this.code = code;
+  }
+}
+
 export class AuthFailSPError extends AdditionalLogErrorBase {
   override name = 'AuthFailSPError';
 }

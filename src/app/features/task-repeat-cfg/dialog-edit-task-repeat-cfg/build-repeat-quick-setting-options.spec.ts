@@ -30,14 +30,21 @@ describe('buildRepeatQuickSettingOptions', () => {
     );
     expect(options.map((o) => o.value)).toEqual([
       'DAILY',
+      'EVERY_OTHER_DAY',
       'MONDAY_TO_FRIDAY',
+      'WEEKENDS',
       'WEEKLY_CURRENT_WEEKDAY',
+      'BIWEEKLY_CURRENT_WEEKDAY',
       'MONTHLY_CURRENT_DATE',
       'MONTHLY_FIRST_DAY',
       'MONTHLY_LAST_DAY',
       'MONTHLY_NTH_WEEKDAY',
+      'MONTHLY_LAST_WEEKDAY',
+      'QUARTERLY_CURRENT_DATE',
+      'SEMIANNUALLY_CURRENT_DATE',
       'YEARLY_CURRENT_DATE',
-      'CUSTOM',
+      'EVERY_OTHER_YEAR_CURRENT_DATE',
+      'RRULE',
     ]);
 
     const monthlyNthWeekdayOption = options.find(
@@ -64,7 +71,7 @@ describe('buildRepeatQuickSettingOptions', () => {
       'en-US',
       translateService,
     );
-    expect(options.length).toBe(9);
+    expect(options.length).toBe(16);
     options.forEach((o) => expect(o.label).toBeTruthy());
   });
 });

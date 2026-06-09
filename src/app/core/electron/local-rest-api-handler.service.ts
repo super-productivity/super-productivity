@@ -399,6 +399,7 @@ export class LocalRestApiHandlerService {
     }
 
     const taskId = this._taskService.add(title, false, additionalFields);
+
     const createdTask = await this._getTaskById(taskId);
 
     return createSuccessResponse(requestId, 201, createdTask);

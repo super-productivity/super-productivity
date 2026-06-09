@@ -332,6 +332,19 @@ test.describe('@migration Legacy Data Migration', () => {
       await page.goto('/#/project/TEST_PROJECT');
       await page.waitForLoadState('networkidle').catch(() => {});
 
+      // page.goto only changes the URL hash, so the SPA switches work-context
+      // client-side (load the project's tasks, recompute selectors, re-render)
+      // while the previous view's task-list lingers in the DOM. Gate on the
+      // switch actually landing — the active project's title rendering in <main>
+      // (the main-header page-title), as projectPage.navigateToProjectByName does
+      // — so the assertions below test THIS project's render instead of racing a
+      // stale one. Without this gate the task-title check alone carries the wait
+      // for the context switch, which under heavy parallel load can outlast its
+      // budget (the original flake).
+      await expect(page.locator('main')).toContainText('Migration Test Project', {
+        timeout: 20000,
+      });
+
       // Wait for task list to appear
       await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
 

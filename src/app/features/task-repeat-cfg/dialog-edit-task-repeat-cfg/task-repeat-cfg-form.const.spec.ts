@@ -74,58 +74,52 @@ describe('TaskRepeatCfgFormConfig', () => {
     });
   });
 
-  describe('weekdays group visibility (issue #8025)', () => {
-    const repeatContainer = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.find(
-      (field) => field.fieldGroupClassName === 'repeat-config-container',
-    );
-    const weekdaysGroup = repeatContainer?.fieldGroup?.find(
-      (field) => field.fieldGroupClassName === 'weekdays',
-    );
-    const WEEKDAY_KEYS = [
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-      'sunday',
-    ];
+  // NOTE: the 'repeatFromCompletionDate' Formly select was removed along with the
+  // legacy Custom UI — the RRULE builder owns that toggle now (covered by
+  // rrule-builder.component.spec).
 
-    it('should locate the weekdays group', () => {
-      expect(weekdaysGroup).toBeDefined();
-      expect(weekdaysGroup?.fieldGroup?.length).toBe(7);
+  describe('quickSetting change handler', () => {
+    const getChangeHandler = (): ((field: unknown, event: unknown) => void) => {
+      const field = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.find(
+        (f) => f.key === 'quickSetting',
+      );
+      return field!.templateOptions!.change as (field: unknown, event: unknown) => void;
+    };
+
+    const callWith = (
+      startDate: string | undefined,
+      quickSetting: string,
+    ): Record<string, unknown> => {
+      let patched: Record<string, unknown> = {};
+      const field = {
+        model: { startDate },
+        form: {
+          patchValue: (v: Record<string, unknown>) => {
+            patched = v;
+          },
+        },
+      };
+      getChangeHandler()(field, { value: quickSetting });
+      return patched;
+    };
+
+    it('uses the selected start date for date-writing presets (not today)', () => {
+      // Regression: without the reference date, MONTHLY_CURRENT_DATE stamped
+      // *today* into the model, overwriting a user-picked future anchor.
+      const patched = callWith('2099-09-15', 'MONTHLY_CURRENT_DATE');
+      expect(patched['startDate']).toBe('2099-09-15');
     });
 
-    // Regression guard for #8025: a `hideExpression` makes formly destroy and
-    // recreate the checkbox views on every cycle switch, which breaks their
-    // wiring to the FormControls (clicks stop updating the model after a
-    // Week -> Month -> Week round-trip). Visibility must be driven by CSS instead.
-    it('should NOT use hideExpression (it would re-freeze the checkboxes)', () => {
-      expect(weekdaysGroup?.hideExpression).toBeUndefined();
+    it('uses the selected start date for the weekday flags of weekly presets', () => {
+      // 2099-09-14 is a Monday.
+      const patched = callWith('2099-09-14', 'WEEKLY_CURRENT_WEEKDAY');
+      expect(patched['monday']).toBe(true);
+      expect(patched['tuesday']).toBe(false);
     });
 
-    it('should toggle visibility via a dynamic className bound to repeatCycle', () => {
-      const className = weekdaysGroup?.expressionProperties?.['className'] as (model: {
-        repeatCycle: string;
-      }) => string;
-      expect(className).toEqual(jasmine.any(Function));
-      expect(className({ repeatCycle: 'WEEKLY' })).toBe('');
-      expect(className({ repeatCycle: 'MONTHLY' })).toBe('repeat-cfg-hidden');
-      expect(className({ repeatCycle: 'YEARLY' })).toBe('repeat-cfg-hidden');
-      expect(className({ repeatCycle: 'DAILY' })).toBe('repeat-cfg-hidden');
-    });
-
-    // The group stays mounted, but the CUSTOM container above it still hides via
-    // hideExpression. Each checkbox needs resetOnHide:false so the selection
-    // survives a quickSetting != CUSTOM round-trip instead of being wiped.
-    it('should keep every weekday checkbox value across hide (resetOnHide:false)', () => {
-      WEEKDAY_KEYS.forEach((key) => {
-        const field = weekdaysGroup?.fieldGroup?.find((f) => f.key === key);
-        expect(field).withContext(`weekday field "${key}" exists`).toBeDefined();
-        expect(field?.resetOnHide)
-          .withContext(`weekday field "${key}" resetOnHide`)
-          .toBe(false);
-      });
+    it('falls back to today when no start date is set', () => {
+      const patched = callWith(undefined, 'MONTHLY_CURRENT_DATE');
+      expect(typeof patched['startDate']).toBe('string');
     });
   });
 });

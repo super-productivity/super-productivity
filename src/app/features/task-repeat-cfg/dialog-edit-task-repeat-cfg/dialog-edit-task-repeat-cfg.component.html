@@ -32,14 +32,14 @@
         [model]="repeatCfg()"
       ></formly-form>
 
-      @if (isWeekdaySelectionInvalid()) {
-        <div
-          id="weekday-error"
-          class="weekday-error"
-          role="alert"
-        >
-          {{ T.F.TASK_REPEAT.F.WEEKDAY_REQUIRED | translate }}
-        </div>
+      @if (isRRuleMode()) {
+        <rrule-builder
+          [rrule]="repeatCfg().rrule ?? ''"
+          [startDate]="repeatCfg().startDate"
+          [repeatFromCompletion]="repeatCfg().repeatFromCompletionDate ?? false"
+          (rruleChange)="onRRuleChange($event)"
+          (repeatFromCompletionChange)="onRepeatFromCompletionChange($event)"
+        ></rrule-builder>
       }
 
       <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
@@ -61,6 +61,32 @@
       </collapsible>
     </div>
   </mat-dialog-content>
+
+  <!-- Live result/preview — pinned above the action buttons in RRULE mode. -->
+  @if (isRRuleMode() && rrulePreview(); as p) {
+    <div class="rrule-result">
+      <div class="rrule-result__human">&rarr; {{ p.human }}</div>
+      @if (repeatCfg().repeatFromCompletionDate) {
+        @if (p.completionExample; as ex) {
+          <div class="rrule-result__next">
+            {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
+            {{ ex.done | date: 'mediumDate' }} &rarr; {{ ex.next | date: 'mediumDate' }}
+          </div>
+        }
+      } @else if (p.upcoming.length) {
+        <div class="rrule-result__next">
+          {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
+          @for (d of p.upcoming; track d.getTime(); let last = $last) {
+            <span>{{ d | date: 'mediumDate' }}</span>
+            @if (!last) {
+              <span class="rrule-result__sep">&middot;</span>
+            }
+          }
+        </div>
+      }
+      <div class="rrule-result__expr">{{ p.rrule }}</div>
+    </div>
+  }
 
   <mat-dialog-actions align="end">
     <button
@@ -103,14 +129,8 @@
     }
 
     <button
-      [disabled]="
-        !formGroup1().valid ||
-        !formGroup2().valid ||
-        isLoading() ||
-        isWeekdaySelectionInvalid()
-      "
+      [disabled]="!formGroup1().valid || !formGroup2().valid || isLoading()"
       [attr.aria-label]="T.G.SAVE | translate"
-      [attr.aria-describedby]="isWeekdaySelectionInvalid() ? 'weekday-error' : null"
       class="icon-on-small"
       color="primary"
       mat-raised-button

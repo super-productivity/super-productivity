@@ -65,6 +65,7 @@ export const JIRA_ADDITIONAL_ISSUE_FIELDS = [
   'timeestimate',
   'timespent',
   'status',
+  'priority',
   'attachment',
   'comment',
   'updated',

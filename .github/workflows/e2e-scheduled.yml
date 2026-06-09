@@ -123,10 +123,16 @@ jobs:
           cp .env.example .env
 
       - name: Start WebDAV Docker Service
-        run: |
-          docker compose up -d webdav
-          chmod +x ./scripts/wait-for-webdav.sh
-          ./scripts/wait-for-webdav.sh
+        # Retry to survive transient Docker Hub pull timeouts / rate limits
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 6
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: |
+            docker compose up -d webdav
+            chmod +x ./scripts/wait-for-webdav.sh
+            ./scripts/wait-for-webdav.sh
 
       - name: Run WebDAV E2E Tests
         env:
@@ -186,11 +192,18 @@ jobs:
           cp .env.example .env
 
       - name: Start SuperSync Docker Service
-        run: |
-          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync
-          echo "⏳ Waiting for SuperSync server..."
-          until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done
-          echo "✓ SuperSync server ready!"
+        # Retry to survive transient Docker Hub pull timeouts / rate limits;
+        # timeout_minutes also bounds the otherwise-unbounded health-wait loop
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 12
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: |
+            docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync
+            echo "⏳ Waiting for SuperSync server..."
+            until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done
+            echo "✓ SuperSync server ready!"
 
       - name: Run SuperSync E2E Tests
         env:

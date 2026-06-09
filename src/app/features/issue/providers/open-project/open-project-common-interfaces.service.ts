@@ -78,7 +78,11 @@ export class OpenProjectCommonInterfacesService extends BaseIssueProviderService
         cfg,
       ),
     );
-    IssueLog.log(workPackages);
+    IssueLog.log('OpenProject backlog work packages fetched', {
+      issueProviderId,
+      workPackageCount: workPackages.length,
+      hasWorkPackageIds: workPackages.some((workPackage) => !!workPackage.id),
+    });
     return workPackages;
   }
 

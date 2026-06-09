@@ -3,6 +3,7 @@ import {
   fakeAsync,
   tick,
   discardPeriodicTasks,
+  flush,
   flushMicrotasks,
 } from '@angular/core/testing';
 import {
@@ -943,7 +944,7 @@ END:VCALENDAR`;
 
   describe('testConnection', () => {
     it('should return true when connection succeeds', async () => {
-      const cfg = { icalUrl: 'https://example.com/calendar.ics' } as any;
+      const cfg = createMockProvider();
 
       const promise = service.testConnection(cfg);
 
@@ -955,7 +956,7 @@ END:VCALENDAR`;
     });
 
     it('should return false when connection fails', async () => {
-      const cfg = { icalUrl: 'https://example.com/calendar.ics' } as any;
+      const cfg = createMockProvider();
 
       const promise = service.testConnection(cfg);
 
@@ -967,7 +968,7 @@ END:VCALENDAR`;
     });
 
     it('should return false for empty response', async () => {
-      const cfg = { icalUrl: 'https://example.com/calendar.ics' } as any;
+      const cfg = createMockProvider();
 
       const promise = service.testConnection(cfg);
 
@@ -1076,7 +1077,10 @@ END:VCALENDAR`;
       const req = httpMock.expectOne(mockProvider.icalUrl);
       req.flush(MOCK_ICAL_DATA);
 
-      tick(0);
+      // flush() (not tick(0)) because requestEvents$ awaits loadIcalModule(),
+      // a dynamic import('ical.js') whose promise chain isn't guaranteed to
+      // resolve in a single microtask drain on first invocation.
+      flush();
       expect(result).toEqual([
         jasmine.objectContaining({
           id: 'test-event-1',
@@ -1090,15 +1094,16 @@ END:VCALENDAR`;
         isDisabledForWebApp: true,
       });
 
-      // Note: IS_WEB_BROWSER might be false in tests, so this test might not fully work
-      const sub = service.requestEvents$(mockProvider).subscribe(() => {
-        // Subscribe to trigger the request
+      let result: CalendarIntegrationEvent[] | undefined;
+      const sub = service.requestEvents$(mockProvider).subscribe((events) => {
+        result = events;
       });
       subscriptions.push(sub);
 
-      tick(0);
+      flush();
 
-      // May or may not make request depending on IS_WEB_BROWSER
+      expect(result).toEqual([]);
+      httpMock.expectNone(mockProvider.icalUrl);
     }));
 
     it('should handle parse errors gracefully', fakeAsync(() => {
@@ -1112,7 +1117,7 @@ END:VCALENDAR`;
       const req = httpMock.expectOne(mockProvider.icalUrl);
       req.flush('INVALID ICAL DATA');
 
-      tick(0);
+      flush();
       // Should not throw, might return empty array or parsed result
     }));
 
@@ -1134,7 +1139,7 @@ END:VCALENDAR`;
           '</body></html>',
       );
 
-      tick(0);
+      flush();
       expect(result).toEqual([]);
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -1162,7 +1167,7 @@ END:VCALENDAR`;
       const req = httpMock.expectOne(mockProvider.icalUrl);
       req.flush('<html>not ical</html>');
 
-      tick(0);
+      flush();
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           msg: 'F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL',

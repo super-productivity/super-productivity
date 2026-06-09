@@ -3,6 +3,7 @@ import { T } from '../../../t.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { TaskReminderOptionId } from '../../tasks/task.model';
@@ -49,8 +50,16 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
       // NOTE replaced in component to allow for dynamic translation
       options: [],
       change: (field, event) => {
+        // Pass the selected start date as the reference, else date-writing
+        // presets (MONTHLY_CURRENT_DATE etc.) stamp *today* into the model and
+        // silently overwrite a user-picked future anchor (save-time recompute
+        // then reads the overwritten value).
+        const sd = (field.model as { startDate?: string | Date } | undefined)?.startDate;
+        const referenceDate =
+          sd instanceof Date ? sd : sd ? dateStrToUtcDate(sd) : undefined;
         const updatesForQuickSetting = getQuickSettingUpdates(
           event.value as RepeatQuickSetting,
+          referenceDate,
         );
         if (updatesForQuickSetting) {
           // NOTE: for some reason this doesn't update the model value, just the view value :(
@@ -60,165 +69,11 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
     },
   },
 
-  // REPEAT CUSTOM CFG - Wrapped in container
-  {
-    fieldGroupClassName: 'repeat-config-container',
-    resetOnHide: false,
-    hideExpression: (model: any) => model.quickSetting !== 'CUSTOM',
-    fieldGroup: [
-      {
-        fieldGroupClassName: 'repeat-cycle',
-        fieldGroup: [
-          {
-            key: 'repeatEvery',
-            type: 'input',
-            defaultValue: 1,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.REPEAT_EVERY,
-              required: true,
-              min: 1,
-              max: 1000,
-              type: 'number',
-            },
-          },
-          {
-            key: 'repeatCycle',
-            type: 'select',
-            defaultValue: 'WEEKLY',
-            templateOptions: {
-              required: true,
-              label: T.F.TASK_REPEAT.F.REPEAT_CYCLE,
-              options: [
-                { value: 'DAILY', label: T.F.TASK_REPEAT.F.C_DAY },
-                { value: 'WEEKLY', label: T.F.TASK_REPEAT.F.C_WEEK },
-                { value: 'MONTHLY', label: T.F.TASK_REPEAT.F.C_MONTH },
-                { value: 'YEARLY', label: T.F.TASK_REPEAT.F.C_YEAR },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        fieldGroupClassName: 'monthly-anchor',
-        resetOnHide: false,
-        hideExpression: (model: any) => model.repeatCycle !== 'MONTHLY',
-        fieldGroup: [
-          {
-            key: 'monthlyWeekOfMonth',
-            type: 'select',
-            // Picking the "Day of month" sentinel clears the anchor; the
-            // gatekeeper falls back to legacy day-of-month behavior.
-            defaultValue: null,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.WEEK_OF_MONTH,
-              options: [
-                { value: null, label: T.F.TASK_REPEAT.F.MONTHLY_MODE_DAY_OF_MONTH },
-                { value: 1, label: T.F.TASK_REPEAT.F.ORD_FIRST },
-                { value: 2, label: T.F.TASK_REPEAT.F.ORD_SECOND },
-                { value: 3, label: T.F.TASK_REPEAT.F.ORD_THIRD },
-                { value: 4, label: T.F.TASK_REPEAT.F.ORD_FOURTH },
-                { value: -1, label: T.F.TASK_REPEAT.F.ORD_LAST },
-              ],
-            },
-          },
-          {
-            key: 'monthlyWeekday',
-            type: 'select',
-            defaultValue: 1,
-            resetOnHide: false,
-            hideExpression: (model: any) => model.monthlyWeekOfMonth == null,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.WEEKDAY,
-              options: [
-                { value: 1, label: T.F.TASK_REPEAT.F.MONDAY },
-                { value: 2, label: T.F.TASK_REPEAT.F.TUESDAY },
-                { value: 3, label: T.F.TASK_REPEAT.F.WEDNESDAY },
-                { value: 4, label: T.F.TASK_REPEAT.F.THURSDAY },
-                { value: 5, label: T.F.TASK_REPEAT.F.FRIDAY },
-                { value: 6, label: T.F.TASK_REPEAT.F.SATURDAY },
-                { value: 0, label: T.F.TASK_REPEAT.F.SUNDAY },
-              ],
-            },
-          },
-        ],
-      },
-      {
-        // Hide via a dynamic CSS class instead of `hideExpression`. With formly's
-        // default `lazyRender`, hiding a field group destroys its child views and
-        // recreates them on re-show, and the recreated mat-checkboxes lose their
-        // wiring to the (re-registered) FormControls. After a cycle round-trip
-        // (Week -> Month -> Week) the checkboxes then look enabled but are inert:
-        // clicks no longer update the model (#8025). Keeping the group mounted and
-        // toggling only its visibility preserves the control/view binding.
-        // `resetOnHide: false` on each checkbox keeps the selection when the
-        // CUSTOM container itself is hidden (quickSetting != CUSTOM).
-        fieldGroupClassName: 'weekdays',
-        expressionProperties: {
-          className: (model: TaskRepeatCfg) =>
-            model.repeatCycle === 'WEEKLY' ? '' : 'repeat-cfg-hidden',
-        },
-        fieldGroup: [
-          {
-            key: 'monday',
-            type: 'checkbox',
-            resetOnHide: false,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.MONDAY,
-            },
-          },
-          {
-            key: 'tuesday',
-            type: 'checkbox',
-            resetOnHide: false,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.TUESDAY,
-            },
-          },
-          {
-            key: 'wednesday',
-            type: 'checkbox',
-            resetOnHide: false,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.WEDNESDAY,
-            },
-          },
-          {
-            key: 'thursday',
-            type: 'checkbox',
-            resetOnHide: false,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.THURSDAY,
-            },
-          },
-          {
-            key: 'friday',
-            type: 'checkbox',
-            resetOnHide: false,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.FRIDAY,
-            },
-          },
-          {
-            key: 'saturday',
-            type: 'checkbox',
-            resetOnHide: false,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.SATURDAY,
-            },
-          },
-          {
-            key: 'sunday',
-            type: 'checkbox',
-            resetOnHide: false,
-            templateOptions: {
-              label: T.F.TASK_REPEAT.F.SUNDAY,
-            },
-          },
-        ],
-      },
-    ],
-  },
   // REPEAT CFG END
+  // NOTE: the legacy "Custom" recurrence container (repeat-every / cycle /
+  // weekday / monthly-anchor controls) was removed — the RRULE builder replaces
+  // it. Existing legacy cfgs are migrated to RRULE on open
+  // (legacyTaskRepeatCfgToRRule + _processQuickSettingForDate).
 ];
 
 export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
@@ -274,47 +129,6 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       rows: 4,
     },
   },
-  // Schedule type: from due date or from completion
-  {
-    key: 'repeatFromCompletionDate',
-    type: 'select',
-    defaultValue: false,
-    resetOnHide: false,
-    hideExpression: (model: any) => {
-      // Only show for custom settings with intervals > 1
-      if (model.quickSetting !== 'CUSTOM') {
-        return true;
-      }
-      return false;
-    },
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.SCHEDULE_TYPE_LABEL,
-      options: [],
-    },
-    expressionProperties: {
-      ['templateOptions.options']: (model: any) => {
-        const repeatEvery = model.repeatEvery || 1;
-        const cycleMap: Record<string, string> = {
-          DAILY: repeatEvery === 1 ? 'day' : 'days',
-          WEEKLY: repeatEvery === 1 ? 'week' : 'weeks',
-          MONTHLY: repeatEvery === 1 ? 'month' : 'months',
-          YEARLY: repeatEvery === 1 ? 'year' : 'years',
-        };
-        const cycleName = cycleMap[model.repeatCycle] || 'days';
-
-        return [
-          {
-            value: false,
-            label: `Fixed schedule (every ${repeatEvery} ${cycleName} from start date)`,
-          },
-          {
-            value: true,
-            label: `After completion (${repeatEvery} ${cycleName} after I finish)`,
-          },
-        ];
-      },
-    },
-  },
   {
     key: 'shouldInheritSubtasks',
     type: 'checkbox',
@@ -345,6 +159,9 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION_DESCRIPTION,
     },
   },
+  // NOTE: the "Schedule type" (repeatFromCompletionDate) select was removed from
+  // here along with the legacy Custom UI — the RRULE builder owns that toggle now
+  // (RruleBuilderComponent.repeatFromCompletion). #5326 / #5388.
   {
     key: 'skipOverdue',
     type: 'checkbox',
@@ -354,4 +171,8 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.SKIP_OVERDUE_DESCRIPTION,
     },
   },
+  // NOTE: a 'createForEachMissed' (backfill one task per missed occurrence)
+  // checkbox was removed from this slice — the scheduling engine has no support
+  // for it yet (occurrence engine creates the newest missed only). Re-add the
+  // field together with the engine behavior.
 ];

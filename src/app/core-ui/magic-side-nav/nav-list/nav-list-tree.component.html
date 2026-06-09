@@ -159,6 +159,8 @@
 <!-- Project Visibility Menu -->
 <mat-menu #visibilityMenu="matMenu">
   @for (project of allUnarchivedProjects(); track project.id) {
+    @let projectIcon = project.icon || DEFAULT_PROJECT_ICON;
+    @let isProjectIconEmoji = isSingleEmoji(projectIcon);
     <button
       mat-menu-item
       role="menuitemcheckbox"
@@ -172,8 +174,9 @@
       }
       <mat-icon
         class="nav-icon"
-        [class.nav-icon-emoji]="isSingleEmoji(project.icon || DEFAULT_PROJECT_ICON)"
-        >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
+        [class.nav-icon-emoji]="isProjectIconEmoji"
+        [style.color]="getProjectVisibilityIconColor(project)"
+        >{{ projectIcon }}</mat-icon
       >
       {{ project.title }}
     </button>

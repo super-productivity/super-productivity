@@ -27,6 +27,9 @@ export const selectUnarchivedVisibleProjects = createSelector(
 export const selectArchivedProjects = createSelector(selectAllProjects, (projects) =>
   projects.filter((p) => p.isArchived),
 );
+// NOTE: completing a project also sets isArchived, so completed projects are a
+// subset of selectArchivedProjects — keep that one as-is, since it drives
+// active-task filtering (selectArchivedProjectIds in task.selectors).
 export const selectArchivedProjectsSortedByTitle = createSelector(
   selectArchivedProjects,
   (projects) => [...projects].sort((a, b) => a.title.localeCompare(b.title)),

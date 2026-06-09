@@ -32,6 +32,8 @@ import { LocalDataConflictError } from '../core/errors/sync-errors';
 import { SyncHydrationService } from '../persistence/sync-hydration.service';
 import { SyncImportConflictDialogService } from './sync-import-conflict-dialog.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { BackupService } from '../backup/backup.service';
+import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { TODAY_TAG, SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 
@@ -45,6 +47,7 @@ describe('OperationLogSyncService', () => {
   let writeFlushServiceSpy: jasmine.SpyObj<OperationWriteFlushService>;
   let superSyncStatusServiceSpy: jasmine.SpyObj<SuperSyncStatusService>;
   let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
+  let backupServiceSpy: jasmine.SpyObj<BackupService>;
   let syncImportConflictDialogServiceSpy: jasmine.SpyObj<SyncImportConflictDialogService>;
 
   beforeEach(() => {
@@ -87,6 +90,13 @@ describe('OperationLogSyncService', () => {
       tag: { ids: [TODAY_TAG.id] }, // Only default TODAY tag
       note: { ids: [] },
     } as any);
+
+    backupServiceSpy = jasmine.createSpyObj('BackupService', [
+      'captureImportBackup',
+      'restoreImportBackup',
+    ]);
+    backupServiceSpy.captureImportBackup.and.resolveTo(1);
+    backupServiceSpy.restoreImportBackup.and.resolveTo(true);
 
     remoteOpsProcessingServiceSpy = jasmine.createSpyObj('RemoteOpsProcessingService', [
       'processRemoteOps',
@@ -215,6 +225,7 @@ describe('OperationLogSyncService', () => {
           ]),
         },
         { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
+        { provide: BackupService, useValue: backupServiceSpy },
         {
           provide: SyncImportConflictDialogService,
           useValue: syncImportConflictDialogServiceSpy,
@@ -1854,6 +1865,69 @@ describe('OperationLogSyncService', () => {
       await service.forceDownloadRemoteState(mockProvider);
 
       expect(callOrder[0]).toBe('clearUnsyncedOps');
+    });
+
+    it('should capture a safety backup BEFORE clearing unsynced ops (#8107)', async () => {
+      const callOrder: string[] = [];
+      backupServiceSpy.captureImportBackup.and.callFake(async () => {
+        callOrder.push('captureImportBackup');
+        return 1;
+      });
+      opLogStoreSpy.clearUnsyncedOps.and.callFake(async () => {
+        callOrder.push('clearUnsyncedOps');
+      });
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+      });
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+
+      expect(callOrder).toEqual(['captureImportBackup', 'clearUnsyncedOps']);
+    });
+
+    it('should ABORT without wiping local data if the safety backup fails (#8107)', async () => {
+      backupServiceSpy.captureImportBackup.and.rejectWith(new Error('disk full'));
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await expectAsync(service.forceDownloadRemoteState(mockProvider)).toBeRejected();
+
+      expect(opLogStoreSpy.clearUnsyncedOps).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.clearFullStateOps).not.toHaveBeenCalled();
+      expect(downloadServiceSpy.downloadRemoteOps).not.toHaveBeenCalled();
+    });
+
+    it('should offer to restore the previous data after replacing (#8107)', async () => {
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+      });
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_UNDO,
+          actionStr: T.G.UNDO,
+        }),
+      );
     });
 
     it('should reset lastServerSeq to 0', async () => {

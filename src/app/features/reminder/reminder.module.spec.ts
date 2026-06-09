@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { NEVER, of, Subject } from 'rxjs';
@@ -18,7 +18,91 @@ import {
   NotificationActionEvent,
 } from '../../core/platform/capacitor-notification.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { Task } from '../tasks/task.model';
+import { Task, TaskWithReminderData } from '../tasks/task.model';
+import { DialogViewTaskRemindersComponent } from '../tasks/dialog-view-task-reminders/dialog-view-task-reminders.component';
+
+describe('ReminderModule dialog opening', () => {
+  let matDialogSpy: jasmine.SpyObj<MatDialog>;
+  let remindersActive$: Subject<TaskWithReminderData[]>;
+  let syncDone$: Subject<void>;
+
+  const reminder = {
+    id: 'task-1',
+    title: 'Task 1',
+    reminderData: { remindAt: Date.now() - 1000 },
+  } as TaskWithReminderData;
+
+  beforeEach(() => {
+    remindersActive$ = new Subject<TaskWithReminderData[]>();
+    syncDone$ = new Subject<void>();
+    matDialogSpy = jasmine.createSpyObj('MatDialog', ['open'], { openDialogs: [] });
+
+    const taskServiceSpy = jasmine.createSpyObj('TaskService', ['currentTaskId']);
+    taskServiceSpy.currentTaskId.and.returnValue(null);
+
+    const notifyServiceSpy = jasmine.createSpyObj('NotifyService', ['notify']);
+    notifyServiceSpy.notify.and.resolveTo();
+
+    TestBed.configureTestingModule({
+      providers: [
+        ReminderModule,
+        {
+          provide: ReminderService,
+          useValue: jasmine.createSpyObj('ReminderService', ['init'], {
+            onRemindersActive$: remindersActive$,
+          }),
+        },
+        { provide: MatDialog, useValue: matDialogSpy },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+        {
+          provide: UiHelperService,
+          useValue: jasmine.createSpyObj('UiHelperService', ['focusApp']),
+        },
+        { provide: NotifyService, useValue: notifyServiceSpy },
+        {
+          provide: LayoutService,
+          useValue: jasmine.createSpyObj('LayoutService', ['isShowAddTaskBar']),
+        },
+        { provide: TaskService, useValue: taskServiceSpy },
+        {
+          provide: SyncTriggerService,
+          useValue: { afterInitialSyncDoneAndDataLoadedInitially$: syncDone$ },
+        },
+        {
+          provide: SyncWrapperService,
+          useValue: jasmine.createSpyObj('SyncWrapperService', ['sync']),
+        },
+        { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: CapacitorReminderService,
+          useValue: jasmine.createSpyObj('CapacitorReminderService', ['initialize'], {
+            action$: NEVER,
+          }),
+        },
+      ],
+    });
+  });
+
+  it('opens task reminder dialog without passive close paths', fakeAsync(() => {
+    TestBed.inject(ReminderModule);
+
+    syncDone$.next();
+    tick(1000);
+    remindersActive$.next([reminder]);
+
+    expect(matDialogSpy.open).toHaveBeenCalledOnceWith(DialogViewTaskRemindersComponent, {
+      restoreFocus: true,
+      disableClose: true,
+      data: {
+        reminders: [reminder],
+      },
+    });
+  }));
+});
 
 describe('ReminderModule iOS notification actions', () => {
   let module: ReminderModule;

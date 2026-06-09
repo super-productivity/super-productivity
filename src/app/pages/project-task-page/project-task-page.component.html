@@ -1,11 +1,23 @@
 @if (currentProject()?.isArchived) {
   <div class="archived-notice">
-    <span>{{ T.F.PROJECT.ARCHIVED_NOTICE | translate }}</span>
+    <span>
+      {{
+        (currentProject()?.isDone
+          ? T.F.PROJECT.COMPLETE.NOTICE
+          : T.F.PROJECT.ARCHIVED_NOTICE
+        ) | translate
+      }}
+    </span>
     <button
       mat-button
       (click)="restoreProject()"
     >
-      {{ T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate }}
+      {{
+        (currentProject()?.isDone
+          ? T.F.PROJECT.COMPLETE.REOPEN
+          : T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE
+        ) | translate
+      }}
     </button>
   </div>
 }

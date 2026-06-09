@@ -50,19 +50,25 @@ test.describe('Worklog', () => {
       'daily-summary button[mat-flat-button][color="primary"]:last-of-type',
     );
     await saveBtn.waitFor({ state: 'visible' });
-    await saveBtn.click();
-
-    await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
+    // The finish-day flow archives, flushes, then navigates back to Today
+    // asynchronously. Wait for that redirect to settle before navigating away;
+    // otherwise the deferred navigation clobbers the History route mid-render.
+    await Promise.all([
+      page.waitForURL(/#\/tag\/TODAY\/tasks/, { timeout: 15000 }),
+      saveBtn.click(),
+    ]);
+    await expect(page.locator('task-list').first()).toBeVisible();
 
     // Navigate to full history
     await page.goto('/#/tag/TODAY/history');
-    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/#\/tag\/TODAY\/history/);
 
     // Worklog should show today's completed task
     await expect(page.locator('history')).toBeVisible();
-    const dayRow = page.locator('history .week-row').first();
-    await dayRow.waitFor({ state: 'visible' });
-    await dayRow.click();
+    const dayToggle = page.locator('history .week-row .day-toggle').first();
+    await expect(dayToggle).toBeVisible();
+    await dayToggle.click();
+    await expect(dayToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(
       page.locator('.task-summary-table td.title button').filter({ hasText: taskName }),
     ).toBeVisible();

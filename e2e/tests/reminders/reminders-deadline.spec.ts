@@ -94,7 +94,7 @@ test.describe('Deadline Reminders', () => {
     await expect(page.locator(REMINDER_DIALOG)).not.toBeVisible();
   });
 
-  test('should not reappear after ESC/backdrop dismissal of the deadline reminder dialog', async ({
+  test('should require an explicit action for the deadline reminder dialog', async ({
     page,
     workViewPage,
     testPrefix,
@@ -143,11 +143,18 @@ test.describe('Deadline Reminders', () => {
       state: 'visible',
       timeout: SCHEDULE_MAX_WAIT_TIME,
     });
-    await expect(page.locator(REMINDER_DIALOG)).toBeVisible();
+    const reminderDialog = page.locator(REMINDER_DIALOG);
+    await expect(reminderDialog).toBeVisible();
 
-    // Dismiss via ESC (simulates user closing the dialog without a dedicated action)
+    // ESC and backdrop clicks must not passively dismiss the reminder dialog.
     await page.keyboard.press('Escape');
-    await page.locator(REMINDER_DIALOG).waitFor({ state: 'hidden', timeout: 10000 });
+    await expect(reminderDialog).toBeVisible();
+
+    await page.locator('.cdk-overlay-backdrop').last().click({ force: true });
+    await expect(reminderDialog).toBeVisible();
+
+    await reminderDialog.locator('button:has-text("Done")').click();
+    await reminderDialog.waitFor({ state: 'hidden', timeout: 10000 });
 
     // Poll over a window longer than the 10s reminder worker tick. If the
     // worker re-fires the past-due deadline, the dialog becomes visible and

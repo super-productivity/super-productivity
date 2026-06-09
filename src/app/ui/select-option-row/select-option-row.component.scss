@@ -21,6 +21,16 @@
     margin: 0 !important;
   }
 
+  .menu-icon-emoji {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+    font-feature-settings: normal;
+    font-variation-settings: normal;
+    font-size: 16px;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
   .option-title {
     grid-column: 2;
     grid-row: 1;
