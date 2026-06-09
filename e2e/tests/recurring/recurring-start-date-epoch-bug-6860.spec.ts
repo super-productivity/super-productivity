@@ -69,10 +69,9 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await firstDay.click();
 
     // Click Schedule button
-    const scheduleSubmitBtn = scheduleDialog.getByRole('button', {
-      name: 'Schedule',
-      exact: true,
-    });
+    const scheduleSubmitBtn = scheduleDialog.locator(
+      '[data-test-id="schedule-submit-btn"]',
+    );
     await scheduleSubmitBtn.click();
     await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 

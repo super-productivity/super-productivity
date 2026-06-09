@@ -51,10 +51,7 @@ test('should not crash when a repeat config has an invalid startTime in the stor
   await startTimeField.fill('10:30');
   await startTimeField.blur();
 
-  const scheduleBtn = scheduleDialog.getByRole('button', {
-    name: 'Schedule',
-    exact: true,
-  });
+  const scheduleBtn = scheduleDialog.locator('[data-test-id="schedule-submit-btn"]');
   await scheduleBtn.click();
   await scheduleDialog.waitFor({ state: 'hidden' });
   await page.waitForTimeout(300);
