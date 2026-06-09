@@ -1,4 +1,4 @@
-import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { DateTimePickerComponent } from './datetime-picker.component';
 import { DateService } from '../../core/date/date.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
@@ -119,4 +119,78 @@ describe('DateTimePickerComponent', () => {
     component.onHostMouseMove(mouseMoveEvent);
     expect(component.isKeyboardNavigating).toBeFalse();
   });
+
+  it('should only update calendar activeDate when selectedDate changes', () => {
+    const calendar = component.calendar()!;
+    const initialDate = new Date(2026, 4, 6);
+    const sameDate = new Date(2026, 4, 6);
+    const differentDate = new Date(2026, 4, 7);
+
+    // Initial sync
+    fixture.componentRef.setInput('selectedDate', initialDate);
+    fixture.detectChanges();
+    expect(calendar.activeDate).toEqual(initialDate);
+
+    // Navigation (simulated by manual update to activeDate)
+    calendar.activeDate = new Date(2026, 5, 1);
+
+    // Sync with same date value - should NOT reset activeDate
+    fixture.componentRef.setInput('selectedDate', sameDate);
+    fixture.detectChanges();
+    expect(calendar.activeDate).toEqual(new Date(2026, 5, 1));
+
+    // Sync with different date value - SHOULD reset activeDate
+    fixture.componentRef.setInput('selectedDate', differentDate);
+    fixture.detectChanges();
+    expect(calendar.activeDate).toEqual(differentDate);
+  });
+
+  it('should emit enterSubmit when Enter is pressed on the calendar and date matches', () => {
+    spyOn(component.enterSubmit, 'emit');
+    fixture.componentRef.setInput('selectedDate', new Date(2026, 4, 6));
+    fixture.detectChanges();
+
+    const calendar = component.calendar()!;
+    calendar.activeDate = new Date(2026, 4, 6);
+
+    const enterEvent = new KeyboardEvent('keydown', { code: 'Enter' });
+
+    component.onKeyDownOnCalendar(enterEvent);
+    expect(component.enterSubmit.emit).toHaveBeenCalled();
+    expect(component.isShowEnterMsg).toBeTrue();
+  });
+
+  it('should require two Enter presses to emit enterSubmit on time input', () => {
+    spyOn(component.enterSubmit, 'emit');
+    fixture.componentRef.setInput('selectedTime', '10:30');
+    fixture.detectChanges();
+
+    const enterEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+
+    // First press
+    component.onTimeKeyDown(enterEvent);
+    expect(component.enterSubmit.emit).not.toHaveBeenCalled();
+    expect(component.isShowEnterMsg).toBeTrue();
+
+    // Second press
+    component.onTimeKeyDown(enterEvent);
+    expect(component.enterSubmit.emit).toHaveBeenCalled();
+  });
+
+  it('should focus the active calendar cell after view init', fakeAsync(() => {
+    // Create an element that querySelector will find
+    const activeCell = document.createElement('div');
+    activeCell.classList.add('mat-calendar-body-active');
+    activeCell.tabIndex = 0;
+    fixture.nativeElement.appendChild(activeCell);
+
+    spyOn(activeCell, 'focus');
+    // Mock querySelector on the native element
+    spyOn(fixture.nativeElement, 'querySelector').and.returnValue(activeCell);
+
+    component.ngAfterViewInit();
+    tick(50); // Match the 50ms in component
+
+    expect(activeCell.focus).toHaveBeenCalled();
+  }));
 });
