@@ -23,10 +23,17 @@ export const download = async (
         recursive: true,
       });
 
+      // writeFile does not reliably populate `uri` on every Android device/version;
+      // resolve it explicitly so the share sheet gets a valid file reference,
+      // otherwise the recipient (mail/file manager) receives a 0-byte file.
+      const uri =
+        fileResult.uri ??
+        (await Filesystem.getUri({ directory: Directory.Cache, path: filename })).uri;
+
       try {
         await Share.share({
           title: filename,
-          files: [fileResult.uri],
+          files: [uri],
         });
       } catch (shareError: any) {
         const isCanceled =
@@ -41,7 +48,9 @@ export const download = async (
       }
     } catch (e) {
       Log.error(e);
-      await saveStringAsFile(filename, stringData);
+      // Share failed: fall back to a real on-disk save and report where it landed.
+      const fallback = await saveStringAsFile(filename, stringData);
+      return { wasCanceled: false, path: fallback.uri };
     }
     return { wasCanceled: false };
   } else if (isRunningInSnap() && window.ea?.saveFileDialog) {

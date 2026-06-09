@@ -1550,6 +1550,28 @@ describe('InlineMarkdownComponent', () => {
       );
     });
 
+    it('should ignore regular text containing task-like brackets', () => {
+      // Arrange
+      component.model = '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [ ] Task 2';
+      fixture.detectChanges();
+
+      const wrapper1 = document.createElement('li');
+      wrapper1.className = 'checkbox-wrapper';
+      const wrapper2 = document.createElement('li');
+      wrapper2.className = 'checkbox-wrapper';
+
+      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
+      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
+
+      // Act - toggle Task 2
+      component['_handleCheckboxClick'](wrapper2);
+
+      // Assert - regular text with "- [" should not offset the checkbox mapping
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [x] Task 2',
+      );
+    });
+
     it('should handle mixed checked and unchecked items', () => {
       // Arrange
       component.model = '- [x] Done\n- [ ] Todo\n- [x] Also Done';

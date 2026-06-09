@@ -87,6 +87,37 @@ drop-then-create concurrent-index case generically: it resolves the failed row
 when needed, applies the migration SQL outside Prisma migrate, marks the
 migration applied, and retries `migrate deploy`.
 
+> **Existing databases created before the `0_init` baseline:** the migration
+> chain now begins with a `0_init` baseline that creates the base tables, so a
+> brand-new database can be initialized from migrations alone. A database whose
+> schema predates this baseline must tell Prisma which migrations its schema
+> already reflects **before the next deploy**, or `migrate deploy` tries to
+> recreate existing objects and fails (`relation "users" already exists`, or
+> `P3005 The database schema is not empty`). This also applies to the unattended
+> deploy paths (the Helm `migrate-db` initContainer and the Docker
+> `RUN_MIGRATIONS_ON_STARTUP=true` startup), which fail loudly until baselined.
+>
+> - **Database with prior Prisma migration history** (the pre-`0_init`
+>   migrations are recorded in `_prisma_migrations`): mark only the baseline as
+>   applied.
+>
+>   ```bash
+>   npx prisma migrate resolve --applied 0_init
+>   ```
+>
+> - **Database created with `prisma db push`** (no migration history): its
+>   schema already matches the latest `schema.prisma`, so baseline the whole
+>   chain by marking every existing migration as applied.
+>
+>   ```bash
+>   for m in prisma/migrations/*/; do
+>     npx prisma migrate resolve --applied "$(basename "$m")"
+>   done
+>   ```
+>
+> Fresh databases need none of this — `migrate deploy` applies `0_init` and the
+> rest of the chain automatically.
+
 For local `prisma migrate dev` shadow databases, apply migrations containing
 `CREATE INDEX CONCURRENTLY` through `prisma db execute` outside the transaction
 and then mark the migration applied, mirroring the production deploy workaround.

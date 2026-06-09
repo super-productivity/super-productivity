@@ -4,6 +4,10 @@ import { Observable, throwError, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { AzureDevOpsCfg } from './azure-devops.model';
 import { AzureDevOpsIssueReduced } from './azure-devops-issue/azure-devops-issue.model';
+import {
+  AZURE_DEVOPS_DEFAULT_WORK_ITEM_LIMIT,
+  AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT,
+} from './azure-devops.const';
 
 // Azure DevOps API response interfaces
 interface AzureDevOpsUser {
@@ -82,7 +86,9 @@ export class AzureDevOpsApiService {
         { headers: this._getHeaders(cfg).set('Content-Type', 'application/json') },
       )
       .pipe(
-        switchMap((res) => this._mapIssues(res, cfg)),
+        switchMap((res) =>
+          this._mapIssues(res, cfg, AZURE_DEVOPS_DEFAULT_WORK_ITEM_LIMIT),
+        ),
         catchError((error) => {
           return throwError(error);
         }),
@@ -108,17 +114,18 @@ export class AzureDevOpsApiService {
         { query },
         { headers: this._getHeaders(cfg).set('Content-Type', 'application/json') },
       )
-      .pipe(switchMap((res) => this._mapIssues(res, cfg)));
+      .pipe(switchMap((res) => this._mapIssues(res, cfg, this._getAutoImportLimit(cfg))));
   }
 
   private _mapIssues(
     res: AzureDevOpsWiqlResponse,
     cfg: AzureDevOpsCfg,
+    limit: number,
   ): Observable<AzureDevOpsIssueReduced[]> {
     if (!res.workItems || res.workItems.length === 0) {
       return of([]);
     }
-    const ids = res.workItems.map((item) => item.id).slice(0, 50);
+    const ids = res.workItems.map((item) => item.id).slice(0, limit);
     const idsStr = ids.join(',');
     const fields = [
       'System.Id',
@@ -208,5 +215,12 @@ export class AzureDevOpsApiService {
   private _getBaseUrl(cfg: AzureDevOpsCfg): string {
     const host = cfg.host || `https://dev.azure.com/${cfg.organization}`;
     return host.replace(/\/$/, '');
+  }
+
+  private _getAutoImportLimit(cfg: AzureDevOpsCfg): number {
+    return Math.min(
+      Math.max(cfg.autoImportLimit || AZURE_DEVOPS_DEFAULT_WORK_ITEM_LIMIT, 1),
+      AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT,
+    );
   }
 }

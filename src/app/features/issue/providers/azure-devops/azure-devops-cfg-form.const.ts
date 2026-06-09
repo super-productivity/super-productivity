@@ -2,6 +2,10 @@ import { ConfigFormSection } from '../../../config/global-config.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
 import { AzureDevOpsCfg } from './azure-devops.model';
 import { T } from '../../../../t.const';
+import {
+  AZURE_DEVOPS_DEFAULT_WORK_ITEM_LIMIT,
+  AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT,
+} from './azure-devops.const';
 
 export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg> = {
   title: 'Azure DevOps',
@@ -55,6 +59,22 @@ export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg>
                 label: T.F.AZURE_DEVOPS.FORM.SCOPE_ASSIGNED,
               },
             ],
+          },
+        },
+        {
+          key: 'autoImportLimit',
+          type: 'input',
+          defaultValue: AZURE_DEVOPS_DEFAULT_WORK_ITEM_LIMIT,
+          templateOptions: {
+            required: true,
+            label: T.F.AZURE_DEVOPS.FORM.AUTO_IMPORT_LIMIT,
+            description: T.F.AZURE_DEVOPS.FORM.AUTO_IMPORT_LIMIT_DESCRIPTION,
+            descriptionTranslateParams: {
+              max: AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT,
+            },
+            type: 'number',
+            min: 1,
+            max: AZURE_DEVOPS_MAX_WORK_ITEM_LIMIT,
           },
         },
       ],

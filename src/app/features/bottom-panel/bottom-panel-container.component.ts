@@ -27,6 +27,8 @@ import { PanelContentService, PanelContentType } from '../panels/panel-content.s
 import { BottomPanelStateService } from '../../core-ui/bottom-panel-state.service';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
 import { BodyClass } from '../../app.constants';
+import { T } from '../../t.const';
+import { TranslatePipe } from '@ngx-translate/core';
 
 export interface BottomPanelData {
   panelContent: PanelContentType;
@@ -36,6 +38,7 @@ const PANEL_HEIGHTS = {
   MAX_HEIGHT: 0.8,
   MAX_HEIGHT_ABSOLUTE: 0.98,
   TASK_PANEL_HEIGHT: 0.6,
+  NOTES_PANEL_HEIGHT: 0.6,
   OTHER_PANEL_HEIGHT: 0.9,
   // Upward fling → expand to MAX_HEIGHT.
   VELOCITY_THRESHOLD: 0.5, // px/ms
@@ -63,6 +66,27 @@ const PANEL_HEIGHTS = {
   INITIAL_ANIMATION_BLOCK_DURATION: 300,
 } as const;
 
+export const getInitialBottomPanelHeightRatio = (
+  panelContent: PanelContentType | null,
+): number => {
+  switch (panelContent) {
+    case 'TASK':
+      return PANEL_HEIGHTS.TASK_PANEL_HEIGHT;
+    case 'NOTES':
+      return PANEL_HEIGHTS.NOTES_PANEL_HEIGHT;
+    default:
+      return PANEL_HEIGHTS.OTHER_PANEL_HEIGHT;
+  }
+};
+
+export const isBottomPanelCloseButtonVisible = (
+  panelContent: PanelContentType | null,
+): boolean => panelContent === 'NOTES';
+
+export const stopBottomPanelHeaderEventPropagation = (event: Event): void => {
+  event.stopPropagation();
+};
+
 const KEYBOARD_DETECT_THRESHOLD = 100;
 const KEYBOARD_SAFE_HEIGHT_MIN = 200;
 const KEYBOARD_SAFE_HEIGHT_RATIO = 0.85;
@@ -85,10 +109,12 @@ const CSS_VAR_VISUAL_VIEWPORT_HEIGHT = '--visual-viewport-height';
     IssuePanelComponent,
     TaskViewCustomizerPanelComponent,
     PluginPanelContainerComponent,
+    TranslatePipe,
   ],
   standalone: true,
 })
 export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
+  readonly T = T;
   private _bottomSheetRef = inject(MatBottomSheetRef<BottomPanelContainerComponent>);
   private _elementRef = inject(ElementRef);
   private _taskService = inject(TaskService);
@@ -105,6 +131,9 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     const dataContent = this.data?.panelContent ?? null;
     return dataContent ?? this._panelContentService.getCurrentPanelType();
   });
+  readonly isShowCloseButton = computed<boolean>(() =>
+    isBottomPanelCloseButtonVisible(this.panelContent()),
+  );
   readonly selectedTask = toSignal(this._taskService.selectedTask$, {
     initialValue: null,
   });
@@ -165,6 +194,10 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
 
   close(): void {
     this._bottomSheetRef.dismiss();
+  }
+
+  stopHeaderEventPropagation(event: Event): void {
+    stopBottomPanelHeaderEventPropagation(event);
   }
 
   private _setupDragListeners(): void {
@@ -408,10 +441,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _setInitialHeight(): void {
     const container = this._getSheetContainer();
     if (container) {
-      const heightRatio =
-        this.panelContent() === 'TASK'
-          ? PANEL_HEIGHTS.TASK_PANEL_HEIGHT
-          : PANEL_HEIGHTS.OTHER_PANEL_HEIGHT;
+      const heightRatio = getInitialBottomPanelHeightRatio(this.panelContent());
       const initialHeight = window.innerHeight * heightRatio;
       container.style.height = `${initialHeight}px`;
       container.style.maxHeight = `${initialHeight}px`;

@@ -247,15 +247,15 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   clickPreview($event: MouseEvent): void {
-    if (($event.target as HTMLElement).tagName === 'A') {
+    const target = $event.target as HTMLElement;
+    if (target.closest('a')) {
       // links are already handled by the markdown component
-    } else if (
-      $event?.target &&
-      ($event.target as HTMLElement).classList.contains('checkbox')
-    ) {
-      this._handleCheckboxClick(
-        ($event.target as HTMLElement).parentElement as HTMLElement,
-      );
+      return;
+    }
+
+    const wrapper = target.closest('.checkbox-wrapper') as HTMLElement | null;
+    if (wrapper) {
+      this._handleCheckboxClick(wrapper);
     }
   }
 

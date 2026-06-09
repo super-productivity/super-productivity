@@ -1,9 +1,19 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(currentDir, '../prisma/migrations');
+
+const readMigration = (name: string): string =>
+  readFileSync(join(migrationsDir, name, 'migration.sql'), 'utf8');
+
+const allMigrationSql = (): string =>
+  readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => readMigration(entry.name))
+    .join('\n');
 
 describe('performance migrations', () => {
   it('adds the entity sequence index without a blocking or destructive migration', () => {
@@ -273,5 +283,58 @@ describe('performance migrations', () => {
       '"migrate-payload-bytes:dev": "ts-node scripts/migrate-payload-bytes.ts"',
     );
     expect(script).not.toContain('prisma.operation.update({');
+  });
+});
+
+// Regression coverage for issue #8187: the migration chain must be able to
+// create a fresh database on its own, and must stay in sync with schema.prisma.
+describe('schema bootstrap and drift (#8187)', () => {
+  const migrationNames = (): string[] =>
+    readdirSync(migrationsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+
+  it('starts with a baseline that creates the base tables (no ALTER on a missing table)', () => {
+    const sql = readMigration('0_init');
+
+    // migrate deploy applies migrations in lexicographic order; the baseline
+    // must sort before the first incremental (ALTER-only) migration so the
+    // tables those migrations ALTER actually exist on a fresh database.
+    expect(migrationNames()[0]).toBe('0_init');
+
+    for (const table of ['users', 'operations', 'user_sync_state', 'sync_devices']) {
+      expect(sql).toContain(`CREATE TABLE "${table}"`);
+    }
+  });
+
+  it('adds the magic-link login_token columns and index that schema.prisma requires', () => {
+    const sql = readMigration('20260601000000_add_login_token');
+
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS "login_token" TEXT/i);
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS "login_token_expires_at" BIGINT/i);
+    expect(sql).toMatch(
+      /CREATE INDEX IF NOT EXISTS "users_login_token_idx" ON "users"\("login_token"\)/i,
+    );
+  });
+
+  it('keeps every @map column in schema.prisma backed by a migration', () => {
+    const schema = readFileSync(join(currentDir, '../prisma/schema.prisma'), 'utf8');
+    const migrations = allMigrationSql();
+
+    // The #8187 root cause was a column declared in schema.prisma (login_token)
+    // with no migration creating it, so a migrate-only database crashed at
+    // runtime with `column users.login_token does not exist`. Guard the whole
+    // bug class: every `@map("col")` (single @, so model `@@map` table names are
+    // excluded by the lookbehind) must appear as a quoted identifier in some
+    // migration. Quoting avoids substring matches (e.g. "login_token" must not
+    // be satisfied by "login_token_expires_at").
+    const mappedColumns = [...schema.matchAll(/(?<!@)@map\("([^"]+)"\)/g)].map(
+      (match) => match[1],
+    );
+    expect(mappedColumns.length).toBeGreaterThan(0);
+
+    const missing = mappedColumns.filter((column) => !migrations.includes(`"${column}"`));
+    expect(missing).toEqual([]);
   });
 });

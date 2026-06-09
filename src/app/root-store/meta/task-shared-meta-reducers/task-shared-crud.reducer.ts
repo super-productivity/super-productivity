@@ -23,7 +23,7 @@ import { Tag } from '../../../features/tag/tag.model';
 import { Project } from '../../../features/project/project.model';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { calcTotalTimeSpent } from '../../../features/tasks/util/calc-total-time-spent';
-import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { IN_PROGRESS_TAG, TODAY_TAG } from '../../../features/tag/tag.const';
 import { unique } from '../../../util/unique';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
@@ -623,6 +623,30 @@ const sanitizeDoneScheduleChanges = (
   };
 };
 
+const removeInProgressTagOnCompletion = (
+  taskUpdate: Update<Task>,
+  currentTask: Task,
+): Update<Task> => {
+  if (taskUpdate.changes.isDone !== true) {
+    return taskUpdate;
+  }
+
+  const tagIds = Array.isArray(taskUpdate.changes.tagIds)
+    ? taskUpdate.changes.tagIds
+    : currentTask.tagIds;
+  if (!tagIds.includes(IN_PROGRESS_TAG.id)) {
+    return taskUpdate;
+  }
+
+  return {
+    ...taskUpdate,
+    changes: {
+      ...taskUpdate.changes,
+      tagIds: tagIds.filter((tagId) => tagId !== IN_PROGRESS_TAG.id),
+    },
+  };
+};
+
 const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState => {
   const taskId = taskUpdate.id as string;
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
@@ -638,29 +662,33 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
     currentTask,
     todayStr,
   );
+  const cleanedTaskUpdate = removeInProgressTagOnCompletion(
+    sanitizedTaskUpdate,
+    currentTask,
+  );
 
   // Handle tag changes if tagIds are being updated
-  if (sanitizedTaskUpdate.changes.tagIds) {
+  if (cleanedTaskUpdate.changes.tagIds) {
     const oldTagIds = currentTask.tagIds;
-    const newTagIds = sanitizedTaskUpdate.changes.tagIds;
+    const newTagIds = cleanedTaskUpdate.changes.tagIds;
 
     updatedState = handleTagUpdates(updatedState, taskId, oldTagIds, newTagIds);
   }
 
   // Handle task state updates using existing task reducer logic
   let taskState = updatedState[TASK_FEATURE_NAME];
-  const { timeSpentOnDay, timeEstimate } = sanitizedTaskUpdate.changes;
+  const { timeSpentOnDay, timeEstimate } = cleanedTaskUpdate.changes;
 
   taskState = timeSpentOnDay
     ? updateTimeSpentForTask(taskId, timeSpentOnDay, taskState)
     : taskState;
-  taskState = updateTimeEstimateForTask(sanitizedTaskUpdate, timeEstimate, taskState);
-  taskState = updateDoneOnForTask(sanitizedTaskUpdate, taskState, todayStr);
+  taskState = updateTimeEstimateForTask(cleanedTaskUpdate, timeEstimate, taskState);
+  taskState = updateDoneOnForTask(cleanedTaskUpdate, taskState, todayStr);
   taskState = taskAdapter.updateOne(
     {
-      ...sanitizedTaskUpdate,
+      ...cleanedTaskUpdate,
       changes: {
-        ...sanitizedTaskUpdate.changes,
+        ...cleanedTaskUpdate.changes,
         modified: Date.now(),
       },
     },
@@ -675,7 +703,7 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
   // Keep TODAY_TAG.taskIds order intact for tasks that are already scheduled for today.
   // Completing a task must not move an overdue/future scheduled task to today; doneOn
   // records completion date separately from the task's schedule.
-  const isToDone = sanitizedTaskUpdate.changes.isDone === true;
+  const isToDone = cleanedTaskUpdate.changes.isDone === true;
   if (isToDone && !currentTask.parentId && currentTask.dueDay === todayStr) {
     const todayTag = getTag(updatedState, TODAY_TAG.id);
     if (!todayTag.taskIds.includes(taskId)) {
@@ -692,11 +720,11 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
   // and TODAY_TAG.taskIds to keep them consistent with the task's dueDay.
   const taskAfterUpdate = taskState.entities[taskId] as Task;
   const hasDueDayChange = Object.prototype.hasOwnProperty.call(
-    sanitizedTaskUpdate.changes,
+    cleanedTaskUpdate.changes,
     'dueDay',
   );
   const newDueDay = hasDueDayChange
-    ? sanitizedTaskUpdate.changes.dueDay
+    ? cleanedTaskUpdate.changes.dueDay
     : isToDone && taskAfterUpdate?.dueDay !== currentTask.dueDay
       ? taskAfterUpdate?.dueDay
       : undefined;
