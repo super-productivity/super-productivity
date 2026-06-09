@@ -8,6 +8,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { Log } from '../../../core/log';
 import { from, Observable, of, Subject } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -19,6 +20,7 @@ import { IssueService } from '../../issue/issue.service';
 import { Store } from '@ngrx/store';
 import {
   adjustRemainingTime,
+  cancelFocusSession,
   completeFocusSession,
   completeTask,
   endFlowtimeSession,
@@ -37,6 +39,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { SimpleCounterService } from '../../simple-counter/simple-counter.service';
 import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import { ICAL_TYPE } from '../../issue/issue.const';
+import { INBOX_PROJECT } from '../../project/project.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatFabButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -52,6 +55,7 @@ import { SimpleCounterButtonComponent } from '../../simple-counter/simple-counte
 import { TaskAttachmentListComponent } from '../../tasks/task-attachment/task-attachment-list/task-attachment-list.component';
 import { slideInOutFromBottomAni } from '../../../ui/animations/slide-in-out-from-bottom.ani';
 import { FocusModeService } from '../focus-mode.service';
+import { FocusModeLayoutComponent } from '../focus-mode-layout/focus-mode-layout.component';
 import { FocusClockFaceComponent } from '../focus-clock-face/focus-clock-face.component';
 import {
   FOCUS_MODE_DEFAULTS,
@@ -87,6 +91,7 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
     slideInOutFromBottomAni,
   ],
   imports: [
+    FocusModeLayoutComponent,
     TaskTitleComponent,
     FocusClockFaceComponent,
     MatIconButton,
@@ -119,6 +124,7 @@ export class FocusModeMainComponent {
   private readonly _store = inject(Store);
   private readonly _focusModeStorage = inject(FocusModeStorageService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _router = inject(Router);
 
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
@@ -496,6 +502,13 @@ export class FocusModeMainComponent {
 
   resetCycles(): void {
     this._store.dispatch(resetCycles());
+  }
+
+  exitToPlanning(): void {
+    // Unified with the break / session-done screens: cancel the session
+    // (clears tracking + hides the overlay) and route to the Inbox.
+    this._store.dispatch(cancelFocusSession());
+    this._router.navigateByUrl(`/project/${INBOX_PROJECT.id}/tasks`);
   }
 
   selectMode(mode: FocusModeMode | string | number): void {

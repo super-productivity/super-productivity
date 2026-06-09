@@ -38,7 +38,7 @@ describe('IosBackgroundTrackingEffects', () => {
       isRunning: false,
     };
 
-    const breakOfferTimer: TimerState = {
+    const pausedBreakTimer: TimerState = {
       isRunning: false,
       startedAt: null,
       elapsed: 0,
@@ -99,8 +99,8 @@ describe('IosBackgroundTrackingEffects', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     });
 
-    it('does not dispatch focus tick on the BreakOffer screen', () => {
-      handleIosResume(globalTracking, taskService, store, breakOfferTimer);
+    it('does not dispatch focus tick when a break is paused (not running)', () => {
+      handleIosResume(globalTracking, taskService, store, pausedBreakTimer);
 
       expect(store.dispatch).not.toHaveBeenCalled();
     });

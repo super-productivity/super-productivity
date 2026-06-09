@@ -3,8 +3,9 @@ import { Router } from '@angular/router';
 import { MatButtonModule, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { FocusModeService } from '../focus-mode.service';
+import { FocusModeLayoutComponent } from '../focus-mode-layout/focus-mode-layout.component';
 import { FocusClockFaceComponent } from '../focus-clock-face/focus-clock-face.component';
-import { FocusMainUIState, FocusModeMode, getBreakCycle } from '../focus-mode.model';
+import { FocusModeMode, getBreakCycle } from '../focus-mode.model';
 import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clock-string.pipe';
 import { Store } from '@ngrx/store';
 import {
@@ -13,7 +14,6 @@ import {
   pauseFocusSession,
   resetCycles,
   skipBreak,
-  startBreak,
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
 import { INBOX_PROJECT } from '../../project/project.const';
@@ -26,12 +26,12 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { TaskService } from '../../tasks/task.service';
-import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 @Component({
   selector: 'focus-mode-break',
   standalone: true,
   imports: [
+    FocusModeLayoutComponent,
     MatButtonModule,
     MatIconButton,
     MatTooltip,
@@ -72,11 +72,6 @@ export class FocusModeBreakComponent {
   });
 
   readonly isBreakPaused = computed(() => this.focusModeService.isSessionPaused());
-  readonly isBreakOffer = computed(
-    () =>
-      !this.focusModeService.isSessionRunning() &&
-      this.focusModeService.mainState() === FocusMainUIState.BreakOffer,
-  );
   readonly isPomodoro = computed(
     () => this.focusModeService.mode() === FocusModeMode.Pomodoro,
   );
@@ -98,9 +93,6 @@ export class FocusModeBreakComponent {
   // Which break-label translation key to show above the digits. Flowtime breaks
   // aren't Pomodoro short/long, so they read as a neutral "Break".
   readonly breakLabelKey = computed(() => {
-    if (this.isBreakOffer()) {
-      return T.F.FOCUS_MODE.FLOWTIME_BREAK_TITLE;
-    }
     if (this.focusModeService.mode() === FocusModeMode.Flowtime) {
       return T.F.FOCUS_MODE.BREAK_TITLE;
     }
@@ -130,27 +122,7 @@ export class FocusModeBreakComponent {
   }
 
   resumeBreak(): void {
-    if (this.isBreakOffer()) {
-      // Prefer the stored pausedTaskId for Flowtime break offers;
-      // fallback to the active current task only when no pausedTaskId exists.
-      const currentTaskId = this._taskService.currentTaskId();
-      const storePausedTaskId = this._pausedTaskId();
-      const pausedTaskId = storePausedTaskId ?? currentTaskId;
-      const config = this.focusModeService.focusModeConfig();
-      if (config?.isPauseTrackingDuringBreak) {
-        this._store.dispatch(unsetCurrentTask());
-      }
-
-      this._store.dispatch(
-        startBreak({
-          duration: this.focusModeService.sessionDuration(),
-          isLongBreak: this.focusModeService.isBreakLong(),
-          pausedTaskId,
-        }),
-      );
-    } else {
-      this._store.dispatch(unPauseFocusSession());
-    }
+    this._store.dispatch(unPauseFocusSession());
   }
 
   resetCycles(): void {

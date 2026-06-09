@@ -1,7 +1,7 @@
 @let isCountDown = isCountTimeDown();
 @let ct = currentTask();
 @let displayed = displayedTask();
-<!-- Countdown Animation -->
+<!-- Countdown Animation (full-screen overlay, sits outside the layout) -->
 @if (isShowCountdown()) {
   <focus-mode-countdown
     @fade
@@ -9,42 +9,53 @@
   ></focus-mode-countdown>
 }
 
-<!-- Mode Selector (Preparation state) -->
-@if (isShowModeSelector()) {
-  <div class="mode-selector-wrapper">
+<focus-mode-layout>
+  <!-- ========== ROW 1: TOP CONTROLS ========== -->
+  <!-- Mode selector (Preparation) and simple counters (In Progress) are mutually
+       exclusive; whichever is active projects into the layout's top slot. The
+       slot keeps its reserved height when neither is present (the layout's
+       min-height), so the rows below don't jump. The selector is removed from
+       the DOM when not in preparation — hiding it via visibility would leave its
+       mat-icons painted (the global isMaterialSymbolsLoaded rule forces icons
+       visible), so removal is the only clean way to make it disappear. -->
+  @if (isShowModeSelector()) {
     <segmented-button-group
+      fmTop
       class="focus-mode-select-mode"
       [options]="modeOptions()"
       [selectedId]="mode()"
       [ariaLabel]="T.F.FOCUS_MODE.SELECT_MODE | translate"
       (selectionChange)="selectMode($event)"
     ></segmented-button-group>
-  </div>
-}
+  }
 
-<!-- Simple Counter Buttons (In Progress state) -->
-@if (isShowSimpleCounters()) {
-  @if (simpleCounterService.enabledSimpleCounters$ | async; as enabledSimpleCounters) {
-    @if (enabledSimpleCounters.length) {
-      <section class="simple-counter-buttons">
-        @for (
-          simpleCounter of enabledSimpleCounters;
-          track trackById($index, simpleCounter)
-        ) {
-          <simple-counter-button
-            [class.isHiddenWithoutFocus]="!simpleCounter.isOn"
-            [simpleCounter]="simpleCounter"
-          ></simple-counter-button>
-        }
-      </section>
+  <!-- Simple Counter Buttons (In Progress state) -->
+  @if (isShowSimpleCounters()) {
+    @if (simpleCounterService.enabledSimpleCounters$ | async; as enabledSimpleCounters) {
+      @if (enabledSimpleCounters.length) {
+        <section
+          fmTop
+          class="simple-counter-buttons"
+        >
+          @for (
+            simpleCounter of enabledSimpleCounters;
+            track trackById($index, simpleCounter)
+          ) {
+            <simple-counter-button
+              [class.isHiddenWithoutFocus]="!simpleCounter.isOn"
+              [simpleCounter]="simpleCounter"
+            ></simple-counter-button>
+          }
+        </section>
+      }
     }
   }
-}
 
-<!-- Main Content (visible in Preparation and In Progress states) -->
-<div class="center-block">
-  <!-- Task title (switch on left, finish on right when task selected) -->
-  <div class="task-section">
+  <!-- ========== ROW 2: Task title (switch on left, finish on right) ========== -->
+  <div
+    fmTask
+    class="task-section"
+  >
     @if (displayed) {
       @if (displayed.parentId && parentTaskTitle()) {
         <div class="parent-title">
@@ -91,8 +102,11 @@
     }
   </div>
 
-  <!-- Clock Display -->
-  <div class="clock-display">
+  <!-- ========== ROW 3: Clock Display (fills, centers the clock) ========== -->
+  <div
+    fmClock
+    class="clock-display"
+  >
     <div
       class="clock-display__content"
       [class.is-duration-slider-active]="isShowDurationSlider()"
@@ -182,197 +196,208 @@
         </div>
       }
     </div>
-
-    <!-- Session controls below the circle (pause / complete / reset, in-progress only) -->
-    @if (isShowPauseButton() || isShowCompleteSessionButton()) {
-      <div
-        class="circle-controls"
-        @fade
-      >
-        @if (isShowPauseButton()) {
-          @if (focusModeService.isSessionPaused()) {
-            <button
-              mat-icon-button
-              class="pause-resume-btn"
-              [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
-              (click)="resumeSession()"
-            >
-              <mat-icon>play_arrow</mat-icon>
-            </button>
-          } @else {
-            <button
-              mat-icon-button
-              class="pause-resume-btn"
-              [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
-              (click)="pauseSession()"
-            >
-              <mat-icon>pause</mat-icon>
-            </button>
-          }
-        }
-
-        @if (isShowCompleteSessionButton()) {
-          <button
-            mat-icon-button
-            class="complete-session-btn"
-            [matTooltip]="T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate"
-            (click)="completeFocusSession()"
-          >
-            <mat-icon>done_all</mat-icon>
-          </button>
-        }
-
-        @if (isShowCompleteSessionButton() && isPomodoro()) {
-          <button
-            mat-icon-button
-            [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
-            (click)="resetCycles()"
-          >
-            <mat-icon>restart_alt</mat-icon>
-          </button>
-        }
-      </div>
-    }
-
-    <!-- Play FAB + mode settings cog (Preparation state) -->
-    @if (isShowPlayButton()) {
-      <div class="play-actions">
-        <button
-          mat-fab
-          color="primary"
-          [matTooltip]="
-            isPlayButtonDisabled()
-              ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
-              : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
-          "
-          [disabled]="isPlayButtonDisabled()"
-          (click)="startSession()"
-          class="play-button"
-        >
-          <mat-icon>play_arrow</mat-icon>
-        </button>
-
-        @if (isShowPomodoroSettings()) {
-          <button
-            mat-icon-button
-            [matTooltip]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
-            (click)="openPomodoroSettings()"
-            class="mode-settings-btn"
-          >
-            <mat-icon>settings</mat-icon>
-          </button>
-        }
-
-        @if (isShowFlowtimeSettings()) {
-          <button
-            mat-icon-button
-            [matTooltip]="T.F.FOCUS_MODE.FLOWTIME_SETTINGS | translate"
-            (click)="openFlowtimeSettings()"
-            class="mode-settings-btn"
-          >
-            <mat-icon>settings</mat-icon>
-          </button>
-        }
-      </div>
-    }
-
-    <!-- Bottom control buttons (In Progress state) -->
-    @if (isShowBottomControls()) {
-      <section class="bottom-controls">
-        @if (displayed && displayed.issueId && displayed.issueType !== ICAL_TYPE) {
-          <a
-            mat-icon-button
-            [matTooltip]="T.F.FOCUS_MODE.OPEN_ISSUE_IN_BROWSER | translate"
-            target="_blank"
-            [href]="issueUrl$ | async"
-          >
-            @if (displayed.issuePoints) {
-              <div class="mini-badge bgc-primary">{{ displayed.issuePoints }}</div>
-            }
-            <mat-icon [svgIcon]="displayed.issueType | issueIcon"></mat-icon>
-          </a>
-        }
-
-        @if (displayed) {
-          <button
-            (click)="isFocusNotes.set(!isFocusNotes())"
-            [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
-            class="ico-btn show-additional-info-btn"
-            color=""
-            mat-icon-button
-          >
-            @if (!isFocusNotes()) {
-              <mat-icon>chat</mat-icon>
-            }
-            @if (isFocusNotes()) {
-              <mat-icon>expand_more</mat-icon>
-            }
-          </button>
-        }
-      </section>
-    }
   </div>
 
-  <!-- Task Selector Overlay -->
-  @if (isTaskSelectorOpen()) {
-    <focus-mode-task-selector
-      (taskSelected)="onTaskSelected($event)"
-      (closed)="closeTaskSelector()"
-    ></focus-mode-task-selector>
-  }
-
-  <!-- Notes and Attachments (In Progress only) -->
-  @if (isShowBottomControls() && displayed && isFocusNotes()) {
+  <!-- ========== ROW 4: Play FAB + mode settings cog (Preparation state) ========== -->
+  @if (isShowPlayButton()) {
     <div
-      class="notes-backdrop"
-      (click)="isFocusNotes.set(false)"
-      @fade
-    ></div>
-
-    <div
-      class="notes-and-attachments"
-      @slideInOutFromBottom
+      fmBottom
+      class="play-actions"
     >
       <button
-        (click)="isFocusNotes.set(false)"
-        class="hide-notes-btn"
-        color=""
-        mat-mini-fab
+        mat-fab
+        color="primary"
+        [matTooltip]="
+          isPlayButtonDisabled()
+            ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
+            : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
+        "
+        [disabled]="isPlayButtonDisabled()"
+        (click)="startSession()"
+        class="play-button"
       >
-        <mat-icon>expand_more</mat-icon>
+        <mat-icon>play_arrow</mat-icon>
       </button>
 
-      <div class="notes-panel">
-        <inline-markdown
-          (blur)="isFocusNotes.set(false)"
-          (blurred)="isFocusNotes.set(false)"
-          (changed)="changeTaskNotes($event); isFocusNotes.set(false)"
-          [isFocus]="isFocusNotes()"
-          [isShowControls]="true"
-          [isDefaultText]="!displayed.notes"
-          [model]="displayed.notes || defaultTaskNotes()"
-          [taskId]="displayed.id"
-        ></inline-markdown>
-      </div>
-      @if (displayed.attachments.length) {
-        <div
-          class="attachment-list-wrapper"
-          @fade
+      @if (isShowPomodoroSettings()) {
+        <button
+          mat-icon-button
+          [matTooltip]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
+          (click)="openPomodoroSettings()"
+          class="mode-settings-btn"
         >
-          <task-attachment-list
-            [taskId]="displayed.id"
-            [attachments]="displayed.attachments"
-          ></task-attachment-list>
-        </div>
+          <mat-icon>settings</mat-icon>
+        </button>
+      }
+
+      @if (isShowFlowtimeSettings()) {
+        <button
+          mat-icon-button
+          [matTooltip]="T.F.FOCUS_MODE.FLOWTIME_SETTINGS | translate"
+          (click)="openFlowtimeSettings()"
+          class="mode-settings-btn"
+        >
+          <mat-icon>settings</mat-icon>
+        </button>
       }
     </div>
   }
 
-  <!-- Drag Over Message -->
-  @if (displayed && isDragOver()) {
-    <div class="bgc-accent drag-over-msg">
-      <mat-icon>add</mat-icon>
-      {{ T.F.TASK.CMP.DROP_ATTACHMENT | translate: { title: displayed.title } }}
-    </div>
+  <!-- ========== ROW 4: Session control row (In Progress state) ========== -->
+  <!-- Back to Planning · Pause · Complete · Reset · (issue) · Notes — one bottom row. -->
+  @if (isShowBottomControls()) {
+    <section
+      fmBottom
+      class="bottom-controls"
+    >
+      <!-- Back to Planning (cancels the session + returns to the Inbox) -->
+      <button
+        mat-icon-button
+        class="exit-session-btn"
+        [matTooltip]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
+        (click)="exitToPlanning()"
+      >
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+
+      @if (isShowPauseButton()) {
+        @if (focusModeService.isSessionPaused()) {
+          <button
+            mat-icon-button
+            class="pause-resume-btn"
+            [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
+            (click)="resumeSession()"
+          >
+            <mat-icon>play_arrow</mat-icon>
+          </button>
+        } @else {
+          <button
+            mat-icon-button
+            class="pause-resume-btn"
+            [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
+            (click)="pauseSession()"
+          >
+            <mat-icon>pause</mat-icon>
+          </button>
+        }
+      }
+
+      @if (isShowCompleteSessionButton()) {
+        <button
+          mat-icon-button
+          class="complete-session-btn"
+          [matTooltip]="T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate"
+          (click)="completeFocusSession()"
+        >
+          <mat-icon>done_all</mat-icon>
+        </button>
+      }
+
+      @if (isShowCompleteSessionButton() && isPomodoro()) {
+        <button
+          mat-icon-button
+          [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+          (click)="resetCycles()"
+        >
+          <mat-icon>restart_alt</mat-icon>
+        </button>
+      }
+
+      @if (displayed && displayed.issueId && displayed.issueType !== ICAL_TYPE) {
+        <a
+          mat-icon-button
+          [matTooltip]="T.F.FOCUS_MODE.OPEN_ISSUE_IN_BROWSER | translate"
+          target="_blank"
+          [href]="issueUrl$ | async"
+        >
+          @if (displayed.issuePoints) {
+            <div class="mini-badge bgc-primary">{{ displayed.issuePoints }}</div>
+          }
+          <mat-icon [svgIcon]="displayed.issueType | issueIcon"></mat-icon>
+        </a>
+      }
+
+      @if (displayed) {
+        <button
+          (click)="isFocusNotes.set(!isFocusNotes())"
+          [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
+          class="ico-btn show-additional-info-btn"
+          color=""
+          mat-icon-button
+        >
+          @if (!isFocusNotes()) {
+            <mat-icon>chat</mat-icon>
+          }
+          @if (isFocusNotes()) {
+            <mat-icon>expand_more</mat-icon>
+          }
+        </button>
+      }
+    </section>
   }
-</div>
+</focus-mode-layout>
+
+<!-- ========== OVERLAYS (anchored to :host, above the layout) ========== -->
+
+<!-- Task Selector Overlay -->
+@if (isTaskSelectorOpen()) {
+  <focus-mode-task-selector
+    (taskSelected)="onTaskSelected($event)"
+    (closed)="closeTaskSelector()"
+  ></focus-mode-task-selector>
+}
+
+<!-- Notes and Attachments (In Progress only) -->
+@if (isShowBottomControls() && displayed && isFocusNotes()) {
+  <div
+    class="notes-backdrop"
+    (click)="isFocusNotes.set(false)"
+    @fade
+  ></div>
+
+  <div
+    class="notes-and-attachments"
+    @slideInOutFromBottom
+  >
+    <button
+      (click)="isFocusNotes.set(false)"
+      class="hide-notes-btn"
+      color=""
+      mat-mini-fab
+    >
+      <mat-icon>expand_more</mat-icon>
+    </button>
+
+    <div class="notes-panel">
+      <inline-markdown
+        (blur)="isFocusNotes.set(false)"
+        (blurred)="isFocusNotes.set(false)"
+        (changed)="changeTaskNotes($event); isFocusNotes.set(false)"
+        [isFocus]="isFocusNotes()"
+        [isShowControls]="true"
+        [isDefaultText]="!displayed.notes"
+        [model]="displayed.notes || defaultTaskNotes()"
+        [taskId]="displayed.id"
+      ></inline-markdown>
+    </div>
+    @if (displayed.attachments.length) {
+      <div
+        class="attachment-list-wrapper"
+        @fade
+      >
+        <task-attachment-list
+          [taskId]="displayed.id"
+          [attachments]="displayed.attachments"
+        ></task-attachment-list>
+      </div>
+    }
+  </div>
+}
+
+<!-- Drag Over Message -->
+@if (displayed && isDragOver()) {
+  <div class="bgc-accent drag-over-msg">
+    <mat-icon>add</mat-icon>
+    {{ T.F.TASK.CMP.DROP_ATTACHMENT | translate: { title: displayed.title } }}
+  </div>
+}

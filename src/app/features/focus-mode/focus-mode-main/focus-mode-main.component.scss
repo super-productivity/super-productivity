@@ -6,15 +6,10 @@
   right: 0;
   left: 0;
   bottom: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  // Reserve room at top for the absolute-positioned mode selector (Preparation)
-  // and simple-counter buttons (InProgress). Held constant across states so
-  // the centered clock doesn't shift when controls swap in/out.
-  padding-top: var(--s9);
-  padding-bottom: var(--s2);
+  // The 4-row skeleton lives in <focus-mode-layout>; this host is just the
+  // positioning context for that layout plus the overlays (notes, task
+  // selector, drag-over) that sit above it.
+  display: block;
   // Establish a stacking context so the notes-modal backdrop can't bleed
   // above the parent overlay's close (X) button.
   z-index: 0;
@@ -48,12 +43,11 @@
   }
 }
 
-// Mode selector at the top (Preparation state)
+// ========== ROW 1: TOP CONTROLS ==========
+// Mode selector (Preparation) / simple counters (In Progress) project into the
+// layout's reserved top slot; that slot's min-height keeps the row height (and
+// the rows below) stable when the active control is removed.
 .focus-mode-select-mode {
-  position: absolute;
-  top: var(--s2);
-  left: 50%;
-  transform: translateX(-50%);
   z-index: var(--z-focus-mode-main-selector);
   padding: 0 var(--s2);
   max-width: 600px;
@@ -68,31 +62,17 @@
   pointer-events: var(--revealed-pointer-events);
 }
 
-// ========== CENTER BLOCK (Preparation & In Progress) ==========
-.center-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-}
-
-// ========== TASK SECTION ==========
-// Min-height reserves enough vertical room for the extended FAB CTA (~56px)
-// so the circle below doesn't shift up when the user selects a task and the
-// FAB collapses to the smaller title row. Stabilizes the circle's vertical
-// position across no-task ↔ task-selected transitions.
+// ========== ROW 2: TASK SECTION ==========
+// Content-height row beneath the top controls — parent title plus the
+// switch · title · finish row (or the "select task" CTA when none is chosen).
 .task-section {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
   flex-direction: column;
   width: calc(100% - var(--s2));
   max-width: var(--component-max-width);
   min-width: 0;
-  margin: var(--s) auto;
-  min-height: var(--s9); // fits extended FAB + parent-title + buffer
 }
 
 // Switch + finish flank the title in a horizontal row.
@@ -170,13 +150,13 @@
   margin: var(--s);
 }
 
-// ========== CLOCK DISPLAY ==========
+// ========== ROW 3: CLOCK DISPLAY ==========
+// Projected into the layout's flexing clock row, which centers it. This wrapper
+// just stacks the clock face and the overtime message.
 .clock-display {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: var(--s2);
 
   // Mirror the size tokens declared on focus-clock-face's :host so sibling
   // elements (the duration-slider overlay) can read them. Both pull the
@@ -264,37 +244,15 @@
   }
 }
 
-// ========== CIRCLE CONTROLS (row below the clock face) ==========
-// Session controls — pause/resume + complete session — visible in-progress.
-// Min-height matches .play-actions so prep ↔ in-progress transitions don't
-// shift the circle vertically (FAB is 64px, icon buttons are 40px).
-.circle-controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: var(--s);
-  margin-top: var(--s2);
-  min-height: var(--s8); // matches play/circle-controls so prep↔in-progress stays put
-
-  button {
-    opacity: var(--revealed-opacity);
-    transition: var(--transition-standard);
-    pointer-events: var(--revealed-pointer-events);
-  }
-}
-
-// ========== PLAY BUTTON + SETTINGS COG (prep state) ==========
-// Keep the play FAB centered on the circle. The cog floats next to it via
-// absolute positioning, so adding/removing it never shifts the FAB.
-// min-height matches .circle-controls so prep ↔ in-progress doesn't shift
-// the circle.
+// ========== ROW 4 (Preparation): PLAY BUTTON + SETTINGS COG ==========
+// Content-height bottom row. The cog floats next to the FAB via absolute
+// positioning (anchored to this relative row), so adding/removing it never
+// shifts the centered FAB.
 .play-actions {
   position: relative;
   display: flex;
   align-items: center;
   width: fit-content;
-  margin-top: var(--s2);
-  min-height: var(--s8); // matches play/circle-controls so prep↔in-progress stays put
 }
 
 .play-button {
@@ -308,13 +266,10 @@
   }
 }
 
-// ========== SIMPLE COUNTER BUTTONS (In Progress) ==========
+// ========== ROW 1 (In Progress): SIMPLE COUNTER BUTTONS ==========
 .simple-counter-buttons {
   display: flex;
-  position: absolute;
-  top: calc(var(--s2) + 80px);
-  left: 50%;
-  transform: translateX(-50%);
+  justify-content: center;
   z-index: var(--z-focus-mode-simple-counter);
   gap: var(--s);
 
@@ -335,15 +290,16 @@
   }
 }
 
-// ========== CONTROLS (In Progress) ==========
+// ========== ROW 4 (In Progress): SESSION CONTROL ROW ==========
+// Back to Planning · Pause · Complete · Reset · (issue) · Notes — one
+// content-height bottom row. Keeps the hover/window-focus reveal
+// (--revealed-opacity) so it stays distraction-free, matching the rest of
+// focus mode.
 .bottom-controls {
   display: flex;
   justify-content: center;
   align-items: center;
-  position: fixed;
-  bottom: calc(var(--s2) + var(--safe-area-bottom));
-  left: 50%;
-  transform: translateX(-50%);
+  gap: var(--s2);
   opacity: var(--revealed-opacity);
   pointer-events: var(--revealed-pointer-events);
   transition: var(--transition-standard);

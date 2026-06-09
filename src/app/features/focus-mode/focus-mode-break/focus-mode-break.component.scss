@@ -1,30 +1,20 @@
 @use '../../../../styles/_globals.scss' as *;
 
-.focus-mode-break {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  gap: var(--s2);
-  // Mirror focus-mode-main's :host padding so the circle's vertical baseline
-  // matches across the focus ↔ break transition. focus-mode-main reserves --s9
-  // at the top for its mode selector; break has no selector but keeps the same
-  // reservation so its circle doesn't sit higher than the focus circle.
-  padding-top: var(--s9);
-  padding-bottom: var(--s2);
+// The 4-row skeleton lives in <focus-mode-layout>; this host is just its
+// positioning context, mirroring focus-mode-main.
+:host {
+  position: absolute;
+  inset: 0;
 }
 
-// Mirrors focus-mode-main's .task-section so the circle's vertical baseline
-// is identical across focus ↔ break transitions.
+// ========== ROW 2: TASK NAME ==========
 .task-section {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  min-height: var(--s9);
-  margin: var(--s);
+  width: calc(100% - var(--s2));
+  max-width: var(--component-max-width);
 }
 
 .task-title {
@@ -40,6 +30,10 @@
     font-size: 18px;
   }
 }
+
+// ========== ROW 3: CLOCK ==========
+// The labels below are positioned against focus-clock-face (position: relative),
+// not this wrapper, so it needs no layout of its own.
 
 // "Short break" / "Long break" / "Take a break" label inside the circle,
 // positioned above the digits. Two steps up the spacing scale from the
@@ -76,23 +70,35 @@
   }
 }
 
-// Secondary control row directly under the clock face (matches the layout
-// used by focus-mode-main).
-.circle-controls {
+// ========== ROW 4: controls + tracking + primary actions ==========
+// Tracking info stacked above a single icon-button row.
+.break-bottom {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  gap: var(--s);
-  min-height: var(--s5); // mat-icon-button is 40px = --s5
+  gap: var(--s2);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 var(--s2);
 }
 
-// Primary action row with generous padding above so it visually anchors to
-// the bottom of the panel.
-.bottom-actions {
+// Single icon-button row, mirroring focus-mode-main's bottom controls (the
+// 56px / 32px icon size + --s2 gap) so the break's actions read as one row,
+// identical to the focus session.
+.bottom-controls {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: var(--s2);
-  margin-top: var(--s4);
+
+  button {
+    width: 56px !important;
+    height: 56px !important;
+
+    mat-icon {
+      font-size: 32px !important;
+      width: 32px !important;
+      height: 32px !important;
+    }
+  }
 }

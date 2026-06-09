@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { BehaviorSubject, EMPTY, of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -128,6 +129,7 @@ describe('FocusModeMainComponent', () => {
       providers: [
         provideMockStore(),
         provideMockActions(() => of()),
+        { provide: Router, useValue: { navigateByUrl: () => Promise.resolve(true) } },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
@@ -706,6 +708,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       providers: [
         provideMockStore(),
         provideMockActions(() => of()),
+        { provide: Router, useValue: { navigateByUrl: () => Promise.resolve(true) } },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
@@ -732,6 +735,16 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
 
   it('should hide the mode selector while a focus session is in progress', () => {
     expect(component.isShowModeSelector()).toBe(false);
+  });
+
+  it('should remove the mode selector from the DOM (not just visually hide it) while in progress', () => {
+    // Regression: a visibility:hidden selector still left its mat-icons painted,
+    // because the global `body.isMaterialSymbolsLoaded mat-icon` rule forces
+    // visibility:visible (an explicit value beats the inherited hidden one).
+    // The selector must be removed from the DOM so no icons can remain.
+    const selector = fixture.nativeElement.querySelector('segmented-button-group');
+
+    expect(selector).toBeNull();
   });
 
   it('should hide the mode selector while a Flowtime session is in progress', () => {
