@@ -93,7 +93,6 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
   private readonly _matDialog = inject(MatDialog);
-  private readonly _shortcuts = MARKDOWN_SHORTCUTS;
 
   /**
    * Resolved content with blob URLs for images (for preview rendering).
@@ -193,7 +192,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   getShortcutLabel(name: ShortcutNames): string {
-    const shortcut = this._shortcuts.find((s) => s.name === name);
+    const shortcut = MARKDOWN_SHORTCUTS.find((s) => s.name === name);
     return shortcut ? ` (${shortcut.shortcutLabel})` : '';
   }
 
@@ -239,14 +238,14 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     }
 
     if (hasModifier) {
-      const shortcut = this._shortcuts.find((s) => {
+      const shortcut = MARKDOWN_SHORTCUTS.find((s) => {
         const keyMatch = s.code ? ev.code === s.code : ev.key.toLowerCase() === s.key;
         return keyMatch && ev.shiftKey === s.shiftKey;
       });
 
       if (shortcut) {
         ev.preventDefault();
-        this._executeShortcutByName(shortcut?.name);
+        this._executeShortcutByName(shortcut.name);
         return;
       }
     }

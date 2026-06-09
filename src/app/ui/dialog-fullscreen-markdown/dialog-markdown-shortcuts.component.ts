@@ -13,6 +13,6 @@ import { MARKDOWN_SHORTCUTS } from './markdown-shortcuts.const';
   imports: [MatButtonModule, MatDialogModule, TranslatePipe],
 })
 export class DialogMarkdownShortcutsComponent {
-  readonly _shortcuts = MARKDOWN_SHORTCUTS;
   readonly T = T;
+  readonly MARKDOWN_SHORTCUTS = MARKDOWN_SHORTCUTS;
 }

@@ -9,7 +9,7 @@
       </tr>
     </thead>
     <tbody>
-      @for (shortcut of _shortcuts; track shortcut.name) {
+      @for (shortcut of MARKDOWN_SHORTCUTS; track shortcut.name) {
         <tr>
           <td class="action-name">
             {{ 'F.NOTE.D_FULLSCREEN.TOOLBAR.' + shortcut.translationKey | translate }}
