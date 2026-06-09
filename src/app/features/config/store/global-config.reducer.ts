@@ -111,6 +111,10 @@ const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig 
     ...cfg,
   };
 
+  if (cfg?.moveToTodaysTasks != null && cfg.taskScheduleToday == null) {
+    keyboard.taskScheduleToday = cfg.moveToTodaysTasks;
+  }
+
   if (
     cfg?.addNewNote === 'N' &&
     (cfg.taskOpenNotesPanel === undefined || cfg.taskOpenNotesPanel === null)
