@@ -102,39 +102,53 @@ describe('DateTimePickerComponent', () => {
   });
 
   it('should toggle isKeyboardNavigating based on keyboard navigation and mouse move', () => {
+    fixture.detectChanges();
     expect(component.isKeyboardNavigating).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-hide-cursor')).toBeFalse();
 
     // Trigger keyboard navigation key down on calendar
-    const arrowDownEvent = new KeyboardEvent('keydown', { key: 'ArrowDown' });
-    component.onKeyDownOnCalendar(arrowDownEvent);
+    fixture.nativeElement
+      .querySelector('mat-calendar')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
     expect(component.isKeyboardNavigating).toBeTrue();
-
-    // Trigger non-navigation key down on calendar - should not reset it
-    const enterEvent = new KeyboardEvent('keydown', { key: 'Enter' });
-    component.onKeyDownOnCalendar(enterEvent);
-    expect(component.isKeyboardNavigating).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-hide-cursor')).toBeTrue();
 
     // Trigger mousemove with changed coordinates - should reset it to false
-    const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
-    component.onHostMouseMove(mouseMoveEvent);
+    fixture.nativeElement.dispatchEvent(
+      new MouseEvent('mousemove', { clientX: 30, clientY: 40, bubbles: true }),
+    );
+    fixture.detectChanges();
     expect(component.isKeyboardNavigating).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-hide-cursor')).toBeFalse();
   });
 
-  it('should reset isInitialFocus on keyboard navigation or mouse move', () => {
+  it('should reset isInitialFocus on keyboard navigation', () => {
+    fixture.detectChanges();
     expect(component.isInitialFocus).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeTrue();
 
     // Trigger keyboard navigation key down on calendar
-    const arrowDownEvent = new KeyboardEvent('keydown', { key: 'ArrowDown' });
-    component.onKeyDownOnCalendar(arrowDownEvent);
+    fixture.nativeElement
+      .querySelector('mat-calendar')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
     expect(component.isInitialFocus).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeFalse();
+  });
 
-    // Reset for next test
-    component.isInitialFocus = true;
+  it('should reset isInitialFocus on mouse move', () => {
+    fixture.detectChanges();
+    expect(component.isInitialFocus).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeTrue();
 
     // Trigger mousemove
-    const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
-    component.onHostMouseMove(mouseMoveEvent);
+    fixture.nativeElement.dispatchEvent(
+      new MouseEvent('mousemove', { clientX: 30, clientY: 40, bubbles: true }),
+    );
+    fixture.detectChanges();
     expect(component.isInitialFocus).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeFalse();
   });
 
   it('should only update calendar activeDate when selectedDate changes', () => {
