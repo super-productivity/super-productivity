@@ -191,6 +191,10 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
+      localBackup: {
+        ...DEFAULT_GLOBAL_CONFIG.localBackup,
+        ...appDataComplete.globalConfig.localBackup,
+      },
       focusMode: {
         ...DEFAULT_GLOBAL_CONFIG.focusMode,
         ...migrateFocusModeConfig(appDataComplete.globalConfig.focusMode),

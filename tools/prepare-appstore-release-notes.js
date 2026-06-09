@@ -83,7 +83,10 @@ const chars = [...text];
 if (chars.length > MAX_CHARS) {
   // Slice by code points (not UTF-16 units) so a multi-byte character (e.g. an
   // emoji surrogate pair) is never cut in half. Keeps us within ASC's cap.
-  text = `${chars.slice(0, MAX_CHARS - 1).join('').trimEnd()}…`;
+  text = `${chars
+    .slice(0, MAX_CHARS - 1)
+    .join('')
+    .trimEnd()}…`;
 }
 
 fs.writeFileSync(outFile, `${text}\n`, 'utf8');

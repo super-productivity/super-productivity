@@ -16,8 +16,7 @@
  *
  * The legacy single-blob entry is tombstoned (empty payload) after migration
  * so an offline device that still writes the old shape loses cleanly on
- * reconnect — see docs/plans/2026-05-23-stage-a-keyed-plugin-persistence.md
- * Phase 4 for the LWW rationale.
+ * reconnect (its stale whole-blob write is LWW-dominated by the keyed entries).
  */
 
 import type { PluginAPI } from '@super-productivity/plugin-api';

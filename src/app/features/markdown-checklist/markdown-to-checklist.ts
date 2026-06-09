@@ -1,16 +1,11 @@
 import { MarkdownChecklistTask } from './markdown-checklist.model';
+import { isCheckedItemLine, isChecklistItemLine } from './checklist-operations';
 
-export const markdownToChecklist = (text: string): MarkdownChecklistTask[] => {
-  const items: MarkdownChecklistTask[] = [];
-  text.split('\n').forEach((it: string) => {
-    const t = it.trim();
-    const isChecked = t.startsWith('- [x] ');
-    if (isChecked || t.startsWith('- [ ]')) {
-      items.push({
-        text: t.replace('- [x] ', '').replace('- [ ]', '').trim(),
-        isChecked,
-      });
-    }
-  });
-  return items;
-};
+export const markdownToChecklist = (text: string): MarkdownChecklistTask[] =>
+  text
+    .split('\n')
+    .filter((line) => isChecklistItemLine(line))
+    .map((line) => ({
+      text: line.trim().replace(/^- \[[ xX]\] ?/, ''),
+      isChecked: isCheckedItemLine(line),
+    }));

@@ -20,17 +20,18 @@ import { Task, TaskState } from '../tasks/task.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import {
   addProject,
-  archiveProject,
+  completeProject,
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
+  reopenProject,
   toggleHideFromMenu,
   unarchiveProject,
   updateProject,
   updateProjectOrder,
 } from './store/project.actions';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { DEFAULT_PROJECT } from './project.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from './project.const';
 import {
   selectArchivedProjects,
   selectProjectById,
@@ -51,6 +52,53 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DateService } from '../../core/date/date.service';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
+
+export interface ProjectCompletionInfo {
+  topLevelTasks: Task[];
+  allTasks: Task[];
+  unfinishedTasks: Task[];
+  topLevelTasksWithUnfinishedWork: Task[];
+}
+
+/**
+ * Depth-first flatten of a task tree into a flat list (each parent immediately
+ * before its subtasks), de-duplicated via a shared `seen` set so a task reached
+ * from more than one parent is included only once.
+ */
+const flattenTaskTree = (
+  topLevelTasks: Task[],
+  entities: Record<string, Task | undefined>,
+): Task[] => {
+  const result: Task[] = [];
+  const seen = new Set<string>();
+  const visit = (task: Task): void => {
+    if (seen.has(task.id)) {
+      return;
+    }
+    seen.add(task.id);
+    result.push(task);
+    (task.subTaskIds ?? []).forEach((subId) => {
+      const sub = entities[subId];
+      if (sub) {
+        visit(sub);
+      }
+    });
+  };
+  topLevelTasks.forEach(visit);
+  return result;
+};
+
+/** True if the task itself or any of its (live) subtasks is still unfinished. */
+const hasUnfinishedWork = (
+  task: Task,
+  unfinishedTaskIds: Set<string>,
+  entities: Record<string, Task | undefined>,
+): boolean =>
+  unfinishedTaskIds.has(task.id) ||
+  (task.subTaskIds ?? []).some((subId) => {
+    const sub = entities[subId];
+    return !!sub && hasUnfinishedWork(sub, unfinishedTaskIds, entities);
+  });
 
 @Injectable({
   providedIn: 'root',
@@ -142,14 +190,6 @@ export class ProjectService {
     );
   }
 
-  archive(projectId: string): void {
-    this._store$.dispatch(archiveProject({ id: projectId }));
-    this._snackService.open({
-      ico: 'archive',
-      msg: T.F.PROJECT.S.ARCHIVED,
-    });
-  }
-
   async unarchive(projectId: string): Promise<void> {
     const project = await firstValueFrom(this.getByIdOnce$(projectId));
     this._store$.dispatch(unarchiveProject({ id: projectId }));
@@ -166,6 +206,129 @@ export class ProjectService {
             msg: T.F.PROJECT.S.UNARCHIVED,
           },
     );
+  }
+
+  complete(projectId: string, doneOn: number): void {
+    // Single-entity flag flip. Unfinished-task resolution (move-to-inbox /
+    // mark-done) is dispatched separately as normal per-task actions before
+    // this call — see moveTasksToInbox / markTasksDone and the completion flow
+    // in work-context-menu. No undo affordance: that resolution can't be fully
+    // restored by reopen, so the fullscreen celebration is the feedback and
+    // reactivation lives on the archived-projects page.
+    this._store$.dispatch(completeProject({ id: projectId, doneOn }));
+  }
+
+  /**
+   * Carry unfinished work forward into the Inbox before completing a project.
+   * Uses the normal per-task move action so every downstream effect (issue
+   * sync, reminders, repeat-cfg) and per-entity conflict detection fires
+   * naturally. Done tasks are explicitly re-opened (setUnDone) so carried-over
+   * work is actionable again in the Inbox — the move itself keeps isDone.
+   * The trailing flush is the bulk-dispatch guard (sync-model Rule #6).
+   */
+  async moveTasksToInbox(tasks: Task[]): Promise<void> {
+    for (const task of tasks) {
+      const withSubTasks = await firstValueFrom(
+        this._taskService.getByIdWithSubTaskData$(task.id),
+      );
+      this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
+      if (task.isDone) {
+        this._taskService.setUnDone(task.id);
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  /** Mark a project's unfinished tasks done via the normal per-task action. */
+  async markTasksDone(tasks: Task[]): Promise<void> {
+    tasks.forEach((task) => this._taskService.setDone(task.id));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  reopen(projectId: string, project?: Pick<Project, 'isHiddenFromMenu'>): void {
+    this._store$.dispatch(reopenProject({ id: projectId }));
+    this._snackService.open(
+      project?.isHiddenFromMenu
+        ? {
+            ico: 'replay',
+            msg: T.F.PROJECT.S.REOPENED,
+            actionStr: T.F.PROJECT.S.SHOW_IN_MENU,
+            actionFn: () => this._store$.dispatch(toggleHideFromMenu({ id: projectId })),
+          }
+        : {
+            ico: 'replay',
+            msg: T.F.PROJECT.S.REOPENED,
+          },
+    );
+  }
+
+  /**
+   * Tasks of a project for the completion flow. Stats include live and archived
+   * project tasks, while unfinished resolution only considers active tasks that
+   * can still be moved or marked done from the live store.
+   */
+  async getCompletionInfo(projectId: string): Promise<ProjectCompletionInfo> {
+    const project = await firstValueFrom(this.getByIdOnce$(projectId));
+    if (!project) {
+      return {
+        topLevelTasks: [],
+        allTasks: [],
+        unfinishedTasks: [],
+        topLevelTasksWithUnfinishedWork: [],
+      };
+    }
+    const stats = await this._getCompletionStatsTasks(projectId, project);
+    const resolvable = await this._getResolvableTasks(project);
+    return { ...stats, ...resolvable };
+  }
+
+  /**
+   * Stats lists for the celebration: count live AND archived project tasks, so
+   * work the user archived earlier still counts toward the finished total.
+   */
+  private async _getCompletionStatsTasks(
+    projectId: string,
+    project: Project,
+  ): Promise<Pick<ProjectCompletionInfo, 'topLevelTasks' | 'allTasks'>> {
+    const ids = [...(project.taskIds ?? []), ...(project.backlogTaskIds ?? [])];
+    const idSet = new Set(ids);
+    const projectTasks = await this._taskService.getAllTasksForProject(projectId);
+    const projectTaskById = new Map(projectTasks.map((task) => [task.id, task]));
+    const topLevelTasks = [
+      ...ids,
+      ...projectTasks
+        .filter((task) => !task.parentId && !idSet.has(task.id))
+        .map((task) => task.id),
+    ]
+      .map((id) => projectTaskById.get(id))
+      .filter((t): t is Task => !!t);
+    const allTasks = flattenTaskTree(topLevelTasks, Object.fromEntries(projectTaskById));
+    return { topLevelTasks, allTasks };
+  }
+
+  /**
+   * Resolvable lists for the unfinished-task prompt: only LIVE tasks can still
+   * be moved or marked done, so the archive is intentionally ignored here.
+   */
+  private async _getResolvableTasks(
+    project: Project,
+  ): Promise<
+    Pick<ProjectCompletionInfo, 'unfinishedTasks' | 'topLevelTasksWithUnfinishedWork'>
+  > {
+    const taskState = await firstValueFrom(this._store$.select(selectTaskFeatureState));
+    const ids = [...(project.taskIds ?? []), ...(project.backlogTaskIds ?? [])];
+    const activeTopLevelTasks = ids
+      .map((id) => taskState.entities[id])
+      .filter((t): t is Task => !!t);
+    const activeAllTasks = flattenTaskTree(activeTopLevelTasks, taskState.entities);
+    const unfinishedTasks = activeAllTasks.filter((t) => !t.isDone);
+    const unfinishedTaskIds = new Set(unfinishedTasks.map((t) => t.id));
+    return {
+      unfinishedTasks,
+      topLevelTasksWithUnfinishedWork: activeTopLevelTasks.filter((t) =>
+        hasUnfinishedWork(t, unfinishedTaskIds, taskState.entities),
+      ),
+    };
   }
 
   getByIdOnce$(id: string): Observable<Project | undefined> {
@@ -311,6 +474,10 @@ export class ProjectService {
       taskIds: [],
       backlogTaskIds: [],
       noteIds: [],
+      // A duplicate is a fresh, active project — never inherit completed/archived state.
+      isDone: false,
+      doneOn: null,
+      isArchived: false,
     });
 
     const noteState = await firstValueFrom(this._store$.select(selectNoteFeatureState));

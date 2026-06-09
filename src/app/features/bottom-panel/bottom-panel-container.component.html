@@ -1,16 +1,21 @@
 <div class="bottom-panel-container">
   <div
     class="bottom-panel-header"
+    [class.has-close-btn]="isShowCloseButton()"
     #panelHeader
   >
     <div class="drag-handle"></div>
-    <button
-      mat-icon-button
-      class="close-btn"
-      (click)="close()"
-    >
-      <mat-icon>close</mat-icon>
-    </button>
+    @if (isShowCloseButton()) {
+      <button
+        mat-icon-button
+        class="close-btn"
+        [attr.aria-label]="T.G.CLOSE | translate"
+        (pointerdown)="stopHeaderEventPropagation($event)"
+        (click)="close(); stopHeaderEventPropagation($event)"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    }
   </div>
 
   <div class="bottom-panel-content">

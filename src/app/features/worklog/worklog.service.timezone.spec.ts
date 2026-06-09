@@ -91,26 +91,29 @@ describe('WorklogService timezone fix', () => {
       buggyFilteredTasks.map((t) => ({ id: t.id, dateStr: t.dateStr })),
     );
 
-    // In America/Los_Angeles timezone, this would fail because:
-    // new Date('2024-01-15') creates Jan 15 00:00 UTC = Jan 14 16:00 PST
-    // rangeStart is Jan 15 00:00 PST = Jan 15 08:00 UTC
-    // So taskDate < rangeStart, and the task is excluded
-    if (currentTimezone === 'America/Los_Angeles') {
-      // The bug would cause the first task to be excluded
+    // In any timezone WEST of UTC (e.g. LA, New York), this would fail because:
+    // new Date('2024-01-15') creates Jan 15 00:00 UTC = Jan 14 local time
+    // rangeStart is Jan 15 00:00 local = later than that in UTC
+    // So taskDate < rangeStart, and the task is excluded.
+    // Branch on the offset AT the test date (January!) — the host's current
+    // offset differs across DST, and a tz-name string check only covered LA.
+    const tzOffsetAtRange = rangeStart.getTimezoneOffset();
+    if (tzOffsetAtRange > 0) {
+      // west of UTC (e.g. LA, New York): the bug excludes the first task
       expect(buggyFilteredTasks.length).toBe(2);
       expect(buggyFilteredTasks.some((t) => t.dateStr === '2024-01-15')).toBe(
         false,
-        'First day should be excluded due to timezone bug in America/Los_Angeles',
+        'First day should be excluded due to the timezone bug west of UTC',
       );
     } else {
-      // In Europe/Berlin (UTC+1), the bug doesn't manifest because:
+      // At/east of UTC (e.g. Berlin), the bug doesn't manifest because:
       // new Date('2024-01-15') creates Jan 15 00:00 UTC = Jan 15 01:00 CET
       // rangeStart is Jan 15 00:00 CET = Jan 14 23:00 UTC
       // So taskDate > rangeStart, and the task is included
       expect(buggyFilteredTasks.length).toBe(3);
       expect(buggyFilteredTasks.some((t) => t.dateStr === '2024-01-15')).toBe(
         true,
-        'All tasks should be included in Europe/Berlin due to positive UTC offset',
+        'All tasks should be included at/east of UTC',
       );
     }
   });

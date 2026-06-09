@@ -72,6 +72,9 @@ export class MobileNotificationEffects {
   private _scheduledDeadlineIds = new Set<string>();
   // Track pre-scheduled recurring reminder IDs (the predicted task instance IDs)
   private _scheduledRepeatReminderIds = new Set<string>();
+  // One-shot guard: the Android exact-alarm check runs at most once per session.
+  // See _warnIfExactAlarmPermissionDeniedOnce().
+  private _exactAlarmPermissionCheckPromise?: Promise<void>;
 
   // Narrowed cfg slice so the scheduling effects only re-run on reminder-config
   // changes, not on every unrelated global-config edit (theme, sync, etc.).
@@ -94,21 +97,25 @@ export class MobileNotificationEffects {
         timer(DELAY_PERMISSIONS).pipe(
           tap(async () => {
             try {
-              const hasPermission = await this._reminderService.ensurePermissions();
-              Log.log('MobileEffects: initial permission check', { hasPermission });
-              if (!hasPermission) {
+              // Read the permission STATE without prompting. The OS dialog is
+              // requested lazily on the first real schedule (see
+              // CapacitorReminderService.initialize()), which yields better grant
+              // rates than an unprompted launch-time prompt. Only nag here when
+              // the user has *explicitly* denied — 'prompt' means we simply
+              // haven't asked yet, so stay silent and let the lazy prompt run
+              // when a reminder actually needs scheduling. (#8120)
+              const permissionState = await this._reminderService.getPermissionState();
+              Log.log('MobileEffects: initial permission check', { permissionState });
+              if (permissionState === 'denied') {
                 this._notifyPermissionIssue();
                 return;
               }
-              // Check exact alarm permission separately (Android 12+)
-              const hasExactAlarm =
-                await this._reminderService.ensureExactAlarmPermission();
-              if (!hasExactAlarm) {
-                this._snackService.open({
-                  type: 'ERROR',
-                  msg: T.NOTIFICATION.EXACT_ALARM_DENIED,
-                });
+              if (permissionState !== 'granted') {
+                // Not asked yet — defer the prompt and the exact-alarm check
+                // until a notification actually needs scheduling.
+                return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
             } catch (error) {
               Log.err(error);
               this._notifyPermissionIssue(error?.toString());
@@ -188,6 +195,7 @@ export class MobileNotificationEffects {
                 this._notifyPermissionIssue();
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               // Schedule each reminder using the platform-appropriate method
               for (const task of tasksWithReminders) {
@@ -305,6 +313,7 @@ export class MobileNotificationEffects {
                 this._notifyPermissionIssue();
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               for (const occ of upcoming) {
                 await this._reminderService.scheduleReminder({
@@ -385,6 +394,7 @@ export class MobileNotificationEffects {
               if (!hasPermission) {
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               const now = Date.now();
               for (const task of tasks) {
@@ -474,6 +484,7 @@ export class MobileNotificationEffects {
               if (!hasPermission) {
                 return;
               }
+              await this._warnIfExactAlarmPermissionDeniedOnce();
 
               const now = Date.now();
               for (const task of tasks) {
@@ -586,6 +597,46 @@ export class MobileNotificationEffects {
     }
 
     return result;
+  }
+
+  /**
+   * Run the Android exact-alarm check at most once per app session, warning the
+   * user when it is denied. Memoized via `_exactAlarmPermissionCheckPromise` so
+   * the underlying `ensureExactAlarmPermission()` — which can open the Android
+   * system settings page — never re-fires across the many scheduling effects
+   * that call this. A later in-session grant is intentionally not re-detected
+   * (it resets next launch); the trade-off avoids repeatedly opening that page.
+   *
+   * Gated on `isAndroid()`, the superset of native + legacy WebView: on legacy
+   * WebView `ensureExactAlarmPermission()` self-guards and returns true, so no
+   * spurious warning fires there.
+   */
+  private _warnIfExactAlarmPermissionDeniedOnce(): Promise<void> {
+    if (!this._platformService.isAndroid()) {
+      return Promise.resolve();
+    }
+
+    this._exactAlarmPermissionCheckPromise =
+      this._exactAlarmPermissionCheckPromise ||
+      this._reminderService
+        .ensureExactAlarmPermission()
+        .then((hasExactAlarm) => {
+          if (!hasExactAlarm) {
+            this._snackService.open({
+              type: 'ERROR',
+              msg: T.NOTIFICATION.EXACT_ALARM_DENIED,
+            });
+          }
+        })
+        // `ensureExactAlarmPermission()` swallows its own errors today, but keep
+        // a resolving catch so a future throw can't cache a rejected promise
+        // here (which every scheduling effect would then re-await). Log-only: a
+        // thrown check is not an explicit denial, so don't show the snack.
+        .catch((error: unknown) => {
+          Log.warn('MobileEffects: exact alarm permission check failed', error);
+        });
+
+    return this._exactAlarmPermissionCheckPromise;
   }
 
   private _notifyPermissionIssue(message?: string): void {

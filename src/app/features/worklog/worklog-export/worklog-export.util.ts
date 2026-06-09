@@ -49,7 +49,7 @@ export const createRows = (
       rows.push(groups[key]);
     });
 
-  return rows;
+  return groupBy === WorklogGrouping.WORKLOG ? clearRepeatedWorklogDayTimes(rows) : rows;
 };
 
 /**
@@ -183,6 +183,22 @@ const handleWorklogGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
     });
   }
   return taskGroups;
+};
+
+const clearRepeatedWorklogDayTimes = (rows: RowItem[]): RowItem[] => {
+  const seenDays = new Set<string>();
+  return rows.map((row) => {
+    const day = row.dates[0];
+    if (seenDays.has(day)) {
+      return {
+        ...row,
+        workStart: 0,
+        workEnd: 0,
+      };
+    }
+    seenDays.add(day);
+    return row;
+  });
 };
 
 /**

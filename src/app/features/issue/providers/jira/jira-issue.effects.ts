@@ -316,7 +316,12 @@ export class JiraIssueEffects {
 
         return this._jiraApiService.getReducedIssueById$(task.issueId, jiraCfg).pipe(
           concatMap((issue) => {
-            if (!issue.status || issue.status.name !== chosenTransition.name) {
+            const isAlreadyInTargetStatus =
+              issue.status &&
+              (issue.status.id === chosenTransition.to.id ||
+                issue.status.name === chosenTransition.to.name);
+
+            if (!isAlreadyInTargetStatus) {
               return this._jiraApiService
                 .transitionIssue$(issue.id, chosenTransition.id, jiraCfg)
                 .pipe(

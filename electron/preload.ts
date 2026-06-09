@@ -260,6 +260,12 @@ const ea: ElectronAPI = {
       request,
     ) as Promise<PluginNodeScriptResult>,
 
+  // Register/revoke a plugin's nodeExecution grant with the main process. The
+  // executor authorizes from this out-of-band state, not the per-call manifest.
+  // See GHSA-78rv-m663-4fph.
+  pluginSetNodeConsent: (pluginId: string, isGranted: boolean) =>
+    _invoke('PLUGIN_SET_NODE_CONSENT', pluginId, isGranted) as Promise<void>,
+
   // Plugin OAuth
   pluginOAuthPrepare: () => _invoke('PLUGIN_OAUTH_PREPARE') as Promise<{ port: number }>,
   pluginOAuthStart: (url: string) => _send('PLUGIN_OAUTH_START', { url }),

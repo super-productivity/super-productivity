@@ -35,12 +35,26 @@ export const buildRepeatQuickSettingOptions = (
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_DAILY),
     },
     {
+      value: 'EVERY_OTHER_DAY',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_EVERY_OTHER_DAY),
+    },
+    {
       value: 'MONDAY_TO_FRIDAY',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_MONDAY_TO_FRIDAY),
     },
     {
+      value: 'WEEKENDS',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_WEEKENDS),
+    },
+    {
       value: 'WEEKLY_CURRENT_WEEKDAY',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_WEEKLY_CURRENT_WEEKDAY, {
+        weekdayStr: refWeekdayStr,
+      }),
+    },
+    {
+      value: 'BIWEEKLY_CURRENT_WEEKDAY',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_BIWEEKLY_CURRENT_WEEKDAY, {
         weekdayStr: refWeekdayStr,
       }),
     },
@@ -66,14 +80,38 @@ export const buildRepeatQuickSettingOptions = (
       }),
     },
     {
+      value: 'MONTHLY_LAST_WEEKDAY',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_MONTHLY_LAST_WEEKDAY, {
+        weekdayStr: refWeekdayStr,
+      }),
+    },
+    {
+      value: 'QUARTERLY_CURRENT_DATE',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_QUARTERLY_CURRENT_DATE, {
+        dateDayStr: refDayStr,
+      }),
+    },
+    {
+      value: 'SEMIANNUALLY_CURRENT_DATE',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_SEMIANNUALLY_CURRENT_DATE, {
+        dateDayStr: refDayStr,
+      }),
+    },
+    {
       value: 'YEARLY_CURRENT_DATE',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_YEARLY_CURRENT_DATE, {
         dayAndMonthStr: refDayAndMonthStr,
       }),
     },
     {
-      value: 'CUSTOM',
-      label: translateService.instant(T.F.TASK_REPEAT.F.Q_CUSTOM),
+      value: 'EVERY_OTHER_YEAR_CURRENT_DATE',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_EVERY_OTHER_YEAR_CURRENT_DATE, {
+        dayAndMonthStr: refDayAndMonthStr,
+      }),
+    },
+    {
+      value: 'RRULE',
+      label: translateService.instant(T.F.TASK_REPEAT.F.Q_RRULE),
     },
   ];
 };

@@ -13,6 +13,7 @@ import {
 import { expandAnimation } from '../../../ui/animations/expand.ani';
 import {
   ConfigFormSection,
+  ConfigSectionAction,
   CustomCfgSection,
   GlobalConfigFormSectionKey,
 } from '../global-config.model';
@@ -26,6 +27,9 @@ import { exists } from '../../../util/exists';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { ConfigFormComponent } from '../config-form/config-form.component';
+import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
+import { Log } from '../../../core/log';
 
 interface CustomFormInstance {
   cfg?: Record<string, unknown>;
@@ -44,6 +48,8 @@ interface CustomFormInstance {
     HelpSectionComponent,
     ConfigFormComponent,
     TranslatePipe,
+    MatButton,
+    MatIcon,
   ],
 })
 export class ConfigSectionComponent implements OnInit, OnDestroy {
@@ -64,6 +70,7 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
   private _subs: Subscription = new Subscription();
   private _instance?: CustomFormInstance;
   private _viewDestroyTimeout?: number;
+  private _pendingActions = new Set<ConfigSectionAction>();
 
   private _cfg: Record<string, unknown> | undefined;
 
@@ -129,6 +136,34 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
     config: Record<string, unknown>;
   }): void {
     this.save.emit($event);
+  }
+
+  isActionPending(action: ConfigSectionAction): boolean {
+    return this._pendingActions.has(action);
+  }
+
+  onAction(action: ConfigSectionAction): void {
+    if (this.isActionPending(action)) {
+      return;
+    }
+
+    try {
+      const result = action.onClick();
+      if (result instanceof Promise) {
+        this._pendingActions.add(action);
+        this._cd.markForCheck();
+        result
+          .catch((err) => {
+            Log.err('ConfigSection action error', err);
+          })
+          .finally(() => {
+            this._pendingActions.delete(action);
+            this._cd.markForCheck();
+          });
+      }
+    } catch (err) {
+      Log.err('ConfigSection action error', err);
+    }
   }
 
   trackByIndex(i: number, p: unknown): number {

@@ -35,7 +35,7 @@ declare global {
   interface Window {
     PluginAPI?: {
       showSnack: (config: { msg: string; type?: SnackType }) => void;
-      openDialog: (config: any) => Promise<void>;
+      openDialog: (config: any) => Promise<string | undefined>;
       onMessage: (handler: (message: AllPluginMessages) => Promise<any>) => void;
       addTask: (task: { title: string; notes?: string }) => Promise<string>;
       dispatchAction: (action: { type: string; [key: string]: any }) => void;

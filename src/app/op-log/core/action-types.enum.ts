@@ -113,6 +113,8 @@ export enum ActionType {
   PROJECT_UPDATE_ADVANCED_CFG = '[Project] Update Project Advanced Cfg',
   PROJECT_ARCHIVE = '[Project] Archive Project',
   PROJECT_UNARCHIVE = '[Project] Unarchive Project',
+  PROJECT_COMPLETE = '[Project] Complete Project',
+  PROJECT_REOPEN = '[Project] Reopen Project',
   PROJECT_TOGGLE_HIDE = '[Project] Toggle hide from menu',
   PROJECT_MOVE_TASK_IN_BACKLOG = '[Project] Move Task in Backlog',
   PROJECT_MOVE_TASK_UP_BACKLOG = '[Project] Move Task Up in Backlog',

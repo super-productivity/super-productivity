@@ -1,0 +1,140 @@
+:host {
+  display: block;
+}
+
+.rb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+// A sentence-style row: label + inline controls.
+.rb-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s);
+}
+
+.rb-lbl {
+  font-weight: bold;
+  opacity: 0.85;
+}
+
+.rb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-quarter, 4px);
+
+  > label {
+    font-weight: bold;
+    opacity: 0.85;
+  }
+}
+
+// Shared control styling (native select / input themed to the app).
+.rb-sel,
+.rb-num,
+.rb-text,
+.rb-date {
+  height: 40px; // touch-friendly
+  padding: 0 var(--s);
+  color: var(--text-color);
+  background: var(--bg, transparent);
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--card-border-radius);
+  font-size: 14px;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: var(--c-primary);
+  }
+}
+
+.rb-num {
+  width: 64px;
+  text-align: center;
+}
+
+.rb-sel--wide {
+  min-width: 180px;
+}
+
+.rb-text {
+  width: 100%;
+
+  &--mono {
+    font-family: monospace;
+  }
+
+  // Sits inline next to a select within a row (e.g. the custom BYSETPOS input).
+  &--inline {
+    width: 110px;
+  }
+}
+
+// Toggle buttons for weekdays / months.
+.rb-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-quarter, 4px);
+
+  &--months {
+    max-width: 320px;
+  }
+
+  // Calendar-style day-of-month grid (~7 per row).
+  &--days {
+    max-width: 300px;
+  }
+}
+
+.rb-tgl--wide {
+  min-width: auto;
+  padding: 0 var(--s2);
+}
+
+.rb-tgl {
+  min-width: 40px;
+  height: 40px; // touch-friendly tap target
+  padding: 0 var(--s);
+  touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color);
+  background: transparent;
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--card-border-radius);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease,
+    border-color 0.1s ease;
+
+  &:hover {
+    border-color: var(--c-primary);
+  }
+
+  &.active {
+    background: var(--c-primary);
+    border-color: var(--c-primary);
+    color: #fff;
+    font-weight: bold;
+  }
+}
+
+.rb-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.65;
+}
+
+.rb-adv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s);
+}

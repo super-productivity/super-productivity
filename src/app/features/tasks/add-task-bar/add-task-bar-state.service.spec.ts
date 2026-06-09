@@ -110,6 +110,20 @@ describe('AddTaskBarStateService', () => {
 
       expect(service.state().date).toBe(null);
     });
+
+    it('should not mark parser-driven date clears as explicitly cleared', () => {
+      service.updateDate(null);
+
+      expect(service.state().isDateExplicitlyCleared).toBe(false);
+    });
+
+    it('should clear the explicit date clear flag when date is set', () => {
+      service.clearDate();
+
+      service.updateDate('2024-01-15');
+
+      expect(service.state().isDateExplicitlyCleared).toBe(false);
+    });
   });
 
   describe('updateTime', () => {
@@ -346,6 +360,7 @@ describe('AddTaskBarStateService', () => {
 
       expect(service.state().date).toBe(null);
       expect(service.state().time).toBe(null);
+      expect(service.state().isDateExplicitlyCleared).toBe(true);
     });
 
     it('should update input text when cleanedInputTxt provided', () => {
@@ -654,6 +669,17 @@ describe('AddTaskBarStateService', () => {
       expect(service.state().projectId).toBe('project-1');
       expect(service.state().date).toBe('2024-01-15');
       expect(service.state().estimate).toBe(3600000);
+    });
+
+    it('should preserve an explicitly cleared date', () => {
+      service.updateDate('2024-01-15', '14:00');
+      service.clearDate();
+
+      service.resetAfterAdd();
+
+      expect(service.state().date).toBe(null);
+      expect(service.state().time).toBe(null);
+      expect(service.state().isDateExplicitlyCleared).toBe(true);
     });
   });
 });

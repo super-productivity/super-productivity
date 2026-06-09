@@ -1,0 +1,486 @@
+<div class="rb">
+  <!-- Frequency + interval, read as a sentence -->
+  <div class="rb-row">
+    <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate }}</span>
+    <input
+      #intervalIn
+      class="rb-num"
+      type="number"
+      min="1"
+      max="1000"
+      [value]="model().interval"
+      (input)="setInterval(intervalIn.value)"
+    />
+    <select
+      #freqSel
+      class="rb-sel"
+      (change)="setFreq(freqSel.value)"
+    >
+      @for (o of freqOpts; track o.value) {
+        <option
+          [value]="o.value"
+          [selected]="o.value === model().freq"
+        >
+          {{ o.label | translate }}
+        </option>
+      }
+    </select>
+  </div>
+
+  <!-- WEEKLY: weekday toggle buttons -->
+  @if (model().freq === 'WEEKLY') {
+    <div class="rb-field">
+      <label>{{ T.F.TASK_REPEAT.F.RRULE_BYDAY | translate }}</label>
+      <div class="rb-toggles">
+        @for (w of weekdays; track w.value) {
+          <button
+            type="button"
+            class="rb-tgl"
+            [class.active]="model().byDay.includes(w.value)"
+            [title]="w.full"
+            (click)="toggleDay(w.value)"
+          >
+            {{ w.short }}
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- MONTHLY -->
+  @if (model().freq === 'MONTHLY') {
+    <div class="rb-row">
+      <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate }}</span>
+      <select
+        #mMode
+        class="rb-sel rb-sel--wide"
+        (change)="setMonthlyMode(mMode.value)"
+      >
+        @for (o of monthlyModeOpts; track o.value) {
+          <option
+            [value]="o.value"
+            [selected]="o.value === model().monthlyMode"
+          >
+            {{ o.label | translate }}
+          </option>
+        }
+      </select>
+    </div>
+
+    @if (model().monthlyMode === 'DAY_OF_MONTH') {
+      <div class="rb-field">
+        <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate }}</label>
+        <div class="rb-toggles rb-toggles--days">
+          @for (d of dayGrid; track d) {
+            <button
+              type="button"
+              class="rb-tgl"
+              [class.active]="model().monthDays.includes(d)"
+              (click)="toggleMonthDay(d)"
+            >
+              {{ d }}
+            </button>
+          }
+          @for (nd of negativeDays; track nd.value) {
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide"
+              [class.active]="model().monthDays.includes(nd.value)"
+              (click)="toggleMonthDay(nd.value)"
+            >
+              {{ nd.label | translate }}
+            </button>
+          }
+        </div>
+        <input
+          class="rb-text"
+          type="text"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
+          [value]="model().monthDays.join(',')"
+          (change)="setMonthDays($any($event.target).value)"
+        />
+        <div class="rb-hint">
+          {{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_DESCRIPTION | translate }}
+        </div>
+      </div>
+    }
+    <!-- nth-weekday rows render in the shared block below (monthly + yearly). -->
+    @if (model().monthlyMode === 'WEEKDAYS') {
+      <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
+    }
+  }
+
+  <!-- YEARLY -->
+  @if (model().freq === 'YEARLY') {
+    <div class="rb-row">
+      <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate }}</span>
+      <select
+        #yMode
+        class="rb-sel rb-sel--wide"
+        (change)="setYearlyMode(yMode.value)"
+      >
+        @for (o of yearlyModeOpts; track o.value) {
+          <option
+            [value]="o.value"
+            [selected]="o.value === model().yearlyMode"
+          >
+            {{ o.label | translate }}
+          </option>
+        }
+      </select>
+    </div>
+    <div class="rb-hint">
+      {{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE_DESCRIPTION | translate }}
+    </div>
+    @if (model().yearlyMode === 'DAY_OF_MONTH') {
+      <div class="rb-field">
+        <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate }}</label>
+        <div class="rb-toggles rb-toggles--days">
+          @for (d of dayGrid; track d) {
+            <button
+              type="button"
+              class="rb-tgl"
+              [class.active]="model().monthDays.includes(d)"
+              (click)="toggleMonthDay(d)"
+            >
+              {{ d }}
+            </button>
+          }
+          @for (nd of negativeDays; track nd.value) {
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide"
+              [class.active]="model().monthDays.includes(nd.value)"
+              (click)="toggleMonthDay(nd.value)"
+            >
+              {{ nd.label | translate }}
+            </button>
+          }
+        </div>
+        <input
+          class="rb-text"
+          type="text"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
+          [value]="model().monthDays.join(',')"
+          (change)="setMonthDays($any($event.target).value)"
+        />
+      </div>
+    }
+    @if (model().yearlyMode === 'WEEKDAYS') {
+      <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
+    }
+  }
+
+  <!-- Weekday set + "which occurrence" (BYSETPOS) toggles — shared by the
+       monthly and yearly WEEKDAYS modes (all bindings are frequency-agnostic). -->
+  <ng-template #weekdaySetBlock>
+    <div class="rb-row">
+      <div class="rb-toggles">
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide"
+          [class.active]="isSetPosEvery()"
+          (click)="clearSetPos()"
+        >
+          {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
+        </button>
+        @for (o of ordinalOpts; track o.value) {
+          <button
+            type="button"
+            class="rb-tgl rb-tgl--wide"
+            [class.active]="isSetPosActive(o.value)"
+            (click)="toggleSetPos(o.value)"
+          >
+            {{ o.label | translate }}
+          </button>
+        }
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide"
+          [class.active]="isSetPosCustom()"
+          (click)="toggleSetPosCustomMode()"
+        >
+          {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+        </button>
+      </div>
+      @if (isSetPosCustom()) {
+        <input
+          #customWhich
+          class="rb-text rb-text--inline"
+          type="text"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS_PLACEHOLDER | translate"
+          [value]="model().bySetPos"
+          (change)="setCustomBySetPos(customWhich.value)"
+        />
+      }
+      <div class="rb-toggles">
+        @for (w of weekdays; track w.value) {
+          <button
+            type="button"
+            class="rb-tgl"
+            [class.active]="model().byDay.includes(w.value)"
+            [title]="w.full"
+            (click)="toggleDay(w.value)"
+          >
+            {{ w.short }}
+          </button>
+        }
+      </div>
+    </div>
+    <div class="rb-hint">
+      {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
+    </div>
+  </ng-template>
+
+  <!-- nth-weekday rows (monthly + yearly): per-weekday ordinals, e.g. the 3rd
+       Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line, + adds more. -->
+  @if (isNthMode()) {
+    <div class="rb-field">
+      <label>{{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate }}</label>
+      @for (nd of model().nthDays; track $index; let rowIdx = $index) {
+        <div class="rb-row">
+          <select
+            #pos
+            class="rb-sel"
+            (change)="setNthDayPos(rowIdx, pos.value)"
+          >
+            @for (o of availableOrdinalOpts(rowIdx); track o.value) {
+              <option
+                [value]="o.value"
+                [selected]="!isNthRowCustom(rowIdx) && o.value === nd.pos"
+              >
+                {{ o.label | translate }}
+              </option>
+            }
+            <option
+              [value]="ORD_CUSTOM"
+              [selected]="isNthRowCustom(rowIdx)"
+            >
+              {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+            </option>
+          </select>
+          @if (isNthRowCustom(rowIdx)) {
+            <input
+              #customPos
+              class="rb-num"
+              type="number"
+              [min]="-nthPosBound()"
+              [max]="nthPosBound()"
+              [value]="nd.pos"
+              [title]="T.F.TASK_REPEAT.F.ORD_CUSTOM_DESCRIPTION | translate"
+              (change)="setNthDayCustomPos(rowIdx, customPos.value)"
+            />
+          }
+          <div class="rb-toggles">
+            @for (w of weekdays; track w.value) {
+              <button
+                type="button"
+                class="rb-tgl"
+                [class.active]="nd.days.includes(w.value)"
+                [title]="w.full"
+                (click)="toggleNthDayWeekday(rowIdx, w.value)"
+              >
+                {{ w.short }}
+              </button>
+            }
+          </div>
+          @if (model().nthDays.length > 1) {
+            <button
+              type="button"
+              class="rb-tgl"
+              [title]="T.G.DELETE | translate"
+              (click)="removeNthDay(rowIdx)"
+            >
+              &times;
+            </button>
+          }
+        </div>
+      }
+      @if (canAddNthDay()) {
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide"
+          (click)="addNthDay()"
+        >
+          + {{ T.F.TASK_REPEAT.F.RRULE_ADD_NTH | translate }}
+        </button>
+      }
+      <div class="rb-hint">
+        {{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY_DESCRIPTION | translate }}
+      </div>
+    </div>
+  }
+
+  <!-- In months (optional seasonal constraint, any frequency) -->
+  <div class="rb-field">
+    <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTH | translate }}</label>
+    <div class="rb-toggles rb-toggles--months">
+      @for (m of months; track m.value) {
+        <button
+          type="button"
+          class="rb-tgl"
+          [class.active]="model().byMonth.includes(m.value)"
+          [title]="m.full"
+          (click)="toggleMonth(m.value)"
+        >
+          {{ m.short }}
+        </button>
+      }
+    </div>
+    <div class="rb-hint">
+      {{ T.F.TASK_REPEAT.F.RRULE_BYMONTH_DESCRIPTION | translate }}
+    </div>
+  </div>
+
+  <!-- Ends -->
+  <div class="rb-row">
+    <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_END | translate }}</span>
+    <select
+      #endSel
+      class="rb-sel rb-sel--wide"
+      (change)="setEndType(endSel.value)"
+    >
+      @for (o of endOpts; track o.value) {
+        <option
+          [value]="o.value"
+          [selected]="o.value === model().endType"
+        >
+          {{ o.label | translate }}
+        </option>
+      }
+    </select>
+    @if (model().endType === 'COUNT') {
+      <input
+        #countIn
+        class="rb-num"
+        type="number"
+        min="1"
+        max="1000"
+        [value]="model().count"
+        (input)="setCount(countIn.value)"
+      />
+    }
+    @if (model().endType === 'UNTIL') {
+      <input
+        #untilIn
+        class="rb-date"
+        type="date"
+        [value]="model().until"
+        (input)="setUntil(untilIn.value)"
+      />
+    }
+  </div>
+
+  <!-- Schedule type: fixed calendar dates vs. count the interval from completion -->
+  <div class="rb-field">
+    <label>{{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate }}</label>
+    <div class="rb-toggles">
+      <button
+        type="button"
+        class="rb-tgl rb-tgl--wide"
+        [class.active]="!fromCompletion()"
+        (click)="setRepeatFromCompletion(false)"
+      >
+        {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START | translate }}
+      </button>
+      <button
+        type="button"
+        class="rb-tgl rb-tgl--wide"
+        [class.active]="fromCompletion()"
+        (click)="setRepeatFromCompletion(true)"
+      >
+        {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION | translate }}
+      </button>
+    </div>
+    <div class="rb-hint">
+      {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESCRIPTION | translate }}
+    </div>
+  </div>
+
+  <!-- NOTE: the live result/preview lives at the dialog bottom (just above the
+       action buttons), not here — see DialogEditTaskRepeatCfgComponent. -->
+
+  <!-- Advanced -->
+  <collapsible
+    [title]="T.F.TASK_REPEAT.F.RRULE_ADVANCED | translate"
+    [isExpanded]="model().showAdvanced"
+    (isExpandedChange)="setShowAdvanced($event)"
+  >
+    <div class="rb-adv">
+      <div class="rb-field">
+        <label>{{ T.F.TASK_REPEAT.F.RRULE_WKST | translate }}</label>
+        <select
+          #wkstSel
+          class="rb-sel rb-sel--wide"
+          (change)="setWkst(wkstSel.value)"
+        >
+          <option
+            value=""
+            [selected]="model().wkst === ''"
+          >
+            {{ T.F.TASK_REPEAT.F.RRULE_WKST_DEFAULT | translate }}
+          </option>
+          @for (o of weekdaySelectOpts; track o.value) {
+            <option
+              [value]="o.value"
+              [selected]="o.value === model().wkst"
+            >
+              {{ o.label }}
+            </option>
+          }
+        </select>
+        <div class="rb-hint">
+          {{ T.F.TASK_REPEAT.F.RRULE_WKST_DESCRIPTION | translate }}
+        </div>
+      </div>
+
+      <!-- Week numbers / days of year — only meaningful for YEARLY (RFC 5545 §3.3.10) -->
+      @if (model().freq === 'YEARLY') {
+        <div class="rb-field">
+          <label>{{ T.F.TASK_REPEAT.F.RRULE_BYWEEKNO | translate }}</label>
+          <input
+            #bwn
+            class="rb-text"
+            type="text"
+            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_PLACEHOLDER | translate"
+            [value]="model().byWeekNo"
+            (input)="setByWeekNo(bwn.value)"
+          />
+          <div class="rb-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_DESCRIPTION | translate }}
+          </div>
+        </div>
+
+        <div class="rb-field">
+          <label>{{ T.F.TASK_REPEAT.F.RRULE_BYYEARDAY | translate }}</label>
+          <input
+            #byd
+            class="rb-text"
+            type="text"
+            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_PLACEHOLDER | translate"
+            [value]="model().byYearDay"
+            (input)="setByYearDay(byd.value)"
+          />
+          <div class="rb-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_DESCRIPTION | translate }}
+          </div>
+        </div>
+      }
+
+      <div class="rb-field">
+        <label>{{ T.F.TASK_REPEAT.F.RRULE_RAW | translate }}</label>
+        <input
+          #raw
+          class="rb-text rb-text--mono"
+          type="text"
+          [placeholder]="T.F.TASK_REPEAT.F.RRULE_RAW_PLACEHOLDER | translate"
+          [value]="model().rawOverride"
+          (input)="setRawOverride(raw.value)"
+        />
+        <div class="rb-hint">
+          {{ T.F.TASK_REPEAT.F.RRULE_RAW_DESCRIPTION | translate }}
+        </div>
+      </div>
+    </div>
+  </collapsible>
+</div>

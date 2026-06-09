@@ -112,8 +112,8 @@ export class PluginUserPersistenceService {
     // Validate data size — applies whether the write commits now or later.
     // Cap is on the uncompressed user input, so a plugin can't bypass by
     // sending pre-compressed bytes. The cap is per-entity (i.e. per
-    // composite id); aggregate caps across a plugin's keys are out of
-    // scope — see docs/plans/2026-05-23-stage-a-keyed-plugin-persistence.md.
+    // composite id); aggregate caps across a plugin's keys are intentionally
+    // out of scope.
     const dataSize = new Blob([data]).size;
     if (dataSize > MAX_PLUGIN_DATA_SIZE) {
       throw new Error(

@@ -23,9 +23,11 @@ import { TagService } from '../../tag/tag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
-import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
+import { TaskCopy } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
+import { SnackService } from '../../../core/snack/snack.service';
+import { DateService } from '../../../core/date/date.service';
 
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
@@ -34,6 +36,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockTagService: jasmine.SpyObj<TagService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockDateTimeFormatService: jasmine.SpyObj<DateTimeFormatService>;
+  let mockDateService: jasmine.SpyObj<DateService>;
 
   const mockRepeatCfg: TaskRepeatCfg = {
     ...DEFAULT_TASK_REPEAT_CFG,
@@ -77,6 +80,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       'addTaskRepeatCfgToTask',
       'deleteTaskRepeatCfgWithDialog',
     ]);
+    mockDateService = jasmine.createSpyObj('DateService', ['todayStr']);
+    mockDateService.todayStr.and.returnValue('2026-06-09');
 
     // Set up the return value for getTaskRepeatCfgById$ before creating the component
     if (getTaskRepeatCfgById$ReturnValue) {
@@ -92,25 +97,14 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
     });
-    mockDateTimeFormatService = jasmine.createSpyObj(
-      'DateTimeFormatService',
-      ['formatTime'],
-      {
-        currentLocale: () => 'en-US',
-        dateFormat: () => ({
-          parse: 'MM/dd/yyyy',
-          display: { dateInput: 'MM/dd/yyyy' },
-        }),
-      },
-    );
-    mockDateTimeFormatService.formatTime.and.callFake(
-      (timestamp: number, locale?: string) => {
-        const date = new Date(timestamp);
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        return `${hours}:${minutes}`;
-      },
-    );
+    mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
+      currentLocale: () => 'en-US',
+      dateFormat: () => ({
+        parse: 'MM/dd/yyyy',
+        display: { dateInput: 'MM/dd/yyyy' },
+      }),
+      formatTime: () => '12:00 PM',
+    });
 
     await TestBed.configureTestingModule({
       imports: [
@@ -132,7 +126,9 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         { provide: TagService, useValue: mockTagService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateService, useValue: mockDateService },
         { provide: DateAdapter, useClass: CustomDateAdapter },
+        { provide: SnackService, useValue: { open: () => undefined } },
       ],
     })
       .overrideComponent(DialogEditTaskRepeatCfgComponent, {
@@ -403,7 +399,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(component.repeatCfg().quickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
     });
 
-    it('should still fall back to CUSTOM when startDate is missing', async () => {
+    it('migrates a startDate-less legacy cfg to RRULE (Custom UI removed)', async () => {
       const cfgNoDate: TaskRepeatCfg = {
         ...DEFAULT_TASK_REPEAT_CFG,
         id: 'repeat-cfg-nodate',
@@ -416,7 +412,33 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       const fixture = await setupTestBed({ repeatCfg: cfgNoDate });
       const component = fixture.componentInstance;
 
-      expect(component.repeatCfg().quickSetting).toBe('CUSTOM');
+      expect(component.repeatCfg().quickSetting).toBe('RRULE');
+      expect(component.repeatCfg().rrule).toContain('FREQ=MONTHLY');
+    });
+
+    it('migrates a legacy CUSTOM cfg to an equivalent RRULE on open', async () => {
+      const customCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-cfg-custom',
+        title: 'Legacy custom',
+        quickSetting: 'CUSTOM',
+        startDate: '2024-06-03',
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 2,
+        monday: true,
+        wednesday: true,
+        tuesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+      };
+
+      const fixture = await setupTestBed({ repeatCfg: customCfg });
+      const cfg = fixture.componentInstance.repeatCfg();
+
+      expect(cfg.quickSetting).toBe('RRULE');
+      expect(cfg.rrule).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE');
     });
   });
 
@@ -447,27 +469,66 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       });
       expect(normalized.monthlyWeekOfMonth).toBeUndefined();
     });
+
+    it('converts the null sentinel for RRULE cfgs too (null is not master-safe)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'RRULE',
+        monthlyWeekOfMonth: null,
+      });
+      expect(normalized.monthlyWeekOfMonth).toBeUndefined();
+    });
   });
 
-  describe('plannedStartDateStr computed signal', () => {
-    it('returns a formatted localized date string when only startDate is set', async () => {
-      const fixture = await setupTestBed({ repeatCfg: mockRepeatCfg });
-      fixture.detectChanges();
-      const val = fixture.componentInstance.plannedStartDateStr();
-      // '2026-01-02' formatted in en-US is 'Jan 2, 2026'
-      expect(val).toContain('Jan 2, 2026');
+  describe('startDate min floor (#7768 Bug 4)', () => {
+    it('sets minDate to null for a new repeat cfg created from a task', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: null,
+          }),
+        }),
+      );
     });
 
-    it('returns a formatted localized date and time string when startTime is set', async () => {
-      const cfgWithTime: TaskRepeatCfg = {
+    it('sets minDate to null when editing an existing past cfg', async () => {
+      const pastCfg: TaskRepeatCfg = {
         ...mockRepeatCfg,
-        startTime: '11:45',
+        startDate: '2020-01-15',
       };
-      const fixture = await setupTestBed({ repeatCfg: cfgWithTime });
-      fixture.detectChanges();
-      const val = fixture.componentInstance.plannedStartDateStr();
-      expect(val).toContain('Jan 2, 2026');
-      expect(val).toContain('11:45');
+      const fixture = await setupTestBed({ repeatCfg: pastCfg });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: null,
+          }),
+        }),
+      );
+    });
+
+    it('sets minDate to null when editing a cfg whose startDate is in the future', async () => {
+      const futureCfg: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startDate: '2027-01-01',
+      };
+      const fixture = await setupTestBed({ repeatCfg: futureCfg });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: null,
+          }),
+        }),
+      );
     });
   });
 
@@ -531,172 +592,474 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     }));
   });
 
-  describe('default reminders for repeat configs', () => {
-    it('should set remindAt to defaultTaskRemindOption when initializing an existing repeatCfg with startTime but undefined remindAt', async () => {
-      const cfgWithTimeNoReminder: TaskRepeatCfg = {
-        ...mockRepeatCfg,
-        startTime: '14:30',
-        remindAt: undefined,
-      };
-
-      const fixture = await setupTestBed({ repeatCfg: cfgWithTimeNoReminder });
-      const component = fixture.componentInstance;
-
-      expect(component.repeatCfg().remindAt).toBeDefined();
-      expect(component.repeatCfg().remindAt).not.toBe(TaskReminderOptionId.DoNotRemind);
-    });
-  });
-
-  describe('isWeekdaySelectionInvalid (issue #8025)', () => {
-    const baseCfg = {
-      ...DEFAULT_TASK_REPEAT_CFG,
-      monday: false,
-      tuesday: false,
-      wednesday: false,
-      thursday: false,
-      friday: false,
-      saturday: false,
-      sunday: false,
-    };
-
-    it('should be true for a CUSTOM weekly config with no weekday selected', async () => {
+  describe('RRULE builder mode', () => {
+    it('_processQuickSettingForDate forces RRULE mode for a non-preset rrule cfg', async () => {
       const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-
-      component.repeatCfg.set({
-        ...baseCfg,
+      const component = fixture.componentInstance as any;
+      const out = component._processQuickSettingForDate({
+        rrule: 'FREQ=DAILY',
         quickSetting: 'CUSTOM',
-        repeatCycle: 'WEEKLY',
+        startDate: '2024-06-01',
       });
-
-      expect(component.isWeekdaySelectionInvalid()).toBe(true);
+      expect(out.quickSetting).toBe('RRULE');
     });
 
-    it('should be false once at least one weekday is selected', async () => {
+    it('_processQuickSettingForDate keeps the preset label for a faithful rrule preset', async () => {
       const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-
-      component.repeatCfg.set({
-        ...baseCfg,
-        quickSetting: 'CUSTOM',
-        repeatCycle: 'WEEKLY',
-        wednesday: true,
-      });
-
-      expect(component.isWeekdaySelectionInvalid()).toBe(false);
-    });
-
-    it('should be false for non-weekly cycles even with no weekday selected', async () => {
-      const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-
-      component.repeatCfg.set({
-        ...baseCfg,
-        quickSetting: 'CUSTOM',
-        repeatCycle: 'MONTHLY',
-      });
-
-      expect(component.isWeekdaySelectionInvalid()).toBe(false);
-    });
-
-    it('should be false for non-CUSTOM quick settings (e.g. DAILY)', async () => {
-      const fixture = await setupTestBed({ task: mockTask });
-      const component = fixture.componentInstance;
-
-      component.repeatCfg.set({
-        ...baseCfg,
+      const component = fixture.componentInstance as any;
+      // rrule matches what the DAILY preset produces → stays a labelled preset.
+      const out = component._processQuickSettingForDate({
+        rrule: 'FREQ=DAILY',
         quickSetting: 'DAILY',
-        repeatCycle: 'WEEKLY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2024-06-01',
       });
-
-      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+      expect(out.quickSetting).toBe('DAILY');
     });
 
-    it('should block direct save when a CUSTOM weekly config has no weekday selected', async () => {
+    it('_processQuickSettingForDate opens the builder when the rrule diverges from its preset label', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance as any;
+      // Labelled DAILY but the rule is biweekly Monday → not a faithful preset.
+      const out = component._processQuickSettingForDate({
+        rrule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO',
+        quickSetting: 'DAILY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2024-06-03',
+      });
+      expect(out.quickSetting).toBe('RRULE');
+    });
+
+    it('editing an rrule cfg opens in RRULE mode with the rule preserved', async () => {
+      const rruleCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-cfg',
+        title: 'Biweekly',
+        startDate: '2024-06-03',
+        repeatCycle: 'WEEKLY',
+        rrule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO',
+      };
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const cfg = fixture.componentInstance.repeatCfg();
+      expect(cfg.quickSetting).toBe('RRULE');
+      expect(cfg.rrule).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
+    });
+
+    it('onRRuleChange stores the rule and derives the legacy repeatCycle', async () => {
       const fixture = await setupTestBed({ task: mockTask });
       const component = fixture.componentInstance;
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      const cfg = component.repeatCfg();
+      expect(cfg.rrule).toBe('FREQ=MONTHLY;BYMONTHDAY=15');
+      expect(cfg.repeatCycle).toBe('MONTHLY');
+    });
 
-      component.repeatCfg.set({
-        ...baseCfg,
+    it('result preview reflects onRRuleChange freq/interval updates', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'RRULE' }) as any);
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      expect(component.rrulePreview()?.rrule).toBe('FREQ=MONTHLY;BYMONTHDAY=15');
+      component.onRRuleChange('FREQ=YEARLY;INTERVAL=2;BYMONTHDAY=15');
+      expect(component.rrulePreview()?.rrule).toBe(
+        'FREQ=YEARLY;INTERVAL=2;BYMONTHDAY=15',
+      );
+    });
+
+    it('exposes a live rrule result/preview in RRULE mode (dialog-level)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) =>
+          ({
+            ...c,
+            quickSetting: 'RRULE',
+            rrule: 'FREQ=WEEKLY;BYDAY=MO',
+          }) as any,
+      );
+      expect(component.rrulePreview()?.human.toLowerCase()).toContain('week');
+      expect(component.rrulePreview()?.rrule).toBe('FREQ=WEEKLY;BYDAY=MO');
+    });
+
+    it('save() persists the rrule the builder produced', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'RRULE' }) as any);
+      component.onRRuleChange('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE');
+      component.save();
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).toHaveBeenCalled();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.rrule).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE');
+      expect(savedCfg.repeatCycle).toBe('WEEKLY');
+    });
+
+    it('onRRuleChange clears stale monthly anchors from a previous rule', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      // Simulate a leftover nth-weekday anchor (e.g. from MONTHLY_NTH_WEEKDAY).
+      component.repeatCfg.update(
+        (c) => ({ ...c, monthlyWeekOfMonth: 2, monthlyWeekday: 2 }) as any,
+      );
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      const cfg = component.repeatCfg() as any;
+      // undefined (not null!) — released clients' typia schema allows the
+      // anchors only absent-or-numeric, so null must never be persisted.
+      expect(cfg.monthlyWeekOfMonth).toBeUndefined();
+      expect(cfg.monthlyWeekday).toBeUndefined();
+    });
+
+    it('onRRuleChange does NOT touch startDate (alignment happens at save only)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2024-06-03' }) as any);
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      // Aligning live would silently rewrite the visible start-date field on
+      // every builder interaction.
+      expect(component.repeatCfg().startDate).toBe('2024-06-03');
+    });
+
+    it('save() aligns startDate onto the rule day for a new date-anchored cfg', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-03' }) as any,
+      );
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      // Old clients read the monthly day from startDate — must sit on the 15th.
+      expect(savedCfg.startDate).toBe('2024-06-15');
+    });
+
+    it('save() keeps monthlyLastDay as the old-client fallback for BYMONTHDAY=-1', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'RRULE' }) as any);
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=-1');
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.rrule).toBe('FREQ=MONTHLY;BYMONTHDAY=-1');
+      // Regression: _normalizeMonthlyAnchor used to strip this for RRULE saves,
+      // losing month-end semantics on old clients.
+      expect(savedCfg.monthlyLastDay).toBe(true);
+    });
+
+    it('save() realigns startDate edited after the last builder change', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'RRULE' }) as any);
+      component.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      // User edits the start date afterwards — off-occurrence again.
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2024-07-03' }) as any);
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.startDate).toBe('2024-07-15');
+    });
+
+    it('save() re-derives the legacy weekday fallback when startDate changed after the last builder emit', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-12' }) as any, // a Wednesday
+      );
+      // BYDAY-less weekly rule — the legacy fallback maps onto the start weekday.
+      component.onRRuleChange('FREQ=WEEKLY');
+      // User edits the start date afterwards; no alignment applies for weekly,
+      // but the stale Wednesday flag must still be re-derived to Thursday —
+      // else old clients fire on a different weekday than the saved dtstart.
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2024-06-13' }) as any); // a Thursday
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.startDate).toBe('2024-06-13');
+      expect(savedCfg.thursday).toBe(true);
+      expect(savedCfg.wednesday).toBe(false);
+    });
+
+    it('save() does NOT realign startDate on an edit when the schedule was not touched', async () => {
+      // Regression (#7373 class): a stored cfg whose startDate is off-occurrence
+      // (imported / pre-alignment) must not get a startDate change — a
+      // SCHEDULE_AFFECTING_FIELD — injected by save() when the user only edited
+      // the title; that would reschedule today's live instance.
+      const storedCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-unaligned',
+        title: 'Unaligned',
+        startDate: '2024-06-03',
+        repeatCycle: 'MONTHLY',
+        quickSetting: 'RRULE' as any,
+        rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
+      };
+      const fixture = await setupTestBed({ repeatCfg: storedCfg });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, title: 'Renamed' }) as any);
+      component.save();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalled();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.title).toBe('Renamed');
+      expect('startDate' in changes).toBe(false);
+    });
+
+    it('save() blocks a parseable rule that can never produce an occurrence', async () => {
+      // FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30 parses fine (and isRRuleValid is
+      // true) but Feb 30 never exists — persisting it would create a silently
+      // dead recurrence with the legacy fallback bypassed.
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-03' }) as any,
+      );
+      component.onRRuleChange('FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30');
+      component.save();
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
+    it('save() blocks sub-daily frequencies (raw override FREQ=HOURLY)', async () => {
+      // The engine is day-granular: a sub-daily rule would be accepted but
+      // silently collapse to ~daily firing, and it has no legacy repeatCycle
+      // for old clients (rruleToLegacyTaskRepeatCfg returns {}).
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-03' }) as any,
+      );
+      component.onRRuleChange('FREQ=HOURLY');
+      component.save();
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
+    it('save() blocks COUNT combined with repeat-from-completion (count never finishes)', async () => {
+      // Completing an instance re-anchors startDate + lastTaskCreationDay to
+      // the completion day, which restarts the COUNT window — the series would
+      // never terminate.
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', startDate: '2024-06-03' }) as any,
+      );
+      component.onRRuleChange('FREQ=DAILY;COUNT=5');
+      component.onRepeatFromCompletionChange(true);
+      component.save();
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+
+      // The same rule WITHOUT the completion anchor saves fine.
+      component.onRepeatFromCompletionChange(false);
+      component.save();
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).toHaveBeenCalled();
+    });
+
+    it('reopens a wire-clamped preset cfg under its preset label (not the raw builder)', async () => {
+      // Non-master presets persist as quickSetting='CUSTOM' (sync clamp); the
+      // rrule is the only thing identifying them on reopen — infer it back.
+      const weekendsCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-weekends',
+        title: 'Weekends',
         quickSetting: 'CUSTOM',
         repeatCycle: 'WEEKLY',
-      });
+        repeatEvery: 1,
+        startDate: '2024-06-08', // a Saturday
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: true,
+        sunday: true,
+        rrule: 'FREQ=WEEKLY;BYDAY=SA,SU',
+      };
+      const fixture = await setupTestBed({ repeatCfg: weekendsCfg });
+      expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('WEEKENDS');
+    });
 
+    it('opens completion-relative cfgs in builder mode even when the rrule matches a preset', async () => {
+      // The schedule-type toggle ("from completion") only exists in the RRULE
+      // builder — a preset label (e.g. EVERY_OTHER_DAY) would hide it.
+      const completionCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-completion',
+        title: 'Every other day after done',
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'DAILY',
+        repeatEvery: 2,
+        repeatFromCompletionDate: true,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY;INTERVAL=2',
+      };
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
+    });
+
+    it('opens a completion-relative FAITHFUL preset cfg in builder mode too', async () => {
+      const faithful: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-completion-2',
+        title: 'Daily after done',
+        quickSetting: 'DAILY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY',
+      };
+      const fixture = await setupTestBed({ repeatCfg: faithful });
+      expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
+    });
+
+    it('clears repeatFromCompletionDate when switching a completion-relative cfg to a preset', async () => {
+      // The "from completion" toggle lives only in the RRULE builder, so picking
+      // a preset (which hides it) must clear the flag — otherwise it persists
+      // with no visible control and keeps firing relative to completion.
+      const completionCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-switch',
+        title: 'After done daily',
+        quickSetting: 'DAILY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY',
+      };
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const component = fixture.componentInstance;
+      // Completion-relative cfgs open in the builder regardless of preset match.
+      expect(component.repeatCfg().quickSetting).toBe('RRULE');
+      // User picks a plain preset, hiding the from-completion control.
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'DAILY' }) as any);
       component.save();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalled();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.repeatFromCompletionDate).toBe(false);
+    });
 
-      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    it('does NOT inject repeatFromCompletionDate on a preset save when it was never set', async () => {
+      // Guards the conditional clear: an untouched (falsy) flag must stay out of
+      // the change set so a title-only preset save stays an empty-diff no-op
+      // (#7373 class) instead of dispatching a spurious undefined→false op.
+      const presetCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-preset-plain',
+        title: 'Plain daily',
+        quickSetting: 'DAILY',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2024-06-03',
+        rrule: 'FREQ=DAILY',
+      };
+      const fixture = await setupTestBed({ repeatCfg: presetCfg });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, title: 'Renamed' }) as any);
+      component.save();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.title).toBe('Renamed');
+      expect('repeatFromCompletionDate' in changes).toBe(false);
+    });
+
+    it('still opens the builder for a CUSTOM cfg whose rrule matches no preset', async () => {
+      const handBuilt: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-hand',
+        title: 'Hand built',
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        startDate: '2024-06-03',
+        rrule: 'FREQ=WEEKLY;INTERVAL=3;BYDAY=MO,FR',
+      };
+      const fixture = await setupTestBed({ repeatCfg: handBuilt });
+      expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
+    });
+
+    it('does NOT persist the lazy rrule migration on a title-only edit (no reschedule)', async () => {
+      // Opening a legacy CUSTOM cfg migrates it to rrule IN MEMORY. `rrule` is
+      // a SCHEDULE_AFFECTING_FIELD — leaking it into the change set of an
+      // unrelated edit would relocate today's live instance (#7373 class).
+      const legacyCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'legacy-migrate',
+        title: 'Old custom',
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 2,
+        startDate: '2024-06-03',
+        monday: true,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+      };
+      const fixture = await setupTestBed({ repeatCfg: legacyCfg });
+      const component = fixture.componentInstance;
+      // Migrated in-memory:
+      expect(component.repeatCfg().rrule).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
+      component.repeatCfg.update((c) => ({ ...c, title: 'Renamed' }) as any);
+      component.save();
+      const changes = mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as any;
+      expect(changes.title).toBe('Renamed');
+      expect('rrule' in changes).toBe(false);
+      expect('quickSetting' in changes).toBe(false);
+      expect('startDate' in changes).toBe(false);
+    });
+
+    it('skips the update dispatch entirely when nothing changed', async () => {
+      const storedCfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'rr-noop',
+        title: 'Unchanged',
+        startDate: '2024-06-03',
+        repeatCycle: 'WEEKLY',
+        quickSetting: 'CUSTOM',
+        rrule: 'FREQ=WEEKLY;INTERVAL=3;BYDAY=MO',
+        monday: true,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+      };
+      const fixture = await setupTestBed({ repeatCfg: storedCfg });
+      fixture.componentInstance.save();
       expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
-      expect(mockDialogRef.close).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('openScheduleDialog()', () => {
-    it('should fall back to date-only/no-time when startTime is corrupt/invalid', async () => {
-      const cfgWithCorruptTime: TaskRepeatCfg = {
-        ...mockRepeatCfg,
-        startTime: 'INVALID_CLOCK_STRING',
-      };
-      const fixture = await setupTestBed({ repeatCfg: cfgWithCorruptTime });
-      const component = fixture.componentInstance;
-
-      component.openScheduleDialog();
-
-      expect(mockMatDialog.open).toHaveBeenCalled();
-      const openArgs = mockMatDialog.open.calls.mostRecent().args;
-      const dialogData = openArgs[1]?.data as any;
-      expect(dialogData.task.dueWithTime).toBeUndefined();
-      expect(dialogData.targetTime).toBeUndefined();
     });
 
-    it('should use the time when startTime is valid', async () => {
-      const cfgWithValidTime: TaskRepeatCfg = {
-        ...mockRepeatCfg,
-        startTime: '12:30',
-      };
-      const fixture = await setupTestBed({ repeatCfg: cfgWithValidTime });
+    it('save() blocks when the rrule is missing/invalid in RRULE mode', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
       const component = fixture.componentInstance;
-
-      component.openScheduleDialog();
-
-      expect(mockMatDialog.open).toHaveBeenCalled();
-      const openArgs = mockMatDialog.open.calls.mostRecent().args;
-      const dialogData = openArgs[1]?.data as any;
-      expect(dialogData.task.dueWithTime).toBeDefined();
-      expect(dialogData.targetTime).toBe('12:30');
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'RRULE', rrule: undefined }) as any,
+      );
+      component.save();
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
     });
 
-    it('should set remindAt to undefined if result.time is null/absent', async () => {
-      const fixture = await setupTestBed({ repeatCfg: mockRepeatCfg });
+    it('save() replaces a stale builder rrule with the preset canonical rule (presets stay rrule-backed)', async () => {
+      // Switching from builder mode to a preset must NOT strip the rrule —
+      // getQuickSettingUpdates overwrites it with the preset's canonical rule.
+      // (Clearing via `rrule: undefined` would also be dropped by the JSON
+      // wire, leaving remote clients on the old rule.)
+      const fixture = await setupTestBed({ task: mockTask });
       const component = fixture.componentInstance;
-      mockMatDialog.open.and.returnValue({
-        afterClosed: () =>
-          of({
-            date: new Date('2026-01-02'),
-            time: null,
-            remindOption: TaskReminderOptionId.AtStart,
-          }),
-      } as any);
-
-      component.openScheduleDialog();
-
-      expect(component.repeatCfg().remindAt).toBeUndefined();
-    });
-
-    it('should set remindAt to result.remindOption if result.time is present and valid', async () => {
-      const fixture = await setupTestBed({ repeatCfg: mockRepeatCfg });
-      const component = fixture.componentInstance;
-      mockMatDialog.open.and.returnValue({
-        afterClosed: () =>
-          of({
-            date: new Date('2026-01-02'),
-            time: '14:30',
-            remindOption: TaskReminderOptionId.AtStart,
-          }),
-      } as any);
-
-      component.openScheduleDialog();
-
-      expect(component.repeatCfg().remindAt).toBe(TaskReminderOptionId.AtStart);
+      component.repeatCfg.update(
+        (c) => ({ ...c, quickSetting: 'DAILY', rrule: 'FREQ=WEEKLY' }) as any,
+      );
+      component.save();
+      const savedCfg = mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as any;
+      expect(savedCfg.rrule).toBe('FREQ=DAILY');
+      expect(savedCfg.repeatCycle).toBe('DAILY');
     });
   });
 });

@@ -465,7 +465,6 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     Log.log('[DailySummary] Moving done tasks to archive:', {
       count: doneTasks.length,
       taskIds: doneTasks.map((t) => t.id),
-      tasks: doneTasks,
     });
 
     if (doneTasks.length === 0) {
@@ -640,7 +639,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
             flatTasks.push(pt);
             flatTasks = flatTasks.concat(subTasks);
           }
-        } else if (_isWorkedOnDoneOrDueToday(pt) || pt.repeatCfgId) {
+        } else if (_isWorkedOnDoneOrDueToday(pt)) {
           flatTasks.push(pt);
         }
       });

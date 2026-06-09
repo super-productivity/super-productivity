@@ -27,6 +27,7 @@ import {
   addProject,
   addProjects,
   archiveProject,
+  completeProject,
   loadProjects,
   moveAllProjectBacklogTasksToRegularList,
   moveProjectTaskDownInBacklogList,
@@ -38,6 +39,7 @@ import {
   moveProjectTaskToRegularListAuto,
   moveProjectTaskToTopInBacklogList,
   moveProjectTaskUpInBacklogList,
+  reopenProject,
   toggleHideFromMenu,
   unarchiveProject,
   updateProject,
@@ -181,6 +183,43 @@ export const projectReducer = createReducer<ProjectState>(
       {
         id,
         changes: {
+          isArchived: false,
+          isDone: false,
+          doneOn: null,
+        },
+      },
+      state,
+    ),
+  ),
+
+  // Completing a project marks it done AND archives it (hide from active menu).
+  // isDone stays distinct from isArchived so a finish ≠ a quiet shelve.
+  // Task resolution (move-to-inbox / mark-done) is decoupled — it runs as the
+  // normal per-task actions from the completion flow, not bundled in here.
+  on(completeProject, (state, { id, doneOn }) => {
+    if (id === INBOX_PROJECT.id) return state;
+    return projectAdapter.updateOne(
+      {
+        id,
+        changes: {
+          isDone: true,
+          doneOn,
+          isArchived: true,
+        },
+      },
+      state,
+    );
+  }),
+
+  // Reopen reverts a completed project back to active. It clears the done flags
+  // only; tasks resolved at completion time are not restored (by design).
+  on(reopenProject, (state, { id }) =>
+    projectAdapter.updateOne(
+      {
+        id,
+        changes: {
+          isDone: false,
+          doneOn: null,
           isArchived: false,
         },
       },

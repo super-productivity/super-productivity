@@ -74,6 +74,13 @@ describe('CapacitorNotificationService', () => {
     });
   });
 
+  describe('getPermissionState', () => {
+    it("should return 'denied' when not available", async () => {
+      const result = await service.getPermissionState();
+      expect(result).toBe('denied');
+    });
+  });
+
   describe('checkPermissions', () => {
     it('should return false when not available', async () => {
       const result = await service.checkPermissions();

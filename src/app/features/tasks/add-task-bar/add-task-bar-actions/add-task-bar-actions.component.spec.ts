@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -12,7 +12,7 @@ import { TagService } from '../../../tag/tag.service';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { Project } from '../../../project/project.model';
 import { Tag } from '../../../tag/tag.model';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { Store } from '@ngrx/store';
@@ -20,6 +20,7 @@ import { GlobalConfigService } from 'src/app/features/config/global-config.servi
 import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
 import { DateService } from '../../../../core/date/date.service';
 import { TaskReminderOptionId } from '../../task.model';
+import { INBOX_PROJECT } from '../../../project/project.const';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -38,6 +39,7 @@ describe('AddTaskBarActionsComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
   let mockDateService: jasmine.SpyObj<DateService>;
+  let mockProjectsSignal: WritableSignal<Project[]>;
 
   const mockProject: Project = {
     id: '1',
@@ -132,10 +134,11 @@ describe('AddTaskBarActionsComponent', () => {
       'removeShortSyntaxFromInput',
     ]);
 
+    mockProjectsSignal = signal([mockProject]);
     mockProjectService = jasmine.createSpyObj('ProjectService', [], {
       list$: of([mockProject]),
-      listSortedForUI: signal([mockProject]),
-      listSorted: signal([mockProject]),
+      listSortedForUI: mockProjectsSignal,
+      listSorted: mockProjectsSignal,
     });
 
     mockTagService = jasmine.createSpyObj('TagService', [], {
@@ -193,6 +196,9 @@ describe('AddTaskBarActionsComponent', () => {
           },
         },
       },
+      G: {
+        INBOX_PROJECT_TITLE: 'Posteingang',
+      },
     });
     translateService.use('en');
 
@@ -225,6 +231,54 @@ describe('AddTaskBarActionsComponent', () => {
   });
 
   describe('Computed Properties', () => {
+    it('should translate the default inbox project title in the action button', () => {
+      mockProjectsSignal.set([INBOX_PROJECT]);
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        projectId: INBOX_PROJECT.id,
+      });
+
+      fixture.detectChanges();
+
+      const projectButton: HTMLElement =
+        fixture.nativeElement.querySelector('.action-btn');
+      expect(projectButton.textContent).toContain('Posteingang');
+      expect(projectButton.textContent).not.toContain('Inbox');
+    });
+
+    it('should translate the default inbox project title in the project menu', fakeAsync(() => {
+      mockProjectsSignal.set([INBOX_PROJECT]);
+      fixture.detectChanges();
+
+      const projectButton: HTMLElement =
+        fixture.nativeElement.querySelector('.action-btn');
+      projectButton.click();
+      fixture.detectChanges();
+      tick();
+
+      const menuPanel = document.querySelector('.cdk-overlay-container');
+      expect(menuPanel?.textContent).toContain('Posteingang');
+      expect(menuPanel?.textContent).not.toContain('Inbox');
+    }));
+
+    it('should preserve a renamed inbox project title in the action button', () => {
+      const renamedInboxProject = {
+        ...INBOX_PROJECT,
+        title: 'Personal Inbox',
+      };
+      mockProjectsSignal.set([renamedInboxProject]);
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        projectId: INBOX_PROJECT.id,
+      });
+
+      fixture.detectChanges();
+
+      const projectButton: HTMLElement =
+        fixture.nativeElement.querySelector('.action-btn');
+      expect(projectButton.textContent).toContain('Personal Inbox');
+    });
+
     it('should compute hasNewTags correctly', () => {
       const stateWithNewTags = {
         ...mockState,

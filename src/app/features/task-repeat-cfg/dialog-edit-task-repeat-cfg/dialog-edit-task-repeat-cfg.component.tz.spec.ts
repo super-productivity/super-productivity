@@ -47,12 +47,15 @@ describe('DialogEditTaskRepeatCfgComponent timezone test', () => {
       // This creates a repeat config based on local interpretation of the timestamp
       // In LA: starts on 2025-01-16
       // In Berlin: starts on 2025-01-17
-      const tzOffset = new Date().getTimezoneOffset();
-      if (tzOffset > 0) {
-        // LA
+      // Use the offset AT the test instant (January) — `new Date()` breaks
+      // every summer in DST zones. 07:00 UTC (= 11 PM PST) is the previous
+      // local day only west of UTC-7.
+      const tzOffset = new Date(taskDueWithTime).getTimezoneOffset();
+      if (tzOffset > 420) {
+        // west of UTC-7 (e.g. LA)
         expect(startDate).toBe('2025-01-16');
       } else {
-        // Berlin
+        // east of UTC-7 (e.g. New York, Berlin)
         expect(startDate).toBe('2025-01-17');
       }
     });
