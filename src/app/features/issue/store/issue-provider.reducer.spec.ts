@@ -35,7 +35,7 @@ describe('issueProviderReducer loadAllData migration', () => {
         issueProviderInitialState,
         loadWith({ gp1: legacyGitea }),
       );
-      const migrated = state.entities['gp1'] as Record<string, unknown>;
+      const migrated = state.entities['gp1'] as unknown as Record<string, unknown>;
       expect(migrated['pluginId']).toBe('gitea-issue-provider');
       expect(migrated['pluginConfig']).toEqual({
         host: 'https://gitea.example.com',
@@ -52,7 +52,7 @@ describe('issueProviderReducer loadAllData migration', () => {
         issueProviderInitialState,
         loadWith({ gp1: legacyGitea }),
       );
-      const migrated = state.entities['gp1'] as Record<string, unknown>;
+      const migrated = state.entities['gp1'] as unknown as Record<string, unknown>;
       expect(migrated['host']).toBe('https://gitea.example.com');
       expect(migrated['repoFullname']).toBe('me/repo');
       expect(migrated['issueProviderKey']).toBe('GITEA');
@@ -65,7 +65,7 @@ describe('issueProviderReducer loadAllData migration', () => {
         issueProviderInitialState,
         loadWith({ gp1: noScope }),
       );
-      const migrated = state.entities['gp1'] as Record<string, unknown>;
+      const migrated = state.entities['gp1'] as unknown as Record<string, unknown>;
       expect((migrated['pluginConfig'] as Record<string, unknown>)['scope']).toBe(
         'created-by-me',
       );
@@ -81,7 +81,7 @@ describe('issueProviderReducer loadAllData migration', () => {
         issueProviderInitialState,
         loadWith({ gp1: already }),
       );
-      expect(state.entities['gp1']).toBe(already);
+      expect(state.entities['gp1'] as unknown).toBe(already);
     });
   });
 
@@ -100,7 +100,7 @@ describe('issueProviderReducer loadAllData migration', () => {
         issueProviderInitialState,
         loadWith({ lp1: legacyLinear }),
       );
-      const migrated = state.entities['lp1'] as Record<string, unknown>;
+      const migrated = state.entities['lp1'] as unknown as Record<string, unknown>;
       expect(migrated['pluginId']).toBe('linear-issue-provider');
       expect(migrated['pluginConfig']).toEqual({
         apiKey: 'lin_key',
@@ -114,7 +114,7 @@ describe('issueProviderReducer loadAllData migration', () => {
         issueProviderInitialState,
         loadWith({ lp1: { id: 'lp1', issueProviderKey: 'LINEAR', apiKey: 'k' } }),
       );
-      const cfg = (state.entities['lp1'] as Record<string, unknown>)[
+      const cfg = (state.entities['lp1'] as unknown as Record<string, unknown>)[
         'pluginConfig'
       ] as Record<string, unknown>;
       expect(cfg).toEqual({ apiKey: 'k', teamId: '', projectId: '' });
@@ -130,7 +130,7 @@ describe('issueProviderReducer loadAllData migration', () => {
       jasmine.objectContaining({ issueProviderKey: 'JIRA' }),
     );
     expect(
-      (state.entities['jp1'] as Record<string, unknown>)['pluginConfig'],
+      (state.entities['jp1'] as unknown as Record<string, unknown>)['pluginConfig'],
     ).toBeUndefined();
   });
 });
