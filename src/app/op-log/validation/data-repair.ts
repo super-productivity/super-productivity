@@ -9,10 +9,7 @@ import { Task, TaskArchive, TaskCopy, TaskState } from '../../features/tasks/tas
 import { unique } from '../../util/unique';
 import { isDBDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../../features/tag/tag.const';
-import {
-  MASTER_SAFE_QUICK_SETTINGS,
-  TaskRepeatCfgCopy,
-} from '../../features/task-repeat-cfg/task-repeat-cfg.model';
+import { TaskRepeatCfgCopy } from '../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { IssueProvider } from '../../features/issue/issue.model';
 import { AppDataComplete } from '../model/model-config';
 import { INBOX_PROJECT } from '../../features/project/project.const';
@@ -129,7 +126,6 @@ export const dataRepair = (
   dataOut = _fixInvalidDueDateStrings(dataOut, summary);
   dataOut = _fixTaskRepeatMissingWeekday(dataOut, summary);
   dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut, summary);
-  dataOut = _fixTaskRepeatInvalidMonthlyAnchor(dataOut, summary);
   dataOut = _stripLegacyMonthlyMode(dataOut, summary);
   dataOut = _createInboxProjectIfNecessary(dataOut, summary);
   dataOut = _fixOrphanedNotes(dataOut, summary);
@@ -270,17 +266,6 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
     ];
     Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
       const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
-      // Downgrade any quickSetting outside the released (sync-safe) union to
-      // 'CUSTOM', so a value an older/mobile client can't typia-validate never
-      // survives in stored data.
-      if (cfg.quickSetting && !MASTER_SAFE_QUICK_SETTINGS.has(cfg.quickSetting)) {
-        OpLog.log(
-          `Fixing repeat config ${cfg.id}: unsupported quickSetting ${cfg.quickSetting} -> CUSTOM`,
-        );
-        cfg.quickSetting = 'CUSTOM';
-        summary.entityStateFixed++;
-        return;
-      }
       if (
         cfg.quickSetting &&
         quickSettingsRequiringStartDate.includes(cfg.quickSetting) &&
@@ -294,40 +279,6 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
       }
     });
   }
-  return data;
-};
-
-// Mirror of the action-creator anchor sanitizer (task-repeat-cfg.actions.ts):
-// the monthly anchors are typia-validated against 1|2|3|4|-1 / 0..6 on every
-// client, so a `null` or out-of-union number (e.g. from an out-of-range BYDAY
-// ordinal an older build converted, or a foreign import) must be cleared here
-// too — repair is the last gate before re-validation.
-const _fixTaskRepeatInvalidMonthlyAnchor = (
-  data: AppDataComplete,
-  summary: RepairSummary,
-): AppDataComplete => {
-  if (!data.taskRepeatCfg?.entities) {
-    return data;
-  }
-  const isValidWeekOfMonth = (v: unknown): boolean =>
-    v === -1 || (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 4);
-  const isValidWeekday = (v: unknown): boolean =>
-    Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 6;
-  Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
-    const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
-    const w = cfg.monthlyWeekOfMonth as unknown;
-    const d = cfg.monthlyWeekday as unknown;
-    if (w !== undefined && !isValidWeekOfMonth(w)) {
-      OpLog.log(`Fixing repeat config ${cfg.id}: invalid monthlyWeekOfMonth cleared`);
-      cfg.monthlyWeekOfMonth = undefined;
-      summary.entityStateFixed++;
-    }
-    if (d !== undefined && !isValidWeekday(d)) {
-      OpLog.log(`Fixing repeat config ${cfg.id}: invalid monthlyWeekday cleared`);
-      cfg.monthlyWeekday = undefined;
-      summary.entityStateFixed++;
-    }
-  });
   return data;
 };
 

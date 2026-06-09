@@ -64,22 +64,19 @@ test.describe('Recurring Task - preserve past dueDay (#7344)', () => {
     const repeatDialog = page.locator('mat-dialog-container');
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 4. Convert to recurring via "Custom recurring config" (the RRULE builder;
-    //    the legacy Custom → repeat-cycle UI was removed).
+    // 4. Switch to CUSTOM so repeatCycle becomes editable without overriding
+    //    startDate (picking YEARLY_CURRENT_DATE would reset startDate to today).
     const quickSettingSelect = repeatDialog.locator('mat-select').first();
     await quickSettingSelect.click();
-    const rruleOption = page
-      .locator('mat-option')
-      .filter({ hasText: /Custom recurring config/i });
-    await expect(rruleOption).toBeVisible({ timeout: 5000 });
-    await rruleOption.click();
+    const customOption = page.locator('mat-option').filter({ hasText: /Custom/i });
+    await customOption.click();
 
-    // 5. Set the builder frequency to Yearly. The exact rule is irrelevant to
-    //    this regression — what matters is that converting a past-dated task to
-    //    recurring must NOT advance its dueDay (which would drop it from Today).
-    const freqSelect = repeatDialog.locator('rrule-builder select').first();
-    await expect(freqSelect).toBeVisible({ timeout: 5000 });
-    await freqSelect.selectOption('YEARLY');
+    // 5. Set repeat cycle to YEARLY (default is WEEKLY under CUSTOM).
+    const repeatCycleSelect = repeatDialog.locator('.repeat-cycle mat-select').first();
+    await expect(repeatCycleSelect).toBeVisible({ timeout: 5000 });
+    await repeatCycleSelect.click();
+    const yearlyOption = page.locator('mat-option').filter({ hasText: /Year/i });
+    await yearlyOption.click();
 
     // 6. Save the repeat config.
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });

@@ -2,23 +2,6 @@ h1 mat-icon {
   transform: rotate(45deg);
 }
 
-// Bound the whole dialog to the viewport and lay it out as a flex column so
-// the scrollable form and the pinned result band share the available height
-// instead of overflowing past the action buttons.
-.dialog-help-wrapper {
-  display: flex;
-  flex-direction: column;
-  max-height: 85vh;
-}
-
-mat-dialog-content {
-  flex: 1 1 auto;
-  // Let the flex parent govern height instead of Material's fixed 65vh so the
-  // form region shrinks to make room for the result band.
-  min-height: 0;
-  max-height: none;
-}
-
 h1,
 mat-dialog-actions {
   :host-context([dir='rtl']) & {
@@ -56,37 +39,6 @@ mat-dialog-actions {
 .form-wrapper {
   min-width: 280px;
   max-width: 620px;
-}
-
-// Live RRULE result/preview, pinned above the dialog action buttons.
-.rrule-result {
-  margin: var(--s) 0;
-  padding: var(--s) var(--s2);
-  border-radius: var(--card-border-radius);
-  background: var(--extra-border-color);
-  font-size: 13px;
-  line-height: 1.4;
-
-  &__human {
-    font-weight: bold;
-  }
-
-  &__next {
-    margin-top: var(--s-quarter, 2px);
-    opacity: 0.85;
-  }
-
-  &__sep {
-    margin: 0 var(--s-quarter, 4px);
-    opacity: 0.5;
-  }
-
-  &__expr {
-    margin-top: var(--s-quarter, 2px);
-    font-family: monospace;
-    opacity: 0.7;
-    word-break: break-all;
-  }
 }
 
 :host collapsible {

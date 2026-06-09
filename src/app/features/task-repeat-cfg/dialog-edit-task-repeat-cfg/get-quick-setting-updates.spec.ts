@@ -242,29 +242,21 @@ describe('getQuickSettingUpdates', () => {
     });
   });
 
-  // The numeric anchors reset via PRESENT-but-undefined keys so the
-  // spread-merge overwrites stale values in memory. NOT null: released
-  // clients' typia schema allows these fields only absent-or-numeric, so a
-  // null must never reach the wire.
   describe('day-of-month presets clear NTH_WEEKDAY anchors', () => {
     it('MONTHLY_CURRENT_DATE explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_CURRENT_DATE');
-      expect('monthlyWeekOfMonth' in result!).toBe(true);
-      expect('monthlyWeekday' in result!).toBe(true);
       expect(result!.monthlyWeekOfMonth).toBeUndefined();
       expect(result!.monthlyWeekday).toBeUndefined();
     });
 
     it('MONTHLY_FIRST_DAY explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
-      expect('monthlyWeekOfMonth' in result!).toBe(true);
       expect(result!.monthlyWeekOfMonth).toBeUndefined();
       expect(result!.monthlyWeekday).toBeUndefined();
     });
 
     it('MONTHLY_LAST_DAY explicitly clears the Nth-weekday anchor fields', () => {
       const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
-      expect('monthlyWeekOfMonth' in result!).toBe(true);
       expect(result!.monthlyWeekOfMonth).toBeUndefined();
       expect(result!.monthlyWeekday).toBeUndefined();
     });
@@ -272,18 +264,20 @@ describe('getQuickSettingUpdates', () => {
 
   describe('monthlyLastDay anchor is mutually exclusive with other presets', () => {
     it('MONTHLY_CURRENT_DATE clears monthlyLastDay', () => {
-      expect(getQuickSettingUpdates('MONTHLY_CURRENT_DATE')!.monthlyLastDay).toBe(false);
+      expect(
+        getQuickSettingUpdates('MONTHLY_CURRENT_DATE')!.monthlyLastDay,
+      ).toBeUndefined();
     });
 
     it('MONTHLY_FIRST_DAY clears monthlyLastDay', () => {
-      expect(getQuickSettingUpdates('MONTHLY_FIRST_DAY')!.monthlyLastDay).toBe(false);
+      expect(getQuickSettingUpdates('MONTHLY_FIRST_DAY')!.monthlyLastDay).toBeUndefined();
     });
 
     it('MONTHLY_NTH_WEEKDAY clears monthlyLastDay', () => {
       const ref = new Date(2026, 0, 12);
-      expect(getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref)!.monthlyLastDay).toBe(
-        false,
-      );
+      expect(
+        getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref)!.monthlyLastDay,
+      ).toBeUndefined();
     });
   });
 
@@ -291,121 +285,6 @@ describe('getQuickSettingUpdates', () => {
     it('should return undefined', () => {
       const result = getQuickSettingUpdates('CUSTOM');
       expect(result).toBeUndefined();
-    });
-  });
-
-  describe('rrule presets (every preset emits a canonical rrule)', () => {
-    it('DAILY → FREQ=DAILY', () => {
-      expect(getQuickSettingUpdates('DAILY')!.rrule).toBe('FREQ=DAILY');
-    });
-
-    it('MONDAY_TO_FRIDAY → weekday rule', () => {
-      expect(getQuickSettingUpdates('MONDAY_TO_FRIDAY')!.rrule).toBe(
-        'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
-      );
-    });
-
-    it('WEEKLY_CURRENT_WEEKDAY → BYDAY for the reference weekday', () => {
-      const monday = new Date(2025, 11, 29); // a Monday
-      expect(getQuickSettingUpdates('WEEKLY_CURRENT_WEEKDAY', monday)!.rrule).toBe(
-        'FREQ=WEEKLY;BYDAY=MO',
-      );
-    });
-
-    it('MONTHLY_CURRENT_DATE → BYMONTHDAY for the reference day', () => {
-      const ref = new Date(2024, 5, 15);
-      expect(getQuickSettingUpdates('MONTHLY_CURRENT_DATE', ref)!.rrule).toBe(
-        'FREQ=MONTHLY;BYMONTHDAY=15',
-      );
-    });
-
-    it('MONTHLY_LAST_DAY → BYMONTHDAY=-1', () => {
-      expect(getQuickSettingUpdates('MONTHLY_LAST_DAY')!.rrule).toBe(
-        'FREQ=MONTHLY;BYMONTHDAY=-1',
-      );
-    });
-
-    it('MONTHLY_NTH_WEEKDAY → BYDAY=<pos><weekday> (3rd Saturday)', () => {
-      const ref = new Date(2024, 5, 15); // 3rd Saturday of June 2024
-      expect(getQuickSettingUpdates('MONTHLY_NTH_WEEKDAY', ref)!.rrule).toBe(
-        'FREQ=MONTHLY;BYDAY=3SA',
-      );
-    });
-
-    it('YEARLY_CURRENT_DATE → BYMONTH;BYMONTHDAY', () => {
-      const ref = new Date(2024, 2, 17);
-      expect(getQuickSettingUpdates('YEARLY_CURRENT_DATE', ref)!.rrule).toBe(
-        'FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=17',
-      );
-    });
-
-    it('RRULE baseline does not set rrule (the builder assembles it)', () => {
-      expect(getQuickSettingUpdates('RRULE')!.rrule).toBeUndefined();
-    });
-  });
-
-  describe('interval & weekend presets', () => {
-    it('EVERY_OTHER_DAY → DAILY every 2, no startDate', () => {
-      const result = getQuickSettingUpdates('EVERY_OTHER_DAY');
-      expect(result!.repeatCycle).toBe('DAILY');
-      expect(result!.repeatEvery).toBe(2);
-      expect(result!.startDate).toBeUndefined();
-      expect(result!.rrule).toBe('FREQ=DAILY;INTERVAL=2');
-    });
-
-    it('BIWEEKLY_CURRENT_WEEKDAY → WEEKLY every 2 on the reference weekday', () => {
-      const monday = new Date(2025, 11, 29); // a Monday
-      const result = getQuickSettingUpdates('BIWEEKLY_CURRENT_WEEKDAY', monday);
-      expect(result!.repeatCycle).toBe('WEEKLY');
-      expect(result!.repeatEvery).toBe(2);
-      expect((result as any).monday).toBe(true);
-      expect(result!.rrule).toBe('FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
-    });
-
-    it('WEEKENDS → WEEKLY on Saturday & Sunday only', () => {
-      const result = getQuickSettingUpdates('WEEKENDS');
-      expect(result!.repeatCycle).toBe('WEEKLY');
-      expect(result!.repeatEvery).toBe(1);
-      expect((result as any).saturday).toBe(true);
-      expect((result as any).sunday).toBe(true);
-      expect((result as any).monday).toBe(false);
-      expect((result as any).friday).toBe(false);
-      expect(result!.startDate).toBeUndefined();
-      expect(result!.rrule).toBe('FREQ=WEEKLY;BYDAY=SA,SU');
-    });
-
-    it('QUARTERLY_CURRENT_DATE → MONTHLY every 3 on the reference day', () => {
-      const ref = new Date(2024, 5, 15);
-      const result = getQuickSettingUpdates('QUARTERLY_CURRENT_DATE', ref);
-      expect(result!.repeatCycle).toBe('MONTHLY');
-      expect(result!.repeatEvery).toBe(3);
-      expect(result!.startDate).toBe(getDbDateStr(ref));
-      expect(result!.rrule).toBe('FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15');
-    });
-
-    it('SEMIANNUALLY_CURRENT_DATE → MONTHLY every 6 on the reference day', () => {
-      const ref = new Date(2024, 5, 15);
-      const result = getQuickSettingUpdates('SEMIANNUALLY_CURRENT_DATE', ref);
-      expect(result!.repeatCycle).toBe('MONTHLY');
-      expect(result!.repeatEvery).toBe(6);
-      expect(result!.rrule).toBe('FREQ=MONTHLY;INTERVAL=6;BYMONTHDAY=15');
-    });
-
-    it('MONTHLY_LAST_WEEKDAY → BYDAY=-1<weekday> for the reference weekday', () => {
-      const friday = new Date(2026, 5, 26); // last Friday of June 2026
-      const result = getQuickSettingUpdates('MONTHLY_LAST_WEEKDAY', friday);
-      expect(result!.repeatCycle).toBe('MONTHLY');
-      expect(result!.monthlyWeekOfMonth).toBe(-1);
-      expect(result!.monthlyWeekday).toBe(5); // Friday
-      expect(result!.rrule).toBe('FREQ=MONTHLY;BYDAY=-1FR');
-    });
-
-    it('EVERY_OTHER_YEAR_CURRENT_DATE → YEARLY every 2 on the reference day/month', () => {
-      const ref = new Date(2024, 2, 17);
-      const result = getQuickSettingUpdates('EVERY_OTHER_YEAR_CURRENT_DATE', ref);
-      expect(result!.repeatCycle).toBe('YEARLY');
-      expect(result!.repeatEvery).toBe(2);
-      expect(result!.rrule).toBe('FREQ=YEARLY;INTERVAL=2;BYMONTH=3;BYMONTHDAY=17');
     });
   });
 });

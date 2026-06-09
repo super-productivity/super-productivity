@@ -126,6 +126,7 @@ export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
     summary: fields.summary,
     updated: fields.updated,
     status: fields.status,
+    priority: fields.priority,
     storyPoints:
       !!cfg.storyPointFieldId &&
       !!(fields as Record<string, unknown>)[cfg.storyPointFieldId]

@@ -318,34 +318,10 @@ bootstrapApplication(AppComponent, {
   // recurring-task tests. Stripped from production via the env guard.
   if (!environment.production && !environment.stage) {
     const storeRef = appRef.injector.get(Store);
-    Promise.all([import('./app/op-log/apply/hydration-state.service')]).then(([m]) => {
-      // Dev-only manual clock fast-forward for testing recurring / day-change
-      // behavior without touching the OS clock. Overrides Date.now() (the basis
-      // for the app's logical "today") by a cumulative day offset, then forces a
-      // day-change re-sample so addAllDueToday() runs. Reload — or resetClock() —
-      // to undo. Call from the console: __e2eTestHelpers.jumpDay() / jumpDay(7).
-      const realNow = Date.now.bind(Date);
-      let clockOffsetMs = 0;
-      const reSampleDay = (): void => {
-        window.dispatchEvent(new Event('focus'));
-      };
-      const jumpDay = (days = 1): string => {
-        clockOffsetMs += days * 24 * 60 * 60 * 1000;
-        Date.now = () => realNow() + clockOffsetMs;
-        reSampleDay();
-        return new Date(realNow() + clockOffsetMs).toDateString();
-      };
-      const resetClock = (): void => {
-        clockOffsetMs = 0;
-        Date.now = realNow;
-        reSampleDay();
-      };
-
+    import('./app/op-log/apply/hydration-state.service').then((m) => {
       (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
         store: storeRef,
         hydrationState: appRef.injector.get(m.HydrationStateService),
-        jumpDay,
-        resetClock,
       };
     });
   }
@@ -369,9 +345,11 @@ bootstrapApplication(AppComponent, {
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {
-        LocaleImportFns[locale as keyof typeof LocaleImportFns]().then((m) => {
-          registerLocaleData(m.default, locale);
-        });
+        LocaleImportFns[locale as keyof typeof LocaleImportFns]()
+          .then((m) => {
+            registerLocaleData(m.default, locale);
+          })
+          .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
       }
     });
   };

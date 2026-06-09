@@ -41,15 +41,12 @@ describe('ArchiveService timezone test', () => {
 
       // In LA (UTC-8): 2025-01-16 at 11 PM -> '2025-01-16'
       // In Berlin (UTC+1): 2025-01-17 at 8 AM -> '2025-01-17'
-      // Use the offset AT the test instant (January) — `new Date()` breaks
-      // every summer in DST zones (New York: EST 300 in Jan vs EDT 240 in
-      // June). 07:00 UTC is the previous local day only west of UTC-7.
-      const tzOffset = new Date(testTime).getTimezoneOffset();
-      if (tzOffset > 420) {
-        // west of UTC-7 (e.g. LA)
+      const tzOffset = new Date().getTimezoneOffset();
+      if (tzOffset > 0) {
+        // LA
         expect(todayStr).toBe('2025-01-16');
       } else {
-        // east of UTC-7 (e.g. New York, Berlin)
+        // Berlin
         expect(todayStr).toBe('2025-01-17');
       }
     });

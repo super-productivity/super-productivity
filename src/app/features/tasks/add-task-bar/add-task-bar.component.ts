@@ -85,13 +85,6 @@ import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
-// Repeat quick settings that need the full repeat dialog to assemble the rule
-// (the add-task-bar menu can't build an rrule itself): the 'RRULE' builder
-// option and the legacy 'CUSTOM' value. Routing them through
-// getQuickSettingUpdates instead would silently create a weekly-fallback cfg.
-const isDialogRepeatSetting = (s: string | null | undefined): boolean =>
-  s === 'RRULE' || s === 'CUSTOM';
-
 @Component({
   selector: 'add-task-bar',
   templateUrl: './add-task-bar.component.html',
@@ -496,10 +489,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         } else {
           taskData.dueDay = state.date;
         }
-      } else if (
-        state.repeatQuickSetting &&
-        !isDialogRepeatSetting(state.repeatQuickSetting)
-      ) {
+      } else if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
         // When a repeat preset is selected without an explicit date, set dueDay to today
         // so the first task instance appears as today's occurrence instead of staying in inbox
         taskData.dueDay = this._dateService.todayStr();
@@ -529,7 +519,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       // would cause double-scheduling.
       const isTimedRepeatTask =
         !!state.repeatQuickSetting &&
-        !isDialogRepeatSetting(state.repeatQuickSetting) &&
+        state.repeatQuickSetting !== 'CUSTOM' &&
         !!state.time;
       if (taskData.dueWithTime && !isTimedRepeatTask) {
         this._taskService
@@ -547,9 +537,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
       // Create repeat config if a repeat setting was selected
       if (state.repeatQuickSetting) {
-        if (isDialogRepeatSetting(state.repeatQuickSetting)) {
-          // 'Custom recurring config' → open the full repeat dialog (with the
-          // RRULE builder) for the freshly created task.
+        if (state.repeatQuickSetting === 'CUSTOM') {
           this._openRepeatDialogForTask(taskId, resolvedRemindOption);
         } else {
           const startDate = state.date || this._dateService.todayStr();
@@ -561,8 +549,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             startDate,
             ...quickSettingUpdates,
             title,
-            // The addTaskRepeatCfgToTask action creator clamps quickSetting to a
-            // sync-safe value at the persist boundary (newer presets → 'CUSTOM').
             quickSetting: state.repeatQuickSetting,
             tagIds: taskData.tagIds ?? [],
             defaultEstimate: state.estimate || 0,
@@ -837,13 +823,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           const { DialogEditTaskRepeatCfgComponent } =
             await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
           this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
-            // Open straight into the RRULE builder — the user explicitly chose
-            // "Custom recurring config" from the menu.
-            data: {
-              task,
-              defaultRemindOption: remindOption,
-              initialQuickSetting: 'RRULE',
-            },
+            data: { task, defaultRemindOption: remindOption },
           });
         },
         error: (err) => {

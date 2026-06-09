@@ -11,8 +11,6 @@ import {
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
 import { Log } from '../../../core/log';
-import { getNewestPossibleRRuleDueDate, isRRuleValid } from './rrule-occurrence.util';
-import { taskRepeatCfgToRRuleInput } from './task-repeat-cfg-to-rrule-input.util';
 
 export const getNewestPossibleDueDate = (
   taskRepeatCfg: TaskRepeatCfg,
@@ -20,13 +18,6 @@ export const getNewestPossibleDueDate = (
 ): Date | null => {
   // FOR DEBUG
   // return new Date();
-
-  // A malformed raw-override rule falls through to the legacy schedule fields
-  // instead of stopping the task (only defer to the engine when it parses).
-  if (taskRepeatCfg.rrule && isRRuleValid(taskRepeatCfg.rrule)) {
-    // RRULE ignores repeatEvery/weekday flags; defer entirely to the engine.
-    return getNewestPossibleRRuleDueDate(taskRepeatCfgToRRuleInput(taskRepeatCfg), today);
-  }
 
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
     Log.warn(

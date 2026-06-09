@@ -11,9 +11,7 @@ import {
   type TestUser,
 } from '../../utils/supersync-helpers';
 import { execSync } from 'child_process';
-import { readFileSync, unlinkSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { writeFileSync } from 'fs';
 
 /** Default encryption password used by setupSuperSync's mandatory encryption dialog */
 const ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
@@ -86,8 +84,7 @@ const USER_SYNC_TABLES = ['operations', 'user_sync_state', 'sync_devices'] as co
 
 /**
  * Snapshot a SINGLE user's sync data to a restorable SQL script and return its
- * host path (in the OS temp dir — no POSIX-only /tmp, so it works on Windows
- * hosts too).
+ * host path.
  *
  * Replaces a previous full-database `pg_dump` + `DROP SCHEMA public CASCADE`
  * restore. That restore wiped EVERY user's rows on the shared test database;
@@ -102,7 +99,7 @@ const USER_SYNC_TABLES = ['operations', 'user_sync_state', 'sync_devices'] as co
  * SYNC_IMPORT_EXISTS scenario these tests exercise.
  */
 const dumpUserData = (userId: number): string => {
-  const dumpPath = join(tmpdir(), `supersync_e2e_userdump_${userId}_${Date.now()}.sql`);
+  const dumpPath = `/tmp/supersync_e2e_userdump_${userId}_${Date.now()}.sql`;
   let script = 'BEGIN;\n';
   for (const table of USER_SYNC_TABLES) {
     script += `DELETE FROM ${table} WHERE user_id = ${userId};\n`;
@@ -120,7 +117,7 @@ const dumpUserData = (userId: number): string => {
     script += `COPY ${table} FROM STDIN;\n${copyData}\\.\n`;
   }
   script += 'COMMIT;\n';
-  writeFileSync(dumpPath, script, 'utf-8');
+  writeFileSync(dumpPath, script);
   return dumpPath;
 };
 
@@ -128,18 +125,14 @@ const dumpUserData = (userId: number): string => {
  * Restore a user's sync data from a snapshot created by dumpUserData().
  * Atomic (ON_ERROR_STOP aborts the transaction) and scoped to the snapshotted
  * user — it never touches other users' rows.
- * Cross-platform: feeds the script via stdin instead of `cat | …`, which is
- * unavailable on Windows hosts.
  */
 const restoreUserData = (dumpPath: string): void => {
   execSync(
-    'docker compose -f docker-compose.yaml exec -T db ' +
-      'psql -U supersync supersync_db -v ON_ERROR_STOP=1',
+    `cat ${dumpPath} | docker compose -f docker-compose.yaml exec -T db ` +
+      `psql -U supersync supersync_db -v ON_ERROR_STOP=1`,
     {
-      input: readFileSync(dumpPath, 'utf-8'),
       encoding: 'utf-8',
       timeout: 30000,
-      maxBuffer: 64 * 1024 * 1024,
     },
   );
 };
@@ -149,7 +142,7 @@ const restoreUserData = (dumpPath: string): void => {
  */
 const cleanupDump = (dumpPath: string): void => {
   try {
-    unlinkSync(dumpPath);
+    execSync(`rm -f ${dumpPath}`);
   } catch {
     // ignore cleanup errors
   }

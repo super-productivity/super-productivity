@@ -70,11 +70,12 @@ export class OpenProjectApiService {
     searchText: string,
     cfg: OpenProjectCfg,
   ): Observable<SearchResultItem[]> {
-    // OpenProject does not allow empty filter for subjectOrId, only send when searchText is present
-    const filters: OpenProjectFilterItem[] = [{ status: { operator: 'o', values: [] } }];
-    if (searchText?.trim()) {
-      filters.push({ subjectOrId: { operator: '**', values: [searchText] } });
-    }
+    const trimmedSearchText = searchText?.trim();
+    // OpenProject does not allow empty filter for subjectOrId. Keep empty searches
+    // bounded to open work packages, but search explicit terms across all statuses.
+    const filters: OpenProjectFilterItem[] = trimmedSearchText
+      ? [{ subjectOrId: { operator: '**', values: [trimmedSearchText] } }]
+      : [{ status: { operator: 'o', values: [] } }];
     return this._sendRequest$(
       {
         // see https://www.openproject.org/docs/api/endpoints/work-packages/

@@ -928,23 +928,6 @@ describe('getNextRepeatOccurrence()', () => {
     });
   });
 
-  describe('malformed rrule falls back to the legacy fields', () => {
-    it('uses the legacy weekly schedule when the rrule is unparseable', () => {
-      const cfg = dummyRepeatable('ID1', {
-        rrule: 'this is not a valid rrule',
-        repeatCycle: 'WEEKLY',
-        monday: true,
-        startDate: getDbDateStr(FAKE_MONDAY_THE_10TH),
-        lastTaskCreationDay: getDbDateStr(FAKE_MONDAY_THE_10TH),
-      });
-      // From Mon Jan 10 2022 the next Monday is Jan 17 — NOT null (it would be
-      // null if the bad rrule silently stopped the task instead of falling back).
-      const next = getNextRepeatOccurrence(cfg, new Date(2022, 0, 10, 12));
-      expect(next).not.toBeNull();
-      expect(getDbDateStr(next!)).toBe('2022-01-17');
-    });
-  });
-
   // Issue #7951: the inclusive variant is used when relocating an existing live
   // instance on a schedule edit — `fromDate` (today) must be considered instead
   // of being skipped to the day after the last creation.
@@ -1099,23 +1082,6 @@ describe('getNextRepeatOccurrence()', () => {
       });
 
       expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(tomorrow);
-    });
-
-    it('honors inclusive on the RRULE engine path (today valid → today, not tomorrow)', () => {
-      // All new cfgs are rrule-backed — the inclusive relocation (#7951) must
-      // not silently degrade to strictly-future when the rrule engine routes.
-      const today = noon(new Date());
-      const tomorrow = noon(new Date(today.getTime() + DAY));
-      const cfg = dummyRepeatable('ID1', {
-        rrule: 'FREQ=DAILY',
-        repeatCycle: 'DAILY',
-        repeatEvery: 1,
-        startDate: getDbDateStr(today),
-        lastTaskCreationDay: getDbDateStr(today),
-      });
-
-      expect(getNextRepeatOccurrence(cfg, today)).toEqual(tomorrow);
-      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
     });
   });
 });
