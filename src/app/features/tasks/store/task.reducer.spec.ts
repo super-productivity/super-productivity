@@ -1114,4 +1114,30 @@ describe('Task Reducer', () => {
       expect(() => taskReducer(stateWithUndefined, action)).not.toThrow();
     });
   });
+
+  describe('subtask hide/show actions - persistent meta', () => {
+    it('updateTaskUi should be persistent with correct meta', () => {
+      const action = fromActions.updateTaskUi({
+        task: { id: 'task-1', changes: { _hideSubTasksMode: 1 } },
+      });
+
+      expect(action.meta.isPersistent).toBe(true);
+      expect(action.meta.entityType).toBe('TASK');
+      expect(action.meta.entityId).toBe('task-1');
+      expect(action.meta.opType).toBe('UPD');
+    });
+
+    it('toggleTaskHideSubTasks should be persistent with correct meta', () => {
+      const action = fromActions.toggleTaskHideSubTasks({
+        taskId: 'task-1',
+        isShowLess: true,
+        isEndless: true,
+      });
+
+      expect(action.meta.isPersistent).toBe(true);
+      expect(action.meta.entityType).toBe('TASK');
+      expect(action.meta.entityId).toBe('task-1');
+      expect(action.meta.opType).toBe('UPD');
+    });
+  });
 });
