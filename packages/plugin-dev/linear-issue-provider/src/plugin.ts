@@ -138,6 +138,11 @@ const searchAssignedIssues = async (
   http: PluginHttp,
 ): Promise<PluginSearchResult[]> => {
   const variables: Record<string, unknown> = { first: 50 };
+  // Deliberate behavior change from the built-in provider: the old
+  // LinearApiService accepted teamId/projectId but its callers never passed
+  // them, so the "filter to specific team/project" config fields were inert.
+  // Here we honor them as the labels promise. Empty fields = no filter (the
+  // common case), so this only narrows results for users who set a value.
   if (cfg.teamId) {
     variables.team = { id: { eq: cfg.teamId } };
   }
