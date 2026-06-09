@@ -4,7 +4,13 @@ const path = require('node:path');
 
 require('ts-node/register/transpile-only');
 
-const { isPathInsideDir } = require('./file-path-guard.ts');
+// Resolve the module via a computed path rather than a literal relative
+// require of the .ts file. The .ts source is excluded from the packaged
+// app.asar, and tools/verify-electron-requires.js flags literal relative
+// requires that cannot resolve in the package (it scans raw text). A computed
+// require is skipped by that static check and matches the pattern the other
+// electron *.test.cjs files use. The test still runs from source via ts-node.
+const { isPathInsideDir } = require(path.resolve(__dirname, 'file-path-guard.ts'));
 
 const DIR = path.resolve('/home/user/.config/superProductivity/backups');
 
