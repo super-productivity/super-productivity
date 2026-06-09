@@ -97,7 +97,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   );
 
   T: typeof T = T;
-  minDate = this.data.minDate || new Date();
+  minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
 
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
