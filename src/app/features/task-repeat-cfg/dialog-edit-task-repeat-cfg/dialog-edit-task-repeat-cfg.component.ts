@@ -182,7 +182,7 @@ export class DialogEditTaskRepeatCfgComponent {
           isSubmitOnQuickAccess: false,
           targetDay: currentCfg.startDate || undefined,
           targetTime: hasValidTime ? currentCfg.startTime : undefined,
-          minDate: null,
+          minDate: this.isEdit() ? null : this._getReferenceDate(),
         },
       })
       .afterClosed()
@@ -569,7 +569,9 @@ export class DialogEditTaskRepeatCfgComponent {
     if (this._data.repeatCfg?.startDate) {
       return dateStrToUtcDate(this._data.repeatCfg.startDate);
     }
-    return new Date();
+    const d = this._dateService.getLogicalTodayDate();
+    d.setHours(0, 0, 0, 0);
+    return d;
   }
 
   private _processQuickSettingForDate<

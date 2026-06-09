@@ -79,8 +79,12 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       'addTaskRepeatCfgToTask',
       'deleteTaskRepeatCfgWithDialog',
     ]);
-    mockDateService = jasmine.createSpyObj('DateService', ['todayStr']);
+    mockDateService = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getLogicalTodayDate',
+    ]);
     mockDateService.todayStr.and.returnValue('2026-06-09');
+    mockDateService.getLogicalTodayDate.and.returnValue(new Date(2026, 5, 9, 0, 0, 0, 0));
 
     // Set up the return value for getTaskRepeatCfgById$ before creating the component
     if (getTaskRepeatCfgById$ReturnValue) {
@@ -443,22 +447,41 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
   });
 
-  describe('startDate min floor (#7768 Bug 4)', () => {
-    it('sets minDate to null for a new repeat cfg created from a task', async () => {
+  describe('startDate min floor (#7768 Bug 4 refined)', () => {
+    it('sets minDate to today for a brand-new repeat cfg (no due date)', async () => {
       const fixture = await setupTestBed({ task: mockTask });
       const component = fixture.componentInstance;
       component.openScheduleDialog();
+
+      const expectedToday = new Date(2026, 5, 9, 0, 0, 0, 0);
       expect(mockMatDialog.open).toHaveBeenCalledWith(
         jasmine.any(Function),
         jasmine.objectContaining({
           data: jasmine.objectContaining({
-            minDate: null,
+            minDate: expectedToday,
           }),
         }),
       );
     });
 
-    it('sets minDate to null when editing an existing past cfg', async () => {
+    it('sets minDate to task due date when creating new cfg for past task', async () => {
+      const pastTask = { ...mockTask, dueDay: '2020-01-15' } as TaskCopy;
+      const fixture = await setupTestBed({ task: pastTask });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+
+      const expectedDate = new Date(2020, 0, 15, 0, 0, 0, 0);
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: expectedDate,
+          }),
+        }),
+      );
+    });
+
+    it('sets minDate to null when editing an existing past cfg (full flexibility)', async () => {
       const pastCfg: TaskRepeatCfg = {
         ...mockRepeatCfg,
         startDate: '2020-01-15',
@@ -476,7 +499,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       );
     });
 
-    it('sets minDate to null when editing a cfg whose startDate is in the future', async () => {
+    it('sets minDate to null when editing a future cfg (full flexibility)', async () => {
       const futureCfg: TaskRepeatCfg = {
         ...mockRepeatCfg,
         startDate: '2027-01-01',
