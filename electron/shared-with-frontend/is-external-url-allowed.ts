@@ -11,9 +11,7 @@
  * Shared between the Angular renderer (link rendering) and the Electron main
  * process (shell.openExternal call sites) so both layers enforce one policy.
  */
-/* eslint-disable @typescript-eslint/naming-convention */
 export const ALLOWED_EXTERNAL_URL_SCHEMES = ['http:', 'https:', 'mailto:', 'file:'];
-/* eslint-enable @typescript-eslint/naming-convention */
 
 const _isSlash = (char: string): boolean => char === '/' || char === '\\';
 

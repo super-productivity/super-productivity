@@ -1,6 +1,9 @@
 import { MarkedOptions, MarkedRenderer } from 'ngx-markdown';
 import { Hooks, Token } from 'marked';
-import { isExternalUrlSchemeAllowed } from '../../../electron/shared-with-frontend/is-external-url-allowed';
+import {
+  isExternalUrlSchemeAllowed,
+  isPathSafeToOpen,
+} from '../../../electron/shared-with-frontend/is-external-url-allowed';
 
 /**
  * Escape a value before interpolating it into a double-quoted HTML attribute.
@@ -135,6 +138,17 @@ export const markedOptionsFactory = (): MarkedOptions => {
     title: string | null;
     text: string;
   }) => {
+    // Unlike links, an image src auto-loads on render (no click). A remote
+    // `file://host/share` or UNC src would silently make the OS open an SMB
+    // connection and leak the user's NTLM hash just by viewing the note, so
+    // such srcs must never reach the `src` attribute. Remote web images
+    // (http/https/data/blob) are unaffected. See GHSA-hr87-735w-hfq3.
+    if (!isPathSafeToOpen(href)) {
+      return `<span class="markdown-blocked-link" title="Image blocked: unsafe URL">${escapeHtmlAttr(
+        text || '',
+      )}</span>`;
+    }
+
     const { width, height } = parseImageDimensionsFromTitle(title);
 
     // Build width and height attributes (not style, as Angular sanitizer strips inline styles)

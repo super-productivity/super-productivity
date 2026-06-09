@@ -446,6 +446,56 @@ describe('markedOptionsFactory', () => {
       expect(result).not.toContain('title=');
       expect(result).toContain('alt="No title"');
     });
+
+    // GHSA-hr87-735w-hfq3: an image src auto-loads on render (no click), so a
+    // remote file:// / UNC src would silently leak the user's NTLM hash. Such
+    // srcs must never reach the `src` attribute.
+    describe('unsafe image src (GHSA-hr87-735w-hfq3)', () => {
+      [
+        'file://192.168.1.100/share/pixel.png',
+        'file:////host/share/pixel.png',
+        '\\\\host\\share\\pixel.png',
+        '//host/share/pixel.png',
+      ].forEach((href) => {
+        it(`blocks remote/UNC src "${href}" (renders no <img>)`, () => {
+          const result = options.renderer!.image({
+            href,
+            title: null,
+            text: 'Alt text',
+          } as any);
+          expect(result).not.toContain('<img');
+          expect(result).not.toContain(`src="${href}"`);
+          expect(result).toContain('Alt text');
+        });
+      });
+
+      it('still renders local file:// and remote web/data images', () => {
+        [
+          'file:///home/user/img.png',
+          'http://example.com/img.png',
+          'https://example.com/img.png',
+          'data:image/png;base64,iVBORw0KGgo=',
+          'blob:https://example.com/abc',
+        ].forEach((href) => {
+          const result = options.renderer!.image({
+            href,
+            title: null,
+            text: 'L',
+          } as any);
+          expect(result).toContain(`src="${href}"`);
+        });
+      });
+
+      it('escapes the blocked-image alt text so it cannot inject markup', () => {
+        const result = options.renderer!.image({
+          href: 'file://host/share/x.png',
+          title: null,
+          text: '<img src=x onerror=alert(1)>',
+        } as any);
+        expect(result).not.toContain('<img');
+        expect(result).toContain('&lt;img src=x onerror=alert(1)&gt;');
+      });
+    });
   });
 
   describe('paragraph renderer', () => {
