@@ -15,7 +15,7 @@ import { from } from 'rxjs';
 import { filter, first, switchMap } from 'rxjs/operators';
 import { Task } from '../../tasks/task.model';
 import { DateAdapter } from '@angular/material/core';
-import { DayData, HeatmapData } from '../../../ui/heatmap/heatmap.component';
+import { DayData, HeatmapViewData } from '../../../ui/heatmap/heatmap.component';
 import { HeatmapSwitcherComponent } from '../../../ui/heatmap/heatmap-switcher.component';
 import {
   buildHeatmapMonths,
@@ -130,10 +130,7 @@ export class RepeatTaskHeatmapComponent {
     };
   });
 
-  readonly heatmapData = computed<
-    | (HeatmapData & { dayMap: Map<string, DayData>; rangeStart: Date; rangeEnd: Date })
-    | null
-  >(() => {
+  readonly heatmapData = computed<HeatmapViewData | null>(() => {
     const rawData = this._rawHeatmapData();
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
 

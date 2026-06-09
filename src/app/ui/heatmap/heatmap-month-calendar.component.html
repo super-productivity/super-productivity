@@ -41,7 +41,7 @@
 
   @if (legendMode() !== 'none') {
     <div class="month-cal__legend">
-      @if (legendMode() === 'hours') {
+      @if (legendMode() === 'intensity') {
         <!-- Coloring is RELATIVE (ratio to the busiest day), so the legend is a
              Low→High gradient, not absolute hour buckets. -->
         <span class="month-cal__legend-item">{{ T.G.HEATMAP_LOW | translate }}</span>

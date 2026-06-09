@@ -2,12 +2,9 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  effect,
-  ElementRef,
   inject,
   input,
   output,
-  viewChild,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -35,12 +32,21 @@ export interface MonthBlock {
 }
 
 export interface HeatmapData {
+  // The continuous week grid — rendered by nothing on-screen anymore, but the
+  // metric share-canvas export still draws it.
   weeks: WeekData[];
   monthLabels: string[];
-  // Optional month-grouped layout used when `groupByMonth` is set: each month is
-  // its own mini-grid with a label + total beneath. `weeks`/`monthLabels` stay
-  // for the continuous layout and the share-canvas export.
+  // The month-grouped layout this component renders: each month its own
+  // mini-grid with a label + total beneath.
   months?: MonthBlock[];
+}
+
+/** The full payload the heatmap-switcher consumes: the rendered year data plus
+ *  the raw dayMap + range its month-calendar view navigates. */
+export interface HeatmapViewData extends HeatmapData {
+  dayMap: Map<string, DayData>;
+  rangeStart: Date;
+  rangeEnd: Date;
 }
 
 @Component({
@@ -58,32 +64,11 @@ export class HeatmapComponent {
 
   readonly data = input.required<HeatmapData | null>();
   readonly label = input<string>('');
-  readonly showLegend = input<boolean>(true);
-  readonly scrollToEnd = input<boolean>(false);
-  /** Render `data.months` as spaced per-month blocks instead of the continuous
-   *  GitHub-style strip. */
-  readonly groupByMonth = input<boolean>(false);
-  /** Legend under the month-grouped layout: relative intensity (Low→High) for
-   *  activity data, projected/completed swatches for projections, or none. */
-  readonly legendMode = input<'hours' | 'occurrences' | 'none'>('none');
+  /** Legend under the grid: relative intensity (Low→High) for activity data,
+   *  projected/completed swatches for projections, or none. */
+  readonly legendMode = input<'intensity' | 'projection' | 'none'>('none');
   /** Emits the clicked day (non-empty cells only). Consumers decide what to do. */
   readonly dayClick = output<DayData>();
-
-  private readonly _scrollableContent =
-    viewChild<ElementRef<HTMLElement>>('scrollableContent');
-
-  constructor() {
-    effect(() => {
-      const data = this.data();
-      const scrollEl = this._scrollableContent()?.nativeElement;
-      if (data && scrollEl && this.scrollToEnd()) {
-        // Use setTimeout to ensure DOM is updated
-        setTimeout(() => {
-          scrollEl.scrollTo({ left: scrollEl.scrollWidth, behavior: 'instant' });
-        });
-      }
-    });
-  }
 
   readonly dayLabels = computed(() => {
     const allDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

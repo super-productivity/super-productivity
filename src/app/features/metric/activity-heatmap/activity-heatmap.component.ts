@@ -16,12 +16,12 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { SnackService } from '../../../core/snack/snack.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { ShareService } from '../../../core/share/share.service';
 import { DayData, WeekData } from '../../../ui/heatmap/heatmap.component';
 import { HeatmapSwitcherComponent } from '../../../ui/heatmap/heatmap-switcher.component';
 import {
   buildHeatmapMonths,
+  buildHeatmapWeeks,
   heatmapHoursTotal,
 } from '../../../ui/heatmap/build-heatmap-data.util';
 import { DateAdapter } from '@angular/material/core';
@@ -59,7 +59,6 @@ export class ActivityHeatmapComponent {
     return availableYears.length > 0 ? availableYears[0] : new Date().getFullYear();
   });
   T: typeof T = T;
-  weeks: WeekData[] = [];
   isSharing = signal(false);
   private readonly _activeWorkContextTitle = toSignal(
     this._workContextService.activeWorkContextTitle$,
@@ -133,11 +132,12 @@ export class ActivityHeatmapComponent {
     // `monthLabels` stay for the share-canvas export; `months` drives the
     // month-grouped on-screen layout.
     return {
-      ...this._buildWeeksGrid(
+      ...buildHeatmapWeeks(
         rawData.dayMap,
         rawData.startDate,
         rawData.endDate,
         firstDay,
+        this._dateAdapter.getMonthNames('short'),
       ),
       months: buildHeatmapMonths(
         rawData.dayMap,
@@ -235,111 +235,6 @@ export class ActivityHeatmapComponent {
       startDate,
       endDate,
     };
-  }
-
-  private _buildWeeksGrid(
-    dayMap: Map<string, DayData>,
-    startDate: Date,
-    endDate: Date,
-    firstDayOfWeek: number = 0,
-  ): { weeks: WeekData[]; monthLabels: string[] } {
-    const weeks: WeekData[] = [];
-    const monthLabels: string[] = [];
-    let currentMonth = -1;
-
-    // Find the first day (based on firstDayOfWeek setting) before or on the start date
-    const firstDay = new Date(startDate);
-    const dayOfWeek = firstDay.getDay();
-    // Calculate days to go back to reach the first day of the week
-    const daysToGoBack = (dayOfWeek - firstDayOfWeek + 7) % 7;
-    firstDay.setDate(firstDay.getDate() - daysToGoBack);
-
-    // Build weeks
-    const currentDate = new Date(firstDay);
-    let weekCount = 0;
-
-    while (currentDate <= endDate || weeks.length === 0) {
-      const week: WeekData = { days: [] };
-
-      // Add 7 days for this week
-      for (let i = 0; i < 7; i++) {
-        const dateStr = getDbDateStr(currentDate);
-        const dayData = dayMap.get(dateStr);
-
-        // Only include days within our range
-        if (currentDate >= startDate && currentDate <= endDate) {
-          week.days.push(dayData || null);
-
-          // Track month changes for labels
-          const month = currentDate.getMonth();
-          if (month !== currentMonth && currentDate.getDate() <= 7 && weekCount > 0) {
-            // Add month label at the start of the month
-            const monthNames = [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ];
-            monthLabels.push(monthNames[month]);
-            currentMonth = month;
-          } else if (monthLabels.length === 0 && weekCount === 0) {
-            // Add first month
-            const monthNames = [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ];
-            monthLabels.push(monthNames[month]);
-            currentMonth = month;
-          }
-        } else {
-          week.days.push(null);
-        }
-
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      weeks.push(week);
-      weekCount++;
-
-      // Safety limit
-      if (weeks.length > 54) {
-        break;
-      }
-    }
-
-    return { weeks, monthLabels };
-  }
-
-  getDayClass(day: DayData | null): string {
-    if (!day) {
-      return 'day empty';
-    }
-    return `day level-${day.level}`;
-  }
-
-  getDayTitle(day: DayData | null): string {
-    if (!day) {
-      return '';
-    }
-    return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
   }
 
   private _extractAvailableYearsFromWorklog(worklog: Worklog): number[] {

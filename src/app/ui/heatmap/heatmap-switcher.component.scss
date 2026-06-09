@@ -5,10 +5,8 @@
 
   &__toggle {
     align-self: center;
-    font-size: 12px;
-
-    ::ng-deep .mat-button-toggle-button {
-      font-size: 12px;
-    }
+    // Material system token — sizes the toggle text without piercing component
+    // internals (no .mat-* override, per the styling rules).
+    --mat-button-toggle-label-text-size: 12px;
   }
 }

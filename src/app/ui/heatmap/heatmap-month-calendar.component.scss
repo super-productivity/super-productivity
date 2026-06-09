@@ -93,22 +93,23 @@
     cursor: default;
   }
 
-  // in-month, no activity → plain number, no fill
+  // in-month, no activity → plain number, no fill.
+  // Translucent fills (levels 1–3) keep the theme's default text color — the
+  // background barely shifts, so the surrounding text color stays readable in
+  // BOTH light and dark themes. Solid-primary cells use the palette's contrast
+  // token (what themes declare as readable ON primary) — never a hex literal.
   &.level-1 {
     background: color-mix(in srgb, var(--c-primary) 25%, transparent);
-    color: #fff;
   }
   &.level-2 {
     background: color-mix(in srgb, var(--c-primary) 45%, transparent);
-    color: #fff;
   }
   &.level-3 {
     background: color-mix(in srgb, var(--c-primary) 65%, transparent);
-    color: #fff;
   }
   &.level-4 {
     background: var(--c-primary);
-    color: #fff;
+    color: var(--c-contrast);
   }
 
   &.projected {
@@ -118,7 +119,7 @@
   }
   &.completed {
     background: var(--c-primary);
-    color: #fff;
+    color: var(--c-contrast);
     outline: 2px solid var(--c-primary);
     outline-offset: 1px;
   }

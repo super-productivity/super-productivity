@@ -1,5 +1,5 @@
 @if (data(); as heatmapData) {
-  @if (groupByMonth() && heatmapData.months; as months) {
+  @if (heatmapData.months; as months) {
     <div class="heatmap-container">
       <div class="heatmap-month-row">
         <div class="day-labels day-labels--blocks">
@@ -36,7 +36,7 @@
         <div class="heatmap-label">{{ label() }}</div>
       }
 
-      @if (legendMode() === 'hours') {
+      @if (legendMode() === 'intensity') {
         <div class="heatmap-legend">
           <span>{{ T.G.HEATMAP_LOW | translate }}</span>
           <div class="legend-item level-0"></div>
@@ -46,64 +46,12 @@
           <div class="legend-item level-4"></div>
           <span>{{ T.G.HEATMAP_HIGH | translate }}</span>
         </div>
-      } @else if (legendMode() === 'occurrences') {
+      } @else if (legendMode() === 'projection') {
         <div class="heatmap-legend">
           <div class="legend-item projected"></div>
           <span>{{ T.G.HEATMAP_PROJECTED | translate }}</span>
           <div class="legend-item completed"></div>
           <span>{{ T.G.HEATMAP_COMPLETED_SIM | translate }}</span>
-        </div>
-      }
-    </div>
-  } @else {
-    <div class="heatmap-container">
-      <div class="heatmap-grid">
-        <div class="day-labels">
-          <div class="month-spacer"></div>
-          @for (label of dayLabels(); track $index) {
-            <div class="day-label">{{ label }}</div>
-          }
-        </div>
-
-        <div
-          class="scrollable-content"
-          #scrollableContent
-        >
-          <div class="heatmap-months">
-            @for (month of heatmapData.monthLabels; track $index) {
-              <div class="month-label">{{ month }}</div>
-            }
-          </div>
-
-          <div class="weeks">
-            @for (week of heatmapData.weeks; track $index) {
-              <div class="week">
-                @for (day of week.days; track $index) {
-                  <div
-                    [class]="getDayClass(day)"
-                    [title]="getDayTitle(day)"
-                    (click)="day && dayClick.emit(day)"
-                  ></div>
-                }
-              </div>
-            }
-          </div>
-        </div>
-      </div>
-
-      @if (label()) {
-        <div class="heatmap-label">{{ label() }}</div>
-      }
-
-      @if (showLegend()) {
-        <div class="heatmap-legend">
-          <span>Less</span>
-          <div class="legend-item level-0"></div>
-          <div class="legend-item level-1"></div>
-          <div class="legend-item level-2"></div>
-          <div class="legend-item level-3"></div>
-          <div class="legend-item level-4"></div>
-          <span>More</span>
         </div>
       }
     </div>

@@ -14,43 +14,7 @@
   margin-bottom: -8px;
 }
 
-.heatmap-grid {
-  display: flex;
-  gap: var(--s);
-  align-items: flex-start;
-}
-
-.scrollable-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s);
-  overflow-x: auto;
-  overflow-y: hidden;
-
-  // Smooth scrolling
-  scroll-behavior: smooth;
-
-  // Better scrollbar styling
-  &::-webkit-scrollbar {
-    height: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: var(--c-dark-10);
-    border-radius: var(--card-border-radius);
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--c-dark-20);
-    border-radius: var(--card-border-radius);
-
-    &:hover {
-      background: var(--c-dark-30);
-    }
-  }
-}
-
-// Month-grouped layout (groupByMonth): each month is its own mini-grid, all
+// Month-grouped layout: each month is its own mini-grid, all
 // months in ONE row (Jan–Dec side by side) with a label + total beneath each;
 // the row scrolls horizontally when it doesn't fit, with the weekday labels
 // pinned outside the scroll area.
@@ -104,21 +68,6 @@
   }
 }
 
-.heatmap-months {
-  display: flex;
-  gap: var(--s-quarter);
-  font-size: 12px;
-  line-height: 12px;
-  height: 12px;
-  color: var(--text-color-muted);
-  flex-shrink: 0;
-
-  .month-label {
-    flex: 0 0 auto;
-    width: calc(4 * 12px + 4 * 2px); // 4 weeks * (cell width + gap)
-  }
-}
-
 .day-labels {
   display: flex;
   flex-direction: column;
@@ -129,11 +78,6 @@
   width: 40px;
   text-align: right;
   flex-shrink: 0;
-
-  .month-spacer {
-    height: 17px; // 12px (heatmap-months height) + 8px (gap in scrollable-content)
-    flex-shrink: 0;
-  }
 
   .day-label {
     height: 12px;
@@ -272,20 +216,6 @@
 :host-context(.isDarkTheme) {
   .heatmap-container {
     background: var(--c-light-05);
-  }
-
-  .scrollable-content {
-    &::-webkit-scrollbar-track {
-      background: var(--c-light-05);
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--c-light-10);
-
-      &:hover {
-        background: var(--c-light-33);
-      }
-    }
   }
 
   .day {

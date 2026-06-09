@@ -24,8 +24,6 @@
   } @else if (data(); as d) {
     <heatmap
       [data]="d"
-      [showLegend]="false"
-      [groupByMonth]="true"
       [legendMode]="legendMode()"
       (dayClick)="dayClick.emit($event)"
     />

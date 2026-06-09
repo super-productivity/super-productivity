@@ -9,7 +9,7 @@ import {
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
-import { DayData, HeatmapComponent, HeatmapData } from './heatmap.component';
+import { DayData, HeatmapComponent, HeatmapViewData } from './heatmap.component';
 import { HeatmapMonthCalendarComponent } from './heatmap-month-calendar.component';
 import { Log } from '../../core/log';
 
@@ -38,11 +38,11 @@ const STORAGE_PREFIX = 'sp_heatmap_view_';
 })
 export class HeatmapSwitcherComponent {
   readonly T = T;
-  readonly data = input.required<HeatmapData | null>();
+  readonly data = input.required<HeatmapViewData | null>();
   readonly dayMap = input.required<Map<string, DayData>>();
   readonly rangeStart = input.required<Date>();
   readonly rangeEnd = input.required<Date>();
-  readonly legendMode = input<'hours' | 'occurrences' | 'none'>('hours');
+  readonly legendMode = input<'intensity' | 'projection' | 'none'>('intensity');
   /** Storage slot for remembering the chosen view (empty → not persisted). */
   readonly persistKey = input<string>('');
   readonly dayClick = output<DayData>();

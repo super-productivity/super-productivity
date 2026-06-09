@@ -71,7 +71,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { DateAdapter } from '@angular/material/core';
-import { DayData, HeatmapData } from '../../../ui/heatmap/heatmap.component';
+import { DayData, HeatmapViewData } from '../../../ui/heatmap/heatmap.component';
 import { HeatmapSwitcherComponent } from '../../../ui/heatmap/heatmap-switcher.component';
 import {
   buildHeatmapMonths,
@@ -256,10 +256,7 @@ export class DialogEditTaskRepeatCfgComponent {
         a.exdatesKey === b.exdatesKey,
     },
   );
-  resultHeatmapData = computed<
-    | (HeatmapData & { dayMap: Map<string, DayData>; rangeStart: Date; rangeEnd: Date })
-    | null
-  >(() => {
+  resultHeatmapData = computed<HeatmapViewData | null>(() => {
     if (!this.isRRuleMode() || !this.showResultHeatmap()) {
       return null;
     }

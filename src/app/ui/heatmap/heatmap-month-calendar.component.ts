@@ -46,7 +46,7 @@ export class HeatmapMonthCalendarComponent {
   readonly rangeStart = input.required<Date>();
   readonly rangeEnd = input.required<Date>();
   /** Which legend to show beneath the grid. */
-  readonly legendMode = input<'hours' | 'occurrences' | 'none'>('hours');
+  readonly legendMode = input<'intensity' | 'projection' | 'none'>('intensity');
   readonly dayClick = output<DayData>();
 
   // Explicit user navigation; null → the computed default month. A navigated
