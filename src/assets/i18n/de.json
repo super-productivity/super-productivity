@@ -29,16 +29,7 @@
     "RESTORE_STRAY_BACKUP": "Bei der letzten Synchronisierung ist möglicherweise ein Fehler aufgetreten. Möchtest du das letzte Backup wiederherstellen?"
   },
   "DATETIME_SCHEDULE": {
-    "MONTH": "Monat",
-    "NEXT_24_YEARS": "Nächste 24 Jahre",
-    "NEXT_MONTH": "Nächster Monat",
-    "NEXT_YEAR": "Nächstes Jahr",
-    "PRESS_ENTER_AGAIN": "Drücke zum Speichern erneut die Eingabetaste",
-    "PREVIOUS_24_YEARS": "Vorherige 24 Jahre",
-    "PREVIOUS_MONTH": "Vorheriger Monat",
-    "PREVIOUS_YEAR": "Vorheriges Jahr",
-    "SWITCH_TO_MULTI_YEAR_VIEW": "Jahr wählen",
-    "SWITCH_TO_YEAR_VIEW": "Monat wählen"
+    "PRESS_ENTER_AGAIN": "Drücke zum Speichern erneut die Eingabetaste"
   },
   "DIALOG_LOGS": {
     "COPY": "Kopieren",
