@@ -29,13 +29,16 @@
     "RESTORE_STRAY_BACKUP": "During the last sync, there may have been an error. Do you want to restore the last backup?"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Press enter again to save",
-    "SWITCH_TO_YEAR_VIEW": "Choose month",
-    "SWITCH_TO_MULTI_YEAR_VIEW": "Choose year",
-    "PREVIOUS_YEAR": "Previous year",
+    "MONTH": "Month",
+    "NEXT_24_YEARS": "Next 24 years",
+    "NEXT_MONTH": "Next month",
     "NEXT_YEAR": "Next year",
+    "PRESS_ENTER_AGAIN": "Press enter again to save",
     "PREVIOUS_24_YEARS": "Previous 24 years",
-    "NEXT_24_YEARS": "Next 24 years"
+    "PREVIOUS_MONTH": "Previous month",
+    "PREVIOUS_YEAR": "Previous year",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Choose year",
+    "SWITCH_TO_YEAR_VIEW": "Choose month"
   },
   "DIALOG_LOGS": {
     "COPY": "Copy",

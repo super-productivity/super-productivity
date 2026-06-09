@@ -12,14 +12,22 @@ export class TranslateMatDatepickerIntl extends MatDatepickerIntl {
     this._translateService.onLangChange.subscribe(() => {
       this._updateLabels();
     });
+    this._translateService.onTranslationChange.subscribe(() => {
+      this._updateLabels();
+    });
+    this._translateService.onDefaultLangChange.subscribe(() => {
+      this._updateLabels();
+    });
     this._updateLabels();
   }
 
   private _updateLabels(): void {
-    this.calendarLabel = this._translateService.instant(T.F.SCHEDULE.MONTH);
+    this.calendarLabel = this._translateService.instant(T.DATETIME_SCHEDULE.MONTH);
     this.openCalendarLabel = this._translateService.instant(T.F.TASK.CMP.SCHEDULE);
-    this.prevMonthLabel = this._translateService.instant(T.F.SCHEDULE.PREVIOUS_MONTH);
-    this.nextMonthLabel = this._translateService.instant(T.F.SCHEDULE.NEXT_MONTH);
+    this.prevMonthLabel = this._translateService.instant(
+      T.DATETIME_SCHEDULE.PREVIOUS_MONTH,
+    );
+    this.nextMonthLabel = this._translateService.instant(T.DATETIME_SCHEDULE.NEXT_MONTH);
     this.prevYearLabel = this._translateService.instant(
       T.DATETIME_SCHEDULE.PREVIOUS_YEAR,
     );
