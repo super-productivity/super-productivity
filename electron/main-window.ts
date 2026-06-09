@@ -29,8 +29,15 @@ import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state'
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
+import { isAppOriginUrl } from './navigation-guard';
 
 let mainWin: BrowserWindow;
+
+// The URL passed to `mainWin.loadURL()` — the single source of truth for
+// "what is the app's own origin?". Read by the will-navigate / will-redirect
+// guards in `initWinEventListeners`. Set in `createWindow`, before listeners
+// are wired, so the guard never sees `undefined` at runtime.
+let appLoadedUrl: string | undefined;
 
 // Compact WCO band on Win/Linux. Native button width is OS-controlled
 // (~138px total); only height is configurable. Lower values may be
@@ -296,6 +303,11 @@ export const createWindow = async ({
       ? 'http://localhost:4200'
       : `file://${normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html'))}`;
 
+  // Capture the loaded URL so the navigation guard (initWinEventListeners →
+  // will-navigate) can compare against the actual app origin, not a derived
+  // guess. Any URL change here automatically tightens the guard.
+  appLoadedUrl = url;
+
   mainWin.loadURL(url).then(() => {
     // Set window title for dev mode
     if (IS_DEV) {
@@ -446,30 +458,52 @@ function initWinEventListeners(app: Electron.App): void {
     });
   };
 
-  // open new window links in browser
+  // Compare the navigation target against the URL the app actually loaded
+  // (captured at loadURL time in createWindow). Anything else is treated as
+  // external and routed through the scheme-guarded `openUrlInBrowser`.
+  //
+  // The main window has Node integration via the preload bridge (`window.ea`).
+  // Allowing in-window navigation to ANY other origin — including
+  // http://127.0.0.1:<any-port> — would expose that bridge to whatever page
+  // happens to be served there (a malicious local web server, a sibling
+  // electron app, etc.). The previous host-only check accepted those.
+  //
+  // Hash-only changes do NOT fire will-navigate, so this never fires for
+  // the app's own hash routes (HashLocationStrategy in src/main.ts).
+  const guardNavigation = (
+    ev: { preventDefault: () => void },
+    url: string,
+    eventLabel: string,
+  ): void => {
+    if (appLoadedUrl && isAppOriginUrl(url, appLoadedUrl)) return;
+    ev.preventDefault();
+    log(`Blocked in-window navigation (${eventLabel})`);
+    openUrlInBrowser(url);
+  };
+
   mainWin.webContents.on('will-navigate', (ev, url) => {
-    // Navigate in-window only for the app's own dev-server origin
-    // (http://localhost:4200). Prod serves from file:// (start URL above) and
-    // routes via hash (withHashLocation, src/main.ts), so will-navigate never
-    // fires for the app's own routes there — only for real external links,
-    // which we hand to the (scheme-guarded) browser. Compare the host exactly:
-    // a substring match let hosts like `https://localhost.evil.com` navigate
-    // the main window directly.
-    let isInternalNavigation = false;
-    try {
-      const { hostname } = new URL(url);
-      isInternalNavigation = hostname === 'localhost' || hostname === '127.0.0.1';
-    } catch {
-      isInternalNavigation = false;
-    }
-    if (!isInternalNavigation) {
-      ev.preventDefault();
-      openUrlInBrowser(url);
-    }
+    guardNavigation(ev, url, 'will-navigate');
+  });
+  // Defense in depth: a same-origin navigation could redirect to a different
+  // origin server-side. Re-run the same check on the redirect target so a
+  // ‘302 → http://127.0.0.1:1337’ cannot land the bridge on an attacker page.
+  mainWin.webContents.on('will-redirect', (ev, url) => {
+    guardNavigation(ev, url, 'will-redirect');
   });
   mainWin.webContents.setWindowOpenHandler((details) => {
     openUrlInBrowser(details.url);
     return { action: 'deny' };
+  });
+  // Defense in depth: setWindowOpenHandler already denies, so this should
+  // never fire. If a future code path ever enables window creation, destroy
+  // the spawned window rather than letting it inherit the preload bridge.
+  mainWin.webContents.on('did-create-window', (childWin) => {
+    error('did-create-window fired despite deny handler — destroying child');
+    try {
+      childWin.destroy();
+    } catch (e) {
+      error('Failed to destroy unexpected child window:', e);
+    }
   });
 
   // TODO refactor quitting mess

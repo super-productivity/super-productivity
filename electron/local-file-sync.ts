@@ -74,6 +74,17 @@ export const initLocalFileSyncAdapter = (): void => {
   );
 
   ipcMain.handle(IPC.TO_FILE_URL, (_, filePath: string): string => {
+    // SECURITY: the renderer hands us a path string from an OS file picker;
+    // a plugin/XSS could call us directly with any string. The result is a
+    // pure string conversion and not itself a capability, but the produced
+    // file:// URL is later persisted as background-image config and fed to
+    // READ_LOCAL_IMAGE_AS_DATA_URL. Mirroring that handler's deny — refuse
+    // to mint a file:// URL pointing at the app's private dir — keeps the
+    // two layers consistent and removes a path-laundering surface. Throw
+    // (vs. returning Error) so the existing string-returning signature is
+    // preserved; the legitimate caller passes paths from an OS picker, so
+    // a reject only fires on abuse.
+    assertPathOutside(getAppPrivateDir(), filePath);
     return pathToFileURL(filePath).href;
   });
   ipcMain.handle(
