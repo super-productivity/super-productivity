@@ -39,6 +39,18 @@ test('dev: localhost.evil.com substring attack is rejected', () => {
   assert.equal(isAppOriginUrl('http://evil.localhost:4200/', DEV_APP_URL), false);
 });
 
+test('dev: userinfo @ trick is rejected (host is the part after @)', () => {
+  // WHATWG URL parses `http://localhost:4200@evil.com/` with host=evil.com,
+  // username=localhost. A naive substring/startsWith check would be fooled;
+  // the host-equality check correctly rejects it.
+  assert.equal(isAppOriginUrl('http://localhost:4200@evil.com/', DEV_APP_URL), false);
+  assert.equal(
+    isAppOriginUrl('http://localhost@evil.com:4200/', DEV_APP_URL),
+    false,
+    'evil.com:4200 with localhost as username is still not our origin',
+  );
+});
+
 test('dev: https variant is rejected (protocol must match)', () => {
   assert.equal(isAppOriginUrl('https://localhost:4200/', DEV_APP_URL), false);
 });
