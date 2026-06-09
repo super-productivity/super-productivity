@@ -9,10 +9,14 @@ const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'timeEstimate',
 ]);
 
-export const isAllProjects = (projectIds: string[]): boolean => projectIds.includes('');
+// Absent `projectIds` (legacy data that hasn't been sanitized yet) means
+// "All Projects", same as an array containing the "" sentinel.
+export const isAllProjects = (projectIds: string[] | undefined): boolean =>
+  !projectIds || projectIds.includes('');
 
-export const firstSpecificProjectId = (projectIds: string[]): string | undefined =>
-  projectIds.find((id) => id !== '');
+export const firstSpecificProjectId = (
+  projectIds: string[] | undefined,
+): string | undefined => projectIds?.find((id) => id !== '');
 
 /**
  * Normalizes a panel cfg for persistence and hydration:

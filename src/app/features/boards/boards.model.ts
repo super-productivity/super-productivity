@@ -26,7 +26,12 @@ export interface BoardSrcCfg {
   includedTagsMatch?: BoardMatchMode;
   // Absent = 'any' (today's behavior): exclude on any match.
   excludedTagsMatch?: BoardMatchMode;
-  projectIds: string[];
+  // Absent/[''] = "All Projects". Optional so the typia validator tolerates
+  // legacy data (panels that still carry `projectId` and no `projectIds`) on
+  // raw-data paths that validate before the reducer's `sanitizePanelCfg` runs
+  // (e.g. the legacy PFAPI → op-log migration). `sanitizePanelCfg` always
+  // normalizes this to a defined array before it reaches any component.
+  projectIds?: string[];
   taskDoneState: BoardPanelCfgTaskDoneState;
   scheduledState: BoardPanelCfgScheduledState;
   isParentTasksOnly: boolean;

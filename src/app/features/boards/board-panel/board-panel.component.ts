@@ -272,6 +272,7 @@ export class BoardPanelComponent {
     const firstProjectId = firstSpecificProjectId(panelCfg.projectIds);
     if (
       firstProjectId &&
+      panelCfg.projectIds &&
       panelCfg.projectIds.length > 0 &&
       !isAllProjects(panelCfg.projectIds) &&
       !panelCfg.projectIds.includes(task.projectId)
