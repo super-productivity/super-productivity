@@ -55,6 +55,7 @@ import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
+import { DateService } from '../../../core/date/date.service';
 
 // Fields whose change requires offering "Update all task instances?" — covers
 // what propagates to existing tasks (vs. schedule fields, which only affect
@@ -102,6 +103,7 @@ const WEEKDAY_KEYS: (keyof TaskRepeatCfgCopy)[] = [
 export class DialogEditTaskRepeatCfgComponent {
   private _globalConfigService = inject(GlobalConfigService);
   private _tagService = inject(TagService);
+  private _dateService = inject(DateService);
 
   plannedStartDateStr = computed(() => {
     const d = this.repeatCfg().startDate;
@@ -587,7 +589,7 @@ export class DialogEditTaskRepeatCfgComponent {
       this.canRemoveInstance.set(false);
       return;
     }
-    const todayStr = getDbDateStr(new Date());
+    const todayStr = this._dateService.todayStr();
     const isTargetTodayOrPast = this._data.targetDate <= todayStr;
     this.canRemoveInstance.set(!isTargetTodayOrPast);
   }
