@@ -8,14 +8,24 @@ export type ShortcutNames =
   | 'code'
   | 'quote';
 
-interface MarkdownShortcut {
+type BaseShortcut = {
   name: ShortcutNames;
   translationKey: string;
   shortcutLabel: string;
   shiftKey: boolean;
+};
+
+type ShortcutWithKey = BaseShortcut & {
   key: string;
-  code?: string;
-}
+  code?: never;
+};
+
+type ShortcutWithCode = BaseShortcut & {
+  code: string;
+  key?: never;
+};
+
+export type MarkdownShortcut = ShortcutWithKey | ShortcutWithCode;
 
 export const MARKDOWN_SHORTCUTS: MarkdownShortcut[] = [
   {
@@ -50,7 +60,6 @@ export const MARKDOWN_SHORTCUTS: MarkdownShortcut[] = [
     name: 'bullet',
     translationKey: 'BULLET_LIST',
     shortcutLabel: 'Ctrl/Cmd+Shift+8',
-    key: '9',
     shiftKey: true,
     code: 'Digit8',
   },
@@ -58,7 +67,6 @@ export const MARKDOWN_SHORTCUTS: MarkdownShortcut[] = [
     name: 'numbered',
     translationKey: 'NUMBERED_LIST',
     shortcutLabel: 'Ctrl/Cmd+Shift+7',
-    key: '8',
     shiftKey: true,
     code: 'Digit7',
   },
@@ -66,7 +74,6 @@ export const MARKDOWN_SHORTCUTS: MarkdownShortcut[] = [
     name: 'quote',
     translationKey: 'QUOTE',
     shortcutLabel: 'Ctrl/Cmd+Shift+9',
-    key: '10',
     shiftKey: true,
     code: 'Digit9',
   },
