@@ -14,7 +14,12 @@ import {
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
-import { buildComparator, rewriteTagIdsForPanel } from '../boards.util';
+import {
+  buildComparator,
+  firstSpecificProjectId,
+  isAllProjects,
+  rewriteTagIdsForPanel,
+} from '../boards.util';
 import { select, Store } from '@ngrx/store';
 import {
   selectAllTasksInActiveProjects,
@@ -131,9 +136,9 @@ export class BoardPanelComponent {
   additionalTaskFields = computed(() => {
     const panelCfg = this.panelCfg();
     const tagsToAdd = this.tagsToAddForInlineCreate();
-    const firstProjectId = panelCfg.projectIds?.includes('')
+    const firstProjectId = isAllProjects(panelCfg.projectIds)
       ? undefined
-      : panelCfg.projectIds?.[0];
+      : firstSpecificProjectId(panelCfg.projectIds);
 
     return {
       ...(tagsToAdd.length ? { tagIds: tagsToAdd } : {}),
@@ -185,7 +190,7 @@ export class BoardPanelComponent {
       if (
         panelCfg.projectIds &&
         panelCfg.projectIds.length > 0 &&
-        !panelCfg.projectIds.includes('')
+        !isAllProjects(panelCfg.projectIds)
       ) {
         // TODO check parentId case thoroughly
         isTaskIncluded = isTaskIncluded && panelCfg.projectIds.includes(task.projectId);
@@ -264,11 +269,11 @@ export class BoardPanelComponent {
       updates.isDone = false;
     }
 
-    const firstProjectId = panelCfg.projectIds?.find((id) => id !== '');
+    const firstProjectId = firstSpecificProjectId(panelCfg.projectIds);
     if (
       firstProjectId &&
       panelCfg.projectIds.length > 0 &&
-      !panelCfg.projectIds.includes('') &&
+      !isAllProjects(panelCfg.projectIds) &&
       !panelCfg.projectIds.includes(task.projectId)
     ) {
       const taskWithSubTasks = await this.store

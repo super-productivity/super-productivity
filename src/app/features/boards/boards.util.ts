@@ -51,7 +51,7 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   // Canonicalize any `projectIds` containing "" back to [""] (All Projects).
   // This is lossy: if "" (All Projects) co-occurs with specific IDs, the specific IDs
   // are dropped in favor of "All Projects".
-  if (out.projectIds.includes('')) {
+  if (isAllProjects(out.projectIds)) {
     out.projectIds = [''];
   }
 
