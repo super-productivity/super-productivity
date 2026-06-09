@@ -421,9 +421,29 @@ export class DialogFlowtimeSettingsComponent {
       this._lastBreakPercentage = model.breakPercentage;
     }
 
-    if (!this._isEmptyBreakRules(model.breakRules)) {
+    if (
+      this._isRuleModeVisible(model) &&
+      this._hasCacheableBreakRules(model.breakRules)
+    ) {
       this._lastNonEmptyBreakRules = this._copyBreakRules(model.breakRules!);
     }
+  }
+
+  private _isRuleModeVisible(model: FlowtimeFormModel): boolean {
+    return model.isBreakEnabled === true && model.breakMode === 'rule';
+  }
+
+  private _hasCacheableBreakRules(
+    breakRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): breakRules is FlowtimeBreakRuleInMinutes[] {
+    return (
+      !!breakRules?.length &&
+      breakRules.every(
+        (rule: FlowtimeBreakRuleInMinutes) =>
+          !this._isBlankFormValue(rule.minDuration) &&
+          !this._isBlankFormValue(rule.breakDuration),
+      )
+    );
   }
 
   private _copyBreakRules(

@@ -270,6 +270,49 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(component.model().breakRules).toEqual(initialRules);
   });
 
+  it('should ignore partial hidden rule rows emitted while Ratio-based is visible', () => {
+    fixture.destroy();
+    globalConfigServiceMock.cfg.and.returnValue({
+      flowtime: {
+        isBreakEnabled: false,
+        breakMode: 'ratio',
+        breakPercentage: 20,
+        breakRules: [],
+      },
+    });
+    fixture = TestBed.createComponent(DialogFlowtimeSettingsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const initialRules = component.model().breakRules;
+    const enabledRatioModel = component.model();
+    enabledRatioModel.isBreakEnabled = true;
+    enabledRatioModel.breakRules = [
+      {
+        minDuration: '' as unknown as number,
+        maxDuration: '' as unknown as number,
+        breakDuration: 5,
+      },
+    ];
+    component.updateModel(enabledRatioModel);
+
+    const restoredRuleModel = component.model();
+    restoredRuleModel.breakMode = 'rule';
+    restoredRuleModel.breakRules = [
+      {
+        minDuration: '' as unknown as number,
+        maxDuration: '' as unknown as number,
+        breakDuration: 5,
+      },
+    ];
+    component.updateModel(restoredRuleModel);
+    fixture.detectChanges();
+
+    expect(component.model().breakRules).toEqual(initialRules);
+    const firstRule = (component.form.get('breakRules') as any).at(0);
+    expect(firstRule.value).toEqual(initialRules![0]);
+  });
+
   describe('save()', () => {
     it('should convert minutes back to ms and save the config', () => {
       component.save();
