@@ -1,53 +1,85 @@
 @if (data(); as heatmapData) {
-  <div class="heatmap-container">
-    <div class="heatmap-grid">
-      <div class="day-labels">
-        <div class="month-spacer"></div>
-        @for (label of dayLabels(); track $index) {
-          <div class="day-label">{{ label }}</div>
+  @if (groupByMonth() && heatmapData.months; as months) {
+    <div class="heatmap-container">
+      <div class="heatmap-month-blocks">
+        @for (m of months; track $index) {
+          <div class="heatmap-month">
+            <div class="weeks">
+              @for (week of m.weeks; track $index) {
+                <div class="week">
+                  @for (day of week.days; track $index) {
+                    <div
+                      [class]="getDayClass(day)"
+                      [title]="getDayTitle(day)"
+                      (click)="day && dayClick.emit(day)"
+                    ></div>
+                  }
+                </div>
+              }
+            </div>
+            <div class="heatmap-month__label">{{ m.label }}</div>
+            @if (m.total) {
+              <div class="heatmap-month__total">{{ m.total }}</div>
+            }
+          </div>
         }
       </div>
 
-      <div
-        class="scrollable-content"
-        #scrollableContent
-      >
-        <div class="heatmap-months">
-          @for (month of heatmapData.monthLabels; track $index) {
-            <div class="month-label">{{ month }}</div>
-          }
-        </div>
-
-        <div class="weeks">
-          @for (week of heatmapData.weeks; track $index) {
-            <div class="week">
-              @for (day of week.days; track $index) {
-                <div
-                  [class]="getDayClass(day)"
-                  [title]="getDayTitle(day)"
-                  (click)="day && dayClick.emit(day)"
-                ></div>
-              }
-            </div>
-          }
-        </div>
-      </div>
+      @if (label()) {
+        <div class="heatmap-label">{{ label() }}</div>
+      }
     </div>
+  } @else {
+    <div class="heatmap-container">
+      <div class="heatmap-grid">
+        <div class="day-labels">
+          <div class="month-spacer"></div>
+          @for (label of dayLabels(); track $index) {
+            <div class="day-label">{{ label }}</div>
+          }
+        </div>
 
-    @if (label()) {
-      <div class="heatmap-label">{{ label() }}</div>
-    }
+        <div
+          class="scrollable-content"
+          #scrollableContent
+        >
+          <div class="heatmap-months">
+            @for (month of heatmapData.monthLabels; track $index) {
+              <div class="month-label">{{ month }}</div>
+            }
+          </div>
 
-    @if (showLegend()) {
-      <div class="heatmap-legend">
-        <span>Less</span>
-        <div class="legend-item level-0"></div>
-        <div class="legend-item level-1"></div>
-        <div class="legend-item level-2"></div>
-        <div class="legend-item level-3"></div>
-        <div class="legend-item level-4"></div>
-        <span>More</span>
+          <div class="weeks">
+            @for (week of heatmapData.weeks; track $index) {
+              <div class="week">
+                @for (day of week.days; track $index) {
+                  <div
+                    [class]="getDayClass(day)"
+                    [title]="getDayTitle(day)"
+                    (click)="day && dayClick.emit(day)"
+                  ></div>
+                }
+              </div>
+            }
+          </div>
+        </div>
       </div>
-    }
-  </div>
+
+      @if (label()) {
+        <div class="heatmap-label">{{ label() }}</div>
+      }
+
+      @if (showLegend()) {
+        <div class="heatmap-legend">
+          <span>Less</span>
+          <div class="legend-item level-0"></div>
+          <div class="legend-item level-1"></div>
+          <div class="legend-item level-2"></div>
+          <div class="legend-item level-3"></div>
+          <div class="legend-item level-4"></div>
+          <span>More</span>
+        </div>
+      }
+    </div>
+  }
 }

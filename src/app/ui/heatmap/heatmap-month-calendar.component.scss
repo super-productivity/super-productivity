@@ -1,0 +1,135 @@
+.month-cal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+  padding: var(--s2);
+  background: var(--c-dark-10);
+  border-radius: var(--card-border-radius);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s);
+  }
+
+  &__title {
+    font-weight: bold;
+    min-width: 9em;
+    text-align: center;
+  }
+
+  &__weekdays,
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--s-quarter);
+  }
+
+  &__weekday {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-color-muted);
+  }
+
+  &__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s);
+    justify-content: center;
+    margin-top: var(--s-quarter);
+    font-size: 11px;
+    color: var(--text-color-muted);
+  }
+
+  &__legend-item {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+.sw {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 4px;
+
+  &.level-1 {
+    background: color-mix(in srgb, var(--c-primary) 25%, transparent);
+  }
+  &.level-2 {
+    background: color-mix(in srgb, var(--c-primary) 45%, transparent);
+  }
+  &.level-3 {
+    background: color-mix(in srgb, var(--c-primary) 65%, transparent);
+  }
+  &.level-4 {
+    background: var(--c-primary);
+  }
+  &.projected {
+    background: transparent;
+    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline-offset: -2px;
+  }
+  &.completed {
+    background: var(--c-primary);
+  }
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--card-border-radius);
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+
+  &.other-month {
+    color: var(--text-color-muted);
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  // in-month, no activity → plain number, no fill
+  &.level-1 {
+    background: color-mix(in srgb, var(--c-primary) 25%, transparent);
+    color: #fff;
+  }
+  &.level-2 {
+    background: color-mix(in srgb, var(--c-primary) 45%, transparent);
+    color: #fff;
+  }
+  &.level-3 {
+    background: color-mix(in srgb, var(--c-primary) 65%, transparent);
+    color: #fff;
+  }
+  &.level-4 {
+    background: var(--c-primary);
+    color: #fff;
+  }
+
+  &.projected {
+    background: transparent;
+    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline-offset: -2px;
+  }
+  &.completed {
+    background: var(--c-primary);
+    color: #fff;
+    outline: 2px solid var(--c-primary);
+    outline-offset: 1px;
+  }
+
+  &:not(.other-month):hover {
+    outline: 1px solid var(--c-dark-20);
+  }
+}
+
+:host-context(.isDarkTheme) {
+  .month-cal {
+    background: var(--c-light-05);
+  }
+}

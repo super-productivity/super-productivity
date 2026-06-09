@@ -94,10 +94,13 @@
         <span>{{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW | translate }}</span>
       </button>
       @if (resultHeatmapData(); as hd) {
-        <heatmap
+        <heatmap-switcher
           class="rrule-result__cal"
           [data]="hd"
-          [showLegend]="false"
+          [dayMap]="hd.dayMap"
+          [rangeStart]="hd.rangeStart"
+          [rangeEnd]="hd.rangeEnd"
+          legendMode="occurrences"
           (dayClick)="onPreviewDayClick($event)"
         />
         @if (simulatedCompletion(); as sim) {

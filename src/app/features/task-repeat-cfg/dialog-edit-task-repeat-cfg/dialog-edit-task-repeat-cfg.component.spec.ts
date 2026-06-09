@@ -599,8 +599,10 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       c.toggleResultHeatmap();
       const hd = c.resultHeatmapData();
       expect(hd).not.toBeNull();
-      expect(hd!.weeks.length).toBeGreaterThan(0);
-      const hasProjected = hd!.weeks.some((w) => w.days.some((d) => !!d?.isProjected));
+      expect(hd!.months!.length).toBeGreaterThan(0);
+      const hasProjected = hd!.months!.some((m) =>
+        m.weeks.some((w) => w.days.some((d) => !!d?.isProjected)),
+      );
       expect(hasProjected).toBe(true);
     });
 

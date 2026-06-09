@@ -20,11 +20,12 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { ShareService } from '../../../core/share/share.service';
+import { DayData, WeekData } from '../../../ui/heatmap/heatmap.component';
+import { HeatmapSwitcherComponent } from '../../../ui/heatmap/heatmap-switcher.component';
 import {
-  DayData,
-  WeekData,
-  HeatmapComponent,
-} from '../../../ui/heatmap/heatmap.component';
+  buildHeatmapMonths,
+  heatmapHoursTotal,
+} from '../../../ui/heatmap/build-heatmap-data.util';
 import { DateAdapter } from '@angular/material/core';
 import { Worklog } from '../../worklog/worklog.model';
 
@@ -40,7 +41,7 @@ interface YearlyActivityData {
   styleUrls: ['./activity-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    HeatmapComponent,
+    HeatmapSwitcherComponent,
     TranslatePipe,
     MatFormFieldModule,
     MatIconButton,
@@ -112,13 +113,28 @@ export class ActivityHeatmapComponent {
       return null;
     }
 
-    // Rebuild the weeks grid with the current firstDayOfWeek setting
-    return this._buildWeeksGrid(
-      rawData.dayMap,
-      rawData.startDate,
-      rawData.endDate,
-      firstDay,
-    );
+    // Rebuild the weeks grid with the current firstDayOfWeek setting. `weeks`/
+    // `monthLabels` stay for the share-canvas export; `months` drives the
+    // month-grouped on-screen layout.
+    return {
+      ...this._buildWeeksGrid(
+        rawData.dayMap,
+        rawData.startDate,
+        rawData.endDate,
+        firstDay,
+      ),
+      months: buildHeatmapMonths(
+        rawData.dayMap,
+        rawData.startDate,
+        rawData.endDate,
+        firstDay,
+        this._dateAdapter.getMonthNames('short'),
+        heatmapHoursTotal,
+      ),
+      dayMap: rawData.dayMap,
+      rangeStart: rawData.startDate,
+      rangeEnd: rawData.endDate,
+    };
   });
 
   private _buildHeatmapDataFromWorklog(

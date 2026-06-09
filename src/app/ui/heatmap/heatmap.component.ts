@@ -10,7 +10,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
+import { TranslateService } from '@ngx-translate/core';
 import { msToString } from '../duration/ms-to-string.pipe';
+import { T } from '../../t.const';
 
 export interface DayData {
   date: Date;
@@ -26,9 +28,19 @@ export interface WeekData {
   days: (DayData | null)[];
 }
 
+export interface MonthBlock {
+  label: string; // localized short month name (e.g. "Jan")
+  total: string; // pre-formatted total shown beneath (caller picks time vs count)
+  weeks: WeekData[]; // this month's days, laid in weekday-row columns
+}
+
 export interface HeatmapData {
   weeks: WeekData[];
   monthLabels: string[];
+  // Optional month-grouped layout used when `groupByMonth` is set: each month is
+  // its own mini-grid with a label + total beneath. `weeks`/`monthLabels` stay
+  // for the continuous layout and the share-canvas export.
+  months?: MonthBlock[];
 }
 
 @Component({
@@ -41,11 +53,15 @@ export interface HeatmapData {
 })
 export class HeatmapComponent {
   private readonly _dateAdapter = inject(DateAdapter);
+  private readonly _translateService = inject(TranslateService);
 
   readonly data = input.required<HeatmapData | null>();
   readonly label = input<string>('');
   readonly showLegend = input<boolean>(true);
   readonly scrollToEnd = input<boolean>(false);
+  /** Render `data.months` as spaced per-month blocks instead of the continuous
+   *  GitHub-style strip. */
+  readonly groupByMonth = input<boolean>(false);
   /** Emits the clicked day (non-empty cells only). Consumers decide what to do. */
   readonly dayClick = output<DayData>();
 
@@ -85,11 +101,14 @@ export class HeatmapComponent {
       return '';
     }
     if (day.isCompleted) {
-      return `${day.dateStr}: completed (simulated)`;
+      return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_COMPLETED_SIM)}`;
     }
     if (day.isProjected) {
-      return `${day.dateStr}: projected occurrence`;
+      return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_PROJECTED)}`;
     }
-    return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
+    return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_ACTIVITY, {
+      count: day.taskCount,
+      time: msToString(day.timeSpent),
+    })}`;
   }
 }

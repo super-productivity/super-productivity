@@ -1,4 +1,11 @@
-import { buildHeatmapWeeks, buildProjectionDayMap } from './build-heatmap-data.util';
+import {
+  buildHeatmapMonths,
+  buildHeatmapWeeks,
+  buildProjectionDayMap,
+  heatmapHoursTotal,
+  heatmapOccurrenceTotal,
+} from './build-heatmap-data.util';
+import { DayData } from './heatmap.component';
 
 const D = (s: string): Date => {
   const [y, m, d] = s.split('-').map(Number);
@@ -60,5 +67,38 @@ describe('buildHeatmapWeeks', () => {
     const nonNull = grid.weeks.flatMap((w) => w.days).filter((d) => d !== null);
     expect(nonNull.length).toBe(1);
     expect(nonNull[0]!.dateStr).toBe('2024-06-01');
+  });
+});
+
+describe('buildHeatmapMonths', () => {
+  it('groups days into one block per month, each a 7-row column grid', () => {
+    const map = buildProjectionDayMap(
+      [D('2024-01-15'), D('2024-02-10')],
+      D('2024-01-01'),
+      D('2024-02-29'),
+    );
+    const blocks = buildHeatmapMonths(
+      map,
+      D('2024-01-01'),
+      D('2024-02-29'),
+      0,
+      MONTHS,
+      heatmapOccurrenceTotal,
+    );
+    expect(blocks.map((b) => b.label)).toEqual(['Jan', 'Feb']);
+    blocks.forEach((b) => b.weeks.forEach((w) => expect(w.days.length).toBe(7)));
+    // one projected occurrence in each month
+    expect(blocks[0].total).toBe('1×');
+    expect(blocks[1].total).toBe('1×');
+  });
+
+  it('heatmapHoursTotal sums day time as whole hours', () => {
+    const days = [{ timeSpent: 7_200_000 }, { timeSpent: 3_600_000 }] as DayData[];
+    expect(heatmapHoursTotal(days)).toBe('3h');
+    expect(heatmapHoursTotal([])).toBe('0h');
+  });
+
+  it('heatmapOccurrenceTotal is empty when a month has no occurrences', () => {
+    expect(heatmapOccurrenceTotal([])).toBe('');
   });
 });

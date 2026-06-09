@@ -1,4 +1,4 @@
-import { DayData, HeatmapData, WeekData } from './heatmap.component';
+import { DayData, HeatmapData, MonthBlock, WeekData } from './heatmap.component';
 import { getDbDateStr } from '../../util/get-db-date-str';
 
 /**
@@ -82,4 +82,65 @@ export const buildProjectionDayMap = (
     cur.setDate(cur.getDate() + 1);
   }
   return dayMap;
+};
+
+/**
+ * Group `[startDate, endDate]` into calendar months, laying each month's days
+ * into its own weekday-row column grid (a mini calendar). `formatTotal` builds
+ * the per-month label shown beneath the block from that month's day data — e.g.
+ * total hours for an activity heatmap, or an occurrence count for a projection.
+ */
+export const buildHeatmapMonths = (
+  dayMap: Map<string, DayData>,
+  startDate: Date,
+  endDate: Date,
+  firstDayOfWeek: number,
+  monthNames: string[],
+  formatTotal: (days: DayData[]) => string,
+): MonthBlock[] => {
+  const blocks: MonthBlock[] = [];
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+  while (cursor <= lastMonth) {
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const weeks: WeekData[] = [];
+    const monthDays: DayData[] = [];
+    let column: WeekData = { days: [] };
+    // Pad the first column so day-of-week rows line up.
+    const lead = (new Date(year, month, 1).getDay() - firstDayOfWeek + 7) % 7;
+    for (let p = 0; p < lead; p++) column.days.push(null);
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dd = dayMap.get(getDbDateStr(new Date(year, month, d))) ?? null;
+      column.days.push(dd);
+      if (dd) monthDays.push(dd);
+      if (column.days.length === 7) {
+        weeks.push(column);
+        column = { days: [] };
+      }
+    }
+    if (column.days.length) {
+      while (column.days.length < 7) column.days.push(null);
+      weeks.push(column);
+    }
+
+    blocks.push({ label: monthNames[month], total: formatTotal(monthDays), weeks });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return blocks;
+};
+
+/** Per-month total as whole hours (e.g. `186h`) — for activity/history heatmaps. */
+export const heatmapHoursTotal = (days: DayData[]): string =>
+  `${Math.round(days.reduce((sum, d) => sum + d.timeSpent, 0) / 3_600_000)}h`;
+
+/** Per-month total as an occurrence count (e.g. `6×`) — for projection previews;
+ *  empty when the month has none. */
+export const heatmapOccurrenceTotal = (days: DayData[]): string => {
+  const n = days.filter((d) => d.isProjected || d.isCompleted).length;
+  return n ? `${n}×` : '';
 };

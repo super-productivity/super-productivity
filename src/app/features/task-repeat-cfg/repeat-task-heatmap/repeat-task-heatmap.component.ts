@@ -12,12 +12,13 @@ import { from } from 'rxjs';
 import { filter, first, switchMap } from 'rxjs/operators';
 import { Task } from '../../tasks/task.model';
 import { DateAdapter } from '@angular/material/core';
+import { DayData, HeatmapData } from '../../../ui/heatmap/heatmap.component';
+import { HeatmapSwitcherComponent } from '../../../ui/heatmap/heatmap-switcher.component';
 import {
-  DayData,
-  HeatmapData,
-  HeatmapComponent,
-} from '../../../ui/heatmap/heatmap.component';
-import { buildHeatmapWeeks } from '../../../ui/heatmap/build-heatmap-data.util';
+  buildHeatmapMonths,
+  buildHeatmapWeeks,
+  heatmapHoursTotal,
+} from '../../../ui/heatmap/build-heatmap-data.util';
 import { T } from '../../../t.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslateModule } from '@ngx-translate/core';
@@ -41,7 +42,7 @@ const PROJECTION_DAYS = 92;
   styleUrls: ['./repeat-task-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [HeatmapComponent, TranslateModule],
+  imports: [HeatmapSwitcherComponent, TranslateModule],
 })
 export class RepeatTaskHeatmapComponent {
   readonly T = T;
@@ -91,7 +92,10 @@ export class RepeatTaskHeatmapComponent {
     };
   });
 
-  readonly heatmapData = computed<HeatmapData | null>(() => {
+  readonly heatmapData = computed<
+    | (HeatmapData & { dayMap: Map<string, DayData>; rangeStart: Date; rangeEnd: Date })
+    | null
+  >(() => {
     const rawData = this._rawHeatmapData();
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
 
@@ -104,13 +108,27 @@ export class RepeatTaskHeatmapComponent {
       return null;
     }
 
-    return buildHeatmapWeeks(
-      rawData.dayMap,
-      rawData.startDate,
-      rawData.endDate,
-      firstDay,
-      this._dateAdapter.getMonthNames('short'),
-    );
+    const monthNames = this._dateAdapter.getMonthNames('short');
+    return {
+      ...buildHeatmapWeeks(
+        rawData.dayMap,
+        rawData.startDate,
+        rawData.endDate,
+        firstDay,
+        monthNames,
+      ),
+      months: buildHeatmapMonths(
+        rawData.dayMap,
+        rawData.startDate,
+        rawData.endDate,
+        firstDay,
+        monthNames,
+        heatmapHoursTotal,
+      ),
+      dayMap: rawData.dayMap,
+      rangeStart: rawData.startDate,
+      rangeEnd: rawData.endDate,
+    };
   });
 
   private async _loadTasksForRepeatCfg(repeatCfgId: string): Promise<Task[]> {

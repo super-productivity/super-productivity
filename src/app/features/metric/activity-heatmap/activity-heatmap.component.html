@@ -39,7 +39,13 @@
       </div>
     }
 
-    <heatmap [data]="data" />
+    <heatmap-switcher
+      [data]="data"
+      [dayMap]="data.dayMap"
+      [rangeStart]="data.rangeStart"
+      [rangeEnd]="data.rangeEnd"
+      legendMode="hours"
+    />
   } @else {
     <p>{{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}</p>
   }

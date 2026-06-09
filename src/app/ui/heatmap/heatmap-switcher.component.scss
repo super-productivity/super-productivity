@@ -1,0 +1,14 @@
+.heatmap-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+
+  &__toggle {
+    align-self: center;
+    font-size: 12px;
+
+    ::ng-deep .mat-button-toggle-button {
+      font-size: 12px;
+    }
+  }
+}

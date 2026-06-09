@@ -71,14 +71,13 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { DateAdapter } from '@angular/material/core';
+import { DayData, HeatmapData } from '../../../ui/heatmap/heatmap.component';
+import { HeatmapSwitcherComponent } from '../../../ui/heatmap/heatmap-switcher.component';
 import {
-  DayData,
-  HeatmapComponent,
-  HeatmapData,
-} from '../../../ui/heatmap/heatmap.component';
-import {
+  buildHeatmapMonths,
   buildHeatmapWeeks,
   buildProjectionDayMap,
+  heatmapOccurrenceTotal,
 } from '../../../ui/heatmap/build-heatmap-data.util';
 
 // Fields whose change requires offering "Update all task instances?" — covers
@@ -114,7 +113,7 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     MatButton,
     MatIcon,
     RepeatTaskHeatmapComponent,
-    HeatmapComponent,
+    HeatmapSwitcherComponent,
     CollapsibleComponent,
     RruleBuilderComponent,
     DatePipe,
@@ -223,7 +222,10 @@ export class DialogEditTaskRepeatCfgComponent {
       day.dateStr === this.simulatedCompletion() ? null : day.dateStr,
     );
   }
-  resultHeatmapData = computed<HeatmapData | null>(() => {
+  resultHeatmapData = computed<
+    | (HeatmapData & { dayMap: Map<string, DayData>; rangeStart: Date; rangeEnd: Date })
+    | null
+  >(() => {
     if (!this.isRRuleMode() || !this.showResultHeatmap()) {
       return null;
     }
@@ -290,13 +292,22 @@ export class DialogEditTaskRepeatCfgComponent {
         day.level = 4;
       }
     }
-    return buildHeatmapWeeks(
+    const firstDay = this._dateAdapter.getFirstDayOfWeek();
+    const monthNames = this._dateAdapter.getMonthNames('short');
+    return {
+      ...buildHeatmapWeeks(dayMap, from, to, firstDay, monthNames),
+      months: buildHeatmapMonths(
+        dayMap,
+        from,
+        to,
+        firstDay,
+        monthNames,
+        heatmapOccurrenceTotal,
+      ),
       dayMap,
-      from,
-      to,
-      this._dateAdapter.getFirstDayOfWeek(),
-      this._dateAdapter.getMonthNames('short'),
-    );
+      rangeStart: from,
+      rangeEnd: to,
+    };
   });
 
   canRemoveInstance = signal<boolean>(false);

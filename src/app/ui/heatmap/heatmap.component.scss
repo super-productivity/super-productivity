@@ -50,6 +50,33 @@
   }
 }
 
+// Month-grouped layout (groupByMonth): each month is its own mini-grid, the
+// blocks spaced in a wrapping row with a label + total beneath each.
+.heatmap-month-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s2);
+}
+
+.heatmap-month {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-half);
+
+  &__label {
+    font-size: 12px;
+    color: var(--text-color-muted);
+  }
+
+  &__total {
+    font-size: 11px;
+    opacity: 0.55;
+    margin-top: -4px;
+  }
+}
+
 .heatmap-months {
   display: flex;
   gap: var(--s-quarter);
