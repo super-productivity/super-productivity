@@ -15,6 +15,7 @@ import { error, log } from 'electron-log/main';
 import type { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import type { AppDataComplete } from '../src/app/op-log/model/model-config';
 import { getBackupTimestamp } from './shared-with-frontend/get-backup-timestamp';
+import { isPathInsideDir } from './file-path-guard';
 import {
   DEFAULT_MAX_BACKUP_FILES,
   selectBackupFilesToDelete,
@@ -63,8 +64,21 @@ export function initBackupAdapter(): void {
 
   // RESTORE_BACKUP
   ipcMain.handle(IPC.BACKUP_LOAD_DATA, (ev, backupPath: string): string => {
-    log('Reading backup file: ', backupPath);
-    return readFileSync(backupPath, { encoding: 'utf8' });
+    // `backupPath` comes from the renderer, which runs untrusted plugin code,
+    // so it must be constrained to the backup directory. Otherwise any plugin
+    // (or XSS payload) could read arbitrary files via window.ea.loadBackupData.
+    // See GHSA-x937-wf3j-88q3. Both the regular and the Windows-Store backup
+    // dirs are accepted; the legitimate caller only ever passes paths built
+    // from BACKUP_DIR (see IPC.BACKUP_IS_AVAILABLE above).
+    if (
+      !isPathInsideDir(BACKUP_DIR, backupPath) &&
+      !isPathInsideDir(BACKUP_DIR_WINSTORE, backupPath)
+    ) {
+      throw new Error('BACKUP_LOAD_DATA: refused path outside backup directory');
+    }
+    const resolved = path.resolve(backupPath);
+    log('Reading backup file: ', resolved);
+    return readFileSync(resolved, { encoding: 'utf8' });
   });
 }
 

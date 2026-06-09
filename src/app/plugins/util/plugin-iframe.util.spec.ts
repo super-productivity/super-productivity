@@ -12,7 +12,10 @@ import {
 } from './plugin-iframe.util';
 
 describe('handlePluginMessage()', () => {
-  const createConfig = (pluginBridge: PluginBridgeService): PluginIframeConfig => ({
+  const createConfig = (
+    pluginBridge: PluginBridgeService,
+    boundMethods?: PluginIframeConfig['boundMethods'],
+  ): PluginIframeConfig => ({
     pluginId: 'test-plugin',
     manifest: {
       id: 'test-plugin',
@@ -33,9 +36,7 @@ describe('handlePluginMessage()', () => {
     pluginBridge,
     bridgeToken: 'test-bridge-token',
     bridgeGeneration: 4,
-    boundMethods: {} as ReturnType<
-      typeof PluginBridgeService.prototype.createBoundMethods
-    >,
+    boundMethods,
   });
 
   it('rebuilds iframe dialog button handlers and returns the selected result', async () => {
@@ -246,6 +247,47 @@ describe('handlePluginMessage()', () => {
     );
 
     expect(dialogButtonResult).toBe('trusted');
+  });
+
+  it('routes iframe i18n API calls through plugin-bound methods', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const translate = jasmine
+      .createSpy('translate')
+      .withArgs('DATE.YESTERDAY', { days: 1 })
+      .and.returnValue('Gestern');
+    const pluginBridge = {
+      createBoundMethods: () => ({
+        translate,
+      }),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'translate',
+          callId: 11,
+          args: ['DATE.YESTERDAY', { days: 1 }],
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(translate).toHaveBeenCalledOnceWith('DATE.YESTERDAY', { days: 1 });
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 11,
+        result: 'Gestern',
+      },
+      '*',
+    );
   });
 
   it('generates iframe code that waits for async dialog button handlers', () => {

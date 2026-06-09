@@ -44,6 +44,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'updateTag',
   'showSnack',
   'notify',
+  'translate',
   'openDialog',
   'showIndexHtmlAsView',
   'showIndexHtmlInSidePanel',
@@ -460,6 +461,11 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           decrementCounter: (id, decrementBy) => callApi('decrementCounter', [id, decrementBy]),
           deleteCounter: (id) => callApi('deleteCounter', [id]),
           getAllCounters: () => callApi('getAllCounters'),
+
+          // i18n
+          translate: (key, params) => callApi('translate', [key, params]),
+          formatDate: (date, format) => callApi('formatDate', [date, format]),
+          getCurrentLanguage: () => callApi('getCurrentLanguage'),
 
           // Readiness signal for iframe plugins.
           //

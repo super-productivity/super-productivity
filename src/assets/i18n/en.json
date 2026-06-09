@@ -2788,6 +2788,7 @@
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",
     "ALREADY_INITIALIZED": "Plugin is already initialized",
+    "AUTHORED_BY": "by {{author}}",
     "CHOOSE_PLUGIN_FILE": "Choose Plugin File",
     "CLEAR_PLUGIN_CACHE": "Clear Plugin Cache",
     "CODE_TOO_LARGE": "Plugin code is too large (max {{maxSize}}MB)",

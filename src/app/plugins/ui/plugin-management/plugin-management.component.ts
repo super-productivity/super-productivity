@@ -50,6 +50,10 @@ interface CommunityPlugin {
   stars?: number;
 }
 
+interface PluginManifestAuthor {
+  author?: unknown;
+}
+
 @Component({
   selector: 'plugin-management',
   templateUrl: './plugin-management.component.html',
@@ -255,6 +259,11 @@ export class PluginManagementComponent {
     // 1. It doesn't require nodeExecution, OR
     // 2. We're running in Electron
     return !plugin.error && (!this.requiresNodeExecution(plugin) || IS_ELECTRON);
+  }
+
+  getPluginAuthor(plugin: PluginInstance): string | null {
+    const author = (plugin.manifest as PluginManifestAuthor).author;
+    return typeof author === 'string' && author.trim().length > 0 ? author.trim() : null;
   }
 
   getNodeExecutionMessage(): string {
