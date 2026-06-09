@@ -233,6 +233,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       baseCfg,
       pluginBridge: this._pluginBridge,
       bridgeToken: this._createBridgeToken(),
+      bridgeGeneration: this._pluginService.getPluginIframeGeneration(pluginId),
       boundMethods: this._pluginBridge.createBoundMethods(pluginId, plugin.manifest),
     };
 
@@ -249,6 +250,12 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       const msgEvent = event as MessageEvent;
       const iframeWin = this.iframeRef?.nativeElement?.contentWindow;
       if (!iframeWin || msgEvent.source !== iframeWin) {
+        return;
+      }
+      if (
+        this._pluginService.getPluginIframeGeneration(config.pluginId) !==
+        config.bridgeGeneration
+      ) {
         return;
       }
       if (!this._pluginService.getPluginIndexHtml(config.pluginId)) {

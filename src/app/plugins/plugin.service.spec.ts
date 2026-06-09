@@ -361,6 +361,40 @@ describe('PluginService', () => {
     expect(service.getPluginIndexHtml(manifest.id)).toBeNull();
   });
 
+  it('bumps iframe generation when unloading a plugin runtime', () => {
+    const instance: PluginInstance = {
+      manifest: mockManifest,
+      loaded: true,
+      isEnabled: true,
+    };
+    (
+      service as unknown as {
+        _loadedPlugins: PluginInstance[];
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._loadedPlugins = [instance];
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(mockManifest.id, {
+      manifest: mockManifest,
+      status: 'loaded',
+      path: 'uploaded://test-plugin',
+      type: 'uploaded',
+      isEnabled: true,
+      instance,
+    });
+
+    const generationBeforeUnload = service.getPluginIframeGeneration(mockManifest.id);
+
+    service.unloadPlugin(mockManifest.id);
+
+    expect(service.getPluginIframeGeneration(mockManifest.id)).toBe(
+      generationBeforeUnload + 1,
+    );
+  });
+
   it('clears stale instances when ready handling fails', () => {
     const instance: PluginInstance = {
       manifest: mockManifest,

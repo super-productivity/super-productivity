@@ -511,7 +511,11 @@ PluginAPI.registerHook(PluginAPI.Hooks.ACTION, (action) => {
 
 ### Data Persistence
 
-You can persist data that will also be synced vai the `persistDataSynced` and `loadSyncedData` APIs. For local storage I recommend using `localStorage`.
+You can persist data that will also be synced via the `persistDataSynced` and
+`loadSyncedData` APIs. Host-side `plugin.js` code can use `localStorage` for
+data that should stay local. Iframe plugins should prefer the synced
+persistence APIs because sandboxed iframe origins may not have reliable access
+to browser storage.
 
 ```javascript
 // Save plugin data
@@ -634,9 +638,12 @@ cold-boot bridge pings are only performed for host-side plugin code.
 
 Iframe plugins receive a filtered `window.PluginAPI` object injected into `index.html`.
 The iframe can use the injected task/project/tag APIs, dialog and notification APIs,
-navigation helpers, persistence helpers, registration helpers, counters, and action
-dispatch. APIs not injected into the iframe are unavailable, even if they exist on the
-host-side plugin bridge.
+navigation helpers, persistence helpers, counters, action dispatch, `registerHook()`,
+and `registerWorkContextHeaderButton()`. Callback-heavy registration methods such as
+`registerHeaderButton()`, `registerMenuEntry()`, `registerSidePanelButton()`,
+`registerShortcut()`, and `registerConfigHandler()` must be registered from
+host-side `plugin.js` code. APIs not injected into the iframe are unavailable, even if
+they exist on the host-side plugin bridge.
 
 `executeNodeScript()` is proxied through the host bridge for iframe plugins when
 the desktop app grants the plugin `nodeExecution` permission.

@@ -16,6 +16,7 @@ export interface PluginIframeConfig {
   baseCfg: PluginBaseCfg;
   pluginBridge: PluginBridgeService;
   bridgeToken: string;
+  bridgeGeneration: number;
   boundMethods?: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
 }
 
@@ -53,11 +54,6 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'persistDataSynced',
   'loadPersistedData',
   'registerHook',
-  'registerHeaderButton',
-  'registerMenuEntry',
-  'registerConfigHandler',
-  'registerShortcut',
-  'registerSidePanelButton',
   'registerWorkContextHeaderButton',
   'executeNodeScript',
   'dispatchAction',
@@ -237,6 +233,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
       (function() {
         let callId = 0;
         const bridgeToken = ${JSON.stringify(config.bridgeToken)};
+        const bridgeGeneration = ${JSON.stringify(config.bridgeGeneration)};
         const pendingCalls = new Map();
         const dialogButtonHandlers = new Map();
         const hookHandlers = new Map(); // Store hook handlers by hook type
@@ -274,6 +271,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
                   window.parent.postMessage({
                     type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
                     bridgeToken: bridgeToken,
+                    bridgeGeneration: bridgeGeneration,
                     dialogCallId: data.dialogCallId,
                     buttonIndex: data.buttonIndex,
                     result: result
@@ -283,6 +281,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
                   window.parent.postMessage({
                     type: '${PluginIframeMessageType.DIALOG_BUTTON_RESPONSE}',
                     bridgeToken: bridgeToken,
+                    bridgeGeneration: bridgeGeneration,
                     dialogCallId: data.dialogCallId,
                     buttonIndex: data.buttonIndex,
                     error: error instanceof Error ? error.message : 'Unknown dialog button error'
@@ -359,6 +358,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
             window.parent.postMessage({
               type: '${PluginIframeMessageType.API_CALL}',
               bridgeToken: bridgeToken,
+              bridgeGeneration: bridgeGeneration,
               method: method,
               args: processedArgs || [],
               callId: id
@@ -372,6 +372,12 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
               }
             }, 30000);
           });
+        }
+
+        function unsupportedIframeRegistration(method) {
+          return () => Promise.reject(
+            new Error(method + ' is only supported in plugin.js, not iframe index.html')
+          );
         }
 
         // Create the PluginAPI object with all methods
@@ -424,11 +430,11 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
 
           // Registration methods
           registerHook: (hook, handler) => callApi('registerHook', [hook, handler]),
-          registerHeaderButton: (cfg) => callApi('registerHeaderButton', [cfg]),
-          registerMenuEntry: (cfg) => callApi('registerMenuEntry', [cfg]),
-          registerConfigHandler: (handler) => callApi('registerConfigHandler', [handler]),
-          registerShortcut: (cfg) => callApi('registerShortcut', [cfg]),
-          registerSidePanelButton: (cfg) => callApi('registerSidePanelButton', [cfg]),
+          registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton'),
+          registerMenuEntry: unsupportedIframeRegistration('registerMenuEntry'),
+          registerConfigHandler: unsupportedIframeRegistration('registerConfigHandler'),
+          registerShortcut: unsupportedIframeRegistration('registerShortcut'),
+          registerSidePanelButton: unsupportedIframeRegistration('registerSidePanelButton'),
           registerWorkContextHeaderButton: (cfg) => {
             // onClick is not structured-cloneable across postMessage; keep it
             // locally, keyed by the button's label, and send the rest of the
@@ -511,6 +517,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         window.parent.postMessage({
           type: '${PluginIframeMessageType.READY}',
           bridgeToken: bridgeToken,
+          bridgeGeneration: bridgeGeneration,
           pluginId: '${config.pluginId}'
         }, '*');
       })();
@@ -753,6 +760,7 @@ export const handlePluginMessage = async (
                         if (
                           e.source === event.source &&
                           e.data?.bridgeToken === config.bridgeToken &&
+                          e.data?.bridgeGeneration === config.bridgeGeneration &&
                           e.data?.type ===
                             PluginIframeMessageType.DIALOG_BUTTON_RESPONSE &&
                           e.data?.dialogCallId === callId &&
@@ -856,5 +864,14 @@ const isValidBridgeMessage = (
   if (!hostHandledTypes.has(data.type)) {
     return true;
   }
-  return data.bridgeToken === config.bridgeToken;
+  if (data.type === PluginIframeMessageType.MESSAGE) {
+    // Legacy iframe UIs post raw plugin-to-plugin messages. PluginIndexComponent
+    // source-checks the mounted iframe and verifies the current bridge generation
+    // before calling into this handler.
+    return true;
+  }
+  return (
+    data.bridgeToken === config.bridgeToken &&
+    data.bridgeGeneration === config.bridgeGeneration
+  );
 };

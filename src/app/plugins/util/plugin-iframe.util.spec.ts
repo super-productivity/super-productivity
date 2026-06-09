@@ -32,6 +32,7 @@ describe('handlePluginMessage()', () => {
     } as PluginBaseCfg,
     pluginBridge,
     bridgeToken: 'test-bridge-token',
+    bridgeGeneration: 4,
     boundMethods: {} as ReturnType<
       typeof PluginBridgeService.prototype.createBoundMethods
     >,
@@ -59,6 +60,7 @@ describe('handlePluginMessage()', () => {
             data: {
               type: PluginIframeMessageType.DIALOG_BUTTON_RESPONSE,
               bridgeToken: 'test-bridge-token',
+              bridgeGeneration: 4,
               dialogCallId: 7,
               buttonIndex: 0,
               result: undefined,
@@ -76,6 +78,7 @@ describe('handlePluginMessage()', () => {
         data: {
           type: PluginIframeMessageType.API_CALL,
           bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
           method: 'openDialog',
           callId: 7,
           args: [
@@ -130,6 +133,7 @@ describe('handlePluginMessage()', () => {
             data: {
               type: PluginIframeMessageType.DIALOG_BUTTON_RESPONSE,
               bridgeToken: 'test-bridge-token',
+              bridgeGeneration: 4,
               dialogCallId: 8,
               buttonIndex: 0,
               error: 'Button failed',
@@ -145,6 +149,7 @@ describe('handlePluginMessage()', () => {
         data: {
           type: PluginIframeMessageType.API_CALL,
           bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
           method: 'openDialog',
           callId: 8,
           args: [
@@ -191,6 +196,7 @@ describe('handlePluginMessage()', () => {
             data: {
               type: PluginIframeMessageType.DIALOG_BUTTON_RESPONSE,
               bridgeToken: 'test-bridge-token',
+              bridgeGeneration: 3,
               dialogCallId: 10,
               buttonIndex: 0,
               result: 'spoofed',
@@ -203,6 +209,7 @@ describe('handlePluginMessage()', () => {
             data: {
               type: PluginIframeMessageType.DIALOG_BUTTON_RESPONSE,
               bridgeToken: 'test-bridge-token',
+              bridgeGeneration: 4,
               dialogCallId: 10,
               buttonIndex: 0,
               result: 'trusted',
@@ -219,6 +226,7 @@ describe('handlePluginMessage()', () => {
         data: {
           type: PluginIframeMessageType.API_CALL,
           bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
           method: 'openDialog',
           callId: 10,
           args: [
@@ -249,6 +257,10 @@ describe('handlePluginMessage()', () => {
     expect(script).toContain('.then(() => handler())');
     expect(script).toContain('Unknown dialog button error');
     expect(script).toContain('const bridgeToken = "test-bridge-token"');
+    expect(script).toContain('const bridgeGeneration = 4');
+    expect(script).toContain(
+      "registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton')",
+    );
   });
 
   it('keeps iframe plugins on an opaque sandbox origin', () => {
@@ -271,6 +283,7 @@ describe('handlePluginMessage()', () => {
         data: {
           type: PluginIframeMessageType.API_CALL,
           bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
           method: 'requestNodeExecutionGrant',
           callId: 9,
           args: ['sync-md'],
@@ -329,6 +342,82 @@ describe('handlePluginMessage()', () => {
     expect(sourceWindow.postMessage).not.toHaveBeenCalled();
   });
 
+  it('ignores iframe API calls from a stale bridge generation', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const pluginBridge = {
+      createBoundMethods: () => ({}),
+      getTasks: jasmine.createSpy('getTasks'),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 3,
+          method: 'getTasks',
+          callId: 13,
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(
+      (
+        pluginBridge as unknown as {
+          getTasks: jasmine.Spy;
+        }
+      ).getTasks,
+    ).not.toHaveBeenCalled();
+    expect(sourceWindow.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects raw iframe registration APIs that need callback proxying', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const pluginBridge = {
+      createBoundMethods: () => ({}),
+      registerHeaderButton: jasmine.createSpy('registerHeaderButton'),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'registerHeaderButton',
+          callId: 14,
+          args: [{ label: 'Run' }],
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(
+      (
+        pluginBridge as unknown as {
+          registerHeaderButton: jasmine.Spy;
+        }
+      ).registerHeaderButton,
+    ).not.toHaveBeenCalled();
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_ERROR,
+        callId: 14,
+        error: 'Unknown API method: registerHeaderButton',
+      },
+      '*',
+    );
+  });
+
   it('rejects raw iframe registerHook calls with legacy string handlers', async () => {
     const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
       'sourceWindow',
@@ -344,6 +433,7 @@ describe('handlePluginMessage()', () => {
         data: {
           type: PluginIframeMessageType.API_CALL,
           bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
           method: 'registerHook',
           callId: 11,
           args: ['TASK_UPDATE', '() => window.__unexpectedParentHandler = true'],
@@ -365,6 +455,47 @@ describe('handlePluginMessage()', () => {
         type: PluginIframeMessageType.API_ERROR,
         callId: 11,
         error: 'Iframe registerHook calls must use IFRAME_HANDLER',
+      },
+      '*',
+    );
+  });
+
+  it('forwards legacy iframe plugin messages without requiring a bridge token', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const pluginBridge = {
+      createBoundMethods: () => ({}),
+      sendMessageToPlugin: jasmine
+        .createSpy('sendMessageToPlugin')
+        .and.resolveTo({ ok: true }),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.MESSAGE,
+          messageId: 'msg-1',
+          message: { type: 'getConfig' },
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(
+      (
+        pluginBridge as unknown as {
+          sendMessageToPlugin: jasmine.Spy;
+        }
+      ).sendMessageToPlugin,
+    ).toHaveBeenCalledOnceWith('test-plugin', { type: 'getConfig' });
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.MESSAGE_RESPONSE,
+        messageId: 'msg-1',
+        result: { ok: true },
       },
       '*',
     );

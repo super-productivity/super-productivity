@@ -103,6 +103,7 @@ export class PluginService implements OnDestroy {
   private _pluginPaths: Map<string, string> = new Map(); // Store plugin ID -> path mapping
   private _pluginIndexHtml: Map<string, string> = new Map(); // Store plugin ID -> index.html content
   private _pluginIcons: Map<string, string> = new Map(); // Store plugin ID -> SVG icon content
+  private _pluginIframeGenerations: Map<string, number> = new Map();
   private _pluginIconsSignal = signal<Map<string, string>>(new Map());
 
   // Lazy loading state management
@@ -679,6 +680,7 @@ export class PluginService implements OnDestroy {
     const pluginId = instance.manifest.id;
     const errorMsg = error instanceof Error ? error.message : String(error);
     PluginLog.err(`onReady failed for plugin ${pluginId}:`, error);
+    this._bumpPluginIframeGeneration(pluginId);
 
     try {
       this._pluginRunner.unloadPlugin(pluginId);
@@ -996,6 +998,10 @@ export class PluginService implements OnDestroy {
 
   getPluginPath(pluginId: string): string | undefined {
     return this._pluginPaths.get(pluginId);
+  }
+
+  getPluginIframeGeneration(pluginId: string): number {
+    return this._pluginIframeGenerations.get(pluginId) ?? 0;
   }
 
   isInitialized(): boolean {
@@ -1591,6 +1597,8 @@ export class PluginService implements OnDestroy {
    * without changing isEnabled or _pluginStates. Used for re-upload and reload.
    */
   private _teardownPluginRuntime(pluginId: string): void {
+    this._bumpPluginIframeGeneration(pluginId);
+
     // Close the side panel if this plugin is active
     const activePluginId = this.getActiveSidePanelPluginId();
     if (activePluginId === pluginId) {
@@ -1620,6 +1628,13 @@ export class PluginService implements OnDestroy {
     // Best-effort and fire-and-forget because teardown is synchronous.
     void this._revokeNodeExecutionGrant(pluginId).catch((e) =>
       PluginLog.err(`Failed to revoke nodeExecution grant for ${pluginId}`, e),
+    );
+  }
+
+  private _bumpPluginIframeGeneration(pluginId: string): void {
+    this._pluginIframeGenerations.set(
+      pluginId,
+      this.getPluginIframeGeneration(pluginId) + 1,
     );
   }
 
