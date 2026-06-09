@@ -46,7 +46,7 @@ describe('sanitizePanelCfg', () => {
     expect('projectId' in out).toBe(false);
   });
 
-  it('canonicalizes projectIds containing "" to just [""]', () => {
+  it('deliberately drops specific IDs when "" co-occurs (lossy canonicalization)', () => {
     const out = sanitizePanelCfg({ ...basePanel, projectIds: ['', 'p1', 'p2'] } as any);
     expect(out.projectIds).toEqual(['']);
   });

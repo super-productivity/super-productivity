@@ -22,16 +22,19 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   // Migrate legacy `projectId` → `projectIds`.
   // Preference given to legacy `projectId` if present (even if `projectIds`
   // exists as [""] from overlaying DEFAULT_PANEL_CFG during migration).
-  if ((out as any).projectId !== undefined) {
+  // NOTE: This preference is deliberate to ensure we don't lose the user's
+  // choice if they had a specific project selected in an older version.
+  const legacyPanel = out as BoardPanelCfg & { projectId?: string };
+  if (legacyPanel.projectId !== undefined) {
     if (
       out.projectIds === undefined ||
       (Array.isArray(out.projectIds) &&
         out.projectIds.length === 1 &&
         out.projectIds[0] === '')
     ) {
-      out.projectIds = [(out as any).projectId || ''];
+      out.projectIds = [legacyPanel.projectId || ''];
     }
-    delete (out as any).projectId;
+    delete legacyPanel.projectId;
   }
 
   // Ensure `projectIds` is always an array (e.g. if loaded from older client
@@ -41,6 +44,8 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   }
 
   // Canonicalize any `projectIds` containing "" back to [""] (All Projects).
+  // This is lossy: if "" (All Projects) co-occurs with specific IDs, the specific IDs
+  // are dropped in favor of "All Projects".
   if (out.projectIds.includes('')) {
     out.projectIds = [''];
   }
