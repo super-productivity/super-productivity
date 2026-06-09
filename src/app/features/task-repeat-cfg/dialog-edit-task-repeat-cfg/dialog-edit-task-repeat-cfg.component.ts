@@ -179,6 +179,7 @@ export class DialogEditTaskRepeatCfgComponent {
           task: dummyTask,
           isSelectDueOnly: true,
           showQuickAccess: true,
+          isSubmitOnQuickAccess: false,
           targetDay: currentCfg.startDate || undefined,
           targetTime: hasValidTime ? currentCfg.startTime : undefined,
           minDate: null,

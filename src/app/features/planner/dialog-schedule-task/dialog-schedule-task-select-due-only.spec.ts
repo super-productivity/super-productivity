@@ -236,19 +236,33 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       expect(component.selectedDate).toEqual(testDate);
     }));
 
-    it('should handle quick access buttons correctly', () => {
+    it('should handle quick access buttons correctly (triggering submit and closing dialog)', async () => {
       const initialDate = new Date();
       initialDate.setMinutes(0, 0, 0);
 
       // Test "Today" button
-      component.onQuickAccessClick('today');
+      await component.onQuickAccessClick('today');
       expect(component.selectedDate).toEqual(initialDate);
+      expect(dialogRefSpy.close).toHaveBeenCalled();
+
+      dialogRefSpy.close.calls.reset();
 
       // Test "Tomorrow" button
       const tomorrow = new Date(initialDate);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      component.onQuickAccessClick('tomorrow');
+      await component.onQuickAccessClick('tomorrow');
       expect(component.selectedDate).toEqual(tomorrow);
+      expect(dialogRefSpy.close).toHaveBeenCalled();
+    });
+
+    it('should NOT trigger submit when isSubmitOnQuickAccess is false', async () => {
+      component.data.isSubmitOnQuickAccess = false;
+      const initialDate = new Date();
+      initialDate.setMinutes(0, 0, 0);
+
+      await component.onQuickAccessClick('today');
+      expect(component.selectedDate).toEqual(initialDate);
+      expect(dialogRefSpy.close).not.toHaveBeenCalled();
     });
   });
 

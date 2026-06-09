@@ -72,7 +72,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     targetTime?: string;
     isSelectDueOnly?: boolean;
     showQuickAccess?: boolean;
-    minDate?: Date;
+    minDate?: Date | null;
+    isSubmitOnQuickAccess?: boolean;
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogScheduleTaskComponent>>(MatDialogRef);
   private _cd = inject(ChangeDetectorRef);
@@ -442,7 +443,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         break;
     }
 
-    if (!this.data.isSelectDueOnly) {
+    if (this.data.isSubmitOnQuickAccess !== false) {
       this.submit();
     }
   }
