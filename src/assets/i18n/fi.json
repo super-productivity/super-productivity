@@ -1874,6 +1874,56 @@
         "ERR_CREDENTIALS_MISSING": "Syötä ensin Nextcloud-osoite, käyttäjänimi ja salasana.",
         "ERR_LOAD_BOARDS": "Deck-taulujen lataus epäonnistui. Tarkista tunnistetietosi."
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Isäntä (esim.: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Käyttäjänimi tai organisaation nimi/projekti",
+        "REPO_FULL_NAME_DESCRIPTION": "Löytyy osana URL-osoitetta, kun katsot projektia selaimessa.",
+        "SCOPE": "Laajuus",
+        "SCOPE_ALL": "Kaikki",
+        "SCOPE_ASSIGNED": "Minulle osoitetut",
+        "SCOPE_CREATED": "Minun luomat",
+        "TOKEN": "Käyttöoikeustunnus"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan avoimet Forgejo-ongelmat tietystä arkistosta tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin ongelmaan sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti lisätä ja tuoda kaikki avoimet ongelmat.</p><p>Käyttörajoitusten ja pääsyn saamiseksi voit antaa käyttöoikeustunnuksen."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Vastuuhenkilö",
+        "DESCRIPTION": "Kuvaus",
+        "LABELS": "Tunnisteet",
+        "MARK_AS_CHECKED": "Merkitse päivitykset tarkastetuiksi",
+        "PROJECT": "Projekti",
+        "STATUS": "Tila",
+        "SUMMARY": "Yhteenveto",
+        "WRITE_A_COMMENT": "Kirjoita kommentti"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Isäntä (esim.: https://codeberg.org)",
+        "REPO_FULL_NAME": "Käyttäjänimi tai organisaation nimi/projekti",
+        "REPO_FULL_NAME_DESCRIPTION": "Löytyy osana URL-osoitetta, kun katsot projektia selaimessa.",
+        "SCOPE": "Laajuus",
+        "SCOPE_ALL": "Kaikki",
+        "SCOPE_ASSIGNED": "Minulle osoitetut",
+        "SCOPE_CREATED": "Minun luomat",
+        "TOKEN": "Käyttöoikeustunnus"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan avoimet Codeberg-ongelmat tietystä arkistosta tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin ongelmaan sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti lisätä ja tuoda kaikki avoimet ongelmat.</p><p>Käyttörajoitusten ja pääsyn saamiseksi voit antaa käyttöoikeustunnuksen."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Vastuuhenkilö",
+        "DESCRIPTION": "Kuvaus",
+        "LABELS": "Tunnisteet",
+        "MARK_AS_CHECKED": "Merkitse päivitykset tarkastetuiksi",
+        "PROJECT": "Projekti",
+        "STATUS": "Tila",
+        "SUMMARY": "Yhteenveto",
+        "WRITE_A_COMMENT": "Kirjoita kommentti"
+      }
     }
   },
   "FILE_IMEX": {

@@ -1486,7 +1486,6 @@
         "LABEL": "Oznake"
       },
       "FORM_BASIC": {
-        "L_COLOR": "Ako nije postavljeno, koristi se primarna boja teme)",
         "L_COLOR": "Boja oznake",
         "L_ICON": "Ikona",
         "L_TITLE": "Ime oznake",
@@ -1986,6 +1985,64 @@
         "FOCUS_SUMMARY": "Sesije fokusa (broj / vrijeme)",
         "NO_DATA": "Još nema zadataka ovaj tjedan.",
         "TITLE": "Naslov"
+      }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Isključi oznake (opcionalno)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Popis imena oznaka odvojena zarezima. Zadaci koji imaju bilo koju od ovih oznaka će se isključiti.",
+        "FILTER_LABELS": "Filtriraj prema oznakama (opcionalno)",
+        "FILTER_LABELS_DESCRIPTION": "Popis imena oznaka odvojena zarezima. Sinkronizirat će se samo zadaci koji imaju sve ove oznake. Ostavi prazno za sinkronizaciju svih zadataka koji odgovaraju opsegu.",
+        "HOST": "Host (npr. https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Korisničko ime ili ime organizacije/repozitorija",
+        "REPO_FULL_NAME_DESCRIPTION": "Možeš ga vidjeti u URL-u kad otvoriš repozitorij u pregledniku.",
+        "SCOPE": "Opseg",
+        "SCOPE_ALL": "Sve",
+        "SCOPE_ASSIGNED": "Dodijeljeno meni",
+        "SCOPE_CREATED": "Stvoreno od mene",
+        "TOKEN": "Token za pristup"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Ovdje možeš podesiti Super Productivity da prikazuje otvorene Forgejo probleme za određeni repozitorij u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi i imat će poveznicu na problem kao i dodatne informacije.</p> <p>Također možeš automatski dodati i uvesti sve otvorene probleme.</p><p>Za izbjegavanja ograničenja i dobivanja pristupa, unesi token za pristup.</p>"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Dodijeljeno",
+        "DESCRIPTION": "Opis",
+        "LABELS": "Oznake",
+        "MARK_AS_CHECKED": "Označi aktualiziranja kao pregledana",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Sažetak",
+        "WRITE_A_COMMENT": "Napiši komentar"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Isključi oznake (opcionalno)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Popis imena oznaka odvojena zarezima. Zadaci koji imaju bilo koju od ovih oznaka će se isključiti.",
+        "FILTER_LABELS": "Filtriraj prema oznakama (opcionalno)",
+        "FILTER_LABELS_DESCRIPTION": "Popis imena oznaka odvojena zarezima. Sinkronizirat će se samo zadaci koji imaju sve ove oznake. Ostavi prazno za sinkronizaciju svih zadataka koji odgovaraju opsegu.",
+        "HOST": "Host (npr. https://codeberg.org)",
+        "REPO_FULL_NAME": "Korisničko ime ili ime organizacije/repozitorija",
+        "REPO_FULL_NAME_DESCRIPTION": "Možeš ga vidjeti u URL-u kad otvoriš repozitorij u pregledniku.",
+        "SCOPE": "Opseg",
+        "SCOPE_ALL": "Sve",
+        "SCOPE_ASSIGNED": "Dodijeljeno meni",
+        "SCOPE_CREATED": "Stvoreno od mene",
+        "TOKEN": "Token za pristup"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Ovdje možeš podesiti Super Productivity da prikazuje otvorene Codeberg probleme za određeni repozitorij u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi i imat će poveznicu na problem kao i dodatne informacije.</p> <p>Također možeš automatski dodati i uvesti sve otvorene probleme.</p><p>Za izbjegavanja ograničenja i dobivanja pristupa, unesi token za pristup.</p>"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Dodijeljeno",
+        "DESCRIPTION": "Opis",
+        "LABELS": "Oznake",
+        "MARK_AS_CHECKED": "Označi aktualiziranja kao pregledana",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Sažetak",
+        "WRITE_A_COMMENT": "Napiši komentar"
       }
     }
   },

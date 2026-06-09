@@ -2002,6 +2002,64 @@
       "PASTE_SUCCESS": "Immagine incollata con successo",
       "SIZE_EXCEEDED": "La dimensione dell'immagine ({{actualSize}}) supera la dimensione massima consentita ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Quota di archiviazione superata. Libera spazio o riduci le dimensioni delle immagini."
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Host (es.: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Username o nome Organizzazione/Progetto",
+        "REPO_FULL_NAME_DESCRIPTION": "Può essere trovata come parte dell'URL mentre visualizzi il progetto nel browser.",
+        "SCOPE": "Scopo",
+        "SCOPE_ALL": "Tutti",
+        "SCOPE_ASSIGNED": "Assegnate a me",
+        "SCOPE_CREATED": "Create da me",
+        "TOKEN": "Token di accesso",
+        "EXCLUDE_LABELS": "Escludi etichette (facoltativo)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Elenco di nomi di etichette separati da virgole. Le issue con una di queste etichette verranno escluse.",
+        "FILTER_LABELS": "Filtra per etichette (facoltativo)",
+        "FILTER_LABELS_DESCRIPTION": "Elenco di nomi di etichette separati da virgole. Verranno sincronizzate solo le issue con tutte queste etichette. Lascia vuoto per sincronizzare tutte le issue che corrispondono all'ambito."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Qui è possibile configurare SuperProductivity in modo che elenchi le issue aperte di Forgejo per uno specifico repository nel pannello di creazione delle attività nella vista di pianificazione giornaliera. Saranno elencati come suggerimenti e forniranno un link all'issue e ulteriori informazioni su di esso.</p> <p>Inoltre è possibile aggiungere e importare automaticamente tutte le issue aperte.</p><p>Per superare i limiti di utilizzo e accedere è possibile fornire un token di accesso."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Assegnatario",
+        "DESCRIPTION": "Descrizione",
+        "LABELS": "Etichette",
+        "MARK_AS_CHECKED": "Spunta gli aggiornamenti come verificati",
+        "PROJECT": "Progetto",
+        "STATUS": "Stato",
+        "SUMMARY": "Riepilogo",
+        "WRITE_A_COMMENT": "Scrivi un commento"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Host (es.: https://codeberg.org)",
+        "REPO_FULL_NAME": "Username o nome Organizzazione/Progetto",
+        "REPO_FULL_NAME_DESCRIPTION": "Può essere trovata come parte dell'URL mentre visualizzi il progetto nel browser.",
+        "SCOPE": "Scopo",
+        "SCOPE_ALL": "Tutti",
+        "SCOPE_ASSIGNED": "Assegnate a me",
+        "SCOPE_CREATED": "Create da me",
+        "TOKEN": "Token di accesso",
+        "EXCLUDE_LABELS": "Escludi etichette (facoltativo)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Elenco di nomi di etichette separati da virgole. Le issue con una di queste etichette verranno escluse.",
+        "FILTER_LABELS": "Filtra per etichette (facoltativo)",
+        "FILTER_LABELS_DESCRIPTION": "Elenco di nomi di etichette separati da virgole. Verranno sincronizzate solo le issue con tutte queste etichette. Lascia vuoto per sincronizzare tutte le issue che corrispondono all'ambito."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Qui è possibile configurare SuperProductivity in modo che elenchi le issue aperte di Codeberg per uno specifico repository nel pannello di creazione delle attività nella vista di pianificazione giornaliera. Saranno elencati come suggerimenti e forniranno un link all'issue e ulteriori informazioni su di esso.</p> <p>Inoltre è possibile aggiungere e importare automaticamente tutte le issue aperte.</p><p>Per superare i limiti di utilizzo e accedere è possibile fornire un token di accesso."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Assegnatario",
+        "DESCRIPTION": "Descrizione",
+        "LABELS": "Etichette",
+        "MARK_AS_CHECKED": "Spunta gli aggiornamenti come verificati",
+        "PROJECT": "Progetto",
+        "STATUS": "Stato",
+        "SUMMARY": "Riepilogo",
+        "WRITE_A_COMMENT": "Scrivi un commento"
+      }
     }
   },
   "FILE_IMEX": {

@@ -2147,6 +2147,64 @@
         "NO_DATA": "No tasks this week yet.",
         "TITLE": "Title"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Exclude labels (optional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Comma-separated list of label names. Issues carrying any of these labels will be excluded.",
+        "FILTER_LABELS": "Filter by labels (optional)",
+        "FILTER_LABELS_DESCRIPTION": "Comma-separated list of label names. Only issues carrying all of these labels will be synced. Leave empty to sync all issues matching the scope.",
+        "HOST": "Host (e.g. https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Username or Organization name/repository",
+        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the URL when viewing the repository in a web browser.",
+        "SCOPE": "Scope",
+        "SCOPE_ALL": "All",
+        "SCOPE_ASSIGNED": "Assigned to me",
+        "SCOPE_CREATED": "Created by me",
+        "TOKEN": "Access Token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Here you can configure Super Productivity to list open Forgejo issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and gain access, you can provide an access token."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Assignee",
+        "DESCRIPTION": "Description",
+        "LABELS": "Labels",
+        "MARK_AS_CHECKED": "Mark updates as checked",
+        "PROJECT": "Project",
+        "STATUS": "Status",
+        "SUMMARY": "Summary",
+        "WRITE_A_COMMENT": "Write a comment"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Exclude labels (optional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Comma-separated list of label names. Issues carrying any of these labels will be excluded.",
+        "FILTER_LABELS": "Filter by labels (optional)",
+        "FILTER_LABELS_DESCRIPTION": "Comma-separated list of label names. Only issues carrying all of these labels will be synced. Leave empty to sync all issues matching the scope.",
+        "HOST": "Host (e.g. https://codeberg.org)",
+        "REPO_FULL_NAME": "Username or Organization name/repository",
+        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the URL when viewing the repository in a web browser.",
+        "SCOPE": "Scope",
+        "SCOPE_ALL": "All",
+        "SCOPE_ASSIGNED": "Assigned to me",
+        "SCOPE_CREATED": "Created by me",
+        "TOKEN": "Access Token"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Here you can configure Super Productivity to list open Codeberg issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and gain access, you can provide an access token."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Assignee",
+        "DESCRIPTION": "Description",
+        "LABELS": "Labels",
+        "MARK_AS_CHECKED": "Mark updates as checked",
+        "PROJECT": "Project",
+        "STATUS": "Status",
+        "SUMMARY": "Summary",
+        "WRITE_A_COMMENT": "Write a comment"
+      }
     }
   },
   "FILE_IMEX": {

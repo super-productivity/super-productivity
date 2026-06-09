@@ -9,6 +9,8 @@ import { JIRA_ISSUE_CONTENT_CONFIG } from '../providers/jira/jira-issue-content.
 import { GITLAB_ISSUE_CONTENT_CONFIG } from '../providers/gitlab/gitlab-issue-content.const';
 import { CALDAV_ISSUE_CONTENT_CONFIG } from '../providers/caldav/caldav-issue-content.const';
 import { GITEA_ISSUE_CONTENT_CONFIG } from '../providers/gitea/gitea-issue-content.const';
+import { FORGEJO_ISSUE_CONTENT_CONFIG } from '../providers/forgejo/forgejo-issue-content.const';
+import { CODEBERG_ISSUE_CONTENT_CONFIG } from '../providers/codeberg/codeberg-issue-content.const';
 import { REDMINE_ISSUE_CONTENT_CONFIG } from '../providers/redmine/redmine-issue-content.const';
 import { OPEN_PROJECT_ISSUE_CONTENT_CONFIG } from '../providers/open-project/open-project-issue-content.const';
 import { TRELLO_ISSUE_CONTENT_CONFIG } from '../providers/trello/trello-issue-content.const';
@@ -27,6 +29,8 @@ export const ISSUE_CONTENT_CONFIGS: Record<
   JIRA: JIRA_ISSUE_CONTENT_CONFIG,
   CALDAV: CALDAV_ISSUE_CONTENT_CONFIG,
   GITEA: GITEA_ISSUE_CONTENT_CONFIG,
+  FORGEJO: FORGEJO_ISSUE_CONTENT_CONFIG,
+  CODEBERG: CODEBERG_ISSUE_CONTENT_CONFIG,
   REDMINE: REDMINE_ISSUE_CONTENT_CONFIG,
   OPEN_PROJECT: OPEN_PROJECT_ISSUE_CONTENT_CONFIG,
   TRELLO: TRELLO_ISSUE_CONTENT_CONFIG,

@@ -2084,6 +2084,64 @@
         "NO_DATA": "Noch keine Aufgaben in dieser Woche.",
         "TITLE": "Titel"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Labels ausschließen (optional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Kommagetrennte Liste von Labelnamen. Issues mit einem dieser Labels werden ausgeschlossen.",
+        "FILTER_LABELS": "Nach Labels filtern (optional)",
+        "FILTER_LABELS_DESCRIPTION": "Kommagetrennte Liste von Labelnamen. Nur Issues mit allen diesen Labels werden synchronisiert. Leer lassen, um alle Issues im gewählten Bereich zu synchronisieren.",
+        "HOST": "Host (z. B. : https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Benutzername oder Organisationsname/Projekt",
+        "REPO_FULL_NAME_DESCRIPTION": "Kann als Teil der URL gefunden werden, wenn das Projekt im Browser angezeigt wird.",
+        "SCOPE": "Umfang",
+        "SCOPE_ALL": "Alle",
+        "SCOPE_ASSIGNED": "Mir zugewiesen",
+        "SCOPE_CREATED": "Von mir erstellt",
+        "TOKEN": "Zugangstoken"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Hier kannst du SuperProductivity so konfigurieren, dass offene Forgejo-Issues für ein bestimmtes Repository im Aufgabenerstellungsfenster in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu.</p><p> Darüber hinaus kannst du alle offenen Issues automatisch hinzufügen und importieren.</p><p> Um Nutzungsbeschränkungen zu umgehen und Zugriff zu erhalten, kannst du ein Zugriffstoken bereitstellen."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Bearbeiter",
+        "DESCRIPTION": "Beschreibung",
+        "LABELS": "Labels",
+        "MARK_AS_CHECKED": "Aktualisierungen als geprüft markieren",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Zusammenfassung",
+        "WRITE_A_COMMENT": "Schreibe einen Kommentar"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Labels ausschließen (optional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Kommagetrennte Liste von Labelnamen. Issues mit einem dieser Labels werden ausgeschlossen.",
+        "FILTER_LABELS": "Nach Labels filtern (optional)",
+        "FILTER_LABELS_DESCRIPTION": "Kommagetrennte Liste von Labelnamen. Nur Issues mit allen diesen Labels werden synchronisiert. Leer lassen, um alle Issues im gewählten Bereich zu synchronisieren.",
+        "HOST": "Host (z. B. : https://codeberg.org)",
+        "REPO_FULL_NAME": "Benutzername oder Organisationsname/Projekt",
+        "REPO_FULL_NAME_DESCRIPTION": "Kann als Teil der URL gefunden werden, wenn das Projekt im Browser angezeigt wird.",
+        "SCOPE": "Umfang",
+        "SCOPE_ALL": "Alle",
+        "SCOPE_ASSIGNED": "Mir zugewiesen",
+        "SCOPE_CREATED": "Von mir erstellt",
+        "TOKEN": "Zugangstoken"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Hier kannst du SuperProductivity so konfigurieren, dass offene Codeberg-Issues für ein bestimmtes Repository im Aufgabenerstellungsfenster in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu.</p><p> Darüber hinaus kannst du alle offenen Issues automatisch hinzufügen und importieren.</p><p> Um Nutzungsbeschränkungen zu umgehen und Zugriff zu erhalten, kannst du ein Zugriffstoken bereitstellen."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Bearbeiter",
+        "DESCRIPTION": "Beschreibung",
+        "LABELS": "Labels",
+        "MARK_AS_CHECKED": "Aktualisierungen als geprüft markieren",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Zusammenfassung",
+        "WRITE_A_COMMENT": "Schreibe einen Kommentar"
+      }
     }
   },
   "FILE_IMEX": {

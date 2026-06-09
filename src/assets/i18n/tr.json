@@ -2035,6 +2035,64 @@
         "NO_DATA": "Henüz bu haftanın görevleri yok.",
         "TITLE": "Başlık"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Etiketleri hariç tut (isteğe bağlı)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Virgülle ayrılmış etiket adları listesi. Bu etiketlerden herhangi birini taşıyan konular hariç tutulur.",
+        "FILTER_LABELS": "Etiketlere göre filtrele (isteğe bağlı)",
+        "FILTER_LABELS_DESCRIPTION": "Virgülle ayrılmış etiket adları listesi. Yalnızca bu etiketlerin tümünü taşıyan konular eşitlenir. Kapsama uyan tüm konuları eşitlemek için boş bırakın.",
+        "HOST": "Sağlayıcı (örneğin: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Kullanıcı adı veya Organizasyon adı/projesi",
+        "REPO_FULL_NAME_DESCRIPTION": "Projeyi Tarayıcıda görüntülerken URL'nin bir parçası olarak bulunabilir.",
+        "SCOPE": "Kapsam",
+        "SCOPE_ALL": "Hepsi",
+        "SCOPE_ASSIGNED": "Bana atanan",
+        "SCOPE_CREATED": "Benim tarafımdan oluşturuldu",
+        "TOKEN": "Erişim Jetonu"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Burada SuperProductivity'yi, günlük planlama görünümündeki görev oluşturma panelinde belirli bir depo için açık Forgejo sorunlarını listeleyecek şekilde yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili bir bağlantının yanı sıra konuyla ilgili daha fazla bilgi sağlayacaklar.</p> <p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listenize ekleyebilir ve senkronize edebilirsiniz.</p><p>Kullanım sınırlarını aşmak ve erişim sağlamak için bir erişim jetonu sağlayabilirsiniz."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Atanan",
+        "DESCRIPTION": "Açıklama",
+        "LABELS": "Etiketler",
+        "MARK_AS_CHECKED": "Güncellemeleri kontrol edildi olarak işaretle",
+        "PROJECT": "Proje",
+        "STATUS": "Durum",
+        "SUMMARY": "Özet",
+        "WRITE_A_COMMENT": "Yorum yaz"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Etiketleri hariç tut (isteğe bağlı)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Virgülle ayrılmış etiket adları listesi. Bu etiketlerden herhangi birini taşıyan konular hariç tutulur.",
+        "FILTER_LABELS": "Etiketlere göre filtrele (isteğe bağlı)",
+        "FILTER_LABELS_DESCRIPTION": "Virgülle ayrılmış etiket adları listesi. Yalnızca bu etiketlerin tümünü taşıyan konular eşitlenir. Kapsama uyan tüm konuları eşitlemek için boş bırakın.",
+        "HOST": "Sağlayıcı (örneğin: https://codeberg.org)",
+        "REPO_FULL_NAME": "Kullanıcı adı veya Organizasyon adı/projesi",
+        "REPO_FULL_NAME_DESCRIPTION": "Projeyi Tarayıcıda görüntülerken URL'nin bir parçası olarak bulunabilir.",
+        "SCOPE": "Kapsam",
+        "SCOPE_ALL": "Hepsi",
+        "SCOPE_ASSIGNED": "Bana atanan",
+        "SCOPE_CREATED": "Benim tarafımdan oluşturuldu",
+        "TOKEN": "Erişim Jetonu"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Burada SuperProductivity'yi, günlük planlama görünümündeki görev oluşturma panelinde belirli bir depo için açık Codeberg sorunlarını listeleyecek şekilde yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili bir bağlantının yanı sıra konuyla ilgili daha fazla bilgi sağlayacaklar.</p> <p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listenize ekleyebilir ve senkronize edebilirsiniz.</p><p>Kullanım sınırlarını aşmak ve erişim sağlamak için bir erişim jetonu sağlayabilirsiniz."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Atanan",
+        "DESCRIPTION": "Açıklama",
+        "LABELS": "Etiketler",
+        "MARK_AS_CHECKED": "Güncellemeleri kontrol edildi olarak işaretle",
+        "PROJECT": "Proje",
+        "STATUS": "Durum",
+        "SUMMARY": "Özet",
+        "WRITE_A_COMMENT": "Yorum yaz"
+      }
     }
   },
   "FILE_IMEX": {

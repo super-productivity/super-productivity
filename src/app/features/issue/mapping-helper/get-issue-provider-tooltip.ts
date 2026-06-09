@@ -57,6 +57,10 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
         return issueProvider.project;
       case 'GITEA':
         return issueProvider.repoFullname;
+      case 'FORGEJO':
+        return issueProvider.repoFullname;
+      case 'CODEBERG':
+        return issueProvider.repoFullname;
       case 'CALDAV':
         return issueProvider.caldavUrl;
       case 'ICAL':
@@ -140,6 +144,10 @@ export const getIssueProviderInitials = (
     case 'GITLAB':
       return getRepoInitials(issueProvider.project);
     case 'GITEA':
+      return getRepoInitials(issueProvider.repoFullname);
+    case 'FORGEJO':
+      return getRepoInitials(issueProvider.repoFullname);
+    case 'CODEBERG':
       return getRepoInitials(issueProvider.repoFullname);
     case 'TRELLO':
       return (issueProvider.boardName || issueProvider.boardId)

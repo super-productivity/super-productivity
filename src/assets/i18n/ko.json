@@ -1986,6 +1986,64 @@
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "닫기",
       "MSG": "회고 노트: ({{date}}): {{content}}"
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "호스트(예: https://forgejo.example.org)",
+        "REPO_FULL_NAME": "사용자 이름 또는 조직 이름/프로젝트",
+        "REPO_FULL_NAME_DESCRIPTION": "브라우저에서 프로젝트를 볼 때 URL의 일부로 찾을 수 있습니다.",
+        "SCOPE": "범위",
+        "SCOPE_ALL": "모두",
+        "SCOPE_ASSIGNED": "나에게 할당됨",
+        "SCOPE_CREATED": "작성자: 나",
+        "TOKEN": "액세스 토큰",
+        "EXCLUDE_LABELS": "라벨 제외(선택 사항)",
+        "EXCLUDE_LABELS_DESCRIPTION": "쉼표로 구분된 라벨 이름 목록입니다. 이 라벨 중 하나라도 있는 이슈는 제외됩니다.",
+        "FILTER_LABELS": "라벨로 필터링(선택 사항)",
+        "FILTER_LABELS_DESCRIPTION": "쉼표로 구분된 라벨 이름 목록입니다. 이 라벨을 모두 가진 이슈만 동기화됩니다. 비워 두면 범위와 일치하는 모든 이슈를 동기화합니다."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>여기에서 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대해 열려 있는 Forgejo 이슈를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이슈는 제안 사항으로 나열되며 이슈에 대한 링크와 자세한 정보를 제공합니다.</p> <p>또한 열려 있는 모든 이슈를 자동으로 추가하고 가져올 수 있습니다.</p><p>사용량 제한을 통과하고 액세스하려면 액세스 토큰을 제공할 수 있습니다."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "담당자",
+        "DESCRIPTION": "설명",
+        "LABELS": "레이블",
+        "MARK_AS_CHECKED": "업데이트 확인됨으로 표시",
+        "PROJECT": "프로젝트",
+        "STATUS": "상태",
+        "SUMMARY": "요약",
+        "WRITE_A_COMMENT": "댓글 작성"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "호스트(예: https://codeberg.org)",
+        "REPO_FULL_NAME": "사용자 이름 또는 조직 이름/프로젝트",
+        "REPO_FULL_NAME_DESCRIPTION": "브라우저에서 프로젝트를 볼 때 URL의 일부로 찾을 수 있습니다.",
+        "SCOPE": "범위",
+        "SCOPE_ALL": "모두",
+        "SCOPE_ASSIGNED": "나에게 할당됨",
+        "SCOPE_CREATED": "작성자: 나",
+        "TOKEN": "액세스 토큰",
+        "EXCLUDE_LABELS": "라벨 제외(선택 사항)",
+        "EXCLUDE_LABELS_DESCRIPTION": "쉼표로 구분된 라벨 이름 목록입니다. 이 라벨 중 하나라도 있는 이슈는 제외됩니다.",
+        "FILTER_LABELS": "라벨로 필터링(선택 사항)",
+        "FILTER_LABELS_DESCRIPTION": "쉼표로 구분된 라벨 이름 목록입니다. 이 라벨을 모두 가진 이슈만 동기화됩니다. 비워 두면 범위와 일치하는 모든 이슈를 동기화합니다."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>여기에서 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대해 열려 있는 Codeberg 이슈를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이슈는 제안 사항으로 나열되며 이슈에 대한 링크와 자세한 정보를 제공합니다.</p> <p>또한 열려 있는 모든 이슈를 자동으로 추가하고 가져올 수 있습니다.</p><p>사용량 제한을 통과하고 액세스하려면 액세스 토큰을 제공할 수 있습니다."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "담당자",
+        "DESCRIPTION": "설명",
+        "LABELS": "레이블",
+        "MARK_AS_CHECKED": "업데이트 확인됨으로 표시",
+        "PROJECT": "프로젝트",
+        "STATUS": "상태",
+        "SUMMARY": "요약",
+        "WRITE_A_COMMENT": "댓글 작성"
+      }
     }
   },
   "FILE_IMEX": {

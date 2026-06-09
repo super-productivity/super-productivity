@@ -198,6 +198,8 @@ export class GlobalThemeService {
       ['open_project', 'assets/icons/open-project.svg'],
       ['remove_today', 'assets/icons/remove-today-48px.svg'],
       ['gitea', 'assets/icons/gitea.svg'],
+      ['forgejo', 'assets/icons/forgejo.svg'],
+      ['codeberg', 'assets/icons/codeberg.svg'],
       ['redmine', 'assets/icons/redmine.svg'],
       ['linear', 'assets/icons/linear.svg'],
       ['clickup', 'assets/icons/clickup.svg'],

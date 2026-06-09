@@ -1984,6 +1984,64 @@
         "NO_DATA": "Brak zadań w tym tygodniu.",
         "TITLE": "Tytuł"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "Host (np. https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Nazwa użytkownika lub nazwa organizacji/projektu",
+        "REPO_FULL_NAME_DESCRIPTION": "Można go znaleźć jako część adresu URL podczas przeglądania projektu w przeglądarce.",
+        "SCOPE": "Zakres",
+        "SCOPE_ALL": "Wszystkie",
+        "SCOPE_ASSIGNED": "Przydzielony do mnie",
+        "SCOPE_CREATED": "Stworzony przeze mnie",
+        "TOKEN": "Token dostępu",
+        "EXCLUDE_LABELS": "Wyklucz etykiety (opcjonalnie)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Rozdzielona przecinkami lista nazw etykiet. Zgłoszenia z dowolną z tych etykiet zostaną wykluczone.",
+        "FILTER_LABELS": "Filtruj według etykiet (opcjonalnie)",
+        "FILTER_LABELS_DESCRIPTION": "Rozdzielona przecinkami lista nazw etykiet. Synchronizowane będą tylko zgłoszenia ze wszystkimi tymi etykietami. Pozostaw puste, aby synchronizować wszystkie zgłoszenia pasujące do zakresu."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tutaj można skonfigurować SuperProductivity tak, aby wyświetlał listę otwartych zgłoszeń Forgejo dla określonego repozytorium w panelu tworzenia zadań w widoku planowania dziennego. Będą one wyświetlane jako sugestie i będą zawierać link do zgłoszenia oraz więcej informacji na jego temat.</p> <p>Ponadto możesz automatycznie dodawać i importować wszystkie otwarte zgłoszenia.</p><p>Aby ominąć limity użytkowania i uzyskać dostęp, możesz podać token dostępu."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Odbiorca",
+        "DESCRIPTION": "Opis",
+        "LABELS": "Etykiety",
+        "MARK_AS_CHECKED": "Oznaczanie aktualizacji jako sprawdzonych",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Podsumowanie",
+        "WRITE_A_COMMENT": "Napisz komentarz"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "Host (np. https://codeberg.org)",
+        "REPO_FULL_NAME": "Nazwa użytkownika lub nazwa organizacji/projektu",
+        "REPO_FULL_NAME_DESCRIPTION": "Można go znaleźć jako część adresu URL podczas przeglądania projektu w przeglądarce.",
+        "SCOPE": "Zakres",
+        "SCOPE_ALL": "Wszystkie",
+        "SCOPE_ASSIGNED": "Przydzielony do mnie",
+        "SCOPE_CREATED": "Stworzony przeze mnie",
+        "TOKEN": "Token dostępu",
+        "EXCLUDE_LABELS": "Wyklucz etykiety (opcjonalnie)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Rozdzielona przecinkami lista nazw etykiet. Zgłoszenia z dowolną z tych etykiet zostaną wykluczone.",
+        "FILTER_LABELS": "Filtruj według etykiet (opcjonalnie)",
+        "FILTER_LABELS_DESCRIPTION": "Rozdzielona przecinkami lista nazw etykiet. Synchronizowane będą tylko zgłoszenia ze wszystkimi tymi etykietami. Pozostaw puste, aby synchronizować wszystkie zgłoszenia pasujące do zakresu."
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Tutaj można skonfigurować SuperProductivity tak, aby wyświetlał listę otwartych zgłoszeń Codeberg dla określonego repozytorium w panelu tworzenia zadań w widoku planowania dziennego. Będą one wyświetlane jako sugestie i będą zawierać link do zgłoszenia oraz więcej informacji na jego temat.</p> <p>Ponadto możesz automatycznie dodawać i importować wszystkie otwarte zgłoszenia.</p><p>Aby ominąć limity użytkowania i uzyskać dostęp, możesz podać token dostępu."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Odbiorca",
+        "DESCRIPTION": "Opis",
+        "LABELS": "Etykiety",
+        "MARK_AS_CHECKED": "Oznaczanie aktualizacji jako sprawdzonych",
+        "PROJECT": "Projekt",
+        "STATUS": "Status",
+        "SUMMARY": "Podsumowanie",
+        "WRITE_A_COMMENT": "Napisz komentarz"
+      }
     }
   },
   "FILE_IMEX": {

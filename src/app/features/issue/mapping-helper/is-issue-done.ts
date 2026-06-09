@@ -15,6 +15,16 @@ export const isIssueDone = (searchResultItem: SearchResultItem): boolean => {
         (searchResultItem as SearchResultItem<'GITEA'>).issueData.state,
       );
 
+    case 'FORGEJO':
+      return ISSUE_DONE_STATE_NAME_GUESSES.includes(
+        (searchResultItem as SearchResultItem<'FORGEJO'>).issueData.state,
+      );
+
+    case 'CODEBERG':
+      return ISSUE_DONE_STATE_NAME_GUESSES.includes(
+        (searchResultItem as SearchResultItem<'CODEBERG'>).issueData.state,
+      );
+
     case 'JIRA':
       return ISSUE_DONE_STATE_NAME_GUESSES.includes(
         (searchResultItem as SearchResultItem<'JIRA'>).issueData.status?.name,

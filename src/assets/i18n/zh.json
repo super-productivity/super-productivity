@@ -2002,6 +2002,64 @@
         "ERR_CREDENTIALS_MISSING": "请先输入 Nextcloud URL、用户名和密码。",
         "ERR_LOAD_BOARDS": "加载 Deck 看板失败。请检查您的凭据。"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "主机（例如：https://forgejo.example.org）",
+        "REPO_FULL_NAME": "用户名或组织名称/项目",
+        "REPO_FULL_NAME_DESCRIPTION": "在浏览器中查看项目时，可以找到作为 URL 的一部分。",
+        "SCOPE": "范围",
+        "SCOPE_ALL": "全部",
+        "SCOPE_ASSIGNED": "分配给我",
+        "SCOPE_CREATED": "由我创建",
+        "TOKEN": "访问令牌",
+        "EXCLUDE_LABELS": "排除标签（可选）",
+        "EXCLUDE_LABELS_DESCRIPTION": "用逗号分隔的标签名称列表。带有其中任一标签的议题将被排除。",
+        "FILTER_LABELS": "按标签筛选（可选）",
+        "FILTER_LABELS_DESCRIPTION": "用逗号分隔的标签名称列表。仅同步带有所有这些标签的议题。留空则同步范围内的所有议题。"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定存储库的未结 Forgejo 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加和导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "负责人",
+        "DESCRIPTION": "描述",
+        "LABELS": "标签",
+        "MARK_AS_CHECKED": "将更新标记为已检查",
+        "PROJECT": "项目",
+        "STATUS": "状态",
+        "SUMMARY": "摘要",
+        "WRITE_A_COMMENT": "写评论"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "主机（例如：https://codeberg.org）",
+        "REPO_FULL_NAME": "用户名或组织名称/项目",
+        "REPO_FULL_NAME_DESCRIPTION": "在浏览器中查看项目时，可以找到作为 URL 的一部分。",
+        "SCOPE": "范围",
+        "SCOPE_ALL": "全部",
+        "SCOPE_ASSIGNED": "分配给我",
+        "SCOPE_CREATED": "由我创建",
+        "TOKEN": "访问令牌",
+        "EXCLUDE_LABELS": "排除标签（可选）",
+        "EXCLUDE_LABELS_DESCRIPTION": "用逗号分隔的标签名称列表。带有其中任一标签的议题将被排除。",
+        "FILTER_LABELS": "按标签筛选（可选）",
+        "FILTER_LABELS_DESCRIPTION": "用逗号分隔的标签名称列表。仅同步带有所有这些标签的议题。留空则同步范围内的所有议题。"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定存储库的未结 Codeberg 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加和导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "负责人",
+        "DESCRIPTION": "描述",
+        "LABELS": "标签",
+        "MARK_AS_CHECKED": "将更新标记为已检查",
+        "PROJECT": "项目",
+        "STATUS": "状态",
+        "SUMMARY": "摘要",
+        "WRITE_A_COMMENT": "写评论"
+      }
     }
   },
   "FILE_IMEX": {

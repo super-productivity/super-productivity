@@ -1988,6 +1988,64 @@
         "NO_DATA": "Nu există sarcini pentru această săptămână încă.",
         "TITLE": "Titlu"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Exclude etichetele (opțional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Listă separată de virgule de nume de etichete. Problemele care conțin oricare dintre aceste etichete vor fi excluse.",
+        "FILTER_LABELS": "Filtrează după etichete (opțional)",
+        "FILTER_LABELS_DESCRIPTION": "Listă separată de virgule de nume de etichete. Doar problemele care conțin toate aceste etichete vor fi sincronizate. Lasă gol pentru a sincroniza toate problemele care se potrivesc cu domeniul de aplicare.",
+        "HOST": "Gazdă (d.e. https://forgejo.example.org)",
+        "REPO_FULL_NAME": "Nume utilizator sau nume organizație/proiect",
+        "REPO_FULL_NAME_DESCRIPTION": "Poate fi găsit ca parte a URL-ului când vizualizezi proiectul într-un navigator web.",
+        "SCOPE": "Domeniu de aplicare",
+        "SCOPE_ALL": "Toate",
+        "SCOPE_ASSIGNED": "Atribuite mie",
+        "SCOPE_CREATED": "Create de mine",
+        "TOKEN": "Jeton de acces"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aici poți configura Super Productivity pentru a lista problemele deschise pe Forgejo pentru un repository specific în panoul de creare a sarcinilor în modul de planificare zilnic. Acestea vor fi listate ca sugestii și vor conține o legătură către problemă și mai multe informații despre acesta.</p> <p>În plus, poți adăuga și importa automat toate problemele deschise.</p><p>Pentru a fenta limitele de utilizare și acces, poți folosi un jeton de acces."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Asignat lui",
+        "DESCRIPTION": "Descriere",
+        "LABELS": "Etichete",
+        "MARK_AS_CHECKED": "Marchează actualizările ca bifate",
+        "PROJECT": "Proiect",
+        "STATUS": "Stare",
+        "SUMMARY": "Sumar",
+        "WRITE_A_COMMENT": "Scrie un comentariu"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "EXCLUDE_LABELS": "Exclude etichetele (opțional)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Listă separată de virgule de nume de etichete. Problemele care conțin oricare dintre aceste etichete vor fi excluse.",
+        "FILTER_LABELS": "Filtrează după etichete (opțional)",
+        "FILTER_LABELS_DESCRIPTION": "Listă separată de virgule de nume de etichete. Doar problemele care conțin toate aceste etichete vor fi sincronizate. Lasă gol pentru a sincroniza toate problemele care se potrivesc cu domeniul de aplicare.",
+        "HOST": "Gazdă (d.e. https://codeberg.org)",
+        "REPO_FULL_NAME": "Nume utilizator sau nume organizație/proiect",
+        "REPO_FULL_NAME_DESCRIPTION": "Poate fi găsit ca parte a URL-ului când vizualizezi proiectul într-un navigator web.",
+        "SCOPE": "Domeniu de aplicare",
+        "SCOPE_ALL": "Toate",
+        "SCOPE_ASSIGNED": "Atribuite mie",
+        "SCOPE_CREATED": "Create de mine",
+        "TOKEN": "Jeton de acces"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>Aici poți configura Super Productivity pentru a lista problemele deschise pe Codeberg pentru un repository specific în panoul de creare a sarcinilor în modul de planificare zilnic. Acestea vor fi listate ca sugestii și vor conține o legătură către problemă și mai multe informații despre acesta.</p> <p>În plus, poți adăuga și importa automat toate problemele deschise.</p><p>Pentru a fenta limitele de utilizare și acces, poți folosi un jeton de acces."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "Asignat lui",
+        "DESCRIPTION": "Descriere",
+        "LABELS": "Etichete",
+        "MARK_AS_CHECKED": "Marchează actualizările ca bifate",
+        "PROJECT": "Proiect",
+        "STATUS": "Stare",
+        "SUMMARY": "Sumar",
+        "WRITE_A_COMMENT": "Scrie un comentariu"
+      }
     }
   },
   "FILE_IMEX": {

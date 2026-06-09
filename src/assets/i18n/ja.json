@@ -1997,6 +1997,64 @@
         "ERR_CREDENTIALS_MISSING": "Nextcloud URL、ユーザー名、パスワードを先に入力してください。",
         "ERR_LOAD_BOARDS": "デッキボードの読み込みに失敗しました。認証情報を確認してください。"
       }
+    },
+    "FORGEJO": {
+      "FORM": {
+        "HOST": "ホスト (例:https://forgejo.example.org)",
+        "REPO_FULL_NAME": "ユーザー名または組織名/プロジェクト名",
+        "REPO_FULL_NAME_DESCRIPTION": "ブラウザでプロジェクトを表示するときに、URL の一部として見つかります。",
+        "SCOPE": "範囲",
+        "SCOPE_ALL": "全て",
+        "SCOPE_ASSIGNED": "私に割り当てられた",
+        "SCOPE_CREATED": "私が作った",
+        "TOKEN": "アクセストークン",
+        "EXCLUDE_LABELS": "ラベルを除外（任意）",
+        "EXCLUDE_LABELS_DESCRIPTION": "カンマ区切りのラベル名リストです。これらのいずれかのラベルが付いた課題は除外されます。",
+        "FILTER_LABELS": "ラベルで絞り込み（任意）",
+        "FILTER_LABELS_DESCRIPTION": "カンマ区切りのラベル名リストです。これらすべてのラベルが付いた課題のみ同期されます。空のままにすると、範囲に一致するすべての課題を同期します。"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>ここで SuperProductivity を設定し、日次計画ビューのタスク作成パネルで特定のリポジトリに対して未解決の Forgejo 課題を一覧表示させることができます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報が提供されます。</p> <p>さらに、すべてのオープン課題を自動的に追加してインポートすることもできます。</p><p>利用制限を通過してアクセスするには、アクセストークンを提供することができます。"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "譲受人",
+        "DESCRIPTION": "説明",
+        "LABELS": "ラベル",
+        "MARK_AS_CHECKED": "更新をチェック済みとしてマーク",
+        "PROJECT": "プロジェクト",
+        "STATUS": "ステータス",
+        "SUMMARY": "概要",
+        "WRITE_A_COMMENT": "コメントを書く"
+      }
+    },
+    "CODEBERG": {
+      "FORM": {
+        "HOST": "ホスト (例:https://codeberg.org)",
+        "REPO_FULL_NAME": "ユーザー名または組織名/プロジェクト名",
+        "REPO_FULL_NAME_DESCRIPTION": "ブラウザでプロジェクトを表示するときに、URL の一部として見つかります。",
+        "SCOPE": "範囲",
+        "SCOPE_ALL": "全て",
+        "SCOPE_ASSIGNED": "私に割り当てられた",
+        "SCOPE_CREATED": "私が作った",
+        "TOKEN": "アクセストークン",
+        "EXCLUDE_LABELS": "ラベルを除外（任意）",
+        "EXCLUDE_LABELS_DESCRIPTION": "カンマ区切りのラベル名リストです。これらのいずれかのラベルが付いた課題は除外されます。",
+        "FILTER_LABELS": "ラベルで絞り込み（任意）",
+        "FILTER_LABELS_DESCRIPTION": "カンマ区切りのラベル名リストです。これらすべてのラベルが付いた課題のみ同期されます。空のままにすると、範囲に一致するすべての課題を同期します。"
+      },
+      "FORM_SECTION": {
+        "HELP": "<p>ここで SuperProductivity を設定し、日次計画ビューのタスク作成パネルで特定のリポジトリに対して未解決の Codeberg 課題を一覧表示させることができます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報が提供されます。</p> <p>さらに、すべてのオープン課題を自動的に追加してインポートすることもできます。</p><p>利用制限を通過してアクセスするには、アクセストークンを提供することができます。"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNEE": "譲受人",
+        "DESCRIPTION": "説明",
+        "LABELS": "ラベル",
+        "MARK_AS_CHECKED": "更新をチェック済みとしてマーク",
+        "PROJECT": "プロジェクト",
+        "STATUS": "ステータス",
+        "SUMMARY": "概要",
+        "WRITE_A_COMMENT": "コメントを書く"
+      }
     }
   },
   "FILE_IMEX": {

@@ -23,6 +23,14 @@ import {
   GITEA_CONFIG_FORM_SECTION,
 } from './providers/gitea/gitea.const';
 import {
+  DEFAULT_FORGEJO_CFG,
+  FORGEJO_CONFIG_FORM_SECTION,
+} from './providers/forgejo/forgejo.const';
+import {
+  DEFAULT_CODEBERG_CFG,
+  CODEBERG_CONFIG_FORM_SECTION,
+} from './providers/codeberg/codeberg.const';
+import {
   DEFAULT_REDMINE_CFG,
   REDMINE_CONFIG_FORM_SECTION,
 } from './providers/redmine/redmine.const';
@@ -52,6 +60,8 @@ export const JIRA_TYPE: BuiltInIssueProviderKey = 'JIRA';
 export const CALDAV_TYPE: BuiltInIssueProviderKey = 'CALDAV';
 export const OPEN_PROJECT_TYPE: BuiltInIssueProviderKey = 'OPEN_PROJECT';
 export const GITEA_TYPE: BuiltInIssueProviderKey = 'GITEA';
+export const FORGEJO_TYPE: BuiltInIssueProviderKey = 'FORGEJO';
+export const CODEBERG_TYPE: BuiltInIssueProviderKey = 'CODEBERG';
 export const REDMINE_TYPE: BuiltInIssueProviderKey = 'REDMINE';
 export const ICAL_TYPE: BuiltInIssueProviderKey = 'ICAL';
 export const TRELLO_TYPE: BuiltInIssueProviderKey = 'TRELLO';
@@ -67,6 +77,8 @@ export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   ICAL_TYPE,
   OPEN_PROJECT_TYPE,
   GITEA_TYPE,
+  FORGEJO_TYPE,
+  CODEBERG_TYPE,
   TRELLO_TYPE,
   REDMINE_TYPE,
   LINEAR_TYPE,
@@ -81,6 +93,8 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [ICAL_TYPE]: 'calendar',
   [OPEN_PROJECT_TYPE]: 'open_project',
   [GITEA_TYPE]: 'gitea',
+  [FORGEJO_TYPE]: 'forgejo',
+  [CODEBERG_TYPE]: 'codeberg',
   [TRELLO_TYPE]: 'trello',
   [REDMINE_TYPE]: 'redmine',
   [LINEAR_TYPE]: 'linear',
@@ -95,6 +109,8 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [ICAL_TYPE]: 'Calendar',
   [OPEN_PROJECT_TYPE]: 'OpenProject',
   [GITEA_TYPE]: 'Gitea',
+  [FORGEJO_TYPE]: 'Forgejo',
+  [CODEBERG_TYPE]: 'Codeberg',
   [TRELLO_TYPE]: 'Trello',
   [REDMINE_TYPE]: 'Redmine',
   [LINEAR_TYPE]: 'Linear',
@@ -109,6 +125,8 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [ICAL_TYPE]: DEFAULT_CALENDAR_CFG,
   [OPEN_PROJECT_TYPE]: DEFAULT_OPEN_PROJECT_CFG,
   [GITEA_TYPE]: DEFAULT_GITEA_CFG,
+  [FORGEJO_TYPE]: DEFAULT_FORGEJO_CFG,
+  [CODEBERG_TYPE]: DEFAULT_CODEBERG_CFG,
   [TRELLO_TYPE]: DEFAULT_TRELLO_CFG,
   [REDMINE_TYPE]: DEFAULT_REDMINE_CFG,
   [LINEAR_TYPE]: DEFAULT_LINEAR_CFG,
@@ -123,6 +141,8 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [ICAL_TYPE]: CALENDAR_FORM_CFG_NEW as any,
   [OPEN_PROJECT_TYPE]: OPEN_PROJECT_CONFIG_FORM_SECTION,
   [GITEA_TYPE]: GITEA_CONFIG_FORM_SECTION,
+  [FORGEJO_TYPE]: FORGEJO_CONFIG_FORM_SECTION,
+  [CODEBERG_TYPE]: CODEBERG_CONFIG_FORM_SECTION,
   [TRELLO_TYPE]: TRELLO_CONFIG_FORM_SECTION,
   [REDMINE_TYPE]: REDMINE_CONFIG_FORM_SECTION,
   [LINEAR_TYPE]: LINEAR_CONFIG_FORM_SECTION,
@@ -151,6 +171,8 @@ export const ISSUE_STR_MAP: Record<
     ISSUES_STR: T.F.OPEN_PROJECT.ISSUE_STRINGS.ISSUES_STR,
   },
   [GITEA_TYPE]: DEFAULT_ISSUE_STRS,
+  [FORGEJO_TYPE]: DEFAULT_ISSUE_STRS,
+  [CODEBERG_TYPE]: DEFAULT_ISSUE_STRS,
   [TRELLO_TYPE]: DEFAULT_ISSUE_STRS,
   [REDMINE_TYPE]: DEFAULT_ISSUE_STRS,
   [LINEAR_TYPE]: DEFAULT_ISSUE_STRS,
