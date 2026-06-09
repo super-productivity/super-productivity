@@ -358,11 +358,13 @@ describe('migrate-legacy-backup', () => {
         },
       ];
       data.task.entities['task-1'].reminderId = 'reminder-1';
+      data.task.entities['task-1'].dueDay = '2024-01-01';
 
       const result = migrateLegacyBackup(data) as any;
 
       expect(result.task.entities['task-1'].remindAt).toBe(1704110400000);
       expect(result.task.entities['task-1'].dueWithTime).toBe(1704110400000);
+      expect(result.task.entities['task-1'].dueDay).toBeUndefined();
       expect(result.task.entities['task-1'].reminderId).toBeUndefined();
       expect(result.reminders).toEqual([]);
     });

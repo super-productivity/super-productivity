@@ -8,7 +8,7 @@ describe('migrateLegacyTaskRemindersIntoTasks', () => {
       'task-1': _task({ id: 'task-1', reminderId: 'reminder-1' }),
     });
 
-    const result = migrateLegacyTaskRemindersIntoTasks(taskState, [
+    migrateLegacyTaskRemindersIntoTasks(taskState, [
       {
         id: 'reminder-1',
         relatedId: 'task-1',
@@ -19,8 +19,8 @@ describe('migrateLegacyTaskRemindersIntoTasks', () => {
 
     expect(taskState.entities['task-1']?.remindAt).toBe(1704110400000);
     expect(taskState.entities['task-1']?.dueWithTime).toBe(1704110400000);
+    expect(taskState.entities['task-1']?.dueDay).toBeUndefined();
     expect(taskState.entities['task-1']?.reminderId).toBeUndefined();
-    expect(result).toEqual({ migratedTaskIds: ['task-1'], skippedNoteCount: 0 });
   });
 
   it('should migrate task reminders by legacy reminderId fallback', () => {
@@ -28,7 +28,7 @@ describe('migrateLegacyTaskRemindersIntoTasks', () => {
       'task-1': _task({ id: 'task-1', reminderId: 'reminder-1' }),
     });
 
-    const result = migrateLegacyTaskRemindersIntoTasks(taskState, [
+    migrateLegacyTaskRemindersIntoTasks(taskState, [
       {
         id: 'reminder-1',
         relatedId: 'missing-task',
@@ -38,7 +38,29 @@ describe('migrateLegacyTaskRemindersIntoTasks', () => {
     ]);
 
     expect(taskState.entities['task-1']?.remindAt).toBe(1704110400000);
-    expect(result.migratedTaskIds).toEqual(['task-1']);
+  });
+
+  it('should clear dueDay when it sets missing dueWithTime', () => {
+    const taskState = _taskState({
+      'task-1': _task({
+        id: 'task-1',
+        reminderId: 'reminder-1',
+        dueDay: '2024-01-01',
+      }),
+    });
+
+    migrateLegacyTaskRemindersIntoTasks(taskState, [
+      {
+        id: 'reminder-1',
+        relatedId: 'task-1',
+        remindAt: 1704110400000,
+        type: 'TASK',
+      },
+    ]);
+
+    expect(taskState.entities['task-1']?.remindAt).toBe(1704110400000);
+    expect(taskState.entities['task-1']?.dueWithTime).toBe(1704110400000);
+    expect(taskState.entities['task-1']?.dueDay).toBeUndefined();
   });
 
   it('should not overwrite existing dueWithTime', () => {
@@ -69,7 +91,7 @@ describe('migrateLegacyTaskRemindersIntoTasks', () => {
       'task-2': _task({ id: 'task-2', isDone: true }),
     });
 
-    const result = migrateLegacyTaskRemindersIntoTasks(taskState, [
+    migrateLegacyTaskRemindersIntoTasks(taskState, [
       {
         id: 'reminder-1',
         relatedId: 'task-1',
@@ -86,7 +108,6 @@ describe('migrateLegacyTaskRemindersIntoTasks', () => {
 
     expect(taskState.entities['task-1']?.remindAt).toBeUndefined();
     expect(taskState.entities['task-2']?.remindAt).toBeUndefined();
-    expect(result).toEqual({ migratedTaskIds: [], skippedNoteCount: 1 });
   });
 });
 
