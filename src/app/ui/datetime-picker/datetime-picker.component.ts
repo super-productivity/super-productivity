@@ -71,10 +71,8 @@ const DEFAULT_TIME = '09:00';
 export class DateTimePickerComponent implements AfterViewInit {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
-  private readonly _cdr = inject(ChangeDetectorRef);
+  private _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
-
-  constructor() {}
 
   // Inputs
   selectedDate = input<Date | null>(null);
@@ -106,6 +104,22 @@ export class DateTimePickerComponent implements AfterViewInit {
   readonly isConfigReady = computed(
     () => this._globalConfigService.localization() !== undefined,
   );
+
+  private _lastView: 'month' | 'year' | 'multi-year' | null = null;
+  private _viewChangeEffect = effect((onCleanup) => {
+    const cal = this.calendar();
+    if (cal) {
+      this._lastView = cal.currentView;
+      const sub = cal.stateChanges.subscribe(() => {
+        if (cal.currentView !== this._lastView) {
+          this._lastView = cal.currentView;
+          this.isInitialFocus = true;
+          this._cdr.markForCheck();
+        }
+      });
+      onCleanup(() => sub.unsubscribe());
+    }
+  });
 
   private _lastSyncedDate: number | null = null;
   private _syncActiveDateEffect = effect(() => {
