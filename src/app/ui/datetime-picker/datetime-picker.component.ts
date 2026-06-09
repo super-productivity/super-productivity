@@ -25,7 +25,7 @@ import {
 } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { MatSelect } from '@angular/material/select';
-import { DateAdapter, MatOption } from '@angular/material/core';
+import { MatOption } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
@@ -40,7 +40,6 @@ import { TimeStepDirective } from '../time-step/time-step.directive';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
-import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 const DEFAULT_TIME = '09:00';
 
@@ -72,26 +71,21 @@ const DEFAULT_TIME = '09:00';
 export class DateTimePickerComponent implements AfterViewInit {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
-  private _dateTimeFormatService = inject(DateTimeFormatService);
-  private _dateAdapter = inject(DateAdapter);
   private readonly _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
 
   pickerSelectedDate: Date | null = null;
-  private _lastView: 'month' | 'year' | 'multi-year' | null = null;
 
   constructor() {
     effect((onCleanup) => {
       const cal = this.calendar();
       if (cal) {
         // Set initial view and date
-        this._lastView = cal.currentView;
         if (cal.currentView !== 'month') {
           this.pickerSelectedDate = cal.activeDate;
         }
 
         const sub = cal.stateChanges.subscribe(() => {
-          this._lastView = cal.currentView;
           if (cal.currentView !== 'month') {
             this.pickerSelectedDate = cal.activeDate;
           }
