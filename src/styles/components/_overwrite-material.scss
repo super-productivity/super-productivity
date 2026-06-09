@@ -160,6 +160,34 @@ body .mat-mdc-dialog-surface {
   }
 }
 
+.project-complete-fullscreen-dialog {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+
+  @supports (height: 100dvh) {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+body.isNativeMobile .project-complete-fullscreen-dialog {
+  width: calc(100vw - var(--safe-area-left) - var(--safe-area-right)) !important;
+  height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
+}
+
 // FORMS
 // --------
 .mat-mdc-form-field {

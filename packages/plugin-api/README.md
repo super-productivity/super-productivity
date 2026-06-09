@@ -88,6 +88,7 @@ PluginAPI.registerShortcut({
 ### UI Types
 
 - `DialogCfg` - Dialog configuration
+- `DialogResult` - Dialog return value
 - `SnackCfg` - Notification configuration
 - `PluginMenuEntryCfg` - Menu entry configuration
 - `PluginShortcutCfg` - Keyboard shortcut configuration

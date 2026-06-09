@@ -2,6 +2,7 @@ import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
 import { GlobalTrackingIntervalService } from './global-tracking-interval.service';
 import { TRACKING_INTERVAL } from '../../app.constants';
+import { DateService } from '../date/date.service';
 
 describe('GlobalTrackingIntervalService', () => {
   beforeEach(() => {
@@ -79,5 +80,22 @@ describe('GlobalTrackingIntervalService', () => {
     sub.unsubscribe();
 
     expect(observed).toContain(100);
+  }));
+
+  it('should refresh todayDateStr$ when the start-of-next-day offset changes', fakeAsync(() => {
+    spyOn(Date, 'now').and.returnValue(new Date(2026, 4, 22, 10, 5).getTime());
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+    const dateService = TestBed.inject(DateService);
+    const observed: string[] = [];
+
+    const sub = service.todayDateStr$.subscribe((dateStr) => observed.push(dateStr));
+
+    expect(observed).toEqual(['2026-05-22']);
+
+    dateService.setStartOfNextDayDiff('10:10');
+    tick(0);
+
+    expect(observed).toEqual(['2026-05-22', '2026-05-21']);
+    sub.unsubscribe();
   }));
 });

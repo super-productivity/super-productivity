@@ -500,8 +500,8 @@ console.log(tasks.length);</code></pre>
         log('Notification sent', 'success');
       }
 
-      function testDialog() {
-        PluginAPI.openDialog({
+      async function testDialog() {
+        const result = await PluginAPI.openDialog({
           title: 'Test Dialog from iFrame',
           htmlContent: `
                     <div style="padding: 20px; color: #ccc; font-family: monospace;">
@@ -521,7 +521,7 @@ console.log(tasks.length);</code></pre>
             },
           ],
         });
-        log('Dialog opened', 'success');
+        log('Dialog closed with result: ' + result, 'success');
       }
 
       function testThemeInfo() {

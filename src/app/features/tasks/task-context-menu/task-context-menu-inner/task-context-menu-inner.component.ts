@@ -341,6 +341,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     t?.parentElement?.querySelector('button')?.focus();
   }
 
+  focusFirstSubmenuItem(menu: MatMenu): void {
+    menu.focusFirstItem('program');
+  }
+
   goToFocusMode(): void {
     this._taskService.setCurrentId(this.task.id);
     this._store.dispatch(showFocusOverlay());

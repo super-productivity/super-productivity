@@ -2,6 +2,7 @@ import {
   BatchUpdateRequest,
   BatchUpdateResult,
   DialogCfg,
+  DialogResult,
   Hooks,
   IssueProviderPluginDefinition,
   NotifyCfg,
@@ -313,7 +314,7 @@ export class PluginAPI implements PluginAPIInterface {
     return this._boundMethods.downloadFile(filename, data);
   }
 
-  async openDialog(dialogCfg: DialogCfg): Promise<void> {
+  async openDialog(dialogCfg: DialogCfg): Promise<DialogResult> {
     PluginLog.log(`Plugin ${this._pluginId} requested to open dialog`);
     return this._pluginBridge.openDialog(dialogCfg);
   }

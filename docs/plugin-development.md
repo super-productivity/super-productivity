@@ -399,11 +399,19 @@ PluginAPI.notify({
 // Open a dialog
 const result = await PluginAPI.openDialog({
   title: 'Confirm Action',
-  content: 'Are you sure?',
-  okBtnLabel: 'Yes',
-  cancelBtnLabel: 'No',
+  htmlContent: '<p>Are you sure?</p>',
+  buttons: [{ label: 'No' }, { label: 'Yes', color: 'primary', raised: true }],
 });
+
+if (result === 'Yes') {
+  // Continue with the confirmed action
+}
 ```
+
+`openDialog()` resolves with the clicked button label. If the user dismisses
+the dialog without clicking a button, it resolves with `undefined`. The legacy
+`content`, `okBtnLabel`, and `cancelBtnLabel` fields are still accepted, but new
+plugins should use `htmlContent` and `buttons`.
 
 ### Registration Methods (plugin.js only)
 

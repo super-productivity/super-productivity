@@ -13,7 +13,17 @@ export const handleIssueProviderHttpError$ = <T>(
   snackService: SnackService,
   error: HttpErrorResponse,
 ): ObservableInput<T> => {
-  IssueLog.log(error);
+  const errorBody: unknown = error.error;
+  IssueLog.log('Issue provider HTTP error', {
+    issueProviderKey,
+    status: error.status,
+    errorBodyName: _getErrorBodyName(errorBody),
+    isClientError: errorBody instanceof ErrorEvent,
+    hasErrorBody: !!errorBody,
+    hasMessage: !!error.message,
+    hasStatusText: !!error.statusText,
+    hasUrl: !!error.url,
+  });
   if (error.error instanceof ErrorEvent) {
     // A client-side or network error occurred. Handle it accordingly.
     snackService.open({
@@ -48,3 +58,11 @@ export const handleIssueProviderHttpError$ = <T>(
 
   return throwError({ [HANDLED_ERROR_PROP_STR]: `${ipLabel}: ${getErrorTxt(error)}` });
 };
+
+const _getErrorBodyName = (errorBody: unknown): string | undefined =>
+  typeof errorBody === 'object' &&
+  errorBody !== null &&
+  'name' in errorBody &&
+  typeof errorBody.name === 'string'
+    ? errorBody.name
+    : undefined;

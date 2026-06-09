@@ -112,7 +112,22 @@ export class GlobalTrackingIntervalService {
     // so consumers never receive the day change (see #5464). We therefore merge in visibility/focus/resume
     // events – all of which fire as soon as the app becomes interactive again – to force an immediate
     // re-sampling of todayStr() even if the regular 1s interval is still suspended.
-    return merge(timerBased$, focusBased$, visibilityBased$, systemResumeBased$).pipe(
+    const startOfNextDayDiffChange$ = (
+      this._dateService as {
+        startOfNextDayDiffChange$?: Observable<unknown>;
+      }
+    ).startOfNextDayDiffChange$;
+    const startOfNextDayChangeBased$ = (startOfNextDayDiffChange$ ?? EMPTY).pipe(
+      map(() => this._dateService.todayStr()),
+    );
+
+    return merge(
+      timerBased$,
+      focusBased$,
+      visibilityBased$,
+      systemResumeBased$,
+      startOfNextDayChangeBased$,
+    ).pipe(
       startWith(this._dateService.todayStr()),
       distinctUntilChanged(),
       tap((v) => Log.log('DAY_CHANGE ' + v)),

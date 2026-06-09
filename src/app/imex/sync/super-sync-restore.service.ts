@@ -91,9 +91,16 @@ export class SuperSyncRestoreService {
         }
 
         console.error('Failed to restore from point:', error);
+        // The server can't replay end-to-end-encrypted ops to reconstruct an
+        // earlier state, so it rejects the restore with a reason mentioning
+        // encryption (surfaced in the thrown error message). Show an actionable
+        // explanation instead of the generic "Failed to restore data". (#8107)
+        const isEncryptionBlocked = errorMsg.includes('encrypt');
         this._snackService.open({
           type: 'ERROR',
-          msg: T.F.SYNC.S.RESTORE_ERROR,
+          msg: isEncryptionBlocked
+            ? T.F.SYNC.S.RESTORE_ENCRYPTED
+            : T.F.SYNC.S.RESTORE_ERROR,
         });
         throw error;
       }

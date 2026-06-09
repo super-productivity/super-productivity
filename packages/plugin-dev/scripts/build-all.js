@@ -38,6 +38,15 @@ function copyRecursive(src, dest) {
   }
 }
 
+function assertFilesExist(basePath, files, pluginName) {
+  const missing = files.filter((file) => !fs.existsSync(path.join(basePath, file)));
+  if (missing.length) {
+    throw new Error(
+      `${pluginName} build is missing required asset(s): ${missing.join(', ')}`,
+    );
+  }
+}
+
 // Plugin configurations
 const plugins = [
   {
@@ -47,6 +56,11 @@ const plugins = [
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
+      assertFilesExist(
+        path.join(pluginPath, 'dist'),
+        ['i18n/en.json', 'i18n/de.json'],
+        'procrastination-buster',
+      );
       // Copy to assets directory
       const targetDir = path.join(
         __dirname,
@@ -64,6 +78,11 @@ const plugins = [
           copyRecursive(src, dest);
         }
       }
+      assertFilesExist(
+        targetDir,
+        ['i18n/en.json', 'i18n/de.json'],
+        'procrastination-buster',
+      );
       return 'Built and copied to assets';
     },
   },
