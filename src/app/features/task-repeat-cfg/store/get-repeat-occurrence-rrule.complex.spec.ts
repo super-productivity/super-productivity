@@ -5,11 +5,6 @@ import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { setRRuleEngineEnabled } from '../../config/rrule-engine-flag';
 
-// The RRULE engine is gated behind a local per-device flag (off by default);
-// these routing tests exercise the engine, so enable it for the suite.
-beforeEach(() => setRRuleEngineEnabled(true));
-afterEach(() => setRRuleEngineEnabled(false));
-
 // Integration: complex RRULE strings routed through the cfg → engine adapter
 // (taskRepeatCfgToRRuleInput), crossed with cfg-level settings
 // (deletedInstanceDates → EXDATE, startDate, lastTaskCreationDay), plus the
@@ -26,6 +21,13 @@ const rruleCfg = (rrule: string, over: Partial<TaskRepeatCfg> = {}): TaskRepeatC
 });
 
 describe('cfg → RRULE engine routing — complex rules × cfg settings', () => {
+  // The RRULE engine is gated behind a local per-device flag (off by default);
+  // these routing tests exercise the engine, so enable it for the suite. The
+  // hooks live inside the describe — a top-level hook would attach to Jasmine's
+  // root suite and force the flag on around every spec in the bundle.
+  beforeEach(() => setRRuleEngineEnabled(true));
+  afterEach(() => setRRuleEngineEnabled(false));
+
   it('routes MONTHLY per-day ordinals (1st & 3rd Monday) for the first occurrence', () => {
     const r = getFirstRepeatOccurrence(
       rruleCfg('FREQ=MONTHLY;BYDAY=1MO,3MO', { startDate: '2024-06-01' }),
