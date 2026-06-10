@@ -8,7 +8,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { DialogFullscreenMarkdownComponent } from './dialog-fullscreen-markdown.component';
-import { shortcutLabels } from './markdown-shortcuts.const';
+import { MOD, shortcutLabels } from './markdown-shortcuts.const';
 
 describe('DialogFullscreenMarkdownComponent', () => {
   let component: DialogFullscreenMarkdownComponent;
@@ -337,18 +337,18 @@ describe('DialogFullscreenMarkdownComponent', () => {
 
   describe('shortcutLabels', () => {
     it('should format bold label correctly', () => {
-      expect(shortcutLabels['bold'].tooltip).toBe(' (Ctrl+B)');
-      expect(shortcutLabels['bold'].keys).toEqual(['Ctrl', 'B']);
+      expect(shortcutLabels.bold.tooltip).toBe(` (${MOD}+B)`);
+      expect(shortcutLabels.bold.keys).toEqual([MOD, 'B']);
     });
 
     it('should include Shift for shift-based shortcuts', () => {
-      expect(shortcutLabels['strikethrough'].tooltip).toBe(' (Ctrl+Shift+S)');
-      expect(shortcutLabels['strikethrough'].keys).toEqual(['Ctrl', 'Shift', 'S']);
+      expect(shortcutLabels.strikethrough.tooltip).toBe(` (${MOD}+Shift+S)`);
+      expect(shortcutLabels.strikethrough.keys).toEqual([MOD, 'Shift', 'S']);
     });
 
     it('should use digit number for code-based shortcuts', () => {
-      expect(shortcutLabels['bullet'].tooltip).toBe(' (Ctrl+Shift+8)');
-      expect(shortcutLabels['bullet'].keys).toEqual(['Ctrl', 'Shift', '8']);
+      expect(shortcutLabels.bullet.tooltip).toBe(` (${MOD}+Shift+8)`);
+      expect(shortcutLabels.bullet.keys).toEqual([MOD, 'Shift', '8']);
     });
   });
 

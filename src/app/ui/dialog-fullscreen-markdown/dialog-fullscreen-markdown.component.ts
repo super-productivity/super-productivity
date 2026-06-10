@@ -230,7 +230,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       return;
     }
 
-    // Accepting both CTRL and META key is intentional though the labels shows one of them
+    // Accept both Ctrl and Meta intentionally; the displayed shortcut label shows only one.
     const hasModifier = (ev.ctrlKey || ev.metaKey) && !ev.altKey;
 
     const textarea = this.textareaEl()?.nativeElement;

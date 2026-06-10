@@ -29,7 +29,7 @@ type ShortcutWithCode = BaseShortcut & {
 export type MarkdownShortcut = ShortcutWithKey | ShortcutWithCode;
 
 export type ShortcutLabel = Record<ShortcutNames, { keys: string[]; tooltip: string }>;
-const MOD = IS_MAC ? 'Cmd' : 'Ctrl';
+export const MOD = IS_MAC ? 'Cmd' : 'Ctrl';
 
 export const MARKDOWN_SHORTCUTS: MarkdownShortcut[] = [
   {
@@ -100,20 +100,4 @@ export const shortcutLabels = MARKDOWN_SHORTCUTS.reduce((acc, s) => {
     tooltip: ` (${keys.join('+')})`,
   };
   return acc;
-}, {} as ShortcutLabel) satisfies ShortcutLabel;
-
-if (process.env['NODE_ENV'] === 'development') {
-  const allKeys: ShortcutNames[] = [
-    'bold',
-    'italic',
-    'link',
-    'strikethrough',
-    'bullet',
-    'numbered',
-    'code',
-    'quote',
-  ];
-  allKeys.forEach((key) => {
-    if (!shortcutLabels[key]) throw new Error(`Missing shortcut label for: ${key}`);
-  });
-}
+}, {} as ShortcutLabel);
