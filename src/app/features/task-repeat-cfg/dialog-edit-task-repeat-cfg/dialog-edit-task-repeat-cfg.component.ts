@@ -65,7 +65,6 @@ import { Log } from '../../../core/log';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { RRuleFeatureFlagService } from '../../config/rrule-feature-flag.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
@@ -121,7 +120,6 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
 })
 export class DialogEditTaskRepeatCfgComponent {
   private _globalConfigService = inject(GlobalConfigService);
-  private _rruleFlag = inject(RRuleFeatureFlagService);
   private _dateAdapter = inject(DateAdapter);
   private _tagService = inject(TagService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
@@ -463,13 +461,14 @@ export class DialogEditTaskRepeatCfgComponent {
     const _locale = this._dateTimeFormatService.currentLocale();
     const translateService = this._translateService;
 
-    // Offer the advanced 'RRULE' option only when the engine flag is on — but
-    // keep it for a config already in RRULE mode so an existing rule stays
-    // editable (the builder is its only editor) even on a flag-off device.
-    const includeRRule =
-      this._rruleFlag.isEnabled() || this.repeatCfg().quickSetting === 'RRULE';
+    // The 'RRULE' option ("Custom recurring config") is ALWAYS offered: it
+    // replaced the legacy Custom UI, so omitting it on engine-flag-off devices
+    // would leave them with fixed presets only. With the flag off, the
+    // occurrence engine schedules from the legacy mirror fields that save()
+    // derives from the rule (rruleToLegacyTaskRepeatCfg) — the same
+    // best-effort fallback older sync clients rely on.
     const buildOptions = (refDate: Date): { value: string; label: string }[] =>
-      buildRepeatQuickSettingOptions(refDate, _locale, translateService, includeRRule);
+      buildRepeatQuickSettingOptions(refDate, _locale, translateService);
 
     const formConfig = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.map((field) => ({
       ...field,
