@@ -98,7 +98,9 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
     // it throws rather than returning null on a transient IndexedDB failure, so
     // a foreign op can never slip through unprotected — the apply aborts and the
     // sync retries instead. It won't mint a fresh id here (this device, having
-    // ops to apply, already has one); both callers wrap this in try/catch.
+    // ops to apply, already has one); every call site tolerates a throw (the two
+    // sync paths wrap applyOperations in try/catch; the boot-time
+    // retryFailedRemoteOps catches per-op and leaves the op for the next launch).
     const localClientId = await this.clientIdProvider.getOrGenerateClientId();
 
     const result = await replayOperationBatch({
