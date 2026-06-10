@@ -65,7 +65,10 @@ export class HeatmapMonthCalendarComponent {
 
   readonly monthLabel = computed(() => {
     const { y, m } = this.viewMonth();
-    return `${(this._dateAdapter.getMonthNames('long') as string[])[m]} ${y}`;
+    const name = (this._dateAdapter.getMonthNames('long') as string[])[m];
+    // The current year is the implied default — "June", not "June 2026"; only
+    // other years carry the year so cross-year navigation stays unambiguous.
+    return y === new Date().getFullYear() ? name : `${name} ${y}`;
   });
 
   readonly weekdayLabels = computed(() => {

@@ -3,23 +3,29 @@
     <div class="heatmap-container">
       @if (navLabel()) {
         <div class="heatmap-nav">
-          <button
-            mat-icon-button
-            type="button"
-            [disabled]="!canNavPrev()"
-            (click)="navPrev.emit()"
-          >
-            <mat-icon>chevron_left</mat-icon>
-          </button>
+          <!-- Arrows only when there is anywhere to go — a single navigable
+               year would render two permanently dead buttons. -->
+          @if (canNavPrev() || canNavNext()) {
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="!canNavPrev()"
+              (click)="navPrev.emit()"
+            >
+              <mat-icon>chevron_left</mat-icon>
+            </button>
+          }
           <div class="heatmap-nav__title">{{ navLabel() }}</div>
-          <button
-            mat-icon-button
-            type="button"
-            [disabled]="!canNavNext()"
-            (click)="navNext.emit()"
-          >
-            <mat-icon>chevron_right</mat-icon>
-          </button>
+          @if (canNavPrev() || canNavNext()) {
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="!canNavNext()"
+              (click)="navNext.emit()"
+            >
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+          }
         </div>
       }
       <div class="heatmap-month-row">
