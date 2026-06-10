@@ -71,7 +71,7 @@ const DEFAULT_TIME = '09:00';
 export class DateTimePickerComponent implements AfterViewInit {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
-  private _cdr = inject(ChangeDetectorRef);
+  private readonly _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
 
   // Inputs
