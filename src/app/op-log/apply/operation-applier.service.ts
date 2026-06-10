@@ -91,7 +91,15 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
     // Identify THIS device so the bulk meta-reducer can tell own-op replay apart
     // from genuinely remote ops (preserves per-device local-only sync settings
     // only against another client's ops, never while replaying our own).
-    const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
+    //
+    // This path applies ops during sync, where the clientId has always been
+    // resolved already (download/upload/vector-clocks need it), so the cached
+    // read returns instantly. Use getOrGenerateClientId (not loadClientId):
+    // it throws rather than returning null on a transient IndexedDB failure, so
+    // a foreign op can never slip through unprotected — the apply aborts and the
+    // sync retries instead. It won't mint a fresh id here (this device, having
+    // ops to apply, already has one); both callers wrap this in try/catch.
+    const localClientId = await this.clientIdProvider.getOrGenerateClientId();
 
     const result = await replayOperationBatch({
       ops,
