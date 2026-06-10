@@ -576,6 +576,30 @@ describe('migrate-legacy-backup', () => {
       expect(result.task.entities['task-2']._showSubTasksMode).toBeUndefined();
     });
 
+    it('should normalize an explicit Show (0) _hideSubTasksMode to undefined', () => {
+      // Persisted state must stay within {undefined, HideDone, HideAll} —
+      // see PersistedHideSubTasksMode in task.model.ts.
+      const data = createLegacyBackup();
+      (data.task.entities['task-1'] as any)._hideSubTasksMode = 0;
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1']._hideSubTasksMode).toBeUndefined();
+    });
+
+    it('should let an explicit Show (0) win over a stale legacy _showSubTasksMode', () => {
+      // A stale _showSubTasksMode: 0 would otherwise be converted to
+      // HideAll, resurrecting a hide over the explicit Show.
+      const data = createLegacyBackup();
+      (data.task.entities['task-1'] as any)._hideSubTasksMode = 0;
+      (data.task.entities['task-1'] as any)._showSubTasksMode = 0;
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1']._hideSubTasksMode).toBeUndefined();
+      expect(result.task.entities['task-1']._showSubTasksMode).toBeUndefined();
+    });
+
     it('should normalize null timeEstimate and created from fixture', () => {
       const result = migrateLegacyBackup(structuredClone(fixture)) as any;
 
