@@ -123,6 +123,13 @@ mat-dialog-actions {
     opacity: 0.6;
   }
 
+  &__cal-empty {
+    margin-top: var(--s-quarter, 4px);
+    font-size: 11px;
+    opacity: 0.6;
+    font-style: italic;
+  }
+
   &__sim {
     display: flex;
     align-items: center;

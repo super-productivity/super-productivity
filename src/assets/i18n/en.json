@@ -2011,6 +2011,8 @@
         "RRULE_NEXT": "Upcoming",
         "RRULE_NEXT_AFTER_COMPLETION": "After completion, e.g.",
         "RRULE_CALENDAR_PREVIEW": "Calendar preview",
+        "RRULE_CALENDAR_PREVIEW_EMPTY": "Nothing to preview: the current rule has no occurrences in the next 12 months (or is incomplete).",
+        "RRULE_PREVIEW_INVALID": "The recurrence rule is incomplete — finish the settings above to see the preview.",
         "RRULE_SIM_LABEL": "Simulating completion on",
         "RRULE_SIM_RESET": "Reset",
         "RRULE_SIM_HINT": "Tip: click a day to simulate completing it there and preview how the series re-anchors.",
