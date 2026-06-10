@@ -57,6 +57,7 @@ import { MARKDOWN_SHORTCUTS, ShortcutNames } from './markdown-shortcuts.const';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
+type ShortcutLabel = Record<ShortcutNames, string>;
 
 @Component({
   selector: 'dialog-fullscreen-markdown',
@@ -93,6 +94,9 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
   private readonly _matDialog = inject(MatDialog);
+  readonly shortcutLabels: ShortcutLabel = Object.fromEntries(
+    MARKDOWN_SHORTCUTS.map((s) => [s.name, `(${s.shortcutLabel})`]),
+  ) as ShortcutLabel;
 
   /**
    * Resolved content with blob URLs for images (for preview rendering).
@@ -189,11 +193,6 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       maxWidth: '100vw',
       width: '402px',
     });
-  }
-
-  getShortcutLabel(name: ShortcutNames): string {
-    const shortcut = MARKDOWN_SHORTCUTS.find((s) => s.name === name);
-    return shortcut ? ` (${shortcut.shortcutLabel})` : '';
   }
 
   private _executeShortcutByName(name: ShortcutNames): void {
