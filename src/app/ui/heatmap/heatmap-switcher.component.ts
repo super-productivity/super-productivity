@@ -56,6 +56,10 @@ export class HeatmapSwitcherComponent {
   /** Passed through to both views: makes day cells keyboard-reachable buttons
    *  for consumers that act on `dayClick` (e.g. click-to-simulate). */
   readonly interactive = input<boolean>(false);
+  /** Passed through to the MONTH view: unlimited month navigation. The consumer
+   *  listens to `monthViewChange` and moves its data window along. */
+  readonly monthBoundless = input<boolean>(false);
+  readonly monthViewChange = output<{ y: number; m: number }>();
 
   readonly view = signal<HeatmapView>('year');
 

@@ -52,15 +52,26 @@ export class HeatmapMonthCalendarComponent {
    *  act on `dayClick`, e.g. click-to-simulate). Display-only calendars keep
    *  plain, non-focusable cells. */
   readonly interactive = input<boolean>(false);
+  /** When true, month navigation is unlimited in both directions instead of
+   *  bounded to `[rangeStart, rangeEnd]`. The consumer is expected to listen to
+   *  `viewMonthChange` and move its data window along (days the current dayMap
+   *  doesn't cover render as plain cells until it does). */
+  readonly boundless = input<boolean>(false);
+  /** The month now shown, emitted on every prev/next navigation. */
+  readonly viewMonthChange = output<{ y: number; m: number }>();
 
   // Explicit user navigation; null → the computed default month. A navigated
   // month that falls OUTSIDE the current data range (the inputs changed under
   // us, e.g. the metric year select) is discarded — otherwise the calendar
   // would strand the user on an all-empty month with the nav buttons disabled.
+  // In boundless mode there are no range walls (the consumer moves its data
+  // window along), so the user's month always stands.
   private readonly _viewMonth = signal<{ y: number; m: number } | null>(null);
   readonly viewMonth = computed(() => {
     const vm = this._viewMonth();
-    return vm && this._isMonthInRange(vm) ? vm : this._defaultMonth();
+    return vm && (this.boundless() || this._isMonthInRange(vm))
+      ? vm
+      : this._defaultMonth();
   });
 
   readonly monthLabel = computed(() => {
@@ -104,10 +115,12 @@ export class HeatmapMonthCalendarComponent {
   });
 
   readonly canPrev = computed(() => {
+    if (this.boundless()) return true;
     const { y, m } = this.viewMonth();
     return new Date(y, m, 0) >= this._dayStart(this.rangeStart());
   });
   readonly canNext = computed(() => {
+    if (this.boundless()) return true;
     const { y, m } = this.viewMonth();
     return new Date(y, m + 1, 1) <= this.rangeEnd();
   });
@@ -115,12 +128,16 @@ export class HeatmapMonthCalendarComponent {
   prev(): void {
     if (!this.canPrev()) return;
     const { y, m } = this.viewMonth();
-    this._viewMonth.set(m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 });
+    const vm = m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 };
+    this._viewMonth.set(vm);
+    this.viewMonthChange.emit(vm);
   }
   next(): void {
     if (!this.canNext()) return;
     const { y, m } = this.viewMonth();
-    this._viewMonth.set(m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 });
+    const vm = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 };
+    this._viewMonth.set(vm);
+    this.viewMonthChange.emit(vm);
   }
 
   onCellKeydown(event: Event, cell: CalCell): void {

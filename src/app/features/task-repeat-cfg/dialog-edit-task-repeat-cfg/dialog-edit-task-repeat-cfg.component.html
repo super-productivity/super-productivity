@@ -106,6 +106,13 @@
             [rangeEnd]="hd.rangeEnd"
             legendMode="projection"
             [interactive]="!!repeatCfg().repeatFromCompletionDate"
+            [navLabel]="previewNavLabel()"
+            [canNavPrev]="true"
+            [canNavNext]="true"
+            [monthBoundless]="true"
+            (navPrev)="previewPrevYear()"
+            (navNext)="previewNextYear()"
+            (monthViewChange)="onPreviewMonthChange($event)"
             (dayClick)="onPreviewDayClick($event)"
           />
           <!-- Simulation only exists for "repeat from completion" schedules — a

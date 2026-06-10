@@ -124,6 +124,43 @@ describe('HeatmapMonthCalendarComponent', () => {
     expect(c.viewMonth()).toEqual({ y: 2022, m: 11 }); // snapped to the new range
   });
 
+  it('boundless mode navigates past the range walls and emits viewMonthChange', () => {
+    const fixture = setup(new Date(2024, 4, 1), new Date(2024, 4, 31)); // May 2024 only
+    fixture.componentRef.setInput('boundless', true);
+    fixture.detectChanges();
+    const c = fixture.componentInstance;
+    expect(c.canPrev()).toBe(true);
+    expect(c.canNext()).toBe(true);
+
+    const emitted: { y: number; m: number }[] = [];
+    c.viewMonthChange.subscribe((vm) => emitted.push(vm));
+    c.next(); // out of range — must stand, not snap back
+    expect(c.viewMonth()).toEqual({ y: 2024, m: 5 }); // Jun
+    c.prev();
+    c.prev();
+    expect(c.viewMonth()).toEqual({ y: 2024, m: 3 }); // Apr
+    expect(emitted).toEqual([
+      { y: 2024, m: 5 },
+      { y: 2024, m: 4 },
+      { y: 2024, m: 3 },
+    ]);
+  });
+
+  it('boundless mode keeps a navigated month when the data range shifts under it', () => {
+    // The consumer moves its window to follow viewMonthChange — that input swap
+    // must not snap the calendar back like the bounded fallback does.
+    const fixture = setup(new Date(2024, 2, 1), new Date(2024, 4, 31));
+    fixture.componentRef.setInput('boundless', true);
+    fixture.detectChanges();
+    const c = fixture.componentInstance;
+    c.next(); // Jun 2024, outside the original range
+    expect(c.viewMonth()).toEqual({ y: 2024, m: 5 });
+    fixture.componentRef.setInput('rangeStart', new Date(2024, 5, 1));
+    fixture.componentRef.setInput('rangeEnd', new Date(2025, 5, 30));
+    fixture.detectChanges();
+    expect(c.viewMonth()).toEqual({ y: 2024, m: 5 }); // still June
+  });
+
   it('does not emit dayClick for other-month spill-over cells', () => {
     // dayMap covers Apr 28 – May 31, so May's leading grey cells HAVE data.
     const map = buildProjectionDayMap(

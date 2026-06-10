@@ -20,6 +20,8 @@
       [rangeEnd]="rangeEnd()"
       [legendMode]="legendMode()"
       [interactive]="interactive()"
+      [boundless]="monthBoundless()"
+      (viewMonthChange)="monthViewChange.emit($event)"
       (dayClick)="dayClick.emit($event)"
     />
   } @else if (data(); as d) {

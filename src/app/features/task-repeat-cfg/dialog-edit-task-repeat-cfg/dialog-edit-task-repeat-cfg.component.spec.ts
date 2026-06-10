@@ -648,6 +648,84 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(c.simulatedCompletion()).toBeNull();
     });
 
+    it('year arrows shift the projection window by whole years, both directions', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const home = c.resultHeatmapData()!;
+      // Window is padded to full calendar months.
+      expect(home.rangeStart.getDate()).toBe(1);
+      const homeStartYear = home.rangeStart.getFullYear();
+
+      c.previewNextYear();
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear + 1);
+
+      c.previewPrevYear();
+      c.previewPrevYear();
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear - 1);
+      expect(c.previewNavLabel()).toContain(String(homeStartYear - 1));
+    });
+
+    it('keeps a navigated window rendered even when it has no occurrences (no stranding)', async () => {
+      // Far in the past, before the cfg's startDate, the window is empty — the
+      // calendar and its ‹ › nav must survive so the user can navigate back.
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      for (let i = 0; i < 5; i++) {
+        c.previewPrevYear();
+      }
+      expect(c.resultHeatmapData()).not.toBeNull();
+      // Back home it is populated again.
+      for (let i = 0; i < 5; i++) {
+        c.previewNextYear();
+      }
+      expect(c.resultHeatmapData()).not.toBeNull();
+    });
+
+    it('does not mark days already past as projected in the home window', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const home = c.resultHeatmapData()!;
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      [...home.dayMap.values()]
+        .filter((d) => d.isProjected)
+        .forEach((d) => expect(d.dateStr >= todayStr).toBe(true));
+    });
+
+    it('month navigation past the window edge pulls the window along', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const home = c.resultHeatmapData()!;
+      const homeStartYear = home.rangeStart.getFullYear();
+      // A month fully after the window end → window shifts forward a year.
+      c.onPreviewMonthChange({
+        y: home.rangeEnd.getFullYear(),
+        m: home.rangeEnd.getMonth() + 1,
+      });
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear + 1);
+      // A month still inside the window → no shift.
+      const cur = c.resultHeatmapData()!;
+      c.onPreviewMonthChange({
+        y: cur.rangeStart.getFullYear(),
+        m: cur.rangeStart.getMonth() + 2,
+      });
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear + 1);
+    });
+
+    it('hiding the calendar resets the year window to home', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.previewNextYear();
+      c.toggleResultHeatmap(); // off
+      c.toggleResultHeatmap(); // on again
+      expect(c.previewYearOffset()).toBe(0);
+    });
+
     it('clears an active simulation when startDate or excluded days change (formly model edit)', async () => {
       // These edits arrive only as a new formly model (no dedicated handler) —
       // the schedule-slice effect must drop the sim, same as a rule edit.

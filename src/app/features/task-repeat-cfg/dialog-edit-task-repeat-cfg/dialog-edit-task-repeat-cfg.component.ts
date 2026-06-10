@@ -196,6 +196,40 @@ export class DialogEditTaskRepeatCfgComponent {
   // works while authoring a brand-new recurrence).
   private readonly _PREVIEW_HEATMAP_DAYS = 365;
   showResultHeatmap = signal(false);
+  // Year-window navigation: 0 = the next 365 days from today; ±n shifts the
+  // window by whole years, unbounded in both directions (the projection is
+  // computed per window, so any year is reachable).
+  previewYearOffset = signal(0);
+  previewPrevYear(): void {
+    this.previewYearOffset.update((o) => o - 1);
+  }
+  previewNextYear(): void {
+    this.previewYearOffset.update((o) => o + 1);
+  }
+  previewNavLabel = computed(() => {
+    const hd = this.resultHeatmapData();
+    if (!hd) {
+      return '';
+    }
+    const a = hd.rangeStart.getFullYear();
+    const b = hd.rangeEnd.getFullYear();
+    return a === b ? `${a}` : `${a} – ${b}`;
+  });
+  // The month view navigates without walls; once the shown month leaves the
+  // current window, shift the window a year so its data follows.
+  onPreviewMonthChange(vm: { y: number; m: number }): void {
+    const hd = this.resultHeatmapData();
+    if (!hd) {
+      return;
+    }
+    const monthStart = new Date(vm.y, vm.m, 1);
+    const monthEnd = new Date(vm.y, vm.m + 1, 0, 23, 59, 59);
+    if (monthEnd < hd.rangeStart) {
+      this.previewYearOffset.update((o) => o - 1);
+    } else if (monthStart > hd.rangeEnd) {
+      this.previewYearOffset.update((o) => o + 1);
+    }
+  }
   // A clicked projected day (YYYY-MM-DD): "simulate completing here" → for a
   // repeat-from-completion schedule the rule re-anchors from that day (the
   // After-completion behavior, made interactive).
@@ -204,6 +238,7 @@ export class DialogEditTaskRepeatCfgComponent {
     this.showResultHeatmap.update((v) => !v);
     if (!this.showResultHeatmap()) {
       this.simulatedCompletion.set(null);
+      this.previewYearOffset.set(0);
     }
   }
   clearSimulation(): void {
@@ -268,10 +303,21 @@ export class DialogEditTaskRepeatCfgComponent {
     // Per-instance overrides (moves / RDATE) are Phase 8; here only EXDATE skips
     // (deletedInstanceDates) apply to the projection.
     const exdates = cfg.exdatesKey ? cfg.exdatesKey.split(',') : [];
-    const from = new Date();
-    from.setHours(12, 0, 0, 0);
-    const to = new Date(from);
-    to.setDate(to.getDate() + this._PREVIEW_HEATMAP_DAYS);
+    // The window: a 365-day span anchored at today, shifted by whole years via
+    // the ‹ › navigation, then padded to full calendar months so the month
+    // view never shows a half-covered month. Projection starts at TODAY in the
+    // home window (no "projected" marks on days already past); shifted windows
+    // show the full pattern.
+    const offset = this.previewYearOffset();
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const anchor = new Date(today);
+    anchor.setFullYear(anchor.getFullYear() + offset);
+    const anchorEnd = new Date(anchor);
+    anchorEnd.setDate(anchorEnd.getDate() + this._PREVIEW_HEATMAP_DAYS);
+    const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12, 0, 0);
+    const to = new Date(anchorEnd.getFullYear(), anchorEnd.getMonth() + 1, 0, 12, 0, 0);
+    const occFrom = offset === 0 ? today : from;
     // The util only reads repeatFromCompletionDate / lastTaskCreationDay /
     // startDate — all carried by the narrow schedule slice.
     const baseStart = getEffectiveRepeatStartDate(cfg);
@@ -294,7 +340,7 @@ export class DialogEditTaskRepeatCfgComponent {
       afterFrom.setDate(afterFrom.getDate() + 1);
       const before = getRRuleOccurrencesInRange(
         { rrule, startDate: baseStart, exdates },
-        from,
+        occFrom,
         beforeEnd,
       );
       const after = getRRuleOccurrencesInRange(
@@ -308,11 +354,14 @@ export class DialogEditTaskRepeatCfgComponent {
       // from-completion schedule where finishing a task never shifts dates).
       occ = getRRuleOccurrencesInRange(
         { rrule, startDate: baseStart, exdates },
-        from,
+        occFrom,
         to,
       );
     }
-    if (!occ.length && !sim) {
+    // Hide an all-empty preview only in the HOME window: a navigated window may
+    // legitimately be empty (e.g. before the start date), and returning null
+    // there would tear down the calendar — and its ‹ › nav — mid-navigation.
+    if (!occ.length && !sim && offset === 0) {
       return null;
     }
 
