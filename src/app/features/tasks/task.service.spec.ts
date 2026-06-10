@@ -21,7 +21,7 @@ import {
   addSubTask,
   moveSubTaskToTop,
   moveSubTaskToBottom,
-  updateTaskUi,
+  setSubtaskHideMode,
 } from './store/task.actions';
 import { selectTaskEntities } from './store/task.selectors';
 import {
@@ -952,8 +952,8 @@ describe('TaskService', () => {
     const dispatchedHideMode = (): number | undefined => {
       const calls = (store.dispatch as jasmine.Spy).calls.all();
       const last = calls[calls.length - 1].args[0];
-      expect(last.type).toBe(updateTaskUi.type);
-      return last.task.changes._hideSubTasksMode;
+      expect(last.type).toBe(setSubtaskHideMode.type);
+      return last.mode;
     };
 
     it('Show → HideDone when some (but not all) subtasks are done (isShowLess)', () => {

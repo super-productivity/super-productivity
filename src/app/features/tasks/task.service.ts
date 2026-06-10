@@ -29,6 +29,7 @@ import {
   roundTimeSpentForDay,
   setCurrentTask,
   setSelectedTask,
+  setSubtaskHideMode,
   toggleStart,
   unsetCurrentTask,
   updateTaskUi,
@@ -1140,7 +1141,7 @@ export class TaskService {
     // Use explicit Show (0) rather than undefined: persisted payloads are JSON-encoded,
     // and JSON.stringify drops `undefined` keys — a remote replay of the "show all"
     // transition would otherwise be a no-op on the receiving device.
-    this.updateUi(id, { _hideSubTasksMode: HideSubTasksMode.Show });
+    this._store.dispatch(setSubtaskHideMode({ taskId: id, mode: HideSubTasksMode.Show }));
   }
 
   toggleSubTaskMode(
@@ -1150,8 +1151,8 @@ export class TaskService {
   ): void {
     // Resolve the new mode here (not in the reducer): the toggle outcome depends on
     // local task/subtask state, which can differ across devices at replay time. By
-    // dispatching `updateTaskUi` with the resolved value, the synced op carries the
-    // final state rather than the toggle intent, keeping replay deterministic.
+    // dispatching `setSubtaskHideMode` with the resolved value, the synced op carries
+    // the final state rather than the toggle intent, keeping replay deterministic.
     const entities = this._taskEntities();
     const task = entities[taskId];
     if (!task) {
@@ -1181,11 +1182,15 @@ export class TaskService {
       }
     }
 
-    this.updateUi(taskId, { _hideSubTasksMode: newVal as HideSubTasksMode });
+    this._store.dispatch(
+      setSubtaskHideMode({ taskId, mode: newVal as HideSubTasksMode }),
+    );
   }
 
   hideSubTasks(id: string): void {
-    this.updateUi(id, { _hideSubTasksMode: HideSubTasksMode.HideAll });
+    this._store.dispatch(
+      setSubtaskHideMode({ taskId: id, mode: HideSubTasksMode.HideAll }),
+    );
   }
 
   async convertToMainTask(task: Task): Promise<void> {

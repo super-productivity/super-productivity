@@ -1116,9 +1116,10 @@ describe('Task Reducer', () => {
   });
 
   describe('subtask hide/show - persistent meta', () => {
-    it('updateTaskUi should be persistent with correct meta', () => {
-      const action = fromActions.updateTaskUi({
-        task: { id: 'task-1', changes: { _hideSubTasksMode: 1 } },
+    it('setSubtaskHideMode should be persistent with correct meta', () => {
+      const action = fromActions.setSubtaskHideMode({
+        taskId: 'task-1',
+        mode: 1,
       });
 
       expect(action.meta.isPersistent).toBe(true);
@@ -1127,15 +1128,58 @@ describe('Task Reducer', () => {
       expect(action.meta.opType).toBe('UPD');
     });
 
-    it('updateTaskUi payload survives JSON round-trip for the "show all" transition', () => {
+    it('updateTaskUi should NOT be persistent (old clients apply known action types)', () => {
+      // Old clients have a reducer for updateTaskUi; a persistent updateTaskUi op
+      // carrying values outside their shipped HideSubTasksMode set would land in
+      // their state and fail typia validation. Collapse-state sync must go
+      // through the dedicated setSubtaskHideMode action instead.
+      const action = fromActions.updateTaskUi({
+        task: { id: 'task-1', changes: { _hideSubTasksMode: 1 } },
+      });
+
+      expect((action as any).meta).toBeUndefined();
+    });
+
+    it('setSubtaskHideMode payload survives JSON round-trip for the "show all" transition', () => {
       // The synced payload is JSON-encoded. `undefined` is dropped by JSON.stringify,
       // so callers must use the explicit Show (0) sentinel to make a "show all"
       // transition replay correctly on remote devices.
-      const action = fromActions.updateTaskUi({
-        task: { id: 'task-1', changes: { _hideSubTasksMode: 0 } },
+      const action = fromActions.setSubtaskHideMode({
+        taskId: 'task-1',
+        mode: 0,
       });
       const roundTripped = JSON.parse(JSON.stringify(action));
-      expect(roundTripped.task.changes._hideSubTasksMode).toBe(0);
+      expect(roundTripped.mode).toBe(0);
+    });
+
+    it('setSubtaskHideMode normalizes Show (0) to undefined in state', () => {
+      // Synced Task state must stay within the legacy {undefined, 1, 2} shape:
+      // old clients' typia validators reject 0 as corruption. The explicit 0
+      // lives only in the action payload.
+      const task = createTask('task-1', { _hideSubTasksMode: 2 });
+      let state: TaskState = {
+        ...initialTaskState,
+        ids: ['task-1'],
+        entities: { 'task-1': task },
+      };
+
+      state = taskReducer(
+        state,
+        fromActions.setSubtaskHideMode({ taskId: 'task-1', mode: 0 }),
+      );
+      expect(state.entities['task-1']!._hideSubTasksMode).toBeUndefined();
+
+      state = taskReducer(
+        state,
+        fromActions.setSubtaskHideMode({ taskId: 'task-1', mode: 2 }),
+      );
+      expect(state.entities['task-1']!._hideSubTasksMode).toBe(2);
+
+      state = taskReducer(
+        state,
+        fromActions.setSubtaskHideMode({ taskId: 'task-1', mode: 1 }),
+      );
+      expect(state.entities['task-1']!._hideSubTasksMode).toBe(1);
     });
   });
 });

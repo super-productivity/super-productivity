@@ -1,6 +1,6 @@
 import { createAction, props } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
-import { Task, TaskDetailTargetPanel } from '../task.model';
+import { HideSubTasksMode, Task, TaskDetailTargetPanel } from '../task.model';
 import { RoundTimeOption } from '../../project/project.model';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { OpType } from '../../../op-log/core/operation.types';
@@ -39,12 +39,22 @@ export const __updateMultipleTaskSimple = createAction(
 
 export const updateTaskUi = createAction(
   '[Task] Update Task Ui',
-  (taskProps: { task: Update<Task> }) => ({
+  props<{ task: Update<Task> }>(),
+);
+
+// Dedicated action (instead of reusing updateTaskUi): old clients apply ops for
+// action types they know, and their typia validators reject values outside the
+// shipped HideSubTasksMode set as data corruption. An unknown action type is a
+// clean no-op for them, so collapse-state sync degrades silently on old
+// versions instead of triggering the repair flow.
+export const setSubtaskHideMode = createAction(
+  '[Task] Set Subtask Hide Mode',
+  (taskProps: { taskId: string; mode: HideSubTasksMode }) => ({
     ...taskProps,
     meta: {
       isPersistent: true,
       entityType: 'TASK',
-      entityId: taskProps.task.id as string,
+      entityId: taskProps.taskId,
       opType: OpType.Update,
     } satisfies PersistentActionMeta,
   }),

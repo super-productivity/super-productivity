@@ -11,6 +11,7 @@ import {
   roundTimeSpentForDay,
   setCurrentTask,
   setSelectedTask,
+  setSubtaskHideMode,
   toggleStart,
   unsetCurrentTask,
   updateTaskUi,
@@ -354,6 +355,18 @@ export const taskReducer = createReducer<TaskState>(
 
   on(updateTaskUi, (state, { task }) => {
     return taskAdapter.updateOne(task, state);
+  }),
+
+  on(setSubtaskHideMode, (state, { taskId, mode }) => {
+    // Normalize Show (0) to undefined so persisted/synced Task state stays
+    // within the legacy {undefined, 1, 2} shape — old clients' typia
+    // validators reject 0 as corruption. The explicit 0 exists only in the
+    // action payload (JSON.stringify drops undefined, so the "show all"
+    // transition needs a serializable value on the wire).
+    return taskAdapter.updateOne(
+      { id: taskId, changes: { _hideSubTasksMode: mode || undefined } },
+      state,
+    );
   }),
 
   // Bulk task updates - used for archive task batch operations

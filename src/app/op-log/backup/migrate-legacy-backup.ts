@@ -304,6 +304,14 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
       delete taskDict[taskId]!.notes;
     }
 
+    // Normalize an explicit Show (0) to undefined: persisted Task state must
+    // stay within the legacy {undefined, 1, 2} shape — old clients' typia
+    // validators reject 0 as corruption (0 only ever travels in action
+    // payloads, never in state).
+    if ((taskDict[taskId]!._hideSubTasksMode as unknown) === 0) {
+      taskDict[taskId] = { ...taskDict[taskId]!, _hideSubTasksMode: undefined };
+    }
+
     // Convert _showSubTasksMode → _hideSubTasksMode.
     // Check `=== undefined` (not truthy): HideSubTasksMode.Show is 0, so a
     // truthy check would incorrectly treat an explicit Show as "not set".
