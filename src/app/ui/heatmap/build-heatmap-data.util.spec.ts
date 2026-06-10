@@ -113,6 +113,35 @@ describe('buildHeatmapMonths', () => {
     expect(labels[1]).toBe('Jul');
   });
 
+  it('keeps CURRENT-year labels plain — only other years get stamped', () => {
+    // "Jun" not "Jun 2026": the current year is the implied default; the next
+    // year's stamp marks the boundary in a rolling window.
+    const y = new Date().getFullYear();
+    const from = D(`${y}-06-15`);
+    const to = D(`${y + 1}-06-15`);
+    const map = buildProjectionDayMap([], from, to);
+    const labels = buildHeatmapMonths(
+      map,
+      from,
+      to,
+      0,
+      MONTHS,
+      heatmapOccurrenceTotal,
+    ).map((b) => b.label);
+    expect(labels[0]).toBe('Jun');
+    expect(labels[7]).toBe(`Jan ${y + 1}`);
+    expect(labels[12]).toBe('Jun');
+    const sameYear = buildHeatmapMonths(
+      buildProjectionDayMap([], D(`${y}-01-01`), D(`${y}-02-28`)),
+      D(`${y}-01-01`),
+      D(`${y}-02-28`),
+      0,
+      MONTHS,
+      heatmapOccurrenceTotal,
+    ).map((b) => b.label);
+    expect(sameYear).toEqual(['Jan', 'Feb']);
+  });
+
   it('heatmapHoursTotal sums day time as whole hours', () => {
     const days = [{ timeSpent: 7_200_000 }, { timeSpent: 3_600_000 }] as DayData[];
     expect(heatmapHoursTotal(days)).toBe('3h');
