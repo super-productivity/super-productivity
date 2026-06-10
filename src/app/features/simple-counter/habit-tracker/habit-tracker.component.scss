@@ -3,14 +3,16 @@
 :host {
   display: flex;
   justify-content: center;
-  overflow-x: auto;
   padding: var(--s);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .habit-tracker-container {
-  display: grid;
-  justify-content: center;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -23,6 +25,7 @@
   margin-bottom: var(--s2);
   padding: 0 var(--s-half);
   width: 100%;
+  box-sizing: border-box;
   min-width: 400px;
 
   @include mq(xs, max) {
@@ -71,17 +74,19 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0; // Critical for flex children truncation
 }
 
 .header-row {
   display: flex;
   margin-bottom: var(--s-half);
   align-items: flex-end;
+  gap: var(--s);
 }
 
 .header-spacer {
   flex: 1 1 0px;
-  min-width: 120px;
+  min-width: 0;
 
   @include mq(xs, max) {
     flex: 0 0 40px;
@@ -90,7 +95,7 @@
 }
 
 .day-header {
-  flex: 0 0 44px;
+  flex: 0 0 48px;
   text-align: center;
   font-size: 11px;
   opacity: 0.7;
@@ -119,6 +124,7 @@
   display: flex;
   align-items: center;
   padding: var(--s) 0;
+  gap: var(--s);
 
   border-bottom: 1px solid var(--c-dark-10);
 
@@ -150,7 +156,7 @@
 
 .habit-title {
   flex: 1 1 0px;
-  min-width: 120px;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -306,7 +312,7 @@
 }
 
 .day-cell {
-  flex: 0 0 44px;
+  flex: 0 0 48px;
   display: flex;
   justify-content: center;
   cursor: pointer;
