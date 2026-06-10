@@ -64,7 +64,6 @@ describe('OperationApplierService', () => {
     mockArchiveOperationHandler.handleOperation.and.returnValue(Promise.resolve());
     mockOperationLogEffects.processDeferredActions.and.returnValue(Promise.resolve());
     mockClientIdProvider.loadClientId.and.resolveTo('testClient');
-    mockClientIdProvider.getOrGenerateClientId.and.resolveTo('testClient');
 
     TestBed.configureTestingModule({
       providers: [

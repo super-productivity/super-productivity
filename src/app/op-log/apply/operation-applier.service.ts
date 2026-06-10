@@ -92,16 +92,17 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
     // from genuinely remote ops (preserves per-device local-only sync settings
     // only against another client's ops, never while replaying our own).
     //
-    // This path applies ops during sync, where the clientId has always been
-    // resolved already (download/upload/vector-clocks need it), so the cached
-    // read returns instantly. Use getOrGenerateClientId (not loadClientId):
-    // it throws rather than returning null on a transient IndexedDB failure, so
-    // a foreign op can never slip through unprotected — the apply aborts and the
-    // sync retries instead. It won't mint a fresh id here (this device, having
-    // ops to apply, already has one); every call site tolerates a throw (the two
-    // sync paths wrap applyOperations in try/catch; the boot-time
-    // retryFailedRemoteOps catches per-op and leaves the op for the next launch).
-    const localClientId = await this.clientIdProvider.getOrGenerateClientId();
+    // Use loadClientId (lenient — returns null, never throws). Do NOT switch to
+    // getOrGenerateClientId to "fail safe": applyRemoteOperations appends the
+    // incoming ops as PENDING before calling this applier and only marks them
+    // applied/failed from the returned result, so a throw here would strand those
+    // appended ops — a same-session retry then skips them as duplicates. That is
+    // worse than the unprotected-foreign-op leak it would prevent. The leak is
+    // unreachable on this path anyway: applying remote ops means the clientId was
+    // already resolved (download/vector-clocks need it), so the cached read
+    // returns it. A null only happens off this path (cold-boot hydration), where
+    // the unset flag's own-op default is the safe direction. See meta-reducer.
+    const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
 
     const result = await replayOperationBatch({
       ops,

@@ -574,18 +574,7 @@ export class OperationLogHydratorService {
     const stillFailedOpIds: string[] = [];
 
     for (const entry of failedOps) {
-      // applyOperations can THROW here (e.g. getOrGenerateClientId on a transient
-      // IndexedDB read failure), not just return result.failedOp. This runs on
-      // the boot path, so swallow it as "still failed" — a clientId hiccup must
-      // leave the op for the next launch, never abort hydration.
-      let result: Awaited<ReturnType<OperationApplierService['applyOperations']>>;
-      try {
-        result = await this.operationApplierService.applyOperations([entry.op]);
-      } catch (e) {
-        OpLog.warn(`OperationLogHydratorService: Error retrying op ${entry.op.id}`, e);
-        stillFailedOpIds.push(entry.op.id);
-        continue;
-      }
+      const result = await this.operationApplierService.applyOperations([entry.op]);
       if (result.failedOp) {
         // SyncStateCorruptedError or any other error means the op still can't be applied
         OpLog.warn(

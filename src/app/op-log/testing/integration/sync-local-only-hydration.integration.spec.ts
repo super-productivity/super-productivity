@@ -50,7 +50,9 @@ describe('Sync local-only settings — hydration replay integration (#8077)', ()
     actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
     opType: OpType.Update,
     entityType: 'GLOBAL_CONFIG' as EntityType,
-    entityId: 'GLOBAL_CONFIG',
+    // Real updateGlobalConfigSection uses the section key as the entity id
+    // (see global-config.actions.ts), so match that here.
+    entityId: 'sync',
     payload: {
       actionPayload: { sectionKey: 'sync', sectionCfg },
       entityChanges: [],

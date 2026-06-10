@@ -1416,35 +1416,6 @@ describe('OperationLogHydratorService', () => {
         jasmine.any(Number),
       );
     });
-
-    it('treats a THROWN applyOperations error as still-failed without aborting (boot resilience)', async () => {
-      const failedOp = createMockOperation('throwing-op');
-      const failedEntry: OperationLogEntry = {
-        seq: 7,
-        op: failedOp,
-        appliedAt: Date.now(),
-        source: 'remote',
-        applicationStatus: 'failed',
-        retryCount: 1,
-      };
-
-      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve([failedEntry]));
-      // Simulate getOrGenerateClientId rejecting inside applyOperations (transient
-      // IndexedDB read failure) — a throw, not a result.failedOp.
-      mockOperationApplierService.applyOperations.and.returnValue(
-        Promise.reject(new Error('clientId read failed')),
-      );
-
-      // Must not reject — a clientId hiccup during boot leaves the op for the
-      // next launch rather than aborting hydration.
-      await service.retryFailedRemoteOps();
-
-      expect(mockOpLogStore.markFailed).toHaveBeenCalledWith(
-        ['throwing-op'],
-        jasmine.any(Number),
-      );
-      expect(mockOpLogStore.markApplied).not.toHaveBeenCalled();
-    });
   });
 
   describe('IndexedDB open error handling', () => {
