@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { RruleBuilderComponent } from './rrule-builder.component';
+import { SnackService } from '../../../../core/snack/snack.service';
 
 describe('RruleBuilderComponent', () => {
   let fixture: ComponentFixture<RruleBuilderComponent>;
@@ -14,6 +15,7 @@ describe('RruleBuilderComponent', () => {
   ): Promise<void> => {
     await TestBed.configureTestingModule({
       imports: [RruleBuilderComponent, TranslateModule.forRoot(), NoopAnimationsModule],
+      providers: [{ provide: SnackService, useValue: { open: () => undefined } }],
     }).compileComponents();
     fixture = TestBed.createComponent(RruleBuilderComponent);
     component = fixture.componentInstance;

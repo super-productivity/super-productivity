@@ -480,6 +480,21 @@
         <div class="rb-hint">
           {{ T.F.TASK_REPEAT.F.RRULE_RAW_DESCRIPTION | translate }}
         </div>
+        <!-- The assembled rule the builder currently emits, with a copy
+             affordance — lives here next to the raw override so reading and
+             overriding the string happen in one place. -->
+        <div class="rb-built">
+          <code class="rb-built__expr">{{ builtRRule() }}</code>
+          <button
+            mat-icon-button
+            type="button"
+            [title]="T.F.WORKLOG.EXPORT.COPY_TO_CLIPBOARD | translate"
+            [attr.aria-label]="T.F.WORKLOG.EXPORT.COPY_TO_CLIPBOARD | translate"
+            (click)="copyRRule()"
+          >
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </div>
       </div>
     </div>
   </collapsible>

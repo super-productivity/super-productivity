@@ -11,7 +11,10 @@ import {
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { MatIcon } from '@angular/material/icon';
+import { MatIconButton } from '@angular/material/button';
 import { CollapsibleComponent } from '../../../../ui/collapsible/collapsible.component';
+import { SnackService } from '../../../../core/snack/snack.service';
 import { T } from '../../../../t.const';
 import { dateStrToUtcDate } from '../../../../util/date-str-to-utc-date';
 import {
@@ -77,10 +80,17 @@ const MONTH_T_KEYS = [
   templateUrl: './rrule-builder.component.html',
   styleUrls: ['./rrule-builder.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, CollapsibleComponent, NgTemplateOutlet],
+  imports: [
+    TranslatePipe,
+    CollapsibleComponent,
+    NgTemplateOutlet,
+    MatIcon,
+    MatIconButton,
+  ],
 })
 export class RruleBuilderComponent implements OnInit {
   private _translateService = inject(TranslateService);
+  private _snackService = inject(SnackService);
   T: typeof T = T;
 
   rrule = input<string>('');
@@ -91,6 +101,19 @@ export class RruleBuilderComponent implements OnInit {
 
   private _model = signal<RRuleFormModel>(defaultRRuleFormModel());
   model = this._model.asReadonly();
+  /** The assembled rule — the exact string the builder emits to the dialog;
+   *  shown beneath the raw-override field with a copy affordance. */
+  readonly builtRRule = computed(() => formModelToRRule(this._model()));
+
+  async copyRRule(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.builtRRule());
+      this._snackService.open(T.GLOBAL_SNACK.COPY_TO_CLIPPBOARD);
+    } catch {
+      // Clipboard blocked (permissions / insecure context) — the string stays
+      // visible and selectable, so there is nothing heavier worth doing here.
+    }
+  }
   // Orthogonal to the rrule string: re-anchors the interval to the completion
   // day. Owned here (not in the rrule body) and surfaced to the dialog via output.
   private _fromCompletion = signal(false);

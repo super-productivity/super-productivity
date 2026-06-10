@@ -132,6 +132,22 @@
   opacity: 0.65;
 }
 
+// The assembled rule + copy button beneath the raw-override field.
+.rb-built {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  margin-top: var(--s-half);
+
+  &__expr {
+    font-family: monospace;
+    font-size: 12px;
+    opacity: 0.75;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+}
+
 .rb-adv {
   display: flex;
   flex-direction: column;
