@@ -7,6 +7,7 @@ import {
   PluginCommentsConfig,
   PluginFieldMapping,
 } from './plugin-issue-provider.model';
+import { PluginLog } from '../../core/log';
 
 const createMockDefinition = (
   overrides: Partial<IssueProviderPluginDefinition> = {},
@@ -73,7 +74,7 @@ describe('PluginIssueProviderRegistryService', () => {
 
     it('should warn and reject duplicate registrations', () => {
       const definition = createMockDefinition();
-      spyOn(console, 'warn');
+      spyOn(PluginLog, 'warn');
 
       registerProvider(service, 'dup', definition, 'First', 'First', 'icon1', 1000, {
         singular: 'A',
@@ -84,7 +85,7 @@ describe('PluginIssueProviderRegistryService', () => {
         plural: 'Bs',
       });
 
-      expect(console.warn).toHaveBeenCalledWith(
+      expect(PluginLog.warn).toHaveBeenCalledWith(
         jasmine.stringContaining('Duplicate registration'),
       );
       // The first registration should be preserved

@@ -6,6 +6,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { RestorePoint } from '../../op-log/sync-providers/provider.interface';
 import { T } from '../../t.const';
+import { SyncLog } from '../../core/log';
 
 describe('SuperSyncRestoreService', () => {
   let service: SuperSyncRestoreService;
@@ -31,9 +32,9 @@ describe('SuperSyncRestoreService', () => {
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
-    // Spy on console methods for retry logging tests
-    spyOn(console, 'warn');
-    spyOn(console, 'error');
+    // Spy on logger methods for retry logging tests
+    spyOn(SyncLog, 'warn');
+    spyOn(SyncLog, 'err');
 
     TestBed.configureTestingModule({
       providers: [
@@ -215,7 +216,7 @@ describe('SuperSyncRestoreService', () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(1);
-      expect(console.warn).toHaveBeenCalledWith(
+      expect(SyncLog.warn).toHaveBeenCalledWith(
         jasmine.stringContaining('Restore failed due to network error, retrying (1/2)'),
         error,
       );
@@ -229,7 +230,7 @@ describe('SuperSyncRestoreService', () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(2);
-      expect(console.warn).toHaveBeenCalledWith(
+      expect(SyncLog.warn).toHaveBeenCalledWith(
         jasmine.stringContaining('Restore failed due to network error, retrying (2/2)'),
         error,
       );

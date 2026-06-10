@@ -1,5 +1,6 @@
 import { playSound } from './play-sound';
 import { closeAudioContext } from './audio-context';
+import { Log } from '../core/log';
 
 describe('playSound', () => {
   let mockAudioContext: any;
@@ -108,12 +109,12 @@ describe('playSound', () => {
   });
 
   it('should handle errors gracefully', async () => {
-    const consoleErrorSpy = spyOn(console, 'error');
+    const logErrSpy = spyOn(Log, 'err');
     fetchSpy.and.returnValue(Promise.reject(new Error('Test error')));
 
     await playSound('nonexistent.mp3');
 
-    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(logErrSpy).toHaveBeenCalled();
   });
 
   it('should reuse the same AudioContext for multiple sounds', async () => {
