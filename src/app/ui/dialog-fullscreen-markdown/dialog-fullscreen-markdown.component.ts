@@ -94,9 +94,10 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
   private readonly _matDialog = inject(MatDialog);
-  readonly shortcutLabels: ShortcutLabel = Object.fromEntries(
-    MARKDOWN_SHORTCUTS.map((s) => [s.name, `(${s.shortcutLabel})`]),
-  ) as ShortcutLabel;
+  readonly shortcutLabels: ShortcutLabel = MARKDOWN_SHORTCUTS.reduce((acc, s) => {
+    acc[s.name] = ` (${s.shortcutLabel})`;
+    return acc;
+  }, {} as ShortcutLabel) satisfies ShortcutLabel;
 
   /**
    * Resolved content with blob URLs for images (for preview rendering).
