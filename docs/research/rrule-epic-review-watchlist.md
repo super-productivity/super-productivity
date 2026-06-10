@@ -133,6 +133,18 @@ BYMONTH=13`, Feb-30 combos) walked to year 275760 (~3.8s freeze) and returned `t
   actually return an occurrence; `UNTIL`/`COUNT` stripped for the probe.
   (Commit `d1ef458`; Comment #20 🟠.) Note: `.between()`/`until` do **not** bound a
   never-firing rule in rrule.js — only `_canNeverFire` does.
+- ✅ **`_canNeverFire` combo coverage** — the original pre-screen only paired
+  `BYMONTH` × positive `BYMONTHDAY`, so `BYMONTH` × `BYYEARDAY` / `BYWEEKNO`
+  contradictions (`FREQ=DAILY;BYWEEKNO=53;BYMONTH=2`: measured ~7–10s) slipped through
+  to the one-time memoised probe walk — i.e. a save-click freeze on first sight.
+  Extended to month-possibility checks for positive year-days (both leap layouts) and
+  positive week numbers (conservative ±-day superset covering WKST shifts and
+  year-boundary spill — ISO week 1 can include late December, week 53 early January;
+  verified against rrule.js, which uses ISO week-year semantics). Negative values
+  count from the year's end and skip the check. Rules the pre-screen still can't
+  recognise (e.g. `BYSETPOS` beyond the period's occurrence count) keep the one-time
+  unbounded-probe cost — any future BY-part interplay check belongs in
+  `_canNeverFire`, never in the probe.
 - 🔶 **Sub-daily FREQ (HOURLY/MINUTELY/SECONDLY)** — engine maps every occurrence to local
   noon, so sub-daily silently collapses to ~daily; also `FREQ_TO_CYCLE` miss →
   `repeatCycle: undefined` → required-field typia failure. Rejected at the **dialog**

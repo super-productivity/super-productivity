@@ -483,7 +483,8 @@ export class DialogEditTaskRepeatCfgComponent {
     // would leave them with fixed presets only. With the flag off, the
     // occurrence engine schedules from the legacy mirror fields that save()
     // derives from the rule (rruleToLegacyTaskRepeatCfg) — the same
-    // best-effort fallback older sync clients rely on.
+    // best-effort fallback older sync clients rely on. (This supersedes the
+    // upstream flag-gated includeRRule — always-offered makes that moot.)
     const buildOptions = (refDate: Date): { value: string; label: string }[] =>
       buildRepeatQuickSettingOptions(refDate, _locale, translateService);
 

@@ -86,6 +86,41 @@ const _validityCache = new Map<string, boolean>();
 /** Max day-of-month per month (Feb leap-permissive at 29). */
 const _MONTH_MAX_DAY = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
+/** Cumulative days at each month's end, non-leap / leap. */
+const _CUM_DAYS = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365];
+const _CUM_DAYS_LEAP = [31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366];
+
+/** Months (1-12) a positive year-day can fall in, across leap AND non-leap
+ *  years (the boundary shifts by one day after February). Out-of-year days
+ *  (<1, >366) wrap to the adjacent year's Dec/Jan — used for week spans that
+ *  straddle a year boundary. */
+const _monthsOfYearDay = (yearDay: number): number[] => {
+  if (yearDay < 1) return [12];
+  if (yearDay > 366) return [1];
+  const months = new Set<number>();
+  for (const cum of [_CUM_DAYS, _CUM_DAYS_LEAP]) {
+    const m = cum.findIndex((c) => yearDay <= c);
+    if (m !== -1) months.add(m + 1);
+  }
+  return [...months];
+};
+
+/** Months an ISO-numbered week `n` (positive) can overlap, across all years,
+ *  leap shifts, and WKST choices. Week n's Monday sits at year-day
+ *  `(n-1)*7 + 4 - wd(Jan4)` with `wd ∈ [1,7]`, the week spans 7 days, and a
+ *  non-Monday WKST shifts boundaries by at most ±6 days — so year-days
+ *  `[(n-1)*7 - 9, (n-1)*7 + 16]` are a strict superset of every day week `n`
+ *  can contain. Superset = conservative: it can only ADD possible months,
+ *  never miss one, so the never-fire flag below stays free of false positives. */
+const _monthsOfWeekNo = (weekNo: number): Set<number> => {
+  const months = new Set<number>();
+  const base = (weekNo - 1) * 7;
+  for (let d = base - 9; d <= base + 16; d++) {
+    for (const m of _monthsOfYearDay(d)) months.add(m);
+  }
+  return months;
+};
+
 const _asArray = (v: number | number[] | null | undefined): number[] =>
   v == null ? [] : Array.isArray(v) ? v : [v];
 
@@ -109,7 +144,8 @@ const _allOutOfRange = (
  * NO occurrence — the case rrule.js "handles" by walking day-by-day to its
  * year-275760 ceiling (a multi-second main-thread freeze) before yielding
  * nothing. We catch the realistic vectors (out-of-range BY values like
- * `BYMONTH=13`, impossible `BYMONTH`+`BYMONTHDAY` combos like Feb-30) up front so
+ * `BYMONTH=13`; impossible `BYMONTH` × `BYMONTHDAY` / `BYYEARDAY` / `BYWEEKNO`
+ * combos like Feb-30, Feb × yearday 200, Feb × week 53) up front so
  * isRRuleValid can reject without iterating.
  *
  * Conservative by construction: it flags a rule ONLY when an entire constraint
@@ -135,14 +171,34 @@ const _canNeverFire = (o: RRuleParsedOptions): boolean => {
   // positive month-days are positional from the start; a negative day (-1 =
   // last) always exists, so a rule with ANY negative day can fire — skip the
   // combo check then. Flag only when no (valid-month, positive-day) pair fits.
+  const validMonths = byMonth.filter((m) => m >= 1 && m <= 12);
   const posDays = byMonthDay.filter((d) => d > 0);
   const hasNegDay = byMonthDay.some((d) => d < 0);
   if (byMonth.length && posDays.length && !hasNegDay) {
-    const validMonths = byMonth.filter((m) => m >= 1 && m <= 12);
     const anyPairFits = validMonths.some((m) =>
       posDays.some((d) => d <= _MONTH_MAX_DAY[m - 1]),
     );
     if (!anyPairFits) return true;
+  }
+  // Impossible month × year-day / week-number intersections, e.g.
+  // BYMONTH=2;BYYEARDAY=200 or BYMONTH=2;BYWEEKNO=53. Same shape as above:
+  // negative values count from the year's end (year-length-dependent), so any
+  // negative skips the check; flag only when NO value can touch a valid month
+  // under either leap layout.
+  const posYearDays = _asArray(o.byyearday).filter((d) => d > 0);
+  if (byMonth.length && posYearDays.length && !_asArray(o.byyearday).some((d) => d < 0)) {
+    const anyDayFits = posYearDays.some((d) =>
+      _monthsOfYearDay(d).some((m) => validMonths.includes(m)),
+    );
+    if (!anyDayFits) return true;
+  }
+  const posWeekNos = _asArray(o.byweekno).filter((n) => n > 0);
+  if (byMonth.length && posWeekNos.length && !_asArray(o.byweekno).some((n) => n < 0)) {
+    const anyWeekFits = posWeekNos.some((n) => {
+      const months = _monthsOfWeekNo(n);
+      return validMonths.some((m) => months.has(m));
+    });
+    if (!anyWeekFits) return true;
   }
   return false;
 };
