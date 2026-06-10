@@ -16,7 +16,7 @@
           </td>
           <td class="shortcut-cell">
             @for (
-              key of shortcut.shortcutLabel.split('+');
+              key of shortcutLabels[shortcut.name].keys;
               track $index;
               let last = $last
             ) {

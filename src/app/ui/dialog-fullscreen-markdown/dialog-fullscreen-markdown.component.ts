@@ -53,11 +53,14 @@ import { IS_MOBILE } from 'src/app/util/is-mobile';
 import { IS_IOS } from 'src/app/util/is-ios';
 import { Keyboard } from '@capacitor/keyboard';
 import { DialogMarkdownShortcutsComponent } from './dialog-markdown-shortcuts.component';
-import { MARKDOWN_SHORTCUTS, ShortcutNames } from './markdown-shortcuts.const';
+import {
+  MARKDOWN_SHORTCUTS,
+  shortcutLabels,
+  ShortcutNames,
+} from './markdown-shortcuts.const';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
-type ShortcutLabel = Record<ShortcutNames, string>;
 
 @Component({
   selector: 'dialog-fullscreen-markdown',
@@ -94,11 +97,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
   private readonly _matDialog = inject(MatDialog);
-  readonly shortcutLabels: ShortcutLabel = MARKDOWN_SHORTCUTS.reduce((acc, s) => {
-    acc[s.name] = ` (${s.shortcutLabel})`;
-    return acc;
-  }, {} as ShortcutLabel) satisfies ShortcutLabel;
-
+  readonly shortcutLabels = shortcutLabels;
   /**
    * Resolved content with blob URLs for images (for preview rendering).
    * Initialized in ngOnInit with raw content, updated asynchronously when images resolve.
@@ -230,6 +229,8 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       this.close();
       return;
     }
+
+    // Accepting both CTRL and META key is intentional though the labels shows one of them
     const hasModifier = (ev.ctrlKey || ev.metaKey) && !ev.altKey;
 
     const textarea = this.textareaEl()?.nativeElement;

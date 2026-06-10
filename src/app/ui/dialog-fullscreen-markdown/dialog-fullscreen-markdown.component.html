@@ -40,7 +40,8 @@
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBold()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate) + shortcutLabels['bold']
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate) +
+            shortcutLabels['bold'].tooltip
           "
           aria-label="Bold"
         >
@@ -51,7 +52,8 @@
           (mousedown)="$event.preventDefault()"
           (click)="onApplyItalic()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate) + shortcutLabels['italic']
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate) +
+            shortcutLabels['italic'].tooltip
           "
           aria-label="Italic"
         >
@@ -63,7 +65,7 @@
           (click)="onApplyStrikethrough()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate) +
-            shortcutLabels['strikethrough']
+            shortcutLabels['strikethrough'].tooltip
           "
           aria-label="Strikethrough"
         >
@@ -78,7 +80,7 @@
           (click)="onApplyBulletList()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate) +
-            shortcutLabels['bullet']
+            shortcutLabels['bullet'].tooltip
           "
           aria-label="Bulleted list"
         >
@@ -90,7 +92,7 @@
           (click)="onApplyNumberedList()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate) +
-            shortcutLabels['numbered']
+            shortcutLabels['numbered'].tooltip
           "
           aria-label="Numbered list"
         >
@@ -113,7 +115,8 @@
           (mousedown)="$event.preventDefault()"
           (click)="onApplyQuote()"
           [matTooltip]="
-            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate) + shortcutLabels['quote']
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate) +
+            shortcutLabels['quote'].tooltip
           "
           aria-label="Quote"
         >
@@ -125,7 +128,7 @@
           (click)="onApplyInlineCode()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate) +
-            shortcutLabels['code']
+            shortcutLabels['code'].tooltip
           "
           aria-label="Inline code"
         >
@@ -149,7 +152,7 @@
           (click)="onInsertLink()"
           [matTooltip]="
             (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate) +
-            shortcutLabels['link']
+            shortcutLabels['link'].tooltip
           "
           aria-label="Insert link"
         >
