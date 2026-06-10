@@ -10,7 +10,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { PluginService } from '../../plugin.service';
@@ -18,9 +18,8 @@ import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCleanupService } from '../../plugin-cleanup.service';
 import {
   PluginIframeConfig,
-  createPluginIframeUrl,
+  buildPluginIframeHtml,
   handlePluginMessage,
-  cleanupPluginIframeUrl,
 } from '../../util/plugin-iframe.util';
 import {
   MatCard,
@@ -93,12 +92,11 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   readonly pluginId = signal<string>('');
   readonly isLoading = signal<boolean>(true);
   readonly error = signal<string | null>(null);
-  readonly iframeSrc = signal<SafeResourceUrl | null>(null);
+  readonly iframeSrcdoc = signal<SafeHtml | null>(null);
   readonly isResizing = this._layoutService.isPanelResizing;
 
   private _messageListener?: EventListener;
   private _routeSubscription?: Subscription;
-  private _currentIframeUrl: string | null = null;
 
   async ngOnInit(): Promise<void> {
     // If directPluginId is provided, load that plugin directly
@@ -235,11 +233,8 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       boundMethods: this._pluginBridge.createBoundMethods(pluginId, plugin.manifest),
     };
 
-    // Create iframe URL using blob URL
-    const iframeUrl = createPluginIframeUrl(config);
-
-    // Store the URL for cleanup
-    this._currentIframeUrl = iframeUrl;
+    // Build the iframe document (loaded via srcdoc, not a blob: URL)
+    const iframeHtml = buildPluginIframeHtml(config);
 
     // Store message handler for cleanup
     // Filter by event.source so messages from other plugin iframes (side panel,
@@ -265,17 +260,12 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // Set up message communication
     window.addEventListener('message', this._messageListener);
 
-    // Create safe URL and set iframe source
-    const safeUrl = this._sanitizer.bypassSecurityTrustResourceUrl(iframeUrl);
-    PluginLog.log(
-      `Setting iframe src for plugin ${pluginId}:`,
-      iframeUrl.startsWith('blob:')
-        ? `blob:${iframeUrl.split(':')[1].substring(0, 20)}...`
-        : iframeUrl.substring(0, 100) + '...',
-    );
-    this.iframeSrc.set(safeUrl);
+    // Set the iframe document. `srcdoc` is a SecurityContext.HTML sink, so the
+    // host-built document (which contains the inline API bridge <script>) must
+    // be marked trusted or Angular's HTML sanitizer would strip the script.
+    this.iframeSrcdoc.set(this._sanitizer.bypassSecurityTrustHtml(iframeHtml));
     this.isLoading.set(false);
-    PluginLog.log(`Plugin ${pluginId} iframe src set, loading complete`);
+    PluginLog.log(`Plugin ${pluginId} iframe srcdoc set, loading complete`);
   }
 
   private _createBridgeToken(): string {
@@ -295,13 +285,6 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       PluginLog.log(`Removed message listener for plugin: ${currentPluginId}`);
     }
 
-    // Cleanup blob URL if it exists
-    if (this._currentIframeUrl) {
-      cleanupPluginIframeUrl(this._currentIframeUrl);
-      PluginLog.log(`Cleaned up blob URL for plugin: ${currentPluginId}`);
-      this._currentIframeUrl = null;
-    }
-
     // Clear iframe reference from cleanup service (but don't remove from DOM).
     // Skip when embedding (work-view, side panel) so the plugin keeps its hook
     // and button registrations across embed mount/unmount cycles.
@@ -310,13 +293,11 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       PluginLog.log(`Cleaned up plugin references for: ${currentPluginId}`);
     }
 
-    // Set iframe to empty data URL to stop execution but keep iframe in DOM
-    this.iframeSrc.set(
-      this._sanitizer.bypassSecurityTrustResourceUrl(
-        'data:text/html,<html><body></body></html>',
-      ),
+    // Reset iframe to an empty document to stop execution but keep it in DOM
+    this.iframeSrcdoc.set(
+      this._sanitizer.bypassSecurityTrustHtml('<html><body></body></html>'),
     );
-    PluginLog.log(`Set iframe to empty data URL for plugin: ${currentPluginId}`);
+    PluginLog.log(`Reset iframe to empty document for plugin: ${currentPluginId}`);
   }
 
   onIframeLoad(): void {

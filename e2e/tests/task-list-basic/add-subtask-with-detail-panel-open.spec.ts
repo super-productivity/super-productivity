@@ -66,18 +66,28 @@ test.describe('Add subtask with detail panel open', () => {
   }) => {
     const parent = await addParentAndOpenPanel(page, workViewPage, taskPage);
 
+    // Let the panel's deferred open-time auto-focus land first, otherwise it can
+    // fire *after* we move focus to the row below and silently steal it back.
+    await expect
+      .poll(async () =>
+        page.evaluate(() => !!document.activeElement?.closest('task-detail-panel')),
+      )
+      .toBe(true);
+
     // Put focus back on the main-list task row (as if the user clicked or
     // arrow-navigated it with the panel open) — the path that goes through the
     // global shortcut handler and previously left the new subtask unfocused.
-    await parent.focus();
-    await expect
-      .poll(async () =>
-        page.evaluate(() => {
+    // Re-apply focus on each retry: under load the row may not accept focus on
+    // the first try, and .poll() alone would never re-focus it.
+    await expect(async () => {
+      await parent.focus();
+      expect(
+        await page.evaluate(() => {
           const a = document.activeElement as HTMLElement | null;
           return a?.tagName?.toLowerCase() === 'task' && !a.closest('task-detail-panel');
         }),
-      )
-      .toBe(true);
+      ).toBe(true);
+    }).toPass();
 
     await page.keyboard.press('a');
 

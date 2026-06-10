@@ -70,7 +70,6 @@ if (asyncActionProto && typeof asyncActionProto.execute === 'function') {
     if (this.closed) {
       if (!warnedOnce) {
         warnedOnce = true;
-        // eslint-disable-next-line no-console
         console.warn(
           '[test] Suppressed a leaked rxjs scheduler action (a cancelled ' +
             "action's timer fired after teardown). A spec is not tearing down " +

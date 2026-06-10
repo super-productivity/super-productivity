@@ -342,6 +342,11 @@ describe('JiraApiService', () => {
     beforeEach(() => {
       service = setupService(new Subject<boolean>());
       fetchSpy = spyOn(window, 'fetch');
+      // findAutoImportIssues$ → _sendRequest$ bails out with "Jira Offline" when
+      // !isOnline(). These tests assert pagination, not connectivity, so pin the
+      // online state instead of depending on the runner's real navigator.onLine
+      // (false under headless/offline CI). Jasmine restores the spy per test.
+      spyOnProperty(navigator, 'onLine').and.returnValue(true);
     });
 
     it('fetches all Jira Cloud search/jql pages via nextPageToken', (done) => {

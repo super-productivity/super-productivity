@@ -533,13 +533,18 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
   `;
 };
 
-// Store blob URLs for cleanup
-const activeBlobUrls = new Set<string>();
-
 /**
- * Create iframe URL with injected API using blob URLs instead of data URLs
+ * Build the full HTML document for a plugin UI iframe: the plugin's index.html
+ * with the host CSS and the postMessage API bridge injected.
+ *
+ * Returned as a string for `iframe.srcdoc`, NOT a `blob:` URL. srcdoc content is
+ * parsed inline, so the iframe loads under its sandbox-assigned opaque origin
+ * even on packaged `file://` builds. A `blob:` URL created by the host inherits
+ * the host origin, and an opaque-origin iframe (no `allow-same-origin`) cannot
+ * fetch it — which blanks the plugin UI on desktop. srcdoc avoids that
+ * cross-origin fetch entirely. See PLUGIN_IFRAME_SANDBOX.
  */
-export const createPluginIframeUrl = (config: PluginIframeConfig): string => {
+export const buildPluginIframeHtml = (config: PluginIframeConfig): string => {
   const apiScript = createPluginApiScript(config);
   const cssInjection = createPluginCssInjection();
   const fullCssInjection =
@@ -566,34 +571,7 @@ export const createPluginIframeUrl = (config: PluginIframeConfig): string => {
     html = html + apiScript;
   }
 
-  // Create blob URL instead of data URL
-  const blob = new Blob([html], { type: 'text/html' });
-  const blobUrl = URL.createObjectURL(blob);
-
-  // Track the blob URL for cleanup
-  activeBlobUrls.add(blobUrl);
-
-  return blobUrl;
-};
-
-/**
- * Clean up a blob URL when iframe is no longer needed
- */
-export const cleanupPluginIframeUrl = (url: string): void => {
-  if (url.startsWith('blob:') && activeBlobUrls.has(url)) {
-    URL.revokeObjectURL(url);
-    activeBlobUrls.delete(url);
-  }
-};
-
-/**
- * Clean up all active blob URLs (useful for cleanup on destroy)
- */
-export const cleanupAllPluginIframeUrls = (): void => {
-  activeBlobUrls.forEach((url) => {
-    URL.revokeObjectURL(url);
-  });
-  activeBlobUrls.clear();
+  return html;
 };
 
 /**

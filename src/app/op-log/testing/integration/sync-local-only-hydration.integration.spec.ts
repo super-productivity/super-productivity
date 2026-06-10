@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 /**
  * Integration test for the #8077 own-op-replay regression.
  *

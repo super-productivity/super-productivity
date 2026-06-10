@@ -59,16 +59,19 @@
   }
 
   <!-- Plugin iframe -->
-  @if (iframeSrc() && !error()) {
+  @if (iframeSrcdoc() && !error()) {
     <div
       class="iframe-container"
       [class.is-resizing]="isResizing()"
     >
       <!-- sandbox must stay a static attribute and mirror PLUGIN_IFRAME_SANDBOX:
-           Angular forbids binding security-sensitive iframe attributes (throws NG0910). -->
+           Angular forbids binding security-sensitive iframe attributes (throws NG0910).
+           No allow-same-origin: the iframe runs on an opaque origin so it cannot reach
+           window.parent.ea. Loaded via srcdoc (not a blob: URL) so it still renders on
+           packaged file:// builds, where an opaque-origin blob: fetch would be blocked. -->
       <iframe
         #iframe
-        [src]="iframeSrc()"
+        [srcdoc]="iframeSrcdoc()"
         data-plugin-iframe
         [attr.data-plugin-id]="pluginId()"
         sandbox="allow-scripts allow-forms allow-popups allow-modals"

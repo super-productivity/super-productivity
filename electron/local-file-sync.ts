@@ -12,6 +12,7 @@ import { app, dialog, ipcMain } from 'electron';
 import { getWin } from './main-window';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { assertPathOutside } from './file-path-guard';
+import { isPathSafeToOpen } from './shared-with-frontend/is-external-url-allowed';
 
 // SECURITY: file-sync must never read/write/list inside the app's private dir,
 // which holds settings/grants/db — touching it is a privilege-escalation
@@ -25,6 +26,15 @@ export const initLocalFileSyncAdapter = (): void => {
     IPC.READ_LOCAL_IMAGE_AS_DATA_URL,
     async (_, filePathOrUrl: string): Promise<string | null> => {
       try {
+        // A theme background-image path is synced and thus attacker-controllable.
+        // Reject UNC / remote file:// before touching the filesystem: fs.stat /
+        // readFile on `\\host\share` (or `file://host/share`) opens an SMB
+        // connection and leaks the user's NTLM hash — with no click, just by the
+        // theme being active. See GHSA-hr87-735w-hfq3.
+        if (!isPathSafeToOpen(filePathOrUrl)) {
+          return null;
+        }
+
         const normalized = filePathOrUrl.startsWith('file://')
           ? fileURLToPath(filePathOrUrl)
           : filePathOrUrl;

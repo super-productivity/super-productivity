@@ -5,6 +5,7 @@ import {
 } from '@super-productivity/plugin-api';
 import { PluginBridgeService } from '../plugin-bridge.service';
 import {
+  buildPluginIframeHtml,
   createPluginApiScript,
   handlePluginMessage,
   PluginIframeConfig,
@@ -308,6 +309,34 @@ describe('handlePluginMessage()', () => {
   it('keeps iframe plugins on an opaque sandbox origin', () => {
     expect(PLUGIN_IFRAME_SANDBOX).toContain('allow-scripts');
     expect(PLUGIN_IFRAME_SANDBOX).not.toContain('allow-same-origin');
+  });
+
+  describe('buildPluginIframeHtml()', () => {
+    const pluginBridge = {
+      createBoundMethods: () => ({}),
+    } as unknown as PluginBridgeService;
+
+    it('returns an inline HTML document (not a blob: URL) for srcdoc', () => {
+      const html = buildPluginIframeHtml({
+        ...createConfig(pluginBridge),
+        indexHtml: '<html><head></head><body><div id="app"></div></body></html>',
+      });
+      expect(typeof html).toBe('string');
+      expect(html.startsWith('blob:')).toBe(false);
+      // plugin content is preserved
+      expect(html).toContain('<div id="app"></div>');
+    });
+
+    it('injects the API bridge script (with the bridge token) before </body>', () => {
+      const html = buildPluginIframeHtml({
+        ...createConfig(pluginBridge),
+        indexHtml: '<html><head></head><body></body></html>',
+      });
+      expect(html).toContain('const bridgeToken = "test-bridge-token"');
+      expect(html).toContain('window.PluginAPI');
+      // script is injected inside the body, before its closing tag
+      expect(html.indexOf('window.PluginAPI')).toBeLessThan(html.indexOf('</body>'));
+    });
   });
 
   it('rejects raw iframe calls to bridge methods outside the iframe API allowlist', async () => {
