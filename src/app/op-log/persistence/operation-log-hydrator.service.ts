@@ -251,8 +251,12 @@ export class OperationLogHydratorService {
             // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
             // This reduces 500 dispatches to 1, dramatically improving startup performance.
             // The bulkHydrationMetaReducer iterates through ops and applies each action.
+            const localClientId =
+              (await this.clientIdProvider.loadClientId()) ?? undefined;
             this.hydrationStateService.startApplyingRemoteOps();
-            this.store.dispatch(bulkApplyOperations({ operations: opsToReplay }));
+            this.store.dispatch(
+              bulkApplyOperations({ operations: opsToReplay, localClientId }),
+            );
             this.hydrationStateService.endApplyingRemoteOps();
 
             // Merge replayed ops' clocks into local clock
@@ -328,8 +332,11 @@ export class OperationLogHydratorService {
           // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
           // This reduces 500 dispatches to 1, dramatically improving startup performance.
           // The bulkHydrationMetaReducer iterates through ops and applies each action.
+          const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
           this.hydrationStateService.startApplyingRemoteOps();
-          this.store.dispatch(bulkApplyOperations({ operations: opsToReplay }));
+          this.store.dispatch(
+            bulkApplyOperations({ operations: opsToReplay, localClientId }),
+          );
           this.hydrationStateService.endApplyingRemoteOps();
 
           // Merge replayed ops' clocks into local clock

@@ -909,6 +909,7 @@ describe('GlobalConfigReducer', () => {
         meta: {
           ...remoteAction.meta,
           isRemote: true,
+          isApplyingFromOtherClient: true,
         },
       };
 
@@ -950,7 +951,11 @@ describe('GlobalConfigReducer', () => {
       });
       const remoteReplayAction = {
         ...remoteAction,
-        meta: { ...remoteAction.meta, isRemote: true },
+        meta: {
+          ...remoteAction.meta,
+          isRemote: true,
+          isApplyingFromOtherClient: true,
+        },
       };
 
       const result = globalConfigReducer(oldState, remoteReplayAction);
@@ -960,6 +965,50 @@ describe('GlobalConfigReducer', () => {
           .withContext(`sync.${key} must survive remote section update`)
           .toBe(localSync[key]);
       }
+    });
+
+    // Regression (scheduled e2e #8077): replaying the device's OWN sync-setup op
+    // during hydration is stamped isRemote (to prevent re-logging) but is NOT a
+    // foreign update. If the crash snapshot predates the setup op, local
+    // state.sync.syncProvider is still null at replay time. Keying the local-only
+    // preservation off isRemote (the #8077 bug) overwrote the op's real provider
+    // with null and silently disabled sync. The bulk meta-reducer sets
+    // isApplyingFromOtherClient ONLY for ops authored by a DIFFERENT client, so
+    // own-op replay (isRemote without that flag) must apply the op faithfully.
+    it('applies own-op replay faithfully when isRemote is set without isApplyingFromOtherClient', () => {
+      const oldState: GlobalConfigState = {
+        ...initialGlobalConfigState,
+        sync: {
+          ...initialGlobalConfigState.sync,
+          // Mid-hydration: snapshot predates the setup op → provider not set yet.
+          syncProvider: null,
+          isEnabled: false,
+          isEncryptionEnabled: false,
+        },
+      };
+      const ownSetupAction = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: {
+          isEnabled: true,
+          syncProvider: SyncProviderId.WebDAV,
+          isEncryptionEnabled: true,
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+        },
+      });
+      const ownReplayAction = {
+        ...ownSetupAction,
+        meta: { ...ownSetupAction.meta, isRemote: true },
+      };
+
+      const result = globalConfigReducer(oldState, ownReplayAction);
+
+      // The op's own values win — sync is NOT silently disabled.
+      expect(result.sync.syncProvider).toBe(SyncProviderId.WebDAV);
+      expect(result.sync.isEnabled).toBe(true);
+      expect(result.sync.isEncryptionEnabled).toBe(true);
+      expect(result.sync.syncInterval).toBe(300000);
+      expect(result.sync.isManualSyncOnly).toBe(true);
     });
 
     it('should update shared sync settings for remote sync section updates', () => {
@@ -974,6 +1023,7 @@ describe('GlobalConfigReducer', () => {
         meta: {
           ...remoteAction.meta,
           isRemote: true,
+          isApplyingFromOtherClient: true,
         },
       };
 

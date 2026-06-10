@@ -397,7 +397,10 @@ describe('OperationLogHydratorService', () => {
         expect(mockStore.dispatch).toHaveBeenCalledTimes(2);
         // Tail ops are replayed via bulk dispatch for performance
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: tailOps.map((e) => e.op) }),
+          bulkApplyHydrationOperations({
+            operations: tailOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
         );
         // Hydration state is managed around the dispatch
         expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalled();
@@ -929,7 +932,10 @@ describe('OperationLogHydratorService', () => {
         expect(mockSchemaMigrationService.migrateOperations).toHaveBeenCalled();
         // Operations should be applied via bulk dispatch
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: migratedOps }),
+          bulkApplyHydrationOperations({
+            operations: migratedOps,
+            localClientId: 'test-client',
+          }),
         );
       });
 
@@ -1098,7 +1104,10 @@ describe('OperationLogHydratorService', () => {
         // Must replay the whole op-log from seq 0.
         expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: allOps.map((e) => e.op) }),
+          bulkApplyHydrationOperations({
+            operations: allOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
         );
       });
 
@@ -1130,7 +1139,10 @@ describe('OperationLogHydratorService', () => {
 
         // Replay all ops via bulk dispatch for performance
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: allOps.map((e) => e.op) }),
+          bulkApplyHydrationOperations({
+            operations: allOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
         );
         // Hydration state is managed around the dispatch
         expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalled();

@@ -238,10 +238,17 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       ...normalizedSectionCfg,
     };
 
-    const isRemoteUpdate =
-      (action as { meta?: { isRemote?: boolean } }).meta?.isRemote === true;
+    // Preserve this device's local-only sync settings ONLY when the update came
+    // from ANOTHER client. `isRemote` is also true while replaying the device's
+    // OWN ops during hydration — keying off it there would overwrite the op's
+    // real (own) sync settings with whatever local state happens to be mid-replay
+    // (e.g. a null syncProvider when the crash snapshot predates the setup op),
+    // silently disabling sync. See bulkOperationsMetaReducer.
+    const isFromOtherClient =
+      (action as { meta?: { isApplyingFromOtherClient?: boolean } }).meta
+        ?.isApplyingFromOtherClient === true;
     const nextSection =
-      sectionKey === 'sync' && isRemoteUpdate
+      sectionKey === 'sync' && isFromOtherClient
         ? withLocalOnlySyncSettings(updatedSection as SyncConfig, state.sync)
         : updatedSection;
 

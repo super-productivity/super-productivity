@@ -16,6 +16,7 @@ import {
 import { HydrationStateService } from './hydration-state.service';
 import { remoteArchiveDataApplied } from '../../features/archive/store/archive.actions';
 import { bulkApplyOperations } from './bulk-hydration.action';
+import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { ApplyOperationsResult, ApplyOperationsOptions } from '../core/types/apply.types';
 
@@ -48,6 +49,7 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
   private store: ActionDispatchPort<SyncActionLike> = inject(Store);
   private archiveOperationHandler = inject(ArchiveOperationHandler);
   private hydrationState = inject(HydrationStateService);
+  private clientIdProvider = inject(CLIENT_ID_PROVIDER);
   // Use Injector to avoid circular dependency: OperationLogEffects depends on services
   // that may depend on this service indirectly through the Store.
   private injector = inject(Injector);
@@ -86,11 +88,17 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
       );
     }
 
+    // Identify THIS device so the bulk meta-reducer can tell own-op replay apart
+    // from genuinely remote ops (preserves per-device local-only sync settings
+    // only against another client's ops, never while replaying our own).
+    const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
+
     const result = await replayOperationBatch({
       ops,
       applyOptions: { isLocalHydration },
       dispatcher: this.store,
-      createBulkApplyAction: (operations) => bulkApplyOperations({ operations }),
+      createBulkApplyAction: (operations) =>
+        bulkApplyOperations({ operations, localClientId }),
       remoteApplyWindow: this.hydrationState,
       deferredLocalActions: {
         processDeferredActions: () =>
