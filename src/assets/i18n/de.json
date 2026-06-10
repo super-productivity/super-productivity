@@ -26,7 +26,7 @@
     "RESTORE_FILE_BACKUP": "Es scheint KEINE DATEN zu geben, aber unter \"{{dir}}\" sind Backups verfügbar. Möchtest du das neueste Backup von {{from}} wiederherstellen?",
     "RESTORE_FILE_BACKUP_ANDROID": "Es scheint KEINE DATEN zu geben, aber es ist ein Backup verfügbar. Möchtest du es laden?",
     "RESTORE_FILE_BACKUP_MOBILE": "No data was found on this device, but a backup is available to restore (tasks: {{tasks}}, projects: {{projects}}). Restore it?",
-    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Das letzte automatische Backup wiederherstellen (Aufgaben: {{tasks}}, Projekte: {{projects}})? Dies ersetzt alle aktuellen Daten auf diesem Gerät und überschreibt bei Nutzung der Synchronisation Ihre anderen Geräte bei der nächsten Synchronisierung.",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Das letzte automatische Backup wiederherstellen (Aufgaben: {{tasks}}, Projekte: {{projects}})? Dies ersetzt alle aktuellen Daten auf diesem Gerät und überschreibt bei Nutzung der Synchronisation deine anderen Geräte bei der nächsten Synchronisierung.",
     "RESTORE_STRAY_BACKUP": "Bei der letzten Synchronisierung ist möglicherweise ein Fehler aufgetreten. Möchtest du das letzte Backup wiederherstellen?"
   },
   "DATETIME_SCHEDULE": {
@@ -88,7 +88,7 @@
     "AZURE_DEVOPS": {
       "FORM": {
         "HOST": "Host (Organisations- oder Sammlungs-URL)",
-        "HOST_DESCRIPTION": "Verwenden Sie die vollständige Azure DevOps-URL, z. B. https://dev.azure.com/your-org oder https://server:8080/tfs/DefaultCollection.",
+        "HOST_DESCRIPTION": "Verwende die vollständige Azure DevOps-URL, z. B. https://dev.azure.com/your-org oder https://server:8080/tfs/DefaultCollection.",
         "AUTO_IMPORT_LIMIT": "Automatisches Importlimit",
         "AUTO_IMPORT_LIMIT_DESCRIPTION": "Maximale Anzahl von Azure DevOps Work Items, die für den automatischen Backlog-Import abgerufen werden. Max. {{max}}.",
         "PROJECT": "Projekt",
@@ -957,11 +957,11 @@
         "COMPLETED_ON": "Abgeschlossen am {{date}}",
         "REOPEN": "Erneut öffnen",
         "NOTICE": "Dieses Projekt ist abgeschlossen.",
-        "ERROR": "Projekt konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.",
+        "ERROR": "Projekt konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
         "RESOLVE": {
           "MSG": "hat noch {{nr}} unerledigte Aufgaben. Was soll mit ihnen geschehen?",
           "MSG_ONE": "hat noch {{nr}} unerledigte Aufgabe. Was soll mit ihr geschehen?",
-          "MOVE_TO_INBOX": "In die Inbox verschieben",
+          "MOVE_TO_INBOX": "In den Eingang verschieben",
           "MARK_DONE": "Als erledigt markieren"
         },
         "CONFIRM": {
@@ -1547,7 +1547,7 @@
         "LOCAL_CHANGES_DISCARDED": "{{count}} lokale Änderung(en) verworfen – Element(e) wurden auf einem anderen Gerät gelöscht",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} nicht gespeicherte lokale Änderung(en) verworfen – Synchronisierung hat neuere Daten heruntergeladen",
         "LOCAL_DATA_REPLACE_CANCELLED": "Synchronisierung abgebrochen. deine lokalen Daten wurden beibehalten.",
-        "LOCAL_DATA_REPLACE_UNDO": "Ihre lokalen Daten wurden durch die Daten des Servers ersetzt.",
+        "LOCAL_DATA_REPLACE_UNDO": "Deine lokalen Daten wurden durch die Daten des Servers ersetzt.",
         "LOCK_TIMEOUT_ERROR": "Zeitüberschreitung bei der Synchronisierung – eine vorherige Operation war noch nicht abgeschlossen. Bitte versuche es erneut.",
         "LWW_CONFLICTS_AUTO_RESOLVED": "Synchronisierungskonflikte automatisch gelöst: {{localWins}} lokale(r) Gewinn(e), {{remoteWins}} entfernte(r) Gewinn(e)",
         "MIGRATION_FAILED": "Einige Synchronisierungsdaten konnten nicht migriert werden und wurden übersprungen. Dies kann auf Datenbeschädigung oder einen Fehler hindeuten.",
@@ -1560,7 +1560,7 @@
         "PERSIST_FAILED": "Änderungen konnten nicht gespeichert werden. Der Zustand kann inkonsistent sein – bitte lade die Seite neu.",
         "REMOTE_DATA_TOO_OLD": "Remote-Daten sind zu alt, um verarbeitet zu werden. Bitte aktualisiere deine Remote-App.",
         "REPLAY_LOCAL_OPS_FAILED": "Lokale Operationen konnten nach dem Import nicht erneut abgespielt werden. Einige aktuelle Änderungen können verloren gegangen sein. Daten wurden validiert.",
-        "RESTORE_ENCRYPTED": "Die Wiederherstellung aus dem Serververlauf ist nicht verfügbar, wenn die Ende-zu-Ende-Verschlüsselung aktiviert ist. Der Server kann Ihre verschlüsselten Daten nicht lesen, um einen früheren Zeitpunkt wiederherzustellen.",
+        "RESTORE_ENCRYPTED": "Die Wiederherstellung aus dem Serververlauf ist nicht verfügbar, wenn die Ende-zu-Ende-Verschlüsselung aktiviert ist. Der Server kann deine verschlüsselten Daten nicht lesen, um einen früheren Zeitpunkt wiederherzustellen.",
         "RESTORE_ERROR": "Datenwiederherstellung fehlgeschlagen",
         "RESTORE_SUCCESS": "Daten erfolgreich wiederhergestellt",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Daten konnten nicht auf den Server migriert werden – lokale Datenvalidierung fehlgeschlagen. Bitte versuche, ein Backup zu importieren.",
@@ -2732,7 +2732,7 @@
     "TITLE": "Wie möchtest du Super Productivity nutzen?",
     "SUBTITLE": "Wähle ein Setup, das zu deinem Workflow passt. Du kannst das später jederzeit in den Einstellungen ändern.",
     "PRIVACY_HINT": "Deine Daten bleiben sicher auf deinem Gerät. Es wird nichts an einen Server gesendet.",
-    "SYNC_CTA": "Verwenden Sie Super Productivity bereits auf einem anderen Gerät?",
+    "SYNC_CTA": "Verwendest du Super Productivity bereits auf einem anderen Gerät?",
     "SYNC_CTA_LINK": "Synchronisation einrichten",
     "PRESETS": {
       "SIMPLE_TODO": {
