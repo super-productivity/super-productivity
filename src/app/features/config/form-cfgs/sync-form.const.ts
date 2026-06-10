@@ -196,8 +196,10 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           },
         },
         {
+          // No `key` on purpose: post-#8228 the sync folder path is owned
+          // main-side. The picker's return value is for display only and
+          // must not write back into the renderer credential store.
           type: 'btn',
-          key: 'syncFolderPath',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
             btnStyle: 'stroked',
@@ -208,10 +210,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               );
               return (localProvider as LocalFileSyncPicker | undefined)?.pickDirectory();
             },
-          },
-          expressions: {
-            'props.required': (field: FormlyFieldConfig) =>
-              field?.parent?.parent?.model?.syncProvider === SyncProviderId.LocalFile,
           },
         },
       ],

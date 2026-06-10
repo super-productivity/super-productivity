@@ -24,14 +24,18 @@ const buildLocalFileSyncElectronDeps = (): LocalFileSyncElectronDeps => ({
     SyncProviderId.LocalFile,
   ) as LocalFileSyncElectronDeps['credentialStore'],
   isElectron: IS_ELECTRON,
-  checkDirExists: async (dirPath) => {
-    const r = await getElectronApi().checkDirExists({ dirPath });
-    if (r instanceof Error) {
-      throw r;
+  pickDirectory: async () => {
+    // Main returns an Error (not a thrown rejection) when the pick succeeded
+    // but persisting/canonicalizing the folder failed (#8228). Re-throw so it
+    // flows into LocalFileSyncElectron.pickDirectory()'s catch path (log +
+    // rethrow) instead of masquerading as a picked path string.
+    const result = await getElectronApi().pickDirectory();
+    if (result instanceof Error) {
+      throw result;
     }
-    return r;
+    return result;
   },
-  pickDirectory: () => getElectronApi().pickDirectory(),
+  getMainSyncFolderPath: () => getElectronApi().getSyncFolderPath(),
 });
 
 export const createLocalFileSyncElectron = (): PackageLocalFileSyncElectron =>

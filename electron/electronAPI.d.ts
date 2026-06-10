@@ -51,23 +51,39 @@ export interface ElectronAPI {
   loadBackupData(backupPath: string): Promise<string>;
 
   fileSyncSave(args: {
-    filePath: string;
+    relativePath: string;
     localRev: string | null;
     dataStr: string;
   }): Promise<string | Error>;
 
   fileSyncLoad(args: {
-    filePath: string;
+    relativePath: string;
     localRev: string | null;
   }): Promise<{ rev: string; dataStr: string | undefined } | Error>;
 
-  fileSyncRemove(args: { filePath: string }): Promise<unknown | Error>;
+  fileSyncRemove(args: { relativePath: string }): Promise<unknown | Error>;
 
-  fileSyncListFiles(args: { dirPath: string }): Promise<string[] | Error>;
+  fileSyncListFiles(args: { relativePath?: string }): Promise<string[] | Error>;
 
-  checkDirExists(args: { dirPath: string }): Promise<true | Error>;
+  checkDirExists(args: { relativePath?: string }): Promise<true | Error>;
 
-  pickDirectory(): Promise<string | undefined>;
+  /**
+   * Opens the native folder picker for the sync folder. Resolves to:
+   * - `string`: the canonicalized, persisted folder path on success
+   * - `undefined`: the user cancelled the picker
+   * - `Error`: the pick succeeded but main could not canonicalize/persist it
+   *   (e.g. the folder was deleted between pick and commit, EACCES, or the
+   *   folder lives inside the app's private dir). Nothing is persisted in
+   *   this case; the renderer must treat it as a failure, not a picked path.
+   */
+  pickDirectory(): Promise<string | Error | undefined>;
+
+  /**
+   * Returns the main-owned sync folder path for display, or null if not yet
+   * configured. The renderer must not pass this value back to file-sync IPCs
+   * — those take only the relative path; main resolves against its own copy.
+   */
+  getSyncFolderPath(): Promise<string | null>;
 
   showOpenDialog(options: {
     properties: string[];
@@ -76,9 +92,21 @@ export interface ElectronAPI {
     filters?: { name: string; extensions: string[] }[];
   }): Promise<string[] | undefined>;
 
-  toFileUrl(filePath: string): Promise<string>;
+  /**
+   * Open the native image picker, copy the chosen file into the main-owned
+   * cache, and return an opaque id. The renderer never holds the absolute
+   * path. Returns null when the user cancels and a safe Error when the picked
+   * file fails validation/import. Old cached images are not deleted here,
+   * because the surrounding config save may still fail or be cancelled.
+   */
+  imagePickAndImport(): Promise<{ id: string; mimeType: string } | null | Error>;
 
-  readLocalImageAsDataUrl(filePathOrUrl: string): Promise<string | null>;
+  /**
+   * Resolve a cached image id to a `data:` URL the renderer can use as a
+   * CSS background. Returns null when the id is unknown or the file
+   * disappeared.
+   */
+  imageCacheGetDataUrl(id: string): Promise<string | null>;
 
   // checkDirExists(dirPath: string): Promise<true | Error>;
 

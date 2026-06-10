@@ -69,20 +69,19 @@ const ea: ElectronAPI = {
     _invoke('BACKUP_IS_AVAILABLE') as Promise<false | LocalBackupMeta>,
   loadBackupData: (backupPath) =>
     _invoke('BACKUP_LOAD_DATA', backupPath) as Promise<string>,
-  fileSyncSave: (filePath) =>
-    _invoke('FILE_SYNC_SAVE', filePath) as Promise<string | Error>,
-  fileSyncLoad: (filePath) =>
-    _invoke('FILE_SYNC_LOAD', filePath) as Promise<{
+  fileSyncSave: (args) => _invoke('FILE_SYNC_SAVE', args) as Promise<string | Error>,
+  fileSyncLoad: (args) =>
+    _invoke('FILE_SYNC_LOAD', args) as Promise<{
       rev: string;
       dataStr: string | undefined;
     }>,
-  fileSyncRemove: (filePath) => _invoke('FILE_SYNC_REMOVE', filePath) as Promise<void>,
+  fileSyncRemove: (args) => _invoke('FILE_SYNC_REMOVE', args) as Promise<void>,
   fileSyncListFiles: (args) =>
     _invoke('FILE_SYNC_LIST_FILES', args) as Promise<string[] | Error>,
-  checkDirExists: (dirPath) =>
-    _invoke('CHECK_DIR_EXISTS', dirPath) as Promise<true | Error>,
+  checkDirExists: (args) => _invoke('CHECK_DIR_EXISTS', args) as Promise<true | Error>,
 
-  pickDirectory: () => _invoke('PICK_DIRECTORY') as Promise<string | undefined>,
+  pickDirectory: () => _invoke('PICK_DIRECTORY') as Promise<string | Error | undefined>,
+  getSyncFolderPath: () => _invoke('GET_SYNC_FOLDER_PATH') as Promise<string | null>,
 
   showOpenDialog: (options: {
     properties: string[];
@@ -91,9 +90,17 @@ const ea: ElectronAPI = {
     filters?: { name: string; extensions: string[] }[];
   }) => _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
 
-  toFileUrl: (filePath: string) => ipcRenderer.invoke(IPC.TO_FILE_URL, filePath),
-  readLocalImageAsDataUrl: (filePathOrUrl: string) =>
-    _invoke('READ_LOCAL_IMAGE_AS_DATA_URL', filePathOrUrl) as Promise<string | null>,
+  imagePickAndImport: () =>
+    _invoke('IMAGE_PICK_AND_IMPORT') as Promise<
+      | {
+          id: string;
+          mimeType: string;
+        }
+      | null
+      | Error
+    >,
+  imageCacheGetDataUrl: (id: string) =>
+    _invoke('IMAGE_CACHE_GET_DATA_URL', id) as Promise<string | null>,
   // STANDARD
   // --------
   setZoomFactor: (zoomFactor: number) => {

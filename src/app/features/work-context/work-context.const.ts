@@ -175,7 +175,7 @@ export const WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG: ConfigFormSection<WorkContex
         type: 'image-input',
         templateOptions: {
           label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_IMAGE_DARK,
-          description: '* https://some/cool.jpg, file:///home/user/bg.png',
+          description: '* https://some/cool.jpg',
         },
       },
       {
@@ -183,7 +183,7 @@ export const WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG: ConfigFormSection<WorkContex
         type: 'image-input',
         templateOptions: {
           label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_IMAGE_LIGHT,
-          description: '* https://some/cool.jpg, file:///home/user/bg.png',
+          description: '* https://some/cool.jpg',
         },
       },
       {

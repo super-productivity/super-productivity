@@ -1,6 +1,15 @@
 import type { FileAdapter } from '@sp/sync-providers/file-based';
 import { ElectronAPI } from '../../../../../../electron/electronAPI';
 
+/**
+ * Bridges `FileAdapter` calls to the Electron main process.
+ *
+ * Post-issue-#8228: the adapter sends only a *relative* path. The sync
+ * folder is owned main-side (inlined at the top of
+ * `electron/local-file-sync.ts`); the renderer never round-trips an
+ * absolute path. The base class's `getFilePath` already returns the
+ * relative form for Electron — we just forward it here.
+ */
 export class ElectronFileAdapter implements FileAdapter {
   private readonly ea: ElectronAPI;
 
@@ -8,9 +17,9 @@ export class ElectronFileAdapter implements FileAdapter {
     this.ea = (window as any).ea as ElectronAPI;
   }
 
-  async readFile(filePath: string): Promise<string> {
+  async readFile(relativePath: string): Promise<string> {
     const result = await this.ea.fileSyncLoad({
-      filePath,
+      relativePath,
       localRev: null,
     });
     if (result instanceof Error) {
@@ -20,10 +29,10 @@ export class ElectronFileAdapter implements FileAdapter {
     return result.dataStr as string;
   }
 
-  async writeFile(filePath: string, dataStr: string): Promise<void> {
+  async writeFile(relativePath: string, dataStr: string): Promise<void> {
     const result = await this.ea.fileSyncSave({
       localRev: null,
-      filePath,
+      relativePath,
       dataStr,
     });
     if (result instanceof Error) {
@@ -31,46 +40,22 @@ export class ElectronFileAdapter implements FileAdapter {
     }
   }
 
-  async deleteFile(filePath: string): Promise<void> {
+  async deleteFile(relativePath: string): Promise<void> {
     const result = await this.ea.fileSyncRemove({
-      filePath,
+      relativePath,
     });
     if (result instanceof Error) {
       throw result;
     }
   }
 
-  async listFiles(dirPath: string): Promise<string[]> {
+  async listFiles(relativePath: string): Promise<string[]> {
     const result = await this.ea.fileSyncListFiles({
-      dirPath,
+      relativePath,
     });
     if (result instanceof Error) {
       throw result;
     }
     return result;
   }
-
-  // async checkDirExists(dirPath: string): Promise<boolean> {
-  //   try {
-  //     const result = await this.ea.checkDirExists({
-  //       dirPath,
-  //     });
-  //     if (result instanceof Error) {
-  //       throw result;
-  //     }
-  //     return result;
-  //   } catch (e) {
-  //     SyncLog.critical( `ElectronFileAdapter.checkDirExists() error`, e);
-  //     return false;
-  //   }
-  // }
-  //
-  // async pickDirectory(): Promise<string | void> {
-  //   try {
-  //     return await this.ea.pickDirectory();
-  //   } catch (e) {
-  //     SyncLog.critical( `ElectronFileAdapter.pickDirectory() error`, e);
-  //     throw e;
-  //   }
-  // }
 }

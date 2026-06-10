@@ -155,7 +155,7 @@ describe('SyncConfigService', () => {
       );
     });
 
-    it('should apply default values for LocalFile provider fields when no existing config', async () => {
+    it('should not seed a syncFolderPath default for LocalFile (path is owned main-side post-#8228)', async () => {
       // Mock no existing provider
       (providerManager.getProviderById as jasmine.Spy).and.returnValue(
         Promise.resolve(null),
@@ -174,10 +174,11 @@ describe('SyncConfigService', () => {
 
       await service.updateSettingsFromForm(settings);
 
+      // syncFolderPath must NOT flow back into the renderer credential store; the
+      // sync folder path is owned main-side (electron/local-file-sync.ts).
       expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.LocalFile,
         {
-          syncFolderPath: '',
           encryptKey: 'test-key',
         },
       );
