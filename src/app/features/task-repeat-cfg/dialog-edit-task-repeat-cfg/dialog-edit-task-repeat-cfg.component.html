@@ -85,7 +85,9 @@
               {{ ex.done | date: 'mediumDate' }} &rarr; {{ ex.next | date: 'mediumDate' }}
             </div>
           }
-        } @else if (p.upcoming.length) {
+        } @else if (!showResultHeatmap() && p.upcoming.length) {
+          <!-- The textual "Upcoming: …" line is the no-calendar fallback — the
+               open calendar shows the same occurrences spatially. -->
           <div class="rrule-result__next">
             {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
             @for (d of p.upcoming; track d.getTime(); let last = $last) {
@@ -109,6 +111,7 @@
         </button>
         @if (resultHeatmapData(); as hd) {
           <heatmap-switcher
+            #calRef
             class="rrule-result__cal"
             [data]="hd"
             [dayMap]="hd.dayMap"

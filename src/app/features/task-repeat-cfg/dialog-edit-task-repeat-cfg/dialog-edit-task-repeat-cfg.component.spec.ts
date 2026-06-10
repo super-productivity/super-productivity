@@ -652,37 +652,60 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(c.simulatedCompletion()).toBeNull();
     });
 
-    it('opening the calendar auto-expands fullscreen; closing it collapses again', async () => {
+    it('opening the calendar does NOT expand when it fits the dialog', fakeAsync(async () => {
+      // Fullscreen is need-based: the post-render measurement only expands a
+      // calendar that is clipped or forced to scroll. With no rendered
+      // calendar element (minimal test template) nothing is clipped.
       const fixture = await setupTestBed({ repeatCfg: rruleCfg });
       const c = fixture.componentInstance;
       expect(c.isFullScreen()).toBe(false);
-      c.toggleResultHeatmap(); // preview on → calendar owns the expansion
+      c.toggleResultHeatmap(); // preview on
+      tick(); // flush the measurement timeout
+      expect(c.isFullScreen()).toBe(false);
+      expect(mockDialogRef.addPanelClass).not.toHaveBeenCalled();
+    }));
+
+    it('closing the calendar collapses a calendar-owned fullscreen', fakeAsync(async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap(); // preview on
+      tick();
+      // Simulate the measurement outcome "doesn't fit → calendar expands".
+
+      (c as any)._setFullScreen(true);
+
+      (c as any)._fullScreenOwnedByCalendar = true;
       expect(c.isFullScreen()).toBe(true);
-      expect(mockDialogRef.addPanelClass).toHaveBeenCalledWith('dialog-fullscreen');
       c.toggleResultHeatmap(); // preview off → calendar-owned fullscreen reverts
       expect(c.isFullScreen()).toBe(false);
       expect(mockDialogRef.removePanelClass).toHaveBeenCalledWith('dialog-fullscreen');
-    });
+    }));
 
-    it('a manual fullscreen toggle takes ownership — closing the calendar keeps it', async () => {
+    it('a manual fullscreen toggle takes ownership — closing the calendar keeps it', fakeAsync(async () => {
       const fixture = await setupTestBed({ repeatCfg: rruleCfg });
       const c = fixture.componentInstance;
       c.toggleFullScreen(); // user expands first
       expect(c.isFullScreen()).toBe(true);
       c.toggleResultHeatmap(); // preview on — already fullscreen, no ownership
+      tick();
       c.toggleResultHeatmap(); // preview off — must NOT shrink the user's choice
       expect(c.isFullScreen()).toBe(true);
-    });
+    }));
 
-    it('pressing the toggle while calendar-owned transfers ownership to the user', async () => {
+    it('manually shrinking a calendar-owned fullscreen transfers ownership to the user', fakeAsync(async () => {
       const fixture = await setupTestBed({ repeatCfg: rruleCfg });
       const c = fixture.componentInstance;
-      c.toggleResultHeatmap(); // calendar expands
+      c.toggleResultHeatmap(); // preview on
+      tick();
+
+      (c as any)._setFullScreen(true);
+
+      (c as any)._fullScreenOwnedByCalendar = true;
       c.toggleFullScreen(); // user shrinks it manually
       expect(c.isFullScreen()).toBe(false);
       c.toggleResultHeatmap(); // preview off — nothing left to revert
       expect(c.isFullScreen()).toBe(false);
-    });
+    }));
 
     it('year arrows shift the projection window by whole years, both directions', async () => {
       const fixture = await setupTestBed({ repeatCfg: rruleCfg });

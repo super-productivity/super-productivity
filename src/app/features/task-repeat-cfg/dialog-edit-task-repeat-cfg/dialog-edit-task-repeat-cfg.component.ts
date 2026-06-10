@@ -3,8 +3,10 @@ import {
   Component,
   computed,
   effect,
+  ElementRef,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { Task, TaskReminderOptionId } from '../../tasks/task.model';
 import {
@@ -251,14 +253,14 @@ export class DialogEditTaskRepeatCfgComponent {
       this._matDialogRef.removePanelClass('dialog-fullscreen');
     }
   }
+  private readonly _calRef = viewChild('calRef', { read: ElementRef });
   toggleResultHeatmap(): void {
     this.showResultHeatmap.update((v) => !v);
     if (this.showResultHeatmap()) {
-      // The year strip needs the room — expand, but remember it was us.
-      if (!this.isFullScreen()) {
-        this._setFullScreen(true);
-        this._fullScreenOwnedByCalendar = true;
-      }
+      // Expand only when needed: measure AFTER the calendar has rendered and
+      // go fullscreen only if it doesn't fit the dialog as-is (clipped
+      // vertically, or the year strip has to scroll sideways).
+      setTimeout(() => this._expandIfCalendarDoesNotFit());
     } else {
       this.simulatedCompletion.set(null);
       this.previewYearOffset.set(0);
@@ -266,6 +268,27 @@ export class DialogEditTaskRepeatCfgComponent {
         this._setFullScreen(false);
       }
       this._fullScreenOwnedByCalendar = false;
+    }
+  }
+  private _expandIfCalendarDoesNotFit(): void {
+    const el = this._calRef()?.nativeElement as HTMLElement | undefined;
+    if (!el || !this.showResultHeatmap() || this.isFullScreen()) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    // Vertically clipped: the calendar (or the action row after it) extends
+    // past the viewport — the 85vh dialog cap couldn't absorb it.
+    const isClippedVertically = rect.bottom > window.innerHeight || rect.top < 0;
+    // The year strip scrolls horizontally inside its own block row — if it has
+    // to, fullscreen buys it the missing width (when there IS more width).
+    const blocks = el.querySelector('.heatmap-month-blocks');
+    const needsHorizontalScroll =
+      !!blocks &&
+      blocks.scrollWidth > blocks.clientWidth + 1 &&
+      window.innerWidth > el.clientWidth + 1;
+    if (isClippedVertically || needsHorizontalScroll) {
+      this._setFullScreen(true);
+      this._fullScreenOwnedByCalendar = true;
     }
   }
   clearSimulation(): void {
