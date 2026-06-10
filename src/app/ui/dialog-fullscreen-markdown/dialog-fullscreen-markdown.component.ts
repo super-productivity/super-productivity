@@ -230,7 +230,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       this.close();
       return;
     }
-    const hasModifier = ev.ctrlKey || ev.metaKey;
+    const hasModifier = (ev.ctrlKey || ev.metaKey) && !ev.altKey;
 
     const textarea = this.textareaEl()?.nativeElement;
     if (!textarea) {
