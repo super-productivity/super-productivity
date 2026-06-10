@@ -16,14 +16,21 @@
       // Keyboard nav hides the cursor, so suppress the stale mouse :hover
       // outline/background — only the keyboard-focused cell should be marked.
       // The .mat-calendar ancestor is included purely to outweigh the global
-      // dashed-hover rule in _overwrite-material.scss.
-      .mat-calendar:not(.no-hover-effects)
-        .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus)
-        > .mat-calendar-body-cell-content {
-        outline: none !important;
+      // hover rules in _overwrite-material.scss.
+      .mat-calendar:not(.no-hover-effects) {
+        .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+          > .mat-calendar-body-cell-content {
+          outline: none !important;
 
-        &:not(.mat-calendar-body-selected) {
-          background-color: transparent !important;
+          &:not(.mat-calendar-body-selected) {
+            background-color: transparent !important;
+          }
+        }
+
+        // Ensure the focused cell is always marked with a solid outline.
+        .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+          > .mat-calendar-body-cell-content {
+          outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
         }
       }
     }

@@ -493,7 +493,7 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
     outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
   }
 
-  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus)
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
     > .mat-calendar-body-cell-content {
     outline: 2px dashed color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
   }
