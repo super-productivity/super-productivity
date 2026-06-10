@@ -61,7 +61,7 @@ import { buildRRuleHumanizeOpts, getRRulePreview } from '../util/rrule-preview.u
 import { DatePipe } from '@angular/common';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Log } from '../../../core/log';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -112,6 +112,7 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     ChipListInputComponent,
     MatDialogActions,
     MatButton,
+    MatIconButton,
     MatIcon,
     RepeatTaskHeatmapComponent,
     HeatmapSwitcherComponent,
