@@ -8,6 +8,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { DialogFullscreenMarkdownComponent } from './dialog-fullscreen-markdown.component';
+import { shortcutLabels } from './markdown-shortcuts.const';
 
 describe('DialogFullscreenMarkdownComponent', () => {
   let component: DialogFullscreenMarkdownComponent;
@@ -314,6 +315,40 @@ describe('DialogFullscreenMarkdownComponent', () => {
       component.keydownHandler(event);
 
       expect(component.onApplyStrikethrough).not.toHaveBeenCalled();
+    });
+
+    it('should NOT trigger bold on Ctrl+Alt+B', () => {
+      spyOn(component, 'onApplyBold');
+      const event = {
+        key: 'b',
+        code: 'KeyB',
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: false,
+        altKey: true,
+        preventDefault: jasmine.createSpy('preventDefault'),
+      } as unknown as KeyboardEvent;
+
+      component.keydownHandler(event);
+
+      expect(component.onApplyBold).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shortcutLabels', () => {
+    it('should format bold label correctly', () => {
+      expect(shortcutLabels['bold'].tooltip).toBe(' (Ctrl+B)');
+      expect(shortcutLabels['bold'].keys).toEqual(['Ctrl', 'B']);
+    });
+
+    it('should include Shift for shift-based shortcuts', () => {
+      expect(shortcutLabels['strikethrough'].tooltip).toBe(' (Ctrl+Shift+S)');
+      expect(shortcutLabels['strikethrough'].keys).toEqual(['Ctrl', 'Shift', 'S']);
+    });
+
+    it('should use digit number for code-based shortcuts', () => {
+      expect(shortcutLabels['bullet'].tooltip).toBe(' (Ctrl+Shift+8)');
+      expect(shortcutLabels['bullet'].keys).toEqual(['Ctrl', 'Shift', '8']);
     });
   });
 
