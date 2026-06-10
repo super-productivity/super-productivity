@@ -2,6 +2,16 @@ h1 mat-icon {
   transform: rotate(45deg);
 }
 
+h1[mat-dialog-title] {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+}
+
+.fullscreen-toggle {
+  margin-left: auto;
+}
+
 // Bound the whole dialog to the viewport and lay it out as a flex column so
 // the scrollable form and the pinned result band share the available height
 // instead of overflowing past the action buttons.
@@ -9,6 +19,14 @@ h1 mat-icon {
   display: flex;
   flex-direction: column;
   max-height: 85vh;
+}
+
+// Fullscreen state (`dialog-fullscreen` panel class on the overlay pane): the
+// pane is viewport-sized, so the wrapper stretches to fill it and the 85vh cap
+// no longer applies.
+:host-context(.dialog-fullscreen) .dialog-help-wrapper {
+  height: 100%;
+  max-height: none;
 }
 
 mat-dialog-content {

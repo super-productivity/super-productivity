@@ -234,11 +234,38 @@ export class DialogEditTaskRepeatCfgComponent {
   // repeat-from-completion schedule the rule re-anchors from that day (the
   // After-completion behavior, made interactive).
   simulatedCompletion = signal<string | null>(null);
+  // Fullscreen: a manual toggle in the title bar; opening the calendar preview
+  // auto-expands the dialog, and closing the preview shrinks it back ONLY when
+  // the preview caused the expansion (a manual toggle takes ownership).
+  isFullScreen = signal(false);
+  private _fullScreenOwnedByCalendar = false;
+  toggleFullScreen(): void {
+    this._setFullScreen(!this.isFullScreen());
+    this._fullScreenOwnedByCalendar = false;
+  }
+  private _setFullScreen(isFullScreen: boolean): void {
+    this.isFullScreen.set(isFullScreen);
+    if (isFullScreen) {
+      this._matDialogRef.addPanelClass('dialog-fullscreen');
+    } else {
+      this._matDialogRef.removePanelClass('dialog-fullscreen');
+    }
+  }
   toggleResultHeatmap(): void {
     this.showResultHeatmap.update((v) => !v);
-    if (!this.showResultHeatmap()) {
+    if (this.showResultHeatmap()) {
+      // The year strip needs the room — expand, but remember it was us.
+      if (!this.isFullScreen()) {
+        this._setFullScreen(true);
+        this._fullScreenOwnedByCalendar = true;
+      }
+    } else {
       this.simulatedCompletion.set(null);
       this.previewYearOffset.set(0);
+      if (this._fullScreenOwnedByCalendar) {
+        this._setFullScreen(false);
+      }
+      this._fullScreenOwnedByCalendar = false;
     }
   }
   clearSimulation(): void {

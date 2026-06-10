@@ -9,6 +9,16 @@
         ? (T.F.TASK_REPEAT.D_EDIT.EDIT | translate)
         : (T.F.TASK_REPEAT.D_EDIT.ADD | translate)
     }}
+    <button
+      mat-icon-button
+      type="button"
+      class="fullscreen-toggle"
+      [title]="T.G.TOGGLE_FULLSCREEN | translate"
+      [attr.aria-label]="T.G.TOGGLE_FULLSCREEN | translate"
+      (click)="toggleFullScreen()"
+    >
+      <mat-icon>{{ isFullScreen() ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+    </button>
   </h1>
 
   <mat-dialog-content>
