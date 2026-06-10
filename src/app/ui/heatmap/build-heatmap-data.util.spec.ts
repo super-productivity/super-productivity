@@ -85,11 +85,32 @@ describe('buildHeatmapMonths', () => {
       MONTHS,
       heatmapOccurrenceTotal,
     );
-    expect(blocks.map((b) => b.label)).toEqual(['Jan', 'Feb']);
+    expect(blocks.map((b) => b.label)).toEqual(['Jan 2024', 'Feb']);
     blocks.forEach((b) => b.weeks.forEach((w) => expect(w.days.length).toBe(7)));
     // one projected occurrence in each month
     expect(blocks[0].total).toBe('1×');
     expect(blocks[1].total).toBe('1×');
+  });
+
+  it('year-stamps the first block of each year so a rolling window spanning the same month twice stays unambiguous', () => {
+    const map = buildProjectionDayMap([], D('2024-06-15'), D('2025-06-15'));
+    const blocks = buildHeatmapMonths(
+      map,
+      D('2024-06-15'),
+      D('2025-06-15'),
+      0,
+      MONTHS,
+      heatmapOccurrenceTotal,
+    );
+    const labels = blocks.map((b) => b.label);
+    // 13 partial months: Jun 2024 … Jun 2025 — the two Junes must differ.
+    expect(labels.length).toBe(13);
+    expect(labels[0]).toBe('Jun 2024');
+    expect(labels[7]).toBe('Jan 2025');
+    expect(labels[12]).toBe('Jun');
+    expect(labels[0]).not.toBe(labels[12]);
+    // Non-boundary months stay plain.
+    expect(labels[1]).toBe('Jul');
   });
 
   it('heatmapHoursTotal sums day time as whole hours', () => {

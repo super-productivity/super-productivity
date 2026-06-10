@@ -105,6 +105,7 @@
             [rangeStart]="hd.rangeStart"
             [rangeEnd]="hd.rangeEnd"
             legendMode="projection"
+            [interactive]="!!repeatCfg().repeatFromCompletionDate"
             (dayClick)="onPreviewDayClick($event)"
           />
           <!-- Simulation only exists for "repeat from completion" schedules — a

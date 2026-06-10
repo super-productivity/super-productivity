@@ -383,6 +383,23 @@ export class DialogEditTaskRepeatCfgComponent {
       }
       this._checkCanRemoveInstance();
     });
+
+    // A simulation belongs to the exact schedule it was clicked on — ANY
+    // schedule edit (rule, start date, excluded days, schedule type) reshapes
+    // the projected series, so a sim day picked for the old schedule would
+    // silently distort the preview. rrule / schedule-type edits already clear
+    // synchronously in their handlers; startDate and exdate edits arrive only
+    // as a new formly model, so watch the schedule slice and drop the sim on
+    // any change. (`_previewScheduleCfg` is value-equal, so the reference only
+    // changes when a schedule-relevant field actually changes.)
+    let lastScheduleSlice = this._previewScheduleCfg();
+    effect(() => {
+      const slice = this._previewScheduleCfg();
+      if (slice !== lastScheduleSlice) {
+        lastScheduleSlice = slice;
+        this.simulatedCompletion.set(null);
+      }
+    });
   }
 
   private _initializeRepeatCfg(): RepeatCfgWorking {

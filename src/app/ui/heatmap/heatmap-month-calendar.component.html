@@ -31,7 +31,12 @@
         <div
           [class]="getCellClass(cell)"
           [title]="getCellTitle(cell)"
+          [attr.role]="isCellInteractive(cell) ? 'button' : null"
+          [attr.tabindex]="isCellInteractive(cell) ? 0 : null"
+          [attr.aria-label]="isCellInteractive(cell) ? getCellTitle(cell) : null"
           (click)="onCellClick(cell)"
+          (keydown.enter)="isCellInteractive(cell) && onCellKeydown($event, cell)"
+          (keydown.space)="isCellInteractive(cell) && onCellKeydown($event, cell)"
         >
           {{ cell.dayNum }}
         </div>

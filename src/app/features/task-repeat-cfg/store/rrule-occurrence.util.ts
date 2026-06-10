@@ -297,8 +297,9 @@ export const getFirstRRuleOccurrence = (input: RRuleOccurrenceInput): Date | nul
 /**
  * All occurrences whose calendar day falls within `[from, to]` (inclusive),
  * returned at local noon. EXDATEs are honored. Empty for a malformed rule.
- * No production caller yet — exercised by the engine invariant/day-march specs
- * and intended for a future calendar/heatmap projection of recurring series.
+ * Drives the repeat-task heatmap's future-occurrence overlay and the edit
+ * dialog's live calendar preview; also exercised by the engine
+ * invariant/day-march specs.
  */
 export const getRRuleOccurrencesInRange = (
   input: RRuleOccurrenceInput,

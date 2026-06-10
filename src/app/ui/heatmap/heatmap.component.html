@@ -38,7 +38,12 @@
                       <div
                         [class]="getDayClass(day)"
                         [title]="getDayTitle(day)"
+                        [attr.role]="interactive() && day ? 'button' : null"
+                        [attr.tabindex]="interactive() && day ? 0 : null"
+                        [attr.aria-label]="interactive() && day ? getDayTitle(day) : null"
                         (click)="day && dayClick.emit(day)"
+                        (keydown.enter)="interactive() && onDayKeydown($event, day)"
+                        (keydown.space)="interactive() && onDayKeydown($event, day)"
                       ></div>
                     }
                   </div>

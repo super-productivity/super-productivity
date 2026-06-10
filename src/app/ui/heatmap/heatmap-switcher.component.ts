@@ -53,6 +53,9 @@ export class HeatmapSwitcherComponent {
   readonly navPrev = output<void>();
   readonly navNext = output<void>();
   readonly dayClick = output<DayData>();
+  /** Passed through to both views: makes day cells keyboard-reachable buttons
+   *  for consumers that act on `dayClick` (e.g. click-to-simulate). */
+  readonly interactive = input<boolean>(false);
 
   readonly view = signal<HeatmapView>('year');
 

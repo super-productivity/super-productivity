@@ -19,6 +19,7 @@
       [rangeStart]="rangeStart()"
       [rangeEnd]="rangeEnd()"
       [legendMode]="legendMode()"
+      [interactive]="interactive()"
       (dayClick)="dayClick.emit($event)"
     />
   } @else if (data(); as d) {
@@ -28,6 +29,7 @@
       [navLabel]="navLabel()"
       [canNavPrev]="canNavPrev()"
       [canNavNext]="canNavNext()"
+      [interactive]="interactive()"
       (navPrev)="navPrev.emit()"
       (navNext)="navNext.emit()"
       (dayClick)="dayClick.emit($event)"

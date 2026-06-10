@@ -27,10 +27,10 @@ import { calcRepeatTaskSeriesTimeSpent } from '../calc-repeat-task-series-time-s
 import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { TaskRepeatCfg } from '../task-repeat-cfg.model';
-import { getRRuleOccurrencesInRange } from '../store/rrule-occurrence.util';
-import { legacyTaskRepeatCfgToRRule } from '../util/legacy-cfg-to-rrule.util';
+import { getRRuleOccurrencesInRange, isRRuleValid } from '../store/rrule-occurrence.util';
 import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
 import { isRRuleEngineEnabled } from '../../config/rrule-engine-flag';
+import { nextYearOf, prevYearOf } from '../../../ui/heatmap/year-nav.util';
 
 @Component({
   selector: 'repeat-task-heatmap',
@@ -76,35 +76,34 @@ export class RepeatTaskHeatmapComponent {
   readonly availableYears = computed<number[]>(() => {
     const years = new Set<number>([new Date().getFullYear()]);
     for (const task of this._loadedTasks() ?? []) {
-      for (const dateStr of Object.keys(task.timeSpentOnDay ?? {})) {
+      // Zero-value entries (start/stop tracking instantly) don't make a year's
+      // heatmap render (`hasData` needs timeSpent > 0) — offering such a year
+      // here would navigate to an empty view with no way back.
+      for (const [dateStr, timeSpent] of Object.entries(task.timeSpentOnDay ?? {})) {
         const y = +dateStr.slice(0, 4);
-        if (y) {
+        if (y && timeSpent > 0) {
           years.add(y);
         }
       }
     }
     return [...years].sort((a, b) => b - a);
   });
-  readonly canPrevYear = computed(() => {
-    const years = this.availableYears();
-    const i = years.indexOf(this.selectedYear());
-    return i !== -1 && i < years.length - 1;
-  });
+  readonly canPrevYear = computed(
+    () => prevYearOf(this.availableYears(), this.selectedYear()) !== null,
+  );
   readonly canNextYear = computed(
-    () => this.availableYears().indexOf(this.selectedYear()) > 0,
+    () => nextYearOf(this.availableYears(), this.selectedYear()) !== null,
   );
   prevYear(): void {
-    const years = this.availableYears();
-    const i = years.indexOf(this.selectedYear());
-    if (i !== -1 && i < years.length - 1) {
-      this.selectedYear.set(years[i + 1]);
+    const y = prevYearOf(this.availableYears(), this.selectedYear());
+    if (y !== null) {
+      this.selectedYear.set(y);
     }
   }
   nextYear(): void {
-    const years = this.availableYears();
-    const i = years.indexOf(this.selectedYear());
-    if (i > 0) {
-      this.selectedYear.set(years[i - 1]);
+    const y = nextYearOf(this.availableYears(), this.selectedYear());
+    if (y !== null) {
+      this.selectedYear.set(y);
     }
   }
 
@@ -212,9 +211,15 @@ export class RepeatTaskHeatmapComponent {
     const horizon = new Date(year, 11, 31);
 
     // Overlay upcoming occurrences on the selected year's remaining days, only
-    // when the RRULE engine is enabled; with the flag off the heatmap is the
+    // when the RRULE engine is enabled AND the cfg has a valid rrule — i.e. only
+    // when the engine actually drives task creation (mirrors the routing utils'
+    // `rrule && isRRuleValid` gate). Legacy cfgs are NOT projected via the
+    // rrule converter: it diverges from the legacy engine for WEEKLY interval≥2
+    // (rolling 7-day blocks vs WKST weeks) and zero-weekday cfgs, and a wrong
+    // overlay is worse than none. With the flag off the heatmap is the
     // unchanged history-only view.
-    const isProjecting = !!cfg && isRRuleEngineEnabled();
+    const isProjecting =
+      !!cfg && isRRuleEngineEnabled() && !!cfg.rrule && isRRuleValid(cfg.rrule);
 
     // Initialize all days of the selected year.
     const currentDate = new Date(yearStart);
@@ -283,19 +288,17 @@ export class RepeatTaskHeatmapComponent {
       }
     }
 
-    // Overlay projected future occurrences (Phase 2). For legacy cfgs (no rrule)
-    // derive an equivalent rule so the projection still works. Per-instance
-    // overrides (moves/RDATE) are Phase 8 — here only EXDATE skips apply.
-    // Projection covers the selected year's days strictly after today — for a
-    // past year the window is empty by construction.
+    // Overlay projected future occurrences (Phase 2). Per-instance overrides
+    // (moves/RDATE) are Phase 8 — here only EXDATE skips apply. Projection
+    // covers the selected year's days strictly after today — for a past year
+    // the window is empty by construction.
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const projectFrom = tomorrow > yearStart ? tomorrow : yearStart;
-    if (isProjecting && cfg && projectFrom <= horizon) {
-      const rrule = cfg.rrule || legacyTaskRepeatCfgToRRule(cfg);
+    if (isProjecting && cfg && cfg.rrule && projectFrom <= horizon) {
       const occurrences = getRRuleOccurrencesInRange(
         {
-          rrule,
+          rrule: cfg.rrule,
           startDate: getEffectiveRepeatStartDate(cfg),
           exdates: cfg.deletedInstanceDates ?? [],
         },

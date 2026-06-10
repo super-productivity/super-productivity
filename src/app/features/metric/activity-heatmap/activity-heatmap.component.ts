@@ -26,6 +26,7 @@ import {
 } from '../../../ui/heatmap/build-heatmap-data.util';
 import { DateAdapter } from '@angular/material/core';
 import { Worklog } from '../../worklog/worklog.model';
+import { nextYearOf, prevYearOf } from '../../../ui/heatmap/year-nav.util';
 
 interface YearlyActivityData {
   dayMap: Map<string, DayData>;
@@ -71,33 +72,29 @@ export class ActivityHeatmapComponent {
 
   // Prev/next navigation over the years that actually have data
   // (availableYears is sorted newest-first).
-  readonly canPrevYear = computed(() => {
-    const years = this.availableYears();
-    const i = years.indexOf(this.selectedYear());
-    return i !== -1 && i < years.length - 1;
-  });
-  readonly canNextYear = computed(() => {
-    const i = this.availableYears().indexOf(this.selectedYear());
-    return i > 0;
-  });
+  readonly canPrevYear = computed(
+    () => prevYearOf(this.availableYears(), this.selectedYear()) !== null,
+  );
+  readonly canNextYear = computed(
+    () => nextYearOf(this.availableYears(), this.selectedYear()) !== null,
+  );
   prevYear(): void {
-    const years = this.availableYears();
-    const i = years.indexOf(this.selectedYear());
-    if (i !== -1 && i < years.length - 1) {
-      this._userSelectedYear.set(years[i + 1]);
+    const y = prevYearOf(this.availableYears(), this.selectedYear());
+    if (y !== null) {
+      this._userSelectedYear.set(y);
     }
   }
   nextYear(): void {
-    const years = this.availableYears();
-    const i = years.indexOf(this.selectedYear());
-    if (i > 0) {
-      this._userSelectedYear.set(years[i - 1]);
+    const y = nextYearOf(this.availableYears(), this.selectedYear());
+    if (y !== null) {
+      this._userSelectedYear.set(y);
     }
   }
 
-  // Day labels adjusted for first day of week
+  // Day labels for the share-canvas export — localized via DateAdapter like the
+  // on-screen views, rotated so the locale's first weekday comes first.
   readonly dayLabels = computed(() => {
-    const allDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const allDays = this._dateAdapter.getDayOfWeekNames('short');
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     return [...allDays.slice(firstDay), ...allDays.slice(0, firstDay)];
   });

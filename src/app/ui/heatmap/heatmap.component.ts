@@ -78,9 +78,23 @@ export class HeatmapComponent {
   readonly navNext = output<void>();
   /** Emits the clicked day (non-empty cells only). Consumers decide what to do. */
   readonly dayClick = output<DayData>();
+  /** When true, day cells become keyboard-reachable buttons (for consumers that
+   *  act on `dayClick`, e.g. click-to-simulate). Display-only heatmaps keep
+   *  plain, non-focusable cells. */
+  readonly interactive = input<boolean>(false);
+
+  onDayKeydown(event: Event, day: DayData | null): void {
+    if (day) {
+      // Space must activate, not scroll.
+      event.preventDefault();
+      this.dayClick.emit(day);
+    }
+  }
 
   readonly dayLabels = computed(() => {
-    const allDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Localized like the month-calendar view of the same widget (DateAdapter),
+    // rotated so the locale's first weekday comes first.
+    const allDays = this._dateAdapter.getDayOfWeekNames('short');
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     return [...allDays.slice(firstDay), ...allDays.slice(0, firstDay)];
   });

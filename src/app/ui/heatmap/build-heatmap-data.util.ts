@@ -101,6 +101,7 @@ export const buildHeatmapMonths = (
   const blocks: MonthBlock[] = [];
   const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
   const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+  let labeledYear: number | null = null;
 
   while (cursor <= lastMonth) {
     const year = cursor.getFullYear();
@@ -128,7 +129,13 @@ export const buildHeatmapMonths = (
       weeks.push(column);
     }
 
-    blocks.push({ label: monthNames[month], total: formatTotal(monthDays), weeks });
+    // A rolling window can span the same month twice (e.g. two Junes a year
+    // apart) — year-stamp the first block of each year so they're tellable
+    // apart.
+    const label =
+      year !== labeledYear ? `${monthNames[month]} ${year}` : monthNames[month];
+    labeledYear = year;
+    blocks.push({ label, total: formatTotal(monthDays), weeks });
     cursor.setMonth(cursor.getMonth() + 1);
   }
   return blocks;

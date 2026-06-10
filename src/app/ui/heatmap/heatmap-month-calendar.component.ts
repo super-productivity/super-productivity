@@ -48,6 +48,10 @@ export class HeatmapMonthCalendarComponent {
   /** Which legend to show beneath the grid. */
   readonly legendMode = input<'intensity' | 'projection' | 'none'>('intensity');
   readonly dayClick = output<DayData>();
+  /** When true, day cells become keyboard-reachable buttons (for consumers that
+   *  act on `dayClick`, e.g. click-to-simulate). Display-only calendars keep
+   *  plain, non-focusable cells. */
+  readonly interactive = input<boolean>(false);
 
   // Explicit user navigation; null → the computed default month. A navigated
   // month that falls OUTSIDE the current data range (the inputs changed under
@@ -114,6 +118,16 @@ export class HeatmapMonthCalendarComponent {
     if (!this.canNext()) return;
     const { y, m } = this.viewMonth();
     this._viewMonth.set(m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 });
+  }
+
+  onCellKeydown(event: Event, cell: CalCell): void {
+    // Space must activate, not scroll.
+    event.preventDefault();
+    this.onCellClick(cell);
+  }
+
+  isCellInteractive(cell: CalCell): boolean {
+    return this.interactive() && !!cell.data && !cell.isOtherMonth;
   }
 
   onCellClick(cell: CalCell): void {

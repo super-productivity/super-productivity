@@ -647,6 +647,37 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(c.simulatedCompletion()).toBeNull();
     });
 
+    it('clears an active simulation when startDate or excluded days change (formly model edit)', async () => {
+      // These edits arrive only as a new formly model (no dedicated handler) —
+      // the schedule-slice effect must drop the sim, same as a rule edit.
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      c.repeatCfg.update((cfg) => ({ ...cfg, startDate: '2024-07-01' }) as any);
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBeNull();
+
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      c.repeatCfg.update(
+        (cfg) => ({ ...cfg, deletedInstanceDates: ['2099-01-05'] }) as any,
+      );
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('keeps an active simulation across an unrelated (title) edit', async () => {
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      c.repeatCfg.update((cfg) => ({ ...cfg, title: 'typing…' }) as any);
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+    });
+
     it('does not rebuild the projection when an unrelated field changes', async () => {
       // formly emits a cloned model per keystroke in ANY field; the projection
       // must only recompute when a schedule-relevant field changes.
