@@ -18,16 +18,13 @@
   // Focus outline suppression
   &:not(.sp-hide-cursor):not(.sp-initial-focus) {
     ::ng-deep {
-      .mat-calendar-body-cell:focus:not(:hover)
-        > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
+      .mat-calendar-body-cell:focus:not(:hover) > .mat-calendar-body-cell-content {
         outline: none !important;
-        background-color: transparent !important;
       }
 
-      // If selected, we still want to keep the selected color, so only hide outline
       .mat-calendar-body-cell:focus:not(:hover)
-        > .mat-calendar-body-cell-content.mat-calendar-body-selected {
-        outline: none !important;
+        > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
+        background-color: transparent !important;
       }
     }
   }
