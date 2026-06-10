@@ -13,6 +13,7 @@
 /* eslint-disable prefer-arrow/prefer-arrow-functions */
 import {
   HideSubTasksMode,
+  PersistedHideSubTasksMode,
   TaskArchive,
   TaskCopy,
   TimeSpentOnDayCopy,
@@ -304,26 +305,27 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
       delete taskDict[taskId]!.notes;
     }
 
-    // Normalize an explicit Show (0) to undefined: persisted Task state must
-    // stay within the legacy {undefined, 1, 2} shape — old clients' typia
-    // validators reject 0 as corruption (0 only ever travels in action
-    // payloads, never in state).
-    if ((taskDict[taskId]!._hideSubTasksMode as unknown) === 0) {
+    // An explicit Show (0) — only producible by interim builds — wins over any
+    // stale legacy _showSubTasksMode and must not be persisted: state stays
+    // within {undefined, HideDone, HideAll}, see PersistedHideSubTasksMode.
+    if (
+      (taskDict[taskId]!._hideSubTasksMode as HideSubTasksMode | undefined) ===
+      HideSubTasksMode.Show
+    ) {
       taskDict[taskId] = { ...taskDict[taskId]!, _hideSubTasksMode: undefined };
-    }
-
-    // Convert _showSubTasksMode → _hideSubTasksMode.
-    // Check `=== undefined` (not truthy): HideSubTasksMode.Show is 0, so a
-    // truthy check would incorrectly treat an explicit Show as "not set".
-    if (taskDict[taskId]!._hideSubTasksMode === undefined) {
+      delete (taskDict[taskId] as unknown as Record<string, unknown>)[
+        '_showSubTasksMode'
+      ];
+    } else if (taskDict[taskId]!._hideSubTasksMode === undefined) {
+      // Convert legacy _showSubTasksMode → _hideSubTasksMode.
       const oldValue = (taskDict[taskId] as unknown as Record<string, unknown>)?.[
         '_showSubTasksMode'
       ] as number | undefined;
-      let newValue: HideSubTasksMode | undefined;
+      let newValue: PersistedHideSubTasksMode | undefined;
       if (oldValue === 1) {
-        newValue = 1;
+        newValue = HideSubTasksMode.HideDone;
       } else if (oldValue === 0) {
-        newValue = 2;
+        newValue = HideSubTasksMode.HideAll;
       }
       if (
         '_showSubTasksMode' in (taskDict[taskId] as unknown as Record<string, unknown>)
@@ -335,7 +337,7 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
       if (newValue) {
         taskDict[taskId] = {
           ...taskDict[taskId]!,
-          _hideSubTasksMode: newValue as HideSubTasksMode,
+          _hideSubTasksMode: newValue,
         };
       }
     }

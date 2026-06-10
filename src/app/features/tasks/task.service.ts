@@ -28,11 +28,10 @@ import {
   removeTimeSpent,
   roundTimeSpentForDay,
   setCurrentTask,
+  setHideSubTasksMode,
   setSelectedTask,
-  setSubtaskHideMode,
   toggleStart,
   unsetCurrentTask,
-  updateTaskUi,
 } from './store/task.actions';
 import { IssueProviderKey } from '../issue/issue.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
@@ -502,14 +501,6 @@ export class TaskService {
     this._store.dispatch(
       TaskSharedActions.removeTagsForAllTasks({
         tagIdsToRemove: tagsToRemove,
-      }),
-    );
-  }
-
-  updateUi(id: string, changes: Partial<Task>): void {
-    this._store.dispatch(
-      updateTaskUi({
-        task: { id, changes },
       }),
     );
   }
@@ -1138,10 +1129,7 @@ export class TaskService {
   }
 
   showSubTasks(id: string): void {
-    // Use explicit Show (0) rather than undefined: persisted payloads are JSON-encoded,
-    // and JSON.stringify drops `undefined` keys — a remote replay of the "show all"
-    // transition would otherwise be a no-op on the receiving device.
-    this._store.dispatch(setSubtaskHideMode({ taskId: id, mode: HideSubTasksMode.Show }));
+    this._setHideSubTasksMode(id, HideSubTasksMode.Show);
   }
 
   toggleSubTaskMode(
@@ -1151,7 +1139,7 @@ export class TaskService {
   ): void {
     // Resolve the new mode here (not in the reducer): the toggle outcome depends on
     // local task/subtask state, which can differ across devices at replay time. By
-    // dispatching `setSubtaskHideMode` with the resolved value, the synced op carries
+    // dispatching `setHideSubTasksMode` with the resolved value, the synced op carries
     // the final state rather than the toggle intent, keeping replay deterministic.
     const entities = this._taskEntities();
     const task = entities[taskId];
@@ -1182,15 +1170,27 @@ export class TaskService {
       }
     }
 
-    this._store.dispatch(
-      setSubtaskHideMode({ taskId, mode: newVal as HideSubTasksMode }),
-    );
+    this._setHideSubTasksMode(taskId, newVal as HideSubTasksMode);
   }
 
   hideSubTasks(id: string): void {
-    this._store.dispatch(
-      setSubtaskHideMode({ taskId: id, mode: HideSubTasksMode.HideAll }),
-    );
+    this._setHideSubTasksMode(id, HideSubTasksMode.HideAll);
+  }
+
+  private _setHideSubTasksMode(id: string, mode: HideSubTasksMode): void {
+    const task = this._taskEntities()[id];
+    if (!task) {
+      return;
+    }
+    // Skip no-op transitions so a redundant click doesn't persist + sync an op.
+    // Note: mode Show (0) travels explicitly in the payload (JSON.stringify
+    // drops `undefined`) but is stored as undefined — see
+    // PersistedHideSubTasksMode in task.model.ts.
+    const current = task._hideSubTasksMode ?? HideSubTasksMode.Show;
+    if (current === mode) {
+      return;
+    }
+    this._store.dispatch(setHideSubTasksMode({ id, mode }));
   }
 
   async convertToMainTask(task: Task): Promise<void> {

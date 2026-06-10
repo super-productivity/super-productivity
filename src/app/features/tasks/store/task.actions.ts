@@ -37,24 +37,19 @@ export const __updateMultipleTaskSimple = createAction(
   }),
 );
 
-export const updateTaskUi = createAction(
-  '[Task] Update Task Ui',
-  props<{ task: Update<Task> }>(),
-);
-
-// Dedicated action (instead of reusing updateTaskUi): old clients apply ops for
-// action types they know, and their typia validators reject values outside the
-// shipped HideSubTasksMode set as data corruption. An unknown action type is a
-// clean no-op for them, so collapse-state sync degrades silently on old
-// versions instead of triggering the repair flow.
-export const setSubtaskHideMode = createAction(
-  '[Task] Set Subtask Hide Mode',
-  (taskProps: { taskId: string; mode: HideSubTasksMode }) => ({
+// Dedicated action (instead of reusing a generic task update): old clients
+// apply ops for action types they know; an unknown action type is a clean
+// no-op for them, so collapse-state sync degrades silently on old versions
+// instead of triggering the repair flow. See PersistedHideSubTasksMode in
+// task.model.ts for the full invariant.
+export const setHideSubTasksMode = createAction(
+  '[Task] Set Hide Sub Tasks Mode',
+  (taskProps: { id: string; mode: HideSubTasksMode }) => ({
     ...taskProps,
     meta: {
       isPersistent: true,
       entityType: 'TASK',
-      entityId: taskProps.taskId,
+      entityId: taskProps.id,
       opType: OpType.Update,
     } satisfies PersistentActionMeta,
   }),

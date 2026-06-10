@@ -10,13 +10,12 @@ import {
   removeTimeSpent,
   roundTimeSpentForDay,
   setCurrentTask,
+  setHideSubTasksMode,
   setSelectedTask,
-  setSubtaskHideMode,
   toggleStart,
   unsetCurrentTask,
-  updateTaskUi,
 } from './task.actions';
-import { Task, TaskDetailTargetPanel, TaskState } from '../task.model';
+import { HideSubTasksMode, Task, TaskDetailTargetPanel, TaskState } from '../task.model';
 import { calcTotalTimeSpent } from '../util/calc-total-time-spent';
 import { addTaskRepeatCfgToTask } from '../../task-repeat-cfg/store/task-repeat-cfg.actions';
 import {
@@ -353,20 +352,16 @@ export const taskReducer = createReducer<TaskState>(
     return taskAdapter.updateMany(taskUpdates, state);
   }),
 
-  on(updateTaskUi, (state, { task }) => {
-    return taskAdapter.updateOne(task, state);
-  }),
-
-  on(setSubtaskHideMode, (state, { taskId, mode }) => {
-    // Normalize Show (0) to undefined so persisted/synced Task state stays
-    // within the legacy {undefined, 1, 2} shape — old clients' typia
-    // validators reject 0 as corruption. The explicit 0 exists only in the
-    // action payload (JSON.stringify drops undefined, so the "show all"
-    // transition needs a serializable value on the wire).
-    return taskAdapter.updateOne(
-      { id: taskId, changes: { _hideSubTasksMode: mode || undefined } },
-      state,
-    );
+  on(setHideSubTasksMode, (state, { id, mode }) => {
+    // Anything but an explicit hide value normalizes to undefined (= Show):
+    // remote op payloads are untrusted input, and persisted state must stay
+    // within {undefined, HideDone, HideAll} — see PersistedHideSubTasksMode
+    // in task.model.ts.
+    const _hideSubTasksMode =
+      mode === HideSubTasksMode.HideDone || mode === HideSubTasksMode.HideAll
+        ? mode
+        : undefined;
+    return taskAdapter.updateOne({ id, changes: { _hideSubTasksMode } }, state);
   }),
 
   // Bulk task updates - used for archive task batch operations

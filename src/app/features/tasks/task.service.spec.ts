@@ -21,7 +21,7 @@ import {
   addSubTask,
   moveSubTaskToTop,
   moveSubTaskToBottom,
-  setSubtaskHideMode,
+  setHideSubTasksMode,
 } from './store/task.actions';
 import { selectTaskEntities } from './store/task.selectors';
 import {
@@ -952,7 +952,7 @@ describe('TaskService', () => {
     const dispatchedHideMode = (): number | undefined => {
       const calls = (store.dispatch as jasmine.Spy).calls.all();
       const last = calls[calls.length - 1].args[0];
-      expect(last.type).toBe(setSubtaskHideMode.type);
+      expect(last.type).toBe(setHideSubTasksMode.type);
       return last.mode;
     };
 
@@ -1035,6 +1035,17 @@ describe('TaskService', () => {
       (store.dispatch as jasmine.Spy).calls.reset();
 
       service.toggleSubTaskMode('missing', true, false);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch when the requested mode equals the current one (no redundant op)', () => {
+      // undefined in state means Show — requesting Show again must not create
+      // a persistent op that would sync for no change.
+      setEntities({ id: 'p', subTaskIds: [] });
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      service.showSubTasks('p');
 
       expect(store.dispatch).not.toHaveBeenCalled();
     });

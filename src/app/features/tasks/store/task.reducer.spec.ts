@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { Task, TaskDetailTargetPanel, TaskState } from '../task.model';
+import { HideSubTasksMode, Task, TaskDetailTargetPanel, TaskState } from '../task.model';
 import { initialTaskState, taskReducer } from './task.reducer';
 import * as fromActions from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -1116,10 +1116,10 @@ describe('Task Reducer', () => {
   });
 
   describe('subtask hide/show - persistent meta', () => {
-    it('setSubtaskHideMode should be persistent with correct meta', () => {
-      const action = fromActions.setSubtaskHideMode({
-        taskId: 'task-1',
-        mode: 1,
+    it('setHideSubTasksMode should be persistent with correct meta', () => {
+      const action = fromActions.setHideSubTasksMode({
+        id: 'task-1',
+        mode: HideSubTasksMode.HideDone,
       });
 
       expect(action.meta.isPersistent).toBe(true);
@@ -1128,35 +1128,25 @@ describe('Task Reducer', () => {
       expect(action.meta.opType).toBe('UPD');
     });
 
-    it('updateTaskUi should NOT be persistent (old clients apply known action types)', () => {
-      // Old clients have a reducer for updateTaskUi; a persistent updateTaskUi op
-      // carrying values outside their shipped HideSubTasksMode set would land in
-      // their state and fail typia validation. Collapse-state sync must go
-      // through the dedicated setSubtaskHideMode action instead.
-      const action = fromActions.updateTaskUi({
-        task: { id: 'task-1', changes: { _hideSubTasksMode: 1 } },
-      });
-
-      expect((action as any).meta).toBeUndefined();
-    });
-
-    it('setSubtaskHideMode payload survives JSON round-trip for the "show all" transition', () => {
+    it('setHideSubTasksMode payload survives JSON round-trip for the "show all" transition', () => {
       // The synced payload is JSON-encoded. `undefined` is dropped by JSON.stringify,
       // so callers must use the explicit Show (0) sentinel to make a "show all"
       // transition replay correctly on remote devices.
-      const action = fromActions.setSubtaskHideMode({
-        taskId: 'task-1',
-        mode: 0,
+      const action = fromActions.setHideSubTasksMode({
+        id: 'task-1',
+        mode: HideSubTasksMode.Show,
       });
       const roundTripped = JSON.parse(JSON.stringify(action));
       expect(roundTripped.mode).toBe(0);
     });
 
-    it('setSubtaskHideMode normalizes Show (0) to undefined in state', () => {
-      // Synced Task state must stay within the legacy {undefined, 1, 2} shape:
-      // old clients' typia validators reject 0 as corruption. The explicit 0
-      // lives only in the action payload.
-      const task = createTask('task-1', { _hideSubTasksMode: 2 });
+    it('setHideSubTasksMode normalizes Show (0) and garbage to undefined in state', () => {
+      // Persisted state must stay within {undefined, HideDone, HideAll} — see
+      // PersistedHideSubTasksMode in task.model.ts. Remote op payloads are
+      // untrusted, so anything but an explicit hide value degrades to Show.
+      const task = createTask('task-1', {
+        _hideSubTasksMode: HideSubTasksMode.HideAll,
+      });
       let state: TaskState = {
         ...initialTaskState,
         ids: ['task-1'],
@@ -1165,21 +1155,34 @@ describe('Task Reducer', () => {
 
       state = taskReducer(
         state,
-        fromActions.setSubtaskHideMode({ taskId: 'task-1', mode: 0 }),
+        fromActions.setHideSubTasksMode({ id: 'task-1', mode: HideSubTasksMode.Show }),
       );
       expect(state.entities['task-1']!._hideSubTasksMode).toBeUndefined();
 
       state = taskReducer(
         state,
-        fromActions.setSubtaskHideMode({ taskId: 'task-1', mode: 2 }),
+        fromActions.setHideSubTasksMode({
+          id: 'task-1',
+          mode: HideSubTasksMode.HideAll,
+        }),
       );
-      expect(state.entities['task-1']!._hideSubTasksMode).toBe(2);
+      expect(state.entities['task-1']!._hideSubTasksMode).toBe(HideSubTasksMode.HideAll);
 
       state = taskReducer(
         state,
-        fromActions.setSubtaskHideMode({ taskId: 'task-1', mode: 1 }),
+        fromActions.setHideSubTasksMode({
+          id: 'task-1',
+          mode: HideSubTasksMode.HideDone,
+        }),
       );
-      expect(state.entities['task-1']!._hideSubTasksMode).toBe(1);
+      expect(state.entities['task-1']!._hideSubTasksMode).toBe(HideSubTasksMode.HideDone);
+
+      // Malformed remote payloads (wrong type / out of range) degrade to Show
+      state = taskReducer(
+        state,
+        fromActions.setHideSubTasksMode({ id: 'task-1', mode: 3 as any }),
+      );
+      expect(state.entities['task-1']!._hideSubTasksMode).toBeUndefined();
     });
   });
 });
