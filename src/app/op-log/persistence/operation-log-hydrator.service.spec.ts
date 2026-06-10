@@ -30,6 +30,7 @@ import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
+import { SyncProviderId } from '../sync-providers/provider.const';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -396,7 +397,10 @@ describe('OperationLogHydratorService', () => {
         expect(mockStore.dispatch).toHaveBeenCalledTimes(2);
         // Tail ops are replayed via bulk dispatch for performance
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: tailOps.map((e) => e.op) }),
+          bulkApplyHydrationOperations({
+            operations: tailOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
         );
         // Hydration state is managed around the dispatch
         expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalled();
@@ -699,6 +703,38 @@ describe('OperationLogHydratorService', () => {
         );
       });
 
+      it('should preserve local sync settings when replaying SYNC_IMPORT without state cache', async () => {
+        const syncImportPayload = {
+          task: {},
+          project: {},
+          globalConfig: {
+            sync: {
+              syncProvider: SyncProviderId.WebDAV,
+              isEnabled: true,
+              isEncryptionEnabled: true,
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+              isCompressionEnabled: true,
+            },
+          },
+        };
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+          payload: syncImportPayload,
+          entityType: 'ALL',
+        });
+
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(
+          Promise.resolve([createMockEntry(1, syncImportOp)]),
+        );
+
+        await service.hydrateStore();
+
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          loadAllData({ appDataComplete: syncImportPayload as any }),
+        );
+      });
+
       it('should merge BACKUP_IMPORT clock BEFORE loadAllData (regression test)', async () => {
         // REGRESSION TEST: Same fix applies to BACKUP_IMPORT operations.
         // BACKUP_IMPORT is a full-state operation like SYNC_IMPORT and has the same
@@ -896,7 +932,10 @@ describe('OperationLogHydratorService', () => {
         expect(mockSchemaMigrationService.migrateOperations).toHaveBeenCalled();
         // Operations should be applied via bulk dispatch
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: migratedOps }),
+          bulkApplyHydrationOperations({
+            operations: migratedOps,
+            localClientId: 'test-client',
+          }),
         );
       });
 
@@ -1065,7 +1104,10 @@ describe('OperationLogHydratorService', () => {
         // Must replay the whole op-log from seq 0.
         expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: allOps.map((e) => e.op) }),
+          bulkApplyHydrationOperations({
+            operations: allOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
         );
       });
 
@@ -1097,7 +1139,10 @@ describe('OperationLogHydratorService', () => {
 
         // Replay all ops via bulk dispatch for performance
         expect(mockStore.dispatch).toHaveBeenCalledWith(
-          bulkApplyHydrationOperations({ operations: allOps.map((e) => e.op) }),
+          bulkApplyHydrationOperations({
+            operations: allOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
         );
         // Hydration state is managed around the dispatch
         expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalled();

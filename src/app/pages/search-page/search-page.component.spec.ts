@@ -279,6 +279,8 @@ describe('SearchPageComponent', () => {
     const task = createTask({ id: 't1', title: 'Finish report', isDone: false });
     allTasks$.next([task]);
     initAndFlush();
+    component.includeCompletedForm.setValue(true);
+    tick(150);
     typeAndFlush('Finish');
     expect(latestResults.length).toBe(1);
     expect(latestResults[0].isDone).toBe(false);
@@ -290,6 +292,28 @@ describe('SearchPageComponent', () => {
     expect(latestResults[0].isDone).toBe(true);
   }));
 
+  it('should hide completed active tasks by default (#5943)', fakeAsync(() => {
+    allTasks$.next([
+      createTask({ id: 'open-task', title: 'Quarterly report', isDone: false }),
+      createTask({ id: 'done-task', title: 'Quarterly report done', isDone: true }),
+    ]);
+    initAndFlush();
+    typeAndFlush('Quarterly report');
+    expect(latestResults.map((item) => item.id)).toEqual(['open-task']);
+  }));
+
+  it('should include completed active tasks when enabled (#5943)', fakeAsync(() => {
+    allTasks$.next([
+      createTask({ id: 'open-task', title: 'Quarterly report', isDone: false }),
+      createTask({ id: 'done-task', title: 'Quarterly report done', isDone: true }),
+    ]);
+    initAndFlush();
+    component.includeCompletedForm.setValue(true);
+    tick(150);
+    typeAndFlush('Quarterly report');
+    expect(latestResults.map((item) => item.id)).toEqual(['open-task', 'done-task']);
+  }));
+
   it('should mark archive tasks with isArchiveTask=true', fakeAsync(() => {
     // Must set archive tasks before creating a new component instance,
     // because _searchableItems$ calls getArchivedTasks() at construction time.
@@ -299,6 +323,31 @@ describe('SearchPageComponent', () => {
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
     initAndFlush();
+    component.includeCompletedForm.setValue(true);
+    tick(150);
+    typeAndFlush('Old');
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].isArchiveTask).toBe(true);
+  }));
+
+  it('should hide archived tasks by default (#5943)', fakeAsync(() => {
+    const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
+    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    fixture = TestBed.createComponent(SearchPageComponent);
+    component = fixture.componentInstance;
+    initAndFlush();
+    typeAndFlush('Old');
+    expect(latestResults).toEqual([]);
+  }));
+
+  it('should include archived tasks when completed tasks are enabled (#5943)', fakeAsync(() => {
+    const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
+    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    fixture = TestBed.createComponent(SearchPageComponent);
+    component = fixture.componentInstance;
+    initAndFlush();
+    component.includeCompletedForm.setValue(true);
+    tick(150);
     typeAndFlush('Old');
     expect(latestResults.length).toBe(1);
     expect(latestResults[0].isArchiveTask).toBe(true);
@@ -514,6 +563,8 @@ describe('SearchPageComponent', () => {
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
     initAndFlush();
+    component.includeCompletedForm.setValue(true);
+    tick(150);
     typeAndFlush('Old');
 
     expect(latestResults.length).toBe(1);

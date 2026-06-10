@@ -57,6 +57,7 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
           useValue: {
             hasEventUrl: jasmine.createSpy('hasEventUrl').and.returnValue(false),
             isPluginEvent: jasmine.createSpy('isPluginEvent').and.returnValue(false),
+            canMoveEvent: jasmine.createSpy('canMoveEvent').and.returnValue(false),
             createAsTask: jasmine.createSpy('createAsTask'),
             hideForever: jasmine.createSpy('hideForever'),
           },
@@ -93,6 +94,26 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
       fixture.detectChanges();
 
       expect(component.isReferenceCalendar()).toBe(false);
+    });
+  });
+
+  describe('canRescheduleCalendarEvent signal', () => {
+    it('should return false when the calendar provider cannot update events', () => {
+      fixture.componentRef.setInput('event', makeCalendarScheduleEvent(false));
+      fixture.detectChanges();
+
+      expect(component.canRescheduleCalendarEvent()).toBe(false);
+    });
+
+    it('should return true when the calendar provider can update events', () => {
+      const calActions = TestBed.inject(
+        CalendarEventActionsService,
+      ) as jasmine.SpyObj<CalendarEventActionsService>;
+      calActions.canMoveEvent.and.returnValue(true);
+      fixture.componentRef.setInput('event', makeCalendarScheduleEvent(false));
+      fixture.detectChanges();
+
+      expect(component.canRescheduleCalendarEvent()).toBe(true);
     });
   });
 

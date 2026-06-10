@@ -22,6 +22,7 @@ import { TagService } from '../../features/tag/tag.service';
 import { sortTagLabels } from './plugin-tag-utils';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { T } from '../../t.const';
+import { PluginLog } from '../../core/log';
 
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderAdapterService implements IssueServiceInterface {
@@ -55,7 +56,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     try {
       return await provider.definition.testConnection(pluginCfg.pluginConfig, http);
     } catch (e) {
-      console.error(
+      PluginLog.err(
         `[PluginIssueAdapter] testConnection failed for ${pluginCfg.issueProviderKey}:`,
         e,
       );
@@ -78,7 +79,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         return link;
       }
     } catch (e) {
-      console.error(
+      PluginLog.err(
         `[PluginIssueAdapter] getIssueLink failed for ${cfg.issueProviderKey}:`,
         e,
       );
@@ -90,7 +91,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       const issue = (await this.getById(issueId, issueProviderId)) as PluginIssue | null;
       return issue?.url ?? '';
     } catch (e) {
-      console.error(
+      PluginLog.err(
         `[PluginIssueAdapter] getIssueLink url fallback failed for ${cfg.issueProviderKey}:`,
         e,
       );
@@ -114,7 +115,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         resolved.http,
       );
     } catch (e) {
-      console.error(
+      PluginLog.err(
         `[PluginIssueAdapter] getById failed for ${cfg.issueProviderKey}:`,
         e,
       );
@@ -172,7 +173,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         issueData: r,
       })) as SearchResultItem[];
     } catch (e) {
-      console.error(
+      PluginLog.err(
         `[PluginIssueAdapter] searchIssues failed for ${cfg.issueProviderKey}:`,
         e,
       );
@@ -258,7 +259,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         this._handleRemoteDeletion(task);
         return null;
       }
-      console.error(
+      PluginLog.err(
         `[PluginIssueAdapter] getFreshDataForIssueTask failed for ${cfg.issueProviderKey}:`,
         e,
       );
@@ -299,7 +300,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       const existingIds = new Set(allExistingIssueIds.map(String));
       return results.filter((r) => !existingIds.has(r.id));
     } catch (e) {
-      console.error(
+      PluginLog.err(
         `[PluginIssueAdapter] getNewIssuesToAddToBacklog failed for ${cfg.issueProviderKey}:`,
         e,
       );

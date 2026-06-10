@@ -22,6 +22,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
+import { Log } from '../../../../core/log';
 
 type SortOrder = 'newest' | 'oldest' | 'largest' | 'smallest';
 
@@ -100,7 +101,7 @@ export class DialogClipboardImagesManagerComponent implements OnInit {
       }
       this.imageUrls.set(urlMap);
     } catch (error) {
-      console.error('Error loading clipboard images:', error);
+      Log.err('Error loading clipboard images:', error);
       this._snackService.open({
         type: 'ERROR',
         msg: this._translateService.instant(T.GCF.CLIPBOARD_IMAGES.ERROR_LOADING),
@@ -124,7 +125,7 @@ export class DialogClipboardImagesManagerComponent implements OnInit {
         throw new Error('Delete operation returned false');
       }
     } catch (error) {
-      console.error('Error deleting clipboard image:', error);
+      Log.err('Error deleting clipboard image:', error);
       this._snackService.open({
         type: 'ERROR',
         msg: this._translateService.instant(T.GCF.CLIPBOARD_IMAGES.ERROR_DELETING),
@@ -159,7 +160,7 @@ export class DialogClipboardImagesManagerComponent implements OnInit {
         });
       }
     } catch (error) {
-      console.error('Error deleting all clipboard images:', error);
+      Log.err('Error deleting all clipboard images:', error);
       await this.loadImages();
       this._snackService.open({
         type: 'ERROR',

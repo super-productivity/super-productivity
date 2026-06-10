@@ -368,7 +368,7 @@ export class MentionDirective implements OnChanges {
 
             // Check if we have a valid active item before proceeding
             if (!this.searchList.activeItem) {
-              console.warn('MentionDirective: No active item available for selection');
+              Log.warn('MentionDirective: No active item available for selection');
               this.stopSearch();
               return false;
             }

@@ -26,12 +26,10 @@ import { DeletedTagTitlesSidecarService } from './deleted-tag-titles-sidecar.ser
 import { selectEnabledIssueProviders } from '../store/issue-provider.selectors';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { T } from '../../../t.const';
-import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
-import { TagService } from '../../tag/tag.service';
-import { createPluginSyncAdapter } from '../../../plugins/issue-provider/plugin-sync-adapter.service';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { deleteTag, deleteTags } from '../../tag/store/tag.actions';
+import { IssueSyncAdapterResolverService } from './issue-sync-adapter-resolver.service';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'isDone',
@@ -124,9 +122,8 @@ export class IssueTwoWaySyncEffects {
   private readonly _snackService = inject(SnackService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _deletedTagTitlesSidecar = inject(DeletedTagTitlesSidecarService);
+  private readonly _adapterResolver = inject(IssueSyncAdapterResolverService);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
-  private readonly _pluginHttp = inject(PluginHttpService);
-  private readonly _tagService = inject(TagService);
   private _syncOriginatedTaskIds = new Set<string>();
   private static readonly _MAX_SYNC_ORIGINATED_IDS = 1000;
 
@@ -464,32 +461,7 @@ export class IssueTwoWaySyncEffects {
   }
 
   private _getAdapter(issueType: string): IssueSyncAdapter<unknown> | undefined {
-    const existing = this._adapterRegistry.get(issueType);
-    if (existing) return existing;
-
-    const provider = this._pluginRegistry.getProvider(issueType);
-    const definition = provider?.definition;
-    if (
-      !provider ||
-      !definition ||
-      (!definition.createIssue &&
-        !definition.deleteIssue &&
-        !(definition.fieldMappings?.length && definition.updateIssue))
-    ) {
-      return undefined;
-    }
-
-    const adapter = createPluginSyncAdapter(
-      definition,
-      (getHeadersFn) =>
-        this._pluginHttp.createHttpHelper(getHeadersFn, {
-          allowPrivateNetwork: provider.allowPrivateNetwork,
-        }),
-      this._tagService,
-    );
-
-    this._adapterRegistry.register(issueType, adapter);
-    return adapter;
+    return this._adapterResolver.getAdapter(issueType);
   }
 
   private _deleteRemoteIssue$(info: DeletedTaskIssueInfo | Task): Observable<unknown> {

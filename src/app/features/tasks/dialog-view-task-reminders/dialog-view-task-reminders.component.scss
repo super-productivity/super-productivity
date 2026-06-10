@@ -55,6 +55,24 @@
     }
   }
 
+  .schedule-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--s-half);
+    margin-left: var(--s);
+    padding-bottom: var(--s-half);
+    color: var(--text-color-muted);
+    font-size: 11px;
+    line-height: 1.4;
+
+    mat-icon {
+      flex: 0 0 auto;
+      width: 14px;
+      height: 14px;
+      font-size: 14px;
+    }
+  }
+
   .title {
     margin-left: var(--s);
   }

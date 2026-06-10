@@ -31,6 +31,7 @@ import { ChartLazyLoaderService } from '../chart-lazy-loader.service';
 import { ShareService } from '../../../core/share/share.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
+import { Log } from '../../../core/log';
 
 interface ChartClickEvent {
   active: ActiveElement[];
@@ -226,10 +227,10 @@ export class LazyChartComponent implements OnDestroy {
       }
 
       if (!result.success && result.error && result.error !== 'Share cancelled') {
-        console.error('Share failed:', result.error);
+        Log.err('Share failed:', result.error);
       }
     } catch (error) {
-      console.error('Share failed:', error);
+      Log.err('Share failed:', error);
     } finally {
       this.isSharing.set(false);
     }
@@ -247,14 +248,14 @@ export class LazyChartComponent implements OnDestroy {
       await this.chartLoaderService.loadChartModule();
       this.isModuleLoaded.set(true);
     } catch (error) {
-      console.error('Failed to load chart module:', error);
+      Log.err('Failed to load chart module:', error);
     }
   }
 
   private initChart(canvas: ElementRef<HTMLCanvasElement>): void {
     const chartModule = this.chartLoaderService.getChartModule();
     if (!chartModule) {
-      console.error('Chart module not loaded');
+      Log.err('Chart module not loaded');
       return;
     }
 
@@ -269,7 +270,7 @@ export class LazyChartComponent implements OnDestroy {
       this.chartInstance?.destroy();
       this.chartInstance = new Chart(canvas.nativeElement, chartConfig);
     } catch (error) {
-      console.error('Failed to initialize chart:', error);
+      Log.err('Failed to initialize chart:', error);
     }
   }
 

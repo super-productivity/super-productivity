@@ -18,6 +18,7 @@ import { ISSUE_PROVIDER_HUMANIZED, TRELLO_TYPE } from '../../issue.const';
 import { T } from '../../../../t.const';
 import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 import { getErrorTxt } from '../../../../util/get-error-text';
+import { IssueLog } from '../../../../core/log';
 
 const BASE_URL = 'https://api.trello.com/1';
 const DEFAULT_CARD_FIELDS = [
@@ -195,7 +196,8 @@ export class TrelloApiService {
       }),
       catchError((error) => {
         const errorMsg = `Trello failed to resolve username "${username}": ${getErrorTxt(error)}`;
-        console.error(errorMsg);
+        // errorMsg embeds the username (user content) — keep it out of the exportable log
+        IssueLog.err('Trello failed to resolve username:', getErrorTxt(error));
         this._snackService.open({
           type: 'ERROR',
           msg: errorMsg,

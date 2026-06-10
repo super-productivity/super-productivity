@@ -23,6 +23,7 @@ import { of, Subscription, timer } from 'rxjs';
 import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { CssString, StyleObject, StyleObjectToString } from '../../util/styles';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { Log } from '../../core/log';
 import { readNumberLSBounded } from '../../util/ls-util';
 import { MatIconModule } from '@angular/material/icon';
 import { MatRippleModule } from '@angular/material/core';
@@ -558,7 +559,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     try {
       localStorage.setItem(LS.RIGHT_PANEL_WIDTH, this.currentWidth().toString());
     } catch (error) {
-      console.warn('Failed to save right panel width to localStorage:', error);
+      Log.warn('Failed to save right panel width to localStorage:', error);
     }
   }
 
@@ -577,7 +578,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
 
       // Additional validation
       if (!Number.isFinite(width) || width < RIGHT_PANEL_CONFIG.MIN_WIDTH) {
-        console.warn('Invalid right panel width detected, using default');
+        Log.warn('Invalid right panel width detected, using default');
         this.currentWidth.set(RIGHT_PANEL_CONFIG.DEFAULT_WIDTH);
         return;
       }
@@ -586,7 +587,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
       const validatedWidth = clampWidth(width, RIGHT_PANEL_CONFIG.MAX_WIDTH);
       this.currentWidth.set(validatedWidth);
     } catch (error) {
-      console.warn('Failed to initialize right panel width:', error);
+      Log.warn('Failed to initialize right panel width:', error);
       this.currentWidth.set(RIGHT_PANEL_CONFIG.DEFAULT_WIDTH);
     }
   }

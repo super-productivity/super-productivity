@@ -20,7 +20,7 @@ import { map } from 'rxjs/operators';
     `
       .page-wrapper {
         padding: 16px;
-        max-width: 1000px;
+        width: 100%;
         margin: 0 auto;
       }
     `,

@@ -251,8 +251,17 @@ export class OperationLogHydratorService {
             // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
             // This reduces 500 dispatches to 1, dramatically improving startup performance.
             // The bulkHydrationMetaReducer iterates through ops and applies each action.
+            // Lenient (no throw) so a cold-boot IndexedDB hiccup can't block
+            // startup. A null clientId leaves the bulk-apply flag unset, which
+            // defaults to own-op semantics (apply faithfully) — the safe
+            // direction for the common case (replaying THIS device's own ops).
+            // See bulkOperationsMetaReducer.
+            const localClientId =
+              (await this.clientIdProvider.loadClientId()) ?? undefined;
             this.hydrationStateService.startApplyingRemoteOps();
-            this.store.dispatch(bulkApplyOperations({ operations: opsToReplay }));
+            this.store.dispatch(
+              bulkApplyOperations({ operations: opsToReplay, localClientId }),
+            );
             this.hydrationStateService.endApplyingRemoteOps();
 
             // Merge replayed ops' clocks into local clock
@@ -328,8 +337,16 @@ export class OperationLogHydratorService {
           // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
           // This reduces 500 dispatches to 1, dramatically improving startup performance.
           // The bulkHydrationMetaReducer iterates through ops and applies each action.
+          // Lenient (no throw) so a cold-boot IndexedDB hiccup can't block
+          // startup. A null clientId leaves the bulk-apply flag unset, which
+          // defaults to own-op semantics (apply faithfully) — the safe direction
+          // for the common case (replaying THIS device's own ops). See
+          // bulkOperationsMetaReducer.
+          const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
           this.hydrationStateService.startApplyingRemoteOps();
-          this.store.dispatch(bulkApplyOperations({ operations: opsToReplay }));
+          this.store.dispatch(
+            bulkApplyOperations({ operations: opsToReplay, localClientId }),
+          );
           this.hydrationStateService.endApplyingRemoteOps();
 
           // Merge replayed ops' clocks into local clock

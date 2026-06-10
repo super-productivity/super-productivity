@@ -12,6 +12,7 @@ import {
   FULL_STATE_OP_TYPES,
   extractFullStateFromPayload,
   assertValidFullStatePayload,
+  ActionType,
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { LOCK_NAMES, MAX_OPS_PER_UPLOAD_REQUEST } from '../core/operation-log.const';
@@ -31,6 +32,10 @@ import {
 import { isRetryableUploadError } from '@sp/sync-providers/http';
 import { handleStorageQuotaError } from './sync-error-utils';
 import { DecryptNoPasswordError } from '../core/errors/sync-errors';
+import {
+  stripLocalOnlySyncScheduleSettings,
+  stripLocalOnlySyncSettingsFromAppData,
+} from '../../features/config/local-only-sync-settings.util';
 
 // Re-export for consumers that import from this service
 export type {
@@ -214,10 +219,30 @@ export class OperationLogUploadService {
         regularOps = opsAfterSnapshot;
       }
 
-      // Convert to SyncOperation format
-      let syncOps: SyncOperation[] = regularOps.map((entry) =>
-        this._entryToSyncOp(entry),
-      );
+      // Convert to SyncOperation format. Local-only operations remain in the
+      // local op-log for replay, but are acknowledged locally instead of uploaded.
+      const syncOpPairs = regularOps
+        .map((entry) => ({ entry, syncOp: this._entryToSyncOp(entry) }))
+        .filter(
+          (pair): pair is { entry: OperationLogEntry; syncOp: SyncOperation } =>
+            pair.syncOp !== null,
+        );
+      const localOnlySeqs = regularOps
+        .filter((entry) => !syncOpPairs.some((pair) => pair.entry.seq === entry.seq))
+        .map((entry) => entry.seq);
+      if (localOnlySeqs.length > 0) {
+        await this.opLogStore.markSynced(localOnlySeqs);
+        uploadedCount += localOnlySeqs.length;
+        OpLog.normal(
+          `OperationLogUploadService: Marked ${localOnlySeqs.length} local-only op(s) as synced without upload`,
+        );
+      }
+      if (syncOpPairs.length === 0) {
+        return;
+      }
+
+      let syncOps: SyncOperation[] = syncOpPairs.map((pair) => pair.syncOp);
+      const uploadEntries = syncOpPairs.map((pair) => pair.entry);
 
       // Encrypt payloads if E2E encryption is enabled
       if (isEncryptionEnabled && encryptKey) {
@@ -227,7 +252,7 @@ export class OperationLogUploadService {
 
       // Upload in batches to avoid 413 Payload Too Large errors
       const chunks = chunkArray(syncOps, MAX_OPS_PER_UPLOAD_REQUEST);
-      const correspondingEntries = chunkArray(regularOps, MAX_OPS_PER_UPLOAD_REQUEST);
+      const correspondingEntries = chunkArray(uploadEntries, MAX_OPS_PER_UPLOAD_REQUEST);
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -378,7 +403,12 @@ export class OperationLogUploadService {
     };
   }
 
-  private _entryToSyncOp(entry: OperationLogEntry): SyncOperation {
+  private _entryToSyncOp(entry: OperationLogEntry): SyncOperation | null {
+    const payload = this._sanitizeRegularOpPayloadForUpload(entry.op);
+    if (payload === null) {
+      return null;
+    }
+
     return {
       id: entry.op.id,
       clientId: entry.op.clientId,
@@ -387,13 +417,54 @@ export class OperationLogUploadService {
       entityType: entry.op.entityType,
       entityId: entry.op.entityId,
       entityIds: entry.op.entityIds,
-      payload: entry.op.payload,
+      payload,
       vectorClock: entry.op.vectorClock,
       timestamp: entry.op.timestamp,
       schemaVersion: entry.op.schemaVersion,
       ...(entry.op.syncImportReason
         ? { syncImportReason: entry.op.syncImportReason }
         : {}),
+    };
+  }
+
+  private _sanitizeRegularOpPayloadForUpload(op: Operation): unknown | null {
+    if (
+      op.actionType !== ActionType.GLOBAL_CONFIG_UPDATE_SECTION ||
+      typeof op.payload !== 'object' ||
+      op.payload === null ||
+      !('actionPayload' in op.payload)
+    ) {
+      return op.payload;
+    }
+
+    const multiEntityPayload = op.payload as {
+      actionPayload?: Record<string, unknown>;
+      entityChanges?: unknown;
+    };
+    const actionPayload = multiEntityPayload.actionPayload;
+    if (
+      !actionPayload ||
+      actionPayload['sectionKey'] !== 'sync' ||
+      typeof actionPayload['sectionCfg'] !== 'object' ||
+      actionPayload['sectionCfg'] === null
+    ) {
+      return op.payload;
+    }
+
+    const sectionCfg = stripLocalOnlySyncScheduleSettings(
+      actionPayload['sectionCfg'] as Record<string, unknown>,
+    );
+    if (Object.keys(sectionCfg).length === 0) {
+      // GLOBAL_CONFIG_UPDATE_SECTION replays from actionPayload; entityChanges are empty.
+      return null;
+    }
+
+    return {
+      ...multiEntityPayload,
+      actionPayload: {
+        ...actionPayload,
+        sectionCfg,
+      },
     };
   }
 
@@ -425,7 +496,9 @@ export class OperationLogUploadService {
 
     // Extract state from payload, handling both wrapped and unwrapped formats.
     // Uses shared utility to ensure consistent handling across the codebase.
-    let state: unknown = extractFullStateFromPayload(op.payload);
+    let state: unknown = stripLocalOnlySyncSettingsFromAppData(
+      extractFullStateFromPayload(op.payload),
+    );
 
     // Validate the payload structure before uploading to catch bugs early.
     // This throws if the payload is malformed (e.g., missing expected keys).

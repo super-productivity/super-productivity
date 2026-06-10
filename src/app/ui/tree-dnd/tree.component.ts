@@ -38,6 +38,7 @@ import { TreeIndicatorService } from './tree-indicator.service';
 import { TREE_CONSTANTS } from './tree-constants';
 import { assertTreeId } from './tree-guards';
 import { expandCollapseAni } from './tree.animations';
+import { Log } from '../../core/log';
 import { dragDelayForTouch } from '../../util/input-intent';
 
 @Component({
@@ -169,7 +170,7 @@ export class TreeDndComponent<TData = unknown> {
       this._rootDropEl = this._host.nativeElement.querySelector('.root-drop');
       this._indicatorService.clear();
     } catch (error) {
-      console.error('Invalid drag start:', error);
+      Log.err('Invalid drag start:', error);
     }
   }
 
@@ -411,7 +412,7 @@ export class TreeDndComponent<TData = unknown> {
         item.reset();
       } catch (error) {
         // Ignore reset errors - they can happen if the item is already destroyed
-        console.debug('Failed to reset drag item:', error);
+        Log.debug('Failed to reset drag item:', error);
       }
     };
 

@@ -29,6 +29,7 @@ import { AppStateActions } from '../../../root-store/app-state/app-state.actions
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
+import { Log } from '../../../core/log';
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -243,7 +244,7 @@ export class GlobalConfigEffects {
                   setTimeout(() => window.location.reload(), 1000);
                 })
                 .catch((err) => {
-                  console.error('Failed to migrate user profiles:', err);
+                  Log.err('Failed to migrate user profiles:', err);
                   this._snackService.open({
                     type: 'ERROR',
                     msg: 'Failed to enable user profiles. Please try again.',

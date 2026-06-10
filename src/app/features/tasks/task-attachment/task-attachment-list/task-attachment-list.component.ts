@@ -20,6 +20,7 @@ import { EnlargeImgDirective } from '../../../../ui/enlarge-img/enlarge-img.dire
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { ClipboardImageService } from '../../../../core/clipboard-image/clipboard-image.service';
 import { isPathSafeToOpen } from '../../../../../../electron/shared-with-frontend/is-external-url-allowed';
+import { Log } from '../../../../core/log';
 
 interface ResolvedAttachment extends TaskAttachment {
   resolvedPath?: string;
@@ -141,7 +142,7 @@ export class TaskAttachmentListComponent {
             });
           }
         } catch (error) {
-          console.error('Error resolving clipboard image:', error);
+          Log.err('Error resolving clipboard image:', error);
         }
       });
     });
@@ -192,7 +193,7 @@ export class TaskAttachmentListComponent {
         this._copyWithFallback(attachment.path);
       }
     } catch (error) {
-      console.warn('Clipboard write failed, trying fallback method:', error);
+      Log.warn('Clipboard write failed, trying fallback method:', error);
       // Try fallback method if modern API fails
       this._copyWithFallback(attachment.path);
     }
@@ -220,7 +221,7 @@ export class TaskAttachmentListComponent {
         });
       }
     } catch (error) {
-      console.error('Fallback copy failed:', error);
+      Log.err('Fallback copy failed:', error);
       this._snackService.open({
         msg: 'Failed to copy to clipboard. Please copy manually.',
         type: 'ERROR',

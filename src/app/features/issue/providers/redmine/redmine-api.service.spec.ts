@@ -1,17 +1,19 @@
-import { TestBed } from '@angular/core/testing';
 import {
   HttpClientTestingModule,
   HttpTestingController,
+  TestRequest,
 } from '@angular/common/http/testing';
 import { HttpRequest } from '@angular/common/http';
+import { TestBed } from '@angular/core/testing';
+import { SnackService } from '../../../../core/snack/snack.service';
+import { SearchResultItem } from '../../issue.model';
 import { RedmineApiService } from './redmine-api.service';
 import { RedmineCfg } from './redmine.model';
-import { SearchResultItem } from '../../issue.model';
-import { SnackService } from '../../../../core/snack/snack.service';
 
 describe('RedmineApiService', () => {
   let service: RedmineApiService;
   let httpMock: HttpTestingController;
+  let snackService: jasmine.SpyObj<SnackService>;
 
   const mockCfg: RedmineCfg = {
     isEnabled: true,
@@ -34,14 +36,15 @@ describe('RedmineApiService', () => {
     limit: 100,
   };
 
-  // by-id lookup is scoped to the configured project (not the global /issues/{id}.json)
+  const searchUrl = (query: string): string =>
+    `${mockCfg.host}/projects/${mockCfg.projectId}/search.json?limit=100&q=${query}&issues=1&open_issues=1`;
+
   const byIdInProjectMatcher =
     (issueId: number) =>
     (req: HttpRequest<unknown>): boolean =>
       req.method === 'GET' &&
       req.url === `${mockCfg.host}/projects/${mockCfg.projectId}/issues.json` &&
       req.params.get('issue_id') === String(issueId) &&
-      // status_id=* so closed issues are found too
       req.params.get('status_id') === '*';
 
   beforeEach(() => {
@@ -57,6 +60,7 @@ describe('RedmineApiService', () => {
     });
     service = TestBed.inject(RedmineApiService);
     httpMock = TestBed.inject(HttpTestingController);
+    snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
   });
 
   afterEach(() => {
@@ -68,10 +72,7 @@ describe('RedmineApiService', () => {
   });
 
   describe('searchIssuesInProject$', () => {
-    const searchUrl = (query: string): string =>
-      `${mockCfg.host}/projects/${mockCfg.projectId}/search.json?limit=100&q=${query}&issues=1&open_issues=1`;
-
-    it('should only send a text search request for non-numeric queries', () => {
+    it('should only send a text search request for non-numeric Latin queries', () => {
       let result: SearchResultItem[] | undefined;
       service.searchIssuesInProject$('some text', mockCfg).subscribe((r) => (result = r));
 
@@ -132,7 +133,6 @@ describe('RedmineApiService', () => {
       service.searchIssuesInProject$('99999', mockCfg).subscribe((r) => (result = r));
 
       const byIdReq = httpMock.expectOne(byIdInProjectMatcher(99999));
-      // Redmine returns an empty list (not a 404) for an id outside the project
       byIdReq.flush({ issues: [], total_count: 0, offset: 0, limit: 1 });
 
       const searchReq = httpMock.expectOne(searchUrl('99999'));
@@ -146,17 +146,89 @@ describe('RedmineApiService', () => {
       let result: SearchResultItem[] | undefined;
       service.searchIssuesInProject$('424242', mockCfg).subscribe((r) => (result = r));
 
-      // The lookup is scoped to the configured project; an id belonging to another
-      // project the API key can see is therefore returned as an empty list by Redmine.
       const byIdReq = httpMock.expectOne(byIdInProjectMatcher(424242));
       byIdReq.flush({ issues: [], total_count: 0, offset: 0, limit: 1 });
 
       const searchReq = httpMock.expectOne(searchUrl('424242'));
       searchReq.flush({ ...mockSearchResponse, results: [] });
 
-      // no global /issues/{id}.json request is ever made
       httpMock.expectNone(`${mockCfg.host}/issues/424242.json`);
       expect(result?.length).toBe(0);
+    });
+
+    it('adds a subject filter fallback for non-Latin queries without full text results', () => {
+      service.searchIssuesInProject$('修正', mockCfg).subscribe((issues) => {
+        expect(issues.length).toBe(1);
+        expect(issues[0].title).toBe('#23 修正ログイン');
+        expect(issues[0].issueData.id).toBe(23);
+      });
+
+      const searchReq = httpMock.expectOne(searchUrl('%E4%BF%AE%E6%AD%A3'));
+      searchReq.flush({
+        results: [],
+        total_count: 0,
+        offset: 0,
+        limit: 100,
+      });
+
+      const fallbackReq = expectSubjectFallbackRequest(httpMock, mockCfg, '修正');
+      expect(fallbackReq.request.method).toBe('GET');
+      fallbackReq.flush({
+        issues: [
+          {
+            id: 23,
+            subject: '修正ログイン',
+            title: '修正ログイン',
+            updated_on: '2026-01-01T00:00:00Z',
+            url: 'https://redmine.example.com/issues/23',
+          },
+        ],
+        total_count: 1,
+        offset: 0,
+        limit: 100,
+      });
+    });
+
+    it('does not request the subject fallback when full text search already returns results', () => {
+      service.searchIssuesInProject$('修正', mockCfg).subscribe((issues) => {
+        expect(issues.map((issue) => issue.issueData.id)).toEqual([23]);
+      });
+
+      const searchReq = httpMock.expectOne(searchUrl('%E4%BF%AE%E6%AD%A3'));
+      searchReq.flush({
+        results: [
+          {
+            id: 23,
+            title: '#23 修正ログイン',
+            url: 'https://redmine.example.com/issues/23',
+          },
+        ],
+        total_count: 1,
+        offset: 0,
+        limit: 100,
+      });
+
+      httpMock.expectNone((req: HttpRequest<unknown>) => {
+        return req.url === `${mockCfg.host}/projects/${mockCfg.projectId}/issues.json`;
+      });
+    });
+
+    it('keeps full text results when subject fallback fails', () => {
+      service.searchIssuesInProject$('修正', mockCfg).subscribe((issues) => {
+        expect(issues).toEqual([]);
+      });
+
+      const searchReq = httpMock.expectOne(searchUrl('%E4%BF%AE%E6%AD%A3'));
+      searchReq.flush({
+        results: [],
+        total_count: 0,
+        offset: 0,
+        limit: 100,
+      });
+
+      const fallbackReq = expectSubjectFallbackRequest(httpMock, mockCfg, '修正');
+      fallbackReq.flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      expect(snackService.open).not.toHaveBeenCalled();
     });
   });
 
@@ -249,5 +321,57 @@ describe('RedmineApiService', () => {
 
       expect(result?.length).toBe(1);
     });
+
+    it('should run the non-Latin subject fallback against instance-wide /issues.json', () => {
+      service.searchIssuesInProject$('修正', globalCfg).subscribe((issues) => {
+        expect(issues.length).toBe(1);
+        expect(issues[0].title).toBe('#23 修正ログイン');
+      });
+
+      const searchReq = httpMock.expectOne(globalSearchUrl('%E4%BF%AE%E6%AD%A3'));
+      searchReq.flush({
+        results: [],
+        total_count: 0,
+        offset: 0,
+        limit: 100,
+      });
+
+      const fallbackReq = expectSubjectFallbackRequest(httpMock, globalCfg, '修正');
+      expect(fallbackReq.request.method).toBe('GET');
+      fallbackReq.flush({
+        issues: [
+          {
+            id: 23,
+            subject: '修正ログイン',
+            title: '修正ログイン',
+            updated_on: '2026-01-01T00:00:00Z',
+            url: 'https://redmine.example.com/issues/23',
+          },
+        ],
+        total_count: 1,
+        offset: 0,
+        limit: 100,
+      });
+    });
   });
 });
+
+const expectSubjectFallbackRequest = (
+  httpMock: HttpTestingController,
+  cfg: RedmineCfg,
+  query: string,
+): TestRequest =>
+  httpMock.expectOne((req: HttpRequest<unknown>) => {
+    const params = req.params;
+
+    return (
+      req.url ===
+        `${cfg.host}${cfg.projectId ? `/projects/${cfg.projectId}` : ''}/issues.json` &&
+      params.get('limit') === '100' &&
+      params.get('status_id') === 'open' &&
+      params.get('set_filter') === '1' &&
+      params.get('f[]') === 'subject' &&
+      params.get('op[subject]') === '~' &&
+      params.get('v[subject][]') === query
+    );
+  });

@@ -42,6 +42,7 @@ object FocusModeNotificationHelper {
         title: String,
         taskTitle: String?,
         remainingMs: Long,
+        isCountdown: Boolean,
         isPaused: Boolean,
         isBreak: Boolean
     ): Notification {
@@ -58,13 +59,31 @@ object FocusModeNotificationHelper {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_sp)
             .setContentTitle(buildTitle(title, taskTitle))
-            .setContentText(formatDuration(remainingMs))
             .setContentIntent(contentPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        // SystemUI's chronometer renders the ticking timer so the service never
+        // re-posts the notification each second — the old 1 Hz notify() loop was
+        // a steady battery drain (#8243). Paused sessions show static text.
+        if (isPaused) {
+            builder.setContentText(formatDuration(remainingMs))
+        } else if (isCountdown) {
+            builder
+                .setWhen(System.currentTimeMillis() + remainingMs)
+                .setShowWhen(true)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+        } else {
+            // Flowtime: remainingMs holds the elapsed time, counting up
+            builder
+                .setWhen(System.currentTimeMillis() - remainingMs)
+                .setShowWhen(true)
+                .setUsesChronometer(true)
+        }
 
         // Add Pause/Resume action
         if (isPaused) {

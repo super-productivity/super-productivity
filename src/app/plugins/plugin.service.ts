@@ -503,7 +503,7 @@ export class PluginService implements OnDestroy {
           }
         }, 100);
       }).catch((err) => {
-        console.error('Plugin activation error:', err);
+        PluginLog.err('Plugin activation error:', err);
       });
 
       const updatedState = this._getPluginState(pluginId);
@@ -523,7 +523,7 @@ export class PluginService implements OnDestroy {
           currentState.manifest,
         );
         if (!hasConsent) {
-          console.log(
+          PluginLog.log(
             'Plugin requires Node.js execution permission but no stored consent found:',
             state.manifest.id,
           );
@@ -533,7 +533,7 @@ export class PluginService implements OnDestroy {
       }
     } else {
       // Plugin is not enabled, don't activate it
-      console.log(`Plugin ${pluginId} is not enabled, skipping activation`);
+      PluginLog.log(`Plugin ${pluginId} is not enabled, skipping activation`);
       return null;
     }
 
@@ -1858,7 +1858,7 @@ export class PluginService implements OnDestroy {
 
     // Only check platform availability in Electron environment
     if (!this._isElectronRuntime()) {
-      console.warn(
+      PluginLog.warn(
         `Plugin ${manifest.id} requires nodeExecution permission which is not available in web environment`,
       );
       return false;

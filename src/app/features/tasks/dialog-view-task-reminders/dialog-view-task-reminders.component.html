@@ -209,6 +209,19 @@
             {{ task.dueWithTime | localeDate: 'short' }}
           }
         </div>
+        @if (shouldShowDeadlineScheduleHint(task)) {
+          <div class="schedule-hint">
+            <mat-icon>event</mat-icon>
+            <span>
+              {{ T.F.TASK.D_REMINDER_VIEW.SCHEDULED_FOR | translate }}
+              @if (task.dueWithTime) {
+                {{ task.dueWithTime | localeDate: 'short' }}
+              } @else {
+                {{ task.dueDay | localDateStr: '' }}
+              }
+            </span>
+          </div>
+        }
         <div class="title">{{ task.title }}</div>
         <tag-list
           [isShowProjectTagAlways]="true"

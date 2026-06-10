@@ -17,6 +17,7 @@ import * as ShareTextUtil from './share-text.util';
 import * as ShareUrlBuilder from './share-url-builder.util';
 import * as ShareFileUtil from './share-file.util';
 import * as SharePlatformUtil from './share-platform.util';
+import { Log } from '../log';
 
 export type ShareOutcome = 'shared' | 'cancelled' | 'unavailable' | 'failed';
 export type { ShareSupport } from './share-platform.util';
@@ -252,7 +253,7 @@ export class ShareService {
             error: 'Share cancelled',
           };
         }
-        console.warn('Capacitor share failed:', error);
+        Log.warn('Capacitor share failed:', error);
       }
     }
 
@@ -273,7 +274,7 @@ export class ShareService {
         if (error instanceof Error && error.name === 'AbortError') {
           return { success: false, error: 'Share cancelled' };
         }
-        console.warn('Web Share API failed:', error);
+        Log.warn('Web Share API failed:', error);
       }
     }
 
@@ -524,7 +525,7 @@ export class ShareService {
           ? `file://${resolvedUri}`
           : `file:///${resolvedUri}`;
 
-      console.debug('[ShareService] shareCanvasViaNative', {
+      Log.debug('[ShareService] shareCanvasViaNative', {
         resolvedUri,
         fileUrl,
         relativePath,
@@ -535,9 +536,9 @@ export class ShareService {
           path: relativePath,
           directory: Directory.Cache,
         });
-        console.debug('[ShareService] shareCanvasViaNative stat', stat);
+        Log.debug('[ShareService] shareCanvasViaNative stat', stat);
       } catch (statError) {
-        console.warn('[ShareService] stat failed for shared image', statError);
+        Log.warn('[ShareService] stat failed for shared image', statError);
       }
 
       const canShare = (await sharePlugin.canShare?.())?.value ?? true;
@@ -570,7 +571,7 @@ export class ShareService {
           error: 'Share cancelled',
         };
       }
-      console.warn('Native image share failed:', error, {
+      Log.warn('Native image share failed:', error, {
         fileUrl: fileUrl ?? 'n/a',
         resolvedUri: resolvedUri ?? 'n/a',
         relativePath,
@@ -633,7 +634,7 @@ export class ShareService {
           error: 'Share cancelled',
         };
       }
-      console.warn('Web Share API failed:', error);
+      Log.warn('Web Share API failed:', error);
     }
 
     return {
@@ -683,7 +684,7 @@ export class ShareService {
           uri,
         };
       } catch (error) {
-        console.warn('Native download failed, falling back to browser download:', error);
+        Log.warn('Native download failed, falling back to browser download:', error);
       }
     }
 
@@ -703,7 +704,7 @@ export class ShareService {
           target: 'download',
         };
       } catch (error) {
-        console.warn('Opening image in new tab failed:', error);
+        Log.warn('Opening image in new tab failed:', error);
       }
     }
 

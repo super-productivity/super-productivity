@@ -7,6 +7,7 @@ import {
   PluginFieldMapping,
 } from './plugin-issue-provider.model';
 import { IssueProviderKey } from '../../features/issue/issue.model';
+import { PluginLog } from '../../core/log';
 
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderRegistryService {
@@ -33,7 +34,7 @@ export class PluginIssueProviderRegistryService {
   }): void {
     const key = opts.issueProviderKey ?? `plugin:${opts.pluginId}`;
     if (this._providers.has(key)) {
-      console.warn(
+      PluginLog.warn(
         `[PluginIssueProviderRegistry] Duplicate registration for '${key}', ignoring.`,
       );
       return;

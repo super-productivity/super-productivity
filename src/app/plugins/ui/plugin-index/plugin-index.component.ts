@@ -298,7 +298,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // Cleanup blob URL if it exists
     if (this._currentIframeUrl) {
       cleanupPluginIframeUrl(this._currentIframeUrl);
-      console.log(`Cleaned up blob URL for plugin: ${currentPluginId}`);
+      PluginLog.log(`Cleaned up blob URL for plugin: ${currentPluginId}`);
       this._currentIframeUrl = null;
     }
 

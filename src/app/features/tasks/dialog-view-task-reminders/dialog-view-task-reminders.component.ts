@@ -44,6 +44,20 @@ import { MatTooltip } from '@angular/material/tooltip';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
+export const shouldShowDeadlineScheduleHint = (
+  task: Pick<TaskWithReminderData, 'isDeadlineReminder' | 'dueWithTime' | 'dueDay'>,
+  todayStr: string,
+  now: number = Date.now(),
+): boolean => {
+  if (!task.isDeadlineReminder) {
+    return false;
+  }
+  if (typeof task.dueWithTime === 'number') {
+    return task.dueWithTime > now;
+  }
+  return typeof task.dueDay === 'string' && task.dueDay > todayStr;
+};
+
 @Component({
   selector: 'dialog-view-task-reminder',
   templateUrl: './dialog-view-task-reminders.component.html',
@@ -337,6 +351,10 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
 
   hasScheduleTasks(tasks: TaskWithReminderData[]): boolean {
     return tasks.some((t) => !t.isDeadlineReminder);
+  }
+
+  shouldShowDeadlineScheduleHint(task: TaskWithReminderData): boolean {
+    return shouldShowDeadlineScheduleHint(task, this._dateService.todayStr());
   }
 
   trackById(i: number, task: Task): string {

@@ -14,7 +14,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatCalendar } from '@angular/material/datepicker';
+import { MatCalendar, MatCalendarView } from '@angular/material/datepicker';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import {
@@ -74,28 +74,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   private readonly _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
 
-  pickerSelectedDate: Date | null = null;
-
-  constructor() {
-    effect((onCleanup) => {
-      const cal = this.calendar();
-      if (cal) {
-        // Set initial view and date
-        if (cal.currentView !== 'month') {
-          this.pickerSelectedDate = cal.activeDate;
-        }
-
-        const sub = cal.stateChanges.subscribe(() => {
-          if (cal.currentView !== 'month') {
-            this.pickerSelectedDate = cal.activeDate;
-          }
-          this._cdr.markForCheck();
-        });
-        onCleanup(() => sub.unsubscribe());
-      }
-    });
-  }
-
   // Inputs
   selectedDate = input<Date | null>(null);
   selectedTime = input<string | null>(null);
@@ -119,6 +97,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   isInitValOnTimeFocus = true;
   isShowEnterMsg = false;
   @HostBinding('class.sp-hide-cursor') isKeyboardNavigating = false;
+  @HostBinding('class.sp-initial-focus') isInitialFocus = true;
 
   readonly calendar = viewChild(MatCalendar);
 
@@ -126,29 +105,45 @@ export class DateTimePickerComponent implements AfterViewInit {
     () => this._globalConfigService.localization() !== undefined,
   );
 
-  get calendarSelectedDate(): Date | null {
+  private _lastView: MatCalendarView | null = null;
+  private _viewChangeEffect = effect((onCleanup) => {
     const cal = this.calendar();
-    if (!cal) {
-      return this.selectedDate();
+    if (cal) {
+      this._lastView = cal.currentView;
+      const sub = cal.stateChanges.subscribe(() => {
+        if (cal.currentView !== this._lastView) {
+          this._lastView = cal.currentView;
+          this.isInitialFocus = true;
+          this._cdr.markForCheck();
+        }
+      });
+      onCleanup(() => sub.unsubscribe());
     }
-    if (cal.currentView === 'month') {
-      return this.selectedDate();
-    }
-    return this.pickerSelectedDate || cal.activeDate;
-  }
+  });
 
   private _lastSyncedDate: number | null = null;
   private _syncActiveDateEffect = effect(() => {
     const date = this.selectedDate();
     const dateMs = date ? new Date(date).getTime() : null;
-    if (dateMs === this._lastSyncedDate) {
-      return;
-    }
-    this._lastSyncedDate = dateMs;
 
     const cal = this.calendar();
     if (cal) {
-      cal.activeDate = new Date(date || new Date());
+      const activeEl = document.activeElement;
+      const isCalendarFocused =
+        activeEl &&
+        this._el.nativeElement.querySelector('mat-calendar')?.contains(activeEl);
+
+      if (!isCalendarFocused) {
+        if (dateMs === this._lastSyncedDate) {
+          return;
+        }
+        this._lastSyncedDate = dateMs;
+
+        const newActiveDate = new Date(date || new Date());
+        if (cal.activeDate.getTime() !== newActiveDate.getTime()) {
+          cal.activeDate = newActiveDate;
+        }
+      }
     }
   });
 
@@ -156,6 +151,7 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   onKeyDownOnCalendar(ev: KeyboardEvent): void {
     this._timeCheckVal = null;
+    this.isInitialFocus = false;
     if (ev.code === 'Enter' || ev.code === 'Space') {
       this.isShowEnterMsg = true;
       const cal = this.calendar();
@@ -267,6 +263,7 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   @HostListener('mousemove', ['$event'])
   onHostMouseMove(ev: MouseEvent): void {
+    this.isInitialFocus = false;
     this._resetKeyboardNav(ev);
   }
 

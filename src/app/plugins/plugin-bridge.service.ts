@@ -566,7 +566,7 @@ export class PluginBridgeService implements OnDestroy {
    * Internal method to show plugin index.html as view
    */
   private _showIndexHtmlAsView(pluginId: string): void {
-    console.log('PluginBridge: Navigating to plugin index view', {
+    PluginLog.log('PluginBridge: Navigating to plugin index view', {
       pluginId,
     });
     // Navigate to the plugin index route
@@ -888,12 +888,12 @@ export class PluginBridgeService implements OnDestroy {
       // Use the TaskService remove method which handles deletion properly
       this._taskService.remove(taskWithSubTasks);
 
-      console.log('PluginBridge: Task deleted successfully', {
+      PluginLog.log('PluginBridge: Task deleted successfully', {
         taskId,
         hadSubTasks: taskWithSubTasks.subTasks.length > 0,
       });
     } catch (error) {
-      console.error('PluginBridge: Failed to delete task:', error);
+      PluginLog.err('PluginBridge: Failed to delete task:', error);
       throw error;
     }
   }
@@ -1169,7 +1169,7 @@ export class PluginBridgeService implements OnDestroy {
       // below as a normal Error.
       const entityId = composeId(pluginId, key);
       this._pluginUserPersistenceService.persistPluginUserData(entityId, dataStr);
-      console.log('PluginBridge: Plugin data persisted successfully', {
+      PluginLog.log('PluginBridge: Plugin data persisted successfully', {
         pluginId,
         keyLen: key?.length ?? 0,
         dataSize: new Blob([dataStr]).size,
@@ -1225,7 +1225,7 @@ export class PluginBridgeService implements OnDestroy {
    */
   private async _triggerSync(pluginId: string): Promise<void> {
     try {
-      console.log('PluginBridge: Triggering sync for plugin', pluginId);
+      PluginLog.log('PluginBridge: Triggering sync for plugin', pluginId);
       await this._syncWrapperService.sync();
       PluginLog.log('PluginBridge: Sync completed successfully');
     } catch (error) {
@@ -1273,7 +1273,7 @@ export class PluginBridgeService implements OnDestroy {
       this._syncAdapterRegistry.unregister(registeredKey);
     }
 
-    console.log('PluginBridge: All hooks unregistered for plugin', { pluginId });
+    PluginLog.log('PluginBridge: All hooks unregistered for plugin', { pluginId });
   }
 
   /**
@@ -1293,7 +1293,7 @@ export class PluginBridgeService implements OnDestroy {
     const currentButtons = this._headerButtons();
     this._headerButtons.set([...currentButtons, newButton]);
 
-    console.log('PluginBridge: Header button registered', {
+    PluginLog.log('PluginBridge: Header button registered', {
       pluginId,
       headerBtnCfg,
     });
@@ -1861,7 +1861,7 @@ export class PluginBridgeService implements OnDestroy {
       try {
         handler(isFocused);
       } catch (error) {
-        console.error('Error in window focus handler:', error);
+        PluginLog.err('Error in window focus handler:', error);
       }
     });
   }

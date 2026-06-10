@@ -89,6 +89,30 @@ export const parseNativeTrackingData = (
   return { taskId, elapsedMs };
 };
 
+/**
+ * Whether a timeSpent change must be pushed to the native tracking notification.
+ * While tracking, timeSpent grows by ~one tick (1s) at a time and the
+ * notification's chronometer advances on its own — pushing every tick would
+ * re-post the notification once per second (battery drain, #8243). Only jumps
+ * (manual edits, remote sync merges, idle/recovery corrections) need to
+ * propagate; those show up as a decrease or a step larger than any tick.
+ * Accepted gap: a manual edit that ADDS <= 5s is indistinguishable from a tick
+ * and stays suppressed — the notification (display-only; persistence happens
+ * elsewhere) re-anchors on the next jump or task switch. The threshold is 5x
+ * TRACKING_INTERVAL as headroom for janky/coalesced ticks; a sibling 5000 in
+ * android-focus-mode.effects.ts has different semantics (abs), don't unify.
+ *
+ * Exported so unit tests can exercise it without instantiating the effect
+ * (which is gated behind IS_ANDROID_WEB_VIEW).
+ */
+export const TIME_SPENT_JUMP_THRESHOLD_MS = 5000;
+export const isTimeSpentJumpForNotification = (
+  prevTimeSpent: number,
+  currTimeSpent: number,
+): boolean =>
+  currTimeSpent < prevTimeSpent ||
+  currTimeSpent - prevTimeSpent > TIME_SPENT_JUMP_THRESHOLD_MS;
+
 @Injectable()
 export class AndroidForegroundTrackingEffects {
   private _store = inject(Store);
@@ -335,12 +359,13 @@ export class AndroidForegroundTrackingEffects {
             // 1. Same task (not switching tasks - that's handled by syncTrackingToService$)
             // 2. Task exists
             // 3. Focus mode is not active (notification is hidden during focus mode)
-            // 4. timeSpent actually changed
+            // 4. timeSpent jumped (per-tick increments are rendered by the
+            //    notification chronometer natively — no push needed, #8243)
             return (
               prev.taskId === curr.taskId &&
               curr.taskId !== null &&
               !curr.isFocusModeActive &&
-              prev.timeSpent !== curr.timeSpent
+              isTimeSpentJumpForNotification(prev.timeSpent, curr.timeSpent)
             );
           }),
           tap(([, curr]) => {

@@ -18,6 +18,7 @@ import { UnsplashService } from '../../core/unsplash/unsplash.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { IS_ELECTRON } from '../../app.constants';
+import { Log } from '../../core/log';
 
 const MAX_BACKGROUND_IMAGE_FILE_SIZE_BYTES = 256 * 1024;
 
@@ -106,7 +107,7 @@ export class FormlyImageInputComponent extends FieldType<FormlyFieldConfig> {
 
   openUnsplashPicker(): void {
     if (!this.isUnsplashAvailable) {
-      console.warn('Unsplash service is not available - no API key configured');
+      Log.warn('Unsplash service is not available - no API key configured');
       return;
     }
 

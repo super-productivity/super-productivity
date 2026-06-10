@@ -4,7 +4,11 @@ import { BehaviorSubject } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
-import { parseNativeTrackingData } from './android-foreground-tracking.effects';
+import {
+  isTimeSpentJumpForNotification,
+  parseNativeTrackingData,
+  TIME_SPENT_JUMP_THRESHOLD_MS,
+} from './android-foreground-tracking.effects';
 
 // We need to test the effect logic by reimplementing it in tests since
 // the actual effects are conditionally created based on IS_ANDROID_WEB_VIEW
@@ -47,7 +51,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeTrue();
 
@@ -67,7 +71,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -80,7 +84,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -93,7 +97,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -106,7 +110,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -119,7 +123,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeTrue();
 
@@ -129,6 +133,26 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
 
       expect(updateTrackingServiceSpy).toHaveBeenCalledWith(120000);
     }));
+  });
+
+  describe('isTimeSpentJumpForNotification', () => {
+    it('should suppress increments at or below the threshold', () => {
+      expect(isTimeSpentJumpForNotification(0, TIME_SPENT_JUMP_THRESHOLD_MS)).toBeFalse();
+      expect(isTimeSpentJumpForNotification(60000, 61000)).toBeFalse();
+      expect(isTimeSpentJumpForNotification(60000, 60000)).toBeFalse();
+    });
+
+    it('should pass increments above the threshold (manual edit, sync merge)', () => {
+      expect(
+        isTimeSpentJumpForNotification(0, TIME_SPENT_JUMP_THRESHOLD_MS + 1),
+      ).toBeTrue();
+      expect(isTimeSpentJumpForNotification(60000, 600000)).toBeTrue();
+    });
+
+    it('should pass any decrease (manual correction, idle time removed)', () => {
+      expect(isTimeSpentJumpForNotification(60000, 59999)).toBeTrue();
+      expect(isTimeSpentJumpForNotification(60000, 0)).toBeTrue();
+    });
   });
 
   describe('distinctUntilChanged behavior', () => {

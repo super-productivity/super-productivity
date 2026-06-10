@@ -12,14 +12,40 @@
       .mat-calendar-body-cell-content {
         cursor: none !important;
       }
-      // Suppress hover-only styling (when not focused) when cursor is hidden
-      .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover:not(:focus)
-        > .mat-calendar-body-cell-content {
-        outline: none !important;
 
-        &:not(.mat-calendar-body-selected) {
-          background-color: transparent !important;
+      // Keyboard nav hides the cursor, so suppress the stale mouse :hover
+      // outline/background — only the keyboard-focused cell should be marked.
+      // The .mat-calendar ancestor is included purely to outweigh the global
+      // hover rules in _overwrite-material.scss.
+      .mat-calendar:not(.no-hover-effects) {
+        .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+          > .mat-calendar-body-cell-content {
+          outline: none !important;
+
+          &:not(.mat-calendar-body-selected) {
+            background-color: transparent !important;
+          }
         }
+
+        // Ensure the focused cell is always marked with a solid outline.
+        .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+          > .mat-calendar-body-cell-content {
+          outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
+        }
+      }
+    }
+  }
+
+  // Focus outline suppression
+  &:not(.sp-hide-cursor):not(.sp-initial-focus) {
+    ::ng-deep {
+      .mat-calendar-body-cell:focus:not(:hover) > .mat-calendar-body-cell-content {
+        outline: none !important;
+      }
+
+      .mat-calendar-body-cell:focus:not(:hover)
+        > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
+        background-color: transparent !important;
       }
     }
   }

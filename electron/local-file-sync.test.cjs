@@ -148,3 +148,20 @@ test('READ_LOCAL_IMAGE_AS_DATA_URL inlines a user image outside userData', async
   );
   assert.match(result, /^data:image\/png;base64,/);
 });
+
+test('TO_FILE_URL refuses a path inside userData (no laundering into file://)', () => {
+  // toFileUrl is a pure string conversion, but the result is persisted as
+  // background-image config and later fed to READ_LOCAL_IMAGE_AS_DATA_URL.
+  // Refusing userData paths here keeps the two layers consistent.
+  assert.throws(
+    () => handlers['TO_FILE_URL']({}, path.join(userDataDir, 'simpleSettings')),
+    /protected directory/,
+  );
+});
+
+test('TO_FILE_URL converts a path outside userData', () => {
+  const p = path.join(externalDir, 'bg.png');
+  const result = handlers['TO_FILE_URL']({}, p);
+  assert.ok(result.startsWith('file://'));
+  assert.ok(result.endsWith('/bg.png'));
+});

@@ -27,6 +27,7 @@ import {
 } from '../../../ui/heatmap/heatmap.component';
 import { DateAdapter } from '@angular/material/core';
 import { Worklog } from '../../worklog/worklog.model';
+import { Log } from '../../../core/log';
 
 interface YearlyActivityData {
   dayMap: Map<string, DayData>;
@@ -368,7 +369,7 @@ export class ActivityHeatmapComponent {
           });
         }
       } else if (result.error && result.error !== 'Share cancelled') {
-        console.error('Share failed:', result.error);
+        Log.err('Share failed:', result.error);
         this._snackService.open({
           type: 'ERROR',
           msg: 'Failed to share heatmap',
@@ -377,7 +378,7 @@ export class ActivityHeatmapComponent {
     } catch (error: any) {
       const isAbort = error?.name === 'AbortError' || error?.error === 'Share cancelled';
       if (!isAbort) {
-        console.error('Share failed:', error);
+        Log.err('Share failed:', error);
         this._snackService.open({
           type: 'ERROR',
           msg: 'Failed to share heatmap',

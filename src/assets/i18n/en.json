@@ -246,6 +246,7 @@
         "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}",
         "CAL_PROVIDER_NOT_ICAL": "Calendar URL did not return iCal data. The share link may be expired, revoked, or require sign-in — try generating a new share URL.",
         "EVENT_HIDDEN": "Calendar event hidden",
+        "EVENT_MOVED": "Event moved",
         "EVENT_RESCHEDULED": "Event rescheduled",
         "EVENT_DELETED": "Event deleted",
         "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}"
@@ -1131,6 +1132,7 @@
       "START": "Work Start"
     },
     "SEARCH_BAR": {
+      "INCLUDE_COMPLETED": "Include completed and archived tasks",
       "INFO": "Start typing to search for tasks or notes",
       "NO_RESULTS": "No tasks or notes found matching your search",
       "PLACEHOLDER": "Search for task, task notes or project notes"
@@ -1815,6 +1817,7 @@
         "DUE_TASKS": "Planned tasks reminder",
         "RESCHEDULE_EDIT": "Edit (reschedule)",
         "RESCHEDULE_UNTIL_TOMORROW": "Reschedule for tomorrow",
+        "SCHEDULED_FOR": "Scheduled for",
         "SNOOZE": "Snooze",
         "SNOOZE_ALL": "Snooze all",
         "START": "Start",

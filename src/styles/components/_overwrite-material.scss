@@ -488,11 +488,14 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
 
 // Shared calendar hover and focus overrides
 .mat-calendar:not(.no-hover-effects) {
-  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
-    > .mat-calendar-body-cell-content,
   .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
-    .mat-calendar-body-cell-content {
+    > .mat-calendar-body-cell-content {
     outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
+  }
+
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+    > .mat-calendar-body-cell-content {
+    outline: 2px dashed color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
   }
 
   .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover

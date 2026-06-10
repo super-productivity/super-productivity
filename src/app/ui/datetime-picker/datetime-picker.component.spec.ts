@@ -102,22 +102,74 @@ describe('DateTimePickerComponent', () => {
   });
 
   it('should toggle isKeyboardNavigating based on keyboard navigation and mouse move', () => {
+    fixture.detectChanges();
     expect(component.isKeyboardNavigating).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-hide-cursor')).toBeFalse();
 
     // Trigger keyboard navigation key down on calendar
-    const arrowDownEvent = new KeyboardEvent('keydown', { key: 'ArrowDown' });
-    component.onKeyDownOnCalendar(arrowDownEvent);
+    fixture.nativeElement
+      .querySelector('mat-calendar')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
     expect(component.isKeyboardNavigating).toBeTrue();
-
-    // Trigger non-navigation key down on calendar - should not reset it
-    const enterEvent = new KeyboardEvent('keydown', { key: 'Enter' });
-    component.onKeyDownOnCalendar(enterEvent);
-    expect(component.isKeyboardNavigating).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-hide-cursor')).toBeTrue();
 
     // Trigger mousemove with changed coordinates - should reset it to false
-    const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 30, clientY: 40 });
-    component.onHostMouseMove(mouseMoveEvent);
+    fixture.nativeElement.dispatchEvent(
+      new MouseEvent('mousemove', { clientX: 30, clientY: 40, bubbles: true }),
+    );
+    fixture.detectChanges();
     expect(component.isKeyboardNavigating).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-hide-cursor')).toBeFalse();
+  });
+
+  it('should reset isInitialFocus on keyboard navigation', () => {
+    fixture.detectChanges();
+    expect(component.isInitialFocus).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeTrue();
+
+    // Trigger keyboard navigation key down on calendar
+    fixture.nativeElement
+      .querySelector('mat-calendar')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    fixture.detectChanges();
+    expect(component.isInitialFocus).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeFalse();
+  });
+
+  it('should reset isInitialFocus on mouse move', () => {
+    fixture.detectChanges();
+    expect(component.isInitialFocus).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeTrue();
+
+    // Trigger mousemove
+    fixture.nativeElement.dispatchEvent(
+      new MouseEvent('mousemove', { clientX: 30, clientY: 40, bubbles: true }),
+    );
+    fixture.detectChanges();
+    expect(component.isInitialFocus).toBeFalse();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeFalse();
+  });
+
+  it('should reset isInitialFocus to true when calendar view changes', () => {
+    fixture.detectChanges();
+    const calendar = component.calendar()!;
+
+    // Initial state
+    expect(component.isInitialFocus).toBeTrue();
+
+    // Reset it to false first
+    component.isInitialFocus = false;
+    fixture.detectChanges();
+    expect(component.isInitialFocus).toBeFalse();
+
+    // Change view
+    calendar.currentView = 'year';
+    calendar.stateChanges.next();
+    fixture.detectChanges();
+
+    expect(component.isInitialFocus).toBeTrue();
+    expect(fixture.nativeElement.classList.contains('sp-initial-focus')).toBeTrue();
   });
 
   it('should only update calendar activeDate when selectedDate changes', () => {
@@ -143,6 +195,27 @@ describe('DateTimePickerComponent', () => {
     fixture.componentRef.setInput('selectedDate', differentDate);
     fixture.detectChanges();
     expect(calendar.activeDate).toEqual(differentDate);
+  });
+
+  it('should not update activeDate when calendar is focused', () => {
+    const calendar = component.calendar()!;
+    const initialDate = new Date(2026, 4, 6);
+    const differentDate = new Date(2026, 4, 7);
+
+    fixture.componentRef.setInput('selectedDate', initialDate);
+    fixture.detectChanges();
+    expect(calendar.activeDate).toEqual(initialDate);
+
+    // Mock calendar focus
+    const calendarEl = fixture.nativeElement.querySelector('mat-calendar');
+    spyOnProperty(document, 'activeElement', 'get').and.returnValue(calendarEl);
+    spyOn(calendarEl, 'contains').and.returnValue(true);
+
+    fixture.componentRef.setInput('selectedDate', differentDate);
+    fixture.detectChanges();
+
+    // Should NOT have updated activeDate because it was focused
+    expect(calendar.activeDate).toEqual(initialDate);
   });
 
   it('should emit enterSubmit when Enter is pressed on the calendar and date matches', () => {
