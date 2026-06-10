@@ -563,6 +563,8 @@ describe('SearchPageComponent', () => {
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
     initAndFlush();
+    component.includeCompletedForm.setValue(true);
+    tick(150);
     typeAndFlush('Old');
 
     expect(latestResults.length).toBe(1);
