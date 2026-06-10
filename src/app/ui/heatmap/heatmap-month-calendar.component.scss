@@ -5,6 +5,11 @@
   padding: var(--s2);
   background: var(--c-dark-10);
   border-radius: var(--card-border-radius);
+  // The 1fr/aspect-ratio cells scale with the container, so on a wide page
+  // (metrics) the calendar outgrows the viewport — cap it and keep it centered.
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
 
   &__header {
     display: flex;

@@ -36,6 +36,10 @@
   display: flex;
   gap: var(--s);
   align-items: flex-start;
+  // Center the strip when it's narrower than the card (otherwise the leftover
+  // space all sits right of December); overflow still scrolls INSIDE
+  // .heatmap-month-blocks, so centering the row is safe.
+  justify-content: center;
 }
 
 .heatmap-month-blocks {
@@ -178,10 +182,10 @@
 .heatmap-legend {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--s-half);
   font-size: 11px;
   color: var(--text-color-muted);
-  padding-right: var(--s-half);
 
   span {
     margin: 0 var(--s-half);
