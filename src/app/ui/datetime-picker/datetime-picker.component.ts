@@ -14,7 +14,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatCalendar } from '@angular/material/datepicker';
+import { MatCalendar, MatCalendarView } from '@angular/material/datepicker';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import {
@@ -105,7 +105,7 @@ export class DateTimePickerComponent implements AfterViewInit {
     () => this._globalConfigService.localization() !== undefined,
   );
 
-  private _lastView: 'month' | 'year' | 'multi-year' | null = null;
+  private _lastView: MatCalendarView | null = null;
   private _viewChangeEffect = effect((onCleanup) => {
     const cal = this.calendar();
     if (cal) {
