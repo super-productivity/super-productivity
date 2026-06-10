@@ -30,7 +30,6 @@ import {
   setCurrentTask,
   setSelectedTask,
   toggleStart,
-  toggleTaskHideSubTasks,
   unsetCurrentTask,
   updateTaskUi,
 } from './store/task.actions';
@@ -1138,7 +1137,10 @@ export class TaskService {
   }
 
   showSubTasks(id: string): void {
-    this.updateUi(id, { _hideSubTasksMode: undefined });
+    // Use explicit Show (0) rather than undefined: persisted payloads are JSON-encoded,
+    // and JSON.stringify drops `undefined` keys — a remote replay of the "show all"
+    // transition would otherwise be a no-op on the receiving device.
+    this.updateUi(id, { _hideSubTasksMode: HideSubTasksMode.Show });
   }
 
   toggleSubTaskMode(
@@ -1146,7 +1148,40 @@ export class TaskService {
     isShowLess: boolean = true,
     isEndless: boolean = false,
   ): void {
-    this._store.dispatch(toggleTaskHideSubTasks({ taskId, isShowLess, isEndless }));
+    // Resolve the new mode here (not in the reducer): the toggle outcome depends on
+    // local task/subtask state, which can differ across devices at replay time. By
+    // dispatching `updateTaskUi` with the resolved value, the synced op carries the
+    // final state rather than the toggle intent, keeping replay deterministic.
+    const entities = this._taskEntities();
+    const task = entities[taskId];
+    if (!task) {
+      return;
+    }
+    const subTasks = task.subTaskIds.map((id) => entities[id]).filter((t) => !!t);
+    const doneTasksLength = subTasks.filter((t) => t!.isDone).length;
+    const isDoneTaskCaseNeeded = doneTasksLength && doneTasksLength < subTasks.length;
+    const oldVal = task._hideSubTasksMode || 0;
+    let newVal: number = isShowLess ? oldVal + 1 : oldVal - 1;
+
+    if (!isDoneTaskCaseNeeded && newVal === 1) {
+      newVal = isShowLess ? 2 : 0;
+    }
+
+    if (isEndless) {
+      if (newVal < 0) {
+        newVal = 2;
+      } else if (newVal > 2) {
+        newVal = 0;
+      }
+    } else {
+      if (newVal < 0) {
+        newVal = 0;
+      } else if (newVal > 2) {
+        newVal = 2;
+      }
+    }
+
+    this.updateUi(taskId, { _hideSubTasksMode: newVal as HideSubTasksMode });
   }
 
   hideSubTasks(id: string): void {

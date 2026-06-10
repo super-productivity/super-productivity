@@ -608,7 +608,20 @@ describe('MobileNotificationEffects', () => {
       ...over,
     });
 
+    // Pin the fake clock to a stable, mid-day, mid-week reference inside
+    // fakeAsync so dayStr(0) (captured at test setup) and the effect's notion of
+    // "today" (read after tick advances the virtual clock) cannot straddle
+    // midnight in any TZ — a real flake we hit when CI ran a few seconds before
+    // local midnight. zone.js routes jasmine.clock().mockDate into
+    // setFakeBaseSystemTime when called inside a fakeAsync zone, so subsequent
+    // tick()s still advance time normally.
+    const pinClock = (): void => {
+      jasmine.clock().mockDate(new Date(Date.UTC(2026, 5, 15, 10, 0, 0))); // Mon 2026-06-15 10:00 UTC
+    };
+
     beforeEach(() => {
+      jasmine.clock().install();
+
       reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
         'ensurePermissions',
         'ensureExactAlarmPermission',
@@ -655,12 +668,17 @@ describe('MobileNotificationEffects', () => {
       store = TestBed.inject(MockStore);
     });
 
+    afterEach(() => {
+      jasmine.clock().uninstall();
+    });
+
     const subscribeRepeatReminders = (): void => {
       effects = TestBed.inject(MobileNotificationEffects);
       (effects.scheduleRepeatReminders$ as unknown as Observable<unknown>).subscribe();
     };
 
     it('schedules the next occurrence of a timed daily recurring config with the same id scheduleNotifications$ would use', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
       subscribeRepeatReminders();
 
@@ -682,6 +700,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('does not schedule configs without a start time or remindAt', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
         mkDailyCfg({ id: 'noTime', startTime: undefined }),
         mkDailyCfg({ id: 'noRemind', remindAt: undefined }),
@@ -694,6 +713,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('does not pre-schedule waitForCompletion configs', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
         mkDailyCfg({ waitForCompletion: true }),
       ]);
@@ -705,6 +725,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('schedules one alarm per config — the soonest upcoming occurrence only', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
         mkDailyCfg({ id: 'a' }),
         mkDailyCfg({ id: 'b', startTime: '10:30' }),
@@ -731,6 +752,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('does not schedule a weekly config whose next occurrence is beyond the lookahead window', fakeAsync(() => {
+      pinClock();
       // Weekly-on-this-weekday, but the only occurrence in range is today — which is
       // already created (lastTaskCreationDay = today). The next is 7 days out and the
       // window only spans the soonest occurrence per config, so for a far-future first
@@ -773,6 +795,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('does not pre-schedule a paused config', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
         mkDailyCfg({ isPaused: true }),
       ]);
@@ -784,6 +807,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('skips occurrences in deletedInstanceDates and schedules the following one', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
         mkDailyCfg({ deletedInstanceDates: [dayStr(1)] }),
       ]);
@@ -801,6 +825,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('skips occurrences whose trigger time has already passed', fakeAsync(() => {
+      pinClock();
       // today IS due (lastTaskCreationDay far in the past), but its 00:00 trigger
       // is already behind us → the next future occurrence (tomorrow) is scheduled.
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
@@ -820,6 +845,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('does not schedule when disableReminders is true', fakeAsync(() => {
+      pinClock();
       cfg$.next(buildCfg({ disableReminders: true }));
       store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
       subscribeRepeatReminders();
@@ -830,6 +856,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('does NOT cancel an about-to-graduate alarm during the creation dispatch burst', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
       subscribeRepeatReminders();
 
@@ -865,6 +892,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('cancels a pre-scheduled alarm when its config is removed', fakeAsync(() => {
+      pinClock();
       store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
       subscribeRepeatReminders();
 
@@ -882,6 +910,7 @@ describe('MobileNotificationEffects', () => {
     }));
 
     it('caps pre-scheduled reminders, keeping the soonest-firing (iOS 64-pending limit)', fakeAsync(() => {
+      pinClock();
       // More configs than the cap (REPEAT_MAX_SCHEDULED = 32 in the effect),
       // each due tomorrow at a distinct clock time 30 min apart (00:00 → 19:30).
       const cfgs = Array.from({ length: 40 }, (_, i) => {

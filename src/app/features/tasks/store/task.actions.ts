@@ -39,17 +39,20 @@ export const __updateMultipleTaskSimple = createAction(
 
 export const updateTaskUi = createAction(
   '[Task] Update Task Ui',
-  props<{ task: Update<Task> }>(),
+  (taskProps: { task: Update<Task> }) => ({
+    ...taskProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'TASK',
+      entityId: taskProps.task.id as string,
+      opType: OpType.Update,
+    } satisfies PersistentActionMeta,
+  }),
 );
 
 export const removeTagsForAllTasks = createAction(
   '[Task] Remove Tags from all Tasks',
   props<{ tagIdsToRemove: string[] }>(),
-);
-
-export const toggleTaskHideSubTasks = createAction(
-  '[Task] Toggle Show Sub Tasks',
-  props<{ taskId: string; isShowLess: boolean; isEndless: boolean }>(),
 );
 
 export const moveSubTask = createAction(

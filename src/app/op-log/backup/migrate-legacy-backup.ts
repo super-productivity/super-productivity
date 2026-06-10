@@ -308,8 +308,10 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
       delete taskDict[taskId]!.notes;
     }
 
-    // Convert _showSubTasksMode → _hideSubTasksMode
-    if (!taskDict[taskId]!._hideSubTasksMode) {
+    // Convert _showSubTasksMode → _hideSubTasksMode.
+    // Check `=== undefined` (not truthy): HideSubTasksMode.Show is 0, so a
+    // truthy check would incorrectly treat an explicit Show as "not set".
+    if (taskDict[taskId]!._hideSubTasksMode === undefined) {
       const oldValue = (taskDict[taskId] as unknown as Record<string, unknown>)?.[
         '_showSubTasksMode'
       ] as number | undefined;

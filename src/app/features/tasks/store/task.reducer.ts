@@ -12,7 +12,6 @@ import {
   setCurrentTask,
   setSelectedTask,
   toggleStart,
-  toggleTaskHideSubTasks,
   unsetCurrentTask,
   updateTaskUi,
 } from './task.actions';
@@ -360,49 +359,6 @@ export const taskReducer = createReducer<TaskState>(
   // Bulk task updates - used for archive task batch operations
   on(TaskSharedActions.updateTasks, (state, { tasks }) => {
     return taskAdapter.updateMany(tasks, state);
-  }),
-
-  // TODO simplify
-  on(toggleTaskHideSubTasks, (state, { taskId, isShowLess, isEndless }) => {
-    const task = getTaskById(taskId, state);
-    const subTasks = task.subTaskIds.map((id) => getTaskById(id, state));
-    const doneTasksLength = subTasks.filter((t) => t.isDone).length;
-    const isDoneTaskCaseNeeded = doneTasksLength && doneTasksLength < subTasks.length;
-    // for easier calculations we use 0 instead of undefined for show state
-    const oldVal = task._hideSubTasksMode || 0;
-    let newVal: number = isShowLess ? oldVal + 1 : oldVal - 1;
-
-    if (!isDoneTaskCaseNeeded && newVal === 1) {
-      if (isShowLess) {
-        newVal = 2;
-      } else {
-        newVal = 0;
-      }
-    }
-
-    if (isEndless) {
-      if (newVal < 0) {
-        newVal = 2;
-      } else if (newVal > 2) {
-        newVal = 0;
-      }
-    } else {
-      if (newVal < 0) {
-        newVal = 0;
-      } else if (newVal > 2) {
-        newVal = 2;
-      }
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: taskId,
-        changes: {
-          _hideSubTasksMode: newVal || undefined,
-        },
-      },
-      state,
-    );
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {

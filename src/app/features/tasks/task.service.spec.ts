@@ -21,8 +21,14 @@ import {
   addSubTask,
   moveSubTaskToTop,
   moveSubTaskToBottom,
+  updateTaskUi,
 } from './store/task.actions';
-import { TaskDetailTargetPanel, TaskReminderOptionId } from './task.model';
+import { selectTaskEntities } from './store/task.selectors';
+import {
+  HideSubTasksMode,
+  TaskDetailTargetPanel,
+  TaskReminderOptionId,
+} from './task.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { signal } from '@angular/core';
@@ -923,6 +929,114 @@ describe('TaskService', () => {
       const active = document.activeElement;
       service.focusTaskById('missing', false);
       expect(document.activeElement).toBe(active);
+    });
+  });
+
+  describe('toggleSubTaskMode (resolve-on-dispatch)', () => {
+    // The resolution moved out of the reducer into the service so the persisted
+    // op carries the final mode (deterministic on replay across devices).
+    const setEntities = (
+      parent: Partial<Task> & { id: string; subTaskIds: string[] },
+      ...subs: Array<Partial<Task> & { id: string }>
+    ): void => {
+      const entities: Record<string, Task> = {
+        [parent.id]: createMockTask(parent.id, parent),
+      };
+      for (const s of subs) {
+        entities[s.id] = createMockTask(s.id, s);
+      }
+      store.overrideSelector(selectTaskEntities, entities);
+      store.refreshState();
+    };
+
+    const dispatchedHideMode = (): number | undefined => {
+      const calls = (store.dispatch as jasmine.Spy).calls.all();
+      const last = calls[calls.length - 1].args[0];
+      expect(last.type).toBe(updateTaskUi.type);
+      return last.task.changes._hideSubTasksMode;
+    };
+
+    it('Show → HideDone when some (but not all) subtasks are done (isShowLess)', () => {
+      setEntities(
+        { id: 'p', subTaskIds: ['s1', 's2'] },
+        { id: 's1', isDone: true },
+        { id: 's2', isDone: false },
+      );
+
+      service.toggleSubTaskMode('p', true, false);
+
+      expect(dispatchedHideMode()).toBe(HideSubTasksMode.HideDone);
+    });
+
+    it('Show → HideAll (skips HideDone) when no done subtasks exist (isShowLess)', () => {
+      setEntities(
+        { id: 'p', subTaskIds: ['s1', 's2'] },
+        { id: 's1', isDone: false },
+        { id: 's2', isDone: false },
+      );
+
+      service.toggleSubTaskMode('p', true, false);
+
+      expect(dispatchedHideMode()).toBe(HideSubTasksMode.HideAll);
+    });
+
+    it('HideDone → HideAll (isShowLess) when mixed done state', () => {
+      setEntities(
+        {
+          id: 'p',
+          subTaskIds: ['s1', 's2'],
+          _hideSubTasksMode: HideSubTasksMode.HideDone,
+        },
+        { id: 's1', isDone: true },
+        { id: 's2', isDone: false },
+      );
+
+      service.toggleSubTaskMode('p', true, false);
+
+      expect(dispatchedHideMode()).toBe(HideSubTasksMode.HideAll);
+    });
+
+    it('HideAll → Show explicitly (0) when not endless (isShowLess=false)', () => {
+      // The explicit Show (0) sentinel — not undefined — is the whole point of
+      // the JSON-safety fix: undefined would be dropped by JSON.stringify and
+      // the "show all" transition would never reach remote devices.
+      setEntities(
+        { id: 'p', subTaskIds: ['s1'], _hideSubTasksMode: HideSubTasksMode.HideAll },
+        { id: 's1', isDone: false },
+      );
+
+      service.toggleSubTaskMode('p', false, false);
+
+      expect(dispatchedHideMode()).toBe(HideSubTasksMode.Show);
+    });
+
+    it('HideAll wraps to Show (0) when isEndless and isShowLess', () => {
+      setEntities(
+        { id: 'p', subTaskIds: ['s1'], _hideSubTasksMode: HideSubTasksMode.HideAll },
+        { id: 's1', isDone: false },
+      );
+
+      service.toggleSubTaskMode('p', true, true);
+
+      expect(dispatchedHideMode()).toBe(HideSubTasksMode.Show);
+    });
+
+    it('Show wraps to HideAll when isEndless and !isShowLess', () => {
+      setEntities({ id: 'p', subTaskIds: [] });
+
+      service.toggleSubTaskMode('p', false, true);
+
+      expect(dispatchedHideMode()).toBe(HideSubTasksMode.HideAll);
+    });
+
+    it('does not dispatch when the task is missing from state', () => {
+      store.overrideSelector(selectTaskEntities, {} as Record<string, Task>);
+      store.refreshState();
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      service.toggleSubTaskMode('missing', true, false);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 });

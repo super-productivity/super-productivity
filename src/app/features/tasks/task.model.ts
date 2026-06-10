@@ -5,7 +5,8 @@ import { TaskAttachment } from './task-attachment/task-attachment.model';
 import { Task as PluginTask } from '@super-productivity/plugin-api';
 
 export enum HideSubTasksMode {
-  // Show is undefined
+  // Legacy/never-toggled tasks may have this undefined (treated as Show).
+  Show = 0,
   HideDone = 1,
   HideAll = 2,
 }

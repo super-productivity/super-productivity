@@ -165,6 +165,7 @@ export enum ActionType {
 
   // Task actions (T)
   TASK_UPDATE_MULTIPLE_SIMPLE = '[Task] Update multiple Tasks (simple)',
+  TASK_UPDATE_UI = '[Task] Update Task Ui',
   TASK_ADD_SUB = '[Task] Add SubTask',
   TASK_MOVE_SUB = '[Task] Move sub task',
   TASK_MOVE_UP = '[Task] Move up',
