@@ -27,6 +27,7 @@ import { TaskCopy } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
@@ -43,6 +44,12 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     title: 'Test Repeat Task',
     startDate: '2026-01-02',
   };
+
+  // "Today" as the component sees it — pinned via the DateService mock in
+  // setupTestBed. Today-relative expectations must derive from this constant,
+  // never from the real clock: the suite would otherwise start failing the
+  // day after the mock date passes (broke master on 2026-06-10).
+  const MOCK_TODAY = new Date(2026, 5, 9); // local Tue 2026-06-09
 
   const mockTask = {
     id: 'task-123',
@@ -83,8 +90,9 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       'todayStr',
       'getLogicalTodayDate',
     ]);
-    mockDateService.todayStr.and.returnValue('2026-06-09');
-    mockDateService.getLogicalTodayDate.and.returnValue(new Date(2026, 5, 9, 0, 0, 0, 0));
+    mockDateService.todayStr.and.returnValue(getDbDateStr(MOCK_TODAY));
+    // callFake with a fresh instance — the component mutates the returned Date
+    mockDateService.getLogicalTodayDate.and.callFake(() => new Date(MOCK_TODAY));
 
     // Set up the return value for getTaskRepeatCfgById$ before creating the component
     if (getTaskRepeatCfgById$ReturnValue) {
@@ -303,8 +311,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
       );
 
-      const today = new Date();
-      const todayDayStr = today.toLocaleDateString('en-US', { day: 'numeric' });
+      const todayDayStr = MOCK_TODAY.toLocaleDateString('en-US', { day: 'numeric' });
 
       expect(monthlyCall).toBeDefined();
       expect(monthlyCall!.params.dateDayStr).toBe(todayDayStr);
@@ -379,11 +386,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
 
     it('should preserve WEEKLY_CURRENT_WEEKDAY when startDate weekday differs from today', async () => {
-      // Pick a date whose weekday definitely differs from today
-      const today = new Date();
-      const differentDay = new Date(today);
-      differentDay.setDate(today.getDate() + 3); // 3 days from now is a different weekday
-      const dateStr = differentDay.toISOString().slice(0, 10);
+      // Friday — a different weekday than the mocked today (Tue 2026-06-09)
+      const dateStr = '2026-06-12';
 
       const cfgWeekly: TaskRepeatCfg = {
         ...DEFAULT_TASK_REPEAT_CFG,
