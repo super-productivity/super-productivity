@@ -89,7 +89,9 @@ re-anchor test.
 at the persist boundary.
 ³ Persist-boundary guards for untrusted ingestion (unsupported-FREQ / `repeatCycle`
 wire-safety) — defends the non-dialog write path.
-⁴ Until Phase 12, sub-daily FREQs are rejected at save **and** the persist boundary.
+⁴ Until Phase 12, sub-daily FREQs are rejected at save **and** at the engine validity
+gate (`isRRuleValid` → legacy fallback, covering synced/imported rules the dialog never
+saw); the persist-boundary ingestion guard lands with Phase 7 (note ³).
 
 Status key: ✅ base · 🚧 in progress · ⏸ on waypoint, awaiting its slice · ⬜ not started ·
 🔭 newly scoped, not built. Donetick assignee rotation / round-robin is out of scope — SP

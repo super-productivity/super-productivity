@@ -148,9 +148,11 @@ BYMONTH=13`, Feb-30 combos) walked to year 275760 (~3.8s freeze) and returned `t
 - 🔶 **Sub-daily FREQ (HOURLY/MINUTELY/SECONDLY)** — engine maps every occurrence to local
   noon, so sub-daily silently collapses to ~daily; also `FREQ_TO_CYCLE` miss →
   `repeatCycle: undefined` → required-field typia failure. Rejected at the **dialog**
-  only. **Mirror the guard at the engine/persist/`data-repair` boundary** so a synced/
-  imported/REST rule can't slip past. (Comments #15.2, #20 🟡.) Phase 12 owns real
-  sub-daily support.
+  AND at the **engine validity gate** (`isRRuleValid` rejects non-day-granular FREQs →
+  a synced/imported rule drops to the legacy `repeatCycle` fallback instead of
+  mis-firing daily). Still open: the persist/`data-repair` ingestion guard (strip or
+  reject at the write boundary) — lands with Phase 7's ingestion guards.
+  (Comments #15.2, #20 🟡.) Phase 12 owns real sub-daily support.
 - 🔶 **`COUNT` + `repeatFromCompletionDate`** — completion re-anchors `startDate` +
   `lastTaskCreationDay`, restarting the COUNT window → never terminates. Rejected at the
   dialog only; mirror at the persist boundary. (Comment #20 🟡.)
