@@ -14,6 +14,20 @@
   margin-bottom: -8px;
 }
 
+// In-card navigation header (‹ 2026 ›) — mirrors the month calendar's header.
+.heatmap-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s);
+
+  &__title {
+    font-weight: bold;
+    min-width: 4em;
+    text-align: center;
+  }
+}
+
 // Month-grouped layout: each month is its own mini-grid, all
 // months in ONE row (Jan–Dec side by side) with a label + total beneath each;
 // the row scrolls horizontally when it doesn't fit, with the weekday labels

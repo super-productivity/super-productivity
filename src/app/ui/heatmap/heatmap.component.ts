@@ -7,6 +7,8 @@ import {
   output,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
+import { MatIcon } from '@angular/material/icon';
+import { MatIconButton } from '@angular/material/button';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { T } from '../../t.const';
@@ -55,7 +57,7 @@ export interface HeatmapViewData extends HeatmapData {
   styleUrls: ['./heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [TranslatePipe],
+  imports: [TranslatePipe, MatIcon, MatIconButton],
 })
 export class HeatmapComponent {
   readonly T = T;
@@ -67,6 +69,13 @@ export class HeatmapComponent {
   /** Legend under the grid: relative intensity (Low→High) for activity data,
    *  projected/completed swatches for projections, or none. */
   readonly legendMode = input<'intensity' | 'projection' | 'none'>('none');
+  /** Optional in-card navigation header (e.g. ‹ 2026 ›), styled like the month
+   *  calendar's ‹ June 2026 › header. Hidden while empty. */
+  readonly navLabel = input<string>('');
+  readonly canNavPrev = input<boolean>(false);
+  readonly canNavNext = input<boolean>(false);
+  readonly navPrev = output<void>();
+  readonly navNext = output<void>();
   /** Emits the clicked day (non-empty cells only). Consumers decide what to do. */
   readonly dayClick = output<DayData>();
 

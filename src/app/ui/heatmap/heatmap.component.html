@@ -1,6 +1,27 @@
 @if (data(); as heatmapData) {
   @if (heatmapData.months; as months) {
     <div class="heatmap-container">
+      @if (navLabel()) {
+        <div class="heatmap-nav">
+          <button
+            mat-icon-button
+            type="button"
+            [disabled]="!canNavPrev()"
+            (click)="navPrev.emit()"
+          >
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <div class="heatmap-nav__title">{{ navLabel() }}</div>
+          <button
+            mat-icon-button
+            type="button"
+            [disabled]="!canNavNext()"
+            (click)="navNext.emit()"
+          >
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </div>
+      }
       <div class="heatmap-month-row">
         <div class="day-labels day-labels--blocks">
           @for (label of dayLabels(); track $index) {

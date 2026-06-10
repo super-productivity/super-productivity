@@ -20,28 +20,6 @@
   </div>
 
   @if (heatmapData(); as data) {
-    @if (availableYears().length > 0) {
-      <div class="year-nav">
-        <button
-          mat-icon-button
-          type="button"
-          [disabled]="!canPrevYear()"
-          (click)="prevYear()"
-        >
-          <mat-icon>chevron_left</mat-icon>
-        </button>
-        <span class="year-nav__label">{{ selectedYear() }}</span>
-        <button
-          mat-icon-button
-          type="button"
-          [disabled]="!canNextYear()"
-          (click)="nextYear()"
-        >
-          <mat-icon>chevron_right</mat-icon>
-        </button>
-      </div>
-    }
-
     <heatmap-switcher
       [data]="data"
       [dayMap]="data.dayMap"
@@ -49,6 +27,11 @@
       [rangeEnd]="data.rangeEnd"
       legendMode="intensity"
       persistKey="metrics"
+      [navLabel]="selectedYear().toString()"
+      [canNavPrev]="canPrevYear()"
+      [canNavNext]="canNextYear()"
+      (navPrev)="prevYear()"
+      (navNext)="nextYear()"
     />
   } @else {
     <p>{{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}</p>

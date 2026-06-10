@@ -82,7 +82,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       tagsNoMyDayAndNoList$: of([]),
     });
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
+      cfg: () => ({ reminder: { defaultTaskRemindOption: null }, tasks: {} }),
       // CustomDateAdapter.getFirstDayOfWeek() reads this — needed by the result
       // calendar preview (heatmap) build.
       localization: () => ({ firstDayOfWeek: 0 }),

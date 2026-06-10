@@ -1,6 +1,5 @@
 :host {
   display: block;
-  max-width: 500px;
   margin-bottom: var(--s2);
 }
 
@@ -10,18 +9,4 @@
   flex-wrap: wrap;
   font-size: 13px;
   margin-bottom: var(--s);
-}
-
-.year-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s);
-  margin-bottom: var(--s-half);
-
-  &__label {
-    font-weight: bold;
-    min-width: 4em;
-    text-align: center;
-  }
 }

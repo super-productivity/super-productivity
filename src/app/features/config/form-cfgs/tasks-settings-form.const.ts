@@ -41,6 +41,13 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
       },
     },
     {
+      key: 'isExpandActivityForRepeatEdit',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.TASKS.IS_EXPAND_ACTIVITY_FOR_REPEAT_EDIT,
+      },
+    },
+    {
       key: 'defaultProjectId',
       type: 'project-select',
       templateOptions: {

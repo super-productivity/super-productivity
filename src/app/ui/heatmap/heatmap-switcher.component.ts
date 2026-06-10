@@ -45,6 +45,13 @@ export class HeatmapSwitcherComponent {
   readonly legendMode = input<'intensity' | 'projection' | 'none'>('intensity');
   /** Storage slot for remembering the chosen view (empty → not persisted). */
   readonly persistKey = input<string>('');
+  /** Optional in-card nav for the YEAR view (e.g. ‹ 2026 ›); the month view has
+   *  its own ‹ June 2026 › nav. Hidden while the label is empty. */
+  readonly navLabel = input<string>('');
+  readonly canNavPrev = input<boolean>(false);
+  readonly canNavNext = input<boolean>(false);
+  readonly navPrev = output<void>();
+  readonly navNext = output<void>();
   readonly dayClick = output<DayData>();
 
   readonly view = signal<HeatmapView>('year');

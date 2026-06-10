@@ -142,7 +142,9 @@ export class DialogEditTaskRepeatCfgComponent {
   }>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
-  isHeatmapExpanded = false;
+  // Optionally start with the Activity section open (Settings → Tasks).
+  isHeatmapExpanded =
+    !!this._globalConfigService.cfg()?.tasks?.isExpandActivityForRepeatEdit;
 
   repeatCfgInitial = signal<TaskRepeatCfgCopy | undefined>(undefined);
   repeatCfg = signal<RepeatCfgWorking>(this._initializeRepeatCfg());

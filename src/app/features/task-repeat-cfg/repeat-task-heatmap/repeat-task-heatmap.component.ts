@@ -6,8 +6,6 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { MatIcon } from '@angular/material/icon';
-import { MatIconButton } from '@angular/material/button';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../archive/task-archive.service';
@@ -40,7 +38,7 @@ import { isRRuleEngineEnabled } from '../../config/rrule-engine-flag';
   styleUrls: ['./repeat-task-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [HeatmapSwitcherComponent, TranslateModule, MatIcon, MatIconButton],
+  imports: [HeatmapSwitcherComponent, TranslateModule],
 })
 export class RepeatTaskHeatmapComponent {
   readonly T = T;

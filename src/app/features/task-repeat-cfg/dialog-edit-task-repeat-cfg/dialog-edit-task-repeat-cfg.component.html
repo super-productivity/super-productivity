@@ -16,6 +16,7 @@
       <collapsible
         [title]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"
         icon="bar_chart"
+        [isExpanded]="isHeatmapExpanded"
         (isExpandedChange)="isHeatmapExpanded = $event"
       >
         @if (isHeatmapExpanded) {

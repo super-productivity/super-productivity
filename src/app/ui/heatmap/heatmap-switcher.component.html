@@ -25,6 +25,11 @@
     <heatmap
       [data]="d"
       [legendMode]="legendMode()"
+      [navLabel]="navLabel()"
+      [canNavPrev]="canNavPrev()"
+      [canNavNext]="canNavNext()"
+      (navPrev)="navPrev.emit()"
+      (navNext)="navNext.emit()"
       (dayClick)="dayClick.emit($event)"
     />
   }
