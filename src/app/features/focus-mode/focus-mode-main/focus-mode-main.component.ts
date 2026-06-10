@@ -8,7 +8,6 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
 import { Log } from '../../../core/log';
 import { from, Observable, of, Subject } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -39,7 +38,6 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { SimpleCounterService } from '../../simple-counter/simple-counter.service';
 import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import { ICAL_TYPE } from '../../issue/issue.const';
-import { INBOX_PROJECT } from '../../project/project.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatFabButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -57,6 +55,7 @@ import { slideInOutFromBottomAni } from '../../../ui/animations/slide-in-out-fro
 import { FocusModeService } from '../focus-mode.service';
 import { FocusModeLayoutComponent } from '../focus-mode-layout/focus-mode-layout.component';
 import { FocusClockFaceComponent } from '../focus-clock-face/focus-clock-face.component';
+import { FocusModeTaskTrackingComponent } from '../focus-mode-task-tracking/focus-mode-task-tracking.component';
 import {
   FOCUS_MODE_DEFAULTS,
   FocusMainUIState,
@@ -94,6 +93,7 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
     FocusModeLayoutComponent,
     TaskTitleComponent,
     FocusClockFaceComponent,
+    FocusModeTaskTrackingComponent,
     MatIconButton,
     MatTooltip,
     MatIcon,
@@ -124,7 +124,6 @@ export class FocusModeMainComponent {
   private readonly _store = inject(Store);
   private readonly _focusModeStorage = inject(FocusModeStorageService);
   private readonly _matDialog = inject(MatDialog);
-  private readonly _router = inject(Router);
 
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
@@ -213,7 +212,6 @@ export class FocusModeMainComponent {
     () => this._isPreparation() && this.mode() === FocusModeMode.Flowtime,
   );
   isShowSimpleCounters = computed(() => this._isInProgress());
-  isShowPauseButton = computed(() => this._isInProgress());
   isShowCompleteSessionButton = computed(() => this._isInProgress());
   isShowBottomControls = computed(() => this._isInProgress());
   isShowCountdown = computed(() => this._isCountdown());
@@ -505,10 +503,9 @@ export class FocusModeMainComponent {
   }
 
   exitToPlanning(): void {
-    // Unified with the break / session-done screens: cancel the session
-    // (clears tracking + hides the overlay) and route to the Inbox.
+    // Cancelling the session clears tracking and hides the overlay, returning
+    // the user to wherever they were before focus mode (no forced navigation).
     this._store.dispatch(cancelFocusSession());
-    this._router.navigateByUrl(`/project/${INBOX_PROJECT.id}/tasks`);
   }
 
   selectMode(mode: FocusModeMode | string | number): void {

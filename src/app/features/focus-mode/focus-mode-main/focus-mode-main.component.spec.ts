@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { BehaviorSubject, EMPTY, of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -129,7 +128,6 @@ describe('FocusModeMainComponent', () => {
       providers: [
         provideMockStore(),
         provideMockActions(() => of()),
-        { provide: Router, useValue: { navigateByUrl: () => Promise.resolve(true) } },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
@@ -708,7 +706,6 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       providers: [
         provideMockStore(),
         provideMockActions(() => of()),
-        { provide: Router, useValue: { navigateByUrl: () => Promise.resolve(true) } },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },

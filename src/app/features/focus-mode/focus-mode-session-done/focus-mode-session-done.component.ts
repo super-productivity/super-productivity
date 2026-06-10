@@ -1,8 +1,6 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
 import { MatButton } from '@angular/material/button';
-import { INBOX_PROJECT } from '../../project/project.const';
 
 import { of } from 'rxjs';
 import { map, switchMap, take } from 'rxjs/operators';
@@ -26,20 +24,18 @@ import {
 } from '../store/focus-mode.actions';
 import { selectFocusModeConfig } from '../../config/store/global-config.reducer';
 import { MatIcon } from '@angular/material/icon';
-import { TaskTrackingInfoComponent } from '../task-tracking-info/task-tracking-info.component';
 
 @Component({
   selector: 'focus-mode-session-done',
   templateUrl: './focus-mode-session-done.component.html',
   styleUrls: ['./focus-mode-session-done.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButton, MsToStringPipe, TranslatePipe, MatIcon, TaskTrackingInfoComponent],
+  imports: [MatButton, MsToStringPipe, TranslatePipe, MatIcon],
 })
 export class FocusModeSessionDoneComponent implements AfterViewInit {
   private _store = inject(Store);
   private readonly _confettiService = inject(ConfettiService);
   private readonly _focusModeService = inject(FocusModeService);
-  private readonly _router = inject(Router);
 
   mode = this._focusModeService.mode;
   FocusModeMode = FocusModeMode;
@@ -77,11 +73,9 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
   }
 
   cancelAndCloseFocusOverlay(): void {
-    // cancelFocusSession both clears tracking and hides the overlay; pair
-    // with router navigation so "Back to planning" deterministically lands
-    // the user on the Inbox across all timer modes.
+    // Cancelling the session clears tracking and hides the overlay, returning
+    // the user to wherever they were before focus mode (no forced navigation).
     this._store.dispatch(cancelFocusSession());
-    this._router.navigateByUrl(`/project/${INBOX_PROJECT.id}/tasks`);
   }
 
   startNextFocusSession(): void {

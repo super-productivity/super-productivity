@@ -17,6 +17,33 @@
   max-width: var(--component-max-width);
 }
 
+// Title + tracking info share a row. Grid keeps the title centered in the
+// viewport (the read-only time sits in the right track), mirroring the focus
+// session's task row.
+.task-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+
+  .task-title {
+    grid-column: 2;
+  }
+
+  focus-mode-task-tracking {
+    grid-column: 3;
+    justify-self: start;
+  }
+}
+
+// Gentle reminder shown in the otherwise-empty task row during a break, in
+// place of the (hidden) task title. Reuses .task-title's sizing (above) so it
+// reads like the task name; only the default <p> margin needs resetting.
+.break-message {
+  margin: 0;
+}
+
 .task-title {
   text-align: center;
   font-size: 30px;
@@ -70,18 +97,7 @@
   }
 }
 
-// ========== ROW 4: controls + tracking + primary actions ==========
-// Tracking info stacked above a single icon-button row.
-.break-bottom {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s2);
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0 var(--s2);
-}
-
+// ========== ROW 4: primary actions ==========
 // Single icon-button row, mirroring focus-mode-main's bottom controls (the
 // 56px / 32px icon size + --s2 gap) so the break's actions read as one row,
 // identical to the focus session.

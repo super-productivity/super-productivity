@@ -283,6 +283,17 @@ label {
     line-height: 1;
     font-variant-numeric: tabular-nums;
     color: inherit;
+    // Base cursor is already `text`; make the click-to-edit affordance explicit
+    // on hover with a subtle accent underline so the digits read as editable.
+    text-decoration: underline transparent;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.12em;
+    transition: text-decoration-color var(--transition-duration-m)
+      var(--ani-standard-timing);
+
+    &:hover {
+      text-decoration-color: var(--c-accent);
+    }
 
     // Suppress the focus scale-up — at clock-time sizes it would push digits
     // past the ring.

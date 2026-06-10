@@ -16,22 +16,27 @@
 
   // Muted controls (switch/finish/pause/complete/+/-/settings/notes/issue) are
   // hidden by default and revealed when the user is paying attention — mouse
-  // over this component AND the OS window has focus. Buttons read
-  // --revealed-opacity for their opacity; the value here drives whether they
-  // appear. --revealed-pointer-events mirrors it so faded buttons can't
-  // capture tooltips that then get stuck after the icon disappears.
+  // over this component OR keyboard focus moving into it, AND the OS window has
+  // focus. Buttons read --revealed-opacity for their opacity; the value here
+  // drives whether they appear. --revealed-pointer-events mirrors it so faded
+  // buttons can't capture tooltips that then get stuck after the icon
+  // disappears.
   --muted-opacity: 0;
   --revealed-opacity: 0;
   --revealed-pointer-events: none;
 
-  &:hover {
+  // :focus-within keeps the controls reachable by keyboard — tabbing onto a
+  // hidden button reveals the row even without a pointer hover.
+  &:hover,
+  &:focus-within {
     --revealed-opacity: 1;
     --revealed-pointer-events: auto;
   }
 
-  // Suppress the hover reveal when the browser window is unfocused. Class is
-  // toggled by the [class.isWindowBlurred] host binding.
-  &.isWindowBlurred:hover {
+  // Suppress the reveal when the browser window is unfocused. Class is toggled
+  // by the [class.isWindowBlurred] host binding.
+  &.isWindowBlurred:hover,
+  &.isWindowBlurred:focus-within {
     --revealed-opacity: 0;
     --revealed-pointer-events: none;
   }
@@ -75,12 +80,16 @@
   min-width: 0;
 }
 
-// Switch + finish flank the title in a horizontal row.
+// Three-track grid so the title stays centered in the viewport regardless of
+// the flanking controls' widths: switch in the left 1fr track (hugging the
+// title), title in the auto center track, tracking + finish in the right 1fr
+// track (hugging the title). Equal 1fr side tracks => the center never shifts
+// when the time numbers or the play/pause icon change width.
 .task-title-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  gap: var(--s);
+  gap: var(--s2);
   width: 100%;
 }
 
@@ -89,6 +98,18 @@
   opacity: var(--revealed-opacity);
   transition: var(--transition-standard);
   pointer-events: var(--revealed-pointer-events);
+}
+
+// Switch hugs the title's left edge; the end controls hug its right edge.
+.task-side-btn--switch {
+  justify-self: end;
+}
+
+.task-end-controls {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: var(--s);
 }
 
 .task-title {

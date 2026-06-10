@@ -305,6 +305,7 @@
         "TO_FOCUS_OVERLAY": "To focus overlay"
       },
       "BACK_TO_PLANNING": "Back to Planning",
+      "BREAK_RELAX_MSG": "Take a moment to relax",
       "BREAK_TITLE": "Break",
       "BROWSER_TITLE_BREAK": "Break",
       "BROWSER_TITLE_PAUSED": "Paused",
@@ -352,6 +353,7 @@
       "RESET_CYCLES": "Reset session counter",
       "RESUME_BREAK": "Resume break",
       "RESUME_SESSION": "Resume session",
+      "RESUME_TRACKING": "Resume tracking",
       "SELECT_MODE": "Choose your focus mode",
       "SELECT_TASK": "Select task to focus on",
       "SELECT_TASK_FIRST": "Select a task first to start tracking",

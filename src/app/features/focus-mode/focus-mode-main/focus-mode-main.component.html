@@ -1,5 +1,4 @@
 @let isCountDown = isCountTimeDown();
-@let ct = currentTask();
 @let displayed = displayedTask();
 <!-- Countdown Animation (full-screen overlay, sits outside the layout) -->
 @if (isShowCountdown()) {
@@ -62,10 +61,14 @@
           <div class="title">{{ parentTaskTitle() }}</div>
         </div>
       }
+      <!-- Grid keeps the title dead-centered in the viewport: the switch (left
+           cell) and the tracking + finish controls (right cell) sit in equal
+           1fr tracks, so changing time values or swapping the play/pause icon
+           never shifts the centered title. -->
       <div class="task-title-row">
         <button
           mat-icon-button
-          class="task-side-btn"
+          class="task-side-btn task-side-btn--switch"
           (click)="openTaskSelector(); $event.stopPropagation()"
           [matTooltip]="T.F.FOCUS_MODE.SWITCH_TASK | translate"
         >
@@ -79,14 +82,23 @@
           class="task-title"
         ></task-title>
 
-        <button
-          mat-icon-button
-          class="task-side-btn"
-          [matTooltip]="T.F.FOCUS_MODE.FINISH_TASK_AND_SELECT_NEXT | translate"
-          (click)="finishCurrentTask()"
-        >
-          <mat-icon>done</mat-icon>
-        </button>
+        <div class="task-end-controls">
+          <!-- Time spent/estimate, shown read-only as soon as a task is selected
+               (the session pause/resume control lives in the bottom row). -->
+          <focus-mode-task-tracking
+            [task]="displayed"
+            [showToggle]="false"
+          ></focus-mode-task-tracking>
+
+          <button
+            mat-icon-button
+            class="task-side-btn"
+            [matTooltip]="T.F.FOCUS_MODE.FINISH_TASK_AND_SELECT_NEXT | translate"
+            (click)="finishCurrentTask()"
+          >
+            <mat-icon>done</mat-icon>
+          </button>
+        </div>
       </div>
     } @else {
       <button
@@ -250,7 +262,7 @@
       fmBottom
       class="bottom-controls"
     >
-      <!-- Back to Planning (cancels the session + returns to the Inbox) -->
+      <!-- Back to Planning (cancels the session + closes the focus overlay) -->
       <button
         mat-icon-button
         class="exit-session-btn"
@@ -260,26 +272,25 @@
         <mat-icon>arrow_back</mat-icon>
       </button>
 
-      @if (isShowPauseButton()) {
-        @if (focusModeService.isSessionPaused()) {
-          <button
-            mat-icon-button
-            class="pause-resume-btn"
-            [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
-            (click)="resumeSession()"
-          >
-            <mat-icon>play_arrow</mat-icon>
-          </button>
-        } @else {
-          <button
-            mat-icon-button
-            class="pause-resume-btn"
-            [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
-            (click)="pauseSession()"
-          >
-            <mat-icon>pause</mat-icon>
-          </button>
-        }
+      <!-- Pause / resume the session (the task-row time stack is read-only). -->
+      @if (focusModeService.isSessionPaused()) {
+        <button
+          mat-icon-button
+          class="pause-resume-btn"
+          [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
+          (click)="resumeSession()"
+        >
+          <mat-icon>play_arrow</mat-icon>
+        </button>
+      } @else {
+        <button
+          mat-icon-button
+          class="pause-resume-btn"
+          [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
+          (click)="pauseSession()"
+        >
+          <mat-icon>pause</mat-icon>
+        </button>
       }
 
       @if (isShowCompleteSessionButton()) {

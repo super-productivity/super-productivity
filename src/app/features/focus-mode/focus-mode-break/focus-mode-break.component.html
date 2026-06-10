@@ -2,13 +2,28 @@
   <!-- Row 1 (top controls) is intentionally empty for breaks; the layout still
        reserves its height so the title/clock baseline matches the focus session. -->
 
-  <!-- ========== ROW 2: Task name ========== -->
+  <!-- ========== ROW 2: Task name + tracking control ========== -->
   <div
     fmTask
     class="task-section"
   >
     @if (!isTrackingPausedDuringBreak() && displayedTask(); as t) {
-      <div class="task-title">{{ t.title }}</div>
+      <div class="task-title-row">
+        <div class="task-title">{{ t.title }}</div>
+        <!-- Read-only: during a break, task tracking is coupled to the break
+             timer (start tracking skips the break, stop tracking pauses it), so
+             a play/pause here can't act on tracking alone. Shows the time only. -->
+        <focus-mode-task-tracking
+          [task]="t"
+          [showToggle]="false"
+        ></focus-mode-task-tracking>
+      </div>
+    } @else {
+      <!-- No task title to show — fill the reserved row with a gentle reminder
+           so the break reads as a moment to relax, not just a countdown. -->
+      <p class="task-title break-message">
+        {{ T.F.FOCUS_MODE.BREAK_RELAX_MSG | translate }}
+      </p>
     }
   </div>
 
@@ -40,84 +55,81 @@
     </focus-clock-face>
   </div>
 
-  <!-- ========== ROW 4: controls + tracking + primary actions ========== -->
-  <div
+  <!-- ========== ROW 4: primary actions ========== -->
+  <!-- Single icon-button row, structurally identical to the focus session's
+       bottom controls (no stacked tracking info) so the clock centers the same
+       on both. Back to Planning + the forward CTA are icons (with aria-labels)
+       so the break reads as one row rather than a stack of mixed button types. -->
+  <section
     fmBottom
-    class="break-bottom"
+    class="bottom-controls"
   >
-    <task-tracking-info></task-tracking-info>
+    <!-- Back to Planning (cancels the session + closes the focus overlay) -->
+    <button
+      mat-icon-button
+      class="exit-session-btn"
+      [attr.aria-label]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
+      [matTooltip]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
+      (click)="exitToPlanning()"
+    >
+      <mat-icon>arrow_back</mat-icon>
+    </button>
 
-    <!-- Single icon-button row, mirroring the focus session's bottom controls.
-         Back to Planning + the forward CTA become icons (with aria-labels) so
-         the break reads as one row rather than a stack of mixed button types. -->
-    <section class="bottom-controls">
-      <!-- Back to Planning (cancels the session + returns to the Inbox) -->
+    @if (remainingTime() > 0) {
+      @if (isBreakPaused()) {
+        <button
+          mat-icon-button
+          class="pause-resume-btn"
+          [attr.aria-label]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
+          [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
+          (click)="resumeBreak()"
+        >
+          <mat-icon>play_arrow</mat-icon>
+        </button>
+      } @else {
+        <button
+          mat-icon-button
+          class="pause-resume-btn"
+          [attr.aria-label]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
+          [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
+          (click)="pauseBreak()"
+        >
+          <mat-icon>pause</mat-icon>
+        </button>
+      }
+
       <button
         mat-icon-button
-        class="exit-session-btn"
-        [attr.aria-label]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
-        [matTooltip]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
-        (click)="exitToPlanning()"
+        [attr.aria-label]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
+        [matTooltip]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
+        (click)="skipBreak()"
       >
-        <mat-icon>arrow_back</mat-icon>
+        <mat-icon>skip_next</mat-icon>
       </button>
+    }
 
-      @if (remainingTime() > 0) {
-        @if (isBreakPaused()) {
-          <button
-            mat-icon-button
-            class="pause-resume-btn"
-            [attr.aria-label]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
-            [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
-            (click)="resumeBreak()"
-          >
-            <mat-icon>play_arrow</mat-icon>
-          </button>
-        } @else {
-          <button
-            mat-icon-button
-            class="pause-resume-btn"
-            [attr.aria-label]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
-            [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
-            (click)="pauseBreak()"
-          >
-            <mat-icon>pause</mat-icon>
-          </button>
-        }
+    @if (isPomodoro()) {
+      <button
+        mat-icon-button
+        [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+        [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+        (click)="resetCycles()"
+      >
+        <mat-icon>restart_alt</mat-icon>
+      </button>
+    }
 
-        <button
-          mat-icon-button
-          [attr.aria-label]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
-          [matTooltip]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
-          (click)="skipBreak()"
-        >
-          <mat-icon>skip_next</mat-icon>
-        </button>
-      }
-
-      @if (isPomodoro()) {
-        <button
-          mat-icon-button
-          [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
-          [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
-          (click)="resetCycles()"
-        >
-          <mat-icon>restart_alt</mat-icon>
-        </button>
-      }
-
-      <!-- Forward CTA: start the next focus session -->
-      @if (remainingTime() <= 0) {
-        <button
-          mat-icon-button
-          color="primary"
-          [attr.aria-label]="T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate"
-          [matTooltip]="T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate"
-          (click)="completeBreak()"
-        >
-          <mat-icon>arrow_forward</mat-icon>
-        </button>
-      }
-    </section>
-  </div>
+    <!-- Forward CTA: start the next focus session -->
+    @if (remainingTime() <= 0) {
+      <button
+        mat-icon-button
+        color="primary"
+        [attr.aria-label]="T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate"
+        [matTooltip]="T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate"
+        (click)="completeBreak()"
+      >
+        <mat-icon>arrow_forward</mat-icon>
+      </button>
+    }
+  </section>
 </focus-mode-layout>

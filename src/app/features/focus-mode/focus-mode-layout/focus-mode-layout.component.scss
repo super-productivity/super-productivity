@@ -7,7 +7,7 @@
   flex-direction: column;
   align-items: center;
   // Breathing room between the top controls and the task title.
-  gap: var(--s3);
+  gap: var(--s2);
   padding-top: var(--s2);
 
   // Reserved height of the top-controls row. Holds the slot open even when its
@@ -16,6 +16,13 @@
   // mode selector's rendered height so swapping it in/out never shifts the row;
   // it's also the one knob for cross-view baseline alignment.
   --focus-mode-top-row-height: var(--s9);
+
+  // Reserved height of the task row. The break hides the task title while
+  // tracking is paused for the break, which would otherwise collapse this row
+  // to 0px and float the clock higher than on the focus session. Flooring it
+  // keeps the clock baseline aligned across focus ↔ break. It's a min only:
+  // longer/wrapping titles still grow the row.
+  --focus-mode-task-row-height: var(--s7);
 }
 
 // ========== ROW 1: TOP CONTROLS (reserved) ==========
@@ -30,7 +37,9 @@
 // ========== ROW 2: TASK ==========
 .task {
   display: flex;
+  align-items: center;
   justify-content: center;
+  min-height: var(--focus-mode-task-row-height);
   width: 100%;
 }
 
@@ -49,5 +58,5 @@
   display: flex;
   justify-content: center;
   width: 100%;
-  padding-bottom: calc(var(--s4) + var(--safe-area-bottom));
+  padding-bottom: var(--s4);
 }

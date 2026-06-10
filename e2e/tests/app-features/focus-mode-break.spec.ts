@@ -81,8 +81,8 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(modeSelector).not.toBeVisible();
 
     // Click "Back to Planning" — unified flow cancels the focus session and
-    // closes the overlay (navigates to /tasks). User must re-open focus mode
-    // to switch timer modes.
+    // closes the overlay (returning to the previous view). User must re-open
+    // focus mode to switch timer modes.
     await expect(backToPlanningButton).toBeVisible();
     await backToPlanningButton.click();
 

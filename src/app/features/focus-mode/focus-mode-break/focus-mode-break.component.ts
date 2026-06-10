@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { Router } from '@angular/router';
 import { MatButtonModule, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { FocusModeService } from '../focus-mode.service';
@@ -16,12 +15,11 @@ import {
   skipBreak,
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
-import { INBOX_PROJECT } from '../../project/project.const';
 import { selectPausedTaskId } from '../store/focus-mode.selectors';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
-import { TaskTrackingInfoComponent } from '../task-tracking-info/task-tracking-info.component';
+import { FocusModeTaskTrackingComponent } from '../focus-mode-task-tracking/focus-mode-task-tracking.component';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
@@ -38,7 +36,7 @@ import { TaskService } from '../../tasks/task.service';
     MsToMinuteClockStringPipe,
     MatIcon,
     TranslatePipe,
-    TaskTrackingInfoComponent,
+    FocusModeTaskTrackingComponent,
     FocusClockFaceComponent,
   ],
   templateUrl: './focus-mode-break.component.html',
@@ -49,7 +47,6 @@ export class FocusModeBreakComponent {
   readonly focusModeService = inject(FocusModeService);
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
-  private readonly _router = inject(Router);
   T: typeof T = T;
 
   // Get pausedTaskId before break ends (passed in action to avoid race condition)
@@ -130,10 +127,9 @@ export class FocusModeBreakComponent {
   }
 
   exitToPlanning(): void {
-    // Unified across all timer modes: cancel the focus session (closes the
-    // overlay + clears tracking via cancelFocusSession$ effect) and route
-    // the user to the Inbox.
+    // Cancelling the session clears tracking and hides the overlay (via the
+    // cancelFocusSession$ effect), returning the user to wherever they were
+    // before focus mode — no forced navigation.
     this._store.dispatch(cancelFocusSession());
-    this._router.navigateByUrl(`/project/${INBOX_PROJECT.id}/tasks`);
   }
 }
