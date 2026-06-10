@@ -42,6 +42,10 @@ export const __updateMultipleTaskSimple = createAction(
 // no-op for them, so collapse-state sync degrades silently on old versions
 // instead of triggering the repair flow. See PersistedHideSubTasksMode in
 // task.model.ts for the full invariant.
+// Known limitation: the local-DELETE-vs-remote-UPDATE conflict path extracts
+// resurrection changes from `payload.task` only, so this op's `{ id, mode }`
+// payload contributes nothing there and the hide mode is dropped (acceptable
+// for a cosmetic field).
 export const setHideSubTasksMode = createAction(
   '[Task] Set Hide Sub Tasks Mode',
   (taskProps: { id: string; mode: HideSubTasksMode }) => ({

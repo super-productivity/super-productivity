@@ -1,5 +1,5 @@
 import { test, expect } from '../../fixtures/test.fixture';
-import { type Page } from '@playwright/test';
+import { dismissViteOverlay } from '../../utils';
 
 /**
  * E2E for issue #7412: subtask collapse/expand state should persist across
@@ -7,15 +7,6 @@ import { type Page } from '@playwright/test';
  *
  * Run with: npm run e2e:file e2e/tests/task-list-basic/subtask-collapse-persistence.spec.ts
  */
-
-const dismissViteOverlay = async (page: Page): Promise<void> => {
-  const overlay = page.locator('vite-error-overlay');
-  const isVisible = await overlay.isVisible().catch(() => false);
-  if (isVisible) {
-    await page.keyboard.press('Escape');
-    await overlay.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
-  }
-};
 
 test.describe('Subtask collapse persistence (#7412)', () => {
   test('collapsed subtasks stay collapsed after reload', async ({

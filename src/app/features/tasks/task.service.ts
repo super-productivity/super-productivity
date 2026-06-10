@@ -1146,9 +1146,13 @@ export class TaskService {
     if (!task) {
       return;
     }
-    const subTasks = task.subTaskIds.map((id) => entities[id]).filter((t) => !!t);
-    const doneTasksLength = subTasks.filter((t) => t!.isDone).length;
-    const isDoneTaskCaseNeeded = doneTasksLength && doneTasksLength < subTasks.length;
+    const subTasks = task.subTaskIds
+      .map((id) => entities[id])
+      .filter((t): t is Task => !!t);
+    const doneTasksLength = subTasks.filter((t) => t.isDone).length;
+    const isDoneTaskCaseNeeded = doneTasksLength > 0 && doneTasksLength < subTasks.length;
+    // TODO simplify the numeric transition arithmetic below (e.g. an explicit
+    // ordered-modes table) — behavior is pinned by task.service.spec.ts.
     const oldVal = task._hideSubTasksMode || 0;
     let newVal: number = isShowLess ? oldVal + 1 : oldVal - 1;
 

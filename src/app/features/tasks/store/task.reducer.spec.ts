@@ -1180,7 +1180,10 @@ describe('Task Reducer', () => {
       // Malformed remote payloads (wrong type / out of range) degrade to Show
       state = taskReducer(
         state,
-        fromActions.setHideSubTasksMode({ id: 'task-1', mode: 3 as any }),
+        fromActions.setHideSubTasksMode({
+          id: 'task-1',
+          mode: 3 as unknown as HideSubTasksMode,
+        }),
       );
       expect(state.entities['task-1']!._hideSubTasksMode).toBeUndefined();
     });

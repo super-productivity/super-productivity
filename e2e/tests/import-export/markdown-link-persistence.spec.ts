@@ -1,5 +1,6 @@
 import { test, expect } from '../../fixtures/test.fixture';
 import { type Page } from '@playwright/test';
+import { dismissViteOverlay } from '../../utils';
 
 /**
  * E2E Tests for issue #7032: Markdown link in task title breaks persistence.
@@ -9,15 +10,6 @@ import { type Page } from '@playwright/test';
  *
  * Run with: npm run e2e:file e2e/tests/import-export/markdown-link-persistence.spec.ts
  */
-
-const dismissViteOverlay = async (page: Page): Promise<void> => {
-  const overlay = page.locator('vite-error-overlay');
-  const isVisible = await overlay.isVisible().catch(() => false);
-  if (isVisible) {
-    await page.keyboard.press('Escape');
-    await overlay.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
-  }
-};
 
 type ExtractedTaskState = {
   title: string;
