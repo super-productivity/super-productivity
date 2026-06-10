@@ -380,6 +380,48 @@ describe('shortSyntax', () => {
       expect(scheduledDate.getDate()).toBe(6); // Tomorrow
       expect(scheduledDate.getHours()).toBe(14);
     });
+
+    it('should correctly parse combined schedule and deadline together without corrupting title', async () => {
+      const t = {
+        ...TASK,
+        title: 'Pay rent @monday !friday',
+      };
+      const now = new Date('2026-06-01T10:00:00'); // Mon Jun 1 2026
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+
+      expect(r?.taskChanges.title).toBe('Pay rent');
+      expect(r?.taskChanges.dueWithTime).toBeDefined();
+      expect(r?.taskChanges.deadlineWithTime).toBeDefined();
+
+      const dueDate = new Date(r?.taskChanges.dueWithTime as number);
+      const deadlineDate = new Date(r?.taskChanges.deadlineWithTime as number);
+
+      expect(dueDate.getDay()).toBe(1); // Monday
+      expect(deadlineDate.getDay()).toBe(5); // Friday
+    });
+
+    it('should still parse schedule syntax when there is no preceding space (e.g. lunch@12)', async () => {
+      const t = {
+        ...TASK,
+        title: 'lunch@12',
+      };
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+
+      expect(r?.taskChanges.title).toBe('lunch');
+      expect(r?.taskChanges.dueWithTime).toBeDefined();
+    });
+
+    it('should not parse deadline syntax when there is no preceding space (e.g. Done!)', async () => {
+      const t = {
+        ...TASK,
+        title: 'Done!',
+      };
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+
+      expect(r).toBeUndefined();
+    });
   });
 
   describe('tags', () => {
@@ -411,6 +453,37 @@ describe('shortSyntax', () => {
       const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual(undefined);
+    });
+
+    it('should not parse issue references (e.g. "fixes #1234") as tags for issue tasks', async () => {
+      const t = {
+        ...TASK,
+        issueId: '42',
+        title: '#42 Fix regression from #1234',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+      expect(r).toEqual(undefined);
+    });
+
+    it('should still parse non-numeric existing #tags in issue task titles', async () => {
+      const t = {
+        ...TASK,
+        issueId: '42',
+        title: '#42 Some title #blu',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        projectId: undefined,
+        attachments: [],
+        taskChanges: {
+          title: '#42 Some title',
+          tagIds: ['blu_id'],
+        },
+      });
     });
 
     it('should not trigger for tasks with starting # (e.g. github issues) when adding tags', async () => {
@@ -1645,6 +1718,28 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Check for details');
     });
 
+    it('should use attachment title as task name when pasting a bare URL with urlBehavior "extract"', async () => {
+      const t = {
+        ...TASK,
+        title: 'https://example.com/my-cool-page',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com/my-cool-page');
+      expect(r?.taskChanges.title).toBe('my-cool-page');
+    });
+
+    it('should use domain basename as task name when pasting a root URL with urlBehavior "extract"', async () => {
+      const t = {
+        ...TASK,
+        title: 'https://example.com',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+      expect(r).toBeDefined();
+      expect(r?.taskChanges.title).toBe('example');
+    });
+
     it('should keep URL in title and add attachment when urlBehavior is "keep-and-attach"', async () => {
       const t = {
         ...TASK,
@@ -1839,6 +1934,97 @@ describe('shortSyntax', () => {
       };
       const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep' });
       expect(r).toBeUndefined();
+    });
+
+    describe('markdown links (issue #7032)', () => {
+      it('should not extract URL from markdown link in keep mode', async () => {
+        const t = {
+          ...TASK,
+          title: 'Add [Website](https://example.com/)',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep' });
+        expect(r).toBeUndefined();
+      });
+
+      it('should extract correct URL from markdown link in extract mode', async () => {
+        const t = {
+          ...TASK,
+          title: 'Add [Website](https://example.com/)',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+        expect(r).toBeDefined();
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://example.com/');
+        expect(r?.taskChanges.title).toBe('Add Website');
+      });
+
+      it('should extract correct URL from markdown link in keep-and-attach mode', async () => {
+        const t = {
+          ...TASK,
+          title: 'Add [Website](https://example.com/)',
+        };
+        const r = await shortSyntax(t, {
+          ...CONFIG,
+          urlBehavior: 'keep-and-attach',
+        });
+        expect(r).toBeDefined();
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://example.com/');
+        // keep-and-attach preserves the original title
+        expect(r?.taskChanges.title).toBe('Add [Website](https://example.com/)');
+      });
+
+      it('should handle markdown link with trailing text', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check [docs](https://example.com/docs) for details',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+        expect(r).toBeDefined();
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://example.com/docs');
+        expect(r?.taskChanges.title).toBe('Check docs for details');
+      });
+
+      it('should handle markdown link with parentheses in URL', async () => {
+        const t = {
+          ...TASK,
+          title: 'Read [article](https://en.wikipedia.org/wiki/C_(programming_language))',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+        expect(r).toBeDefined();
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe(
+          'https://en.wikipedia.org/wiki/C_(programming_language)',
+        );
+        expect(r?.taskChanges.title).toBe('Read article');
+      });
+
+      it('should handle multiple markdown links in extract mode', async () => {
+        const t = {
+          ...TASK,
+          title: '[Site1](https://a.com) and [Site2](https://b.com)',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+        expect(r).toBeDefined();
+        expect(r?.attachments.length).toBe(2);
+        expect(r?.attachments[0].path).toBe('https://a.com');
+        expect(r?.attachments[1].path).toBe('https://b.com');
+        expect(r?.taskChanges.title).toBe('Site1 and Site2');
+      });
+
+      it('should handle mixed markdown link and plain URL in extract mode', async () => {
+        const t = {
+          ...TASK,
+          title: '[docs](https://a.com) and https://b.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+        expect(r).toBeDefined();
+        expect(r?.attachments.length).toBe(2);
+        expect(r?.attachments[0].path).toBe('https://a.com');
+        expect(r?.attachments[1].path).toBe('https://b.com');
+        expect(r?.taskChanges.title).toBe('docs and');
+      });
     });
   });
 });

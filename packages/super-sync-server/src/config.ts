@@ -69,7 +69,13 @@ export interface PrivacyConfig {
 
 export interface ServerConfig {
   port: number;
+  host: string;
   dataDir: string;
+  /**
+   * Enables the batched upload implementation in SyncService.
+   * Default false for staged rollout.
+   */
+  batchUpload: boolean;
   /**
    * Publicly reachable base URL used for links in emails.
    * Should point to the reverse-proxied address users can access.
@@ -118,7 +124,9 @@ const DEFAULT_CORS_ORIGINS: CorsOrigin[] = [
 
 const DEFAULT_CONFIG: ServerConfig = {
   port: 1900,
+  host: '0.0.0.0',
   dataDir: './data',
+  batchUpload: false,
   publicUrl: 'http://localhost:1900',
   cors: {
     enabled: true,
@@ -152,6 +160,22 @@ export const loadConfigFromEnv = (
     }
   }
 
+  if (process.env.HOST !== undefined) {
+    const trimmedHost = process.env.HOST.trim();
+    if (!trimmedHost) {
+      throw new Error('Invalid HOST: must not be empty.');
+    }
+    if (/\s/.test(trimmedHost)) {
+      throw new Error(`Invalid HOST: ${process.env.HOST}. Must not contain whitespace.`);
+    }
+    if (/^https?:\/\//i.test(trimmedHost) || trimmedHost.includes('/')) {
+      throw new Error(
+        `Invalid HOST: ${process.env.HOST}. Use a hostname or IP address without protocol or path.`,
+      );
+    }
+    config.host = trimmedHost;
+  }
+
   if (process.env.DATA_DIR) {
     const resolvedPath = path.resolve(process.env.DATA_DIR);
     if (!resolvedPath) {
@@ -161,6 +185,18 @@ export const loadConfigFromEnv = (
   } else {
     // Resolve default data dir relative to cwd
     config.dataDir = path.resolve(config.dataDir);
+  }
+
+  if (process.env.SUPERSYNC_BATCH_UPLOAD === 'true') {
+    if (process.env.SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE !== 'true') {
+      throw new Error(
+        'SUPERSYNC_BATCH_UPLOAD=true requires SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true. ' +
+          'Run `npm run migrate-payload-bytes` to backfill operation payload_bytes first.',
+      );
+    }
+    config.batchUpload = true;
+  } else if (process.env.SUPERSYNC_BATCH_UPLOAD !== undefined) {
+    config.batchUpload = false;
   }
 
   // Public URL (for email links)
@@ -276,6 +312,10 @@ export const loadConfigFromEnv = (
   // Validation
   if (!Number.isInteger(config.port) || config.port <= 0) {
     throw new Error(`Invalid port configuration: ${config.port}`);
+  }
+
+  if (!config.host) {
+    throw new Error('Host configuration is missing');
   }
 
   if (!config.dataDir) {

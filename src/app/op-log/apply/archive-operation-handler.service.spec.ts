@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import type { ArchiveSideEffectPort } from '@sp/sync-core';
 import {
   ArchiveOperationHandler,
   isArchiveAffectingAction,
@@ -195,6 +196,29 @@ describe('ArchiveOperationHandler', () => {
   });
 
   describe('handleOperation', () => {
+    it('should expose archive side effects through ArchiveSideEffectPort without mutating action meta', async () => {
+      const port: ArchiveSideEffectPort<PersistentAction> = service;
+      const tasks = [createMockTaskWithSubTasks('task-1')];
+      const meta: PersistentAction['meta'] = {
+        isPersistent: true,
+        isRemote: true,
+        entityType: 'TASK',
+        opType: OpType.Update,
+      };
+      const action = {
+        type: TaskSharedActions.moveToArchive.type,
+        tasks,
+        meta,
+      } as unknown as PersistentAction;
+
+      await port.handleOperation(action);
+
+      expect(action.meta).toBe(meta);
+      expect(
+        mockArchiveService.writeTasksToArchiveForRemoteSync,
+      ).toHaveBeenCalledOnceWith(tasks);
+    });
+
     describe('moveToArchive action', () => {
       it('should write tasks to archive for remote sync', async () => {
         const tasks = [
@@ -1062,6 +1086,50 @@ describe('ArchiveOperationHandler', () => {
               type: loadAllData.type,
               appDataComplete: { archiveYoung: newArchive },
               meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+              newArchive,
+            );
+          });
+        });
+
+        describe('REPAIR', () => {
+          // Regression: a REPAIR op built from the sync getStateSnapshot() carries
+          // empty archives. Without this guard it overwrites (wipes) the local
+          // archive on every other client that applies the REPAIR op.
+          it('should preserve local archiveYoung when REPAIR has empty archive (likely bug)', async () => {
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.Repair },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+          });
+
+          it('should preserve local archiveOld when REPAIR has empty archive (likely bug)', async () => {
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveOld: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.Repair },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+          });
+
+          it('should allow writing non-empty archive over existing archive', async () => {
+            const newArchive = createArchiveModelForTest(['new-task']);
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: newArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.Repair },
             } as unknown as PersistentAction;
 
             await service.handleOperation(action);

@@ -24,6 +24,8 @@ export interface PanEvent {
   isFinal: boolean;
   eventType: number;
   target: EventTarget | null;
+  clientX: number;
+  clientY: number;
   preventDefault: () => void;
 }
 
@@ -296,6 +298,8 @@ export class PanDirective implements OnDestroy {
       isFinal,
       eventType,
       target: originalEvent.target,
+      clientX: this._startX + deltaX,
+      clientY: this._startY + deltaY,
       preventDefault: () => originalEvent.preventDefault(),
     };
   }

@@ -41,6 +41,8 @@ import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigat
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
+import { DateService } from '../../../core/date/date.service';
+import { isBlankTask } from '../util/is-blank-task';
 
 @Injectable()
 export class TaskUiEffects {
@@ -55,11 +57,14 @@ export class TaskUiEffects {
   private _workContextService = inject(WorkContextService);
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _layoutService = inject(LayoutService);
+  private _dateService = inject(DateService);
 
   taskCreatedSnack$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.addTask),
+        // Skip the created snack for accidentally created tasks with no title
+        filter(({ task }) => !!task.title.trim()),
         withLatestFrom(this._workContextService.mainListTaskIds$),
         switchMap(([{ task }, activeContextTaskIds]) => {
           if (task.projectId) {
@@ -114,6 +119,8 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteTask),
+        // Skip the undo snack for accidentally created blank tasks
+        filter(({ task }) => !isBlankTask(task)),
         tap(({ task }) => {
           this._snackService.open({
             translateParams: {
@@ -302,6 +309,9 @@ export class TaskUiEffects {
                         this._store$.dispatch(
                           TaskSharedActions.planTasksForToday({
                             taskIds: currentTasks.map((t) => t.id),
+                            today: this._dateService.todayStr(),
+                            startOfNextDayDiffMs:
+                              this._dateService.getStartOfNextDayDiffMs(),
                           }),
                         );
                       }

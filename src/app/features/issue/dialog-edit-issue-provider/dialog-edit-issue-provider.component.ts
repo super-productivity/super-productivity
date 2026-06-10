@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  inject,
+  signal,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
@@ -41,6 +47,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { CalendarContextInfoTarget } from '../providers/calendar/calendar.model';
 import { IssueIconPipe } from '../issue-icon/issue-icon.pipe';
 import { JiraAdditionalCfgComponent } from '../providers/jira/jira-view-components/jira-cfg/jira-additional-cfg.component';
+import { JiraCfg } from '../providers/jira/jira.model';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
@@ -53,6 +60,8 @@ import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
+import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
+import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 // ClickUp is now a plugin — no built-in config component needed
 import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
@@ -104,11 +113,14 @@ export class DialogEditIssueProviderComponent {
   isConnectionWorks = signal(false);
   isOAuthConnected = signal(false);
   isOAuthConnecting = signal(false);
+  optionsLoadState = signal<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
   form = new FormGroup({});
+  showLoadOptionsButton = false;
 
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginHttp = inject(PluginHttpService);
+  private _cdr = inject(ChangeDetectorRef);
 
   issueProviderKey: IssueProviderKey = (this.d.issueProvider?.issueProviderKey ||
     this.d.issueProviderKey) as IssueProviderKey;
@@ -116,9 +128,13 @@ export class DialogEditIssueProviderComponent {
   isEdit: boolean = !!this.issueProvider && !this.d.isDuplicate;
 
   model: Partial<IssueProvider> = this.isEdit
-    ? { ...this.issueProvider }
+    ? this._migratePluginConfigForEdit({ ...this.issueProvider })
     : this.d.isDuplicate && this.issueProvider
-      ? { ...this.issueProvider, id: nanoid(), migratedFromProjectId: undefined }
+      ? this._migratePluginConfigForEdit({
+          ...this.issueProvider,
+          id: nanoid(),
+          migratedFromProjectId: undefined,
+        })
       : ({
           ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
           ...(this._pluginRegistry.hasProvider(this.issueProviderKey)
@@ -142,6 +158,8 @@ export class DialogEditIssueProviderComponent {
   title: string = this._pluginRegistry.hasProvider(this.issueProviderKey)
     ? this._pluginRegistry.getName(this.issueProviderKey) || this.issueProviderKey
     : ISSUE_PROVIDER_HUMANIZED[this.issueProviderKey as BuiltInIssueProviderKey];
+
+  isAgendaView = this._pluginRegistry.getUseAgendaView(this.issueProviderKey);
 
   configFormSection: ConfigFormSection<IssueIntegrationCfg> | undefined =
     this._pluginRegistry.hasProvider(this.issueProviderKey)
@@ -188,7 +206,10 @@ export class DialogEditIssueProviderComponent {
 
   constructor() {
     this._initOAuthAndOptions().catch((err) => {
-      console.error('[DialogEditIssueProvider] OAuth init failed', err);
+      IssueLog.err(
+        '[DialogEditIssueProvider] OAuth init failed',
+        getSafeErrorLogMeta(err),
+      );
     });
   }
 
@@ -237,7 +258,11 @@ export class DialogEditIssueProviderComponent {
   }
 
   customCfgCmpSave(cfgUpdates: IssueIntegrationCfg): void {
-    IssueLog.log('customCfgCmpSave()', cfgUpdates);
+    IssueLog.log('Issue provider config component saved updates', {
+      issueProviderKey: this.issueProviderKey,
+      issueProviderId: this.model.id,
+      ...getSafeCfgUpdateLogMeta(cfgUpdates),
+    });
     this.updateModel(cfgUpdates);
   }
 
@@ -274,6 +299,8 @@ export class DialogEditIssueProviderComponent {
           type: 'SUCCESS',
           msg: T.F.ISSUE.S.CONNECTION_SUCCESS,
         });
+        // Reload dynamic options (e.g. calendar lists) after successful connection
+        await this._loadDynamicOptions();
       } else {
         this._snackService.open({
           type: 'ERROR',
@@ -331,13 +358,10 @@ export class DialogEditIssueProviderComponent {
     this.isConnectionWorks.set(false);
   }
 
-  async connectOAuth(oauthConfig: {
-    authUrl: string;
-    tokenUrl: string;
-    clientId: string;
-    clientSecret?: string;
-    scopes: string[];
-  }): Promise<void> {
+  async connectOAuth(oauthConfig: OAuthFlowConfig): Promise<void> {
+    if (this.isOAuthUnavailableInWeb(oauthConfig)) {
+      return;
+    }
     const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
     if (!pluginId) {
       return;
@@ -345,20 +369,28 @@ export class DialogEditIssueProviderComponent {
     this.isOAuthConnecting.set(true);
     try {
       await this._pluginBridge.startOAuthFlow(pluginId, oauthConfig);
-      this.isOAuthConnected.set(true);
-      this._snackService.open({
-        type: 'SUCCESS',
-        msg: T.F.ISSUE.S.OAUTH_CONNECTED,
-      });
-      await this._loadDynamicOptions();
     } catch (e) {
+      const detail = (e instanceof Error ? e.message : String(e))
+        .replace(/\s+/g, ' ')
+        .slice(0, 200);
+      IssueLog.err('OAuth connect failed', getSafeErrorLogMeta(e));
       this._snackService.open({
         type: 'ERROR',
-        msg: T.F.ISSUE.S.OAUTH_FAILED,
+        msg: detail ? T.F.ISSUE.S.OAUTH_FAILED_WITH_DETAIL : T.F.ISSUE.S.OAUTH_FAILED,
+        translateParams: { detail },
       });
+      return;
     } finally {
       this.isOAuthConnecting.set(false);
     }
+    this.isOAuthConnected.set(true);
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: T.F.ISSUE.S.OAUTH_CONNECTED,
+    });
+    // _loadDynamicOptions surfaces its own per-field error snacks; failures
+    // here must not be reported as OAuth failures (the connection succeeded).
+    await this._loadDynamicOptions();
   }
 
   async disconnectOAuth(): Promise<void> {
@@ -375,22 +407,35 @@ export class DialogEditIssueProviderComponent {
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
 
-  private async _loadDynamicOptions(): Promise<void> {
+  protected get isJiraDirectFetchEnabled(): boolean {
+    return !!(this.model as Partial<JiraCfg>).allowFetchFallback;
+  }
+
+  protected isOAuthUnavailableInWeb(oauthConfig: OAuthFlowConfig): boolean {
+    return !IS_ELECTRON && !IS_NATIVE_PLATFORM && !oauthConfig.webClientId;
+  }
+
+  /**
+   * @returns true if all fields loaded successfully, false if any failed
+   */
+  private async _loadDynamicOptions(): Promise<boolean> {
     const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
     if (!provider) {
-      return;
+      return false;
     }
     const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
     const dynamicFields = configFields.filter((f) => typeof f.loadOptions === 'function');
     if (!dynamicFields.length) {
-      return;
+      return true;
     }
 
     const pluginConfig = (this.model as Record<string, unknown>)['pluginConfig'] ?? {};
-    const http = this._pluginHttp.createHttpHelper(() =>
-      provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+    const http = this._pluginHttp.createHttpHelper(
+      () => provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+      { allowPrivateNetwork: provider.allowPrivateNetwork },
     );
 
+    let anyFailed = false;
     for (const field of dynamicFields) {
       try {
         const options = await field.loadOptions!(
@@ -407,10 +452,12 @@ export class DialogEditIssueProviderComponent {
           formlyField.props.options = options;
         }
       } catch (e) {
-        console.error(
-          `[DialogEditIssueProvider] loadOptions failed for field '${field.key}':`,
-          e,
-        );
+        anyFailed = true;
+        IssueLog.err('[DialogEditIssueProvider] loadOptions failed', {
+          issueProviderKey: this.issueProviderKey,
+          hasFieldKey: !!field.key,
+          ...getSafeErrorLogMeta(e),
+        });
         this._snackService.open({
           type: 'ERROR',
           msg: T.F.ISSUE.S.LOAD_OPTIONS_FAILED,
@@ -418,8 +465,20 @@ export class DialogEditIssueProviderComponent {
         });
       }
     }
-    // Trigger formly refresh
+    // Trigger formly refresh — reassign both fields and model so mat-select
+    // re-evaluates display labels for already-selected values.
+    // Use detectChanges() instead of markForCheck() because plugin bridge
+    // async calls may resolve outside Zone.js (e.g. Electron IPC).
     this.fields = [...this.fields];
+    const currentPluginCfg = (this.model as Record<string, unknown>)['pluginConfig'];
+    this.model = currentPluginCfg
+      ? {
+          ...this.model,
+          pluginConfig: { ...(currentPluginCfg as Record<string, unknown>) },
+        }
+      : { ...this.model };
+    this._cdr.detectChanges();
+    return !anyFailed;
   }
 
   private _findFormlyField(
@@ -440,19 +499,77 @@ export class DialogEditIssueProviderComponent {
     return undefined;
   }
 
+  /**
+   * For plugin providers, run any necessary config migrations so the edit dialog
+   * displays migrated values instead of showing empty required fields.
+   */
+  private _migratePluginConfigForEdit(
+    model: Partial<IssueProvider>,
+  ): Partial<IssueProvider> {
+    const pluginConfig = (model as { pluginConfig?: Record<string, unknown> })
+      .pluginConfig;
+    if (!pluginConfig) return model;
+    // Shallow-clone pluginConfig to avoid mutating store state
+    const migrated = { ...pluginConfig };
+    // Migrate old single-calendar calendarId to multi-calendar config shape
+    if (
+      migrated['calendarId'] &&
+      !((migrated['readCalendarIds'] as string[])?.length > 0)
+    ) {
+      migrated['readCalendarIds'] = [migrated['calendarId'] as string];
+      migrated['writeCalendarId'] = migrated['writeCalendarId'] || migrated['calendarId'];
+    }
+    const defaultPluginConfig = this._getDefaultPluginConfig();
+    const defaultTwoWaySync = defaultPluginConfig['twoWaySync'] as
+      | Record<string, PluginSyncDirection>
+      | undefined;
+    if (defaultTwoWaySync) {
+      const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+      const isPushSupported = !!provider?.definition.updateIssue;
+      const currentTwoWaySync =
+        (migrated['twoWaySync'] as Record<string, PluginSyncDirection> | undefined) ?? {};
+      const normalizedCurrentTwoWaySync = Object.fromEntries(
+        Object.entries(currentTwoWaySync).map(([field, direction]) => [
+          field,
+          this._normalizeSyncDirectionForCapabilities(direction, isPushSupported),
+        ]),
+      );
+      migrated['twoWaySync'] = {
+        ...defaultTwoWaySync,
+        ...normalizedCurrentTwoWaySync,
+      };
+    }
+    return { ...model, pluginConfig: migrated } as Partial<IssueProvider>;
+  }
+
   private _getDefaultPluginConfig(): Record<string, unknown> {
     if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
       return {};
     }
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const fieldMappings = this._pluginRegistry.getFieldMappings(this.issueProviderKey);
     if (!fieldMappings?.length) {
       return {};
     }
     const twoWaySync: Record<string, string> = {};
     for (const m of fieldMappings) {
-      twoWaySync[m.taskField] = m.defaultDirection;
+      twoWaySync[m.taskField] = this._normalizeSyncDirectionForCapabilities(
+        m.defaultDirection as PluginSyncDirection,
+        isPushSupported,
+      );
     }
     return { twoWaySync };
+  }
+
+  private _normalizeSyncDirectionForCapabilities(
+    direction: PluginSyncDirection,
+    isPushSupported: boolean,
+  ): PluginSyncDirection {
+    if (!isPushSupported && (direction === 'pushOnly' || direction === 'both')) {
+      return 'pullOnly';
+    }
+    return direction;
   }
 
   private _getPluginFormSection(): ConfigFormSection<IssueIntegrationCfg> | undefined {
@@ -462,6 +579,8 @@ export class DialogEditIssueProviderComponent {
     if (!configFields?.length && !fieldMappings?.length) {
       return undefined;
     }
+
+    const isAgendaView = this._pluginRegistry.getUseAgendaView(pluginKey);
 
     const regularFields = configFields.filter(
       (f) => !f.advanced && f.type !== 'oauthButton',
@@ -474,16 +593,25 @@ export class DialogEditIssueProviderComponent {
       this._mapPluginConfigField(f),
     ) as LimitedFormlyFieldConfig<IssueIntegrationCfg>[];
 
-    items.push({
-      type: 'collapsible' as any,
-      props: { label: T.F.ISSUE.DIALOG.ADVANCED_CONFIG },
-      fieldGroup: [
-        ...(ISSUE_PROVIDER_COMMON_FORM_FIELDS as any[]),
-        ...advancedFields.map((f) => this._mapPluginConfigField(f)),
-      ],
-    } as any);
+    // For agenda-view providers (e.g. Google Calendar), skip generic issue provider
+    // fields (auto-import, polling, default note) and two-way sync config — the
+    // ownership model makes them unnecessary.
+    const advancedFieldGroup = isAgendaView
+      ? advancedFields.map((f) => this._mapPluginConfigField(f))
+      : [
+          ...(ISSUE_PROVIDER_COMMON_FORM_FIELDS as any[]),
+          ...advancedFields.map((f) => this._mapPluginConfigField(f)),
+        ];
 
-    if (fieldMappings?.length) {
+    if (advancedFieldGroup.length) {
+      items.push({
+        type: 'collapsible' as any,
+        props: { label: T.F.ISSUE.DIALOG.ADVANCED_CONFIG },
+        fieldGroup: advancedFieldGroup,
+      } as any);
+    }
+
+    if (!isAgendaView && fieldMappings?.length) {
       items.push(this._buildTwoWaySyncSection(pluginKey, fieldMappings) as any);
     }
 
@@ -503,6 +631,7 @@ export class DialogEditIssueProviderComponent {
     url?: string;
     pattern?: string;
     options?: { value: string; label: string }[];
+    showIf?: string;
   }): unknown {
     if (f.type === 'link') {
       return {
@@ -513,7 +642,7 @@ export class DialogEditIssueProviderComponent {
     const formlyType =
       f.type === 'checkbox'
         ? 'checkbox'
-        : f.type === 'select'
+        : f.type === 'select' || f.type === 'multiSelect'
           ? 'select'
           : f.type === 'textarea'
             ? 'textarea'
@@ -521,12 +650,21 @@ export class DialogEditIssueProviderComponent {
     return {
       key: ('pluginConfig.' + f.key) as keyof IssueIntegrationCfg,
       type: formlyType,
+      ...(f.showIf
+        ? {
+            hideExpression: (m: Record<string, unknown>) =>
+              !(m['pluginConfig'] as Record<string, unknown> | undefined)?.[f.showIf!],
+          }
+        : {}),
       templateOptions: {
         label: f.label,
         required: f.required ?? false,
         ...(f.description ? { description: f.description } : {}),
         ...(f.type === 'password' ? { type: 'password' } : {}),
-        ...(f.type === 'select' ? { options: f.options } : {}),
+        ...(f.type === 'select' || f.type === 'multiSelect'
+          ? { options: f.options }
+          : {}),
+        ...(f.type === 'multiSelect' ? { multiple: true } : {}),
         ...(f.pattern ? { pattern: f.pattern } : {}),
       },
     };
@@ -536,11 +674,17 @@ export class DialogEditIssueProviderComponent {
     pluginKey: IssueProviderKey,
     fieldMappings: { taskField: string; issueField: string; defaultDirection: string }[],
   ): unknown {
+    const provider = this._pluginRegistry.getProvider(pluginKey);
+    const isPushSupported = !!provider?.definition.updateIssue;
     const syncDirectionOptions = [
       { value: 'off', label: T.F.ISSUE.TWO_WAY_SYNC.OFF },
       { value: 'pullOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PULL_ONLY },
-      { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
-      { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+      ...(isPushSupported
+        ? [
+            { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
+            { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+          ]
+        : []),
     ];
     const TASK_FIELD_LABELS: Record<string, string> = {
       isDone: T.F.ISSUE.TWO_WAY_SYNC.STATUS,
@@ -549,6 +693,7 @@ export class DialogEditIssueProviderComponent {
       dueDay: T.F.ISSUE.TWO_WAY_SYNC.DUE_DAY,
       dueWithTime: T.F.ISSUE.TWO_WAY_SYNC.DUE_WITH_TIME,
       timeEstimate: T.F.ISSUE.TWO_WAY_SYNC.TIME_ESTIMATE,
+      tagIds: T.F.ISSUE.TWO_WAY_SYNC.TAGS,
     };
     const syncFields: any[] = fieldMappings.map((m) => ({
       key: ('pluginConfig.twoWaySync.' + m.taskField) as keyof IssueIntegrationCfg,
@@ -558,7 +703,6 @@ export class DialogEditIssueProviderComponent {
         options: syncDirectionOptions,
       },
     }));
-    const provider = this._pluginRegistry.getProvider(pluginKey);
     if (provider?.definition.createIssue) {
       syncFields.push({
         key: 'pluginConfig.isAutoCreateIssues',
@@ -573,6 +717,16 @@ export class DialogEditIssueProviderComponent {
         },
       });
     }
+    if (provider?.definition.fieldMappings?.some((m) => m.taskField === 'tagIds')) {
+      syncFields.push({
+        key: 'pluginConfig.isAutoCreateTags',
+        type: 'checkbox',
+        props: {
+          label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS,
+          description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_TAGS_DESCRIPTION,
+        },
+      });
+    }
     return {
       type: 'collapsible',
       props: { label: T.F.ISSUE.TWO_WAY_SYNC.SECTION },
@@ -582,13 +736,7 @@ export class DialogEditIssueProviderComponent {
 
   private _getOAuthButtons(): {
     label: string;
-    oauthConfig: {
-      authUrl: string;
-      tokenUrl: string;
-      clientId: string;
-      clientSecret?: string;
-      scopes: string[];
-    };
+    oauthConfig: OAuthFlowConfig;
   }[] {
     if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
       return [];
@@ -610,6 +758,90 @@ export class DialogEditIssueProviderComponent {
     this.isOAuthConnected.set(hasTokens);
     if (hasTokens) {
       await this._loadDynamicOptions();
+    } else {
+      // For non-OAuth plugins (e.g. CalDAV with Basic Auth), show a "Load Calendars"
+      // button and attempt to load dynamic options if credentials are already saved.
+      const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
+      const hasLoadOptions = configFields.some(
+        (f) => typeof f.loadOptions === 'function',
+      );
+      const hasNoOAuth = !configFields.some((f) => f.type === 'oauthButton');
+      if (hasLoadOptions && hasNoOAuth) {
+        this.showLoadOptionsButton = true;
+        if (this.isEdit) {
+          await this.loadDynamicOptions();
+        }
+      }
     }
   }
+
+  async loadDynamicOptions(): Promise<void> {
+    this.optionsLoadState.set('loading');
+    const success = await this._loadDynamicOptions();
+    this.optionsLoadState.set(success ? 'loaded' : 'failed');
+  }
 }
+
+const CREDENTIAL_LIKE_CFG_KEY_RE = /token|secret|key|password|auth|credential/i;
+
+const getSafeCfgUpdateLogMeta = (
+  cfgUpdates: IssueIntegrationCfg,
+): {
+  updateCount: number;
+  hasCredentialLikeUpdate: boolean;
+  hasPluginConfigUpdate: boolean;
+  hasDefaultNoteUpdate: boolean;
+  hasDefaultProjectUpdate: boolean;
+  defaultTagUpdateCount: number;
+} => {
+  const cfgUpdateRecord = cfgUpdates as unknown as Record<string, unknown>;
+  const updateKeys = Object.keys(cfgUpdateRecord);
+  const defaultTagIds = cfgUpdateRecord['defaultTagIds'];
+
+  return {
+    updateCount: updateKeys.length,
+    hasCredentialLikeUpdate: hasCredentialLikeCfgKey(cfgUpdateRecord, new WeakSet()),
+    hasPluginConfigUpdate: updateKeys.includes('pluginConfig'),
+    hasDefaultNoteUpdate: updateKeys.includes('defaultNote'),
+    hasDefaultProjectUpdate: updateKeys.includes('defaultProjectId'),
+    defaultTagUpdateCount: Array.isArray(defaultTagIds) ? defaultTagIds.length : 0,
+  };
+};
+
+const hasCredentialLikeCfgKey = (value: unknown, seen: WeakSet<object>): boolean => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+
+  return Object.entries(value as Record<string, unknown>).some(
+    ([key, nestedValue]) =>
+      CREDENTIAL_LIKE_CFG_KEY_RE.test(key) || hasCredentialLikeCfgKey(nestedValue, seen),
+  );
+};
+
+const getSafeErrorLogMeta = (
+  e: unknown,
+): {
+  errorName: string;
+  errorCode?: string | number;
+} => {
+  const errorName =
+    e instanceof Error
+      ? e.name
+      : typeof e === 'object' && e !== null && 'name' in e && typeof e.name === 'string'
+        ? e.name
+        : 'UnknownError';
+  const errorCode =
+    typeof e === 'object' &&
+    e !== null &&
+    'code' in e &&
+    (typeof e.code === 'string' || typeof e.code === 'number')
+      ? e.code
+      : undefined;
+
+  return errorCode === undefined ? { errorName } : { errorName, errorCode };
+};

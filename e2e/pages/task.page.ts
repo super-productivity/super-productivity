@@ -53,6 +53,10 @@ export class TaskPage extends BasePage {
    */
   async markTaskAsDone(task: Locator): Promise<void> {
     await task.waitFor({ state: 'visible' });
+    // `data-task-id` is only bound on the <task> host. Wrapper components such
+    // as <planner-task> (Boards) render the same done-toggle but expose no id,
+    // so the done-confirmation strategy is chosen based on its presence.
+    const taskId = await task.getAttribute('data-task-id');
     await task.hover();
 
     // Give hover effects time to settle
@@ -62,8 +66,29 @@ export class TaskPage extends BasePage {
     await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
     await doneBtn.click();
 
-    // Wait for the done animation delay (200ms) and state change to settle
-    await this.page.waitForTimeout(300);
+    if (taskId) {
+      // <task> rows: the done animation can briefly render old and new rows
+      // with the same id, so wait until every matching row reflects done.
+      await this.page.waitForFunction(
+        (id) => {
+          const matchingTasks = Array.from(document.querySelectorAll('task')).filter(
+            (el) => el.getAttribute('data-task-id') === id,
+          );
+          return (
+            matchingTasks.length > 0 &&
+            matchingTasks.every((el) => el.classList.contains('isDone'))
+          );
+        },
+        taskId,
+        { timeout: 10000 },
+      );
+    } else {
+      // Wrappers like <planner-task> (Boards) can relocate the task to another
+      // panel on done (e.g. IN_PROGRESS → DONE), detaching this locator — so a
+      // done-state assertion here is unreliable. Let the toggle's 200ms
+      // animation and state change settle; callers assert the resulting panel.
+      await this.page.waitForTimeout(300);
+    }
     await waitForAngularStability(this.page);
   }
 
@@ -99,7 +124,7 @@ export class TaskPage extends BasePage {
     await task.waitFor({ state: 'visible' });
     await task.hover();
     const showDetailBtn = this.page.getByRole('button', {
-      name: 'Show/Hide additional info',
+      name: 'Show/hide task panel',
     });
     await showDetailBtn.waitFor({ state: 'visible', timeout: 3000 });
     await showDetailBtn.click();
@@ -179,7 +204,7 @@ export class TaskPage extends BasePage {
   async waitForTaskCount(expectedCount: number, timeout: number = 10000): Promise<void> {
     await this.page.waitForFunction(
       (args) => {
-        const currentCount = document.querySelectorAll('task').length;
+        const currentCount = document.querySelectorAll('task, planner-task').length;
         return currentCount === args.expectedCount;
       },
       { expectedCount },
@@ -216,7 +241,7 @@ export class TaskPage extends BasePage {
   async toggleTaskDetail(task: Locator): Promise<void> {
     await task.hover();
     const toggleBtn = this.page.getByRole('button', {
-      name: 'Show/Hide additional info',
+      name: 'Show/hide task panel',
     });
     await toggleBtn.click();
     await this.page.waitForTimeout(300);

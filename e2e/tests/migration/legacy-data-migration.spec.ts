@@ -1,5 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
+import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
+import { skipOnboardingForE2E } from '../../utils/waits';
 
 /**
  * Legacy Data Migration E2E Tests
@@ -72,7 +74,7 @@ const readMigratedState = async (
 }> => {
   return page.evaluate(async () => {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('SUP_OPS', 5);
+      const request = indexedDB.open('SUP_OPS');
       request.onsuccess = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         const tx = db.transaction('state_cache', 'readonly');
@@ -105,7 +107,7 @@ const readMigratedArchive = async (
 }> => {
   return page.evaluate(async (storeKey) => {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('SUP_OPS', 5);
+      const request = indexedDB.open('SUP_OPS');
       request.onsuccess = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         const tx = db.transaction(storeKey, 'readonly');
@@ -142,6 +144,7 @@ test.describe('@migration Legacy Data Migration', () => {
     });
 
     const page = await context.newPage();
+    await page.addInitScript(skipOnboardingForE2E);
 
     try {
       // ========================================================================
@@ -202,7 +205,7 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // The backup download is the key indicator that migration ran
       const download = await downloadPromise;
-      expect(download.suggestedFilename()).toContain('sp-pre-migration-backup');
+      expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
 
       // ========================================================================
       // STEP 5: Wait for app to be fully loaded
@@ -329,6 +332,19 @@ test.describe('@migration Legacy Data Migration', () => {
       await page.goto('/#/project/TEST_PROJECT');
       await page.waitForLoadState('networkidle').catch(() => {});
 
+      // page.goto only changes the URL hash, so the SPA switches work-context
+      // client-side (load the project's tasks, recompute selectors, re-render)
+      // while the previous view's task-list lingers in the DOM. Gate on the
+      // switch actually landing — the active project's title rendering in <main>
+      // (the main-header page-title), as projectPage.navigateToProjectByName does
+      // — so the assertions below test THIS project's render instead of racing a
+      // stale one. Without this gate the task-title check alone carries the wait
+      // for the context switch, which under heavy parallel load can outlast its
+      // budget (the original flake).
+      await expect(page.locator('main')).toContainText('Migration Test Project', {
+        timeout: 20000,
+      });
+
       // Wait for task list to appear
       await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
 
@@ -370,6 +386,7 @@ test.describe('@migration Legacy Data Migration', () => {
     });
 
     const page = await context.newPage();
+    await page.addInitScript(skipOnboardingForE2E);
 
     try {
       // Seed minimal but valid data - app should still migrate successfully
@@ -449,7 +466,7 @@ test.describe('@migration Legacy Data Migration', () => {
       // Backup should have been downloaded (if migration started)
       const download = await downloadPromise;
       if (download) {
-        expect(download.suggestedFilename()).toContain('sp-pre-migration-backup');
+        expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
       }
     } finally {
       await context.close();

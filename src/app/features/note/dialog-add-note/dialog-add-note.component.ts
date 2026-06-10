@@ -70,6 +70,7 @@ export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
   }
 
   override ngModelChange(val: string = this.data?.content || ''): void {
+    super.ngModelChange(val);
     sessionStorage.setItem(SS.NOTE_TMP, val);
   }
 

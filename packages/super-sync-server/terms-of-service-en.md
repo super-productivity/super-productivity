@@ -1,7 +1,7 @@
 # General Terms and Conditions (GTC)
 
 **Super Productivity Sync**
-_Last updated: 08.12.2025_
+_Last updated: 25.04.2026_
 
 ## 1. Scope and Provider
 
@@ -81,6 +81,8 @@ The Provider strives for high availability but does not guarantee uninterrupted 
 (2) The Provider may terminate the contractual relationship at any time with a notice period of two (2) weeks (for free services) or block or terminate the contract without notice for good cause.
 
 (3) For paid services, the notice periods stated in the order process apply.
+
+(4) **Inactive Accounts:** Accounts without any user activity (in particular no login and no synchronization) for a period of three (3) months are considered inactive. The Provider is entitled to delete such inactive accounts, including all associated synchronized data, without further prior notice. The User is responsible for maintaining regular local backups of their data (see Section 4 Paragraph 3).
 
 ## 10. Amendments to the GTC
 

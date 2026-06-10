@@ -12,6 +12,7 @@ import { Store } from '@ngrx/store';
 import { IssueProvider } from '../issue.model';
 import { selectEnabledIssueProviders } from './issue-provider.selectors';
 import { DELAY_BEFORE_ISSUE_POLLING, ICAL_TYPE } from '../issue.const';
+import { isPluginIssueProvider } from '../issue.model';
 import {
   selectAllCalendarIssueTasks,
   selectAllTasks,
@@ -122,8 +123,11 @@ export class PollIssueUpdatesEffects {
    * For other providers, returns only tasks in the current work context.
    */
   private _getTasksForProvider(provider: IssueProvider): Observable<Task[]> {
-    if (provider.issueProviderKey === ICAL_TYPE) {
-      // For calendar providers, poll ALL calendar tasks across all projects
+    if (
+      provider.issueProviderKey === ICAL_TYPE ||
+      isPluginIssueProvider(provider.issueProviderKey)
+    ) {
+      // For calendar/plugin providers, poll ALL calendar tasks across all projects
       return this._store.select(selectAllCalendarIssueTasks).pipe(
         first(),
         map((tasks) =>

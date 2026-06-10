@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyError, FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import helmet from '@fastify/helmet';
@@ -8,13 +8,25 @@ import * as path from 'path';
 import { loadConfigFromEnv, ServerConfig, PrivacyConfig } from './config';
 import { Logger } from './logger';
 import { prisma, disconnectDb } from './db';
+import websocket from '@fastify/websocket';
 import { apiRoutes } from './api';
 import { pageRoutes } from './pages';
-import { syncRoutes, startCleanupJobs, stopCleanupJobs } from './sync';
+import {
+  syncRoutes,
+  startCleanupJobs,
+  stopCleanupJobs,
+  initSyncService,
+  getSyncService,
+} from './sync';
+import { wsRoutes } from './sync/websocket.routes';
+import {
+  getWsConnectionService,
+  resetWsConnectionService,
+} from './sync/services/websocket-connection.service';
 import { testRoutes } from './test-routes';
 
 // HTML escape to prevent XSS in generated HTML
-const escapeHtml = (unsafe: string): string => {
+export const escapeHtml = (unsafe: string): string => {
   return unsafe
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -22,6 +34,81 @@ const escapeHtml = (unsafe: string): string => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 };
+
+const SENSITIVE_QUERY_PARAMS = [
+  'authorization',
+  'jwt',
+  'logintoken',
+  'password',
+  'passkeyrecoverytoken',
+  'resetpasswordtoken',
+  'token',
+] as const;
+
+const SENSITIVE_QUERY_PARAM_SET = new Set<string>(SENSITIVE_QUERY_PARAMS);
+
+const SENSITIVE_QUERY_PARAM_PATTERN = new RegExp(
+  `([?&](?:${SENSITIVE_QUERY_PARAMS.join('|')})=)[^&\\s]*`,
+  'gi',
+);
+
+export const SERVER_HELMET_CONFIG = {
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // Inline styles for HTML pages
+      imgSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"], // Prevent clickjacking
+      formAction: ["'self'"],
+      baseUri: ["'self'"],
+    },
+  },
+};
+
+/**
+ * Picks the log level for a Fastify-handled error. 5xx → error (with stack);
+ * WS-upgrade 429s → debug (storm tail from pre-18.6.0 clients that reconnect
+ * on any close; the cooldown WARN+summary in WebSocketConnectionService is
+ * the actionable signal, the rate-limit 429s only add flood). Everything
+ * else → warn. Exact-matches /api/sync/ws (strips ?query + trailing slashes)
+ * so future siblings like /api/sync/ws-status do not silently inherit
+ * debug-only behavior. statusCode gate short-circuits the path-normalize on
+ * the ~99% of error responses that aren't 429.
+ */
+export const pickErrorLogLevel = (
+  url: string,
+  statusCode: number,
+): 'error' | 'warn' | 'debug' => {
+  if (statusCode >= 500) return 'error';
+  if (statusCode === 429 && url.split('?', 1)[0].replace(/\/+$/, '') === '/api/sync/ws') {
+    return 'debug';
+  }
+  return 'warn';
+};
+
+export const sanitizeRequestUrlForLog = (rawUrl: string): string => {
+  try {
+    const url = new URL(rawUrl, 'http://localhost');
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (SENSITIVE_QUERY_PARAM_SET.has(key.toLowerCase())) {
+        url.searchParams.set(key, 'redacted');
+      }
+    }
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return rawUrl.replace(SENSITIVE_QUERY_PARAM_PATTERN, '$1redacted');
+  }
+};
+
+export const createListenOptions = (
+  config: Pick<ServerConfig, 'port' | 'host'>,
+): { port: number; host: string } => ({
+  port: config.port,
+  host: config.host,
+});
 
 const generatePrivacyHtml = (privacy?: PrivacyConfig): void => {
   const publicDir = path.join(__dirname, '../../public');
@@ -72,6 +159,7 @@ export const createServer = (
   stop: () => Promise<void>;
 } => {
   const fullConfig = loadConfigFromEnv(config);
+  initSyncService({ batchUpload: fullConfig.batchUpload });
 
   // Ensure data directory exists
   if (!fs.existsSync(fullConfig.dataDir)) {
@@ -95,29 +183,44 @@ export const createServer = (
         // Add explicit timeouts for long-running operations
         connectionTimeout: 90000, // 90s - match client timeout
         requestTimeout: 80000, // 80s - must exceed DB timeout (60s) but be less than Caddy (85s)
+        // Trust exactly one reverse proxy hop (X-Forwarded-For) so req.ip reflects
+        // the real client IP instead of the proxy's IP. Using 1 instead of true
+        // prevents attackers from spoofing IPs when no proxy is present.
+        trustProxy: 1,
+      });
+
+      // Sanitize 5xx responses so internal details (e.g. raw Prisma errors
+      // exposing DB hostnames or ORM call shapes) never reach clients/log
+      // exports. 4xx errors are passed through — those are typically Fastify
+      // validation messages or auth failures that are safe and actionable.
+      fastifyServer.setErrorHandler((error: FastifyError, req, reply) => {
+        const statusCode = error.statusCode ?? 500;
+        const sanitizedUrl = sanitizeRequestUrlForLog(req.url);
+        const logMessage = `Request failed ${statusCode} ${req.method} ${sanitizedUrl}: ${error.name}: ${error.message}`;
+        const level = pickErrorLogLevel(req.url, statusCode);
+        if (level === 'error') {
+          Logger.error(logMessage, error.stack);
+        } else if (level === 'debug') {
+          Logger.debug(logMessage);
+        } else {
+          Logger.warn(logMessage);
+        }
+        if (statusCode >= 500) {
+          return reply.status(500).send({
+            statusCode: 500,
+            error: 'Internal Server Error',
+          });
+        }
+        return reply.send(error);
       });
 
       // Security Headers
-      await fastifyServer.register(helmet, {
-        contentSecurityPolicy: {
-          directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"], // Inline styles for HTML pages
-            imgSrc: ["'self'", 'data:'],
-            fontSrc: ["'self'"],
-            objectSrc: ["'none'"],
-            frameAncestors: ["'none'"], // Prevent clickjacking
-            formAction: ["'self'"],
-            baseUri: ["'self'"],
-          },
-        },
-      });
+      await fastifyServer.register(helmet, SERVER_HELMET_CONFIG);
 
       // Rate Limiting (prevent brute force)
       if (!fullConfig.testMode?.enabled) {
         await fastifyServer.register(rateLimit, {
-          max: 100,
+          max: 500,
           timeWindow: '15 minutes',
         });
       }
@@ -151,12 +254,36 @@ export const createServer = (
         prefix: '/',
       });
 
+      // WebSocket support for real-time sync notifications
+      // maxPayload: only app-level pong messages expected from clients (~20 bytes)
+      await fastifyServer.register(websocket, {
+        options: { maxPayload: 1024 },
+      });
+
+      // Backfill self-check: paired with the env-flag enforcement in
+      // loadConfigFromEnv. The env flag (SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE)
+      // is operator-set; if it is flipped to true before the migrate-payload-bytes
+      // script finishes, batch-upload deltas are still correct but the SUM-based
+      // reconcile in calculateStorageUsage would mix exact bytes with the
+      // CASE-WHEN fallback for legacy rows. One indexed probe at startup closes
+      // the trust hole: refuse to boot if any row still has payload_bytes = 0.
+      if (fullConfig.batchUpload) {
+        try {
+          await getSyncService().assertPayloadBytesBackfillComplete();
+        } catch (err) {
+          Logger.error('Startup self-check failed', err);
+          throw err;
+        }
+      }
+
       // Health Check - verifies database connectivity
-      fastifyServer.get('/health', async (_, reply) => {
+      // Exempt from rate limiting (Kubernetes probes hit this every 5-15s)
+      fastifyServer.get('/health', { config: { rateLimit: false } }, async (_, reply) => {
         try {
           // Simple query to verify DB is responsive
           await prisma.$queryRaw`SELECT 1`;
-          return { status: 'ok', db: 'connected' };
+          const wsConnections = getWsConnectionService().getConnectionCount();
+          return { status: 'ok', db: 'connected', wsConnections };
         } catch (err) {
           Logger.error('Health check failed: DB not responsive', err);
           return reply.status(503).send({
@@ -173,6 +300,9 @@ export const createServer = (
       // Sync Routes (operation-based sync)
       await fastifyServer.register(syncRoutes, { prefix: '/api/sync' });
 
+      // WebSocket routes for real-time sync notifications
+      await fastifyServer.register(wsRoutes, { prefix: '/api/sync' });
+
       // Test Routes (only in test mode)
       if (fullConfig.testMode?.enabled) {
         await fastifyServer.register(testRoutes, { prefix: '/api/test' });
@@ -185,11 +315,11 @@ export const createServer = (
       // Start cleanup jobs
       startCleanupJobs();
 
+      // Start WebSocket heartbeat
+      getWsConnectionService().startHeartbeat();
+
       try {
-        const address = await fastifyServer.listen({
-          port: fullConfig.port,
-          host: '0.0.0.0',
-        });
+        const address = await fastifyServer.listen(createListenOptions(fullConfig));
         Logger.info(`Server started on ${address}`);
         return address;
       } catch (err) {
@@ -198,6 +328,8 @@ export const createServer = (
       }
     },
     stop: async (): Promise<void> => {
+      // Stop WebSocket connections
+      resetWsConnectionService();
       stopCleanupJobs();
       if (fastifyServer) {
         await fastifyServer.close();

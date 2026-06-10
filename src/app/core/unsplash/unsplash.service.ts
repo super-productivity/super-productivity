@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { getEnvOptional } from '../../util/env';
+import { Log } from '../log';
 
 export interface UnsplashPhoto {
   id: string;
@@ -56,7 +57,7 @@ export class UnsplashService {
     }
 
     if (!this.ACCESS_KEY) {
-      console.warn(
+      Log.warn(
         'No Unsplash Access Key configured. Register at https://unsplash.com/developers?utm_source=super-productivity&utm_medium=referral&utm_campaign=api-credit',
       );
       return of({ results: [], total: 0, total_pages: 0 });
@@ -81,7 +82,7 @@ export class UnsplashService {
       })
       .pipe(
         catchError((error) => {
-          console.error('Unsplash API error:', error);
+          Log.err('Unsplash API error:', error);
           return of({ results: [], total: 0, total_pages: 0 });
         }),
       );
@@ -122,12 +123,12 @@ export class UnsplashService {
    */
   trackPhotoDownload(photo: UnsplashPhoto): Observable<any> {
     if (!photo.links?.download_location) {
-      console.warn('No download_location available for photo', photo.id);
+      Log.warn('No download_location available for photo', photo.id);
       return of(null);
     }
 
     if (!this.ACCESS_KEY) {
-      console.warn('No Unsplash Access Key configured');
+      Log.warn('No Unsplash Access Key configured');
       return of(null);
     }
 
@@ -138,7 +139,7 @@ export class UnsplashService {
     // Call the download endpoint to track usage
     return this._http.get(photo.links.download_location, { headers }).pipe(
       catchError((error) => {
-        console.error('Failed to track photo download:', error);
+        Log.err('Failed to track photo download:', error);
         // Don't fail the selection if tracking fails
         return of(null);
       }),

@@ -17,6 +17,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
 import { GlobalConfigService } from './features/config/global-config.service';
+import { TaskWidgetSettingsService } from './features/config/task-widget-settings.service';
 import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
@@ -29,6 +30,7 @@ import { LS } from './core/persistence/storage-keys.const';
 import { BannerId } from './core/banner/banner.model';
 import { T } from './t.const';
 import { GlobalThemeService } from './core/theme/global-theme.service';
+import { resolveBgImageToDataUrl } from './core/theme/resolve-bg-image-to-data-url.util';
 import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
@@ -36,6 +38,7 @@ import { ActivatedRoute, RouterOutlet } from '@angular/router';
 import { concatMap, first, take } from 'rxjs/operators';
 
 import { IS_MOBILE } from './util/is-mobile';
+import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
 import { AddTaskBarComponent } from './features/tasks/add-task-bar/add-task-bar.component';
 import { Dir } from '@angular/cdk/bidi';
@@ -58,8 +61,15 @@ import { NoteStartupBannerService } from './features/note/note-startup-banner.se
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
-import { WorkContextType } from './features/work-context/work-context.model';
-import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
+import {
+  WorkContextType,
+  type WorkContextThemeCfg,
+} from './features/work-context/work-context.model';
+import { SectionService } from './features/section/section.service';
+import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
+import { TODAY_TAG } from './features/tag/tag.const';
+import { normalizeBackgroundImageBlur } from './features/work-context/work-context.const';
+import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
@@ -70,6 +80,8 @@ import { setKeyboardLayoutService } from './util/check-key-combo';
 import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
+import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
+import { BrowserTitleService } from './core/browser-title/browser-title.service';
 
 const ONBOARDING_PRESET_EXIT_DELAY = 1000;
 const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
@@ -79,6 +91,21 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
+
+type WorkContextThemeSource =
+  | {
+      theme?: WorkContextThemeCfg | null;
+    }
+  | null
+  | undefined;
+
+export const getBackgroundOverlayOpacity = (context: WorkContextThemeSource): number => {
+  const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
+  return baseOpacity * 0.01;
+};
+
+export const getBackgroundImageBlur = (context: WorkContextThemeSource): number =>
+  normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
 
 @Component({
   selector: 'app-root',
@@ -131,8 +158,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _startupService = inject(StartupService);
   // Injected for side-effect: creates example tasks on first run
   private _exampleTasksService = inject(ExampleTasksService);
+  // Injected for side-effect: loads per-instance task widget settings from
+  // localStorage and pushes them to the Electron main process at app boot,
+  // before the user opens the (lazy-loaded) Settings page.
+  private _taskWidgetSettingsService = inject(TaskWidgetSettingsService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _dataInitStateService = inject(DataInitStateService);
+  private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
   readonly onboardingHintService = inject(OnboardingHintService);
 
   private _syncTriggerService = inject(SyncTriggerService);
@@ -140,10 +172,15 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly layoutService = inject(LayoutService);
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
+  private _sectionService = inject(SectionService);
+  private _browserTitleService = inject(BrowserTitleService);
+  private _hasShownLegacyFileBgSnack = false;
   readonly T = T;
+  readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
+  @ViewChild(RouterOutlet) private _routerOutlet?: RouterOutlet;
 
   @HostBinding('class.isWorkViewScrolled') get isWorkViewScrolledClass(): boolean {
     return this.layoutService.isWorkViewScrolled();
@@ -157,6 +194,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const misc = this._globalConfigService.misc();
     return misc?.isDisableAnimations ?? false;
   });
+
+  // Experimental: vertical action strip on the right edge instead of the
+  // horizontal top header. Switches the DOM layout live (see template).
+  readonly isVerticalActionBar = computed(
+    () => this._globalConfigService.misc()?.isVerticalActionBar ?? false,
+  );
 
   isRTL: boolean = false;
 
@@ -180,6 +223,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.workContextService.activeWorkContext$,
     { initialValue: null },
   );
+  readonly resolvedBgImage = signal<string | null>(null);
 
   isShowOnboardingPresets = signal(
     !localStorage.getItem(LS.ONBOARDING_PRESET_DONE) &&
@@ -187,10 +231,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   );
 
   private _subs: Subscription = new Subscription();
-  private _intervalTimer?: NodeJS.Timeout;
 
   constructor() {
     this._startupService.init();
+    void this._materialIconsLoaderService.ensureFontReady();
 
     // Skip onboarding for existing users with data
     if (this.isShowOnboardingPresets()) {
@@ -224,6 +268,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this._subs.add(
       this._activatedRoute.queryParams.subscribe((params) => {
         if (!!params.focusItem) {
+          recordSearchNavDebug('appComponent:focusQueryParam', {
+            focusItem: params.focusItem,
+            url: window.location.pathname + window.location.search,
+          });
           this._focusElement(params.focusItem);
         }
       }),
@@ -231,6 +279,30 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
     // init theme and body class handlers
     this._globalThemeService.init();
+
+    let bgResolveRequestId = 0;
+    effect(() => {
+      const bgImage = this._globalThemeService.backgroundImg();
+      const currentRequestId = ++bgResolveRequestId;
+      if (
+        typeof bgImage === 'string' &&
+        bgImage.startsWith('file://') &&
+        !this._hasShownLegacyFileBgSnack
+      ) {
+        this._hasShownLegacyFileBgSnack = true;
+        this._snackService.open({
+          msg: T.F.PROJECT.FORM_THEME.S_BACKGROUND_IMAGE_RESELECT_REQUIRED,
+          type: 'WARNING',
+          config: { duration: 0 },
+        });
+      }
+      void resolveBgImageToDataUrl(bgImage).then((resolved) => {
+        // Ignore stale resolutions when the source changed mid-read.
+        if (currentRequestId === bgResolveRequestId) {
+          this.resolvedBgImage.set(resolved);
+        }
+      });
+    });
 
     this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
       .pipe(take(1))
@@ -270,16 +342,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     let taskTitle: string | null = null;
     let isSubTask = false;
 
-    // Find task element by traversing up the DOM tree
-    let element: HTMLElement | null = target;
-    while (element && !element.id.startsWith('t-')) {
-      element = element.parentElement;
+    // Find the nearest task element via the data-task-id attribute (set
+    // on the <task> host). Avoids brittle id-prefix scans that could match
+    // unrelated elements whose id happens to start with "t-".
+    const taskEl = target.closest<HTMLElement>('[data-task-id]');
+
+    if (taskEl) {
+      taskId = taskEl.getAttribute('data-task-id');
     }
 
-    if (element && element.id.startsWith('t-')) {
-      // Extract task ID from DOM id (format: "t-{taskId}")
-      taskId = element.id.substring(2);
-
+    if (taskId) {
       // Get task data to determine if it's a sub-task
       this._taskService.getByIdOnce$(taskId).subscribe((task) => {
         if (task) {
@@ -343,19 +415,40 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return outlet.activatedRouteData.page || 'one';
   }
 
+  /**
+   * The background context menu is scoped to the task-list / work-view routes
+   * (`tag/:id/tasks`, `project/:id/tasks`) so it never opens on unrelated pages
+   * like Habits or Config. See #7734.
+   */
+  isWorkViewPage(): boolean {
+    if (!this._routerOutlet) {
+      return false;
+    }
+    const page = this.getPage(this._routerOutlet);
+    return page === 'tag-tasks' || page === 'project-tasks';
+  }
+
   getActiveWorkContextId(): string | null {
-    return this._activeWorkContextId();
+    return this._activeWorkContextId() ?? null;
   }
 
   onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {
     this.layoutService.setPendingFocusTaskId(taskId);
+    this.layoutService.scrollToNewTask(taskId);
   }
 
   readonly bgOverlayOpacity = computed((): number => {
-    const context = this._activeWorkContext();
-    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
+    return getBackgroundOverlayOpacity(this._activeWorkContext());
+  });
 
-    return baseOpacity * 0.01;
+  readonly bgImageBlur = computed((): number => {
+    return getBackgroundImageBlur(this._activeWorkContext());
+  });
+
+  readonly bgImageBlurFilter = computed((): string => {
+    const blur = this.bgImageBlur();
+
+    return blur > 0 ? `blur(${blur}px)` : 'none';
   });
 
   async openSettings(): Promise<void> {
@@ -368,17 +461,28 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const entity = isForProject
       ? await firstValueFrom(this._projectService.getByIdOnce$(contextId))
       : await firstValueFrom(this._tagService.getTagById$(contextId).pipe(first()));
+    if (!entity) {
+      return;
+    }
 
-    const { DialogWorkContextSettingsComponent } =
-      await import('./features/work-context/dialog-work-context-settings/dialog-work-context-settings.component');
-    this._matDialog.open(DialogWorkContextSettingsComponent, {
-      restoreFocus: true,
-      backdropClass: 'cdk-overlay-transparent-backdrop',
-      data: {
-        isProject: isForProject,
-        entity,
-      } as WorkContextSettingsDialogData,
+    await openWorkContextSettingsDialog(this._matDialog, {
+      isProject: isForProject,
+      entity,
     });
+  }
+
+  async addSection(): Promise<void> {
+    const ctxId = this.workContextService.activeWorkContextId;
+    const ctxType = this.workContextService.activeWorkContextType;
+    if (!ctxId || !ctxType) return;
+    const title = await firstValueFrom(
+      this._matDialog
+        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .afterClosed(),
+    );
+    if (typeof title === 'string' && title.trim()) {
+      this._sectionService.addSection(title, ctxId, ctxType);
+    }
   }
 
   isAppEntrance = signal(!this.isShowOnboardingPresets());
@@ -392,6 +496,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       this.isAppEntrance.set(false);
       this.onboardingHintService.startAfterPresetSelection();
     }, ONBOARDING_ENTRANCE_COMPLETE_DELAY);
+  }
+
+  // Returning user set up sync from onboarding: just reveal the app with their
+  // synced data — no preset applied, no new-user hint tour.
+  onOnboardingDismissed(): void {
+    this.isShowOnboardingPresets.set(false);
   }
 
   ngAfterViewInit(): void {
@@ -430,31 +540,29 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this._subs.unsubscribe();
-    if (this._intervalTimer) clearInterval(this._intervalTimer);
   }
 
   /**
    * since page load and animation time are not always equal
-   * an interval seemed to feel the most responsive
+   * retrying until the rendered task row is available avoids missing focus targets
    */
   private _focusElement(id: string): void {
-    let counter = 0;
-    this._intervalTimer = setInterval(() => {
-      counter += 1;
-
-      const el = document.getElementById(`t-${id}`);
-      el?.focus();
-
+    recordSearchNavDebug('appComponent:focusElement', {
+      taskId: id,
+      url: window.location.pathname + window.location.search,
+    });
+    this.layoutService.focusTaskInViewWhenReady(id, (el) => {
+      recordSearchNavDebug('appComponent:focusElement:success', {
+        taskId: id,
+        url: window.location.pathname + window.location.search,
+        matchedElementId: el.id,
+      });
       if (el && IS_MOBILE) {
         el.classList.add('mobile-highlight-searched-item');
         el.addEventListener('blur', () =>
           el.classList.remove('mobile-highlight-searched-item'),
         );
       }
-
-      if ((el || counter === 4) && this._intervalTimer) {
-        clearInterval(this._intervalTimer);
-      }
-    }, 400);
+    });
   }
 }

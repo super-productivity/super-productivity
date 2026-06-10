@@ -16,11 +16,6 @@ type TagChanges = {
   taskChanges?: Partial<TaskCopy>;
   newTagTitlesToCreate?: string[];
 };
-type DueChanges = {
-  title?: string;
-  dueWithTime?: number;
-  dueDay?: string | null;
-};
 
 const CH_TSP = '/';
 // Due how this expression capture clusters of duration units, be mindful of
@@ -34,7 +29,8 @@ export const SHORT_SYNTAX_TIME_REG_EX = new RegExp(
 const CH_PRO = '+';
 const CH_TAG = '#';
 const CH_DUE = '@';
-const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE})`;
+const CH_DEADLINE = '!';
+const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE}|\\${CH_DEADLINE})`;
 
 let customDateParserPromise: Promise<Chrono> | null = null;
 let customDateParserCache: Chrono | null = null;
@@ -96,6 +92,10 @@ const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(`\\${CH_TAG}[^${ALL_SPECIAL}|\\s]+`,
 // Match string starting with the literal @ and followed by 1 or more of the characters
 // not in the ALL_SPECIAL
 const SHORT_SYNTAX_DUE_REG_EX = new RegExp(`\\${CH_DUE}[^${ALL_SPECIAL}]+`, 'gi');
+const SHORT_SYNTAX_DEADLINE_REG_EX = new RegExp(
+  `\\${CH_DEADLINE}[^${ALL_SPECIAL}]+`,
+  'gi',
+);
 
 // Match URLs with protocol (http, https, file) or www prefix
 // Matches URLs but excludes trailing punctuation
@@ -103,6 +103,12 @@ const SHORT_SYNTAX_URL_REG_EX = new RegExp(
   String.raw`(?:(?:https?|file)://\S+|www\.\S+?)(?=\s|$)`,
   'gi',
 );
+
+// Markdown link regex: [title](url)
+// Allows one level of balanced parentheses inside the URL so that links like
+// [article](https://en.wikipedia.org/wiki/C_(programming_language)) work.
+const SHORT_SYNTAX_MARKDOWN_LINK_REG_EX =
+  /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
 export const shortSyntax = async (
   task: Task | Partial<Task>,
@@ -113,7 +119,7 @@ export const shortSyntax = async (
   mode: 'combine' | 'replace' = 'combine',
 ): Promise<
   | {
-      taskChanges: Partial<Task>;
+      taskChanges: Partial<Task> & { hasDeadlineTime?: boolean };
       newTagTitles: string[];
       remindAt: number | null;
       projectId: string | undefined;
@@ -129,20 +135,22 @@ export const shortSyntax = async (
   }
 
   // TODO clean up this mess
-  let taskChanges: Partial<TaskCopy> = {};
+  let taskChanges: Partial<TaskCopy> & { hasDeadlineTime?: boolean } = {};
   let changesForProject: ProjectChanges = {};
   let changesForTag: TagChanges = {};
   let attachments: TaskAttachment[] = [];
 
   if (config.isEnableDue) {
     taskChanges = parseTimeSpentChanges(task);
-    taskChanges = {
-      ...taskChanges,
-      ...(await parseScheduledDate(
-        { ...task, title: taskChanges.title || task.title },
-        now,
-      )),
-    };
+    const dueChanges = await parseScheduledDate(
+      { ...task, title: taskChanges.title || task.title },
+      now,
+    );
+    const deadlineChanges = await parseDeadlineDate(
+      { ...task, title: dueChanges.title ?? (taskChanges.title || task.title) },
+      now,
+    );
+    taskChanges = { ...taskChanges, ...dueChanges, ...deadlineChanges };
   }
 
   if (config.isEnableProject) {
@@ -209,7 +217,7 @@ export const shortSyntax = async (
   };
 };
 
-const parseProjectChanges = (
+export const parseProjectChanges = (
   task: Partial<TaskCopy>,
   allProjects?: Project[],
 ): ProjectChanges => {
@@ -314,8 +322,8 @@ const parseTagChanges = (
           return (
             newTagTitle.length >= 1 &&
             tagStartIndex !== -1 &&
-            // NOTE: only block tags at the beginning if they are numeric (e.g. "#123 task")
-            (!isNumericOnly || tagStartIndex > 0)
+            // NOTE: block numeric tags at the start, and any numeric tag on issue tasks
+            (!isNumericOnly || (tagStartIndex > 0 && !task.issueId))
           );
         });
 
@@ -381,16 +389,28 @@ const parseTagChanges = (
   };
 };
 
-const parseScheduledDate = async (
+const parseShortSyntaxDate = async (
   task: Partial<TaskCopy>,
   now: Date,
-): Promise<DueChanges> => {
+  regEx: RegExp,
+  isDeadline: boolean,
+): Promise<Partial<TaskCopy> & { hasDeadlineTime?: boolean }> => {
   if (!task.title) {
     return {};
   }
-  const rr = task.title.match(SHORT_SYNTAX_DUE_REG_EX);
+  const rr = task.title.match(regEx);
 
   if (rr && rr[0]) {
+    if (isDeadline) {
+      // Check if the character before trigger is a space or start of string
+      const indexBeforeTrigger = task.title.indexOf(rr[0]) - 1;
+      const charBeforeTrigger =
+        indexBeforeTrigger >= 0 ? task.title.charAt(indexBeforeTrigger) : '';
+      if (charBeforeTrigger && charBeforeTrigger !== ' ') {
+        return {};
+      }
+    }
+
     const dateParser = await loadCustomDateParser();
     const parsedDateArr = dateParser.parse(rr[0], now, {
       forwardDate: true,
@@ -411,14 +431,24 @@ const parseScheduledDate = async (
       const matchText = parsedDateResult.text;
       const matchIndex = parsedDateResult.index;
       const textToReplace = rr[0].substring(0, matchIndex + matchText.length);
+      // Strip out the short syntax for scheduled date and given date
+      const title = task.title.replace(textToReplace, '').trim();
 
-      return {
-        dueWithTime: due,
-        dueDay: null,
-        // Strip out the short syntax for scheduled date and given date
-        title: task.title.replace(textToReplace, '').trim(),
-        ...(hasPlannedTime ? {} : { hasPlannedTime: false }),
-      };
+      if (isDeadline) {
+        return {
+          deadlineWithTime: due,
+          deadlineDay: null,
+          title,
+          ...(hasPlannedTime ? { hasDeadlineTime: true } : { hasDeadlineTime: false }),
+        };
+      } else {
+        return {
+          dueWithTime: due,
+          dueDay: null,
+          title,
+          ...(hasPlannedTime ? {} : { hasPlannedTime: false }),
+        };
+      }
     }
 
     const simpleMatch = rr[0].match(/\d+/);
@@ -443,18 +473,39 @@ const parseScheduledDate = async (
         const matchIndex = simpleMatch.index as number;
         const matchText = simpleMatch[0];
         const textToReplace = rr[0].substring(0, matchIndex + matchText.length);
+        const title = task.title.replace(textToReplace, '').trim();
 
-        return {
-          dueWithTime: due.getTime(),
-          dueDay: null,
-          title: task.title.replace(textToReplace, '').trim(),
-        };
+        if (isDeadline) {
+          return {
+            deadlineWithTime: due.getTime(),
+            deadlineDay: null,
+            title,
+          };
+        } else {
+          return {
+            dueWithTime: due.getTime(),
+            dueDay: null,
+            title,
+          };
+        }
       }
     }
   }
 
   return {};
 };
+
+const parseScheduledDate = (
+  task: Partial<TaskCopy>,
+  now: Date,
+): Promise<Partial<TaskCopy> & { hasDeadlineTime?: boolean }> =>
+  parseShortSyntaxDate(task, now, SHORT_SYNTAX_DUE_REG_EX, false);
+
+const parseDeadlineDate = (
+  task: Partial<TaskCopy>,
+  now: Date,
+): Promise<Partial<TaskCopy> & { hasDeadlineTime?: boolean }> =>
+  parseShortSyntaxDate(task, now, SHORT_SYNTAX_DEADLINE_REG_EX, true);
 
 export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
   if (!task.title) {
@@ -486,6 +537,29 @@ export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> =>
   };
 };
 
+/**
+ * Extracts markdown links [text](url) from title.
+ * Returns the URLs found and a title with markdown links replaced by their display text.
+ */
+const extractMarkdownLinks = (
+  title: string,
+): { urls: string[]; titleWithoutMarkdown: string } => {
+  if (!title.includes('](')) {
+    return { urls: [], titleWithoutMarkdown: title };
+  }
+  const urls: string[] = [];
+  const titleWithoutMarkdown = title.replace(
+    SHORT_SYNTAX_MARKDOWN_LINK_REG_EX,
+    (_match, text: string, url: string) => {
+      if (url) {
+        urls.push(url);
+      }
+      return text;
+    },
+  );
+  return { urls, titleWithoutMarkdown };
+};
+
 const parseUrlAttachments = (
   task: Partial<TaskCopy>,
   config: ShortSyntaxConfig,
@@ -499,8 +573,16 @@ const parseUrlAttachments = (
     return undefined;
   }
 
-  const urlMatches = task.title.match(SHORT_SYNTAX_URL_REG_EX);
-  if (!urlMatches || urlMatches.length === 0) {
+  // 1. Extract markdown links first — they take priority over plain URL matching
+  // This prevents the plain URL regex from greedily including the closing ')' of
+  // markdown syntax like [text](https://example.com/)
+  const { urls: markdownUrls, titleWithoutMarkdown } = extractMarkdownLinks(task.title);
+
+  // 2. Then match remaining plain URLs in the title (after markdown links are replaced)
+  const plainUrlMatches = titleWithoutMarkdown.match(SHORT_SYNTAX_URL_REG_EX) || [];
+
+  const allUrls = [...markdownUrls, ...plainUrlMatches];
+  if (allUrls.length === 0) {
     return undefined;
   }
 
@@ -511,15 +593,21 @@ const parseUrlAttachments = (
   }
 
   // Filter out attachments that already exist (prevent duplicates)
-  const newAttachments = filterDuplicateUrlAttachments(
-    urlMatches,
-    task.attachments || [],
-  );
+  const newAttachments = filterDuplicateUrlAttachments(allUrls, task.attachments || []);
 
-  // Only clean URLs from title if urlBehavior is 'extract'
   let cleanedTitle = task.title;
   if (config.urlBehavior === 'extract') {
-    cleanedTitle = removeUrlsFromTitle(task.title, urlMatches);
+    // In extract mode: replace markdown links with display text, remove plain URLs
+    cleanedTitle = markdownUrls.length > 0 ? titleWithoutMarkdown : task.title;
+    cleanedTitle = removeUrlsFromTitle(cleanedTitle, plainUrlMatches);
+
+    // If the title is empty after extracting URLs, use a URL basename as
+    // the task name so pasting a bare URL results in a meaningful title.
+    // Use allUrls (not newAttachments) because the pasted URL may already
+    // exist as an attachment, in which case newAttachments would be empty.
+    if (!cleanedTitle && allUrls.length > 0) {
+      cleanedTitle = _baseNameForUrl(allUrls[0]) || cleanedTitle;
+    }
   }
 
   // Return undefined if nothing changed

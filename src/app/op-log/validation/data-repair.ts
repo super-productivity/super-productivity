@@ -16,9 +16,11 @@ import { INBOX_PROJECT } from '../../features/project/project.const';
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { IValidation } from 'typia';
 import { OpLog } from '../../core/log';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { RepairSummary } from '../core/operation.types';
+import { isValidEntityId } from './is-valid-entity-id';
 
 export interface DataRepairResult {
   data: AppDataComplete;
@@ -38,6 +40,7 @@ const ENTITY_STATE_KEYS: (keyof AppDataCompleteLegacy)[] = [
   'metric',
   'task',
   'taskRepeatCfg',
+  'section',
 ];
 
 export const dataRepair = (
@@ -92,6 +95,14 @@ export const dataRepair = (
     dataOut.reminders = [];
   }
 
+  // Initialize section slice if missing — legacy pf databases (pre-section
+  // feature) don't carry one, and Typia's `DataToValidate` validator
+  // requires it. Without this, `validateFull` after `dataRepair` still
+  // fails and OperationLogMigrationService aborts the migration.
+  if (!dataOut.section) {
+    dataOut.section = { ids: [], entities: {} };
+  }
+
   // NOTE: We no longer merge archiveOld into archiveYoung during repair.
   // The dual-archive architecture keeps them separate for proper age-based archiving.
 
@@ -115,12 +126,14 @@ export const dataRepair = (
   dataOut = _fixInvalidDueDateStrings(dataOut, summary);
   dataOut = _fixTaskRepeatMissingWeekday(dataOut, summary);
   dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut, summary);
+  dataOut = _stripLegacyMonthlyMode(dataOut, summary);
   dataOut = _createInboxProjectIfNecessary(dataOut, summary);
   dataOut = _fixOrphanedNotes(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTasks(dataOut, summary);
   dataOut = _removeNonExistentTagsFromTasks(dataOut, summary);
   dataOut = _addInboxProjectIdIfNecessary(dataOut, summary);
   dataOut = _repairMenuTree(dataOut, summary);
+  dataOut = _repairSections(dataOut, summary);
   dataOut = autoFixTypiaErrors(dataOut, errors);
   summary.typeErrorsFixed = errors.length;
 
@@ -181,14 +194,22 @@ const _fixInvalidDueDateStrings = (
       const t = taskState.entities[id] as TaskCopy;
       if (!t) continue;
       if (typeof t.dueDay === 'string' && !isDBDateStr(t.dueDay)) {
-        OpLog.warn(`[data-repair] Clearing invalid dueDay "${t.dueDay}" on task ${id}`);
+        OP_LOG_SYNC_LOGGER.warn('[data-repair] Clearing invalid task date field', {
+          taskId: id,
+          field: 'dueDay',
+          valueType: 'string',
+          valueStringLength: t.dueDay.length,
+        });
         t.dueDay = undefined;
         fixedCount++;
       }
       if (typeof t.deadlineDay === 'string' && !isDBDateStr(t.deadlineDay)) {
-        OpLog.warn(
-          `[data-repair] Clearing invalid deadlineDay "${t.deadlineDay}" on task ${id}`,
-        );
+        OP_LOG_SYNC_LOGGER.warn('[data-repair] Clearing invalid task date field', {
+          taskId: id,
+          field: 'deadlineDay',
+          valueType: 'string',
+          valueStringLength: t.deadlineDay.length,
+        });
         t.deadlineDay = undefined;
         fixedCount++;
       }
@@ -241,6 +262,7 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
       'MONTHLY_CURRENT_DATE',
       'MONTHLY_FIRST_DAY',
       'MONTHLY_LAST_DAY',
+      'MONTHLY_NTH_WEEKDAY',
     ];
     Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
       const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
@@ -257,6 +279,36 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (
       }
     });
   }
+  return data;
+};
+
+// Issue #6040 follow-up: an earlier development build of the Nth-weekday
+// feature persisted a `monthlyMode` discriminator that has since been
+// dropped. Anchor presence is now the sole source of truth, but a cfg
+// stored as `{monthlyMode: 'DAY_OF_MONTH', monthlyWeekOfMonth: …, monthlyWeekday: …}`
+// would silently flip to NTH-weekday behavior on upgrade. Clear stale
+// anchors when the legacy mode said day-of-month, and strip the field.
+const _stripLegacyMonthlyMode = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  if (!data.taskRepeatCfg?.entities) {
+    return data;
+  }
+  Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
+    const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy & {
+      monthlyMode?: string;
+    };
+    if (!('monthlyMode' in cfg)) {
+      return;
+    }
+    if (cfg.monthlyMode === 'DAY_OF_MONTH') {
+      cfg.monthlyWeekOfMonth = undefined;
+      cfg.monthlyWeekday = undefined;
+    }
+    delete cfg.monthlyMode;
+    summary.entityStateFixed++;
+  });
   return data;
 };
 
@@ -681,12 +733,27 @@ const _resetEntityIdsFromObjects = <T extends AppBaseDataEntityLikeStates>(
     } as T;
   }
 
+  const sanitizedEntities = Object.entries(data.entities).reduce(
+    (acc, [key, entity]) => {
+      if (!entity || typeof entity !== 'object') {
+        return acc;
+      }
+
+      const entityId = (entity as { id?: unknown }).id;
+      if (!isValidEntityId(entityId) || !isValidEntityId(key)) {
+        return acc;
+      }
+
+      acc[entityId] = entity;
+      return acc;
+    },
+    {} as AppBaseDataEntityLikeStates['entities'],
+  );
+
   return {
     ...data,
-    entities: data.entities || {},
-    ids: data.entities
-      ? Object.keys(data.entities).filter((id) => !!data.entities[id])
-      : [],
+    entities: sanitizedEntities,
+    ids: Object.keys(sanitizedEntities),
   };
 };
 
@@ -773,9 +840,8 @@ const _addInboxProjectIdIfNecessary = (
     }
   });
 
-  OpLog.log(taskArchiveYoungIds);
-  OpLog.log(Object.keys(archiveYoung.task.entities));
-
+  // Archive tasks: set INBOX for missing projectId and enforce TODAY_TAG invariant.
+  // These are structural/invariant fixes, not stale-reference cleanup (#6270).
   taskArchiveYoungIds.forEach((id) => {
     const t = archiveYoung.task.entities[id] as TaskCopy;
     if (!t.projectId) {
@@ -783,14 +849,10 @@ const _addInboxProjectIdIfNecessary = (
       t.projectId = INBOX_PROJECT.id;
       summary.relationshipsFixed++;
     }
-    // while we are at it, we also cleanup the today tag
     if (t.tagIds?.includes(TODAY_TAG.id)) {
       t.tagIds = t.tagIds.filter((idI) => idI !== TODAY_TAG.id);
     }
   });
-
-  OpLog.log(taskArchiveOldIds);
-  OpLog.log(Object.keys(archiveOld.task.entities));
 
   taskArchiveOldIds.forEach((id) => {
     const t = archiveOld.task.entities[id] as TaskCopy;
@@ -799,7 +861,6 @@ const _addInboxProjectIdIfNecessary = (
       t.projectId = INBOX_PROJECT.id;
       summary.relationshipsFixed++;
     }
-    // while we are at it, we also cleanup the today tag
     if (t.tagIds?.includes(TODAY_TAG.id)) {
       t.tagIds = t.tagIds.filter((idI) => idI !== TODAY_TAG.id);
     }
@@ -830,40 +891,16 @@ const _removeNonExistentProjectIdsFromTasks = (
   data: AppDataComplete,
   summary: RepairSummary,
 ): AppDataComplete => {
-  const { task, project, archiveYoung, archiveOld } = data;
+  const { task, project } = data;
   const projectIds: string[] = project.ids as string[];
   const taskIds: string[] = task.ids;
-  const taskArchiveYoungIds: string[] = archiveYoung.task.ids as string[];
-  const taskArchiveOldIds: string[] = archiveOld.task.ids as string[];
 
+  // Active tasks only — archived tasks with stale projectId are harmless
+  // and no longer fail validation. See: https://github.com/super-productivity/super-productivity/issues/6270
   taskIds.forEach((id) => {
     const t = task.entities[id] as TaskCopy;
     if (t.projectId && !projectIds.includes(t.projectId)) {
       OpLog.log('Delete missing project id from task ' + t.projectId);
-      t.projectId = INBOX_PROJECT.id;
-      summary.invalidReferencesRemoved++;
-    }
-  });
-
-  OpLog.log(taskArchiveYoungIds);
-  OpLog.log(Object.keys(archiveYoung.task.entities));
-
-  taskArchiveYoungIds.forEach((id) => {
-    const t = archiveYoung.task.entities[id] as TaskCopy;
-    if (t.projectId && !projectIds.includes(t.projectId)) {
-      OpLog.log('Delete missing project id from archive task ' + t.projectId);
-      t.projectId = INBOX_PROJECT.id;
-      summary.invalidReferencesRemoved++;
-    }
-  });
-
-  OpLog.log(taskArchiveOldIds);
-  OpLog.log(Object.keys(archiveOld.task.entities));
-
-  taskArchiveOldIds.forEach((id) => {
-    const t = archiveOld.task.entities[id] as TaskCopy;
-    if (t.projectId && !projectIds.includes(t.projectId)) {
-      OpLog.log('Delete missing project id from old archive task ' + t.projectId);
       t.projectId = INBOX_PROJECT.id;
       summary.invalidReferencesRemoved++;
     }
@@ -876,18 +913,15 @@ const _removeNonExistentTagsFromTasks = (
   data: AppDataComplete,
   summary: RepairSummary,
 ): AppDataComplete => {
-  const { task, tag, archiveYoung, archiveOld } = data;
+  const { task, tag } = data;
   const tagIds: string[] = tag.ids as string[];
   const taskIds: string[] = task.ids;
-  const taskArchiveYoungIds: string[] = archiveYoung.task.ids as string[];
-  const taskArchiveOldIds: string[] = archiveOld.task.ids as string[];
   let removedCount = 0;
 
   // Helper function to filter valid tags
   // Note: We exclude TODAY_TAG.id as it's handled separately and removed elsewhere
   const filterValidTags = (taskTagIds: string[]): string[] => {
     return taskTagIds.filter((tagId) => {
-      // Skip TODAY_TAG as it's handled elsewhere
       if (tagId === TODAY_TAG.id) {
         return false;
       }
@@ -895,7 +929,8 @@ const _removeNonExistentTagsFromTasks = (
     });
   };
 
-  // Fix tasks in main task state
+  // Active tasks only — archived tasks with stale tagIds are harmless
+  // and no longer fail validation. See: https://github.com/super-productivity/super-productivity/issues/6270
   taskIds.forEach((id) => {
     const t = task.entities[id] as TaskCopy;
     if (t.tagIds && t.tagIds.length > 0) {
@@ -907,46 +942,6 @@ const _removeNonExistentTagsFromTasks = (
         if (removedTags.length > 0) {
           OpLog.log(
             `Removing non-existent tags from task ${t.id}: ${removedTags.join(', ')}`,
-          );
-          removedCount += removedTags.length;
-        }
-        t.tagIds = validTagIds;
-      }
-    }
-  });
-
-  // Fix tasks in archiveYoung
-  taskArchiveYoungIds.forEach((id) => {
-    const t = archiveYoung.task.entities[id] as TaskCopy;
-    if (t.tagIds && t.tagIds.length > 0) {
-      const validTagIds = filterValidTags(t.tagIds);
-      if (validTagIds.length !== t.tagIds.length) {
-        const removedTags = t.tagIds.filter(
-          (tagId) => !tagIds.includes(tagId) && tagId !== TODAY_TAG.id,
-        );
-        if (removedTags.length > 0) {
-          OpLog.log(
-            `Removing non-existent tags from archive task ${t.id}: ${removedTags.join(', ')}`,
-          );
-          removedCount += removedTags.length;
-        }
-        t.tagIds = validTagIds;
-      }
-    }
-  });
-
-  // Fix tasks in archiveOld
-  taskArchiveOldIds.forEach((id) => {
-    const t = archiveOld.task.entities[id] as TaskCopy;
-    if (t.tagIds && t.tagIds.length > 0) {
-      const validTagIds = filterValidTags(t.tagIds);
-      if (validTagIds.length !== t.tagIds.length) {
-        const removedTags = t.tagIds.filter(
-          (tagId) => !tagIds.includes(tagId) && tagId !== TODAY_TAG.id,
-        );
-        if (removedTags.length > 0) {
-          OpLog.log(
-            `Removing non-existent tags from old archive task ${t.id}: ${removedTags.join(', ')}`,
           );
           removedCount += removedTags.length;
         }
@@ -1017,43 +1012,18 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
   data: AppDataComplete,
   summary: RepairSummary,
 ): AppDataComplete => {
-  const { task, taskRepeatCfg, archiveYoung, archiveOld } = data;
+  const { task, taskRepeatCfg } = data;
   if (!taskRepeatCfg?.ids) return data;
   const repeatCfgIds: string[] = taskRepeatCfg.ids as string[];
   const taskIds: string[] = task.ids;
-  const taskArchiveYoungIds: string[] = archiveYoung.task.ids as string[];
-  const taskArchiveOldIds: string[] = archiveOld.task.ids as string[];
   let removedCount = 0;
 
-  // Fix tasks in main task state
+  // Active tasks only — archived tasks with stale repeatCfgId are harmless
+  // and no longer fail validation. See: https://github.com/super-productivity/super-productivity/issues/6270
   taskIds.forEach((id) => {
     const t = task.entities[id] as TaskCopy;
     if (t.repeatCfgId && !repeatCfgIds.includes(t.repeatCfgId)) {
       OpLog.log(`Clearing non-existent repeatCfgId from task ${t.id}: ${t.repeatCfgId}`);
-      t.repeatCfgId = undefined;
-      removedCount++;
-    }
-  });
-
-  // Fix tasks in archiveYoung
-  taskArchiveYoungIds.forEach((id) => {
-    const t = archiveYoung.task.entities[id] as TaskCopy;
-    if (t.repeatCfgId && !repeatCfgIds.includes(t.repeatCfgId)) {
-      OpLog.log(
-        `Clearing non-existent repeatCfgId from archive task ${t.id}: ${t.repeatCfgId}`,
-      );
-      t.repeatCfgId = undefined;
-      removedCount++;
-    }
-  });
-
-  // Fix tasks in archiveOld
-  taskArchiveOldIds.forEach((id) => {
-    const t = archiveOld.task.entities[id] as TaskCopy;
-    if (t.repeatCfgId && !repeatCfgIds.includes(t.repeatCfgId)) {
-      OpLog.log(
-        `Clearing non-existent repeatCfgId from old archive task ${t.id}: ${t.repeatCfgId}`,
-      );
       t.repeatCfgId = undefined;
       removedCount++;
     }
@@ -1075,7 +1045,7 @@ const _cleanupNonExistingTasksFromLists = (
   projectIds.forEach((pid) => {
     const projectItem = data.project.entities[pid];
     if (!projectItem) {
-      OpLog.log(data.project);
+      OpLog.log('Missing project entity for id: ' + pid);
       throw new Error('No project');
     }
     const origTaskIdsLen = projectItem.taskIds.length;
@@ -1096,7 +1066,7 @@ const _cleanupNonExistingTasksFromLists = (
     .map((id) => data.tag.entities[id])
     .forEach((tagItem) => {
       if (!tagItem) {
-        OpLog.log(data.tag);
+        OpLog.log('Missing tag entity');
         throw new Error('No tag');
       }
       const origLen = tagItem.taskIds.length;
@@ -1116,7 +1086,7 @@ const _cleanupNonExistingNotesFromLists = (
   projectIds.forEach((pid) => {
     const projectItem = data.project.entities[pid];
     if (!projectItem) {
-      OpLog.log(data.project);
+      OpLog.log('Missing project entity for id: ' + pid);
       throw new Error('No project');
     }
     const origLen = (projectItem as ProjectCopy).noteIds?.length ?? 0;
@@ -1144,7 +1114,7 @@ const _fixOrphanedNotes = (
   noteIds.forEach((nId) => {
     const note = data.note.entities[nId];
     if (!note) {
-      OpLog.log(data.note);
+      OpLog.log('Missing note entity for id: ' + nId);
       throw new Error('No note');
     }
     // missing project case
@@ -1194,7 +1164,7 @@ const _fixInconsistentProjectId = (
     .map((id) => data.project.entities[id])
     .forEach((projectItem) => {
       if (!projectItem) {
-        OpLog.log(data.project);
+        OpLog.log('Missing project entity');
         throw new Error('No project');
       }
       projectItem.taskIds.forEach((tid) => {
@@ -1246,7 +1216,7 @@ const _fixInconsistentTagId = (
     .map((id) => data.tag.entities[id])
     .forEach((tagItem) => {
       if (!tagItem) {
-        OpLog.log(data.tag);
+        OpLog.log('Missing tag entity');
         throw new Error('No tag');
       }
       tagItem.taskIds.forEach((tid) => {
@@ -1272,7 +1242,7 @@ const _setTaskProjectIdAccordingToParent = (
     .map((id) => data.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        OpLog.log(data.task);
+        OpLog.log('Missing task entity');
         throw new Error('No task');
       }
       if (taskItem.subTaskIds) {
@@ -1295,7 +1265,7 @@ const _setTaskProjectIdAccordingToParent = (
     .map((id) => data.archiveYoung.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        OpLog.log(data.archiveYoung.task);
+        OpLog.log('Missing archive task entity');
         throw new Error('No archive task');
       }
       if (taskItem.subTaskIds) {
@@ -1318,7 +1288,7 @@ const _setTaskProjectIdAccordingToParent = (
     .map((id) => data.archiveOld.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        OpLog.log(data.archiveOld.task);
+        OpLog.log('Missing old archive task entity');
         throw new Error('No old archive task');
       }
       if (taskItem.subTaskIds) {
@@ -1349,7 +1319,7 @@ const _cleanupOrphanedSubTasks = (
     .map((id) => data.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        OpLog.log(data.task);
+        OpLog.log('Missing task entity');
         throw new Error('No task');
       }
 
@@ -1358,7 +1328,7 @@ const _cleanupOrphanedSubTasks = (
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
           if (!data.task.entities[sid]) {
-            OpLog.log('Delete orphaned sub task for ', taskItem);
+            OpLog.log('Delete orphaned sub task ' + sid + ' for ' + taskItem.id);
             taskItem.subTaskIds.splice(i, 1);
             summary.relationshipsFixed++;
           }
@@ -1372,7 +1342,7 @@ const _cleanupOrphanedSubTasks = (
     .map((id) => data.archiveYoung.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        OpLog.log(data.archiveYoung.task);
+        OpLog.log('Missing archive task entity');
         throw new Error('No archive task');
       }
 
@@ -1381,7 +1351,7 @@ const _cleanupOrphanedSubTasks = (
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
           if (!data.archiveYoung.task.entities[sid]) {
-            OpLog.log('Delete orphaned archive sub task for ', taskItem);
+            OpLog.log('Delete orphaned archive sub task ' + sid + ' for ' + taskItem.id);
             taskItem.subTaskIds.splice(i, 1);
             summary.relationshipsFixed++;
           }
@@ -1395,7 +1365,7 @@ const _cleanupOrphanedSubTasks = (
     .map((id) => data.archiveOld.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        OpLog.log(data.archiveOld.task);
+        OpLog.log('Missing old archive task entity');
         throw new Error('No old archive task');
       }
 
@@ -1404,7 +1374,9 @@ const _cleanupOrphanedSubTasks = (
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
           if (!data.archiveOld.task.entities[sid]) {
-            OpLog.log('Delete orphaned old archive sub task for ', taskItem);
+            OpLog.log(
+              'Delete orphaned old archive sub task ' + sid + ' for ' + taskItem.id,
+            );
             taskItem.subTaskIds.splice(i, 1);
             summary.relationshipsFixed++;
           }
@@ -1433,5 +1405,68 @@ const _repairMenuTree = (
     summary.structureRepaired++;
   }
 
+  return data;
+};
+
+const _repairSections = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const sectionState = data.section;
+  if (!sectionState?.ids?.length) return data;
+
+  const validProjectIds = new Set<string>(data.project.ids as string[]);
+  const validTaskIds = new Set<string>(data.task.ids as string[]);
+
+  const keptIds: string[] = [];
+  const newEntities: typeof sectionState.entities = {};
+  let droppedSections = 0;
+  let droppedTaskRefs = 0;
+
+  for (const sid of sectionState.ids as string[]) {
+    const section = sectionState.entities[sid];
+    if (!section) continue;
+
+    // Sections are only valid in PROJECT contexts (with a live projectId)
+    // or the singleton TODAY tag. Custom-tag sections are rejected at
+    // dispatch boundaries; surviving ones in stored data are dropped.
+    const isValidProject =
+      section.contextType === 'PROJECT' && validProjectIds.has(section.contextId);
+    const isTodayTag =
+      section.contextType === 'TAG' && section.contextId === TODAY_TAG.id;
+    if (!isValidProject && !isTodayTag) {
+      droppedSections++;
+      continue;
+    }
+
+    // Defend against malformed remote payloads where `taskIds` is not
+    // an array (truthy `?? []` would slip through and `.filter` would
+    // throw or yield garbage on a string / object value).
+    const taskIds = Array.isArray(section.taskIds) ? section.taskIds : [];
+    const filtered = taskIds.filter((tid) => validTaskIds.has(tid));
+    if (filtered.length !== taskIds.length) {
+      droppedTaskRefs += taskIds.length - filtered.length;
+      newEntities[sid] = { ...section, taskIds: filtered };
+    } else {
+      newEntities[sid] = section;
+    }
+    keptIds.push(sid);
+  }
+
+  if (droppedSections === 0 && droppedTaskRefs === 0) return data;
+
+  data.section = { ids: keptIds, entities: newEntities };
+  if (droppedSections > 0) {
+    OpLog.warn(
+      `[data-repair] Removed ${droppedSections} section(s) with missing project/tag`,
+    );
+    summary.invalidReferencesRemoved += droppedSections;
+  }
+  if (droppedTaskRefs > 0) {
+    OpLog.warn(
+      `[data-repair] Removed ${droppedTaskRefs} stale task reference(s) from sections`,
+    );
+    summary.invalidReferencesRemoved += droppedTaskRefs;
+  }
   return data;
 };

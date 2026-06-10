@@ -1,52 +1,11 @@
-:host {
-  display: block;
-}
+@use '../collapsible-shared' as *;
+
+@include collapsible-shared;
 
 .collapsible-header {
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  //padding-top: 16px;
   padding-bottom: var(--s);
 
   &:focus {
     outline: none;
   }
-
-  :host.isInline & {
-    display: inline-block;
-
-    & > * {
-      display: inline-block;
-      vertical-align: middle;
-    }
-  }
-}
-
-.collapsible-title {
-  flex-grow: 1;
-
-  :host.isInline & {
-    //display: inline-block;
-  }
-}
-
-.collapsible-expand-icon {
-  margin-right: var(--s);
-  transition: all var(--transition-standard);
-
-  :host.isExpanded & {
-    transform: rotate(180deg);
-  }
-}
-
-.collapsible-panel {
-  height: auto;
-  display: block;
-
-  // make sure we don't produce clunky animations
-  padding: 0 !important;
-  margin: 0 !important;
 }

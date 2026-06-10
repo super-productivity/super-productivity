@@ -7,7 +7,11 @@ import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', async () => {
-  const { testState: state } = await import('./sync.service.test-state');
+  const {
+    applyOperationSelect,
+    hasOperationUniqueConflict,
+    testState: state,
+  } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
 
   const createTxMock = () => ({
@@ -31,9 +35,35 @@ vi.mock('../src/db', async () => {
         state.operations.set(args.data.id, op);
         return op;
       }),
+      createMany: vi.fn().mockImplementation(async (args: any) => {
+        const rows = Array.isArray(args.data) ? args.data : [args.data];
+        let count = 0;
+
+        for (const row of rows) {
+          if (hasOperationUniqueConflict(state.operations, row)) {
+            if (args.skipDuplicates) {
+              continue;
+            }
+            throw new PrismaModule.PrismaClientKnownRequestError(
+              'Unique constraint failed',
+              { code: 'P2002', clientVersion: '5.0.0' },
+            );
+          }
+
+          state.operations.set(row.id, {
+            ...row,
+            receivedAt: row.receivedAt ?? BigInt(Date.now()),
+          });
+          count++;
+        }
+
+        return { count };
+      }),
       findFirst: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         if (args.where?.entityId && args.where?.entityType) {
           const ops = Array.from(state.operations.values())
@@ -41,12 +71,61 @@ vi.mock('../src/db', async () => {
               (op: any) =>
                 op.userId === args.where.userId &&
                 op.entityId === args.where.entityId &&
-                op.entityType === args.where.entityType,
+                op.entityType === args.where.entityType &&
+                (args.where.clientId?.not === undefined ||
+                  op.clientId !== args.where.clientId.not),
             )
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-          return ops[0] || null;
+          return applyOperationSelect(ops[0], args.select) || null;
+        }
+        if (args.where?.opType?.in) {
+          const ops = Array.from(state.operations.values()).filter((op: any) => {
+            if (args.where.userId !== undefined && args.where.userId !== op.userId)
+              return false;
+            if (
+              args.where.serverSeq?.lte !== undefined &&
+              op.serverSeq > args.where.serverSeq.lte
+            )
+              return false;
+            if (!args.where.opType.in.includes(op.opType)) return false;
+            if (
+              args.where.isPayloadEncrypted !== undefined &&
+              op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+            )
+              return false;
+            return true;
+          });
+          if (ops.length === 0) return null;
+          ops.sort((a: any, b: any) =>
+            args.orderBy?.serverSeq === 'desc'
+              ? b.serverSeq - a.serverSeq
+              : a.serverSeq - b.serverSeq,
+          );
+          return applyOperationSelect(ops[0], args.select) || ops[0];
         }
         return null;
+      }),
+      count: vi.fn().mockImplementation(async (args: any) => {
+        return Array.from(state.operations.values()).filter((op: any) => {
+          if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+            return false;
+          if (
+            args.where?.serverSeq?.gt !== undefined &&
+            op.serverSeq <= args.where.serverSeq.gt
+          )
+            return false;
+          if (
+            args.where?.serverSeq?.lte !== undefined &&
+            op.serverSeq > args.where.serverSeq.lte
+          )
+            return false;
+          if (
+            args.where?.isPayloadEncrypted !== undefined &&
+            op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+          )
+            return false;
+          return true;
+        }).length;
       }),
       findMany: vi.fn().mockImplementation(async (args: any) => {
         const ops = Array.from(state.operations.values());
@@ -65,6 +144,29 @@ vi.mock('../src/db', async () => {
           })
           .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
           .slice(0, args.take || 500);
+      }),
+      count: vi.fn().mockImplementation(async (args: any) => {
+        const ops = Array.from(state.operations.values());
+        return ops.filter((op: any) => {
+          if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+            return false;
+          if (
+            args.where?.serverSeq?.gt !== undefined &&
+            op.serverSeq <= args.where.serverSeq.gt
+          )
+            return false;
+          if (
+            args.where?.serverSeq?.lte !== undefined &&
+            op.serverSeq > args.where.serverSeq.lte
+          )
+            return false;
+          if (
+            args.where?.isPayloadEncrypted !== undefined &&
+            op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+          )
+            return false;
+          return true;
+        }).length;
       }),
       aggregate: vi.fn().mockImplementation(async (args: any) => {
         const ops = Array.from(state.operations.values()).filter(
@@ -98,7 +200,9 @@ vi.mock('../src/db', async () => {
       }),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         return null;
       }),
@@ -115,6 +219,33 @@ vi.mock('../src/db', async () => {
         state.userSyncStates.set(args.where.userId, result);
         return result;
       }),
+      // Race-safe writers used by snapshot generation:
+      // updateMany honours the `OR: [lastSnapshotSeq null, lastSnapshotSeq < seq]`
+      // guard; create is the first-time-user fallback.
+      updateMany: vi.fn().mockImplementation(async (args: any) => {
+        const existing = state.userSyncStates.get(args.where.userId);
+        if (!existing) return { count: 0 };
+        const seqFilter = args.where?.OR?.find(
+          (clause: any) => clause.lastSnapshotSeq?.lt !== undefined,
+        )?.lastSnapshotSeq?.lt;
+        const cachedSeq = existing.lastSnapshotSeq;
+        const matches =
+          cachedSeq === null ||
+          cachedSeq === undefined ||
+          (seqFilter !== undefined && cachedSeq < seqFilter);
+        if (!matches) return { count: 0 };
+        const updated = { ...existing, ...args.data };
+        state.userSyncStates.set(args.where.userId, updated);
+        return { count: 1 };
+      }),
+      create: vi.fn().mockImplementation(async (args: any) => {
+        if (state.userSyncStates.has(args.data.userId)) {
+          throw Object.assign(new Error('Unique constraint'), { code: 'P2002' });
+        }
+        const result = { ...args.data };
+        state.userSyncStates.set(args.data.userId, result);
+        return result;
+      }),
       update: vi.fn().mockImplementation(async (args: any) => {
         const existing = state.userSyncStates.get(args.where.userId);
         if (existing) {
@@ -123,6 +254,13 @@ vi.mock('../src/db', async () => {
             if (typeof value === 'object' && value !== null && 'increment' in value) {
               updated[key] =
                 (existing[key] || 0) + (value as { increment: number }).increment;
+            } else if (
+              typeof value === 'object' &&
+              value !== null &&
+              'decrement' in value
+            ) {
+              updated[key] =
+                (existing[key] || 0) - (value as { decrement: number }).decrement;
             } else {
               updated[key] = value;
             }
@@ -168,6 +306,36 @@ vi.mock('../src/db', async () => {
         return state.users.get(args.where.id) || null;
       }),
     },
+    // Upload transaction writes the storage counter atomically via $executeRaw.
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    // Full-state op uploads aggregate prior vector clocks via $queryRaw inside
+    // the same transaction. Dispatch based on the SQL text so other $queryRaw
+    // callers (storage counter, etc.) keep working.
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
+      const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('jsonb_each_text(vector_clock)')) {
+        const [userId, beforeServerSeq] = params;
+        const aggregate = new Map<string, number>();
+        for (const op of state.operations.values()) {
+          if (op.userId !== userId) continue;
+          if (op.serverSeq >= beforeServerSeq) continue;
+          const vc = op.vectorClock;
+          if (!vc || typeof vc !== 'object') continue;
+          for (const [clientKey, rawVal] of Object.entries(
+            vc as Record<string, unknown>,
+          )) {
+            if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) continue;
+            const cur = aggregate.get(clientKey) ?? 0;
+            if (rawVal > cur) aggregate.set(clientKey, rawVal);
+          }
+        }
+        return Array.from(aggregate, ([client_id, max_counter]) => ({
+          client_id,
+          max_counter: BigInt(max_counter),
+        }));
+      }
+      return [{ total: BigInt(0) }];
+    }),
   });
 
   return {
@@ -188,6 +356,7 @@ vi.mock('../src/db', async () => {
           const ops = Array.from(state.operations.values());
           return ops
             .filter((op: any) => {
+              if (args.where?.id?.in && !args.where.id.in.includes(op.id)) return false;
               if (args.where?.userId !== undefined && args.where.userId !== op.userId)
                 return false;
               if (
@@ -195,12 +364,46 @@ vi.mock('../src/db', async () => {
                 op.serverSeq <= args.where.serverSeq.gt
               )
                 return false;
+              if (
+                args.where?.serverSeq?.lte !== undefined &&
+                op.serverSeq > args.where.serverSeq.lte
+              )
+                return false;
+              if (
+                args.where?.receivedAt?.lt !== undefined &&
+                op.receivedAt >= args.where.receivedAt.lt
+              )
+                return false;
               if (args.where?.clientId?.not && op.clientId === args.where.clientId.not)
                 return false;
               return true;
             })
             .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
-            .slice(0, args.take || 500);
+            .slice(0, args.take || 500)
+            .map((op: any) => applyOperationSelect(op, args.select));
+        }),
+        count: vi.fn().mockImplementation(async (args: any) => {
+          const ops = Array.from(state.operations.values());
+          return ops.filter((op: any) => {
+            if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+              return false;
+            if (
+              args.where?.serverSeq?.gt !== undefined &&
+              op.serverSeq <= args.where.serverSeq.gt
+            )
+              return false;
+            if (
+              args.where?.serverSeq?.lte !== undefined &&
+              op.serverSeq > args.where.serverSeq.lte
+            )
+              return false;
+            if (
+              args.where?.isPayloadEncrypted !== undefined &&
+              op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+            )
+              return false;
+            return true;
+          }).length;
         }),
         aggregate: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(state.operations.values()).filter(
@@ -217,6 +420,7 @@ vi.mock('../src/db', async () => {
         deleteMany: vi.fn().mockImplementation(async (args: any) => {
           let count = 0;
           for (const [id, op] of state.operations.entries()) {
+            if (args.where?.id?.in && !args.where.id.in.includes(id)) continue;
             if (
               args.where?.userId !== undefined &&
               args.where.userId !== (op as any).userId
@@ -237,6 +441,54 @@ vi.mock('../src/db', async () => {
             return state.operations.get(args.where.id) || null;
           }
           return null;
+        }),
+        findFirst: vi.fn().mockImplementation(async (args: any) => {
+          const ops = Array.from(state.operations.values()).filter((op: any) => {
+            if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+              return false;
+            if (
+              args.where?.serverSeq?.lte !== undefined &&
+              op.serverSeq > args.where.serverSeq.lte
+            )
+              return false;
+            if (args.where?.opType?.in && !args.where.opType.in.includes(op.opType))
+              return false;
+            if (
+              args.where?.isPayloadEncrypted !== undefined &&
+              op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+            )
+              return false;
+            return true;
+          });
+          if (ops.length === 0) return null;
+          ops.sort((a: any, b: any) =>
+            args.orderBy?.serverSeq === 'desc'
+              ? b.serverSeq - a.serverSeq
+              : a.serverSeq - b.serverSeq,
+          );
+          return ops[0];
+        }),
+        count: vi.fn().mockImplementation(async (args: any) => {
+          return Array.from(state.operations.values()).filter((op: any) => {
+            if (args.where?.userId !== undefined && args.where.userId !== op.userId)
+              return false;
+            if (
+              args.where?.serverSeq?.gt !== undefined &&
+              op.serverSeq <= args.where.serverSeq.gt
+            )
+              return false;
+            if (
+              args.where?.serverSeq?.lte !== undefined &&
+              op.serverSeq > args.where.serverSeq.lte
+            )
+              return false;
+            if (
+              args.where?.isPayloadEncrypted !== undefined &&
+              op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+            )
+              return false;
+            return true;
+          }).length;
         }),
       },
       syncDevice: {
@@ -282,7 +534,10 @@ vi.mock('../src/db', async () => {
         findUnique: vi.fn().mockImplementation(async (args: any) => {
           return state.users.get(args.where.id) || null;
         }),
+        update: vi.fn().mockResolvedValue({}),
       },
+      $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+      $executeRaw: vi.fn().mockResolvedValue(0),
     },
   };
 });
@@ -321,6 +576,111 @@ describe('Sync Operations', () => {
       createdAt: new Date(),
     });
     initSyncService();
+  });
+
+  describe('Full-state op upload', () => {
+    const createFullStateOp = (
+      opType: 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR',
+      authorClientId: string,
+      vectorClock: Record<string, number>,
+    ): Operation => ({
+      id: uuidv7(),
+      clientId: authorClientId,
+      actionType:
+        opType === 'BACKUP_IMPORT'
+          ? '[SP_ALL] Load(import) all data'
+          : opType === 'REPAIR'
+            ? '[Repair] Auto Repair'
+            : '[SP_ALL] Load(import) all data',
+      opType,
+      entityType: 'ALL',
+      payload: {},
+      vectorClock,
+      timestamp: Date.now(),
+      schemaVersion: 1,
+    });
+
+    it('persists the prior-history aggregate merged with the snapshot op clock', async () => {
+      // Regression guard: a BACKUP_IMPORT uploads with a fresh `{ newClient: 1 }`
+      // clock by design (see backup.service.ts). If the server persisted that
+      // clock as-is, downloading clients would reset to a baseline that does
+      // NOT cover pre-import ops still living in the conflict-detection set,
+      // and their first post-restore edit could be rejected as CONCURRENT
+      // against those rows. The fix aggregates prior ops at upload time.
+      const service = getSyncService();
+      // Seed prior history from two existing clients.
+      await service.uploadOps(userId, 'old-client-a', [
+        {
+          id: uuidv7(),
+          clientId: 'old-client-a',
+          actionType: 'ADD_TASK',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: 'task-a',
+          payload: { title: 'Task A' },
+          vectorClock: { 'old-client-a': 5 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+      await service.uploadOps(userId, 'old-client-b', [
+        {
+          id: uuidv7(),
+          clientId: 'old-client-b',
+          actionType: 'ADD_TASK',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: 'task-b',
+          payload: { title: 'Task B' },
+          vectorClock: { 'old-client-a': 5, 'old-client-b': 3 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      // Restore from backup: new client uses a fresh clock.
+      await service.uploadOps(userId, 'restoring-client', [
+        createFullStateOp('BACKUP_IMPORT', 'restoring-client', {
+          'restoring-client': 1,
+        }),
+      ]);
+
+      const syncState = testState.userSyncStates.get(userId);
+      expect(syncState?.latestFullStateSeq).toBe(3);
+      expect(syncState?.latestFullStateVectorClock).toEqual({
+        'old-client-a': 5,
+        'old-client-b': 3,
+        'restoring-client': 1,
+      });
+    });
+
+    it('keeps the snapshot op counter when both prior and incoming list the same client', async () => {
+      const service = getSyncService();
+      // Prior op from the same client at a lower counter.
+      await service.uploadOps(userId, 'shared-client', [
+        {
+          id: uuidv7(),
+          clientId: 'shared-client',
+          actionType: 'ADD_TASK',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: 'task-a',
+          payload: { title: 'A' },
+          vectorClock: { 'shared-client': 2 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      // SYNC_IMPORT from same client with a higher counter (compaction
+      // typically bumps it). Merge must take the max, not the prior aggregate.
+      await service.uploadOps(userId, 'shared-client', [
+        createFullStateOp('SYNC_IMPORT', 'shared-client', { 'shared-client': 9 }),
+      ]);
+
+      const syncState = testState.userSyncStates.get(userId);
+      expect(syncState?.latestFullStateVectorClock).toEqual({ 'shared-client': 9 });
+    });
   });
 
   describe('Snapshot Generation', () => {
@@ -503,23 +863,6 @@ describe('Sync Operations', () => {
       const snapshot = await service.generateSnapshot(userId);
       expect(snapshot).toBeDefined();
     });
-
-    // Skip: Cannot spy on zlib.gunzipSync in this test environment
-    it.skip('should discard cached snapshot if decompression exceeds limit', async () => {
-      const service = getSyncService();
-
-      await service.uploadOps(userId, clientId, [createOp('task-1', 'CRT')]);
-      await service.generateSnapshot(userId);
-
-      const gunzipSpy = vi.spyOn(zlib, 'gunzipSync').mockImplementation(() => {
-        throw new RangeError('maxOutputLength exceeded');
-      });
-
-      const cached = await service.getCachedSnapshot(userId);
-      expect(cached).toBeNull();
-
-      gunzipSpy.mockRestore();
-    });
   });
 
   describe('Rate Limiting', () => {
@@ -665,7 +1008,7 @@ describe('Sync Operations', () => {
     it('should return null for new request IDs', () => {
       const service = getSyncService();
 
-      const cached = service.checkRequestDeduplication(userId, 'new-request-123');
+      const cached = service.checkOpsRequestDedup(userId, 'new-request-123');
       expect(cached).toBeNull();
     });
 
@@ -676,10 +1019,10 @@ describe('Sync Operations', () => {
       const results = [{ opId: 'op-1', accepted: true, serverSeq: 1 }];
 
       // Cache results
-      service.cacheRequestResults(userId, requestId, results as any);
+      service.cacheOpsRequestResults(userId, requestId, results as any);
 
       // Should return cached results
-      const cached = service.checkRequestDeduplication(userId, requestId);
+      const cached = service.checkOpsRequestDedup(userId, requestId);
       expect(cached).toEqual(results);
     });
 
@@ -688,19 +1031,40 @@ describe('Sync Operations', () => {
       const requestId = 'shared-request';
 
       const results = [{ opId: 'op-1', accepted: true, serverSeq: 1 }];
-      service.cacheRequestResults(userId, requestId, results as any);
+      service.cacheOpsRequestResults(userId, requestId, results as any);
 
       // Same request ID for different user should not be cached
-      const cachedOtherUser = service.checkRequestDeduplication(2, requestId);
+      const cachedOtherUser = service.checkOpsRequestDedup(2, requestId);
       expect(cachedOtherUser).toBeNull();
+    });
+
+    it('should isolate ops vs snapshot caches with the same requestId', () => {
+      const service = getSyncService();
+      const requestId = 'collision-id';
+
+      service.cacheOpsRequestResults(userId, requestId, [
+        { opId: 'op-1', accepted: true, serverSeq: 1 },
+      ] as any);
+      service.cacheSnapshotRequestResult(userId, requestId, {
+        accepted: true,
+        serverSeq: 99,
+      });
+
+      expect(service.checkOpsRequestDedup(userId, requestId)).toEqual([
+        { opId: 'op-1', accepted: true, serverSeq: 1 },
+      ]);
+      expect(service.checkSnapshotRequestDedup(userId, requestId)).toEqual({
+        accepted: true,
+        serverSeq: 99,
+      });
     });
 
     it('should cleanup expired dedup entries', () => {
       const service = getSyncService();
 
       // Cache some results
-      service.cacheRequestResults(userId, 'request-1', []);
-      service.cacheRequestResults(userId, 'request-2', []);
+      service.cacheOpsRequestResults(userId, 'request-1', []);
+      service.cacheOpsRequestResults(userId, 'request-2', []);
 
       // Since we can't easily manipulate time, verify cleanup runs without error
       const cleaned = service.cleanupExpiredRequestDedupEntries();

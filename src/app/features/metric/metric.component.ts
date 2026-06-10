@@ -20,6 +20,8 @@ import { map } from 'rxjs/operators';
 import { calculateSustainabilityScore } from './metric-scoring.util';
 import { TODAY_TAG } from '../tag/tag.const';
 
+const FULL_PRODUCTIVITY_BREAKDOWN_CHART_RANGE = Number.MAX_SAFE_INTEGER;
+
 @Component({
   selector: 'metric',
   templateUrl: './metric.component.html',
@@ -46,11 +48,11 @@ export class MetricComponent {
   activeWorkContext = toSignal(this.workContextService.activeWorkContext$);
 
   /**
-   * Determine which metrics service to use based on the active work context.
-   * - For TODAY_TAG: use AllTasksMetricsService (shows all tasks)
-   * - For other contexts: use ProjectMetricsService (project/tag specific)
+   * Whether the active work context is the global "Today / all tasks" view.
+   * Drives the metrics service selection (AllTasks vs Project), the view title,
+   * and whether the global charts are shown (global charts only make sense in Today).
    */
-  private _isShowingAllTasks = computed(() => {
+  isShowingAllTasks = computed(() => {
     const context = this.activeWorkContext();
     return context?.type === WorkContextType.TAG && context.id === TODAY_TAG.id;
   });
@@ -59,7 +61,7 @@ export class MetricComponent {
    * Dynamic title that changes based on context
    */
   metricsTitle = computed(() => {
-    return this._isShowingAllTasks() ? this.T.PM.ALL_TASKS_TITLE : this.T.PM.TITLE;
+    return this.isShowingAllTasks() ? this.T.PM.ALL_TASKS_TITLE : this.T.PM.TITLE;
   });
 
   simpleClickCounterData = toSignal(this.metricService.getSimpleClickCounterMetrics$());
@@ -75,56 +77,58 @@ export class MetricComponent {
     (number | null)[],
     string
   > | null>(
-    this.metricService.getProductivityBreakdown$().pipe(
-      map((breakdown) => {
-        if (!breakdown.length) {
-          return null;
-        }
+    this.metricService
+      .getProductivityBreakdown$(FULL_PRODUCTIVITY_BREAKDOWN_CHART_RANGE)
+      .pipe(
+        map((breakdown) => {
+          if (!breakdown.length) {
+            return null;
+          }
 
-        const labels = breakdown.map((item) => item.day);
-        const productivityScores = breakdown.map((item) =>
-          item.score != null ? item.score : null,
-        );
-        const sustainabilityScores = breakdown.map((item) =>
-          item.energyCheckin != null
-            ? calculateSustainabilityScore(
-                item.focusedMinutes,
-                item.totalWorkMinutes,
-                600,
-                item.energyCheckin,
-              )
-            : null,
-        );
+          const labels = breakdown.map((item) => item.day);
+          const productivityScores = breakdown.map((item) =>
+            item.score != null ? item.score : null,
+          );
+          const sustainabilityScores = breakdown.map((item) =>
+            item.energyCheckin != null
+              ? calculateSustainabilityScore(
+                  item.focusedMinutes,
+                  item.totalWorkMinutes,
+                  600,
+                  item.energyCheckin,
+                )
+              : null,
+          );
 
-        const hasData =
-          productivityScores.some((score) => score != null) ||
-          sustainabilityScores.some((score) => score != null);
+          const hasData =
+            productivityScores.some((score) => score != null) ||
+            sustainabilityScores.some((score) => score != null);
 
-        if (!hasData) {
-          return null;
-        }
+          if (!hasData) {
+            return null;
+          }
 
-        return {
-          labels,
-          datasets: [
-            {
-              label: 'Productivity Score',
-              data: productivityScores,
-              borderColor: 'rgb(75, 192, 192)',
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              tension: 0.1,
-            },
-            {
-              label: 'Sustainability Score',
-              data: sustainabilityScores,
-              borderColor: 'rgb(153, 102, 255)',
-              backgroundColor: 'rgba(153, 102, 255, 0.2)',
-              tension: 0.1,
-            },
-          ],
-        } as ChartData<'line', (number | null)[], string>;
-      }),
-    ),
+          return {
+            labels,
+            datasets: [
+              {
+                label: 'Productivity Score',
+                data: productivityScores,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1,
+              },
+              {
+                label: 'Sustainability Score',
+                data: sustainabilityScores,
+                borderColor: 'rgb(153, 102, 255)',
+                backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                tension: 0.1,
+              },
+            ],
+          } as ChartData<'line', (number | null)[], string>;
+        }),
+      ),
     { initialValue: null },
   );
 
@@ -149,7 +153,7 @@ export class MetricComponent {
    * based on the current context
    */
   simpleMetrics = computed(() => {
-    return this._isShowingAllTasks()
+    return this.isShowingAllTasks()
       ? this.allTasksMetricsService.simpleMetrics()
       : this.projectMetricsService.simpleMetrics();
   });

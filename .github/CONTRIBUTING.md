@@ -23,6 +23,10 @@ I am not a designer. So there is probably a lot not to like. It would be absolut
 ### Translations
 * See our [translation guide](../docs/TRANSLATING.md) for how to contribute translations
 
+### Documentation/[Wiki](https://github.com/super-productivity/super-productivity/wiki)
+* Flagging outdated or incorrect documentation (or correcting via Pull Requests) is greatly appreciated.
+* Creating [guides and workflow examples](https://github.com/super-productivity/super-productivity/wiki/1.00-Quickstarts) with short videos or screenshots would be welcomed.
+
 ## Commit Message Format
 
 We use the Angular commit message format: `type(scope): description`

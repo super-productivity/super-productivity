@@ -5,7 +5,12 @@
   flex-direction: row;
   justify-content: stretch;
   align-items: stretch;
-  height: calc(100% - var(--bar-height));
+  // Right-panel owns the full content area now. The horizontal header is
+  // projected as the first child of .content, so .side spans top-to-bottom
+  // of the viewport — panels start at the very top, header band only spans
+  // the width of .content.
+  height: 100%;
+  min-width: 0;
 
   &.resizing {
     // Disable transitions while resizing
@@ -46,11 +51,23 @@
   }
 }
 
+// While the slide-in/out animation runs, .side width animates 0 <-> *
+// but .side-inner keeps its min-width, so the content spills past the
+// (intentionally overflow:visible) .side. Clip it at the host for the
+// duration only — `clip` avoids creating a scroll container.
+:host(.isPanelAnimating) {
+  overflow: clip;
+}
+
 .content {
   flex-grow: 1;
   max-width: 100%;
+  min-width: 0;
   position: relative;
   z-index: var(--z-right-panel);
+  // Column flex: header on top, route fills, progress bar at bottom.
+  display: flex;
+  flex-direction: column;
 }
 
 .side {

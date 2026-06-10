@@ -17,11 +17,12 @@ import {
 import { GlobalConfigService } from '../../config/global-config.service';
 import { unique } from '../../../util/unique';
 import { TaskService } from '../task.service';
-import { from, of } from 'rxjs';
+import { EMPTY, from, of } from 'rxjs';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { shortSyntax } from '../short-syntax';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
+import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 import { environment } from '../../../../environments/environment';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
@@ -31,6 +32,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { WorkContextService } from '../../work-context/work-context.service';
+import { DateService } from '../../../core/date/date.service';
 
 import { INBOX_PROJECT } from '../../project/project.const';
 import { devError } from '../../../util/dev-error';
@@ -47,6 +49,7 @@ export class ShortSyntaxEffects {
   private _matDialog = inject(MatDialog);
   private _layoutService = inject(LayoutService);
   private _workContextService = inject(WorkContextService);
+  private _dateService = inject(DateService);
 
   shortSyntax$ = createEffect(() =>
     this._actions$.pipe(
@@ -71,6 +74,7 @@ export class ShortSyntaxEffects {
           })),
         );
       }),
+      filter(({ task }) => !!task),
       withLatestFrom(
         this._tagService.tagsNoMyDayAndNoList$,
         this._projectService.list$,
@@ -102,6 +106,12 @@ export class ShortSyntaxEffects {
         ),
       ),
       mergeMap(([{ task, originalAction }, tags, projects, defaultProjectId]) => {
+        // Guard: task may have been archived/deleted while the effect was in flight
+        // (e.g., a concurrent sync applied a moveToArchive op). Skip processing
+        // to prevent "Cannot read properties of undefined" errors.
+        if (!task) {
+          return EMPTY;
+        }
         const isReplaceTagIds = originalAction.type === TaskSharedActions.updateTask.type;
         return from(
           shortSyntax(
@@ -114,7 +124,13 @@ export class ShortSyntaxEffects {
             isReplaceTagIds ? 'replace' : 'combine',
           ).then((r) => {
             if (environment.production) {
-              TaskLog.log('shortSyntax', r);
+              TaskLog.log('shortSyntax', {
+                taskId: task.id,
+                hasResult: !!r,
+                changedFields: r ? Object.keys(r.taskChanges) : [],
+                attachmentCount: r?.attachments.length ?? 0,
+                projectId: r?.projectId,
+              });
             }
             const isAddDefaultProjectIfNecessary: boolean =
               !!defaultProjectId &&
@@ -204,12 +220,21 @@ export class ShortSyntaxEffects {
             }
 
             // Use compound action for atomic state update
+            const autoPlanFields = getDeadlineAutoPlanFields(
+              this._dateService,
+              finalTaskChanges.deadlineDay,
+              finalTaskChanges.deadlineWithTime,
+            );
+
+            delete finalTaskChanges.hasDeadlineTime;
+
             actions.push(
               TaskSharedActions.applyShortSyntax({
                 task,
                 taskChanges: finalTaskChanges,
                 targetProjectId,
                 schedulingInfo,
+                ...autoPlanFields,
               }),
             );
 

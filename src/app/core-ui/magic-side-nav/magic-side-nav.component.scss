@@ -1,5 +1,14 @@
 @use '../../../styles/_globals.scss' as *;
 
+// THEME AUTHORS: do NOT apply `backdrop-filter`, `filter`, `transform`,
+// `perspective`, `contain: paint/layout/strict`, or `will-change` for any of
+// those on the :host (magic-side-nav). They establish a new containing block
+// for fixed-position descendants — and on mobile the host computes to width:0
+// (hostWidthSignal in magic-side-nav.component.ts), which then collapses the
+// fixed-positioned drawer (.nav-sidenav) and overlay (.nav-backdrop-mobile)
+// to 0 width. The drawer simply won't appear when the user taps the menu.
+// Apply glass/blur/tint to `.nav-sidenav` (inner) instead. See velvet.css and
+// liquid-glass.css for the correct pattern.
 :host {
   --sidenav-width-expanded: var(--side-nav-width, 260px);
   --mobile-breakpoint: 768px;
@@ -25,6 +34,42 @@
 // Disable host transition during resize drags
 :host(.resizing) {
   transition: none !important;
+}
+
+:host(.initializing),
+:host(.initializing) * {
+  transition: none !important;
+  animation: none !important;
+}
+
+:host(.initializing) {
+  .nav-sidenav,
+  .resize-handle {
+    opacity: 0;
+  }
+}
+
+:host(.initial-shell-enter) {
+  .nav-sidenav {
+    animation: sidenav-fade-in var(--transition-duration-l) var(--ani-enter-timing) both;
+  }
+}
+
+:host(.initial-enter) {
+  .nav-list,
+  .resize-handle {
+    animation: sidenav-fade-in var(--transition-duration-l) var(--ani-enter-timing) both;
+  }
+}
+
+@keyframes sidenav-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 // Mobile menu open button (only shows when menu is closed)
@@ -101,7 +146,7 @@
   // Milkglass effect when background image is present (light theme)
   :host-context(.hasBgImage) & {
     background: var(--c-light-50);
-    backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px);
   }
 
   // Milkglass effect for dark theme with background image
@@ -129,6 +174,10 @@
     box-shadow: 4px 0 16px var(--c-dark-30);
     // Remove CSS transitions - let Angular animations handle it
     transition: none !important;
+  }
+
+  :host-context(.hasBgImage:not(.isDarkTheme)) &.mobile {
+    background: var(--bg);
   }
 
   :host-context(body.isNativeMobile) &.mobile {

@@ -103,7 +103,7 @@ export class DialogSimpleCounterEditComponent {
   readonly selectedValue = computed(() => {
     const counter = this.localCounter();
     const date = this.selectedDateStr();
-    return counter.countOnDay[date] || 0;
+    return counter.countOnDay?.[date] || 0;
   });
 
   readonly currentStreak = computed(() =>
@@ -115,7 +115,7 @@ export class DialogSimpleCounterEditComponent {
     const dates = this._getChartDates();
 
     const values = dates.map((date) => {
-      const rawValue = counter.countOnDay[date] || 0;
+      const rawValue = counter.countOnDay?.[date] || 0;
       return counter.type === SimpleCounterType.StopWatch
         ? Math.round(rawValue / 60000) // Convert ms to minutes for display
         : rawValue;
@@ -223,8 +223,8 @@ export class DialogSimpleCounterEditComponent {
     const settingsChanges = this._getSettingsChanges(originalData, localData);
 
     // Only save changed values
-    Object.entries(localData.countOnDay).forEach(([date, value]) => {
-      const originalValue = originalData.countOnDay[date] || 0;
+    Object.entries(localData.countOnDay || {}).forEach(([date, value]) => {
+      const originalValue = originalData.countOnDay?.[date] || 0;
       if (value !== originalValue) {
         this._counterService.setCounterForDate(originalData.id, date, value);
       }
@@ -289,7 +289,7 @@ export class DialogSimpleCounterEditComponent {
       return baseLabel;
     }
 
-    const value = counter.countOnDay[dateStr] || 0;
+    const value = counter.countOnDay?.[dateStr] || 0;
     const streakMet = value >= (counter.streakMinValue || 0);
     return `${baseLabel}${streakMet ? '🔥' : '❌'}`;
   }

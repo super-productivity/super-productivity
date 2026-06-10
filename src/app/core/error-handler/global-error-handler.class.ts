@@ -8,6 +8,7 @@ import {
   logAdvancedStacktrace,
 } from './global-error-handler.util';
 import { saveBeforeLastErrorActionLog } from '../../util/action-logger';
+import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 import { error } from 'electron-log/renderer';
 import { BackupService } from '../../op-log/backup/backup.service';
 import { CompleteBackup } from '../../op-log/sync-exports';
@@ -55,6 +56,8 @@ export class GlobalErrorHandler implements ErrorHandler {
       isErrorAlertShown = true;
       const errorStr = this._getErrorStr(err) || errStr;
       saveBeforeLastErrorActionLog();
+      // Hold off the rating prompt for a cooldown after a real crash.
+      recordCriticalErrorTime();
       createErrorAlert(errorStr, simpleStack, err, await this._getUserData());
     }
 

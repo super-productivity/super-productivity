@@ -529,16 +529,20 @@ describe('markdown-toolbar.util', () => {
       expect(result!.selectionStart).toBe(8);
     });
 
-    it('should return null when cursor is in content text', () => {
+    it('should indent when cursor is in content text', () => {
       const text = '- [ ] hello';
       const result = handleTabKey(text, 8, 8);
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result!.text).toBe('  - [ ] hello');
+      expect(result!.selectionStart).toBe(10);
     });
 
-    it('should return null when cursor at prefix end but content exists', () => {
+    it('should indent when cursor at prefix end with content present', () => {
       const text = '- [ ] hello';
       const result = handleTabKey(text, 6, 6);
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result!.text).toBe('  - [ ] hello');
+      expect(result!.selectionStart).toBe(8);
     });
 
     it('should indent bullet list at position 0', () => {

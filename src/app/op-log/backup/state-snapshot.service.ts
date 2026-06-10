@@ -18,6 +18,7 @@ import { selectSimpleCounterFeatureState } from '../../features/simple-counter/s
 import { selectTagFeatureState } from '../../features/tag/store/tag.reducer';
 import { selectTaskFeatureState } from '../../features/tasks/store/task.selectors';
 import { selectTaskRepeatCfgFeatureState } from '../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { selectSectionFeatureState } from '../../features/section/store/section.selectors';
 import { selectTimeTrackingState } from '../../features/time-tracking/store/time-tracking.selectors';
 import { environment } from '../../../environments/environment';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
@@ -108,6 +109,7 @@ export class StateSnapshotService {
         this._store.select(selectPluginUserDataFeatureState),
         this._store.select(selectPluginMetadataFeatureState),
         this._store.select(selectReminderFeatureState),
+        this._store.select(selectSectionFeatureState),
       ]).pipe(first()),
     );
 
@@ -128,6 +130,7 @@ export class StateSnapshotService {
       pluginUserData,
       pluginMetadata,
       reminders,
+      section,
     ] = ngRxData;
 
     return {
@@ -153,6 +156,7 @@ export class StateSnapshotService {
       pluginUserData,
       pluginMetadata,
       reminders,
+      section,
       archiveYoung,
       archiveOld,
     };
@@ -176,7 +180,8 @@ export class StateSnapshotService {
     let simpleCounter: unknown,
       taskRepeatCfg: unknown,
       menuTree: unknown,
-      timeTracking: unknown;
+      timeTracking: unknown,
+      section: unknown;
     let pluginUserData: unknown, pluginMetadata: unknown, reminders: unknown;
 
     // Subscribe synchronously to get current values
@@ -244,6 +249,10 @@ export class StateSnapshotService {
       .select(selectReminderFeatureState)
       .pipe(first())
       .subscribe((v) => (reminders = v));
+    this._store
+      .select(selectSectionFeatureState)
+      .pipe(first())
+      .subscribe((v) => (section = v));
 
     return {
       task: {
@@ -268,6 +277,7 @@ export class StateSnapshotService {
       pluginUserData,
       pluginMetadata,
       reminders,
+      section,
     };
   }
 

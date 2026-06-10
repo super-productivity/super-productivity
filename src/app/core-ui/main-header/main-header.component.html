@@ -1,30 +1,7 @@
 <div class="wrapper">
-  <page-title></page-title>
-
-  @if (isScheduleSection()) {
-    <div class="week-month-selector">
-      <button
-        (click)="selectTimeView('week')"
-        [class.active]="selectedTimeView() === 'week'"
-        class="week-month-btn week-btn"
-        matTooltip="View Week"
-        mat-icon-button
-      >
-        <mat-icon>view_week</mat-icon>
-      </button>
-      <button
-        (click)="selectTimeView('month')"
-        [class.active]="selectedTimeView() === 'month'"
-        class="week-month-btn month-btn"
-        matTooltip="View Month"
-        mat-icon-button
-      >
-        <mat-icon>calendar_month</mat-icon>
-      </button>
-    </div>
-  }
-
   @if (isDataLoaded()) {
+    <page-title></page-title>
+
     <nav class="action-nav-right">
       <div class="counters-action-group">
         @if (isTimeTrackingEnabled()) {
@@ -36,11 +13,11 @@
           ></play-button>
         }
 
-        <!-- Desktop: FocusMode button remains inline if enabled -->
+        <!-- Focus button: keep the entry point discoverable on desktop and mobile. -->
+        @if (isFocusButtonVisible()) {
+          <focus-button></focus-button>
+        }
         @if (showDesktopButtons()) {
-          @if (isFocusModeEnabled() && !isXxxs()) {
-            <focus-button></focus-button>
-          }
           @for (
             simpleCounter of enabledSimpleCounters();
             track trackById($index, simpleCounter)
@@ -72,8 +49,8 @@
       @if (isSyncIconEnabled()) {
         <button
           class="sync-btn"
-          matTooltip="{{ T.MH.TRIGGER_SYNC | translate }}"
-          (click)="syncIsEnabledAndReady() ? sync() : setupSync()"
+          matTooltip="{{ syncTooltip() | translate }}"
+          (click)="onSyncButtonClick()"
           (longPress)="setupSync()"
           (contextmenu)="$event.preventDefault(); setupSync()"
           mat-icon-button
@@ -101,6 +78,7 @@
         </button>
       }
 
+      <plugin-work-context-header-btns></plugin-work-context-header-btns>
       <plugin-header-btns></plugin-header-btns>
 
       @if (isUserProfilesEnabled()) {

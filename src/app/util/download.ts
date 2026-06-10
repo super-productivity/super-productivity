@@ -23,10 +23,17 @@ export const download = async (
         recursive: true,
       });
 
+      // writeFile does not reliably populate `uri` on every Android device/version;
+      // resolve it explicitly so the share sheet gets a valid file reference,
+      // otherwise the recipient (mail/file manager) receives a 0-byte file.
+      const uri =
+        fileResult.uri ??
+        (await Filesystem.getUri({ directory: Directory.Cache, path: filename })).uri;
+
       try {
         await Share.share({
           title: filename,
-          files: [fileResult.uri],
+          files: [uri],
         });
       } catch (shareError: any) {
         const isCanceled =
@@ -41,14 +48,19 @@ export const download = async (
       }
     } catch (e) {
       Log.error(e);
-      await saveStringAsFile(filename, stringData);
+      // Share failed: fall back to a real on-disk save and report where it landed.
+      const fallback = await saveStringAsFile(filename, stringData);
+      return { wasCanceled: false, path: fallback.uri };
     }
     return { wasCanceled: false };
   } else if (isRunningInSnap() && window.ea?.saveFileDialog) {
     // Use native dialog for snap to avoid AppArmor permission issues
     const result = await window.ea.saveFileDialog(filename, stringData);
     if (result.success && result.path) {
-      Log.log('File saved to:', result.path);
+      Log.log('File saved via native dialog', {
+        isSnap: true,
+        hasPath: true,
+      });
       return { isSnap: true, path: result.path };
     }
     return { isSnap: true };
@@ -82,7 +94,10 @@ const saveStringAsFile = async (
     encoding: Encoding.UTF8,
     recursive: true,
   });
-  Log.log(r);
+  Log.log('File saved via Capacitor filesystem fallback', {
+    directory: Directory.Documents,
+    hasUri: !!r.uri,
+  });
   return r;
 };
 

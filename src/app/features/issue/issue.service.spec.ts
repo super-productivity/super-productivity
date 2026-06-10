@@ -23,10 +23,10 @@ import { TrelloCommonInterfacesService } from './providers/trello/trello-common-
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
-import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
-import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
+import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 describe('IssueService', () => {
   let service: IssueService;
@@ -40,6 +40,8 @@ describe('IssueService', () => {
   let translateServiceSpy: jasmine.SpyObj<TranslateService>;
   let globalProgressBarServiceSpy: jasmine.SpyObj<GlobalProgressBarService>;
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
+  let pluginAdapterSpy: jasmine.SpyObj<PluginIssueProviderAdapterService>;
+  let pluginRegistrySpy: jasmine.SpyObj<PluginIssueProviderRegistryService>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -59,6 +61,7 @@ describe('IssueService', () => {
   ): ICalIssueReduced => ({
     id: 'cal-event-456',
     calProviderId: 'calendar-provider-1',
+    issueProviderKey: 'ICAL',
     title: 'Calendar Event',
     start: new Date('2025-01-20T14:00:00Z').getTime(),
     duration: 3600000,
@@ -72,6 +75,7 @@ describe('IssueService', () => {
       'moveToCurrentWorkContext',
       'add',
       'addAndSchedule',
+      'addSubTaskTo',
       'restoreTask',
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
@@ -89,7 +93,8 @@ describe('IssueService', () => {
     calendarIntegrationServiceSpy = jasmine.createSpyObj('CalendarIntegrationService', [
       'skipCalendarEvent',
     ]);
-    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+    storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    storeSpy.pipe.and.returnValue(of([]));
     translateServiceSpy = jasmine.createSpyObj('TranslateService', ['instant']);
     globalProgressBarServiceSpy = jasmine.createSpyObj('GlobalProgressBarService', [
       'countUp',
@@ -98,6 +103,18 @@ describe('IssueService', () => {
     navigateToTaskServiceSpy = jasmine.createSpyObj('NavigateToTaskService', [
       'navigate',
     ]);
+    pluginAdapterSpy = jasmine.createSpyObj('PluginIssueProviderAdapterService', [
+      'getAddTaskData',
+      'getAddTaskDataForCfg',
+    ]);
+    pluginRegistrySpy = jasmine.createSpyObj('PluginIssueProviderRegistryService', [
+      'hasProvider',
+      'getIcon',
+      'getName',
+      'getIssueStrings',
+      'getPollIntervalMs',
+    ]);
+    pluginRegistrySpy.hasProvider.and.returnValue(false);
 
     // Default mock return values - use 'as any' to bypass strict type checking
     issueProviderServiceSpy.getCfgOnce$.and.returnValue(
@@ -144,13 +161,13 @@ describe('IssueService', () => {
           provide: OpenProjectCommonInterfacesService,
           useValue: mockCommonInterfaceService,
         },
-        { provide: GiteaCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: RedmineCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: LinearCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: CalendarCommonInterfacesService,
           useValue: mockCommonInterfaceService,
         },
+        { provide: PluginIssueProviderAdapterService, useValue: pluginAdapterSpy },
+        { provide: PluginIssueProviderRegistryService, useValue: pluginRegistrySpy },
       ],
     });
     service = TestBed.inject(IssueService);
@@ -341,6 +358,82 @@ describe('IssueService', () => {
       expect(taskData.tagIds).toEqual(['tag-1', 'tag-2']);
     });
 
+    it('should merge provider tagIds with default tags', async () => {
+      setupForNewTask();
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+        tagIds: ['remote-tag'],
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['default-tag', 'remote-tag']);
+    });
+
+    it('should use plugin add task data with cfg so mapped tags are imported', async () => {
+      const pluginIssue = {
+        id: 'PLUGIN-1',
+        title: 'Plugin Issue',
+        labels: ['bug'],
+      };
+      pluginRegistrySpy.hasProvider.and.callFake((key) => key === 'plugin:test');
+      pluginAdapterSpy.getAddTaskDataForCfg.and.returnValue({
+        title: 'Plugin Issue',
+        tagIds: ['remote-tag'],
+        issueLastSyncedValues: { labels: ['bug'] },
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          id: 'plugin-provider-1',
+          issueProviderKey: 'plugin:test',
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag'],
+          pluginConfig: { twoWaySync: { tagIds: 'both' } },
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: pluginIssue as any,
+        issueProviderId: 'plugin-provider-1',
+        issueProviderKey: 'plugin:test' as any,
+      });
+
+      expect(pluginAdapterSpy.getAddTaskDataForCfg).toHaveBeenCalledWith(
+        pluginIssue as any,
+        jasmine.objectContaining({ issueProviderKey: 'plugin:test' }),
+      );
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['default-tag', 'remote-tag']);
+      expect(taskData.issueLastSyncedValues).toEqual({ labels: ['bug'] });
+    });
+
     it('should set defaultNote when provider adapter does not set notes', async () => {
       setupForNewTask();
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(
@@ -397,6 +490,241 @@ describe('IssueService', () => {
       const addCall = taskServiceSpy.add.calls.mostRecent();
       const taskData = addCall.args[2] as Partial<Task>;
       expect(taskData.notes).toBe('Provider-set notes');
+    });
+  });
+
+  describe('addTaskFromIssue - CalDAV sub-task / archived-parent path', () => {
+    const caldavIssue = {
+      id: 'child-uid',
+      title: 'Child Task',
+      related_to: 'parent-uid',
+    };
+    let caldavServiceMock: jasmine.SpyObj<CaldavCommonInterfacesService>;
+
+    beforeEach(() => {
+      caldavServiceMock = service.ISSUE_SERVICE_MAP[
+        'CALDAV'
+      ] as jasmine.SpyObj<CaldavCommonInterfacesService>;
+      (caldavServiceMock as any).getAddTaskData = () => ({
+        title: 'Child Task',
+        related_to: 'parent-uid',
+      });
+      (caldavServiceMock as any).getSubTasks = jasmine
+        .createSpy('getSubTasks')
+        .and.resolveTo([]);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({ defaultProjectId: 'proj-1', defaultTagIds: [] } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+        configurable: true,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+        configurable: true,
+      });
+    });
+
+    it('should add child as a top-level task when parent is archived', async () => {
+      // child-uid: not in SP → returns null (so it gets added fresh)
+      // parent-uid: in archive → _tryAddSubTask returns undefined → fallback to top-level
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.callFake(async (id: string) => {
+        if (id === 'parent-uid') {
+          return {
+            task: { id: 'parent-task-id', parentId: null } as any,
+            subTasks: null,
+            isFromArchive: true,
+          };
+        }
+        return null;
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    });
+
+    it('should add child as top-level task when parent is not in SP yet', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    });
+
+    it('should call addSubTaskTo once per child even when provider returns duplicates', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('parent-task-id');
+      taskServiceSpy.addSubTaskTo.and.returnValue('sub-id');
+
+      // Provider returns the same child twice (malformed data).
+      // _addSubTasks iterates the list verbatim, so addSubTaskTo fires once per entry.
+      // The duplicate-prevention guard is at the addTaskFromIssue level (checkForTaskWithIssueEverywhere),
+      // not inside _addSubTasks — this test documents the current expected call count.
+      const duplicate = { id: 'child-uid', title: 'Child Task' };
+      (caldavServiceMock as any).getSubTasks = jasmine
+        .createSpy('getSubTasks')
+        .and.resolveTo([duplicate, duplicate]);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: { id: 'parent-uid', title: 'Parent Task' } as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('addTaskFromIssue - isAddToBacklog skips default dueDay', () => {
+    const jiraIssue = { id: 'JIRA-1', title: 'Test Jira Issue' };
+
+    const setupForNewTask = (): void => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({ defaultProjectId: 'proj-1', defaultTagIds: [] } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+    };
+
+    it('should NOT set dueDay when isAddToBacklog=true', async () => {
+      setupForNewTask();
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+        isAddToBacklog: true,
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.dueDay).toBeUndefined();
+    });
+
+    it('should set dueDay to today when isAddToBacklog is not set', async () => {
+      setupForNewTask();
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.dueDay).toBeDefined();
+    });
+  });
+
+  describe('addTaskFromIssue - existing task already in project backlog', () => {
+    const githubIssue = { id: 'github-issue-123', title: 'GitHub Issue' };
+
+    beforeEach(() => {
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'project-1',
+      });
+    });
+
+    it('should NOT move backlog task to Today list on re-import', async () => {
+      const existingTask = createMockTask({
+        issueType: 'GITHUB',
+        projectId: 'project-1',
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+        task: existingTask,
+        subTasks: null,
+        isFromArchive: false,
+      });
+      projectServiceSpy.getByIdOnce$.and.returnValue(
+        of({ backlogTaskIds: [existingTask.id] } as any),
+      );
+
+      await service.addTaskFromIssue({
+        issueDataReduced: githubIssue as any,
+        issueProviderId: 'github-provider-1',
+        issueProviderKey: 'GITHUB',
+      });
+
+      expect(projectServiceSpy.moveTaskToTodayList).not.toHaveBeenCalled();
+    });
+
+    it('should show "already exists" snack with Go to Task action for backlog tasks', async () => {
+      const existingTask = createMockTask({
+        issueType: 'GITHUB',
+        projectId: 'project-1',
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+        task: existingTask,
+        subTasks: null,
+        isFromArchive: false,
+      });
+      projectServiceSpy.getByIdOnce$.and.returnValue(
+        of({ backlogTaskIds: [existingTask.id] } as any),
+      );
+
+      await service.addTaskFromIssue({
+        issueDataReduced: githubIssue as any,
+        issueProviderId: 'github-provider-1',
+        issueProviderKey: 'GITHUB',
+      });
+
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.TASK.S.TASK_ALREADY_EXISTS,
+          actionStr: T.F.TASK.S.GO_TO_TASK,
+          actionFn: jasmine.any(Function),
+        }),
+      );
+    });
+
+    it('should still move task from Today-side to context when not in backlog', async () => {
+      const existingTask = createMockTask({
+        issueType: 'GITHUB',
+        projectId: 'project-1',
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+        task: existingTask,
+        subTasks: null,
+        isFromArchive: false,
+      });
+      projectServiceSpy.getByIdOnce$.and.returnValue(of({ backlogTaskIds: [] } as any));
+
+      await service.addTaskFromIssue({
+        issueDataReduced: githubIssue as any,
+        issueProviderId: 'github-provider-1',
+        issueProviderKey: 'GITHUB',
+      });
+
+      expect(projectServiceSpy.moveTaskToTodayList).toHaveBeenCalledWith(
+        existingTask.id,
+        'project-1',
+      );
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,
+        }),
+      );
     });
   });
 });

@@ -1,4 +1,3 @@
-@use 'angular-material-css-vars' as mat-css-vars;
 @use '../_common';
 @use './mixins/media-queries';
 
@@ -14,6 +13,68 @@ app-root,
   box-sizing: border-box;
   font-optical-sizing: auto;
   font-family: var(--font-primary-stack);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  letter-spacing: var(--letter-spacing-normal);
+}
+
+// Tabular figures — opt-in only (avoid applying to non-numeric <time> content)
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+// Wrapped in :where() so the global rules specificity is (0,0,0) — any
+// component or Material typography override wins trivially.
+// Excludes Material dialog/card titles explicitly.
+:where(h1, h2, h3, h4, h5, h6):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(
+    .mat-mdc-card-title
+  ) {
+  font-family: inherit;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-tight);
+  color: var(--text-color-most-intense);
+}
+
+:where(h1):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-3xl);
+  letter-spacing: var(--letter-spacing-tighter);
+  line-height: var(--line-height-tight);
+}
+
+:where(h2):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-2xl);
+  letter-spacing: var(--letter-spacing-tighter);
+}
+
+:where(h3):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-xl);
+}
+
+:where(h4):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-lg);
+}
+
+:where(h5):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-md);
+}
+
+:where(h6):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(.mat-mdc-card-title) {
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--text-color-muted);
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono-stack);
+  font-feature-settings: 'liga' 0;
 }
 
 html {
@@ -77,16 +138,17 @@ body {
     opacity: 0;
   }
 
-  &.isLightTheme {
+  // Soft primary-tinted gradient backdrop. Light and dark want different
+  // recipes — the same single corner-glow that reads as warm on dark looks
+  // smudgy on white, so light gets two larger diffuse glows (primary +
+  // accent) for subtle depth without flat-tint feel.
+  // Themes that want a different/no backdrop hide body:before (dark-base,
+  // arc, nord-snow-storm, dracula, velvet do this).
+  &.isLightTheme,
+  &.isDarkTheme {
     color: var(--text-color);
     background: var(--bg);
 
-    &:before {
-      display: block;
-      opacity: 1;
-      filter: saturate(0.8);
-      background: mat-css-vars.mat-css-color(50, 1);
-    }
     &.isDisableBackgroundTint {
       background: var(--bg);
       &:before {
@@ -96,23 +158,39 @@ body {
     }
   }
 
-  &.isDarkTheme {
-    color: var(--text-color);
-    background: var(--bg);
+  &.isLightTheme:before {
+    display: block;
+    opacity: 1;
+    // Two glows in different primary shades — primary-200 (soft pastel)
+    // for the top-left highlight, primary-400 (deeper) for bottom-right
+    // depth. Single-hue keeps the light-mode wash calm.
+    background:
+      radial-gradient(
+        ellipse 120% 80% at 0% -10%,
+        color-mix(in srgb, var(--palette-primary-200) 40%, transparent) 0%,
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse 80% 60% at 100% 100%,
+        color-mix(in srgb, var(--palette-primary-400) 15%, transparent) 0%,
+        transparent 60%
+      );
+  }
 
-    &:before {
-      display: block;
-      opacity: 1;
-      filter: brightness(0.1);
-      background: mat-css-vars.mat-css-color(900, 1);
-    }
-    &.isDisableBackgroundTint {
-      background: var(--bg);
-      &:before {
-        display: none;
-        opacity: 0;
-      }
-    }
+  &.isDarkTheme:before {
+    display: block;
+    opacity: 1;
+    background:
+      radial-gradient(
+        ellipse 80% 60% at 10% -10%,
+        color-mix(in srgb, var(--c-primary) 10%, transparent) 0%,
+        transparent 55%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--c-primary) 4%, transparent) 0%,
+        transparent 100%
+      );
   }
 
   // also hide material dialogs while import is in progress

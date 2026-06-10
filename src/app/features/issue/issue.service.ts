@@ -12,10 +12,9 @@ import {
   SearchResultItemWithProviderId,
 } from './issue.model';
 import { TaskAttachment } from '../tasks/task-attachment/task-attachment.model';
-import { forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
+import { firstValueFrom, forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
 import {
   CALDAV_TYPE,
-  GITEA_TYPE,
   GITLAB_TYPE,
   ICAL_TYPE,
   ISSUE_PROVIDER_HUMANIZED,
@@ -26,7 +25,6 @@ import {
   OPEN_PROJECT_TYPE,
   TRELLO_TYPE,
   REDMINE_TYPE,
-  LINEAR_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
 } from './issue.const';
@@ -40,9 +38,9 @@ import { IssueLog } from '../../core/log';
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
-import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
+// Gitea is now a plugin — no built-in service needed
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
-import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
+// Linear is now a plugin — no built-in service needed
 // ClickUp is now a plugin — no built-in service needed
 import { AzureDevOpsCommonInterfacesService } from './providers/azure-devops/azure-devops-common-interfaces.service';
 import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
@@ -79,9 +77,7 @@ export class IssueService {
   private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
-  private _giteaInterfaceService = inject(GiteaCommonInterfacesService);
   private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
-  private _linearCommonInterfaceService = inject(LinearCommonInterfacesService);
   private _azureDevOpsCommonInterfaceService = inject(AzureDevOpsCommonInterfacesService);
   private _nextcloudDeckCommonInterfaceService = inject(
     NextcloudDeckCommonInterfacesService,
@@ -104,10 +100,8 @@ export class IssueService {
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
-    [GITEA_TYPE]: this._giteaInterfaceService,
     [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
-    [LINEAR_TYPE]: this._linearCommonInterfaceService,
     [AZURE_DEVOPS_TYPE]: this._azureDevOpsCommonInterfaceService,
     [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
 
@@ -509,17 +503,21 @@ export class IssueService {
       };
     }
 
+    const providerCfg = await firstValueFrom(
+      this._issueProviderService.getCfgOnce$(issueProviderId, issueProviderKey),
+    );
+
     const {
       title = null,
       related_to,
       ...additionalFromProviderIssueService
-    } = this._getAddTaskData(issueProviderKey, issueDataReduced);
-    IssueLog.log({ title, related_to, additionalFromProviderIssueService });
+    } = this._getAddTaskData(issueProviderKey, issueDataReduced, providerCfg);
+    IssueLog.log({
+      related_to,
+      additionalKeys: Object.keys(additionalFromProviderIssueService),
+    });
 
-    const getTaskDefaults = async (): Promise<Partial<TaskCopy>> => {
-      const providerCfg = await this._issueProviderService
-        .getCfgOnce$(issueProviderId, issueProviderKey)
-        .toPromise();
+    const getTaskDefaults = (): Partial<TaskCopy> => {
       const defaultProjectId = providerCfg.defaultProjectId;
       const defaultTagIds = (providerCfg.defaultTagIds || []).filter(
         (id) => id !== TODAY_TAG.id,
@@ -560,16 +558,25 @@ export class IssueService {
       }
     };
 
+    const taskDefaults = getTaskDefaults();
+    const providerTagIds = (additionalFromProviderIssueService as Partial<TaskCopy>)
+      .tagIds;
+    if (Array.isArray(providerTagIds)) {
+      taskDefaults.tagIds = unique([...(taskDefaults.tagIds ?? []), ...providerTagIds]);
+    }
+
     const taskData = {
       issueType: issueProviderKey,
       issueProviderId: issueProviderId,
       issueId: issueDataReduced.id.toString(),
       issueWasUpdated: false,
       issueLastUpdated: Date.now(),
-      // Default plan for today unless a precise time is provided by provider
-      dueDay: getDbDateStr(),
+      // Default plan for today unless a precise time is provided by provider.
+      // Skip when going to backlog — a backlog task that's also "due today"
+      // shows up in the Today tab, defeating the point of the backlog.
+      ...(isAddToBacklog ? {} : { dueDay: getDbDateStr() }),
       ...additionalFromProviderIssueService,
-      ...(await getTaskDefaults()),
+      ...taskDefaults,
       ...additional,
     };
 
@@ -580,14 +587,22 @@ export class IssueService {
 
     let taskId: string | undefined;
 
+    // parentTaskId is the SP task under which _addSubTasks should attach children.
+    // When the task is added as a sub-task, this is the root SP parent (not the
+    // newly-added sub-task itself) so that CalDAV grandchildren are flattened to
+    // the same nesting level instead of creating unsupported grandchildren.
+    let subTaskParentId: string | undefined;
+
     if (related_to) {
-      taskId = await this._tryAddSubTask({
+      const subTaskResult = await this._tryAddSubTask({
         title: title as string,
         taskData,
         issueParentId: related_to,
         issueProviderId,
         issueProviderKey,
       });
+      taskId = subTaskResult?.taskId;
+      subTaskParentId = subTaskResult?.parentTaskId;
     }
 
     // add new task (also fallback when parent id of subtask is not found)
@@ -603,15 +618,17 @@ export class IssueService {
         );
       }
 
-      // Handle subtasks if provider supports it
-      if (this._getService(issueProviderKey)?.getSubTasks && taskId) {
-        await this._addSubTasks(
-          issueDataReduced,
-          taskId,
-          issueProviderId,
-          issueProviderKey,
-        );
-      }
+      subTaskParentId = taskId;
+    }
+
+    // Handle subtasks if provider supports it
+    if (this._getService(issueProviderKey)?.getSubTasks && subTaskParentId) {
+      await this._addSubTasks(
+        issueDataReduced,
+        subTaskParentId,
+        issueProviderId,
+        issueProviderKey,
+      );
     }
 
     return taskId;
@@ -669,23 +686,30 @@ export class IssueService {
     issueParentId: string;
     issueProviderId: string;
     issueProviderKey: IssueProviderKey;
-  }): Promise<string | undefined> {
+  }): Promise<{ taskId: string; parentTaskId: string } | undefined> {
     const parentTask = await this._taskService.checkForTaskWithIssueEverywhere(
       issueParentId,
       issueProviderKey,
       issueProviderId,
     );
 
-    if (parentTask) {
-      const subTaskData = { title, ...taskData } as Partial<TaskCopy>;
-      // Ensure invariants for sub-tasks as well
-      if (subTaskData.dueWithTime) {
-        subTaskData.dueDay = undefined;
-      }
-      return this._taskService.addSubTaskTo(parentTask.task.id, subTaskData);
+    // Archived parents cannot receive new sub-tasks (the reducer no-ops silently).
+    // Fall through so the child is added as a top-level task instead.
+    if (!parentTask || parentTask.isFromArchive) {
+      return undefined;
     }
 
-    return undefined;
+    const subTaskData = { title, ...taskData } as Partial<TaskCopy>;
+    if (subTaskData.dueWithTime) {
+      subTaskData.dueDay = undefined;
+    }
+
+    // SP supports only one nesting level. If the resolved parent is itself a
+    // sub-task (has a parentId), attach to its root parent so the new task
+    // becomes a sibling of the parent rather than a grandchild.
+    const effectiveParentId = parentTask.task.parentId || parentTask.task.id;
+    const taskId = await this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
+    return { taskId, parentTaskId: effectiveParentId };
   }
 
   private async _checkAndHandleIssueAlreadyAdded(
@@ -729,6 +753,28 @@ export class IssueService {
         res.task.projectId &&
         res.task.projectId === this._workContextService.activeWorkContextId
       ) {
+        // If the existing task is already in this project's backlog, don't
+        // yank it to Today — that's the whole point of the backlog. Without
+        // this guard, every poll that surfaces an already-imported issue
+        // promotes the task, which spams Today with issues the user
+        // consciously parked in Backlog.
+        const project = await firstValueFrom(
+          this._projectService.getByIdOnce$(res.task.projectId),
+        );
+        const isInBacklog = !!project?.backlogTaskIds?.includes(res.task.id);
+        if (isInBacklog) {
+          const taskId = res.task.id;
+          this._snackService.open({
+            ico: 'info',
+            msg: T.F.TASK.S.TASK_ALREADY_EXISTS,
+            translateParams: { title: res.task.title },
+            actionStr: T.F.TASK.S.GO_TO_TASK,
+            actionFn: () => {
+              this._navigateToTaskService.navigate(taskId, false);
+            },
+          });
+          return true;
+        }
         this._projectService.moveTaskToTodayList(res.task.id, res.task.projectId);
         this._snackService.open({
           ico: 'arrow_upward',
@@ -816,12 +862,19 @@ export class IssueService {
   private _getAddTaskData(
     issueProviderKey: IssueProviderKey,
     issueReduced: IssueDataReduced,
+    cfg?: unknown,
   ): IssueTask {
     const service = this._getService(issueProviderKey);
     if (!service?.getAddTaskData) {
       throw new Error('Issue method not available');
     }
-    const r = service.getAddTaskData(issueReduced);
+    const serviceWithCfg = service as IssueServiceInterface & {
+      getAddTaskDataForCfg?: (issueData: IssueDataReduced, cfg: unknown) => IssueTask;
+    };
+    const r =
+      cfg && serviceWithCfg.getAddTaskDataForCfg
+        ? serviceWithCfg.getAddTaskDataForCfg(issueReduced, cfg)
+        : service.getAddTaskData(issueReduced);
     typia.assert<IssueTask>(r);
     return r;
   }

@@ -241,6 +241,274 @@ describe('taskSharedDeadlineMetaReducer', () => {
         testState,
       );
     });
+
+    describe('auto-planning when deadline is today', () => {
+      const todayStr = '2024-05-18';
+      const autoPlanContext = {
+        autoPlanToday: todayStr,
+        autoPlanStartOfNextDayDiffMs: 0,
+      };
+
+      it('should add to Today and set dueDay if not scheduled', () => {
+        const testState = createStateWithExistingTasks(['task1'], [], [], []);
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'task1',
+          deadlineDay: todayStr,
+          ...autoPlanContext,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        expect(updatedTask.dueDay).toBe(todayStr);
+        expect(todayTag.taskIds).toContain('task1');
+      });
+
+      it('should not auto-plan legacy actions without persisted auto-plan context', () => {
+        const testState = createStateWithExistingTasks(['task1'], [], [], []);
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'task1',
+          deadlineDay: todayStr,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        expect(updatedTask.deadlineDay).toBe(todayStr);
+        expect(updatedTask.dueDay).toBeUndefined();
+        expect(todayTag.taskIds).not.toContain('task1');
+      });
+
+      it('should add to Today and keep schedule if already scheduled for today', () => {
+        const testState = createStateWithExistingTasks(['task1'], [], [], []);
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueDay: todayStr,
+        });
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'task1',
+          deadlineDay: todayStr,
+          ...autoPlanContext,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        expect(updatedTask.dueDay).toBe(todayStr);
+        expect(todayTag.taskIds).toContain('task1');
+      });
+
+      it('should preserve dueWithTime and remindAt if already scheduled with time today', () => {
+        const testState = createStateWithExistingTasks(['task1'], [], [], []);
+        const dueWithTime = new Date(2024, 4, 18, 12).getTime();
+        const remindAt = new Date(2024, 4, 18, 11).getTime();
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueWithTime,
+          remindAt,
+        });
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'task1',
+          deadlineDay: todayStr,
+          ...autoPlanContext,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        expect(updatedTask.dueWithTime).toBe(dueWithTime);
+        expect(updatedTask.dueDay).toBeUndefined();
+        expect(updatedTask.remindAt).toBe(remindAt);
+        expect(todayTag.taskIds).toContain('task1');
+      });
+
+      it('should clear dueWithTime, remindAt, set dueDay, and add to Today if overdue', () => {
+        const testState = createStateWithExistingTasks(['task1'], [], [], []);
+        const pastTimestamp = new Date(2024, 0, 1, 10).getTime();
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueWithTime: pastTimestamp,
+          remindAt: pastTimestamp, // orphaned once dueWithTime cleared -> must clear
+        });
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'task1',
+          deadlineDay: todayStr,
+          ...autoPlanContext,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        expect(updatedTask.dueDay).toBe(todayStr);
+        expect(updatedTask.dueWithTime).toBeUndefined();
+        expect(updatedTask.remindAt).toBeUndefined();
+        expect(todayTag.taskIds).toContain('task1');
+      });
+
+      it('should SKIP auto-planning if task is scheduled for a FUTURE day/time', () => {
+        const testState = createStateWithExistingTasks(['task1'], [], [], []);
+
+        // Future schedule
+        const futureStr = '2025-01-01';
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          dueDay: futureStr,
+        });
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'task1',
+          deadlineDay: todayStr,
+          ...autoPlanContext,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        // Should not have auto-planned (dueDay stays future, not in TODAY)
+        expect(updatedTask.dueDay).toBe(futureStr);
+        expect(todayTag?.taskIds || []).not.toContain('task1');
+      });
+
+      it('should skip done tasks', () => {
+        const testState = createStateWithExistingTasks(['task1'], [], [], []);
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          isDone: true,
+        });
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'task1',
+          deadlineDay: todayStr,
+          ...autoPlanContext,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        expect(updatedTask.dueDay).toBeUndefined();
+        expect(todayTag.taskIds).not.toContain('task1');
+      });
+
+      it('should skip subtasks when their parent is due today', () => {
+        const testState = createStateWithExistingTasks(['parent', 'sub'], [], [], []);
+        testState[TASK_FEATURE_NAME].entities.parent = createMockTask({
+          id: 'parent',
+          dueDay: todayStr,
+        });
+        testState[TASK_FEATURE_NAME].entities.sub = createMockTask({
+          id: 'sub',
+          parentId: 'parent',
+        });
+
+        const action = TaskSharedActions.setDeadline({
+          taskId: 'sub',
+          deadlineDay: todayStr,
+          ...autoPlanContext,
+        });
+
+        metaReducer(testState, action);
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        const updatedTask = updatedState[TASK_FEATURE_NAME].entities.sub as Task;
+        const todayTag = updatedState.tag.entities['TODAY'];
+
+        expect(updatedTask.dueDay).toBeUndefined();
+        expect(todayTag.taskIds).not.toContain('sub');
+      });
+    });
+  });
+
+  describe('planDeadlineTasksForToday action', () => {
+    const todayStr = '2024-05-18';
+    const createAction = (
+      taskIds: string[],
+    ): ReturnType<typeof TaskSharedActions.planDeadlineTasksForToday> =>
+      TaskSharedActions.planDeadlineTasksForToday({
+        taskIds,
+        today: todayStr,
+        startOfNextDayDiffMs: 0,
+      });
+
+    it('should atomically plan unscheduled tasks with deadline today', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], [], []);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        deadlineDay: todayStr,
+      });
+
+      const action = createAction(['task1']);
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+      const todayTag = updatedState.tag.entities['TODAY'];
+
+      expect(updatedTask.dueDay).toBe(todayStr);
+      expect(todayTag.taskIds).toContain('task1');
+    });
+
+    it('should skip future-scheduled tasks', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], [], []);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        deadlineDay: todayStr,
+        dueDay: '2024-06-01',
+      });
+
+      const action = createAction(['task1']);
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1 as Task;
+      const todayTag = updatedState.tag.entities['TODAY'];
+
+      expect(updatedTask.dueDay).toBe('2024-06-01');
+      expect(todayTag.taskIds).not.toContain('task1');
+    });
+
+    it('should process parents before subtasks', () => {
+      const testState = createStateWithExistingTasks(['parent', 'sub'], [], [], []);
+      testState[TASK_FEATURE_NAME].entities.parent = createMockTask({
+        id: 'parent',
+        deadlineDay: todayStr,
+      });
+      testState[TASK_FEATURE_NAME].entities.sub = createMockTask({
+        id: 'sub',
+        parentId: 'parent',
+        deadlineDay: todayStr,
+      });
+
+      const action = createAction(['sub', 'parent']);
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const parent = updatedState[TASK_FEATURE_NAME].entities.parent as Task;
+      const sub = updatedState[TASK_FEATURE_NAME].entities.sub as Task;
+      const todayTag = updatedState.tag.entities['TODAY'];
+
+      expect(parent.dueDay).toBe(todayStr);
+      expect(sub.dueDay).toBeUndefined();
+      expect(todayTag.taskIds).toContain('parent');
+      expect(todayTag.taskIds).not.toContain('sub');
+    });
   });
 
   describe('removeDeadline action', () => {

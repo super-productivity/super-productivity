@@ -62,6 +62,7 @@ export const selectAllTagsWithoutMyDay = createSelector(
  * This selector returns raw stored taskIds which may be stale or incomplete.
  * `selectTodayTaskIds` computes membership from task.dueDay (virtual tag pattern)
  * and is self-healing.
+ * Exception: cleanup code that removes stale raw TODAY_TAG ids needs this stored order.
  *
  * See: docs/ai/today-tag-architecture.md
  */
@@ -352,7 +353,10 @@ export const tagReducer = createReducer<TagState>(
 
   on(updateTagOrder, (state: TagState, { ids }) => {
     if (ids.length !== state.ids.length) {
-      Log.log({ state, ids });
+      Log.log({
+        currentTagCount: state.ids.length,
+        nextTagCount: ids.length,
+      });
       throw new Error('Tag length should not change on re-order');
     }
 

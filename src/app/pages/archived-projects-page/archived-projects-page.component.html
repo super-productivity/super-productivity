@@ -1,0 +1,83 @@
+<div class="page-wrapper">
+  <div class="search-header">
+    <mat-form-field
+      appearance="outline"
+      class="search-field"
+    >
+      <mat-label>{{ T.F.PROJECT.ARCHIVED_PROJECTS.SEARCH | translate }}</mat-label>
+      <input
+        matInput
+        [(ngModel)]="searchTerm"
+        [placeholder]="T.F.PROJECT.ARCHIVED_PROJECTS.SEARCH | translate"
+      />
+      @if (searchTerm()) {
+        <button
+          mat-icon-button
+          matSuffix
+          [attr.aria-label]="T.G.CLEAR | translate"
+          (click)="searchTerm.set('')"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      }
+    </mat-form-field>
+  </div>
+
+  <section class="component-wrapper">
+    @if (filteredProjects().length === 0) {
+      <p class="empty-state">{{ T.F.PROJECT.ARCHIVED_PROJECTS.EMPTY | translate }}</p>
+    } @else {
+      <ul
+        class="project-list"
+        [attr.aria-label]="T.MH.ARCHIVED_PROJECTS | translate"
+      >
+        @for (project of filteredProjects(); track project.id) {
+          <li class="project-row">
+            <a
+              class="project-link"
+              [routerLink]="['/project', project.id, 'tasks']"
+            >
+              <mat-icon
+                class="project-icon"
+                aria-hidden="true"
+                [style.color]="project.theme?.primary || null"
+                >{{ project.icon || DEFAULT_PROJECT_ICON }}</mat-icon
+              >
+              <span class="project-title">{{ project.title }}</span>
+              @if (project.isDone) {
+                <span class="completed-badge">
+                  <mat-icon aria-hidden="true">emoji_events</mat-icon>
+                  @if (project.doneOn) {
+                    {{
+                      T.F.PROJECT.COMPLETE.COMPLETED_ON
+                        | translate: { date: (project.doneOn | date) }
+                    }}
+                  }
+                </span>
+              }
+            </a>
+            @if (project.isDone) {
+              <button
+                mat-icon-button
+                [matTooltip]="T.F.PROJECT.COMPLETE.REOPEN | translate"
+                [attr.aria-label]="T.F.PROJECT.COMPLETE.REOPEN | translate"
+                (click)="reopen(project)"
+              >
+                <mat-icon>replay</mat-icon>
+              </button>
+            } @else {
+              <button
+                mat-icon-button
+                [matTooltip]="T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate"
+                [attr.aria-label]="T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate"
+                (click)="unarchive(project)"
+              >
+                <mat-icon>unarchive</mat-icon>
+              </button>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>

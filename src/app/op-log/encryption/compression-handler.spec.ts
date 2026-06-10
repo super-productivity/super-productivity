@@ -1,3 +1,4 @@
+import { NOOP_SYNC_LOGGER } from '@sp/sync-core';
 import { OpLog } from '../../core/log';
 import { DecompressError } from '../core/errors/sync-errors';
 import {
@@ -9,6 +10,7 @@ import {
 describe('compression-handler', () => {
   beforeEach(() => {
     spyOn(OpLog, 'err').and.stub();
+    spyOn(OpLog, 'log').and.stub();
     spyOn(console, 'log').and.stub();
   });
 
@@ -44,6 +46,45 @@ describe('compression-handler', () => {
       await expectAsync(decompressGzipFromString(invalidGzip)).toBeRejectedWithError(
         DecompressError,
       );
+    });
+
+    it('logs only sanitized error metadata on decompression failure', async () => {
+      (OpLog.err as jasmine.Spy).calls.reset();
+      const invalidGzip = btoa('not gzip data');
+
+      await expectAsync(decompressGzipFromString(invalidGzip)).toBeRejectedWithError(
+        DecompressError,
+      );
+
+      expect(OpLog.err).toHaveBeenCalledOnceWith(
+        '[compression-handler] gzip decompression failed',
+        jasmine.objectContaining({ name: jasmine.any(String) }),
+        {
+          inputLength: invalidGzip.length,
+          sanitizedInputLength: invalidGzip.length,
+        },
+      );
+      expect((OpLog.err as jasmine.Spy).calls.mostRecent().args[1] instanceof Error)
+        .withContext('logged error identity must be sanitized')
+        .toBeFalse();
+      const additionalLogText = (OpLog.log as jasmine.Spy).calls
+        .allArgs()
+        .flat()
+        .join('\n');
+      expect(additionalLogText).not.toContain('not gzip data');
+    });
+
+    it('preserves DecompressError when the injected logger throws', async () => {
+      const throwingLogger = {
+        ...NOOP_SYNC_LOGGER,
+        err: () => {
+          throw new Error('logger failed');
+        },
+      };
+
+      await expectAsync(
+        decompressGzipFromString(btoa('not gzip data'), throwingLogger),
+      ).toBeRejectedWithError(DecompressError);
     });
 
     // Issue #6581: decompressGzipFromString should sanitize base64 input
@@ -90,6 +131,31 @@ describe('compression-handler', () => {
       await expectAsync(
         decompressGzipFromString('!!!completely-broken-data!!!'),
       ).toBeRejectedWithError(DecompressError);
+    });
+
+    // Issue #7300: opaque "compressed Input was truncated" browser errors
+    // must be translated into actionable guidance directing the user to
+    // delete the corrupt remote file.
+    it('surfaces recovery guidance in DecompressError message for truncated gzip', async () => {
+      const original = JSON.stringify({ task: 'test', data: 'x'.repeat(1024) });
+      const compressed = await compressWithGzipToString(original);
+      // Remove the gzip footer (last few bytes in base64) to simulate a
+      // truncated remote file. The underlying DecompressionStream will throw
+      // "compressed Input was truncated" or similar.
+      const truncLen = compressed.length - (compressed.length % 4 || 4);
+      const truncated = compressed.slice(0, truncLen - 4); // drop a full 4-char group
+
+      let caught: unknown;
+      try {
+        await decompressGzipFromString(truncated);
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(DecompressError);
+      const message = (caught as Error).message.toLowerCase();
+      // Truncation branch must have fired: guidance names the file to delete.
+      expect(message).toContain('sync-data.json');
+      expect(message).toContain('delete');
     });
   });
 

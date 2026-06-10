@@ -18,19 +18,27 @@ export const mapScheduleDaysToScheduleEvents = (
     beyondBudgetDays[dayIndex] = day.beyondBudgetTasks.map((taskPlannedForDay) => {
       const timeLeft = getTimeLeftForTask(taskPlannedForDay);
       const timeLeftInHours = timeLeft / 1000 / 60 / 60;
-      const rowSpan = Math.max(Math.round(timeLeftInHours * FH), 1);
+      const plannedForDay =
+        (taskPlannedForDay as TaskWithPlannedForDayIndication).plannedForDay ||
+        taskPlannedForDay.dueDay ||
+        day.dayDate;
       return {
         id: taskPlannedForDay.id,
-        dayOfMonth: undefined,
+        dayOfMonth: getDayOfMonth(plannedForDay),
         data: taskPlannedForDay,
         type: SVEType.TaskPlannedForDay,
-        style: `height: ${rowSpan * 8}px`,
+        style: '',
         timeLeftInHours,
         startHours: 0,
+        plannedForDay,
+        isBeyondBudget: true,
       };
     });
 
-    const activeEntries: typeof day.entries = [];
+    const activeEntries: (
+      | { entry: (typeof day.entries)[number]; eventIndex: number }
+      | undefined
+    )[] = [];
 
     day.entries.forEach((entry) => {
       if (entry.type !== SVEType.WorkdayEnd && entry.type !== SVEType.WorkdayStart) {
@@ -48,13 +56,11 @@ export const mapScheduleDaysToScheduleEvents = (
         const timeLeftInHours = Math.floor(timeLeft / 1000 / 60) / 60;
         const rowSpan = Math.max(1, Math.round(timeLeftInHours * FH));
 
+        const eventIndex = eventsFlat.length;
         eventsFlat.push({
-          dayOfMonth:
-            ((entry.data as TaskWithPlannedForDayIndication)?.plannedForDay &&
-              dateStrToUtcDate(
-                (entry.data as TaskWithPlannedForDayIndication)?.plannedForDay,
-              ).getDate()) ||
-            undefined,
+          dayOfMonth: getDayOfMonth(
+            (entry.data as TaskWithPlannedForDayIndication)?.plannedForDay,
+          ),
           id: entry.id,
           type: entry.type as SVEType,
           startHours: hoursToday,
@@ -62,17 +68,19 @@ export const mapScheduleDaysToScheduleEvents = (
           style: `grid-column: ${dayIndex + 2};  grid-row: ${startRow} / span ${rowSpan}`,
           data: entry.data,
           plannedForDay: entry.plannedForDay,
+          isBeyondBudget: entry.isBeyondBudget,
         });
 
         let overlapCount = 0;
         for (let i = 0; i < activeEntries.length; i++) {
-          if (!activeEntries[i]) {
+          const activeEntry = activeEntries[i];
+          if (!activeEntry) {
             continue;
           }
           const entryEnd = entry.start + Math.max(entry.duration, 1);
           const activeEnd =
-            activeEntries[i].start + Math.max(activeEntries[i].duration, 1);
-          if (entryEnd <= activeEntries[i].start || activeEnd <= entry.start) {
+            activeEntry.entry.start + Math.max(activeEntry.entry.duration, 1);
+          if (entryEnd <= activeEntry.entry.start || activeEnd <= entry.start) {
             delete activeEntries[i];
           } else {
             overlapCount += 1;
@@ -84,13 +92,34 @@ export const mapScheduleDaysToScheduleEvents = (
           nextInactiveSlot = activeEntries.length === 0 ? 0 : activeEntries.length;
         }
 
-        activeEntries[nextInactiveSlot] = entry;
+        activeEntries[nextInactiveSlot] = { entry, eventIndex };
 
         if (overlapCount > 0 || nextInactiveSlot > 0) {
-          eventsFlat[eventsFlat.length - 1].overlap = {
-            count: overlapCount,
-            offset: nextInactiveSlot,
-          };
+          const activeEventSlots = activeEntries
+            .map((activeEntry, offset) => ({ activeEntry, offset }))
+            .filter(
+              (
+                activeEventSlot,
+              ): activeEventSlot is {
+                activeEntry: { entry: (typeof day.entries)[number]; eventIndex: number };
+                offset: number;
+              } => !!activeEventSlot.activeEntry,
+            );
+          const laneCount = Math.max(
+            ...activeEventSlots.map(({ activeEntry, offset }) =>
+              Math.max(
+                offset + 1,
+                eventsFlat[activeEntry.eventIndex].overlap?.count ?? 1,
+              ),
+            ),
+          );
+
+          activeEventSlots.forEach(({ activeEntry, offset }) => {
+            eventsFlat[activeEntry.eventIndex].overlap = {
+              count: laneCount,
+              offset,
+            };
+          });
         }
       }
     });
@@ -98,3 +127,6 @@ export const mapScheduleDaysToScheduleEvents = (
 
   return { eventsFlat, beyondBudgetDays };
 };
+
+const getDayOfMonth = (dayDate: string | undefined): number | undefined =>
+  dayDate ? dateStrToUtcDate(dayDate).getDate() : undefined;

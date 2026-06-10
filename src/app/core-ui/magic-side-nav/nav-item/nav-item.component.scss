@@ -25,7 +25,7 @@
     overflow: hidden;
     flex: 1;
     min-width: 0;
-    font-family: 'Open Sans', sans-serif;
+    font-family: inherit;
     font-weight: 400;
     letter-spacing: normal;
     color: var(--sidenav-text);
@@ -69,16 +69,8 @@
   font-weight: normal;
 }
 
-:host:hover .task-count {
-  display: none !important;
-}
-
-@media (hover: none) {
-  .additional-btn {
-    opacity: 1;
-    visibility: visible;
-  }
-  .task-count {
+@media (hover: hover) {
+  :host:hover .task-count {
     display: none !important;
   }
 }
@@ -96,9 +88,21 @@
   color: var(--text-color-muted);
   // avoid affecting drag handle
   pointer-events: none;
+}
 
-  @include mq(xs, max) {
-    display: none;
+// On touch devices the .additional-btn is always visible, so let the counter
+// flow inline beside it instead of overlapping.
+:host-context(.isTouchPrimary) {
+  .task-count {
+    position: static;
+    transform: none;
+    padding: 0 var(--s);
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
+
+  button:first-of-type.has-tasks {
+    padding-right: var(--s);
   }
 }
 
@@ -174,7 +178,7 @@ button[mat-menu-item].nav-link.active {
   width: 100%;
   text-align: left;
   font-size: 14px;
-  font-family: 'Open Sans', sans-serif;
+  font-family: inherit;
   font-weight: 400;
   letter-spacing: normal;
 
@@ -270,7 +274,7 @@ button[mat-menu-item].nav-link.active {
     font-variation-settings: normal;
     text-transform: none;
     letter-spacing: normal;
-    word-wrap: normal;
+    overflow-wrap: normal;
     white-space: nowrap;
     direction: ltr;
     // Better emoji rendering

@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { isEmailAllowed } from './email-allowlist';
 import * as jwt from 'jsonwebtoken';
 import {
   verifyEmail,
@@ -22,6 +23,7 @@ import {
 import { authenticate, getAuthUser } from './middleware';
 import { Logger } from './logger';
 import { prisma } from './db';
+import { authCache } from './auth-cache';
 
 // Zod Schemas
 const VerifyEmailSchema = z.object({
@@ -204,8 +206,13 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         Logger.info(`[user:${userId}] DELETE ACCOUNT requested`);
 
+        // AUTH_CACHE_INVALIDATION: account deletion must not leave a ghost-token window.
+        authCache.invalidate(userId);
+
         // Cascade delete handles: operations, syncState, devices (via Prisma schema)
         await prisma.user.delete({ where: { id: userId } });
+        // AUTH_CACHE_INVALIDATION: account deletion must not leave a ghost-token window.
+        authCache.invalidate(userId);
 
         Logger.audit({ event: 'USER_ACCOUNT_DELETED', userId });
 
@@ -230,7 +237,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -245,6 +252,12 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
           });
         }
         const { email } = parseResult.data;
+
+        if (!isEmailAllowed(email)) {
+          return reply
+            .status(403)
+            .send({ error: 'Registration is not allowed for this email address.' });
+        }
 
         const options = await generateRegistrationOptions(email);
         return reply.send(options);
@@ -264,7 +277,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -279,6 +292,12 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
           });
         }
         const { email, credential } = parseResult.data;
+
+        if (!isEmailAllowed(email)) {
+          return reply
+            .status(403)
+            .send({ error: 'Registration is not allowed for this email address.' });
+        }
 
         const result = await verifyRegistration(email, credential as any, Date.now());
         return reply.status(201).send(result);
@@ -301,7 +320,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -335,7 +354,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -387,7 +406,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 5,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -421,7 +440,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -455,7 +474,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -493,7 +512,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -508,6 +527,12 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
           });
         }
         const { email } = parseResult.data;
+
+        if (!isEmailAllowed(email)) {
+          return reply
+            .status(403)
+            .send({ error: 'Registration is not allowed for this email address.' });
+        }
 
         const result = await registerWithMagicLink(email, Date.now());
         return reply.status(201).send(result);
@@ -527,7 +552,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 5,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },
@@ -561,7 +586,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
     {
       config: {
         rateLimit: {
-          max: 10,
+          max: 50,
           timeWindow: '15 minutes',
         },
       },

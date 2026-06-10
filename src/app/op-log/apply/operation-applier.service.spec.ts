@@ -1,11 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
+import type {
+  ActionDispatchPort,
+  OperationApplyPort,
+  SyncActionLike,
+} from '@sp/sync-core';
 import { OperationApplierService } from './operation-applier.service';
 import { Operation, OpType, EntityType, ActionType } from '../core/operation.types';
 import { ArchiveOperationHandler } from './archive-operation-handler.service';
 import { HydrationStateService } from './hydration-state.service';
 import { remoteArchiveDataApplied } from '../../features/archive/store/archive.actions';
 import { bulkApplyOperations } from './bulk-hydration.action';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 
 describe('OperationApplierService', () => {
@@ -14,6 +20,7 @@ describe('OperationApplierService', () => {
   let mockArchiveOperationHandler: jasmine.SpyObj<ArchiveOperationHandler>;
   let mockHydrationState: jasmine.SpyObj<HydrationStateService>;
   let mockOperationLogEffects: jasmine.SpyObj<OperationLogEffects>;
+  let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
 
   const createMockOperation = (
     id: string,
@@ -48,9 +55,15 @@ describe('OperationApplierService', () => {
     mockOperationLogEffects = jasmine.createSpyObj('OperationLogEffects', [
       'processDeferredActions',
     ]);
+    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', [
+      'loadClientId',
+      'getOrGenerateClientId',
+      'clearCache',
+    ]);
 
     mockArchiveOperationHandler.handleOperation.and.returnValue(Promise.resolve());
     mockOperationLogEffects.processDeferredActions.and.returnValue(Promise.resolve());
+    mockClientIdProvider.loadClientId.and.resolveTo('testClient');
 
     TestBed.configureTestingModule({
       providers: [
@@ -59,10 +72,41 @@ describe('OperationApplierService', () => {
         { provide: ArchiveOperationHandler, useValue: mockArchiveOperationHandler },
         { provide: HydrationStateService, useValue: mockHydrationState },
         { provide: OperationLogEffects, useValue: mockOperationLogEffects },
+        { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
       ],
     });
 
     service = TestBed.inject(OperationApplierService);
+  });
+
+  describe('port contracts', () => {
+    it('should expose operation application through OperationApplyPort', async () => {
+      const applyPort: OperationApplyPort<Operation> = service;
+      const op = createMockOperation('op-1', 'TASK', OpType.Update, { title: 'Test' });
+
+      const result = await applyPort.applyOperations([op]);
+
+      expect(result.appliedOps).toEqual([op]);
+      expect(mockStore.dispatch).toHaveBeenCalledOnceWith(
+        bulkApplyOperations({ operations: [op], localClientId: 'testClient' }),
+      );
+    });
+
+    it('should preserve action object and meta identity through ActionDispatchPort', () => {
+      const dispatchPort: ActionDispatchPort<SyncActionLike> = mockStore;
+      const meta = { source: 'remote-sync', nested: { marker: 'keep-reference' } };
+      const action: SyncActionLike = {
+        type: '[Test] Dispatch Port Action',
+        meta,
+      };
+
+      dispatchPort.dispatch(action);
+
+      const dispatchedAction = mockStore.dispatch.calls.first()
+        .args[0] as unknown as SyncActionLike;
+      expect(dispatchedAction).toBe(action);
+      expect(dispatchedAction.meta).toBe(meta);
+    });
   });
 
   describe('applyOperations with bulk dispatch', () => {
@@ -107,6 +151,23 @@ describe('OperationApplierService', () => {
 
       expect(result.appliedOps).toEqual(ops);
       expect(result.failedOp).toBeUndefined();
+    });
+
+    it('should preserve the operation array and operation object references in the bulk action', async () => {
+      const payload = { title: 'Reference payload' };
+      const op = createMockOperation('op-1', 'TASK', OpType.Update, payload);
+      const ops = [op];
+
+      await service.applyOperations(ops);
+
+      const dispatchedAction = mockStore.dispatch.calls.first().args[0] as unknown as {
+        type: string;
+        operations: Operation[];
+      };
+      expect(dispatchedAction.type).toBe(bulkApplyOperations.type);
+      expect(dispatchedAction.operations).toBe(ops);
+      expect(dispatchedAction.operations[0]).toBe(op);
+      expect(dispatchedAction.operations[0].payload).toBe(payload);
     });
 
     it('should handle empty operations array', async () => {
@@ -256,6 +317,38 @@ describe('OperationApplierService', () => {
 
       expect(mockHydrationState.startPostSyncCooldown).toHaveBeenCalledTimes(1);
     });
+
+    it('should close the apply window and flush deferred actions for local hydration', async () => {
+      const callOrder: string[] = [];
+      const op = createMockOperation('op-1');
+
+      mockHydrationState.startApplyingRemoteOps.and.callFake(() => {
+        callOrder.push('startApplyingRemoteOps');
+      });
+
+      mockHydrationState.startPostSyncCooldown.and.callFake(() => {
+        callOrder.push('startPostSyncCooldown');
+      });
+
+      mockHydrationState.endApplyingRemoteOps.and.callFake(() => {
+        callOrder.push('endApplyingRemoteOps');
+      });
+
+      mockOperationLogEffects.processDeferredActions.and.callFake(() => {
+        callOrder.push('processDeferredActions');
+        return Promise.resolve();
+      });
+
+      await service.applyOperations([op], { isLocalHydration: true });
+
+      expect(callOrder).toEqual([
+        'startApplyingRemoteOps',
+        'endApplyingRemoteOps',
+        'processDeferredActions',
+      ]);
+      expect(mockArchiveOperationHandler.handleOperation).not.toHaveBeenCalled();
+      expect(mockHydrationState.startPostSyncCooldown).not.toHaveBeenCalled();
+    });
   });
 
   describe('archive reload trigger', () => {
@@ -369,6 +462,46 @@ describe('OperationApplierService', () => {
       await service.applyOperations([op]);
 
       expect(setTimeoutCalledWithZero).toBe(true);
+    });
+
+    it('should wait for the bulk dispatch yield before archive handling starts', async () => {
+      const archiveCalls: string[] = [];
+      const op = createMockOperation('op-1', 'TASK', OpType.Update, { title: 'Test' });
+      let releaseDispatchYield: (() => void) | undefined;
+      const originalSetTimeout = window.setTimeout.bind(window);
+
+      mockArchiveOperationHandler.handleOperation.and.callFake(() => {
+        archiveCalls.push('archive');
+        return Promise.resolve();
+      });
+
+      spyOn(window, 'setTimeout').and.callFake(((fn: () => void, ms?: number) => {
+        if (ms === 0 && !releaseDispatchYield) {
+          releaseDispatchYield = fn;
+          return 0;
+        }
+        return originalSetTimeout(fn, ms);
+      }) as typeof window.setTimeout);
+
+      const applyPromise = service.applyOperations([op]);
+      // applyOperations awaits the (cached) clientId load before dispatching, so
+      // flush that one microtask before asserting the synchronous dispatch.
+      await Promise.resolve();
+
+      expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
+      expect(archiveCalls).toEqual([]);
+      expect(mockArchiveOperationHandler.handleOperation).not.toHaveBeenCalled();
+      expect(releaseDispatchYield).toBeDefined();
+
+      if (!releaseDispatchYield) {
+        fail('Expected dispatch yield callback to be captured');
+        return;
+      }
+
+      releaseDispatchYield();
+      await applyPromise;
+
+      expect(archiveCalls).toEqual(['archive']);
     });
 
     it('should not yield to event loop when no operations are applied', async () => {
@@ -542,6 +675,16 @@ describe('OperationApplierService', () => {
       await service.applyOperations([op]);
 
       expect(mockOperationLogEffects.processDeferredActions).toHaveBeenCalledTimes(1);
+    });
+
+    it('should skip deferred action processing when caller will flush later', async () => {
+      const op = createMockOperation('op-1');
+
+      await service.applyOperations([op], {
+        skipDeferredLocalActions: true,
+      });
+
+      expect(mockOperationLogEffects.processDeferredActions).not.toHaveBeenCalled();
     });
 
     it('should call processDeferredActions after endApplyingRemoteOps', async () => {

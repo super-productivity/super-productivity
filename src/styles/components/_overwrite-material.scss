@@ -13,6 +13,7 @@
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-700);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-700);
   --mat-tab-header-inactive-label-text-color: var(--text-color-muted);
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 35%, transparent);
 }
 
 // Dark theme tab overrides for better contrast - use lighter shade
@@ -22,6 +23,7 @@ body.isDarkTheme {
   --mat-tab-header-active-focus-label-text-color: var(--palette-primary-300);
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-300);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-300);
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 20%, transparent);
 }
 
 // Apply tab colors explicitly to tab components
@@ -70,6 +72,12 @@ body.isNativeMobile .cdk-global-overlay-wrapper {
     var(--safe-area-left);
 }
 
+body.isIOS.isKeyboardVisible .cdk-global-overlay-wrapper {
+  // Dialogs render outside the app shell; when iOS does not shrink the WebView,
+  // reserve keyboard space in the overlay layer itself.
+  padding-bottom: calc(var(--safe-area-bottom) + var(--keyboard-overlay-offset));
+}
+
 // Constrain menu panels to safe area so content scrolls instead of
 // extending behind the status bar when CDK pushes the overlay up.
 body.isNativeMobile .mat-mdc-menu-panel {
@@ -95,6 +103,12 @@ body.isNativeMobile .mat-mdc-menu-panel {
       100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
     ) !important;
   }
+}
+
+body.isIOS.isKeyboardVisible .cdk-overlay-pane.mat-mdc-dialog-panel {
+  max-height: calc(
+    var(--visual-viewport-height) - var(--safe-area-top) - var(--safe-area-bottom)
+  ) !important;
 }
 
 body .mat-mdc-dialog-content {
@@ -146,6 +160,34 @@ body .mat-mdc-dialog-surface {
   @include media-queries.mq(xs) {
     margin: var(--s2);
   }
+}
+
+.project-complete-fullscreen-dialog {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+
+  @supports (height: 100dvh) {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+body.isNativeMobile .project-complete-fullscreen-dialog {
+  width: calc(100vw - var(--safe-area-left) - var(--safe-area-right)) !important;
+  height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
 }
 
 // FORMS
@@ -238,6 +280,12 @@ mat-option.isDone {
 mat-icon,
 .mat-icon {
   vertical-align: middle;
+  visibility: hidden;
+}
+
+body.isMaterialSymbolsLoaded .mat-icon,
+body.isMaterialSymbolsLoaded mat-icon {
+  visibility: visible;
 }
 
 .mat-icon.mat-icon {
@@ -293,6 +341,32 @@ body .mat-mdc-button-base .mat-icon {
   }
 
   background: var(--bg-lightest) !important;
+}
+
+.cdk-drag-preview.tree-dnd-drag-preview {
+  box-sizing: border-box;
+  max-width: calc(100vw - var(--s2));
+  border-radius: var(--card-border-radius);
+  color: var(--sidenav-text);
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  .nav-child-item,
+  nav-item,
+  .nav-link {
+    min-width: 0;
+  }
+
+  .nav-link,
+  .nav-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .drag-preview-time-badge {
@@ -358,6 +432,16 @@ mat-tooltip-component {
   pointer-events: none;
 }
 
+// The tooltip's overlay PANE wrapper (not just the inner component) must
+// not swallow pointer events. A tooltip shown 'below' a button in the
+// vertical action strip lands directly over the next button — without
+// this it intercepts clicks for both real users and Playwright. Scoped
+// to the experimental flag so other tooltips in the app keep their
+// pane-level pointer events (interactive hover content, etc.).
+body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
+  pointer-events: none;
+}
+
 // SNACK
 // Move snack bar above mobile bottom nav for all touch devices
 @include media-queries.mq(xs, max) {
@@ -377,5 +461,47 @@ mat-tooltip-component {
       var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2 + 48px
     ) !important;
     pointer-events: auto;
+  }
+}
+
+.mat-expansion-panel-header {
+  --mat-expansion-header-expanded-state-height: 48px;
+}
+
+.mat-mdc-menu-panel:has(select-option-row) .mat-mdc-menu-item,
+.mat-mdc-autocomplete-panel:has(select-option-row) .mat-mdc-option {
+  height: auto !important;
+  min-height: 48px;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.mention-menu:has(select-option-row) .mention-item {
+  height: auto !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+// Shared calendar hover and focus overrides
+.mat-calendar:not(.no-hover-effects) {
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+    > .mat-calendar-body-cell-content {
+    outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
+  }
+
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+    > .mat-calendar-body-cell-content {
+    outline: 2px dashed color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
+  }
+
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+    > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected),
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+    > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
+    background-color: var(--calendar-hover-bg) !important;
   }
 }

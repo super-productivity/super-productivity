@@ -1,6 +1,9 @@
 import { Injectable, inject } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
 import { ClipboardImageService } from './clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
+import { clipboardHasText } from '../../util/clipboard-has-text';
+import { T } from '../../t.const';
 
 // Paste context interface
 export interface PasteContext {
@@ -21,16 +24,15 @@ export interface PasteContext {
 export class ClipboardPasteHandlerService {
   private _clipboardImageService = inject(ClipboardImageService);
   private _taskAttachmentService = inject(TaskAttachmentService);
+  private _translateService = inject(TranslateService);
 
   async handlePaste(ev: ClipboardEvent, context: PasteContext): Promise<boolean> {
     if (!ev.clipboardData) return false;
 
-    // Check for text content first - prioritize text over images (e.g., OneNote copies both)
-    const hasText =
-      ev.clipboardData.types.includes('text/plain') ||
-      ev.clipboardData.types.includes('text/html');
-    if (hasText) {
-      return false; // Let default text paste behavior handle it
+    // Prioritize text over images (e.g. OneNote copies both); let the default
+    // text paste behavior handle it instead of saving an image.
+    if (clipboardHasText(ev.clipboardData)) {
+      return false;
     }
 
     const progress = this._clipboardImageService.handlePasteWithProgress(ev);
@@ -76,7 +78,9 @@ export class ClipboardPasteHandlerService {
             id: null,
             type: 'IMG',
             path: result.imageUrl,
-            title: 'Pasted image',
+            title: this._translateService.instant(
+              T.F.TASK.ADDITIONAL_INFO.PASTED_IMAGE_TITLE,
+            ),
           });
         }
 

@@ -7,6 +7,7 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from '../sync/sync-session-validation.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { Operation, OpType, ActionType, SyncImportReason } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
@@ -22,6 +23,11 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/normalize-start-of-next-day-config';
+import {
+  applyLocalOnlySyncSettingsToAppData,
+  stripLocalOnlySyncSettingsFromAppData,
+} from '../../features/config/local-only-sync-settings.util';
 
 /**
  * Handles hydration after remote sync downloads.
@@ -43,6 +49,7 @@ export class SyncHydrationService {
   private clientIdService = inject(ClientIdService);
   private vectorClockService = inject(VectorClockService);
   private validateStateService = inject(ValidateStateService);
+  private sessionValidation = inject(SyncSessionValidationService);
   private snackService = inject(SnackService);
   private archiveDbAdapter = inject(ArchiveDbAdapter);
 
@@ -81,7 +88,10 @@ export class SyncHydrationService {
       const currentSyncConfig = await firstValueFrom(this.store.select(selectSyncConfig));
       const localOnlySettings = {
         isEnabled: currentSyncConfig.isEnabled,
+        isEncryptionEnabled: currentSyncConfig.isEncryptionEnabled,
         syncProvider: currentSyncConfig.syncProvider,
+        syncInterval: currentSyncConfig.syncInterval,
+        isManualSyncOnly: currentSyncConfig.isManualSyncOnly,
       };
 
       // 1. Write archives to IndexedDB if they were included in the downloaded data.
@@ -114,7 +124,11 @@ export class SyncHydrationService {
         ? { ...dbData, ...downloadedMainModelData }
         : dbData;
 
-      const syncedData = this._stripLocalOnlySettings(mergedData);
+      const syncedData = stripLocalOnlySyncSettingsFromAppData(mergedData);
+      const locallyReplayableSyncedData = applyLocalOnlySyncSettingsToAppData(
+        syncedData,
+        localOnlySettings,
+      );
       OpLog.normal(
         'SyncHydrationService: Loaded synced data',
         downloadedMainModelData
@@ -122,11 +136,8 @@ export class SyncHydrationService {
           : '(from state snapshot)',
       );
 
-      // 3. Get client ID for vector clock
-      const clientId = await this.clientIdService.loadClientId();
-      if (!clientId) {
-        throw new Error('Failed to load clientId - cannot create SYNC_IMPORT operation');
-      }
+      // 3. Get client ID for vector clock (regenerate if missing or invalid)
+      const clientId = await this.clientIdService.getOrGenerateClientId();
 
       // 4. Create SYNC_IMPORT operation with merged clock
       // CRITICAL: The SYNC_IMPORT's clock must include ALL known clients, not just local ones.
@@ -171,7 +182,7 @@ export class SyncHydrationService {
           actionType: ActionType.LOAD_ALL_DATA,
           opType: OpType.SyncImport,
           entityType: 'ALL',
-          payload: syncedData,
+          payload: locallyReplayableSyncedData,
           clientId: clientId,
           vectorClock: newClock,
           timestamp: Date.now(),
@@ -217,9 +228,23 @@ export class SyncHydrationService {
         lastSeq = await this.opLogStore.getLastSeq();
       }
 
-      // 7. Validate and repair synced data before dispatching
-      // This fixes stale task references (e.g., tags/projects referencing deleted tasks)
-      let dataToLoad = syncedData as AppDataComplete;
+      // 7. Validate and repair synced data before dispatching.
+      // This fixes stale task references (e.g., tags/projects referencing deleted tasks).
+      // If the validator reports the data is *not* valid (and repair didn't
+      // succeed), flip the SyncSessionValidationService latch so the wrapper
+      // can refuse IN_SYNC. Without this, snapshot hydration would silently
+      // accept corrupt remote data — a gap not covered by validateAfterSync
+      // since this path bypasses processRemoteOps entirely. (#7330)
+      const downloadedAppData = locallyReplayableSyncedData as AppDataComplete;
+      const normalizedGlobalConfig = normalizeGlobalConfigStartOfNextDay(
+        downloadedAppData.globalConfig,
+      );
+      let dataToLoad = normalizedGlobalConfig
+        ? {
+            ...downloadedAppData,
+            globalConfig: normalizedGlobalConfig,
+          }
+        : downloadedAppData;
       const validationResult =
         await this.validateStateService.validateAndRepair(dataToLoad);
       if (validationResult.wasRepaired && validationResult.repairedState) {
@@ -227,22 +252,12 @@ export class SyncHydrationService {
         dataToLoad = validationResult.repairedState as any;
         OpLog.normal('SyncHydrationService: Repaired synced data before loading');
       }
-
-      // 7b. Restore local-only sync settings into dataToLoad
-      // This ensures the snapshot and NgRx state have the correct local settings,
-      // not the ones from remote data. Without this, isEnabled could be set to false
-      // if another client had sync disabled, causing sync to appear disabled on reload.
-      if (dataToLoad.globalConfig?.sync) {
-        dataToLoad = {
-          ...dataToLoad,
-          globalConfig: {
-            ...dataToLoad.globalConfig,
-            sync: {
-              ...dataToLoad.globalConfig.sync,
-              ...localOnlySettings,
-            },
-          },
-        };
+      if (!validationResult.isValid) {
+        OpLog.err(
+          'SyncHydrationService: Validation failed for hydrated remote snapshot — flagging session',
+          { error: validationResult.error },
+        );
+        this.sessionValidation.setFailed();
       }
 
       // 8. Determine the working clock to use.
@@ -289,42 +304,5 @@ export class SyncHydrationService {
       OpLog.err('SyncHydrationService: Error during hydrateFromRemoteSync', e);
       throw e;
     }
-  }
-
-  /**
-   * Strips local-only settings from synced data to prevent them from being
-   * overwritten by remote data. These settings should remain local to each client.
-   *
-   * Currently strips:
-   * - globalConfig.sync.syncProvider: Each client chooses its own sync provider
-   */
-  private _stripLocalOnlySettings(data: unknown): unknown {
-    if (!data || typeof data !== 'object') {
-      return data;
-    }
-
-    const typedData = data as Record<string, unknown>;
-    if (!typedData['globalConfig']) {
-      return data;
-    }
-
-    const globalConfig = typedData['globalConfig'] as Record<string, unknown>;
-    if (!globalConfig['sync']) {
-      return data;
-    }
-
-    const sync = globalConfig['sync'] as Record<string, unknown>;
-
-    // Return data with syncProvider nulled out
-    return {
-      ...typedData,
-      globalConfig: {
-        ...globalConfig,
-        sync: {
-          ...sync,
-          syncProvider: null, // Local-only setting, don't overwrite from remote
-        },
-      },
-    };
   }
 }

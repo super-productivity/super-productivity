@@ -3,7 +3,10 @@ import { PlannerPlanViewComponent } from './planner-plan-view.component';
 import { PlannerService } from '../planner.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { BehaviorSubject, of } from 'rxjs';
-import { selectUndoneOverdue } from '../../tasks/store/task.selectors';
+import {
+  selectUndoneOverdue,
+  selectUndoneOverdueDeadlineTasks,
+} from '../../tasks/store/task.selectors';
 
 describe('PlannerPlanViewComponent', () => {
   let fixture: ComponentFixture<PlannerPlanViewComponent>;
@@ -24,7 +27,10 @@ describe('PlannerPlanViewComponent', () => {
       providers: [
         { provide: PlannerService, useValue: mockPlannerService },
         provideMockStore({
-          selectors: [{ selector: selectUndoneOverdue, value: [] }],
+          selectors: [
+            { selector: selectUndoneOverdue, value: [] },
+            { selector: selectUndoneOverdueDeadlineTasks, value: [] },
+          ],
         }),
       ],
     });

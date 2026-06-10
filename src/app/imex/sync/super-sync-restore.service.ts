@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import { SuperSyncProvider } from '@sp/sync-providers/super-sync';
 import {
   RestoreCapable,
   RestorePoint,
@@ -10,6 +10,7 @@ import { AppDataComplete } from '../../op-log/model/model-config';
 import { T } from '../../t.const';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { BackupService } from '../../op-log/backup/backup.service';
+import { SyncLog } from '../../core/log';
 
 /**
  * Service for restoring state from Super Sync server history.
@@ -39,7 +40,7 @@ export class SuperSyncRestoreService {
    */
   async getRestorePoints(limit: number = 30): Promise<RestorePoint[]> {
     const provider = this._getRestoreCapableProvider();
-    return provider.getRestorePoints(limit);
+    return (await provider.getRestorePoints(limit)) as RestorePoint[];
   }
 
   /**
@@ -81,7 +82,7 @@ export class SuperSyncRestoreService {
 
         if (isNetworkError && retryCount < MAX_RETRIES) {
           retryCount++;
-          console.warn(
+          SyncLog.warn(
             `Restore failed due to network error, retrying (${retryCount}/${MAX_RETRIES}):`,
             error,
           );
@@ -90,10 +91,17 @@ export class SuperSyncRestoreService {
           continue;
         }
 
-        console.error('Failed to restore from point:', error);
+        SyncLog.err('Failed to restore from point:', error);
+        // The server can't replay end-to-end-encrypted ops to reconstruct an
+        // earlier state, so it rejects the restore with a reason mentioning
+        // encryption (surfaced in the thrown error message). Show an actionable
+        // explanation instead of the generic "Failed to restore data". (#8107)
+        const isEncryptionBlocked = errorMsg.includes('encrypt');
         this._snackService.open({
           type: 'ERROR',
-          msg: T.F.SYNC.S.RESTORE_ERROR,
+          msg: isEncryptionBlocked
+            ? T.F.SYNC.S.RESTORE_ENCRYPTED
+            : T.F.SYNC.S.RESTORE_ERROR,
         });
         throw error;
       }
@@ -120,6 +128,10 @@ export class SuperSyncRestoreService {
     if (!provider) {
       throw new Error('Super Sync is not the active sync provider');
     }
-    return provider;
+    // Package class implements `RestoreCapable<string>`; the app narrows
+    // to `RestoreCapable<RestorePointType>` via the consensus
+    // "narrow at the app shim" decision. Server payloads are validated
+    // against the SP-side schemas before reaching here.
+    return provider as SuperSyncProvider & RestoreCapable;
   }
 }

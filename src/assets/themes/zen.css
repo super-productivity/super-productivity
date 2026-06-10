@@ -1,24 +1,23 @@
 /**
  * Zen Theme for Super Productivity
  * Removes task backgrounds for a clean, borderless look.
- * Tasks still get a background when dragged or selected/current.
+ * Tasks still get a background when dragged or selected; the current task keeps
+ * the default theme's elevated style (accent bg + shadow).
  * Works with both light and dark modes.
  */
 
 body,
 body.isDarkTheme {
-  /* Task backgrounds: transparent */
+  /* Task backgrounds: transparent (current task keeps the default accent bg) */
   --task-c-bg: transparent;
   --task-c-bg-done: transparent;
-  --task-c-current-bg: transparent;
   --sub-task-c-bg: transparent;
   --sub-task-c-bg-done: transparent;
   --sub-task-c-bg-in-selected: transparent;
 
-  /* Remove task shadows */
+  /* Remove task shadows (current task keeps the default elevation shadow) */
   --task-shadow: none;
   --task-shadow-sub-task: none;
-  --task-current-shadow: none;
 
   /* Remove task border */
   --task-border: none;
@@ -39,8 +38,10 @@ body.isDarkTheme {
   /* Use main bg instead of lighter grays */
   --bg-lighter: var(--bg);
   --bg-lightest: var(--bg);
-  --schedule-event-bg: transparent;
-  --schedule-event-bg-in-side-panel: transparent;
+
+  /* Schedule events: solid main bg so things behind don't show through */
+  --schedule-event-bg: var(--bg);
+  --schedule-event-bg-in-side-panel: var(--bg);
 
   /* Selected task: flat with border */
   --task-c-selected-bg: transparent;
@@ -165,6 +166,27 @@ body.isDarkTheme .mat-mdc-menu-panel {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Plugin dialogs can contain forms/cards that use --card-bg and --bg-lighter.
+   Zen makes those transparent globally, so restore an opaque surface inside
+   plugin dialogs while keeping the rest of the theme flat. */
+body .mat-mdc-dialog-surface:has(plugin-dialog),
+body .mat-mdc-dialog-surface:has(plugin-config-dialog) {
+  --card-bg: var(--bg);
+  --bg-lighter: var(--bg);
+}
+
+body:not(.isDarkTheme) .mat-mdc-dialog-surface:has(plugin-dialog),
+body:not(.isDarkTheme) .mat-mdc-dialog-surface:has(plugin-config-dialog) {
+  --card-bg: #fff;
+  --bg-lighter: #fff;
+}
+
+body.isDarkTheme .mat-mdc-dialog-surface:has(plugin-dialog),
+body.isDarkTheme .mat-mdc-dialog-surface:has(plugin-config-dialog) {
+  --card-bg: color-mix(in srgb, var(--bg), #fff 5%);
+  --bg-lighter: color-mix(in srgb, var(--bg), #fff 5%);
+}
+
 body .mat-mdc-card {
   background: var(--bg) !important;
   box-shadow: none !important;
@@ -249,7 +271,13 @@ body .week-month-btn:not(.active) {
   background: transparent !important;
 }
 
-/* Give current task a background when sticky (page scrolled) */
-app-root.isWorkViewScrolled task.isCurrent .box {
-  background: var(--bg) !important;
+/* Banner: zen normally hides chrome; give it a neutral elevated bg so it
+   reads as distinct from the page without re-introducing primary color. */
+body banner .content-wrapper {
+  background: rgba(0, 0, 0, 0.06) !important;
+  box-shadow: none !important;
+}
+
+body.isDarkTheme banner .content-wrapper {
+  background: rgba(255, 255, 255, 0.05) !important;
 }

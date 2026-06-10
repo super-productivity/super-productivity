@@ -590,4 +590,94 @@ describe('Compaction Integration', () => {
       expect(await storeService.hasStateCacheBackup()).toBe(false);
     });
   });
+
+  // Real-IndexedDB proof of the #7892 fix: a transient empty live state must not
+  // clobber a good on-disk state cache, and must not prune ops. The unit specs
+  // assert this against spies; here we assert it against the REAL store so a bug
+  // in saveStateCache/compact's persistence interaction would also be caught.
+  // Discriminator: the guard's early `return` happens BEFORE resetCompactionCounter(),
+  // so an unchanged counter proves the guard path was taken (without it, compact()
+  // would have overwritten the cache and reset the counter).
+  describe('Empty-state guard (#7892)', () => {
+    it('keeps a good state cache and the op-log intact when live state is empty', async () => {
+      const client = new TestClient('client-guard');
+
+      // Seed synced ops (deletion-eligible if the guard were absent).
+      for (let i = 1; i <= 5; i++) {
+        await storeService.append(
+          createTaskOperation(client, `task-${i}`, OpType.Create, { title: `Task ${i}` }),
+          'local',
+        );
+      }
+      const seeded = await storeService.getOpsAfterSeq(0);
+      await storeService.markSynced(seeded.map((e) => e.seq));
+
+      // A good snapshot already exists on disk — this is what must NOT be lost.
+      const goodState = {
+        task: {
+          ids: ['task-1'],
+          entities: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'task-1': createMinimalTaskPayload('task-1', { title: 'Task 1' }),
+          },
+        },
+      };
+      await storeService.saveStateCache({
+        state: goodState,
+        lastAppliedOpSeq: seeded[seeded.length - 1].seq,
+        vectorClock: client.getCurrentClock(),
+        compactedAt: Date.now(),
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+      });
+      await storeService.incrementCompactionCounter();
+
+      // Live NgRx state is the transient empty/initial state.
+      mockStateSnapshot.getStateSnapshot.and.returnValue({
+        task: { ids: [], entities: {} },
+        project: { ids: [], entities: {} },
+        tag: { ids: [], entities: {} },
+        note: { ids: [], entities: {} },
+      } as any);
+
+      await compactionService.compact();
+
+      // Good cache survives untouched (NOT overwritten with empty).
+      const cacheAfter = await storeService.loadStateCache();
+      expect(cacheAfter!.state).toEqual(goodState);
+      // No ops pruned.
+      expect((await storeService.getOpsAfterSeq(0)).length).toBe(5);
+      // Counter NOT reset -> the guard's early return ran.
+      expect(await storeService.getCompactionCounter()).toBe(1);
+    });
+
+    it('resumes compaction (writes cache, resets counter) once real data exists', async () => {
+      const client = new TestClient('client-guard2');
+      await storeService.append(
+        createTaskOperation(client, 'task-1', OpType.Create, { title: 'Task 1' }),
+        'local',
+      );
+      await storeService.incrementCompactionCounter();
+      await storeService.incrementCompactionCounter();
+
+      const liveState = {
+        task: {
+          ids: ['task-1'],
+          entities: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'task-1': createMinimalTaskPayload('task-1', { title: 'Task 1' }),
+          },
+        },
+      };
+      mockStateSnapshot.getStateSnapshot.and.returnValue(liveState as any);
+
+      await compactionService.compact();
+
+      const cacheAfter = await storeService.loadStateCache();
+      expect(cacheAfter).not.toBeNull();
+      expect(cacheAfter!.state).toEqual(liveState);
+      expect(cacheAfter!.snapshotEntityKeys).toContain('TASK:task-1');
+      // Counter reset -> the normal (non-guard) path ran.
+      expect(await storeService.getCompactionCounter()).toBe(0);
+    });
+  });
 });

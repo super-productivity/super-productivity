@@ -16,7 +16,7 @@ import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
 import { CLIPBOARD_IMAGES_FORM } from './form-cfgs/clipboard-images-form.const';
 import { TASKS_SETTINGS_FORM_CFG } from './form-cfgs/tasks-settings-form.const';
-import { OVERLAY_INDICATOR_FORM_CFG } from './form-cfgs/overlay-indicator-form.const';
+import { TASK_WIDGET_FORM_CFG } from './form-cfgs/task-widget-form.const';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   return (
@@ -30,7 +30,7 @@ export const GLOBAL_GENERAL_FORM_CONFIG: ConfigFormConfig = [
   LANGUAGE_SELECTION_FORM_FORM,
   APP_FEATURES_FORM_CFG,
   MISC_SETTINGS_FORM_CFG,
-  OVERLAY_INDICATOR_FORM_CFG,
+  TASK_WIDGET_FORM_CFG,
   KEYBOARD_SETTINGS_FORM_CFG,
   CLIPBOARD_IMAGES_FORM,
 ].filter(filterGlobalConfigForm);

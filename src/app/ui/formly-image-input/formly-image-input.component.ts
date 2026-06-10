@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FieldType } from '@ngx-formly/material';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { MatInput } from '@angular/material/input';
@@ -6,13 +13,28 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { TranslatePipe } from '@ngx-translate/core';
 import { DialogUnsplashPickerComponent } from '../dialog-unsplash-picker/dialog-unsplash-picker.component';
 import { UnsplashService } from '../../core/unsplash/unsplash.service';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
+import { IS_ELECTRON } from '../../app.constants';
+import { Log } from '../../core/log';
+
+const MAX_BACKGROUND_IMAGE_FILE_SIZE_BYTES = 256 * 1024;
 
 @Component({
   selector: 'formly-image-input',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule, FormlyModule, MatInput, MatButton, MatIcon],
+  imports: [
+    FormsModule,
+    ReactiveFormsModule,
+    FormlyModule,
+    MatInput,
+    MatButton,
+    MatIcon,
+    TranslatePipe,
+  ],
   templateUrl: './formly-image-input.component.html',
   styleUrls: ['./formly-image-input.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -20,14 +42,86 @@ import { UnsplashService } from '../../core/unsplash/unsplash.service';
 export class FormlyImageInputComponent extends FieldType<FormlyFieldConfig> {
   private _dialog = inject(MatDialog);
   private _unsplashService = inject(UnsplashService);
+  private _snackService = inject(SnackService);
+  readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+  readonly T = T;
+  readonly IS_ELECTRON = IS_ELECTRON;
+  // Guard against double-click while the main-side dialog + import is in
+  // flight. A second click would otherwise queue a second IPC that opens
+  // a second dialog after the first resolves and orphan all but the last
+  // selected import in `userData/bg-images/`.
+  readonly isPickerBusy = signal(false);
 
   get isUnsplashAvailable(): boolean {
     return this._unsplashService.isAvailable();
   }
 
+  async openFileExplorer(): Promise<void> {
+    if (!this.IS_ELECTRON || this.isPickerBusy()) {
+      return;
+    }
+    // Post-#8228: dialog + import are atomic in main. The renderer never
+    // sees the absolute path and cannot trigger an import without a real
+    // user-driven dialog interaction. Old cached images are not deleted here:
+    // the surrounding form save can still be cancelled or fail.
+    this.isPickerBusy.set(true);
+    try {
+      const result = await window.ea.imagePickAndImport();
+      if (result instanceof Error) {
+        // Validation failure (extension, size cap, etc.). User-cancel
+        // returns null. See electron/local-file-sync.ts IMAGE_PICK_AND_IMPORT.
+        this._snackService.open({
+          msg: T.F.PROJECT.FORM_THEME.S_BACKGROUND_IMAGE_READ_ERROR,
+          type: 'ERROR',
+        });
+        return;
+      }
+      if (!result) {
+        return; // user cancelled
+      }
+      this.formControl.setValue(`image:${result.id}`);
+    } finally {
+      this.isPickerBusy.set(false);
+    }
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    if (file.size > MAX_BACKGROUND_IMAGE_FILE_SIZE_BYTES) {
+      this._snackService.open({
+        msg: T.F.PROJECT.FORM_THEME.S_BACKGROUND_IMAGE_TOO_LARGE,
+        type: 'ERROR',
+        translateParams: {
+          maxSizeKb: Math.round(MAX_BACKGROUND_IMAGE_FILE_SIZE_BYTES / 1024),
+        },
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      this.formControl.setValue(result);
+    };
+    reader.onerror = () => {
+      this._snackService.open({
+        msg: T.F.PROJECT.FORM_THEME.S_BACKGROUND_IMAGE_READ_ERROR,
+        type: 'ERROR',
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
   openUnsplashPicker(): void {
     if (!this.isUnsplashAvailable) {
-      console.warn('Unsplash service is not available - no API key configured');
+      Log.warn('Unsplash service is not available - no API key configured');
       return;
     }
 

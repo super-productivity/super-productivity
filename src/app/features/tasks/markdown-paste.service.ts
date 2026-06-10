@@ -15,6 +15,11 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
 
+// Anchored at line start: ATX header (#…) or list-item marker (-/* with
+// optional checkbox). One-shot regex that bails before invoking the full
+// parsers on plain-text pastes.
+const MARKDOWN_TASK_OR_HEADER_RE = /^(?:#{1,6}\s|\s*[-*]\s)/m;
+
 @Injectable({
   providedIn: 'root',
 })
@@ -186,6 +191,11 @@ export class MarkdownPasteService {
   }
 
   isMarkdownTaskList(text: string): boolean {
+    // Cheap pre-screen — bails out for plain-text pastes (the common
+    // case for Ctrl+V) before invoking the full parsers, which would
+    // otherwise scan the whole input even for 800KB of prose.
+    if (!MARKDOWN_TASK_OR_HEADER_RE.test(text)) return false;
+
     const parsedTasks = parseMarkdownTasks(text);
     return parsedTasks !== null && parsedTasks.length > 0;
   }

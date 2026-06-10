@@ -3,3 +3,26 @@
   align-items: center;
   gap: var(--s);
 }
+
+.auth-code-flex {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.manual-url-fallback {
+  margin-top: var(--s);
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.manual-url {
+  display: block;
+  margin-top: var(--s);
+  padding: var(--s);
+  word-break: break-all;
+  user-select: all;
+  font-family: monospace;
+  background: var(--bg-lighter);
+  border-radius: 4px;
+}

@@ -14,6 +14,23 @@
   min-height: -webkit-fill-available;
 }
 
+// Vertical action bar (opt-in via misc.isVerticalActionBar): reserve a
+// column on the right for the fixed action strip teleported by main-header
+// (desktop only). The strip is position: fixed, so this padding keeps the
+// main content + right-panel to the left of it.
+.app-container.has-vertical-action-bar {
+  @include mq(xs) {
+    padding-right: var(--vertical-action-bar-width);
+  }
+}
+
+:host-context([dir='rtl']) .app-container.has-vertical-action-bar {
+  @include mq(xs) {
+    padding-right: 0;
+    padding-left: var(--vertical-action-bar-width);
+  }
+}
+
 // Native mobile: body has safe area padding that pushes content down,
 // so the container must be shorter than 100vh to stay within the visible viewport.
 // Without this, bottom items (like Settings) in the sidebar are clipped off-screen.
@@ -29,12 +46,33 @@
   min-height: calc(100vh - var(--safe-area-top));
 }
 
+// iOS keeps 100vh tied to the layout viewport while the soft keyboard is open.
+// Use visualViewport height from JS so the app shell shrinks above the keyboard.
+:host-context(body.isIOS.isKeyboardVisible) .app-container {
+  height: calc(var(--visual-viewport-height) - var(--safe-area-top));
+  min-height: calc(var(--visual-viewport-height) - var(--safe-area-top));
+}
+
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0; // Prevent flex item from growing beyond container
   overflow: hidden;
+}
+
+// First-run onboarding is a focused full-window takeover, so hide the app
+// shell's navigation behind it. Necessary for translucent themes (e.g.
+// liquid-glass sets `--bg: transparent`) where the nav would otherwise show
+// through the onboarding backdrop and overlap its content (#7885).
+// Use `visibility: hidden` (not `display: none`) so the nav keeps its layout
+// space — when onboarding finishes the nav reveals in place instead of the
+// content reflowing as it pops back in.
+.app-container.is-onboarding {
+  magic-side-nav,
+  mobile-bottom-nav {
+    visibility: hidden !important;
+  }
 }
 
 // Mobile bottom nav spacing
@@ -185,6 +223,10 @@ mat-sidenav {
   background-size: cover !important;
   background-position: center !important;
   background-attachment: fixed;
+
+  &.is-blurred {
+    transform: scale(1.12);
+  }
 }
 
 // App entrance animation after onboarding preset selection
@@ -213,11 +255,6 @@ mat-sidenav {
 }
 
 .app-entrance {
-  // Side nav slides in from left (desktop only)
-  magic-side-nav {
-    animation: entrance-slide-left 450ms ease-out 50ms backwards;
-  }
-
   // Main content area fades + slides up as a whole
   .main-content {
     animation: entrance-slide-up 450ms ease-out 150ms backwards;
@@ -226,7 +263,6 @@ mat-sidenav {
 
 @media (prefers-reduced-motion: reduce) {
   .app-entrance {
-    magic-side-nav,
     .main-content {
       animation: none;
     }

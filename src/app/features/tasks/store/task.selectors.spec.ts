@@ -5,6 +5,13 @@ import { taskAdapter } from './task.adapter';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { PROJECT_FEATURE_NAME } from '../../project/store/project.reducer';
+import {
+  selectAllProjects,
+  selectArchivedProjectIds,
+  selectArchivedProjects,
+  selectArrayOfArchivedProjectIds,
+  selectProjectFeatureState,
+} from '../../project/store/project.selectors';
 import { TAG_FEATURE_NAME } from '../../tag/store/tag.reducer';
 import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
 
@@ -130,6 +137,20 @@ describe('Task Selectors', () => {
       timeSpent: 0,
       attachments: [],
     },
+    task9: {
+      id: 'task9',
+      title: 'Task With Deadline',
+      created: Date.now(),
+      isDone: false,
+      subTaskIds: [],
+      tagIds: [],
+      projectId: 'project1',
+      timeSpentOnDay: {},
+      deadlineDay: tomorrow,
+      timeEstimate: 0,
+      timeSpent: 0,
+      attachments: [],
+    },
     subtask1: {
       id: 'subtask1',
       title: 'Subtask 1',
@@ -197,6 +218,42 @@ describe('Task Selectors', () => {
     },
   };
 
+  beforeEach(() => {
+    // Clear any overrideResult set by MockStore.overrideSelector in other spec files
+    // (e.g., provideMockStore). overrideSelector calls setResult() which persists
+    // across tests and is NOT cleared by release() — only clearResult() clears it.
+    fromSelectors.selectTaskFeatureState.clearResult();
+    fromSelectors.selectTaskById.clearResult();
+    fromSelectors.selectAllTasksWithSubTasks.clearResult();
+    fromSelectors.selectAllRepeatableTaskWithSubTasks.clearResult();
+    fromSelectors.selectTaskByIdWithSubTaskData.clearResult();
+    fromSelectors.selectOverdueTasksWithSubTasks.clearResult();
+    fromSelectors.selectLaterTodayTasksWithSubTasks.clearResult();
+    fromSelectors.selectAllTasks.clearResult();
+    fromSelectors.selectAllTasksInActiveProjects.clearResult();
+    fromSelectors.selectOverdueTasks.clearResult();
+    selectProjectFeatureState.clearResult();
+    selectAllProjects.clearResult();
+    selectArchivedProjects.clearResult();
+    selectArrayOfArchivedProjectIds.clearResult();
+    selectArchivedProjectIds.clearResult();
+    fromSelectors.selectTaskFeatureState.release();
+    fromSelectors.selectTaskById.release();
+    fromSelectors.selectAllTasksWithSubTasks.release();
+    fromSelectors.selectAllRepeatableTaskWithSubTasks.release();
+    fromSelectors.selectTaskByIdWithSubTaskData.release();
+    fromSelectors.selectOverdueTasksWithSubTasks.release();
+    fromSelectors.selectLaterTodayTasksWithSubTasks.release();
+    fromSelectors.selectAllTasks.release();
+    fromSelectors.selectAllTasksInActiveProjects.release();
+    fromSelectors.selectOverdueTasks.release();
+    selectProjectFeatureState.release();
+    selectAllProjects.release();
+    selectArchivedProjects.release();
+    selectArrayOfArchivedProjectIds.release();
+    selectArchivedProjectIds.release();
+  });
+
   // Basic selectors
   describe('Basic selectors', () => {
     it('should select task feature state', () => {
@@ -231,7 +288,7 @@ describe('Task Selectors', () => {
 
     it('should select all tasks', () => {
       const result = fromSelectors.selectAllTasks(mockState);
-      expect(result.length).toBe(10);
+      expect(result.length).toBe(11);
     });
   });
 
@@ -253,7 +310,7 @@ describe('Task Selectors', () => {
     it('should flatten tasks', () => {
       const tasksWithSubTasks = fromSelectors.selectAllTasksWithSubTasks(mockState);
       const result = fromSelectors.flattenTasks(tasksWithSubTasks);
-      expect(result.length).toBe(10);
+      expect(result.length).toBe(11);
     });
 
     it('should select task by ID with subtask data', () => {
@@ -265,11 +322,52 @@ describe('Task Selectors', () => {
     });
   });
 
+  describe('selectAllTasksInActiveProjects', () => {
+    it('should return all tasks when no archived projects (fast path)', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        new Set<string>(),
+      );
+      expect(result).toBe(allTasks);
+    });
+
+    it('should exclude tasks belonging to archived project', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        new Set<string>(['project1']),
+      );
+      expect(result.every((t) => t.projectId !== 'project1')).toBe(true);
+    });
+
+    it('should keep tasks from non-archived projects', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        new Set<string>(['project2']),
+      );
+      expect(result.some((t) => t.projectId === 'project1')).toBe(true);
+      expect(result.every((t) => t.projectId !== 'project2')).toBe(true);
+    });
+
+    it('should return identity reference when archivedIds is empty (fast path)', () => {
+      const allTasks = Object.values(mockTasks);
+      const emptySet = new Set<string>();
+      const result = fromSelectors.selectAllTasksInActiveProjects.projector(
+        allTasks,
+        emptySet,
+      );
+      // Same reference — no copy, no filter
+      expect(result).toBe(allTasks);
+    });
+  });
+
   // Startable tasks selectors
   describe('Startable tasks selectors', () => {
     it('should select startable tasks', () => {
       const result = fromSelectors.selectStartableTasks(mockState);
-      expect(result.length).toBe(7);
+      expect(result.length).toBe(8);
     });
   });
 
@@ -279,11 +377,6 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectOverdueTasks(mockState);
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('task6');
-    });
-
-    it('should select all tasks due and overdue', () => {
-      const result = fromSelectors.selectAllTasksDueAndOverdue(mockState);
-      expect(result.length).toBe(2); // task3 (due today) and task6 (overdue)
     });
 
     it('should select undone overdue tasks', () => {
@@ -640,7 +733,7 @@ describe('Task Selectors', () => {
         tagId: TODAY_TAG.id,
       });
       // Virtual tag pattern: TODAY_TAG not in task.tagIds, so all 8 main tasks are returned
-      expect(result.length).toBe(8);
+      expect(result.length).toBe(9);
     });
 
     it('should select all calendar task event IDs', () => {
@@ -730,13 +823,6 @@ describe('Task Selectors', () => {
       expect(projectIds).toContain('project2');
       expect(projectIds).toContain('project3');
     });
-
-    it('should select tasks worked on or done for a day', () => {
-      const result = fromSelectors.selectTasksWorkedOnOrDoneFlat(mockState, {
-        day: today,
-      });
-      expect(result?.length).toBe(2); // task2 (done and worked on) and subtask2 (done)
-    });
   });
 
   // Repeatable task selectors
@@ -753,15 +839,6 @@ describe('Task Selectors', () => {
       });
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('task7');
-    });
-  });
-
-  // Project-related selectors
-  describe('Project-related selectors', () => {
-    it('should select all tasks without hidden projects', () => {
-      const result = fromSelectors.selectAllTasksWithoutHiddenProjects(mockState);
-      // All tasks should still be returned since none belong to hidden project3
-      expect(result.length).toBe(10);
     });
   });
 
@@ -812,136 +889,6 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectOverdueTasksOnToday(stateWithOverdueOnToday);
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('overdueOnToday');
-    });
-
-    it('selectAllTasksDueAndOverdue should use Set for today tag filtering', () => {
-      const result = fromSelectors.selectAllTasksDueAndOverdue(mockState);
-      // Should include task3 (due today) and task6 (overdue yesterday)
-      // task2 is excluded because it's in TODAY_TAG.taskIds (ordering list) AND isDone=true
-      expect(result.map((t) => t.id)).toEqual(
-        jasmine.arrayContaining(['task3', 'task6']),
-      );
-      expect(result.find((t) => t.id === 'task2')).toBeUndefined();
-    });
-  });
-
-  // selectAllTasksWithDueDay selector tests
-  describe('selectAllTasksWithDueDay', () => {
-    it('should return tasks that have dueDay set', () => {
-      const result = fromSelectors.selectAllTasksWithDueDay(mockState);
-      // Should include task2, task3, task4, task6 (all have dueDay)
-      expect(result.length).toBe(4);
-      const ids = result.map((t) => t.id);
-      expect(ids).toContain('task2');
-      expect(ids).toContain('task3');
-      expect(ids).toContain('task4');
-      expect(ids).toContain('task6');
-    });
-
-    it('should exclude tasks without dueDay', () => {
-      const result = fromSelectors.selectAllTasksWithDueDay(mockState);
-      const ids = result.map((t) => t.id);
-      // task1, task5, task7, task8, subtask1, subtask2 don't have dueDay
-      expect(ids).not.toContain('task1');
-      expect(ids).not.toContain('task5');
-      expect(ids).not.toContain('task7');
-      expect(ids).not.toContain('task8');
-      expect(ids).not.toContain('subtask1');
-      expect(ids).not.toContain('subtask2');
-    });
-
-    it('should sort results by dueDay chronologically', () => {
-      const result = fromSelectors.selectAllTasksWithDueDay(mockState);
-      // yesterday < today < tomorrow
-      // task6 (yesterday), task2 (today), task3 (today), task4 (tomorrow)
-      const dueDays = result.map((t) => t.dueDay);
-      for (let i = 1; i < dueDays.length; i++) {
-        expect(dueDays[i - 1].localeCompare(dueDays[i])).toBeLessThanOrEqual(0);
-      }
-    });
-
-    it('should return empty array when no tasks have dueDay', () => {
-      const stateWithoutDueDays = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: ['task1', 'task5'],
-          entities: {
-            task1: mockTasks.task1,
-            task5: mockTasks.task5,
-          },
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(stateWithoutDueDays);
-      expect(result.length).toBe(0);
-    });
-
-    it('should handle empty task state', () => {
-      const emptyState = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: [],
-          entities: {},
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(emptyState);
-      expect(result.length).toBe(0);
-    });
-
-    it('should handle missing entity references gracefully', () => {
-      const stateWithMissingEntity = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: ['task2', 'nonExistent', 'task3'],
-          entities: {
-            task2: mockTasks.task2,
-            task3: mockTasks.task3,
-          },
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(stateWithMissingEntity);
-      expect(result.length).toBe(2);
-      expect(result.map((t) => t.id)).toEqual(
-        jasmine.arrayContaining(['task2', 'task3']),
-      );
-    });
-
-    it('should include subtasks with dueDay', () => {
-      const subtaskWithDueDay: Task = {
-        id: 'subtaskWithDue',
-        title: 'Subtask with Due',
-        created: Date.now(),
-        isDone: false,
-        subTaskIds: [],
-        tagIds: [],
-        projectId: 'project1',
-        parentId: 'task1',
-        timeSpentOnDay: {},
-        dueDay: tomorrow,
-        timeEstimate: 0,
-        timeSpent: 0,
-        attachments: [],
-      };
-
-      const stateWithSubtaskDue = {
-        ...mockState,
-        [TASK_FEATURE_NAME]: {
-          ...mockTaskState,
-          ids: [...mockTaskState.ids, 'subtaskWithDue'],
-          entities: {
-            ...mockTaskState.entities,
-            subtaskWithDue: subtaskWithDueDay,
-          },
-        },
-      };
-
-      const result = fromSelectors.selectAllTasksWithDueDay(stateWithSubtaskDue);
-      expect(result.map((t) => t.id)).toContain('subtaskWithDue');
     });
   });
 
@@ -1018,5 +965,118 @@ describe('Task Selectors', () => {
       expect(result.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
       (window.confirm as jasmine.Spy).and.returnValue(true);
     });
+  });
+
+  describe('selectAllTasksWithDueTimeSorted', () => {
+    it('should return only tasks with dueWithTime, sorted ascending', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(allTasks);
+      expect(result.map((t) => t.id)).toContain('task5');
+      expect(result.every((t) => typeof t.dueWithTime === 'number')).toBe(true);
+    });
+  });
+
+  describe('selectAllUndoneTasksWithDueDay', () => {
+    it('should exclude tasks from archived projects', () => {
+      const activeTasks = Object.values(mockTasks).filter(
+        (t) => t.projectId !== 'project1',
+      );
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(activeTasks);
+      expect(result.map((t) => t.id)).not.toContain('task3');
+    });
+
+    it('should include tasks when project is not archived', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      expect(result.map((t) => t.id)).toContain('task3');
+    });
+
+    it('should exclude done tasks', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      expect(result.every((t) => !t.isDone)).toBeTrue();
+    });
+
+    it('should sort results by dueDay chronologically', () => {
+      const allTasks = Object.values(mockTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      const dueDays = result.map((t) => t.dueDay);
+      for (let i = 1; i < dueDays.length; i++) {
+        expect(dueDays[i - 1].localeCompare(dueDays[i])).toBeLessThanOrEqual(0);
+      }
+    });
+
+    it('should include subtasks with dueDay', () => {
+      const subtaskWithDueDay: Task = {
+        id: 'subtaskWithDue',
+        title: 'Subtask with Due',
+        created: Date.now(),
+        isDone: false,
+        subTaskIds: [],
+        tagIds: [],
+        projectId: 'project1',
+        parentId: 'task1',
+        timeSpentOnDay: {},
+        dueDay: tomorrow,
+        timeEstimate: 0,
+        timeSpent: 0,
+        attachments: [],
+      };
+      const tasksWithSubtask = [...Object.values(mockTasks), subtaskWithDueDay];
+      const result =
+        fromSelectors.selectAllUndoneTasksWithDueDay.projector(tasksWithSubtask);
+      expect(result.map((t) => t.id)).toContain('subtaskWithDue');
+    });
+  });
+
+  describe('selectAllUndoneTasksWithDeadlineSorted', () => {
+    it('should return only undone tasks with deadline, sorted', () => {
+      const allTasks = Object.values(mockTasks);
+      const result =
+        fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(allTasks);
+      expect(result.map((t) => t.id)).toContain('task9');
+      expect(result.every((t) => !t.isDone)).toBe(true);
+    });
+  });
+
+  it('selectOverdueTasks excludes tasks from archived projects', () => {
+    const archivedOverdueTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'overdueInArchived',
+      title: 'Overdue in archived project',
+      projectId: 'projectArchived',
+      dueDay: yesterday,
+      created: Date.now(),
+      subTaskIds: [],
+      tagIds: [],
+      timeSpentOnDay: {},
+    };
+    const archivedState = {
+      ...mockState,
+      [TASK_FEATURE_NAME]: {
+        ...mockTaskState,
+        ids: [...mockTaskState.ids, archivedOverdueTask.id],
+        entities: {
+          ...mockTaskState.entities,
+          [archivedOverdueTask.id]: archivedOverdueTask,
+        },
+      },
+      [PROJECT_FEATURE_NAME]: {
+        ...mockState[PROJECT_FEATURE_NAME],
+        ids: [...mockState[PROJECT_FEATURE_NAME].ids, 'projectArchived'],
+        entities: {
+          ...mockState[PROJECT_FEATURE_NAME].entities,
+          projectArchived: {
+            id: 'projectArchived',
+            title: 'Archived Project',
+            isHiddenFromMenu: false,
+            isArchived: true,
+          },
+        },
+      },
+    };
+    const ids = fromSelectors.selectOverdueTasks(archivedState as any).map((t) => t.id);
+    expect(ids).not.toContain('overdueInArchived');
+    expect(ids).toContain('task6');
   });
 });

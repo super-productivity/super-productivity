@@ -1,6 +1,7 @@
 import { inject, Pipe, PipeTransform } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { Log } from '../../core/log';
 
 /**
  * Custom date pipe that respects the user's configured locale
@@ -38,7 +39,7 @@ export class LocaleDatePipe implements PipeTransform {
     try {
       return this._datePipe.transform(value, format, timezone, effectiveLocale);
     } catch (e) {
-      console.warn('LocaleDatePipe: failed to format value', value, e);
+      Log.warn('LocaleDatePipe: failed to format value', value, e);
       return null;
     }
   }

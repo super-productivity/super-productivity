@@ -7,6 +7,7 @@ import { TaskAttachment } from '../task-attachment.model';
 import { T } from '../../../../t.const';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ClipboardImageService } from '../../../../core/clipboard-image/clipboard-image.service';
+import { Log } from '../../../../core/log';
 
 describe('TaskAttachmentListComponent', () => {
   let component: TaskAttachmentListComponent;
@@ -40,10 +41,53 @@ describe('TaskAttachmentListComponent', () => {
     snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
   });
 
+  describe('resolvedAttachments img src safety (GHSA-hr87-735w-hfq3)', () => {
+    const imgAttachment = (path: string): TaskAttachment => ({
+      id: 'a',
+      type: 'IMG',
+      title: 'x',
+      path,
+    });
+
+    it('drops remote file:// / UNC src so the <img> cannot auto-load and leak NTLM', () => {
+      [
+        'file://192.168.1.100/share/pixel.png',
+        'file:////host/share/pixel.png',
+        'file:///%5C%5Chost/share/pixel.png',
+        'file:///%2F%2Fhost/share/pixel.png',
+        'file:///%2e%2e/%2F%2Fhost/share/pixel.png',
+        '\\\\host\\share\\pixel.png',
+        '//host/share/pixel.png',
+      ].forEach((path) => {
+        fixture.componentRef.setInput('attachments', [imgAttachment(path)]);
+        expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBeUndefined();
+      });
+    });
+
+    it('keeps safe srcs (local file://, http(s), data:)', () => {
+      [
+        'file:///home/user/img.png',
+        'https://example.com/img.png',
+        'data:image/png;base64,iVBORw0KGgo=',
+      ].forEach((path) => {
+        fixture.componentRef.setInput('attachments', [imgAttachment(path)]);
+        expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBe(path);
+      });
+    });
+  });
+
   describe('copy', () => {
     let attachment: TaskAttachment;
-    let originalClipboard: Clipboard;
+    let originalClipboardDescriptor: PropertyDescriptor | undefined;
     let originalExecCommand: typeof document.execCommand;
+
+    const setNavigatorClipboard = (clipboard: Partial<Clipboard> | undefined): void => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: clipboard,
+        writable: true,
+      });
+    };
 
     beforeEach(() => {
       attachment = {
@@ -52,18 +96,21 @@ describe('TaskAttachmentListComponent', () => {
         title: 'Test Link',
         type: 'LINK',
       };
-      originalClipboard = navigator.clipboard;
+      originalClipboardDescriptor = Object.getOwnPropertyDescriptor(
+        navigator,
+        'clipboard',
+      );
       originalExecCommand = document.execCommand;
     });
 
     afterEach(() => {
       // Restore original implementations
-      if (originalClipboard) {
-        Object.defineProperty(navigator, 'clipboard', {
-          value: originalClipboard,
-          writable: true,
-        });
+      if (originalClipboardDescriptor) {
+        Object.defineProperty(navigator, 'clipboard', originalClipboardDescriptor);
+      } else {
+        delete (navigator as { clipboard?: Clipboard }).clipboard;
       }
+      originalClipboardDescriptor = undefined;
       document.execCommand = originalExecCommand;
     });
 
@@ -82,10 +129,7 @@ describe('TaskAttachmentListComponent', () => {
       const writeTextSpy = jasmine
         .createSpy('writeText')
         .and.returnValue(Promise.resolve());
-      Object.defineProperty(navigator, 'clipboard', {
-        value: { writeText: writeTextSpy },
-        writable: true,
-      });
+      setNavigatorClipboard({ writeText: writeTextSpy });
 
       await component.copy(attachment);
 
@@ -94,10 +138,7 @@ describe('TaskAttachmentListComponent', () => {
     });
 
     it('should use fallback method when clipboard API is not available', async () => {
-      Object.defineProperty(navigator, 'clipboard', {
-        value: undefined,
-        writable: true,
-      });
+      setNavigatorClipboard(undefined);
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(true);
 
       await component.copy(attachment);
@@ -110,26 +151,20 @@ describe('TaskAttachmentListComponent', () => {
       const writeTextSpy = jasmine
         .createSpy('writeText')
         .and.returnValue(Promise.reject(new Error('Permission denied')));
-      Object.defineProperty(navigator, 'clipboard', {
-        value: { writeText: writeTextSpy },
-        writable: true,
-      });
+      setNavigatorClipboard({ writeText: writeTextSpy });
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(true);
-      spyOn(console, 'warn');
+      spyOn(Log, 'warn');
 
       await component.copy(attachment);
 
       expect(writeTextSpy).toHaveBeenCalledWith('https://example.com/test');
-      expect(console.warn).toHaveBeenCalled();
+      expect(Log.warn).toHaveBeenCalled();
       expect(document.execCommand).toHaveBeenCalledWith('copy');
       expect(snackService.open).toHaveBeenCalledWith(T.GLOBAL_SNACK.COPY_TO_CLIPPBOARD);
     });
 
     it('should show error message when fallback copy fails', async () => {
-      Object.defineProperty(navigator, 'clipboard', {
-        value: undefined,
-        writable: true,
-      });
+      setNavigatorClipboard(undefined);
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(false);
 
       await component.copy(attachment);
@@ -142,19 +177,16 @@ describe('TaskAttachmentListComponent', () => {
     });
 
     it('should show error message when fallback copy throws error', async () => {
-      Object.defineProperty(navigator, 'clipboard', {
-        value: undefined,
-        writable: true,
-      });
+      setNavigatorClipboard(undefined);
       document.execCommand = jasmine
         .createSpy('execCommand')
         .and.throwError('Command not supported');
-      spyOn(console, 'error');
+      spyOn(Log, 'err');
 
       await component.copy(attachment);
 
       expect(document.execCommand).toHaveBeenCalledWith('copy');
-      expect(console.error).toHaveBeenCalled();
+      expect(Log.err).toHaveBeenCalled();
       expect(snackService.open).toHaveBeenCalledWith({
         msg: 'Failed to copy to clipboard. Please copy manually.',
         type: 'ERROR',
@@ -162,10 +194,7 @@ describe('TaskAttachmentListComponent', () => {
     });
 
     it('should create and remove textarea element for fallback copy', async () => {
-      Object.defineProperty(navigator, 'clipboard', {
-        value: undefined,
-        writable: true,
-      });
+      setNavigatorClipboard(undefined);
       document.execCommand = jasmine.createSpy('execCommand').and.returnValue(true);
 
       const appendChildSpy = spyOn(document.body, 'appendChild').and.callThrough();

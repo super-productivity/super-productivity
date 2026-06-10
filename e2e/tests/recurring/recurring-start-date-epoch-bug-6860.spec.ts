@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { saveRecurDialog, setRecurStartDate } from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/6860
@@ -28,44 +29,58 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     // 2. Open task detail panel and click the repeat item
     await task.hover();
     const detailBtn = page.getByRole('button', {
-      name: 'Show/Hide additional info',
+      name: 'Show/hide task panel',
     });
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();
 
     const recurItem = page
       .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon[svgIcon="repeat"]') });
+      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
     await expect(recurItem).toBeVisible({ timeout: 5000 });
     await recurItem.click();
 
     // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container');
+    const repeatDialog = page.locator('mat-dialog-container').first();
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 4. Open the calendar popup and select first day of next month
-    const calendarToggle = repeatDialog.locator('mat-datepicker-toggle button');
-    await calendarToggle.click();
+    // 4. Open the schedule dialog
+    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+    await scheduleBtn.click();
 
-    const calendar = page.locator('.mat-calendar');
+    // Wait for the schedule dialog to appear
+    const scheduleDialog = page
+      .locator('mat-dialog-container')
+      .filter({ has: page.locator('datetime-picker') });
+    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    const calendar = scheduleDialog.locator('mat-calendar');
     await expect(calendar).toBeVisible({ timeout: 5000 });
 
     // Navigate to next month and select the first available day
-    const nextMonthBtn = page.getByRole('button', { name: /next month/i });
+    const nextMonthBtn = scheduleDialog.getByRole('button', { name: /next month/i });
     await nextMonthBtn.click();
 
-    const firstDay = page
+    const firstDay = scheduleDialog
       .locator('.mat-calendar-body-cell:not(.mat-calendar-body-disabled)')
       .first();
     await expect(firstDay).toBeVisible({ timeout: 5000 });
     await firstDay.click();
 
-    // 5. Verify the date input does not show epoch
-    const dateInput = repeatDialog.getByRole('textbox', { name: /start date/i });
-    await expect(dateInput).toBeVisible();
-    const inputValue = await dateInput.inputValue();
-    expect(inputValue).not.toBe('');
-    expect(inputValue).not.toContain('1970');
+    // Click Schedule button
+    const scheduleSubmitBtn = scheduleDialog.locator(
+      '[data-test-id="schedule-submit-btn"]',
+    );
+    await scheduleSubmitBtn.click();
+    await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+
+    // 5. Verify the date input/val does not show epoch
+    const dateVal = repeatDialog.locator('.planned-date-val');
+    await expect(dateVal).toBeVisible();
+    const valText = await dateVal.innerText();
+    expect(valText).not.toBe('');
+    expect(valText).not.toContain('1970');
 
     // 6. Save and verify the date survives persistence
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
@@ -73,8 +88,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await saveBtn.click();
     await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
   });
-
-  test('should preserve start date when typing date manually into input', async ({
+  test('should preserve start date when configuring recurring task via helper', async ({
     page,
     workViewPage,
     taskPage,
@@ -92,41 +106,22 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     // 2. Open task detail panel and click the repeat item
     await task.hover();
     const detailBtn = page.getByRole('button', {
-      name: 'Show/Hide additional info',
+      name: 'Show/hide task panel',
     });
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();
 
     const recurItem = page
       .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon[svgIcon="repeat"]') });
+      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
     await expect(recurItem).toBeVisible({ timeout: 5000 });
     await recurItem.click();
 
     // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container');
+    const repeatDialog = page.locator('mat-dialog-container').first();
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 4. Type a date directly into the date input field
-    // The app defaults to en-GB locale (DD/MM/YYYY format)
-    const dateInput = repeatDialog.getByRole('textbox', { name: /start date/i });
-    await expect(dateInput).toBeVisible();
-    // Click to focus the input, then select all and type the date
-    await dateInput.click();
-    await dateInput.press('Control+a');
-    await dateInput.pressSequentially('15/06/2026', { delay: 50 });
-    // Trigger change by pressing Tab to blur
-    await dateInput.press('Tab');
-
-    // 5. Verify the input retained the typed date
-    const inputValue = await dateInput.inputValue();
-    expect(inputValue).not.toBe('');
-    expect(inputValue).not.toContain('1970');
-
-    // 6. Save
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await setRecurStartDate(page, '15/06/2026');
+    await saveRecurDialog(page);
   });
 });

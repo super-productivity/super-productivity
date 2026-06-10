@@ -3,7 +3,7 @@ import { OperationLogUploadService } from './operation-log-upload.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
@@ -49,10 +49,8 @@ describe('OperationLogUploadService', () => {
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
 
     // Default mock implementations
-    mockLockService.request.and.callFake(
-      async (_name: string, fn: () => Promise<void>) => {
-        await fn();
-      },
+    mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
+      fn(),
     );
     mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([]));
     mockOpLogStore.markSynced.and.returnValue(Promise.resolve());
@@ -88,7 +86,7 @@ describe('OperationLogUploadService', () => {
 
     describe('API-based sync', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {
@@ -97,7 +95,8 @@ describe('OperationLogUploadService', () => {
           'uploadOps',
           'setLastServerSeq',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         // Add privateCfg mock for E2E encryption support
         (mockApiProvider as any).privateCfg = {
           load: jasmine
@@ -176,6 +175,65 @@ describe('OperationLogUploadService', () => {
 
         expect(result.uploadedCount).toBe(2);
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1, 2]);
+      });
+
+      it('should strip local sync schedule settings from regular config ops before upload', async () => {
+        const entry = createMockEntry(1, 'op-1', 'client-1');
+        entry.op.actionType = ActionType.GLOBAL_CONFIG_UPDATE_SECTION;
+        entry.op.entityType = 'GLOBAL_CONFIG';
+        entry.op.payload = {
+          actionPayload: {
+            sectionKey: 'sync',
+            sectionCfg: {
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+              isCompressionEnabled: true,
+            },
+          },
+          entityChanges: [],
+        };
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+        mockApiProvider.uploadOps.and.returnValue(
+          Promise.resolve({
+            results: [{ opId: 'op-1', accepted: true }],
+            latestSeq: 1,
+            newOps: [],
+          }),
+        );
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const uploadedOps = mockApiProvider.uploadOps.calls.mostRecent().args[0];
+        const payload = uploadedOps[0].payload as {
+          actionPayload: { sectionCfg: Record<string, unknown> };
+        };
+
+        expect(payload.actionPayload.sectionCfg).toEqual({
+          isCompressionEnabled: true,
+        });
+      });
+
+      it('should not upload regular config ops that only contain local sync schedule settings', async () => {
+        const entry = createMockEntry(1, 'op-1', 'client-1');
+        entry.op.actionType = ActionType.GLOBAL_CONFIG_UPDATE_SECTION;
+        entry.op.entityType = 'GLOBAL_CONFIG';
+        entry.op.payload = {
+          actionPayload: {
+            sectionKey: 'sync',
+            sectionCfg: {
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+            },
+          },
+          entityChanges: [],
+        };
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
+        expect(result.uploadedCount).toBe(1);
       });
 
       it('should update last server seq after upload', async () => {
@@ -508,7 +566,7 @@ describe('OperationLogUploadService', () => {
 
     describe('full-state operation routing', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       const createFullStateEntry = (
@@ -546,7 +604,8 @@ describe('OperationLogUploadService', () => {
           'setLastServerSeq',
           'uploadSnapshot',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         (mockApiProvider as any).privateCfg = {
           load: jasmine
             .createSpy('privateCfg.load')
@@ -609,6 +668,7 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           undefined, // isCleanSlate
           'SYNC_IMPORT', // snapshotOpType
+          undefined, // syncImportReason
         );
       });
 
@@ -628,6 +688,7 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           true, // isCleanSlate - auto true for BackupImport
           'BACKUP_IMPORT', // snapshotOpType
+          undefined, // syncImportReason
         );
       });
 
@@ -647,6 +708,7 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           true, // isCleanSlate - auto true for Repair
           'REPAIR', // snapshotOpType
+          undefined, // syncImportReason
         );
       });
 
@@ -739,6 +801,23 @@ describe('OperationLogUploadService', () => {
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
         mockApiProvider.uploadSnapshot.and.returnValue(
           Promise.resolve({ accepted: false, error: '503 Service Unavailable' }),
+        );
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        expect(result.rejectedCount).toBe(0);
+      });
+
+      it('should NOT mark full-state ops as rejected when snapshot fails with 429 rate limit error', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.BackupImport);
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+        mockApiProvider.uploadSnapshot.and.returnValue(
+          Promise.resolve({
+            accepted: false,
+            error:
+              'HTTP 429 Too Many Requests \u2014 Too Many Requests \u2014 retry in 5 minutes',
+          }),
         );
 
         const result = await service.uploadPendingOps(mockApiProvider);
@@ -910,8 +989,8 @@ describe('OperationLogUploadService', () => {
         // Get the call arguments
         const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
 
-        // Verify all 9 args are passed including op.id, isCleanSlate, and snapshotOpType
-        expect(callArgs.length).toBe(9);
+        // Verify all 10 args are passed including op.id, isCleanSlate, snapshotOpType, and syncImportReason
+        expect(callArgs.length).toBe(10);
 
         // Verify specific args
         expect(callArgs[1]).toBe('client-1'); // clientId
@@ -962,7 +1041,40 @@ describe('OperationLogUploadService', () => {
           'op-1', // op.id
           true, // isCleanSlate - auto true for BackupImport
           'BACKUP_IMPORT', // snapshotOpType
+          undefined, // syncImportReason
         );
+      });
+
+      it('should strip local-only sync settings from full-state snapshot uploads', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        entry.op.payload = {
+          task: { ids: [], entities: {} },
+          globalConfig: {
+            sync: {
+              isEnabled: true,
+              isEncryptionEnabled: true,
+              syncProvider: SyncProviderId.WebDAV,
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+              isCompressionEnabled: true,
+            },
+          },
+        };
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const uploadedState = mockApiProvider.uploadSnapshot.calls.mostRecent()
+          .args[0] as Record<string, unknown>;
+        const globalConfig = uploadedState['globalConfig'] as Record<string, unknown>;
+        const sync = globalConfig['sync'] as Record<string, unknown>;
+
+        expect(sync['syncProvider']).toBeNull();
+        expect(sync['syncInterval']).toBeUndefined();
+        expect(sync['isManualSyncOnly']).toBeUndefined();
+        expect(sync['isEnabled']).toBe(true);
+        expect(sync['isEncryptionEnabled']).toBe(true);
+        expect(sync['isCompressionEnabled']).toBe(true);
       });
 
       /**
@@ -1120,7 +1232,7 @@ describe('OperationLogUploadService', () => {
 
     describe('error handling and recovery', () => {
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {
@@ -1129,7 +1241,8 @@ describe('OperationLogUploadService', () => {
           'uploadOps',
           'setLastServerSeq',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         (mockApiProvider as any).privateCfg = {
           load: jasmine
             .createSpy('privateCfg.load')
@@ -1300,7 +1413,7 @@ describe('OperationLogUploadService', () => {
        * server migration and create duplicate SYNC_IMPORT operations.
        */
       let mockApiProvider: jasmine.SpyObj<
-        SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+        SyncProviderBase<SyncProviderId> & OperationSyncCapable
       >;
 
       beforeEach(() => {
@@ -1309,7 +1422,8 @@ describe('OperationLogUploadService', () => {
           'uploadOps',
           'setLastServerSeq',
         ]);
-        (mockApiProvider as any).supportsOperationSync = true;
+        mockApiProvider.supportsOperationSync = true;
+        mockApiProvider.providerMode = 'superSyncOps';
         (mockApiProvider as any).privateCfg = {
           load: jasmine
             .createSpy('privateCfg.load')
@@ -1326,10 +1440,11 @@ describe('OperationLogUploadService', () => {
         const callOrder: string[] = [];
 
         mockLockService.request.and.callFake(
-          async (_name: string, fn: () => Promise<void>) => {
+          async <T>(_name: string, fn: () => Promise<T>) => {
             callOrder.push('lock-acquired');
-            await fn();
+            const r = await fn();
             callOrder.push('lock-released');
+            return r;
           },
         );
 
@@ -1387,16 +1502,10 @@ describe('OperationLogUploadService', () => {
       });
 
       it('should allow callback to create new operations that get uploaded', async () => {
-        // First call to getUnsynced returns empty (callback hasn't run yet)
-        // After callback runs, we simulate it creating a new op
-        let callCount = 0;
+        let callbackCreatedOperation = false;
+        const callbackCreatedEntry = createMockEntry(1, 'sync-import-op', 'client-1');
         mockOpLogStore.getUnsynced.and.callFake(async () => {
-          callCount++;
-          if (callCount === 1) {
-            // After callback ran, return the new op it created
-            return [createMockEntry(1, 'sync-import-op', 'client-1')];
-          }
-          return [];
+          return callbackCreatedOperation ? [callbackCreatedEntry] : [];
         });
 
         mockApiProvider.uploadOps.and.returnValue(
@@ -1407,19 +1516,25 @@ describe('OperationLogUploadService', () => {
           }),
         );
 
-        const callback = jasmine.createSpy('preUploadCallback').and.resolveTo(undefined);
+        const callback = jasmine.createSpy('preUploadCallback').and.callFake(async () => {
+          callbackCreatedOperation = true;
+        });
 
         await service.uploadPendingOps(mockApiProvider, { preUploadCallback: callback });
 
         // Callback was called, and the op it created was uploaded
         expect(callback).toHaveBeenCalled();
-        expect(mockApiProvider.uploadOps).toHaveBeenCalled();
+        expect(mockApiProvider.uploadOps).toHaveBeenCalledWith(
+          [jasmine.objectContaining(callbackCreatedEntry.op)],
+          'client-1',
+          jasmine.any(Number),
+        );
       });
     });
   });
 
-  // NOTE: _isNetworkError tests have been moved to sync-error-utils.spec.ts
-  // The shared isTransientNetworkError utility is now in sync-error-utils.ts
+  // NOTE: transient-error classification is delegated to `isRetryableUploadError`
+  // in `@sp/sync-providers`, which has its own unit test suite.
 
   describe('_opTypeToSnapshotReason', () => {
     // Access private method for testing

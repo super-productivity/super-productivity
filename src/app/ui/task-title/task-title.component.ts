@@ -4,6 +4,7 @@ import {
   computed,
   ElementRef,
   HostListener,
+  inject,
   input,
   Input,
   OnDestroy,
@@ -15,7 +16,12 @@ import { T } from 'src/app/t.const';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
+import { MentionConfig, MentionModule } from '../mentions';
+import { AsyncPipe } from '@angular/common';
+import { Observable } from 'rxjs';
+import { MentionConfigService } from '../../features/tasks/mention-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
+import { SubmitTrigger } from 'src/app/features/tasks/task.model';
 
 /**
  * Inline-editable text field for task titles.
@@ -24,7 +30,7 @@ import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
  */
 @Component({
   selector: 'task-title',
-  imports: [TranslateModule, RenderLinksPipe],
+  imports: [TranslateModule, MentionModule, AsyncPipe, RenderLinksPipe],
   templateUrl: './task-title.component.html',
   styleUrl: './task-title.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,8 +41,13 @@ import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
   },
 })
 export class TaskTitleComponent implements OnDestroy {
+  private static readonly _DEFAULT_SUBMIT_TRIGGER = 'blur' as const;
   T: typeof T = T;
 
+  // short-syntax autocomplete config shared across all editor instances
+  mentionCfg$: Observable<MentionConfig> = inject(MentionConfigService).mentionConfig$;
+
+  private readonly _isMentionListShown = signal(false);
   readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
@@ -81,13 +92,20 @@ export class TaskTitleComponent implements OnDestroy {
     newVal: string;
     wasChanged: boolean;
     blurEvent?: FocusEvent;
+    submitTrigger: SubmitTrigger;
   }>();
 
   private readonly _isFocused = signal(false);
   private readonly _isEditing = signal(false);
   private _focusTimeoutId: number | undefined;
+  private _submitTrigger: SubmitTrigger = TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
 
-  constructor() {}
+  updateMentionListShown(isShown: boolean): void {
+    // use setTimeout to ensure blur event order doesn't interfere with mention selection
+    window.setTimeout(() => {
+      this._isMentionListShown.set(isShown);
+    });
+  }
 
   // Click to enter edit mode or follow links.
   // Using click (not mousedown) allows CDK drag-and-drop to work from the title:
@@ -170,12 +188,22 @@ export class TaskTitleComponent implements OnDestroy {
   // Enter/Escape to submit and blur
   handleKeyDown(ev: KeyboardEvent): void {
     ev.stopPropagation();
+
+    let trigger: SubmitTrigger | null = null;
     if (ev.key === 'Escape') {
-      this._forceBlur();
+      trigger = 'escape';
     } else if (ev.key === 'Enter') {
-      this._forceBlur();
-      ev.preventDefault();
+      trigger = ev.ctrlKey || ev.metaKey ? 'modEnter' : 'enter';
     }
+    if (!trigger) return;
+
+    // While the mention list is open, MentionDirective owns Enter (selects)
+    // and Escape (closes) — leave the textarea focused for either path.
+    if (this._isMentionListShown()) return;
+
+    this._submitTrigger = trigger;
+    this._forceBlur();
+    ev.preventDefault();
   }
 
   // Android WebView: Enter key comes through as textInput
@@ -245,12 +273,15 @@ export class TaskTitleComponent implements OnDestroy {
   private _submit(blurEvent?: FocusEvent): void {
     const previousValue = this.lastExternalValue;
     const cleanVal = this._cleanValue(this.tmpValue());
+    const submitTrigger = this._submitTrigger;
     this.tmpValue.set(cleanVal);
     this.lastExternalValue = cleanVal;
+    this._submitTrigger = TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
     this.valueEdited.emit({
       newVal: cleanVal,
       wasChanged: cleanVal !== previousValue,
       blurEvent,
+      submitTrigger,
     });
   }
 

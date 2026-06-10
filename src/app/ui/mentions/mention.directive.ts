@@ -102,7 +102,7 @@ export class MentionDirective implements OnChanges {
       const itemValue = item[labelKey];
 
       if (itemValue === undefined || itemValue === null) {
-        Log.warn(`MentionDirective: item missing required property '${labelKey}'`, item);
+        Log.warn(`MentionDirective: item missing required property '${labelKey}'`);
         return this.activeConfig?.triggerChar || '';
       }
 
@@ -117,31 +117,27 @@ export class MentionDirective implements OnChanges {
       const searchStringLowerCase = searchString.toLowerCase();
       const labelKey = this.activeConfig?.labelKey || 'label';
 
-      const filteredItems = items.filter((e: MentionItem | string) => {
-        // Add defensive checks to prevent errors during filtering
-        if (!e) {
-          return false;
-        }
-
-        // Handle string items directly
-        if (typeof e === 'string') {
-          return e.toLowerCase().startsWith(searchStringLowerCase);
-        }
-
-        // Handle MentionItem objects
+      const getLabel = (e: MentionItem | string): string | null => {
+        if (!e) return null;
+        if (typeof e === 'string') return e;
         if (typeof e === 'object') {
           const itemValue = e[labelKey];
-          if (
-            itemValue === undefined ||
-            itemValue === null ||
-            typeof itemValue !== 'string'
-          ) {
-            return false;
-          }
-          return itemValue.toLowerCase().startsWith(searchStringLowerCase);
+          return typeof itemValue === 'string' ? itemValue : null;
         }
+        return null;
+      };
 
-        return false;
+      const filteredItems = items.filter((e: MentionItem | string) => {
+        const label = getLabel(e);
+        return label !== null && label.toLowerCase().includes(searchStringLowerCase);
+      });
+
+      // Rank prefix matches above mid-string matches; preserve the
+      // existing alphabetical order from addConfig() as a tiebreaker.
+      filteredItems.sort((a, b) => {
+        const aIdx = getLabel(a)!.toLowerCase().indexOf(searchStringLowerCase);
+        const bIdx = getLabel(b)!.toLowerCase().indexOf(searchStringLowerCase);
+        return aIdx - bIdx;
       });
 
       // Return the same type as the input array
@@ -372,7 +368,7 @@ export class MentionDirective implements OnChanges {
 
             // Check if we have a valid active item before proceeding
             if (!this.searchList.activeItem) {
-              console.warn('MentionDirective: No active item available for selection');
+              Log.warn('MentionDirective: No active item available for selection');
               this.stopSearch();
               return false;
             }

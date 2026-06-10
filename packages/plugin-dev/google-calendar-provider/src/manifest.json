@@ -15,6 +15,6 @@
     "humanReadableName": "Google Calendar",
     "issueStrings": { "singular": "Event", "plural": "Events" },
     "useAgendaView": true,
-    "defaultAutoAddToBacklog": true
+    "defaultAutoAddToBacklog": false
   }
 }

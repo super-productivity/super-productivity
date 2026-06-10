@@ -2,9 +2,10 @@ import { app, BrowserWindow } from 'electron';
 import { info } from 'electron-log/main';
 import { getWin, getWasMaximizedBeforeHide } from './main-window';
 import {
-  getIsOverlayAlwaysShow,
-  hideOverlayWindow,
-} from './overlay-indicator/overlay-indicator';
+  getIsTaskWidgetAlwaysShow,
+  getIsTaskWidgetUserForcedVisible,
+  hideTaskWidget,
+} from './task-widget/task-widget';
 import { setIsQuiting } from './shared-state';
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
@@ -29,15 +30,20 @@ export function showOrFocus(passedWin: BrowserWindow): void {
   if (win.isVisible()) {
     win.focus();
   } else {
-    // restore explicitly
-    if (win.isMinimized()) win.restore();
+    // restore explicitly - always call restore() before show()
+    // On Linux, event.preventDefault() on the minimize event has no effect, so the
+    // window may be minimized. On some desktop environments (e.g. GNOME/Wayland),
+    // isMinimized() returns false for a hidden+minimized window, so calling restore()
+    // only when isMinimized() is true would skip it and leave show() to fail alone.
+    win.restore();
     win.show();
     if (getWasMaximizedBeforeHide()) win.maximize();
   }
 
-  // Hide overlay when main window is shown
-  if (!getIsOverlayAlwaysShow()) {
-    hideOverlayWindow();
+  // Hide task widget when main window is shown, unless the user explicitly
+  // pinned it visible via the global shortcut.
+  if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
+    hideTaskWidget();
   }
 
   // focus window afterwards always

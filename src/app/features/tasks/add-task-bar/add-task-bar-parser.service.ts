@@ -5,8 +5,9 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { SHORT_SYNTAX_TIME_REG_EX, shortSyntax } from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { TimeSpentOnDay } from '../task.model';
+import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
+import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 
 interface PreviousParseResult {
   cleanText: string | null;
@@ -18,12 +19,17 @@ interface PreviousParseResult {
   dueDate: string | null;
   dueTime: string | null;
   attachments: TaskAttachment[];
+  deadlineDate: string | null;
+  deadlineTime: string | null;
+  deadlineRemindOption: TaskReminderOptionId | null;
+  isDeadlineFromSyntax: boolean;
 }
 
 @Injectable()
 export class AddTaskBarParserService {
   private readonly _stateService = inject(AddTaskBarStateService);
   private _previousParseResult: PreviousParseResult | null = null;
+  private _parseRunId = 0;
 
   private _arraysEqual<T>(a: T[], b: T[]): boolean {
     return a.length === b.length && a.every((val, i) => val === b[i]);
@@ -44,7 +50,18 @@ export class AddTaskBarParserService {
     defaultDate?: string,
     defaultTime?: string,
   ): Promise<void> {
-    if (!text || !config) {
+    const parseRunId = ++this._parseRunId;
+
+    if (!text) {
+      if (this._previousParseResult?.isDeadlineFromSyntax) {
+        this._stateService.updateDeadline(null, null);
+        this._stateService.updateDeadlineRemindOption(null);
+      }
+      this._previousParseResult = null;
+      return;
+    }
+
+    if (!config) {
       this._previousParseResult = null;
       return;
     }
@@ -60,8 +77,25 @@ export class AddTaskBarParserService {
       'replace',
     );
 
+    if (parseRunId !== this._parseRunId) {
+      return;
+    }
+
     // Create current parse result data structure
     let currentResult: PreviousParseResult;
+
+    // On the first run _previousParseResult is null. Treat "no previous run"
+    // as "user owns the deadline" so an existing user-set deadline isn't
+    // wiped on first parse.
+    const wasDeadlineFromSyntax =
+      this._previousParseResult?.isDeadlineFromSyntax ?? false;
+    const isDateExplicitlyCleared = currentState.isDateExplicitlyCleared === true;
+    const defaultDueDate = isDateExplicitlyCleared
+      ? null
+      : currentState.date || defaultDate || null;
+    const defaultDueTime = isDateExplicitlyCleared
+      ? null
+      : currentState.time || defaultTime || null;
 
     if (!parseResult) {
       // No parse result means no short syntax found
@@ -76,10 +110,17 @@ export class AddTaskBarParserService {
         newTagTitles: [],
         timeSpentOnDay: null,
         timeEstimate: null,
-        // Preserve current date/time if user has selected them, otherwise use defaults
-        dueDate: currentState.date || (defaultDate ? defaultDate : null),
-        dueTime: currentState.time || defaultTime || null,
+        // Preserve current date/time if user has selected them, otherwise use defaults.
+        // But if the user explicitly cleared a default date, keep it cleared.
+        dueDate: defaultDueDate,
+        dueTime: defaultDueTime,
         attachments: [],
+        deadlineDate: wasDeadlineFromSyntax ? null : currentState.deadlineDate || null,
+        deadlineTime: wasDeadlineFromSyntax ? null : currentState.deadlineTime || null,
+        deadlineRemindOption: wasDeadlineFromSyntax
+          ? null
+          : currentState.deadlineRemindOption || null,
+        isDeadlineFromSyntax: false,
       };
     } else {
       // Extract parsed values
@@ -102,9 +143,44 @@ export class AddTaskBarParserService {
             dueTime = timeStr;
           }
         }
-      } else if (defaultDate) {
-        dueDate = defaultDate;
-        dueTime = defaultTime || null;
+      } else if (defaultDueDate) {
+        dueDate = defaultDueDate;
+        dueTime = defaultDueTime;
+      }
+
+      let deadlineDate: string | null = null;
+      let deadlineTime: string | null = null;
+      let deadlineRemindOption: TaskReminderOptionId | null = null;
+      const hasParsedDeadline =
+        parseResult.taskChanges.deadlineWithTime !== undefined ||
+        parseResult.taskChanges.deadlineDay !== undefined;
+
+      if (parseResult.taskChanges.deadlineWithTime) {
+        const deadlineDateObj = new Date(parseResult.taskChanges.deadlineWithTime);
+        deadlineDate = getDbDateStr(deadlineDateObj);
+
+        if (parseResult.taskChanges.hasDeadlineTime !== false) {
+          const hours = deadlineDateObj.getHours().toString().padStart(2, '0');
+          const minutes = deadlineDateObj.getMinutes().toString().padStart(2, '0');
+          const timeStr = `${hours}:${minutes}`;
+
+          if (timeStr !== '00:00') {
+            deadlineTime = timeStr;
+          }
+        }
+
+        if (parseResult.taskChanges.deadlineRemindAt) {
+          deadlineRemindOption = millisecondsDiffToRemindOption(
+            parseResult.taskChanges.deadlineWithTime,
+            parseResult.taskChanges.deadlineRemindAt,
+          );
+        }
+      } else if (parseResult.taskChanges.deadlineDay) {
+        deadlineDate = parseResult.taskChanges.deadlineDay;
+      } else if (!wasDeadlineFromSyntax) {
+        deadlineDate = currentState.deadlineDate || null;
+        deadlineTime = currentState.deadlineTime || null;
+        deadlineRemindOption = currentState.deadlineRemindOption || null;
       }
 
       currentResult = {
@@ -117,6 +193,10 @@ export class AddTaskBarParserService {
         dueDate: dueDate,
         dueTime: dueTime,
         attachments: parseResult.attachments || [],
+        deadlineDate: deadlineDate,
+        deadlineTime: deadlineTime,
+        deadlineRemindOption: deadlineRemindOption,
+        isDeadlineFromSyntax: hasParsedDeadline,
       };
     }
 
@@ -181,8 +261,9 @@ export class AddTaskBarParserService {
     }
 
     if (
-      !this._previousParseResult ||
-      this._previousParseResult.timeEstimate !== currentResult.timeEstimate
+      (!this._previousParseResult && currentResult.timeEstimate !== null) ||
+      (this._previousParseResult &&
+        this._previousParseResult.timeEstimate !== currentResult.timeEstimate)
     ) {
       this._stateService.updateEstimate(currentResult.timeEstimate);
     }
@@ -203,17 +284,42 @@ export class AddTaskBarParserService {
       this._stateService.updateAttachments(currentResult.attachments);
     }
 
+    const deadlineChanged =
+      !this._previousParseResult ||
+      !this._datesEqual(
+        this._previousParseResult.deadlineDate,
+        currentResult.deadlineDate,
+      ) ||
+      this._previousParseResult.deadlineTime !== currentResult.deadlineTime;
+
+    if (deadlineChanged) {
+      this._stateService.updateDeadline(
+        currentResult.deadlineDate,
+        currentResult.deadlineTime,
+      );
+    }
+
+    if (
+      !this._previousParseResult ||
+      this._previousParseResult.deadlineRemindOption !==
+        currentResult.deadlineRemindOption ||
+      currentState.deadlineRemindOption !== currentResult.deadlineRemindOption
+    ) {
+      this._stateService.updateDeadlineRemindOption(currentResult.deadlineRemindOption);
+    }
+
     // Store current result as previous for next comparison
     this._previousParseResult = currentResult;
   }
 
   resetPreviousResult(): void {
+    this._parseRunId++;
     this._previousParseResult = null;
   }
 
   removeShortSyntaxFromInput(
     currentInput: string,
-    type: 'tags' | 'date' | 'estimate' | 'urls',
+    type: 'tags' | 'date' | 'estimate' | 'urls' | 'deadline',
     specificTag?: string,
   ): string {
     if (!currentInput) return currentInput;
@@ -235,6 +341,11 @@ export class AddTaskBarParserService {
       case 'date':
         // Remove date and time syntax (e.g., @today @16:30 @2024-01-15)
         cleanedInput = cleanedInput.replace(/\s*@\S+/g, '');
+        break;
+
+      case 'deadline':
+        // Remove deadline date and time syntax (e.g., !today !16:30 !2024-01-15)
+        cleanedInput = cleanedInput.replace(/\s*!\S+/g, '');
         break;
 
       case 'estimate':

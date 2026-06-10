@@ -35,7 +35,7 @@
   @if (task.timeSpent || task.timeEstimate) {
     <section class="section">
       <h3>
-        <mat-icon>timer</mat-icon>
+        <mat-icon>hourglass_empty</mat-icon>
         <strong>{{ T.F.TASK.ADDITIONAL_INFO.TIME | translate }}</strong>
       </h3>
       <div class="time-info">
@@ -55,7 +55,6 @@
       <div class="notes-content">
         <markdown
           [data]="task.notes"
-          [disableSanitizer]="true"
           class="markdown-parsed markdown"
         ></markdown>
       </div>
@@ -98,7 +97,7 @@
   @if (task.repeatCfgId) {
     <section class="section">
       <h3>
-        <mat-icon svgIcon="repeat"></mat-icon>
+        <mat-icon>repeat</mat-icon>
         <strong>{{ T.F.TASK.ADDITIONAL_INFO.REPEAT | translate }}</strong>
       </h3>
       @if (repeatCfgLabel()) {

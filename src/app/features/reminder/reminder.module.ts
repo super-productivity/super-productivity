@@ -88,7 +88,7 @@ export class ReminderModule {
             switchMap((reminders: TaskWithReminderData[]) => {
               const isShowAddTaskBar = this._layoutService.isShowAddTaskBar();
               return isShowAddTaskBar
-                ? merge([
+                ? merge(
                     // Wait for add task bar to close
                     interval(100).pipe(
                       map(() => this._layoutService.isShowAddTaskBar()),
@@ -97,7 +97,7 @@ export class ReminderModule {
                     ),
                     // in case someone just forgot to close it
                     timer(10000),
-                  ]).pipe(first(), mapTo(reminders), delay(1000))
+                  ).pipe(first(), mapTo(reminders), delay(1000))
                 : of(reminders);
             }),
           ),
@@ -119,7 +119,6 @@ export class ReminderModule {
           futureCount: futureReminders.length,
           reminders: reminders.map((r) => ({
             id: r.id.substring(0, 8),
-            title: r.title.substring(0, 30),
             remindAt: r.reminderData?.remindAt
               ? new Date(r.reminderData.remindAt).toISOString()
               : 'unknown',
@@ -187,14 +186,13 @@ export class ReminderModule {
             );
           }
         } else {
-          this._matDialog
-            .open(DialogViewTaskRemindersComponent, {
-              restoreFocus: true,
-              data: {
-                reminders,
-              },
-            })
-            .afterClosed();
+          this._matDialog.open(DialogViewTaskRemindersComponent, {
+            restoreFocus: true,
+            disableClose: true,
+            data: {
+              reminders,
+            },
+          });
         }
       });
   }
@@ -253,6 +251,7 @@ export class ReminderModule {
     event: NotificationActionEvent,
   ): Promise<void> {
     const taskId = event.extra?.['relatedId'] as string | undefined;
+    const reminderType = event.extra?.['reminderType'] as string | undefined;
     if (!taskId) {
       Log.warn('ReminderModule: No task ID in notification action', event);
       return;
@@ -274,14 +273,31 @@ export class ReminderModule {
             ? SNOOZE_10M_MS
             : SNOOZE_1H_MS;
         const newRemindAt = Date.now() + snoozeMs;
-        this._store.dispatch(
-          TaskSharedActions.reScheduleTaskWithTime({
-            task,
-            remindAt: newRemindAt,
-            dueWithTime: task.dueWithTime ?? newRemindAt,
-            isMoveToBacklog: false,
-          }),
-        );
+        if (reminderType === 'DEADLINE') {
+          // setDeadline enforces mutual exclusivity between deadlineDay and
+          // deadlineWithTime — passing both would null the day. Forward only the
+          // more specific field (deadlineWithTime) when present.
+          this._store.dispatch(
+            TaskSharedActions.setDeadline({
+              taskId,
+              ...(typeof task.deadlineWithTime === 'number'
+                ? { deadlineWithTime: task.deadlineWithTime }
+                : task.deadlineDay
+                  ? { deadlineDay: task.deadlineDay }
+                  : {}),
+              deadlineRemindAt: newRemindAt,
+            }),
+          );
+        } else {
+          this._store.dispatch(
+            TaskSharedActions.reScheduleTaskWithTime({
+              task,
+              remindAt: newRemindAt,
+              dueWithTime: task.dueWithTime ?? newRemindAt,
+              isMoveToBacklog: false,
+            }),
+          );
+        }
         Log.log('ReminderModule: Task snoozed via iOS notification', {
           taskId,
           snoozeMs,
@@ -291,7 +307,7 @@ export class ReminderModule {
       await this._handleDoneAction(taskId);
     } else {
       // Tap on notification body (actionId is 'tap' in Capacitor)
-      await this._handleTapAction(taskId);
+      await this._handleTapAction(taskId, reminderType);
     }
   }
 
@@ -322,7 +338,7 @@ export class ReminderModule {
   /**
    * Handle notification tap: sync, then navigate to task or show "already done".
    */
-  private async _handleTapAction(taskId: string): Promise<void> {
+  private async _handleTapAction(taskId: string, reminderType?: string): Promise<void> {
     Log.log('ReminderModule: Handling notification tap', { taskId });
     try {
       await this._syncWrapperService.sync();
@@ -339,7 +355,11 @@ export class ReminderModule {
       return;
     }
 
-    this._store.dispatch(TaskSharedActions.dismissReminderOnly({ id: taskId }));
+    if (reminderType === 'DEADLINE') {
+      this._store.dispatch(TaskSharedActions.clearDeadlineReminder({ taskId }));
+    } else if (reminderType !== 'DUE_DATE') {
+      this._store.dispatch(TaskSharedActions.dismissReminderOnly({ id: taskId }));
+    }
     try {
       this._taskService.focusTask(taskId);
     } catch (e) {

@@ -23,7 +23,7 @@ test.describe('Planner Task Visibility', () => {
 
     // The task should be visible in the planner's today section (may take time after route change)
     await expect(
-      page.locator('task').filter({ hasText: 'Planner visibility test' }),
+      page.locator('planner-task').filter({ hasText: 'Planner visibility test' }),
     ).toBeVisible({ timeout: 15000 });
   });
 
@@ -39,10 +39,10 @@ test.describe('Planner Task Visibility', () => {
     await plannerPage.waitForPlannerView();
 
     await expect(
-      page.locator('task').filter({ hasText: 'First planner task' }),
+      page.locator('planner-task').filter({ hasText: 'First planner task' }),
     ).toBeVisible({ timeout: 15000 });
     await expect(
-      page.locator('task').filter({ hasText: 'Second planner task' }),
+      page.locator('planner-task').filter({ hasText: 'Second planner task' }),
     ).toBeVisible();
   });
 });

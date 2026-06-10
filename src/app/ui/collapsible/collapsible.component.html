@@ -1,6 +1,11 @@
 <div
   (click)="toggleExpand()"
+  (keydown)="onHeaderKeydown($event)"
   class="collapsible-header"
+  [attr.tabindex]="isGroup ? 0 : null"
+  [attr.role]="isGroup ? 'button' : null"
+  [attr.aria-expanded]="isGroup ? isExpanded : null"
+  [attr.aria-controls]="isGroup ? panelId : null"
 >
   @if (isIconBefore()) {
     <mat-icon class="collapsible-expand-icon">expand_more</mat-icon>
@@ -9,7 +14,18 @@
     <mat-icon class="collapsible-additional-icon">{{ icon }} </mat-icon>
   }
 
-  <div class="collapsible-title">{{ title() }}</div>
+  @if (isTitleDragHandle()) {
+    <div
+      class="collapsible-title is-drag-handle"
+      cdkDragHandle
+    >
+      {{ title() }}
+    </div>
+  } @else {
+    <div class="collapsible-title">{{ title() }}</div>
+  }
+
+  <ng-content select="[actions]"></ng-content>
 
   @if (!isIconBefore()) {
     <mat-icon class="collapsible-expand-icon">expand_more</mat-icon>
@@ -20,6 +36,7 @@
   <div
     [@expand]
     class="collapsible-panel ani-expand-collapse"
+    [attr.id]="panelId"
   >
     <ng-content></ng-content>
   </div>

@@ -88,7 +88,7 @@
       class="input-item --estimate"
     >
       <ng-container input-title>
-        <mat-icon>timer</mat-icon>
+        <mat-icon>hourglass_empty</mat-icon>
         <span>{{ T.F.TASK.ADDITIONAL_INFO.TIME | translate }}</span>
       </ng-container>
       <ng-container input-value>
@@ -161,6 +161,16 @@
           {{ task().deadlineDay | localDateStr: '' }}
         </div>
       }
+      @if (task().deadlineWithTime || task().deadlineDay) {
+        <button
+          mat-icon-button
+          class="quick-chip"
+          (click)="removeDeadline($event)"
+          [matTooltip]="T.F.TASK.CMP.REMOVE_DEADLINE | translate"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      }
     </ng-container>
   </task-detail-item>
 
@@ -203,14 +213,13 @@
         <mat-icon>checklist</mat-icon>
         Checklist
         <!-- -->
-      } @else {
-        @if (task().notes) {
-          <mat-icon>chat</mat-icon>
-        }
-        @if (!task().notes) {
-          <mat-icon>chat_bubble_outline</mat-icon>
-        }
+      } @else if (task().notes) {
+        <mat-icon>chat</mat-icon>
         <span>{{ T.F.TASK.ADDITIONAL_INFO.NOTES | translate }}</span>
+      } @else {
+        <!-- No content yet: hint that this section can hold a note or a checklist -->
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <span>{{ T.F.TASK.ADDITIONAL_INFO.NOTES_OR_CHECKLIST | translate }}</span>
       }
     </ng-container>
 
@@ -224,6 +233,7 @@
         [isShowControls]="true"
         [isShowChecklistToggle]="true"
         [isDefaultText]="!task().notes"
+        [defaultText]="isStockNotesTemplate() ? defaultTaskNotes() : ''"
         [model]="task().notes || defaultTaskNotes()"
         [taskId]="task().id"
       ></inline-markdown>
@@ -288,6 +298,8 @@
           <div class="add-btn-wrapper">
             <button
               (click)="addAttachment()"
+              [matTooltip]="pasteImageHintKey | translate"
+              matTooltipPosition="above"
               mat-button
             >
               <mat-icon>add</mat-icon>
@@ -303,8 +315,10 @@
       (collapseParent)="collapseParent()"
       (editActionTriggered)="addAttachment()"
       (keyPress)="onItemKeyPress($event)"
+      [matTooltip]="pasteImageHintKey | translate"
       [inputIcon]="'add'"
       class="input-item"
+      matTooltipPosition="above"
     >
       <ng-container input-title>
         <mat-icon>attachment</mat-icon>
@@ -322,7 +336,7 @@
       class="input-item"
     >
       <ng-container input-title>
-        <mat-icon svgIcon="repeat"></mat-icon>
+        <mat-icon>repeat</mat-icon>
         <span>{{ T.F.TASK.ADDITIONAL_INFO.REPEAT | translate }}</span>
       </ng-container>
       <ng-container input-value>
@@ -347,7 +361,7 @@
     class="input-item --estimate"
   >
     <ng-container input-title>
-      <mat-icon>style</mat-icon>
+      <mat-icon>label</mat-icon>
     </ng-container>
     <ng-container input-value>
       <tag-edit

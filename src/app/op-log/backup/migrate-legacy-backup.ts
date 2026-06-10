@@ -36,6 +36,8 @@ import {
 } from '../../features/project/project.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../util/is-today.util';
+// Matches DateService.setStartOfNextDayDiff semantics for legacy backup normalization.
+import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 import { LanguageCode } from '../../core/locale.constants';
 import {
   initialPluginUserDataState,
@@ -43,6 +45,7 @@ import {
 } from '../../plugins/plugin-persistence.model';
 import { AppDataComplete } from '../model/model-config';
 import { OpLog } from '../../core/log';
+import { migrateLegacyTaskRemindersIntoTasks } from '../../features/reminder/migrate-legacy-task-reminders.util';
 
 const LEGACY_INBOX_PROJECT_ID = 'INBOX' as const;
 
@@ -91,6 +94,9 @@ export const migrateLegacyBackup = (
 
   // === Migration 4: plannedAt → dueWithTime, remove TODAY_TAG from tagIds ===
   data = _migration4TaskDateTimeFields(data);
+
+  // === Legacy reminders: reminders[] + task.reminderId → task.remindAt ===
+  data = _migrationLegacyTaskReminders(data);
 
   // === Migration 4.1: Remove TODAY_TAG from task repeat configs ===
   data = _migration41RepeatCfgTodayTag(data);
@@ -371,8 +377,10 @@ function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, a
   }
 
   // Fix TODAY_TAG tasks
-  const startOfNextDayDiffMs =
-    (data.globalConfig?.misc?.startOfNextDay || 0) * 60 * 60 * 1000;
+  const startOfNextDayDiffMs = getStartOfNextDayDiffMs(
+    data.globalConfig?.misc?.startOfNextDayTime,
+    data.globalConfig?.misc?.startOfNextDay,
+  );
   const todayStr = getDbDateStr(new Date(Date.now() - startOfNextDayDiffMs));
   const todayTag = data.tag?.entities?.[TODAY_TAG.id];
   if (todayTag?.taskIds) {
@@ -586,6 +594,16 @@ function _migrateTasksForMigration4(taskState: any): void {
       task.tagIds = task.tagIds.filter((v: string) => v !== TODAY_TAG.id);
     }
   }
+}
+
+function _migrationLegacyTaskReminders(data: Record<string, any>): Record<string, any> {
+  if (!Array.isArray(data.reminders) || !data.task?.entities) {
+    return data;
+  }
+
+  migrateLegacyTaskRemindersIntoTasks(data.task, data.reminders);
+  data.reminders = [];
+  return data;
 }
 
 // ---------------------------------------------------------------------------

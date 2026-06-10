@@ -13,7 +13,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { ScheduleEvent } from '../schedule.model';
+import { isScheduleCalendarEvent, ScheduleEvent } from '../schedule.model';
 import { CdkDragMove, CdkDragRelease, CdkDragStart } from '@angular/cdk/drag-drop';
 import { FH, SVEType } from '../schedule.const';
 import { isDraggableSE } from '../map-schedule-data/is-schedule-types-type';
@@ -23,8 +23,7 @@ import { ScheduleEventComponent } from '../schedule-event/schedule-event.compone
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
+import { isTouchActive } from '../../../util/input-intent';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -34,8 +33,23 @@ import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { calculatePlaceholderForGridMove } from './schedule-week-placeholder.util';
 import { formatScheduleDragPreviewLabel } from './format-schedule-drag-preview-label.util';
 import { truncate } from '../../../util/truncate';
+import { LS } from '../../../core/persistence/storage-keys.const';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 const D_HOURS = 24;
+const DEFAULT_ROW_HEIGHT_PX = 9;
+const DEFAULT_MOBILE_ROW_HEIGHT_PX = 7;
+const MIN_ROW_HEIGHT_PX = 5;
+const MAX_ROW_HEIGHT_PX = 24;
+const ROW_HEIGHT_STEP_PX = 1;
+const MOBILE_ROW_HEIGHT_FACTOR = DEFAULT_MOBILE_ROW_HEIGHT_PX / DEFAULT_ROW_HEIGHT_PX;
+const TOUCH_DRAG_START_DELAY_MS = 75;
+
+interface ScheduleTaskDataLike {
+  id?: string;
+  plannedForDay?: string;
+  dueDay?: string | null;
+}
 
 @Component({
   selector: 'schedule-week',
@@ -60,15 +74,18 @@ const D_HOURS = 24;
     '[class.is-resizing-event]': 'isAnyEventResizing()',
     '[class]': 'dragEventTypeClass()',
     '[attr.data-horizontal-scroll]': 'isHorizontalScrollMode() || null',
+    '[attr.data-hscrolled]': 'isHScrolled() || null',
   },
 })
 export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _service = inject(ScheduleWeekDragService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
+  private _calendarEventActions = inject(CalendarEventActionsService);
 
   isInPanel = input<boolean>(false);
   isHorizontalScrollMode = input<boolean>(false);
+  isHScrolled = input<boolean>(false);
   events = input<ScheduleEvent[] | null>([]);
   beyondBudget = input<ScheduleEvent[][] | null>([]);
   daysToShow = input<string[]>([]);
@@ -77,17 +94,23 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   todayDateStr = input<string | undefined>(undefined);
   isCtrlPressed = signal<boolean>(false);
   isTaskDragActive = input<boolean>(false);
+  scheduleRowHeightPx = signal<number>(readStoredScheduleRowHeight());
+  scheduleRowHeightCss = computed(() => `${this.scheduleRowHeightPx()}px`);
+  scheduleRowHeightMobileCss = computed(
+    () =>
+      `${Math.max(4, Math.round(this.scheduleRowHeightPx() * MOBILE_ROW_HEIGHT_FACTOR))}px`,
+  );
 
   // Shift mode changes drag behavior: instead of scheduling at a time,
   // tasks are planned for the day or reordered relative to other tasks.
   readonly isShiftNoScheduleMode = this._service.isShiftMode;
 
   FH = FH;
-  IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
-  DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
+  protected readonly isTouchActive = isTouchActive;
   SVEType: typeof SVEType = SVEType;
   T: typeof T = T;
   protected readonly isDraggableSE = isDraggableSE;
+  protected readonly touchDragStartDelayMs = TOUCH_DRAG_START_DELAY_MS;
 
   rowsByNr = Array.from({ length: D_HOURS * FH }, (_, index) => index).filter(
     (_, index) => index % FH === 0,
@@ -115,6 +138,66 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
 
   safeEvents = computed(() => this.events() || []);
   safeBeyondBudget = computed(() => this.beyondBudget() || []);
+  beyondBudgetStats = computed(() => {
+    const beyondBudget = this.safeBeyondBudget();
+    const visibleEvents = this.safeEvents();
+    return (this.daysToShow() || []).map((day, index) => {
+      const beyondBudgetDay = beyondBudget[index] || [];
+      const taskIds = new Set<string>();
+
+      visibleEvents.forEach((event) => {
+        if (!event.isBeyondBudget || getEventDay(event) !== day) {
+          return;
+        }
+        const taskId = getEventTaskId(event);
+        if (!taskId) {
+          return;
+        }
+        taskIds.add(taskId);
+      });
+
+      beyondBudgetDay.forEach((event) => {
+        const taskId = getEventTaskId(event);
+        if (!taskId) {
+          return;
+        }
+        taskIds.add(taskId);
+      });
+
+      return {
+        count: taskIds.size,
+      };
+    });
+  });
+  beyondBudgetTooltips = computed(() =>
+    this.beyondBudgetStats().map((stats) =>
+      this._translateService.instant(
+        stats.count === 1
+          ? T.F.SCHEDULE.EXCESS_TASKS_DAY_TOOLTIP_ONE
+          : T.F.SCHEDULE.EXCESS_TASKS_DAY_TOOLTIP,
+        {
+          count: stats.count,
+        },
+      ),
+    ),
+  );
+
+  // Split projections (RepeatProjectionSplit, SplitTaskContinued, …) share the
+  // task/repeat-cfg id across segments. Combine day + start hour so each visual
+  // segment has a unique @for track key and Angular can reconcile them.
+  trackEventKey(ev: ScheduleEvent): string {
+    return `${ev.id}_${ev.plannedForDay ?? ''}_${ev.startHours}`;
+  }
+
+  canDragEvent(ev: ScheduleEvent): boolean {
+    if (isScheduleCalendarEvent(ev)) {
+      return this._calendarEventActions.canMoveEvent(ev.data);
+    }
+    if (isDraggableSE(ev)) {
+      return true;
+    }
+    return false;
+  }
 
   newTaskPlaceholder = signal<{
     style: string;
@@ -230,6 +313,27 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     this._service.destroy();
   }
 
+  @HostListener('wheel', ['$event'])
+  onWheel(ev: WheelEvent): void {
+    if (!ev.ctrlKey || ev.deltaY === 0) {
+      return;
+    }
+
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const direction = ev.deltaY < 0 ? 1 : -1;
+    const rowHeightDelta = direction * ROW_HEIGHT_STEP_PX;
+    const nextValue = clampScheduleRowHeight(this.scheduleRowHeightPx() + rowHeightDelta);
+
+    if (nextValue === this.scheduleRowHeightPx()) {
+      return;
+    }
+
+    this.scheduleRowHeightPx.set(nextValue);
+    localStorage.setItem(LS.SCHEDULE_WEEK_ROW_HEIGHT, String(nextValue));
+  }
+
   onGridClick(ev: MouseEvent): void {
     if (this.isAnyEventResizing()) {
       return;
@@ -268,7 +372,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
       event: ev,
       gridElement,
       days: this.daysToShow() || [],
-      isTouchPrimary: IS_TOUCH_PRIMARY,
+      isTouchPrimary: isTouchActive(),
     });
 
     this.newTaskPlaceholder.set(placeholder);
@@ -362,3 +466,30 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     this._service.hideExternalPreview();
   }
 }
+
+const clampScheduleRowHeight = (value: number): number =>
+  Math.min(MAX_ROW_HEIGHT_PX, Math.max(MIN_ROW_HEIGHT_PX, value));
+
+const readStoredScheduleRowHeight = (): number => {
+  const rawValue = localStorage.getItem(LS.SCHEDULE_WEEK_ROW_HEIGHT);
+  const parsedValue = rawValue === null ? DEFAULT_ROW_HEIGHT_PX : Number(rawValue);
+
+  return Number.isFinite(parsedValue)
+    ? clampScheduleRowHeight(parsedValue)
+    : DEFAULT_ROW_HEIGHT_PX;
+};
+
+const getEventTaskData = (event: ScheduleEvent): ScheduleTaskDataLike | null =>
+  typeof event.data === 'object' && event.data !== null
+    ? (event.data as ScheduleTaskDataLike)
+    : null;
+
+const getEventTaskId = (event: ScheduleEvent): string | null => {
+  const data = getEventTaskData(event);
+  return typeof data?.id === 'string' ? data.id : event.id;
+};
+
+const getEventDay = (event: ScheduleEvent): string | null => {
+  const data = getEventTaskData(event);
+  return event.plannedForDay ?? data?.plannedForDay ?? data?.dueDay ?? null;
+};

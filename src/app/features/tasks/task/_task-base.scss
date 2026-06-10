@@ -125,6 +125,7 @@
   }
 
   :host.isCurrent.isCurrent.isCurrent.isCurrent.isCurrent & {
+    background: var(--task-c-current-bg);
     border-radius: var(--task-border-radius);
     box-shadow: var(--task-current-shadow);
     // because of the shadow, this looks better
@@ -150,17 +151,18 @@
     }
   }
 
-  :host-context(.isLightTheme).isCurrent.isCurrent.isCurrent.isCurrent & {
-    border-color: var(--c-accent) !important;
-    border-width: 1px !important;
-    border-style: dashed;
+  :host.hasTimeConflict .inner-wrapper > & {
+    border-color: color-mix(
+      in srgb,
+      var(--text-color-muted) 36%,
+      var(--extra-border-color)
+    );
+    border-width: 1px;
+    border-style: solid;
+    box-shadow:
+      inset 3px 0 0 color-mix(in srgb, var(--text-color-muted) 55%, transparent),
+      var(--task-shadow);
   }
-
-  :host-context(.isDarkTheme).isCurrent.isCurrent.isCurrent.isCurrent & {
-    background: var(--task-c-current-bg);
-    box-shadow: var(--task-current-shadow);
-  }
-
   :host:first-child .inner-wrapper > & {
     border-top-left-radius: var(--task-border-radius);
     border-top-right-radius: var(--task-border-radius);
@@ -185,11 +187,14 @@
     box-shadow: var(--task-shadow-sub-task);
     border-radius: 0;
     top: -1px;
-    background: var(--sub-task-c-bg);
 
     @include lightTheme {
       border-color: var(--extra-border-color);
       bottom: 0;
+    }
+
+    @include darkTheme {
+      background: var(--sub-task-c-bg);
     }
   }
 

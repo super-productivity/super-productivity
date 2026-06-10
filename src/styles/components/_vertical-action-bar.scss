@@ -1,0 +1,137 @@
+// EXPERIMENT: vertical action strip on the right edge of the viewport
+// (desktop only). Lives at the top level (not inside main-header.scss) so
+// it bypasses Angular view-encapsulation and any containing-block
+// surprises (transform/filter/contain on ancestors).
+//
+// MainHeaderComponent teleports `nav.action-nav-right` to `<body>` when
+// `misc.isVerticalActionBar` is enabled and the breakpoint is non-XS,
+// adding the `action-nav-right--teleported` marker class. The
+// `body.isVerticalActionBar` body class is toggled by GlobalThemeService
+// off the same config flag — used here only for the tooltip override
+// (overlay panes live outside the teleported nav and need a body-level
+// anchor).
+@media screen and (min-width: 600px) {
+  // The strip sits BELOW the horizontal header on Win/Linux Electron with
+  // custom title bar (the header still owns the drag region + native
+  // window controls); elsewhere it starts at viewport top.
+  body > nav.action-nav-right.action-nav-right--teleported {
+    // --header-nav-button-gap is declared on <main-header>'s :host, but the
+    // strip is teleported to <body> and out of that scope, so the var would
+    // be undefined here (gap: 0 — everything cramped). Re-declare it. One
+    // value drives the spacing between every button in the strip.
+    --header-nav-button-gap: var(--s);
+    display: flex;
+    position: fixed;
+    // Default: strip starts at viewport top (web, Mac, native-frame
+    // Electron — none of these have a window-control overlay clashing
+    // with the right edge). Only Win/Linux Electron with custom title
+    // bar pushes the strip down by the header height to clear the WCO
+    // overlay band (rule below).
+    inset: 0 0 0 auto;
+    width: var(--vertical-action-bar-width);
+    margin: 0;
+    padding: var(--s-half) 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--header-nav-button-gap);
+    // Match the left sidenav (magic-side-nav uses --sidenav-bg).
+    background: var(--sidenav-bg);
+    border-left: 1px solid var(--separator-color);
+    z-index: var(--z-vertical-action-bar);
+    // overflow: visible so the current-task flyout can extend past the
+    // 48px rail. (overflow-x can't be visible while overflow-y is auto —
+    // the two axes are coupled — so no inner scroll here; the strip holds
+    // few small buttons and is far shorter than the viewport.)
+    overflow: visible;
+    -webkit-app-region: no-drag;
+    box-sizing: border-box;
+
+    // No extra margin-bottom here: the strip's `gap` already spaces this
+    // group from the buttons below it, so spacing stays uniform.
+    > .counters-action-group {
+      flex-direction: column;
+      margin-right: 0;
+      gap: var(--header-nav-button-gap);
+    }
+
+    // These wrapper custom-elements have no box of their own (height 0),
+    // so as direct flex children the strip's `gap` lands on a collapsed
+    // wrapper instead of the button(s) inside — the visible icons end up
+    // unevenly spaced next to real buttons (e.g. the add button). Make
+    // each wrapper a column flex item that stacks its button(s) with the
+    // same gap, and drop truly-empty wrappers so they don't reserve a
+    // phantom gap slot.
+    > plugin-header-btns,
+    > plugin-side-panel-btns,
+    > desktop-panel-buttons,
+    > user-profile-button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--header-nav-button-gap);
+
+      &:empty {
+        display: none;
+      }
+    }
+
+    // Center the mini-fab in the rail; no extra margin so the play button
+    // is spaced from the focus button by the same gap as every other pair.
+    play-button .play-btn-wrapper {
+      margin: 0;
+    }
+
+    // Current-task title: hover-reveal flyout to the LEFT of the strip.
+    // Keep the component's own position:absolute + top:50% +
+    // translateY(-50%) (relative to .play-btn-wrapper) so it is exactly
+    // vertically centred on the play button regardless of theme/density.
+    // Only undo the inline-header horizontal "tuck", and hide it until
+    // the play button (or the flyout itself) is hovered. Mobile
+    // (< 1080px) is unchanged — the component still display:none's it.
+    play-button .current-task-title {
+      right: calc(100% + var(--s-half));
+      margin: 0;
+      padding: calc(var(--s-half) * 0.75) var(--s);
+      max-width: 320px;
+      z-index: var(--z-vertical-action-bar);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        opacity 0.2s ease-out,
+        visibility 0.2s ease-out;
+    }
+
+    play-button .play-btn-wrapper:hover .current-task-title,
+    play-button .current-task-title:hover {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+  }
+
+  // Win/Linux Electron with custom title bar: WCO renders a compact band
+  // (--wco-height, matches electron WCO_HEIGHT) at top-right. Push the
+  // strip down by exactly that height so its first button sits flush
+  // below the WCO buttons and the strip reclaims the newly-freed space.
+  body.isElectron.isNoMac.isObsidianStyleHeader
+    > nav.action-nav-right.action-nav-right--teleported {
+    top: calc(var(--wco-height) + var(--s));
+  }
+
+  [dir='rtl'] > nav.action-nav-right.action-nav-right--teleported {
+    inset: 0 auto 0 0;
+    border-left: none;
+    border-right: 1px solid var(--separator-color);
+  }
+
+  // RTL: strip is on the left edge, so the flyout opens to its right.
+  [dir='rtl']
+    > nav.action-nav-right.action-nav-right--teleported
+    play-button
+    .current-task-title {
+    right: auto;
+    left: calc(100% + var(--s-half));
+  }
+}

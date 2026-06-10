@@ -15,6 +15,7 @@ import {
 import { Store } from '@ngrx/store';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { DateService } from '../../../core/date/date.service';
+import { getPointerPosition } from '../../../util/get-pointer-position';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -23,13 +24,16 @@ import { FH, SVEType } from '../schedule.const';
 import { calculateTimeFromYPosition } from '../schedule-utils';
 import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { PlannerActions } from '../../planner/store/planner.actions';
-import { TaskWithSubTasks } from '../../tasks/task.model';
+import { TaskReminderOptionId, TaskWithSubTasks } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
 import { Subscription } from 'rxjs';
 import { ScheduleExternalDragService } from '../schedule-week/schedule-external-drag.service';
 import { ScheduleService } from '../schedule.service';
 import { ScheduleEvent } from '../schedule.model';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
+import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 
 const DEFAULT_MIN_DURATION = 15 * 60 * 1000;
 const SCROLL_DELAY_MS = 100;
@@ -72,6 +76,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   private _cdr = inject(ChangeDetectorRef);
   private _ngZone = inject(NgZone);
   private _scheduleService = inject(ScheduleService);
+  private _globalConfigService = inject(GlobalConfigService);
   private _pointerUpSubscription: Subscription | null = null;
   private _activeExternalTask: TaskWithSubTasks | null = null;
   private readonly _globalPointerEvents = ['mousemove', 'touchmove'] as const;
@@ -101,10 +106,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   });
 
   events = computed(() => this._eventsAndBeyondBudget().eventsFlat);
+  beyondBudget = computed(() => this._eventsAndBeyondBudget().beyondBudgetDays);
 
   hasNoEvents = computed(() => {
-    const evs = this.events().filter((ev) => ev.type !== SVEType.LunchBreak);
-    return !evs || evs.length === 0;
+    const hasVisibleEvents = this.events().some((ev) => ev.type !== SVEType.LunchBreak);
+    const hasBeyondBudgetEvents = this.beyondBudget().some(
+      (beyondBudgetDay) => beyondBudgetDay.length > 0,
+    );
+    return !hasVisibleEvents && !hasBeyondBudgetEvents;
   });
 
   private _workStartEndHours = toSignal(
@@ -177,7 +186,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
 
     // Try to use drag preview position, fallback to event coordinates for touch
     const previewEl = this._getDragPreview();
-    const pointer = this._getPointerPosition(event);
+    const pointer = getPointerPosition(event);
     if (previewEl) {
       // Desktop: use drag preview top
       const previewRect = previewEl.getBoundingClientRect();
@@ -252,7 +261,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     // Treat any pointer release while the preview is active as a potential drop on the panel.
     const task = this._activeExternalTask ?? this._externalDragService.activeTask();
     const previewRect = this._getDragPreviewRect();
-    const pointer = this._getPointerPosition(event);
+    const pointer = getPointerPosition(event);
     const isInside = this._isEffectiveTopWithinDropZone(previewRect, pointer);
     const dropCalculation = isInside
       ? this._calculateDropTime(previewRect, pointer?.y ?? null)
@@ -278,12 +287,26 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
         targetTime: targetDate,
         formattedTime: this._formatTime(targetDate.getHours(), targetDate.getMinutes()),
       });
+      const hasExistingSchedule = !!task.dueWithTime;
+      const hasReminder = !!(task.remindAt ?? task.reminderId);
+      let remindAt: number | undefined;
+      if (!hasExistingSchedule && !hasReminder) {
+        remindAt = remindOptionToMilliseconds(dropTime, this._getDefaultReminderOption());
+      } else if (hasReminder) {
+        remindAt = dropTime;
+      }
+
+      const payload = {
+        task,
+        dueWithTime: dropTime,
+        ...(typeof remindAt === 'number' ? { remindAt } : {}),
+        isMoveToBacklog: false,
+      };
+
       this._store.dispatch(
-        TaskSharedActions.scheduleTaskWithTime({
-          task,
-          dueWithTime: dropTime,
-          isMoveToBacklog: false,
-        }),
+        hasExistingSchedule
+          ? TaskSharedActions.reScheduleTaskWithTime(payload)
+          : TaskSharedActions.scheduleTaskWithTime(payload),
       );
       if (!task.timeEstimate || task.timeEstimate <= 0) {
         this._store.dispatch(
@@ -308,17 +331,6 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     if (wasDroppedSuccessfully) {
       this._disableSnapBackAnimation();
     }
-  }
-
-  private _getPointerPosition(
-    event: MouseEvent | TouchEvent,
-  ): { x: number; y: number } | null {
-    if (!('touches' in event)) {
-      return { x: event.clientX, y: event.clientY };
-    }
-
-    const touch = event.touches[0] ?? event.changedTouches?.[0];
-    return touch ? { x: touch.clientX, y: touch.clientY } : null;
   }
 
   private _getDragPreviewRect(): DOMRect | null {
@@ -538,7 +550,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   }
 
   private _onGlobalPointerMove = (ev: MouseEvent | TouchEvent): void => {
-    const pointer = this._getPointerPosition(ev);
+    const pointer = getPointerPosition(ev);
     if (!pointer) {
       return;
     }
@@ -720,6 +732,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     const timeEstimate = task.timeEstimate || DEFAULT_MIN_DURATION;
     const timeInHours = timeEstimate / (60 * 60 * 1000);
     return Math.max(Math.round(timeInHours * FH), 1);
+  }
+
+  private _getDefaultReminderOption(): TaskReminderOptionId {
+    return (
+      (this._globalConfigService.cfg()?.reminder
+        ?.defaultTaskRemindOption as TaskReminderOptionId) ??
+      DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!
+    );
   }
 
   private _disableSnapBackAnimation(): void {

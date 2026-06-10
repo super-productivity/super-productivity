@@ -13,6 +13,7 @@ export interface ScheduleEvent {
   plannedForDay?: string;
   data?: SVE['data'];
   overlap?: { count: number; offset: number };
+  isBeyondBudget?: boolean;
 }
 
 export interface ScheduleDay {
@@ -28,6 +29,7 @@ interface SVEBase {
   start: number;
   duration: number;
   plannedForDay?: string;
+  isBeyondBudget?: boolean;
 }
 
 export interface SVETask extends SVEBase {
@@ -77,16 +79,9 @@ export interface ScheduleFromCalendarEvent extends CalendarIntegrationEvent {
   icon?: string;
 }
 
-export interface ScheduleCustomEvent extends Omit<
-  ScheduleFromCalendarEvent,
-  'calProviderId'
-> {
-  icon: string;
-}
-
 interface SVECalendarEvent extends SVEBase {
   type: SVEType.CalendarEvent;
-  data: ScheduleCustomEvent;
+  data: ScheduleFromCalendarEvent;
 }
 
 export interface ScheduleWorkStartEndCfg {
@@ -135,6 +130,16 @@ export type SVE =
 export interface ScheduleCalendarMapEntry {
   items: ScheduleFromCalendarEvent[];
 }
+
+export const isScheduleCalendarEvent = (
+  event: ScheduleEvent | null,
+): event is ScheduleEvent & {
+  type: SVEType.CalendarEvent;
+  data: ScheduleFromCalendarEvent;
+} =>
+  event?.type === SVEType.CalendarEvent &&
+  !!event.data &&
+  typeof (event.data as { issueProviderKey?: unknown }).issueProviderKey === 'string';
 
 // -----------------
 // BlockedBlocks

@@ -5,6 +5,7 @@ import { Store } from '@ngrx/store';
 import { selectTasksWithSubTasksByIds } from '../tasks/store/task.selectors';
 import { Task, TaskWithSubTasks } from '../tasks/task.model';
 import { first } from 'rxjs/operators';
+import { Log } from '../../core/log';
 
 @Injectable({
   providedIn: 'root',
@@ -75,8 +76,19 @@ export class WorkContextMarkdownService {
         .pipe(first())
         .toPromise()) || [];
 
+    // Drop sub-tasks whose parent is also in the loaded set; otherwise the
+    // sub-task is rendered twice — once nested under the parent, once at the
+    // top level. Matches the tag-view selector dedup (tag.reducer.ts:121-127).
+    // Build the set from loaded tasks (not raw `ids`) so a stale parent id in
+    // tag.taskIds doesn't suppress its real sub-task entry.
+    const loadedIdSet = new Set(
+      tasks.filter((task): task is TaskWithSubTasks => !!task).map((task) => task.id),
+    );
     return {
-      tasks: tasks.filter((task): task is TaskWithSubTasks => !!task),
+      tasks: tasks.filter(
+        (task): task is TaskWithSubTasks =>
+          !!task && (!task.parentId || !loadedIdSet.has(task.parentId)),
+      ),
       contextTitle,
     };
   }
@@ -156,7 +168,7 @@ export class WorkContextMarkdownService {
         await navigator.clipboard.writeText(text);
         return true;
       } catch (err) {
-        console.warn('Clipboard write failed, trying fallback method:', err);
+        Log.warn('Clipboard write failed, trying fallback method:', err);
       }
     }
 
@@ -178,7 +190,7 @@ export class WorkContextMarkdownService {
     try {
       isSuccess = document.execCommand('copy');
     } catch (err) {
-      console.error('Fallback copy failed:', err);
+      Log.err('Fallback copy failed:', err);
       isSuccess = false;
     } finally {
       document.body.removeChild(textarea);

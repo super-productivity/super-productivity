@@ -346,6 +346,89 @@ describe('migrate-legacy-backup', () => {
       expect(task.plannedAt).toBeUndefined();
     });
 
+    it('should migrate legacy task reminders to task.remindAt', () => {
+      const data = createLegacyBackup();
+      data.reminders = [
+        {
+          id: 'reminder-1',
+          relatedId: 'task-1',
+          title: 'Active Task',
+          remindAt: 1704110400000,
+          type: 'TASK',
+        },
+      ];
+      data.task.entities['task-1'].reminderId = 'reminder-1';
+      data.task.entities['task-1'].dueDay = '2024-01-01';
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].remindAt).toBe(1704110400000);
+      expect(result.task.entities['task-1'].dueWithTime).toBe(1704110400000);
+      expect(result.task.entities['task-1'].dueDay).toBeUndefined();
+      expect(result.task.entities['task-1'].reminderId).toBeUndefined();
+      expect(result.reminders).toEqual([]);
+    });
+
+    it('should not overwrite existing dueWithTime when migrating legacy task reminders', () => {
+      const data = createLegacyBackup();
+      data.reminders = [
+        {
+          id: 'reminder-1',
+          relatedId: 'task-1',
+          title: 'Active Task',
+          remindAt: 1704110400000,
+          type: 'TASK',
+        },
+      ];
+      data.task.entities['task-1'].reminderId = 'reminder-1';
+      data.task.entities['task-1'].dueWithTime = 1704100000000;
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].remindAt).toBe(1704110400000);
+      expect(result.task.entities['task-1'].dueWithTime).toBe(1704100000000);
+      expect(result.task.entities['task-1'].reminderId).toBeUndefined();
+      expect(result.reminders).toEqual([]);
+    });
+
+    it('should migrate legacy task reminders by task.reminderId fallback', () => {
+      const data = createLegacyBackup();
+      data.reminders = [
+        {
+          id: 'reminder-1',
+          relatedId: 'missing-task-id',
+          title: 'Active Task',
+          remindAt: 1704110400000,
+          type: 'TASK',
+        },
+      ];
+      data.task.entities['task-1'].reminderId = 'reminder-1';
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].remindAt).toBe(1704110400000);
+      expect(result.task.entities['task-1'].reminderId).toBeUndefined();
+      expect(result.reminders).toEqual([]);
+    });
+
+    it('should not migrate note reminders to task.remindAt', () => {
+      const data = createLegacyBackup();
+      data.reminders = [
+        {
+          id: 'reminder-1',
+          relatedId: 'task-1',
+          title: 'Note Reminder',
+          remindAt: 1704110400000,
+          type: 'NOTE',
+        },
+      ];
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].remindAt).toBeUndefined();
+      expect(result.reminders).toEqual([]);
+    });
+
     it('should be idempotent when run on already-migrated data shape', () => {
       const data = createLegacyBackup();
       const result1 = migrateLegacyBackup(data) as any;

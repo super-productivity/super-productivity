@@ -17,6 +17,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getNextRepeatOccurrence } from '../store/get-next-repeat-occurrence.util';
 import { formatMonthDay } from '../../../util/format-month-day.util';
+import { Log } from '../../../core/log';
 
 @Component({
   selector: 'repeat-cfg-preview',
@@ -50,7 +51,7 @@ export class RepeatCfgPreviewComponent {
       const nextLabel = this._translateService.instant(T.SCHEDULE.NEXT);
       return `${nextLabel} ${formatted}`;
     } catch (e) {
-      console.warn('Failed to compute next repeat occurrence', e);
+      Log.warn('Failed to compute next repeat occurrence', e);
       return '';
     }
   });
@@ -60,6 +61,7 @@ export class RepeatCfgPreviewComponent {
       this.repeatCfg(),
       this._dateTimeFormatService.currentLocale(),
       this._dateTimeFormatService,
+      this._translateService,
     );
     return this._translateService.instant(key, params);
   });

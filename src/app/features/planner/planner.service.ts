@@ -14,7 +14,7 @@ import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import { getDiffInDays } from '../../util/get-diff-in-days';
-import { selectAllTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { selectActiveTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { Log } from '../../core/log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 
@@ -103,20 +103,26 @@ export class PlannerService {
   days$: Observable<PlannerDay[]> = this.daysToShow$.pipe(
     switchMap((daysToShow) =>
       combineLatest([
-        this._store.select(selectAllTaskRepeatCfgs),
+        this._store.select(selectActiveTaskRepeatCfgs),
         this._store.select(selectTodayTaskIds),
-        this._calendarIntegrationService.icalEvents$,
+        this._calendarIntegrationService.calendarEvents$,
         this.allDueWithTimeTasks$,
         this._globalTrackingIntervalService.todayDateStr$,
       ]).pipe(
         switchMap(
-          ([taskRepeatCfgs, todayListTaskIds, icalEvents, allTasksPlanned, todayStr]) =>
+          ([
+            taskRepeatCfgs,
+            todayListTaskIds,
+            calendarEvents,
+            allTasksPlanned,
+            todayStr,
+          ]) =>
             this._store.select(
               selectPlannerDays(
                 daysToShow,
                 taskRepeatCfgs,
                 todayListTaskIds,
-                icalEvents,
+                calendarEvents,
                 allTasksPlanned,
                 todayStr,
               ),
@@ -132,10 +138,7 @@ export class PlannerService {
   );
   tomorrow$ = this.days$.pipe(
     map((days) => {
-      const todayMs = Date.now() - this._dateService.startOfNextDayDiff;
-      // eslint-disable-next-line no-mixed-operators
-      const tomorrowMs = todayMs + 24 * 60 * 60 * 1000;
-      const tomorrowStr = getDbDateStr(tomorrowMs);
+      const tomorrowStr = getDbDateStr(this._dateService.getLogicalTomorrowMs());
       return days.find((d) => d.dayDate === tomorrowStr) ?? null;
     }),
     shareReplay({ bufferSize: 1, refCount: true }),
@@ -185,8 +188,7 @@ export class PlannerService {
 
   ensureDayLoaded(dayDate: string): void {
     const target = parseDbDateStr(dayDate);
-    const todayMs = Date.now() - this._dateService.startOfNextDayDiff;
-    const diff = getDiffInDays(new Date(todayMs), target);
+    const diff = getDiffInDays(this._dateService.getLogicalTodayDate(), target);
     if (diff >= 0 && diff >= this._daysToShowCount$.value) {
       this._userHasScrolled.set(true);
       this._daysToShowCount$.next(diff + 3);

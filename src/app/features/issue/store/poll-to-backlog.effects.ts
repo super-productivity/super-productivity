@@ -22,6 +22,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { DELAY_BEFORE_ISSUE_POLLING } from '../issue.const';
 import { IssueLog } from '../../../core/log';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 @Injectable()
 export class PollToBacklogEffects {
@@ -31,6 +32,7 @@ export class PollToBacklogEffects {
   private readonly _syncTriggerService = inject(SyncTriggerService);
   private readonly _snackService = inject(SnackService);
   private readonly _store = inject(Store);
+  private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
 
   pollToBacklogActions$: Observable<unknown> = this._actions$.pipe(
     ofType(setActiveWorkContext),
@@ -61,6 +63,7 @@ export class PollToBacklogEffects {
                   provider.defaultProjectId === pId &&
                   provider.isAutoAddToBacklog &&
                   provider.pollingMode !== 'always' &&
+                  !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
                   this._issueService.getPollInterval(provider.issueProviderKey) > 0,
               );
               if (matchingProviders.length === 0) {
@@ -94,6 +97,7 @@ export class PollToBacklogEffects {
                   provider.pollingMode === 'always' &&
                   provider.isAutoAddToBacklog &&
                   !!provider.defaultProjectId &&
+                  !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
                   this._issueService.getPollInterval(provider.issueProviderKey) > 0,
               );
               if (alwaysProviders.length === 0) {

@@ -33,10 +33,15 @@ If you want to build a sophisticated UI there is a boilerplate available for sol
 ```
 my-plugin/
 ├── manifest.json      # Plugin metadata (required)
-├── plugin.js          # Main plugin code that is launched when activated and when Super Productivity starts
-├── index.html         # UI interface (optional) => requires iFrame:true in manifest
+├── plugin.js          # Host-side plugin code (optional for iframe-only plugins)
+├── index.html         # UI interface (required when omitting plugin.js; requires iFrame:true in manifest)
 └── icon.svg           # Plugin icon (optional)
 ```
+
+`plugin.js` is required for plugins that need host-side setup at plugin load time,
+shortcuts, header buttons, background behavior, or host-side API handlers. A UI-only
+iframe plugin can ship only `manifest.json` and `index.html` when the manifest sets
+`iFrame: true`.
 
 ### 2. Minimal Example
 
@@ -98,7 +103,7 @@ The `manifest.json` file is required for all plugins and defines the plugin's me
 | `icon`            | string   |          | Path to icon file (SVG recommended)                                                    |
 | `iFrame`          | boolean  |          | Whether plugin uses iframe UI (default: false)                                         |
 | `sidePanel`       | boolean  |          | Show plugin in side panel (default: false), requires `iFrame:true`                     |
-| `permissions`     | string[] |          | The permissions the plugin needs (e.g., ["nodeExecution"])                             |
+| `permissions`     | string[] |          | The permissions the plugin needs                                                       |
 | `hooks`           | string[] |          | App events to listen to                                                                |
 | `uiKit`           | boolean  |          | Enable UI Kit CSS reset for iframe plugins (default: true). Set to `false` to disable. |
 
@@ -117,7 +122,7 @@ The `manifest.json` file is required for all plugins and defines the plugin's me
   "icon": "icon.svg",
   "iFrame": true,
   "sidePanel": false,
-  "permissions": ["nodeExecution"],
+  "permissions": ["getTasks", "updateTask"],
   "hooks": ["taskComplete", "taskUpdate", "currentTaskChange"]
 }
 ```
@@ -162,7 +167,15 @@ Plugins that render custom UI in a sandboxed iframe.
 - You need custom UI/visualizations
 - You want to display charts, forms, or complex interfaces
 
-**Important:** When using iframes, you must inline all CSS and JavaScript directly in the HTML file. External stylesheets and scripts are blocked for security reasons.
+Iframe-only plugins do not need a `plugin.js` file if all plugin behavior lives inside
+`index.html`. Super Productivity automatically adds the default menu or side-panel entry
+from the manifest when the plugin is loaded.
+
+**Important:** Iframe plugins are served from a sandboxed blob document and talk to
+the host only through the filtered Plugin API message bridge. Inline CSS, JavaScript,
+and small assets directly in `index.html`; arbitrary extra files from the ZIP are not
+served to the iframe. External URLs can work when the app/runtime CSP allows them, but
+they are not part of the portable plugin contract.
 
 **Example index.html:**
 
@@ -287,6 +300,10 @@ Iframe plugins automatically receive:
 - `addTask(task)` - Create a new task
 - `updateTask(taskId, updates)` - Update existing task
 
+#### Application State
+
+- `getAppState()` - Get the current application state (read-only; returns `PluginAppState`). An overview of the data returned is the JSON file exported via `Settings > Sync & Backup > Import/Export > Export data`. Example: `const state = await PluginAPI.getAppState();`
+
 #### Projects
 
 - `getAllProjects()` - Get all projects
@@ -386,11 +403,19 @@ PluginAPI.notify({
 // Open a dialog
 const result = await PluginAPI.openDialog({
   title: 'Confirm Action',
-  content: 'Are you sure?',
-  okBtnLabel: 'Yes',
-  cancelBtnLabel: 'No',
+  htmlContent: '<p>Are you sure?</p>',
+  buttons: [{ label: 'No' }, { label: 'Yes', color: 'primary', raised: true }],
 });
+
+if (result === 'Yes') {
+  // Continue with the confirmed action
+}
 ```
+
+`openDialog()` resolves with the clicked button label. If the user dismisses
+the dialog without clicking a button, it resolves with `undefined`. The legacy
+`content`, `okBtnLabel`, and `cancelBtnLabel` fields are still accepted, but new
+plugins should use `htmlContent` and `buttons`.
 
 ### Registration Methods (plugin.js only)
 
@@ -454,10 +479,21 @@ const hooks = {
   CURRENT_TASK_CHANGE: 'currentTaskChange',
   FINISH_DAY: 'finishDay',
   LANGUAGE_CHANGE: 'languageChange',
-  PERSISTED_DATA_UPDATE: 'persistedDataUpdate',
+  PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
 };
+```
 
+`PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
+changes — local writes, remote sync deliveries, and bulk imports —
+_after_ the host has finished its initial boot load. The handler
+receives no payload; re-call `loadSyncedData(key?)` for any key your
+plugin tracks to get fresh data. There is no replay-on-register and no
+guaranteed ordering across rapid changes, so handlers must be
+idempotent. The typical pattern is: call `loadSyncedData()` once on
+plugin init, then subscribe to this hook for subsequent updates.
+
+```javascript
 // Register hook listener
 PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
   console.log(`Task ${taskId} completed!`);
@@ -475,7 +511,11 @@ PluginAPI.registerHook(PluginAPI.Hooks.ACTION, (action) => {
 
 ### Data Persistence
 
-You can persist data that will also be synced vai the `persistDataSynced` and `loadSyncedData` APIs. For local storage I recommend using `localStorage`.
+You can persist data that will also be synced via the `persistDataSynced` and
+`loadSyncedData` APIs. Host-side `plugin.js` code can use `localStorage` for
+data that should stay local. Iframe plugins should prefer the synced
+persistence APIs because sandboxed iframe origins may not have reliable access
+to browser storage.
 
 ```javascript
 // Save plugin data
@@ -505,14 +545,71 @@ console.log(data); // '{ count: 42 }'
 
 - **Request minimal permissions**: Only what you need
 
+### Node.js Script Execution
+
+Plugins with `"permissions": ["nodeExecution"]` can run Node.js scripts in the Electron
+desktop app after the user allows the desktop permission prompt.
+
+The desktop grant is currently issued only for packaged built-in plugins whose
+manifest can be verified by the main process. Uploaded plugins that request
+`nodeExecution` are rejected until uploaded plugin installation is moved to a
+main-process-owned verification path.
+
+```javascript
+const result = await plugin.executeNodeScript({
+  script: `
+    const os = require('os');
+    return os.hostname();
+  `,
+  timeout: 5000,
+});
+
+if (result.success) {
+  console.log('Hostname:', result.result);
+}
+```
+
+**Important — use `plugin.onReady()` for startup calls:**
+
+`executeNodeScript` requires the Electron IPC bridge to be available. On cold boot this
+bridge may not be ready when `plugin.js` first runs. Always put `executeNodeScript` calls
+(and any other startup init code) inside `plugin.onReady()`:
+
+```javascript
+// ❌ May fail on cold boot
+const result = await plugin.executeNodeScript({ script: 'return true' });
+
+// ✅ Correct — fires after the bridge is confirmed available
+plugin.onReady(async () => {
+  const result = await plugin.executeNodeScript({ script: 'return true' });
+});
+```
+
+`plugin.onReady(fn)` fires after `plugin.js` has fully evaluated **and** the app has
+confirmed the Node.js IPC bridge is responding (with automatic retry). If the bridge is
+unavailable after retries, an error is shown in the plugin management UI and `onReady` does
+not fire.
+
+You can also use `onReady` for any other startup work that should run after the plugin
+script has finished setting up its hooks and registrations — not just for `nodeExecution`.
+
+**Iframe plugins:** `PluginAPI.onReady()` is available inside `index.html`. It fires on
+the next microtask after the callback is registered — without an IPC bridge ping. This is
+fine in practice because iframe plugins are rendered on user navigation (well after host
+startup). Iframe API calls still go through the host bridge when they are made;
+cold-boot bridge pings are only performed for host-side plugin code.
+
 ### 4. Don't spam the logs
 
 `console.logs` should be kept to a minimum.
 
-1. **Inline everything**: CSS and JavaScript must be in the HTML file
+### 5. Iframe plugins: keep assets self-contained
+
+1. **Prefer self-contained HTML**: inline CSS, JavaScript, and small assets are the
+   most portable option for iframe plugins
 
 ```html
-<!-- Good: Everything inlined -->
+<!-- Portable: Everything needed by the iframe is in index.html -->
 <!DOCTYPE html>
 <html>
   <head>
@@ -537,22 +634,25 @@ console.log(data); // '{ count: 42 }'
 - Iframe plugins run in sandboxed iframes with restricted permissions
 - No access to file system unless through API
 
-### API Restrictions
+### Iframe API Surface
 
-In iframe context, these methods are NOT available:
+Iframe plugins receive a filtered `window.PluginAPI` object injected into `index.html`.
+The iframe can use the injected task/project/tag APIs, dialog and notification APIs,
+navigation helpers, persistence helpers, counters, action dispatch, `registerHook()`,
+and `registerWorkContextHeaderButton()`. Callback-heavy registration methods such as
+`registerHeaderButton()`, `registerMenuEntry()`, `registerSidePanelButton()`,
+`registerShortcut()`, and `registerConfigHandler()` must be registered from
+host-side `plugin.js` code. APIs not injected into the iframe are unavailable, even if
+they exist on the host-side plugin bridge.
 
-- `registerHeaderButton()`
-- `registerMenuEntry()`
-- `registerSidePanelButton()`
-- `registerShortcut()`
-- `registerHook()`
-- `execNodeScript()`
+`executeNodeScript()` is proxied through the host bridge for iframe plugins when
+the desktop app grants the plugin `nodeExecution` permission.
 
-### Content Security Policy
+### Iframe Boundary
 
-- External scripts/styles are blocked in iframes
-- Only same-origin resources are allowed
-- Inline scripts must be within the HTML file
+- Iframe plugins run without `allow-same-origin`, so they have an opaque origin
+- Host access is limited to the filtered Plugin API `postMessage` bridge
+- Remote assets depend on the app/runtime CSP and should not be relied on
 
 ## Testing Your Plugin
 
@@ -600,6 +700,9 @@ async function testAPI() {
 
 - Check if method is available in current context
 - Verify permissions in manifest
+- If `executeNodeScript` fails on startup or cold boot, wrap your init code in
+  `plugin.onReady(async () => { ... })` — this ensures the Node.js bridge is ready before
+  your code runs
 
 **Iframe not displaying:**
 

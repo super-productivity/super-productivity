@@ -1,7 +1,12 @@
 import { validateOperationPayload } from './validate-operation-payload';
 import { Operation, OpType, EntityType, ActionType } from '../core/operation.types';
+import { OpLog } from '../../core/log';
 
 describe('validateOperationPayload', () => {
+  beforeEach(() => {
+    spyOn(OpLog, 'warn').and.stub();
+  });
+
   const createTestOperation = (overrides: Partial<Operation> = {}): Operation => ({
     id: 'opId123',
     // Cast: Using test placeholder action type
@@ -140,6 +145,30 @@ describe('validateOperationPayload', () => {
       expect(result.success).toBe(true);
     });
 
+    it('should reject UPDATE batch shape when a task is missing a valid id', () => {
+      const op = createTestOperation({
+        opType: OpType.Update,
+        entityType: 'TASK' as EntityType,
+        payload: { tasks: [{ id: 'task1' }, { title: 'Missing id' }] },
+      });
+      const result = validateOperationPayload(op);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('missing valid');
+    });
+
+    it('should reject UPDATE batch shape when a subtask is missing a valid id', () => {
+      const op = createTestOperation({
+        opType: OpType.Update,
+        entityType: 'TASK' as EntityType,
+        payload: {
+          tasks: [{ id: 'task1', subTasks: [{ title: 'Broken subtask' }] }],
+        },
+      });
+      const result = validateOperationPayload(op);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('subTasks[0]');
+    });
+
     it('should validate UPDATE with full entity in nested key', () => {
       const op = createTestOperation({
         opType: OpType.Update,
@@ -159,6 +188,44 @@ describe('validateOperationPayload', () => {
       const result = validateOperationPayload(op);
       expect(result.success).toBe(true);
       expect(result.warnings?.length).toBeGreaterThan(0);
+    });
+
+    it('should log warning metadata without raw payload values', () => {
+      const userContentKey = 'secret payload key';
+      const op = createTestOperation({
+        opType: OpType.Update,
+        entityType: 'TASK' as EntityType,
+        payload: {
+          [userContentKey]: 'secret task title',
+          nested: { notes: 'secret note text' },
+        },
+      });
+
+      const result = validateOperationPayload(op);
+
+      expect(result.success).toBe(true);
+      const logText = JSON.stringify((OpLog.warn as jasmine.Spy).calls.allArgs());
+      expect(logText).toContain('ValidateOperationPayload');
+      expect(logText).toContain('payloadKeyCount');
+      expect(logText).not.toContain(userContentKey);
+      expect(logText).not.toContain('payloadKeys');
+      expect(logText).not.toContain('secret task title');
+      expect(logText).not.toContain('secret note text');
+    });
+
+    it('should sanitize unrecognized operation metadata before logging', () => {
+      const op = createTestOperation({
+        opType: 'secret-custom-op' as OpType,
+        entityType: 'secret-entity-name' as EntityType,
+      });
+
+      const result = validateOperationPayload(op);
+
+      expect(result.success).toBe(true);
+      const logText = JSON.stringify((OpLog.warn as jasmine.Spy).calls.allArgs());
+      expect(logText).toContain('UNKNOWN');
+      expect(logText).not.toContain('secret-custom-op');
+      expect(logText).not.toContain('secret-entity-name');
     });
 
     it('should validate TASK UPDATE with syncTimeSpent shape (taskId, date, duration)', () => {

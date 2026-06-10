@@ -15,7 +15,7 @@ import { T } from '../../../t.const';
 import {
   ClipboardImagesConfig,
   ConfigFormSection,
-  GlobalConfigSectionKey,
+  GlobalConfigFormSectionKey,
 } from '../global-config.model';
 import { ProjectCfgFormKey } from '../../project/project.model';
 import { IS_ELECTRON } from '../../../app.constants';
@@ -24,6 +24,7 @@ import { MatInput } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { DialogClipboardImagesManagerComponent } from './dialog-clipboard-images-manager/dialog-clipboard-images-manager.component';
 import { getDefaultClipboardImagesPath } from '../../../util/get-default-clipboard-images-path';
+import { Log } from '../../../core/log';
 
 @Component({
   selector: 'clipboard-images-cfg',
@@ -58,7 +59,7 @@ export class ClipboardImagesCfgComponent implements OnInit {
   @Input() section?: ConfigFormSection<ClipboardImagesConfig>;
 
   readonly save = output<{
-    sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey;
+    sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
     config: ClipboardImagesConfig;
   }>();
 
@@ -80,7 +81,7 @@ export class ClipboardImagesCfgComponent implements OnInit {
       this.defaultImagePath = await getDefaultClipboardImagesPath();
       this._cd.markForCheck();
     } catch (error) {
-      console.error('Error loading default clipboard image path:', error);
+      Log.err('Error loading default clipboard image path:', error);
     }
   }
 

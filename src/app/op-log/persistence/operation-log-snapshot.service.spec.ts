@@ -10,6 +10,15 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
+import { ValidateStateService } from '../validation/validate-state.service';
+
+// Meaningful state (contains a task) so saveCurrentStateAsSnapshot proceeds past
+// the empty-state guard (#7892). Tests that care only about clock pruning /
+// compactedAt / entity keys use this so the save actually fires; the guard
+// itself has a dedicated test.
+const MEANINGFUL_SNAPSHOT_STATE = {
+  task: { ids: ['t1'], entities: { t1: { id: 't1' } } },
+} as unknown;
 
 describe('OperationLogSnapshotService', () => {
   let service: OperationLogSnapshotService;
@@ -18,6 +27,7 @@ describe('OperationLogSnapshotService', () => {
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockSchemaMigrationService: jasmine.SpyObj<SchemaMigrationService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
+  let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -38,6 +48,13 @@ describe('OperationLogSnapshotService', () => {
     ]);
     mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
     mockClientIdProvider.loadClientId.and.resolveTo('test-client');
+    mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
+      'validateState',
+    ]);
+    mockValidateStateService.validateState.and.resolveTo({
+      isValid: true,
+      typiaErrors: [],
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -47,6 +64,7 @@ describe('OperationLogSnapshotService', () => {
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         { provide: SchemaMigrationService, useValue: mockSchemaMigrationService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: ValidateStateService, useValue: mockValidateStateService },
       ],
     });
     service = TestBed.inject(OperationLogSnapshotService);
@@ -121,6 +139,21 @@ describe('OperationLogSnapshotService', () => {
       const snapshot = createValidSnapshot({ lastAppliedOpSeq: '5' as any });
       expect(service.isValidSnapshot(snapshot)).toBe(false);
     });
+
+    it('should return false when compactedAt is missing', () => {
+      const snapshot = createValidSnapshot({ compactedAt: undefined as any });
+      expect(service.isValidSnapshot(snapshot)).toBe(false);
+    });
+
+    it('should return false when vectorClock is missing', () => {
+      const snapshot = createValidSnapshot({ vectorClock: undefined as any });
+      expect(service.isValidSnapshot(snapshot)).toBe(false);
+    });
+
+    it('should return false when vectorClock is an array', () => {
+      const snapshot = createValidSnapshot({ vectorClock: [] as any });
+      expect(service.isValidSnapshot(snapshot)).toBe(false);
+    });
   });
 
   describe('saveCurrentStateAsSnapshot', () => {
@@ -170,13 +203,27 @@ describe('OperationLogSnapshotService', () => {
     });
 
     it('should not throw when save fails', async () => {
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.rejectWith(new Error('Save failed'));
 
       // Should not throw - errors are caught internally
       await expectAsync(service.saveCurrentStateAsSnapshot()).toBeResolved();
+    });
+
+    it('should skip saving when state has no meaningful data (#7892)', async () => {
+      // A transient empty/initial NgRx state must never be cached over good data.
+      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({ client1: 1 });
+      mockOpLogStore.getLastSeq.and.resolveTo(10);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
     });
 
     it('should prune vector clock before saving when it exceeds MAX_VECTOR_CLOCK_SIZE', async () => {
@@ -188,7 +235,9 @@ describe('OperationLogSnapshotService', () => {
       // Ensure the local client is in the clock
       bloatedClock['test-client'] = 999;
 
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(bloatedClock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -204,7 +253,9 @@ describe('OperationLogSnapshotService', () => {
 
     it('should not prune vector clock when it is within MAX_VECTOR_CLOCK_SIZE', async () => {
       const smallClock = { client1: 5, client2: 3 };
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(smallClock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -220,7 +271,9 @@ describe('OperationLogSnapshotService', () => {
       for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
         exactClock[`client-${i}`] = i + 1;
       }
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(exactClock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -234,7 +287,9 @@ describe('OperationLogSnapshotService', () => {
     it('should save unpruned clock if clientId is null', async () => {
       mockClientIdProvider.loadClientId.and.resolveTo(null);
       const clock = { client1: 5 };
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(clock);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -247,7 +302,9 @@ describe('OperationLogSnapshotService', () => {
 
     it('should include compactedAt timestamp', async () => {
       const beforeTime = Date.now();
-      mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
       mockOpLogStore.getLastSeq.and.resolveTo(1);
       mockOpLogStore.saveStateCache.and.resolveTo(undefined);
@@ -383,6 +440,66 @@ describe('OperationLogSnapshotService', () => {
       ).toBeRejectedWithError('Save failed');
 
       expect(mockOpLogStore.restoreStateCacheFromBackup).toHaveBeenCalled();
+    });
+
+    it('should validate migrated snapshot before saving and clearing backup', async () => {
+      const snapshot = createSnapshot();
+      const migratedSnapshot = { ...snapshot, schemaVersion: CURRENT_SCHEMA_VERSION };
+      mockOpLogStore.saveStateCacheBackup.and.resolveTo(undefined);
+      mockSchemaMigrationService.migrateStateIfNeeded.and.returnValue(migratedSnapshot);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+      mockOpLogStore.clearStateCacheBackup.and.resolveTo(undefined);
+
+      await service.migrateSnapshotWithBackup(snapshot);
+
+      expect(mockValidateStateService.validateState).toHaveBeenCalledWith(
+        migratedSnapshot.state as Record<string, unknown>,
+      );
+      expect(mockValidateStateService.validateState).toHaveBeenCalledBefore(
+        mockOpLogStore.saveStateCache,
+      );
+    });
+
+    it('should restore backup and not save when migrated state fails validation', async () => {
+      const snapshot = createSnapshot();
+      const migratedSnapshot = { ...snapshot, schemaVersion: CURRENT_SCHEMA_VERSION };
+      mockOpLogStore.saveStateCacheBackup.and.resolveTo(undefined);
+      mockSchemaMigrationService.migrateStateIfNeeded.and.returnValue(migratedSnapshot);
+      mockValidateStateService.validateState.and.resolveTo({
+        isValid: false,
+        typiaErrors: [{ path: '$input.task', expected: 'TaskState' }],
+      });
+      mockOpLogStore.restoreStateCacheFromBackup.and.resolveTo(undefined);
+
+      await expectAsync(
+        service.migrateSnapshotWithBackup(snapshot),
+      ).toBeRejectedWithError(/Migrated snapshot validation failed/);
+
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.restoreStateCacheFromBackup).toHaveBeenCalled();
+      expect(mockOpLogStore.clearStateCacheBackup).not.toHaveBeenCalled();
+    });
+
+    it('should restore backup and not save when migrated metadata is invalid', async () => {
+      const snapshot = createSnapshot();
+      // Drop a required field so isValidSnapshot rejects it
+      const migratedSnapshot = {
+        ...snapshot,
+        lastAppliedOpSeq: undefined as any,
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+      };
+      mockOpLogStore.saveStateCacheBackup.and.resolveTo(undefined);
+      mockSchemaMigrationService.migrateStateIfNeeded.and.returnValue(migratedSnapshot);
+      mockOpLogStore.restoreStateCacheFromBackup.and.resolveTo(undefined);
+
+      await expectAsync(
+        service.migrateSnapshotWithBackup(snapshot),
+      ).toBeRejectedWithError(/Migrated snapshot metadata validation failed/);
+
+      expect(mockValidateStateService.validateState).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.restoreStateCacheFromBackup).toHaveBeenCalled();
+      expect(mockOpLogStore.clearStateCacheBackup).not.toHaveBeenCalled();
     });
   });
 });

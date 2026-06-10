@@ -7,6 +7,7 @@ import {
   PluginFieldMapping,
 } from './plugin-issue-provider.model';
 import { IssueProviderKey } from '../../features/issue/issue.model';
+import { PluginLog } from '../../core/log';
 
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderRegistryService {
@@ -29,10 +30,11 @@ export class PluginIssueProviderRegistryService {
     issueProviderKey?: string;
     useAgendaView?: boolean;
     defaultAutoAddToBacklog?: boolean;
+    allowPrivateNetwork?: boolean;
   }): void {
     const key = opts.issueProviderKey ?? `plugin:${opts.pluginId}`;
     if (this._providers.has(key)) {
-      console.warn(
+      PluginLog.warn(
         `[PluginIssueProviderRegistry] Duplicate registration for '${key}', ignoring.`,
       );
       return;
@@ -48,6 +50,7 @@ export class PluginIssueProviderRegistryService {
       issueStrings: opts.issueStrings,
       useAgendaView: opts.useAgendaView,
       defaultAutoAddToBacklog: opts.defaultAutoAddToBacklog,
+      allowPrivateNetwork: opts.allowPrivateNetwork,
     });
     this._pluginIdToKey.set(opts.pluginId, key);
     this.registrationVersion.update((v) => v + 1);

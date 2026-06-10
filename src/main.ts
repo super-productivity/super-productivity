@@ -20,13 +20,18 @@ import {
 } from './app/core/locale.constants';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
+import { AndroidBackButtonService } from './app/features/android/android-back-button.service';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from './app/util/is-native-platform';
 import { DataInitStateService } from './app/core/data-init/data-init-state.service';
 // Type definitions for window.ea are in ./app/core/window-ea.d.ts
 import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
 import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import {
+  HTTP_INTERCEPTORS,
+  provideHttpClient,
+  withInterceptorsFromDi,
+} from '@angular/common/http';
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
@@ -39,6 +44,7 @@ import {
   MatDateFormats,
   DateAdapter,
 } from '@angular/material/core';
+import { MatDatepickerIntl } from '@angular/material/datepicker';
 import { FormlyConfigModule } from './app/ui/formly-config.module';
 import { markedOptionsFactory } from './app/ui/marked-options-factory';
 import { MaterialCssVarsModule } from 'angular-material-css-vars';
@@ -54,7 +60,7 @@ import {
   withPreloading,
 } from '@angular/router';
 import { APP_ROUTES } from './app/app.routes';
-import { StoreModule } from '@ngrx/store';
+import { StoreModule, Store } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
@@ -65,10 +71,8 @@ import { EffectsModule } from '@ngrx/effects';
 import { ReactiveFormsModule } from '@angular/forms';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import {
-  TRANSLATE_HTTP_LOADER_CONFIG,
-  TranslateHttpLoader,
-} from '@ngx-translate/http-loader';
+import { TRANSLATE_HTTP_LOADER_CONFIG } from '@ngx-translate/http-loader';
+import { TranslateHttpLoaderWithFallback } from './app/core/http/translate-http-loader-with-fallback.class';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { AppComponent } from './app/app.component';
 import { ShortTimeHtmlPipe } from './app/ui/pipes/short-time-html.pipe';
@@ -76,15 +80,19 @@ import { ShortTimePipe } from './app/ui/pipes/short-time.pipe';
 import { BackgroundTask } from '@capawesome/capacitor-background-task';
 import { PLUGIN_INITIALIZER_PROVIDER } from './app/plugins/plugin-initializer';
 import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-menu/mat-menu-touch-monkey-patch';
-import { Log } from './app/core/log';
+import { Log, SyncLog } from './app/core/log';
+import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { TaskService } from './app/features/tasks/task.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
 import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
+import { TranslateMatDatepickerIntl } from './app/core/date-time-format/translate-mat-datepicker-intl';
 import { unlockAudioContext } from './app/util/audio-context';
+import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -99,6 +107,18 @@ let appInjector: Injector | null = null;
 // Register one-time user gesture listener to unlock AudioContext.
 // Required on iOS/Android where AudioContext starts suspended.
 unlockAudioContext();
+
+// Surface a deprecation warning the first time legacy PBKDF2 ciphertext is
+// decrypted in this session. The encryption layer invokes this handler on
+// every legacy decrypt; we throttle to one log per session.
+let _hasWarnedLegacyKdf = false;
+setLegacyKdfWarningHandler(() => {
+  if (_hasWarnedLegacyKdf) return;
+  _hasWarnedLegacyKdf = true;
+  SyncLog.log(
+    '[DEPRECATION] Legacy PBKDF2 encryption detected. Consider re-syncing to migrate to Argon2id.',
+  );
+});
 
 bootstrapApplication(AppComponent, {
   providers: [
@@ -168,17 +188,23 @@ bootstrapApplication(AppComponent, {
         fallbackLang: DEFAULT_LANGUAGE,
         loader: {
           provide: TranslateLoader,
-          useClass: TranslateHttpLoader,
+          useClass: TranslateHttpLoaderWithFallback,
         },
       }),
       CdkDropListGroup,
     ),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideHttpClient(withInterceptorsFromDi()),
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: NetworkRetryInterceptorService,
+      multi: true,
+    },
     LocaleDatePipe,
     ShortTimeHtmlPipe,
     ShortTimePipe,
     { provide: DateAdapter, useClass: CustomDateAdapter },
+    { provide: MatDatepickerIntl, useClass: TranslateMatDatepickerIntl },
     {
       provide: MAT_DATE_FORMATS,
       useFactory: (dateTimeFormatService: DateTimeFormatService): MatDateFormats => {
@@ -194,7 +220,7 @@ bootstrapApplication(AppComponent, {
             get dateInput(): string {
               return dateTimeFormatService.dateFormat().raw;
             },
-            monthYearLabel: { year: 'numeric', month: 'short' },
+            monthYearLabel: { year: 'numeric', month: 'long' },
             dateA11yLabel: { year: 'numeric', month: 'long', day: 'numeric' },
             monthYearA11yLabel: { year: 'numeric', month: 'long' },
             timeInput: { hour: 'numeric', minute: 'numeric' },
@@ -286,6 +312,20 @@ bootstrapApplication(AppComponent, {
 }).then((appRef) => {
   appInjector = appRef.injector;
 
+  // Expose store + HydrationStateService for e2e tests in dev/stage builds.
+  // Used by the screenshot pipeline to flip locale / customTheme inside a
+  // single session (see e2e/store-screenshots/helpers.ts) and by #6230
+  // recurring-task tests. Stripped from production via the env guard.
+  if (!environment.production && !environment.stage) {
+    const storeRef = appRef.injector.get(Store);
+    import('./app/op-log/apply/hydration-state.service').then((m) => {
+      (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
+        store: storeRef,
+        hydrationState: appRef.injector.get(m.HydrationStateService),
+      };
+    });
+  }
+
   // Dismiss native startup overlay after all data is loaded (Android only)
   if (IS_ANDROID_WEB_VIEW) {
     appRef.injector.get(DataInitStateService).isAllDataLoadedInitially$.subscribe(() => {
@@ -305,9 +345,11 @@ bootstrapApplication(AppComponent, {
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {
-        LocaleImportFns[locale as keyof typeof LocaleImportFns]().then((m) => {
-          registerLocaleData(m.default, locale);
-        });
+        LocaleImportFns[locale as keyof typeof LocaleImportFns]()
+          .then((m) => {
+            registerLocaleData(m.default, locale);
+          })
+          .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
       }
     });
   };
@@ -413,7 +455,13 @@ if (!(environment.production || environment.stage) && IS_ANDROID_WEB_VIEW) {
 // Android-specific: Handle back button
 if (IS_ANDROID_WEB_VIEW) {
   CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-    if (!canGoBack) {
+    // Delegate to the Angular service so back from a top-level destination pops
+    // to the start destination / exits per Android guidelines (issue #7972).
+    const backButtonService = appInjector?.get(AndroidBackButtonService);
+    if (backButtonService) {
+      backButtonService.handleBackButton(canGoBack);
+    } else if (!canGoBack) {
+      // Pre-bootstrap fallback (back pressed before Angular is ready).
       CapacitorApp.minimizeApp();
     } else {
       window.history.back();
@@ -459,6 +507,10 @@ if (IS_IOS_NATIVE) {
     }
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
+        // Dispatch any accumulated tracked time so it is enqueued before the
+        // op-log drain below. iOS suspends the WebView seconds after this, so
+        // both the dispatch and the persist must happen inside this budget.
+        appInjector?.get(TaskService).flushAccumulatedTimeSpent();
         await flushPendingOperations('iOS');
       } catch (e) {
         Log.err('iOS background: operation flush failed', e);

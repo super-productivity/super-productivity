@@ -6,12 +6,15 @@
   --split-extra-border-radius: 20px;
   --margin-bottom: 6px;
   --margin-right: 10px;
+  // Small left margin so events don't sit flush against the day column's
+  // left edge (and, for the first day, the sticky time column).
+  --margin-left: 4px;
   --offset: 20px;
   --offset-short-event: 15px;
   --standard-border-radius: 6px;
 
   border-radius: var(--standard-border-radius);
-  margin: 0 var(--margin-right) var(--margin-bottom) 0;
+  margin: 0 var(--margin-right) var(--margin-bottom) var(--margin-left);
   scroll-margin-top: 120px;
   scroll-padding-top: 120px;
   line-height: 1;
@@ -119,7 +122,45 @@
   }
 
   &.CalendarEvent {
-    @include extraBorder('-left');
+    border-left: 3px solid var(--project-color, var(--extra-border-color));
+  }
+
+  &.CalendarEvent.is-reference-calendar {
+    border-style: solid;
+    opacity: 0.55;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(128, 128, 128, 0.08) 4px,
+      rgba(128, 128, 128, 0.08) 8px
+    );
+  }
+
+  &.is-beyond-budget {
+    border-bottom: calc(var(--s-quarter) + 1px) solid var(--c-warn);
+
+    &::after {
+      content: '!';
+      position: absolute;
+      bottom: calc(-1 * var(--s-half));
+      left: 50%;
+      z-index: 4;
+      transform: translateX(-50%);
+      display: grid;
+      place-items: center;
+      width: var(--s2);
+      height: var(--s2);
+      box-sizing: border-box;
+      border: 1px solid var(--c-warn);
+      border-radius: 50%;
+      background: var(--schedule-event-bg);
+      color: var(--c-warn);
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+      pointer-events: none;
+    }
   }
 
   &.ScheduledRepeatProjection .ico {
@@ -212,6 +253,18 @@
   pointer-events: none;
 }
 
+.calendar-menu-anchor {
+  position: absolute;
+  pointer-events: auto;
+}
+
+:host(.month-schedule-event).is-beyond-budget::after {
+  bottom: calc(-1 * var(--s-quarter));
+  width: calc(var(--s2) - var(--s-quarter));
+  height: calc(var(--s2) - var(--s-quarter));
+  font-size: 10px;
+}
+
 .ico-wrapper {
   position: relative;
   margin: var(--s) 0 0 6px;
@@ -230,20 +283,6 @@
 
   mat-icon {
     display: block;
-
-    & + mat-icon {
-      display: none;
-    }
-  }
-
-  :host:hover & mat-icon {
-    &:first-of-type:not(:last-of-type) {
-      display: none;
-    }
-
-    &:nth-child(2) {
-      display: block;
-    }
   }
 }
 
@@ -290,21 +329,27 @@
 }
 
 .title {
+  --title-padding-y: 6px;
+  --title-line-height: 1.4em;
+
   font-size: 14px;
-  @include truncateText();
   flex: 1 1 auto;
-  padding: 6px;
+  min-width: 0;
+  padding: var(--title-padding-y) 6px;
+  box-sizing: border-box;
   font-weight: 400;
   line-height: 1.4;
   max-height: 100%;
+  overflow: hidden;
   text-align: left;
-  column-width: 250px;
 
   @include mq(xs, max) {
-    column-width: 120px;
+    --title-padding-y: var(--s-half);
+    --title-line-height: 1.3em;
+
     font-size: 11px;
     line-height: 1.3;
-    padding: var(--s-half);
+    padding: var(--title-padding-y);
   }
 
   @include mq(xxs, max) {
@@ -312,14 +357,36 @@
   }
 
   :host.very-short-event & {
+    max-height: 100%;
     padding: 1px 6px var(--s-quarter);
+  }
+
+  // Keep padding off the clamped element. Padding on a line-clamped box can
+  // reveal a sliver of the next hidden line in Chromium.
+  .title-text {
+    display: -webkit-box;
+    max-height: calc(var(--title-line-clamp, 1) * var(--title-line-height));
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--title-line-clamp, 1);
+    line-clamp: var(--title-line-clamp, 1);
+  }
+
+  :host.very-short-event & .title-text {
+    display: block;
+    @include truncateText();
   }
 
   :host.SplitTaskContinued &,
   :host.RepeatProjectionSplitContinued &,
   :host.SplitTaskContinuedLast &,
   :host.RepeatProjectionSplitContinuedLast & {
-    line-clamp: 1;
+    .title-text {
+      -webkit-line-clamp: 1;
+      line-clamp: 1;
+    }
   }
 
   // Override inherited pointer-events: none from :host > * so links are clickable.
@@ -437,6 +504,10 @@
   opacity: 0.7;
 }
 
+:host.is-beyond-budget .resize-grip {
+  display: none;
+}
+
 :host.is-resizing {
   transition: none !important;
   user-select: none;
@@ -456,4 +527,11 @@
       background: var(--c-accent);
     }
   }
+}
+
+.cal-menu-trigger {
+  position: absolute;
+  width: 0;
+  height: 0;
+  visibility: hidden;
 }

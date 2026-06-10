@@ -1,5 +1,10 @@
 import { ConfigFormSection, AppFeaturesConfig } from '../global-config.model';
 import { T } from '../../../t.const';
+
+export const EXPERIMENTAL_APP_FEATURE_KEYS: ReadonlyArray<keyof AppFeaturesConfig> = [
+  'isEnableUserProfiles',
+];
+
 export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
   title: T.GCF.APP_FEATURES.TITLE,
   key: 'appFeatures',
@@ -106,7 +111,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.HABITS,
-        svgIcon: 'habit',
+        icon: 'heart_check',
       },
     },
     {

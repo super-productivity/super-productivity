@@ -1,5 +1,5 @@
 import {
-  SyncProviderServiceInterface,
+  FileSyncProvider,
   FileRevResponse,
   FileDownloadResponse,
 } from '../../../sync-providers/provider.interface';
@@ -60,7 +60,7 @@ const createMockCredentialStore = <
 };
 
 /**
- * Mock implementation of SyncProviderServiceInterface for integration testing.
+ * Mock implementation of FileSyncProvider for integration testing.
  *
  * Simulates a file-based storage (like Dropbox/WebDAV) by storing data in memory.
  * This allows testing FileBasedSyncAdapterService without real network calls.
@@ -88,7 +88,7 @@ const createMockCredentialStore = <
  * );
  * ```
  */
-export class MockFileProvider implements SyncProviderServiceInterface<SyncProviderId> {
+export class MockFileProvider implements FileSyncProvider<SyncProviderId> {
   readonly id: SyncProviderId;
   readonly isUploadForcePossible = true;
   readonly maxConcurrentRequests = 4;

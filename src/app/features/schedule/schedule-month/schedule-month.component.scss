@@ -1,39 +1,6 @@
 @use 'angular-material-css-vars' as mat-css-vars;
 @use '../../../../styles/_globals.scss' as *;
 
-.month-header {
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
-  @include extraBorder('-top');
-  @include extraBorder('-bottom');
-  box-shadow: var(--whiteframe-shadow-1dp);
-  z-index: 10;
-  color: var(--text-color);
-  background: var(--bg-lighter);
-  align-items: center;
-  justify-content: center;
-  padding: var(--s) var(--s2) 6px var(--s2);
-
-  .month-title {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 6px;
-
-    @include mq(xs, max) {
-      font-size: 16px;
-      margin-bottom: 3px;
-    }
-  }
-
-  @include mq(xs, max) {
-    padding: 6px 12px 3px 12px;
-  }
-}
-
 .month-grid-container {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));

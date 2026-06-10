@@ -19,6 +19,8 @@
       <ng-template mat-tab-label>
         <div
           cdkDrag
+          cdkDragLockAxis="x"
+          [cdkDragStartDelay]="dragStartDelay"
           cdkDragRootElement=".mat-mdc-tab"
           cdkDragPreviewClass="issue-provider-drag-preview"
           class="tab-header-item"

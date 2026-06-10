@@ -1,5 +1,7 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { waitForAppReady } from './waits';
+import { skipOnboardingForE2E, waitForAppReady } from './waits';
+import { MIGRATION_BACKUP_PREFIX } from '../../electron/shared-with-frontend/get-backup-timestamp';
+import { installDevErrorDialogHandler } from './runtime-errors';
 
 /**
  * Legacy Migration E2E Test Helpers
@@ -88,19 +90,14 @@ export const createLegacyMigratedClient = async (
   });
 
   const page = await context.newPage();
+  await page.addInitScript(skipOnboardingForE2E);
 
-  // Set up error logging
+  // pageerror is safe to attach early — it only fires on uncaught JS exceptions,
+  // and no JS runs during the seeding phase (we abort all *.js loads below).
   page.on('pageerror', (error) => {
     console.error(`[Legacy Client ${clientName}] Page error:`, error.message);
   });
-
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') {
-      console.error(`[Legacy Client ${clientName}] Console error:`, msg.text());
-    } else if (process.env.E2E_VERBOSE) {
-      console.log(`[Legacy Client ${clientName}] Console ${msg.type()}:`, msg.text());
-    }
-  });
+  installDevErrorDialogHandler(page, `Legacy Client ${clientName}`);
 
   // Block JS to seed database before app initializes
   await page.route('**/*.js', async (route) => {
@@ -118,6 +115,17 @@ export const createLegacyMigratedClient = async (
   // Unblock JS so app can load
   await page.unroute('**/*.js');
 
+  // Attach console listener only now — attaching earlier would surface the
+  // `Failed to load resource: net::ERR_FAILED` errors from the intentional
+  // *.js aborts above as spurious `console.error` output.
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      console.error(`[Legacy Client ${clientName}] Console error:`, msg.text());
+    } else if (process.env.E2E_VERBOSE) {
+      console.log(`[Legacy Client ${clientName}] Console ${msg.type()}:`, msg.text());
+    }
+  });
+
   // Set up download listener for migration backup file
   const downloadPromise = page
     .waitForEvent('download', { timeout: 90000 })
@@ -130,7 +138,7 @@ export const createLegacyMigratedClient = async (
   // Wait for migration backup file (key indicator that migration ran)
   const download = await downloadPromise;
   if (download) {
-    expect(download.suggestedFilename()).toContain('sp-pre-migration-backup');
+    expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
     console.log(`[Legacy Client ${clientName}] Migration backup downloaded`);
   } else {
     console.warn(
@@ -143,26 +151,6 @@ export const createLegacyMigratedClient = async (
   console.log(`[Legacy Client ${clientName}] App ready after migration`);
 
   return { context, page };
-};
-
-/**
- * Create a legacy-migrated client without auto-accepting dialogs.
- * Use this when you need to interact with conflict dialogs manually.
- *
- * @param browser - Playwright browser instance
- * @param baseURL - App base URL
- * @param legacyData - Legacy data to seed
- * @param clientName - Human-readable name for debugging
- */
-export const createLegacyMigratedClientNoDialogHandler = async (
-  browser: Browser,
-  baseURL: string,
-  legacyData: Record<string, unknown>,
-  clientName: string,
-): Promise<{ context: BrowserContext; page: Page }> => {
-  // Same as createLegacyMigratedClient but doesn't add dialog handlers
-  // This is useful for conflict tests where we need to observe dialogs
-  return createLegacyMigratedClient(browser, baseURL, legacyData, clientName);
 };
 
 /**

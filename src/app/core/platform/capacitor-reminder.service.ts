@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { Capacitor, PermissionState } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Log } from '../log';
 import { CapacitorPlatformService } from './capacitor-platform.service';
@@ -7,7 +8,10 @@ import {
   NotificationActionEvent,
   REMINDER_ACTION_TYPE_ID,
 } from './capacitor-notification.service';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import {
+  IS_ANDROID_WEB_VIEW,
+  IS_ANDROID_WEB_VIEW_TOKEN,
+} from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
 import { Observable } from 'rxjs';
 import { GlobalConfigService } from '../../features/config/global-config.service';
@@ -52,6 +56,9 @@ export class CapacitorReminderService {
   private _platformService = inject(CapacitorPlatformService);
   private _notificationService = inject(CapacitorNotificationService);
   private _globalConfigService = inject(GlobalConfigService);
+  // Injected (vs reading IS_ANDROID_WEB_VIEW directly) so tests can override
+  // it via DI — matches the pattern in `task-reminder.effects.ts`.
+  private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   /**
    * Observable that emits when a notification action is performed (iOS).
@@ -74,6 +81,13 @@ export class CapacitorReminderService {
    */
   async initialize(): Promise<void> {
     if (this._platformService.isIOS()) {
+      // Action types must be registered before any notification with an
+      // actionTypeId is scheduled, so this runs at startup. The permission
+      // dialog is intentionally NOT requested here — CapacitorNotificationService.schedule()
+      // calls ensurePermissions() lazily, so the OS prompt appears the first
+      // time the user actually triggers a notification (creating a reminder,
+      // hitting an estimate-exceeded warning, etc.) — better grant rates than
+      // an unprompted launch-time dialog.
       await this._notificationService.registerReminderActions();
     }
   }
@@ -92,7 +106,7 @@ export class CapacitorReminderService {
 
     Log.log('📱 CapacitorReminderService.scheduleReminder called', {
       notificationId: options.notificationId,
-      title: options.title.substring(0, 30),
+      reminderId: options.reminderId,
       triggerAt: new Date(triggerAt).toISOString(),
       triggerInMs: triggerAt - now,
       triggerInMinutes: Math.round((triggerAt - now) / 1000 / 60),
@@ -126,7 +140,7 @@ export class CapacitorReminderService {
 
         Log.log('✅ CapacitorReminderService: Android reminder scheduled successfully', {
           notificationId: options.notificationId,
-          title: options.title,
+          reminderId: options.reminderId,
           triggerAt: new Date(triggerAt).toISOString(),
         });
         return true;
@@ -148,6 +162,12 @@ export class CapacitorReminderService {
           return false;
         }
 
+        // Re-clamp after the permission await: a first-launch dialog can take
+        // several seconds, aging triggerAt into the past. The iOS plugin
+        // rejects past timestamps ("Scheduled time must be after current time"),
+        // which would silently fail the very first reminder.
+        const safeTriggerAt = Math.max(triggerAt, Date.now() + 1000);
+
         await LocalNotifications.schedule({
           notifications: [
             {
@@ -159,15 +179,16 @@ export class CapacitorReminderService {
               // The string 'default' triggers iOS's file-not-found fallback to the system sound.
               sound: 'default',
               // Include action type for iOS notification actions (Done/Snooze buttons)
-              actionTypeId: this._platformService.isIOS()
-                ? REMINDER_ACTION_TYPE_ID
-                : undefined,
+              actionTypeId:
+                this._platformService.isIOS() && options.reminderType !== 'DUE_DATE'
+                  ? REMINDER_ACTION_TYPE_ID
+                  : undefined,
               // Group notifications on iOS via thread identifier
               threadIdentifier: this._platformService.isIOS()
                 ? 'sp_reminders'
                 : undefined,
               schedule: {
-                at: new Date(triggerAt),
+                at: new Date(safeTriggerAt),
                 allowWhileIdle: true,
               },
               extra: {
@@ -181,8 +202,8 @@ export class CapacitorReminderService {
 
         Log.log('CapacitorReminderService: iOS reminder scheduled', {
           notificationId: options.notificationId,
-          title: options.title,
-          triggerAt: new Date(triggerAt).toISOString(),
+          reminderId: options.reminderId,
+          triggerAt: new Date(safeTriggerAt).toISOString(),
         });
         return true;
       } catch (error) {
@@ -266,12 +287,48 @@ export class CapacitorReminderService {
   }
 
   /**
+   * Read notification permission state WITHOUT prompting the user.
+   *
+   * Used at startup to decide whether to warn (explicit 'denied') while
+   * deferring the actual OS prompt to the first real schedule (see
+   * `initialize()` — contextual prompts have better grant rates than an
+   * unprompted launch-time dialog).
+   *
+   * Legacy Android WebView: the upfront Capacitor check is unreliable there
+   * (no Capacitor bridge → stale `Notification.permission`, issue #7408), so
+   * report 'granted' and let the OS gate POST_NOTIFICATIONS at fire time —
+   * matching `ensurePermissions()`.
+   */
+  async getPermissionState(): Promise<PermissionState> {
+    if (!this.isAvailable) {
+      return 'denied';
+    }
+
+    if (this._isLegacyAndroidWebView()) {
+      return 'granted';
+    }
+
+    return this._notificationService.getPermissionState();
+  }
+
+  /**
    * Ensure notification permissions are granted.
-   * Also handles Android 12+ exact alarm permissions.
+   * Android exact-alarm permission is checked separately once notification
+   * permission is available.
    */
   async ensurePermissions(): Promise<boolean> {
     if (!this.isAvailable) {
       return false;
+    }
+
+    if (this._isLegacyAndroidWebView()) {
+      // No Capacitor bridge → `LocalNotifications.checkPermissions()` would
+      // fall back to `Notification.permission`, which Android WebView leaves
+      // at 'default' regardless of OS POST_NOTIFICATIONS state (issue #7408).
+      // Reminders here go through AlarmManager via the SUPAndroid bridge; the
+      // OS enforces permission at fire time, so we trust it and skip the
+      // upfront check.
+      return true;
     }
 
     const hasPermission = await this._notificationService.ensurePermissions();
@@ -279,10 +336,10 @@ export class CapacitorReminderService {
       return false;
     }
 
-    // Note: exact alarm permission is checked once at startup via
-    // askPermissionsIfNotGiven$ in mobile-notification.effects.ts.
-    // We intentionally do NOT check it here to avoid repeatedly
-    // opening the Android settings page on every scheduling cycle.
+    // Note: exact alarm permission is checked once by MobileNotificationEffects
+    // after notification permission is actually available. We intentionally do
+    // NOT check it here to avoid repeatedly opening the Android settings page
+    // on every scheduling cycle.
 
     return true;
   }
@@ -293,6 +350,15 @@ export class CapacitorReminderService {
    */
   async ensureExactAlarmPermission(): Promise<boolean> {
     if (!IS_ANDROID_WEB_VIEW) {
+      return true;
+    }
+
+    if (this._isLegacyAndroidWebView()) {
+      // Same reasoning as ensurePermissions(): no Capacitor bridge in the
+      // legacy WebView, so the LocalNotifications exact-alarm helpers throw
+      // or return stale data. AlarmManager will fall back to inexact
+      // delivery if SCHEDULE_EXACT_ALARM is denied — acceptable for
+      // reminder UX. Skip the check.
       return true;
     }
 
@@ -309,5 +375,18 @@ export class CapacitorReminderService {
       Log.warn('CapacitorReminderService: Exact alarm check failed', error);
       return false;
     }
+  }
+
+  /**
+   * True on the legacy `FullscreenActivity`, which exposes the SUPAndroid
+   * bridge but does NOT host a Capacitor bridge. Capacitor plugin calls fall
+   * back to their web implementations there, and the Web Notifications API
+   * is unimplemented in Android WebView — making any LocalNotifications
+   * permission/exact-alarm check unreliable. Reminder scheduling on this
+   * path goes through AlarmManager via `androidInterface.scheduleNativeReminder`,
+   * which the OS gates with POST_NOTIFICATIONS at fire time. See issue #7408.
+   */
+  private _isLegacyAndroidWebView(): boolean {
+    return this._isAndroidWebView && !Capacitor.isNativePlatform();
   }
 }

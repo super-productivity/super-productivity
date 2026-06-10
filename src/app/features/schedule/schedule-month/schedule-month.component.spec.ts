@@ -1,8 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Component, Input } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { ScheduleMonthComponent } from './schedule-month.component';
 import { ScheduleService } from '../schedule.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { ScheduleEventComponent } from '../schedule-event/schedule-event.component';
+import { ScheduleEvent } from '../schedule.model';
+import { SVEType } from '../schedule.const';
 
 describe('ScheduleMonthComponent', () => {
   let component: ScheduleMonthComponent;
@@ -30,7 +35,12 @@ describe('ScheduleMonthComponent', () => {
         { provide: ScheduleService, useValue: mockScheduleService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(ScheduleMonthComponent, {
+        remove: { imports: [ScheduleEventComponent] },
+        add: { imports: [ScheduleEventStubComponent] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(ScheduleMonthComponent);
     component = fixture.componentInstance;
@@ -141,6 +151,28 @@ describe('ScheduleMonthComponent', () => {
       const middleDay = parseDbDateStr(days[21]);
       expect(result.getFullYear()).toBe(middleDay.getFullYear());
       expect(result.getMonth()).toBe(middleDay.getMonth());
+    });
+  });
+
+  describe('month event drag behavior', () => {
+    it('should render month events with drag disabled', () => {
+      // Arrange
+      const scheduleEvent = createTaskScheduleEvent('task-1', '2026-01-15');
+      fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+      mockScheduleService.getEventsForDay.and.returnValue([scheduleEvent]);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const eventDebugEl = fixture.debugElement.query(
+        By.directive(ScheduleEventStubComponent),
+      );
+      const scheduleEventCmp =
+        eventDebugEl.componentInstance as ScheduleEventStubComponent;
+      expect(scheduleEventCmp.event).toBe(scheduleEvent);
+      expect(scheduleEventCmp.isMonthView).toBe(true);
+      expect(scheduleEventCmp.cdkDragDisabled).toBe(true);
     });
   });
 
@@ -389,4 +421,27 @@ describe('ScheduleMonthComponent', () => {
       expect(component.firstDayOfWeek()).toBe(1);
     });
   });
+});
+
+@Component({
+  selector: 'schedule-event',
+  standalone: true,
+  template: '',
+})
+class ScheduleEventStubComponent {
+  @Input() event?: ScheduleEvent;
+  @Input() isMonthView?: boolean;
+  @Input() cdkDragDisabled?: boolean;
+}
+
+const createTaskScheduleEvent = (id: string, plannedForDay: string): ScheduleEvent => ({
+  id,
+  type: SVEType.TaskPlannedForDay,
+  style: '',
+  startHours: 10,
+  timeLeftInHours: 1,
+  data: {
+    id,
+  } as ScheduleEvent['data'],
+  plannedForDay,
 });

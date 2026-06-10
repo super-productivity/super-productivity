@@ -33,6 +33,8 @@
       tabindex="-1"
       placeholder="{{ placeholder }}"
       [value]="currentValue"
+      [mentionConfig]="(mentionCfg$ | async) ?? {}"
+      (listShownChange)="updateMentionListShown($event)"
       (blur)="blurred($event)"
       (focus)="focused()"
       (input)="onInput($event)"

@@ -109,10 +109,15 @@ function App() {
           console.warn(`Skipping ${invalidRules.length} invalid rules during import.`);
         }
 
-        for (const rule of validRules) {
-          // Always generate a new ID to ensure we add to existing rules instead of overwriting
-          const ruleToSave = { ...rule, id: Math.random().toString(36).substr(2, 9) };
-          await sendMessage('saveRule', ruleToSave);
+        // Always generate new IDs so import adds to existing rules instead of
+        // overwriting them. Batch all rules into a single persist call to stay
+        // under the host's plugin-data rate limit (1/sec).
+        const rulesToSave = validRules.map((rule) => ({
+          ...rule,
+          id: Math.random().toString(36).substr(2, 9),
+        }));
+        if (rulesToSave.length > 0) {
+          await sendMessage('addRules', rulesToSave);
         }
         await fetchRules();
 

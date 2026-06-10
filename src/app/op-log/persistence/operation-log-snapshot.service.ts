@@ -11,6 +11,8 @@ import { OpLog } from '../../core/log';
 import { extractEntityKeysFromState } from './extract-entity-keys';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
+import { ValidateStateService } from '../validation/validate-state.service';
+import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 
 type StateCache = MigratableStateCache;
 
@@ -31,14 +33,24 @@ export class OperationLogSnapshotService {
   private vectorClockService = inject(VectorClockService);
   private stateSnapshotService = inject(StateSnapshotService);
   private schemaMigrationService = inject(SchemaMigrationService);
+  private validateStateService = inject(ValidateStateService);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
 
   /**
    * Validates that a snapshot has the expected structure and data.
    */
   isValidSnapshot(snapshot: StateCache): boolean {
-    // Check required properties exist
-    if (!snapshot.state || typeof snapshot.lastAppliedOpSeq !== 'number') {
+    // Check required properties exist and have sane types.
+    if (
+      !snapshot.state ||
+      typeof snapshot.lastAppliedOpSeq !== 'number' ||
+      !Number.isFinite(snapshot.lastAppliedOpSeq) ||
+      typeof snapshot.compactedAt !== 'number' ||
+      !Number.isFinite(snapshot.compactedAt) ||
+      typeof snapshot.vectorClock !== 'object' ||
+      snapshot.vectorClock === null ||
+      Array.isArray(snapshot.vectorClock)
+    ) {
       return false;
     }
 
@@ -71,6 +83,21 @@ export class OperationLogSnapshotService {
     try {
       // Get current state from NgRx
       const currentState = this.stateSnapshotService.getStateSnapshot();
+
+      // GUARD (#7892): never cache an empty/degraded state over a good one.
+      // The snapshot is only a load-time cache — the op-log is the source of
+      // truth. If the live NgRx state has no user data (e.g. a transient
+      // hydration glitch left the store in its initial empty state), caching it
+      // would make the next boot trust empty data. Skipping the save is always
+      // safe for correctness: replaying the op-log reconstructs the true state
+      // (including legitimate full-wipe deletes), at most costing a slower boot.
+      if (!hasMeaningfulStateData(currentState)) {
+        OpLog.warn(
+          'OperationLogSnapshotService: Skipping snapshot save — current state has no ' +
+            'meaningful data (refusing to overwrite cache with empty state)',
+        );
+        return;
+      }
 
       // Get current vector clock and last seq
       const vectorClock = await this.vectorClockService.getCurrentVectorClock();
@@ -125,10 +152,27 @@ export class OperationLogSnapshotService {
       // 2. Run migration
       const migratedSnapshot = this.schemaMigrationService.migrateStateIfNeeded(snapshot);
 
-      // 3. Save migrated snapshot
+      // 3. Validate migrated cache metadata before persisting or clearing the backup.
+      if (!this.isValidSnapshot(migratedSnapshot)) {
+        throw new Error('Migrated snapshot metadata validation failed');
+      }
+
+      // 4. Validate migrated snapshot state before persisting or clearing the backup.
+      // Otherwise an invalid current-schema cache could be trusted on next startup.
+      const validationResult = await this.validateStateService.validateState(
+        migratedSnapshot.state as Record<string, unknown>,
+      );
+      if (!validationResult.isValid) {
+        throw new Error(
+          `Migrated snapshot validation failed (${validationResult.typiaErrors.length} typia errors` +
+            `${validationResult.crossModelError ? `, cross-model: ${validationResult.crossModelError}` : ''})`,
+        );
+      }
+
+      // 5. Save migrated snapshot
       await this.opLogStore.saveStateCache(migratedSnapshot);
 
-      // 4. Clear backup on success
+      // 6. Clear backup on success
       await this.opLogStore.clearStateCacheBackup();
       OpLog.normal(
         'OperationLogSnapshotService: Schema migration complete. Backup cleared.',

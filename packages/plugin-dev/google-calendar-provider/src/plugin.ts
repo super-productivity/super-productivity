@@ -1,5 +1,7 @@
 import type {
   IssueProviderPluginDefinition,
+  OAuthFlowConfig,
+  OAuthTokenResult,
   PluginFieldMapping,
   PluginHttp,
   PluginIssue,
@@ -8,13 +10,7 @@ import type {
 
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  startOAuthFlow(config: {
-    authUrl: string;
-    tokenUrl: string;
-    clientId: string;
-    scopes: string[];
-    extraAuthParams?: Record<string, string>;
-  }): Promise<{ accessToken: string; refreshToken: string; expiresAt: number }>;
+  startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
   getOAuthToken(): Promise<string | null>;
   clearOAuthToken(): Promise<void>;
 };
@@ -23,7 +19,8 @@ const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-const CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const CALENDAR_LIST_READONLY_SCOPE =
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly';
 const CLIENT_ID =
   '637968426975-p6bu3f76b9cbk927k6281lb30bris19o.apps.googleusercontent.com';
 // NOT A SECRET — this is a "Desktop" OAuth client type (RFC 8252).
@@ -32,11 +29,70 @@ const CLIENT_ID =
 // redirect URI restrictions are the actual security mechanisms.
 // Do not rotate or revoke — this value is intentionally committed.
 const CLIENT_SECRET = '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';
+// Android OAuth client ID — authenticates via package name + SHA-1 signing key.
+// No client secret needed; PKCE is the sole proof mechanism.
+// Requires "Custom URI scheme" to be enabled in Google Cloud Console.
+const MOBILE_CLIENT_ID =
+  '637968426975-ks6oveqe619324pimp8f7e1uqovfg65b.apps.googleusercontent.com';
+// iOS OAuth client ID — authenticates via bundle ID.
+// Requires "Custom URI scheme" to be enabled in Google Cloud Console.
+const IOS_CLIENT_ID =
+  '637968426975-ka1muro7mee1go0m7hhog49fm7svr4os.apps.googleusercontent.com';
+
+// --- Config ---
 
 interface GoogleCalendarConfig {
-  calendarId?: string;
+  readCalendarIds?: string[];
+  writeCalendarId?: string;
   syncRangeWeeks?: string;
+  showDeclinedEvents?: boolean;
+  isAutoTimeBlock?: boolean;
+  timeBlockCalendarId?: string;
+  // Legacy field — migrated at runtime
+  calendarId?: string;
 }
+
+/** Migrate old single-calendar config to new multi-calendar shape. */
+const migrateConfig = (raw: Record<string, unknown>): GoogleCalendarConfig => {
+  const cfg = raw as unknown as GoogleCalendarConfig;
+  if (cfg.calendarId && !cfg.readCalendarIds?.length) {
+    return {
+      ...cfg,
+      readCalendarIds: [cfg.calendarId],
+      writeCalendarId: cfg.writeCalendarId || cfg.calendarId,
+    };
+  }
+  return cfg;
+};
+
+const getWriteCalendarId = (cfg: GoogleCalendarConfig): string =>
+  cfg.writeCalendarId || 'primary';
+
+const getTimeBlockCalendarId = (cfg: GoogleCalendarConfig): string =>
+  cfg.timeBlockCalendarId || getWriteCalendarId(cfg);
+
+const getReadCalendarIds = (cfg: GoogleCalendarConfig): string[] =>
+  cfg.readCalendarIds?.length ? cfg.readCalendarIds : ['primary'];
+
+// --- Compound IDs ---
+// With multiple read calendars, CRUD methods need to know which calendar
+// an event belongs to. Format: "calendarId::eventId"
+
+const COMPOUND_SEP = '::';
+
+const toCompoundId = (calendarId: string, eventId: string): string =>
+  `${calendarId}${COMPOUND_SEP}${eventId}`;
+
+const parseCompoundId = (
+  id: string,
+  fallbackCalendarId: string,
+): { calendarId: string; eventId: string } => {
+  const sep = id.indexOf(COMPOUND_SEP);
+  if (sep === -1) return { calendarId: fallbackCalendarId, eventId: id };
+  return { calendarId: id.slice(0, sep), eventId: id.slice(sep + COMPOUND_SEP.length) };
+};
+
+// --- Helpers ---
 
 interface GoogleCalendarEvent {
   id: string;
@@ -47,6 +103,11 @@ interface GoogleCalendarEvent {
   start?: { dateTime?: string; date?: string; timeZone?: string };
   end?: { dateTime?: string; date?: string; timeZone?: string };
   htmlLink?: string;
+  attendees?: { self?: boolean; responseStatus?: string }[];
+  extendedProperties?: {
+    private?: Record<string, string>;
+    shared?: Record<string, string>;
+  };
   [key: string]: unknown;
 }
 
@@ -69,21 +130,18 @@ const formatEventTime = (time?: { dateTime?: string; date?: string }): string =>
 const formatYMD = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-const asCfg = (config: Record<string, unknown>): GoogleCalendarConfig =>
-  config as unknown as GoogleCalendarConfig;
-
-const getCalendarId = (cfg: GoogleCalendarConfig): string =>
-  cfg.calendarId || 'primary';
+/** Format a timestamp as UTC ISO 8601 string for use in Google Calendar API. */
+const toUTCISO = (timestamp: number): string => new Date(timestamp).toISOString();
 
 const eventUrl = (calendarId: string, eventId?: string): string => {
   const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`;
   return eventId ? `${base}/${encodeURIComponent(eventId)}` : base;
 };
 
-/** Format a timestamp as UTC ISO 8601 string for use in Google Calendar API. */
-const toUTCISO = (timestamp: number): string => new Date(timestamp).toISOString();
-
-const mapEventToSearchResult = (event: GoogleCalendarEvent): PluginSearchResult => {
+const mapEventToSearchResult = (
+  event: GoogleCalendarEvent,
+  calendarId: string,
+): PluginSearchResult => {
   const startDateTimeMs = event.start?.dateTime
     ? new Date(event.start.dateTime).getTime()
     : undefined;
@@ -91,21 +149,116 @@ const mapEventToSearchResult = (event: GoogleCalendarEvent): PluginSearchResult 
   const startDateMs = event.start?.date
     ? new Date(event.start.date + 'T00:00:00').getTime()
     : undefined;
+  const endDateTimeMs = event.end?.dateTime
+    ? new Date(event.end.dateTime).getTime()
+    : undefined;
+  const isAllDay = !event.start?.dateTime && !!event.start?.date;
+  const duration =
+    startDateTimeMs && endDateTimeMs
+      ? endDateTimeMs - startDateTimeMs
+      : isAllDay
+        ? 24 * 60 * 60 * 1000
+        : 0;
   return {
-    id: event.id,
+    id: toCompoundId(calendarId, event.id),
     title: event.summary || '(No title)',
     status: event.status,
     start: startDateTimeMs ?? startDateMs,
     dueWithTime: startDateTimeMs,
+    duration,
+    isAllDay,
+    description: event.description,
   };
 };
 
-const fetchEvents = async (
+/**
+ * Derive a deterministic Google Calendar event ID from a task ID.
+ * Google Calendar event IDs: base32hex chars (a-v, 0-9), 5-1024 length.
+ * SP task IDs are nanoid strings — hex-encode all bytes to stay within charset.
+ */
+const taskIdToGcalEventId = (taskId: string): string =>
+  'sp' +
+  Array.from(new TextEncoder().encode(taskId))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+const isHttpStatus = (err: unknown, status: number): boolean =>
+  typeof err === 'object' &&
+  err !== null &&
+  'status' in err &&
+  (err as { status: number }).status === status;
+
+const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
+const RATE_LIMIT_MAX_ATTEMPTS = 4;
+
+/**
+ * Read `error.errors[0].reason` from a Google Calendar API error response.
+ * Returns undefined for non-JSON / unrecognized bodies (safe degradation —
+ * the 429 rate-limit path stays reason-independent).
+ */
+const getGcalErrorReason = (err: unknown): string | undefined => {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const body = (err as { error?: unknown }).error;
+  if (typeof body !== 'object' || body === null) return undefined;
+  // Angular puts the parsed JSON on `.error`; Google wraps it in `{ error: {...} }`.
+  const envelope = (body as { error?: unknown }).error ?? body;
+  const errors =
+    typeof envelope === 'object' && envelope !== null
+      ? (envelope as { errors?: unknown }).errors
+      : undefined;
+  if (!Array.isArray(errors) || errors.length === 0) return undefined;
+  const first = errors[0] as { reason?: unknown };
+  return typeof first?.reason === 'string' ? first.reason : undefined;
+};
+
+/**
+ * Google Calendar returns 403 `rateLimitExceeded` (domain `usageLimits`) or 429
+ * for write-rate violations. These must be retried with exponential backoff;
+ * other 403s (e.g. `forbiddenForNonOrganizer`) must not.
+ */
+const isRateLimitError = (err: unknown): boolean => {
+  if (isHttpStatus(err, 429)) return true;
+  if (!isHttpStatus(err, 403)) return false;
+  const reason = getGcalErrorReason(err);
+  return reason !== undefined && RATE_LIMIT_REASONS.has(reason);
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Run `fn`, retrying with exponential backoff + jitter on rate-limit errors. */
+const withRateLimitRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isRateLimitError(err) || attempt >= RATE_LIMIT_MAX_ATTEMPTS) throw err;
+      await sleep(500 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    }
+  }
+};
+
+const isDeclined = (event: GoogleCalendarEvent): boolean =>
+  event.attendees?.some((a) => a.self && a.responseStatus === 'declined') ?? false;
+
+/**
+ * True for events SuperProductivity itself wrote as auto-time-block mirrors of a
+ * local task (tagged with `extendedProperties.private.spTaskId` in
+ * `timeBlock.upsertEvent`). When a read calendar overlaps the time-block
+ * calendar, these mirror events get fetched back and would render in the
+ * schedule/agenda right next to the very task that created them — a duplicate
+ * (#8171). The local task is the source of truth, so the mirror is excluded from
+ * all read paths (schedule/agenda and search-to-add).
+ */
+const isSpManagedEvent = (event: GoogleCalendarEvent): boolean =>
+  typeof event.extendedProperties?.private?.spTaskId === 'string';
+
+/** Fetch events from a single calendar. */
+const fetchEventsForCalendar = async (
   http: PluginHttp,
+  calendarId: string,
   cfg: GoogleCalendarConfig,
   opts?: { query?: string; maxResults?: string },
 ): Promise<PluginSearchResult[]> => {
-  const calendarId = getCalendarId(cfg);
   const syncRangeWeeks = parseInt(cfg.syncRangeWeeks || '', 10) || 2;
   const now = new Date();
   const timeMin = now.toISOString();
@@ -113,24 +266,65 @@ const fetchEvents = async (
     now.getTime() + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const response = await http.get<GoogleCalendarListResponse>(
-    eventUrl(calendarId),
-    {
-      params: {
-        ...(opts?.query ? { q: opts.query } : {}),
-        timeMin,
-        timeMax,
-        singleEvents: 'true',
-        orderBy: 'startTime',
-        maxResults: opts?.maxResults ?? '50',
-      },
+  const response = await http.get<GoogleCalendarListResponse>(eventUrl(calendarId), {
+    params: {
+      ...(opts?.query ? { q: opts.query } : {}),
+      timeMin,
+      timeMax,
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: opts?.maxResults ?? '50',
     },
-  );
+  });
 
   return (response.items || [])
     .filter((e) => e.status !== 'cancelled')
-    .map(mapEventToSearchResult);
+    .filter((e) => !isSpManagedEvent(e))
+    .filter((e) => cfg.showDeclinedEvents || !isDeclined(e))
+    .map((e) => mapEventToSearchResult(e, calendarId));
 };
+
+/** Fetch events from all read calendars, merged and sorted by start time. */
+const fetchEvents = async (
+  http: PluginHttp,
+  cfg: GoogleCalendarConfig,
+  opts?: { query?: string; maxResults?: string },
+): Promise<PluginSearchResult[]> => {
+  const calendarIds = getReadCalendarIds(cfg);
+  const results = await Promise.all(
+    calendarIds.map((calId) => fetchEventsForCalendar(http, calId, cfg, opts)),
+  );
+  return results.flat().sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+};
+
+// --- Load calendar list helpers ---
+
+const loadCalendarList = async (
+  _config: Record<string, unknown>,
+  http: PluginHttp,
+  params?: Record<string, string>,
+): Promise<{ label: string; value: string }[]> => {
+  const res = await http.get<{
+    items?: { id: string; summary: string; primary?: boolean }[];
+  }>(`${GOOGLE_CALENDAR_API}/users/me/calendarList`, params ? { params } : undefined);
+  return (res.items || []).map((cal) => ({
+    label: cal.summary + (cal.primary ? ' (Primary)' : ''),
+    value: cal.id,
+  }));
+};
+
+const loadAllCalendars = (
+  config: Record<string, unknown>,
+  http: PluginHttp,
+): Promise<{ label: string; value: string }[]> => loadCalendarList(config, http);
+
+const loadWritableCalendars = (
+  config: Record<string, unknown>,
+  http: PluginHttp,
+): Promise<{ label: string; value: string }[]> =>
+  loadCalendarList(config, http, { minAccessRole: 'writer' });
+
+// --- Plugin registration ---
 
 PluginAPI.registerIssueProvider({
   configFields: [
@@ -143,31 +337,31 @@ PluginAPI.registerIssueProvider({
         tokenUrl: GOOGLE_TOKEN_URL,
         clientId: CLIENT_ID,
         clientSecret: CLIENT_SECRET,
-        scopes: [CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE],
+        mobileClientId: MOBILE_CLIENT_ID,
+        iosClientId: IOS_CLIENT_ID,
+        // Intentionally no webClientId: durable Google Calendar web OAuth
+        // requires a confidential client secret, which browser JS cannot keep.
+        scopes: [CALENDAR_EVENTS_SCOPE, CALENDAR_LIST_READONLY_SCOPE],
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       },
     },
     {
-      key: 'calendarId',
-      type: 'select' as const,
-      label: 'Calendar',
-      description: 'Select which calendar to sync events from.',
+      key: 'readCalendarIds',
+      type: 'multiSelect' as const,
+      label: 'Calendars to display',
+      description: 'Select which calendars to show in planner and schedule views.',
       required: true,
       options: [{ label: 'Primary', value: 'primary' }],
-      async loadOptions(
-        _config: Record<string, unknown>,
-        http: PluginHttp,
-      ): Promise<{ label: string; value: string }[]> {
-        const res = await http.get<{
-          items?: { id: string; summary: string; primary?: boolean }[];
-        }>(`${GOOGLE_CALENDAR_API}/users/me/calendarList`, {
-          params: { minAccessRole: 'writer' },
-        });
-        return (res.items || []).map((cal) => ({
-          label: cal.summary + (cal.primary ? ' (Primary)' : ''),
-          value: cal.id,
-        }));
-      },
+      loadOptions: loadAllCalendars,
+    },
+    {
+      key: 'writeCalendarId',
+      type: 'select' as const,
+      label: 'Default calendar for new events',
+      description: 'Used when creating or rescheduling events directly from the planner.',
+      required: true,
+      options: [{ label: 'Primary', value: 'primary' }],
+      loadOptions: loadWritableCalendars,
     },
     {
       key: 'syncRangeWeeks',
@@ -175,6 +369,30 @@ PluginAPI.registerIssueProvider({
       label: 'Sync range (weeks)',
       description: 'How many weeks ahead to sync events. Defaults to 2.',
       required: false,
+    },
+    {
+      key: 'showDeclinedEvents',
+      type: 'checkbox' as const,
+      label: 'Show declined events',
+      description: 'Display events you have declined in your calendar views.',
+      advanced: true,
+    },
+    {
+      key: 'isAutoTimeBlock',
+      type: 'checkbox' as const,
+      label: 'Auto time blocking',
+      description:
+        'When you schedule a task to a specific time, automatically create a matching event in Google Calendar. Rescheduling, completing, or deleting the task updates the event.',
+    },
+    {
+      key: 'timeBlockCalendarId',
+      type: 'select' as const,
+      label: 'Time block calendar',
+      description: 'Which calendar to create time block events in.',
+      required: false,
+      showIf: 'isAutoTimeBlock',
+      options: [{ label: 'Primary', value: 'primary' }],
+      loadOptions: loadWritableCalendars,
     },
   ],
 
@@ -191,7 +409,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return fetchEvents(http, asCfg(config), { query: searchTerm });
+    return fetchEvents(http, migrateConfig(config), { query: searchTerm });
   },
 
   async getById(
@@ -199,13 +417,12 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue> {
-    const calendarId = getCalendarId(asCfg(config));
-    const event = await http.get<GoogleCalendarEvent>(
-      eventUrl(calendarId, issueId),
-    );
+    const cfg = migrateConfig(config);
+    const { calendarId, eventId } = parseCompoundId(issueId, getWriteCalendarId(cfg));
+    const event = await http.get<GoogleCalendarEvent>(eventUrl(calendarId, eventId));
 
     return {
-      id: event.id,
+      id: issueId,
       title: event.summary || '(No title)',
       body: event.description || '',
       state: event.status || 'confirmed',
@@ -221,8 +438,10 @@ PluginAPI.registerIssueProvider({
   },
 
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
-    const calendarId = getCalendarId(asCfg(config));
-    const eid = btoa(`${issueId} ${calendarId}`)
+    const cfg = migrateConfig(config);
+    const { calendarId, eventId } = parseCompoundId(issueId, getWriteCalendarId(cfg));
+    const raw = `${eventId} ${calendarId}`;
+    const eid = btoa(String.fromCharCode(...new TextEncoder().encode(raw)))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
@@ -233,9 +452,10 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<boolean> {
-    const calendarId = getCalendarId(asCfg(config));
+    const cfg = migrateConfig(config);
+    const calendarId = getWriteCalendarId(cfg);
     try {
-      await http.get(`${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}`);
+      await http.get(eventUrl(calendarId), { params: { maxResults: '1' } });
       return true;
     } catch {
       return false;
@@ -246,7 +466,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return fetchEvents(http, asCfg(config), { maxResults: '100' });
+    return fetchEvents(http, migrateConfig(config), { maxResults: '100' });
   },
 
   issueDisplay: [
@@ -326,7 +546,8 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<void> {
-    const calendarId = getCalendarId(asCfg(config));
+    const cfg = migrateConfig(config);
+    const { calendarId, eventId } = parseCompoundId(id, getWriteCalendarId(cfg));
     const patch: Record<string, unknown> = {};
 
     if (changes.summary !== undefined) {
@@ -355,7 +576,7 @@ PluginAPI.registerIssueProvider({
       }
     } else if (changes.duration_ms !== undefined) {
       // Duration changed but start didn't - fetch current start
-      const current = await http.get<GoogleCalendarEvent>(eventUrl(calendarId, id));
+      const current = await http.get<GoogleCalendarEvent>(eventUrl(calendarId, eventId));
       if (current.start?.dateTime) {
         const endMs =
           new Date(current.start.dateTime).getTime() + (changes.duration_ms as number);
@@ -383,7 +604,7 @@ PluginAPI.registerIssueProvider({
     }
 
     if (Object.keys(patch).length > 0) {
-      await http.patch(eventUrl(calendarId, id), patch);
+      await http.patch(eventUrl(calendarId, eventId), patch);
     }
   },
 
@@ -415,7 +636,8 @@ PluginAPI.registerIssueProvider({
   },
 
   async createIssue(title: string, config: Record<string, unknown>, http: PluginHttp) {
-    const calendarId = getCalendarId(asCfg(config));
+    const cfg = migrateConfig(config);
+    const calendarId = getWriteCalendarId(cfg);
 
     // Create as all-day event for today; _pushInitialValues will
     // convert to a timed event if the task has dueWithTime set.
@@ -425,19 +647,16 @@ PluginAPI.registerIssueProvider({
     const tmrw = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const tomorrow = formatYMD(tmrw);
 
-    const event = await http.post<GoogleCalendarEvent>(
-      eventUrl(calendarId),
-      {
-        summary: title,
-        start: { date: today },
-        end: { date: tomorrow },
-      },
-    );
+    const event = await http.post<GoogleCalendarEvent>(eventUrl(calendarId), {
+      summary: title,
+      start: { date: today },
+      end: { date: tomorrow },
+    });
 
     return {
-      issueId: event.id,
+      issueId: toCompoundId(calendarId, event.id),
       issueData: {
-        id: event.id,
+        id: toCompoundId(calendarId, event.id),
         title: event.summary || title,
         body: event.description || '',
         state: event.status || 'confirmed',
@@ -454,12 +673,83 @@ PluginAPI.registerIssueProvider({
 
   deletedStates: ['cancelled'],
 
+  timeBlock: {
+    async upsertEvent(
+      taskId: string,
+      eventData: {
+        title: string;
+        dueWithTime: number;
+        durationMs: number;
+        isDone: boolean;
+      },
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void> {
+      const cfg = migrateConfig(config);
+      const calendarId = getTimeBlockCalendarId(cfg);
+      const gcalEventId = taskIdToGcalEventId(taskId);
+      const summary = eventData.isDone ? `[DONE] ${eventData.title}` : eventData.title;
+      const body = {
+        id: gcalEventId,
+        summary,
+        start: { dateTime: toUTCISO(eventData.dueWithTime) },
+        end: { dateTime: toUTCISO(eventData.dueWithTime + eventData.durationMs) },
+        extendedProperties: { private: { spTaskId: taskId } },
+      };
+
+      const patchBody = {
+        summary: body.summary,
+        start: body.start,
+        end: body.end,
+      };
+      const patch = (): Promise<unknown> =>
+        http.patch(eventUrl(calendarId, gcalEventId), patchBody);
+
+      // Patch first: the event already exists on every sync after the first,
+      // so this is a single idempotent write. Inserting first would always get
+      // a 409 "duplicate" and then patch anyway — two writes per sync. Each
+      // call is retried independently so a throttled write isn't amplified.
+      try {
+        await withRateLimitRetry(patch);
+      } catch (err: unknown) {
+        if (!isHttpStatus(err, 404)) throw err;
+        // Event doesn't exist yet — create it. A concurrent upsert for the
+        // same task can win the race (409 duplicate); the event then exists,
+        // so fall back to patching it.
+        try {
+          await withRateLimitRetry(() => http.post(eventUrl(calendarId), body));
+        } catch (insertErr: unknown) {
+          if (!isHttpStatus(insertErr, 409)) throw insertErr;
+          await withRateLimitRetry(patch);
+        }
+      }
+    },
+
+    async deleteEvent(
+      taskId: string,
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void> {
+      const cfg = migrateConfig(config);
+      const calendarId = getTimeBlockCalendarId(cfg);
+      const gcalEventId = taskIdToGcalEventId(taskId);
+      await withRateLimitRetry(async () => {
+        try {
+          await http.delete(eventUrl(calendarId, gcalEventId));
+        } catch (err: unknown) {
+          if (!isHttpStatus(err, 404)) throw err;
+        }
+      });
+    },
+  },
+
   async deleteIssue(
     id: string,
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<void> {
-    const calendarId = getCalendarId(asCfg(config));
-    await http.delete(eventUrl(calendarId, id));
+    const cfg = migrateConfig(config);
+    const { calendarId, eventId } = parseCompoundId(id, getWriteCalendarId(cfg));
+    await http.delete(eventUrl(calendarId, eventId));
   },
 });

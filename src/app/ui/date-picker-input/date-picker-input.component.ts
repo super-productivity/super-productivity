@@ -1,4 +1,12 @@
-import { Component, forwardRef, inject, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  forwardRef,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR, FormsModule } from '@angular/forms';
 import {
   MatFormField,
@@ -41,6 +49,7 @@ export const DATE_PICKER_MAX_DEFAULT = '2999-12-31';
     TranslatePipe,
   ],
   templateUrl: './date-picker-input.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -61,10 +70,17 @@ export class DatePickerInputComponent implements ControlValueAccessor {
   isInvalid = input<boolean | undefined>(undefined); // boolean - validation control by parent, undefined - internal validation
   errorMessage = input<string | undefined>(undefined); // instead of default error message
 
-  innerValue: DateValue = null;
+  innerValue = signal<DateValue>(null);
+  private _cd = inject(ChangeDetectorRef);
 
   toDate(value: Date | string): Date {
-    return value instanceof Date ? value : new Date(value);
+    // Parse YYYY-MM-DD strings to LOCAL midnight (via dateStrToUtcDate),
+    // matching both writeValue's parsing and the MatDatepicker's
+    // local-midnight selections. `new Date('2026-05-29')` would parse as UTC
+    // midnight instead, so in positive-offset timezones a selection equal to a
+    // string `min` (e.g. today) compares as "before min" and gets silently
+    // rejected (#7768 regression: "can't set start date to today").
+    return value instanceof Date ? value : dateStrToUtcDate(value);
   }
 
   formatDate(value: Date | string | undefined): string {
@@ -88,30 +104,31 @@ export class DatePickerInputComponent implements ControlValueAccessor {
 
   writeValue(value: unknown): void {
     if (!value) {
-      this.innerValue = null;
+      this.innerValue.set(null);
     } else if (value instanceof Date) {
-      this.innerValue = value;
+      this.innerValue.set(value);
     } else if (typeof value === 'string') {
       const parsed = dateStrToUtcDate(value);
-      this.innerValue = isNaN(parsed.getTime()) ? null : parsed;
+      this.innerValue.set(isNaN(parsed.getTime()) ? null : parsed);
     } else {
-      this.innerValue = null;
+      this.innerValue.set(null);
     }
+    this._cd.markForCheck();
   }
 
   onValueChange(value: DateValue): void {
     if (!value) {
-      this.innerValue = null;
+      this.innerValue.set(null);
       this.onChange(null);
       this.onTouched();
       return;
     }
 
     if (!this.validateDate(value)) {
-      this.innerValue = null;
+      this.innerValue.set(null);
       this.onChange(null);
     } else {
-      this.innerValue = value;
+      this.innerValue.set(value);
       this.onChange(value);
     }
     this.onTouched();

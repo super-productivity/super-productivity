@@ -1,0 +1,25 @@
+{{- if and .Values.autoscaling.enabled (gt (.Values.autoscaling.maxReplicas | int) 1) }}
+  {{- fail "autoscaling with maxReplicas > 1 is not supported: WebSocket connection state is in-memory and not shared across replicas" }}
+{{- end }}
+{{- if .Values.autoscaling.enabled -}}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "supersync.fullname" . }}
+  labels:
+    {{- include "supersync.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "supersync.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

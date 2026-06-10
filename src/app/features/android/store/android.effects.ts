@@ -4,9 +4,10 @@ import { tap } from 'rxjs/operators';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { DroidLog } from '../../../core/log';
-import { androidInterface } from '../android-interface';
+import { androidInterface, AndroidShareData } from '../android-interface';
 import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
+import { T } from '../../../t.const';
 
 // TODO send message to electron when current task changes here
 
@@ -22,15 +23,18 @@ export class AndroidEffects {
       () =>
         androidInterface.onShareWithAttachment$.pipe(
           tap((shareData) => {
-            const truncatedTitle =
-              shareData.title.length > 150
-                ? shareData.title.substring(0, 147) + '...'
-                : shareData.title;
-            const taskTitle = `Check: ${truncatedTitle}`;
+            // Guard against empty payloads (e.g. stale share data persisted by an
+            // older app version) so we never create a blank, attachment-less task.
+            if (!shareData?.path?.trim()) {
+              DroidLog.warn('Ignoring share intent with empty content');
+              return;
+            }
+            const taskTitle = buildTaskTitle(shareData);
             const taskId = this._taskService.add(taskTitle);
             const icon = shareData.type === 'LINK' ? 'link' : 'file_present';
             this._taskAttachmentService.addAttachment(taskId, {
-              title: shareData.title,
+              title:
+                shareData.subject?.trim() || shareData.title?.trim() || shareData.path,
               type: shareData.type,
               path: shareData.path,
               icon,
@@ -39,6 +43,28 @@ export class AndroidEffects {
             this._snackService.open({
               type: 'SUCCESS',
               msg: 'Task created from share',
+            });
+          }),
+        ),
+      { dispatch: false },
+    );
+
+  showForegroundServiceFailure$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onForegroundServiceStartFailed$.pipe(
+          tap((failure) => {
+            DroidLog.warn('Foreground service notification failed', failure);
+            this._snackService.open({
+              type: 'WARNING',
+              msg:
+                failure.service === 'focusMode'
+                  ? T.F.ANDROID.FOREGROUND_SERVICE_START_FAILED_FOCUS
+                  : T.F.ANDROID.FOREGROUND_SERVICE_START_FAILED_TRACKING,
+              actionStr: T.F.ANDROID.OPEN_NOTIFICATION_SETTINGS,
+              actionFn: () => androidInterface.openAppNotificationSettings?.(),
+              config: { duration: 10000 },
             });
           }),
         ),
@@ -141,7 +167,7 @@ export class AndroidEffects {
               const pendingShare = androidInterface.getPendingShareData?.();
               if (pendingShare) {
                 const parsed = JSON.parse(pendingShare);
-                DroidLog.log('Resume: found pending share data', parsed);
+                DroidLog.log('Resume: found pending share data');
                 androidInterface.onShareWithAttachment$.next(parsed);
               }
             } catch (e) {
@@ -152,3 +178,51 @@ export class AndroidEffects {
       { dispatch: false },
     );
 }
+
+/**
+ * Build a meaningful task title from Android share intent data.
+ * Prefers the page subject (EXTRA_SUBJECT, sent by browsers), then an explicit
+ * title (EXTRA_TITLE), then a type-specific fallback derived from the shared
+ * content itself. Never returns the unhelpful literal "Shared Content".
+ */
+export const buildTaskTitle = (shareData: Partial<AndroidShareData>): string => {
+  const subject = shareData.subject?.trim() || '';
+  const title = shareData.title?.trim() || '';
+  const path = shareData.path?.trim() || '';
+
+  let taskTitle: string;
+
+  if (subject) {
+    taskTitle = subject;
+  } else if (title) {
+    taskTitle = title;
+  } else if (shareData.type === 'LINK') {
+    taskTitle = readableUrl(path);
+  } else {
+    const firstLine = path.split('\n')[0].trim();
+    taskTitle = firstLine || 'Shared note';
+  }
+
+  return taskTitle.length > 150 ? taskTitle.substring(0, 147) + '...' : taskTitle;
+};
+
+/**
+ * Turn a URL into a human-readable "host: path" string for use as a task title.
+ */
+export const readableUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const pathPart = parsed.pathname.replace(/\/$/, '');
+    if (pathPart && pathPart !== '/') {
+      const decoded = decodeURIComponent(pathPart)
+        .replace(/[/_-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return decoded ? `${host}: ${decoded}` : host;
+    }
+    return host;
+  } catch {
+    return url;
+  }
+};

@@ -5,6 +5,7 @@ import { T } from '../../t.const';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { getDefaultClipboardImagesPath } from '../../util/get-default-clipboard-images-path';
 import { MIME_TYPE_EXTENSIONS } from '../../../../electron/shared-with-frontend/mime-type-mapping.const';
+import { Log } from '../log';
 
 const DB_NAME = 'sp-clipboard-images';
 const DB_VERSION = 1;
@@ -117,7 +118,7 @@ export class ClipboardImageService {
                 return { success: true, imageUrl, markdownText };
               }
             } catch (error) {
-              console.error('[CLIPBOARD] Error getting file path:', error);
+              Log.err('[CLIPBOARD] Error getting file path:', error);
             }
           }
         }
@@ -164,8 +165,8 @@ export class ClipboardImageService {
 
       return { success: true, imageUrl, markdownText };
     } catch (error) {
-      console.error('[CLIPBOARD] Error saving clipboard image:', error);
-      console.error(
+      Log.err('[CLIPBOARD] Error saving clipboard image:', error);
+      Log.err(
         '[CLIPBOARD] Error stack:',
         error instanceof Error ? error.stack : 'no stack',
       );
@@ -234,7 +235,7 @@ export class ClipboardImageService {
 
       return { success: true, imageUrl, markdownText };
     } catch (error) {
-      console.error('Error getting image from file paths:', error);
+      Log.err('Error getting image from file paths:', error);
       return null; // Fall back to regular clipboard handling
     }
   }
@@ -316,7 +317,7 @@ export class ClipboardImageService {
       this._blobUrlCache.set(imageId, blobUrl);
       return blobUrl;
     } catch (error) {
-      console.error('Error resolving indexeddb URL for clipboard image:', error);
+      Log.err('Error resolving indexeddb URL for clipboard image:', error);
       return null;
     }
   }

@@ -12,7 +12,7 @@
     "url": ""
   },
   "permissions": [],
-  "hooks": ["taskComplete", "taskUpdate", "anyTaskUpdate"],
+  "hooks": ["taskCreated", "taskComplete", "taskUpdate", "anyTaskUpdate", "currentTaskChange"],
   "iFrame": true,
   "sidePanel": false,
   "isSkipMenuEntry": false,

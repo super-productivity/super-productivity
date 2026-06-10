@@ -38,7 +38,26 @@ async function getPlugins() {
 
   const plugins = [];
 
-  // Add shared-schema first as it's needed for type resolution
+  // Build sync-core before shared-schema. shared-schema re-exports generic
+  // vector-clock algorithms from sync-core, while sync-core must not import
+  // shared-schema; the sync core stays domain-agnostic.
+  plugins.push({
+    name: 'sync-core',
+    path: 'packages/sync-core',
+    buildCommand: 'npm run build',
+    skipCopy: true,
+  });
+
+  // Provider contracts and implementations depend on public sync-core exports
+  // but must stay outside the core package boundary.
+  plugins.push({
+    name: 'sync-providers',
+    path: 'packages/sync-providers',
+    buildCommand: 'npm run build',
+    skipCopy: true,
+  });
+
+  // Add shared-schema after sync-core as it's needed for app/server type resolution.
   plugins.push({
     name: 'shared-schema',
     path: 'packages/shared-schema',
@@ -81,6 +100,7 @@ async function getPlugins() {
 
         // Read manifest.json to check for additional files (e.g., config schema)
         const files = ['manifest.json', 'plugin.js', 'icon.svg'];
+        const requiredFiles = [...files];
         // manifest.json may live at the root or inside src/
         const manifestCandidates = [
           path.join(pluginPath, 'manifest.json'),
@@ -93,9 +113,16 @@ async function getPlugins() {
             manifestRead = true;
             if (manifest.iFrame !== false) {
               files.push('index.html');
+              requiredFiles.push('index.html');
             }
             if (manifest.jsonSchemaCfg) {
               files.push(manifest.jsonSchemaCfg);
+              requiredFiles.push(manifest.jsonSchemaCfg);
+            }
+            if (manifest.i18n?.languages) {
+              for (const lang of manifest.i18n.languages) {
+                requiredFiles.push(`i18n/${lang}.json`);
+              }
             }
             break;
           } catch {
@@ -105,6 +132,7 @@ async function getPlugins() {
         if (!manifestRead) {
           // No manifest.json found — assume index.html is needed
           files.push('index.html');
+          requiredFiles.push('index.html');
         }
 
         plugins.push({
@@ -112,6 +140,7 @@ async function getPlugins() {
           path: `packages/plugin-dev/${entry.name}`,
           buildCommand: hasRealBuildScript ? 'npm run build' : undefined,
           files,
+          requiredFiles,
           sourcePath: hasRealBuildScript ? 'dist' : undefined,
         });
       } catch (e) {

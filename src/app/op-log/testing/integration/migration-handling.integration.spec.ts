@@ -17,6 +17,7 @@ import { resetTestUuidCounter } from './helpers/test-client.helper';
 import { LockService } from '../../sync/lock.service';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
+import { OperationLogEffects } from '../../capture/operation-log.effects';
 import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 
 /**
@@ -65,14 +66,18 @@ describe('Migration Handling Integration', () => {
         },
         {
           provide: ValidateStateService,
-          useValue: jasmine.createSpyObj('ValidateStateService', [
-            'validateAndRepairCurrentState',
-          ]),
+          useFactory: () => {
+            const spy = jasmine.createSpyObj('ValidateStateService', [
+              'validateAndRepairCurrentState',
+            ]);
+            spy.validateAndRepairCurrentState.and.resolveTo(true);
+            return spy;
+          },
         },
         {
           provide: LockService,
           useValue: {
-            request: async (_name: string, fn: () => Promise<void>) => fn(),
+            request: async <T>(_name: string, fn: () => Promise<T>) => fn(),
           },
         },
         {
@@ -92,6 +97,14 @@ describe('Migration Handling Integration', () => {
               validOps: ops,
               invalidatedOps: [],
             }),
+          },
+        },
+        {
+          // RemoteOpsProcessingService lazily resolves OperationLogEffects via
+          // Injector to flush deferred local actions after remote apply (#7700).
+          provide: OperationLogEffects,
+          useValue: {
+            processDeferredActions: () => Promise.resolve(),
           },
         },
       ],
@@ -120,23 +133,24 @@ describe('Migration Handling Integration', () => {
     });
 
     it('should accept operation with current schema version', async () => {
-      const currentVersion = 1; // Assuming CURRENT_SCHEMA_VERSION is 1
+      const currentVersion = CURRENT_SCHEMA_VERSION;
       const op = createOp(currentVersion);
 
       await service.processRemoteOps([op]);
 
       // Should be applied (no error snackbar)
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
-      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith([
-        jasmine.objectContaining({ id: op.id }),
-      ]);
+      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
+        [jasmine.objectContaining({ id: op.id })],
+        jasmine.objectContaining({ skipDeferredLocalActions: true }),
+      );
     });
 
     it('should accept operation with compatible future version (within skip limit)', async () => {
       // Logic: if opVersion <= current + MAX_VERSION_SKIP, it's accepted
-      // MAX_VERSION_SKIP is 3. So version 4 should be accepted if current is 1.
+      // MAX_VERSION_SKIP is 3. So current + 3 should still be accepted.
       // Note: A WARNING snackbar may be shown for newer versions, but no ERROR.
-      const compatibleVersion = 1 + MAX_VERSION_SKIP;
+      const compatibleVersion = CURRENT_SCHEMA_VERSION + MAX_VERSION_SKIP;
       const op = createOp(compatibleVersion);
 
       await service.processRemoteOps([op]);
@@ -174,9 +188,10 @@ describe('Migration Handling Integration', () => {
       await service.processRemoteOps([op]);
 
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
-      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith([
-        jasmine.objectContaining({ id: op.id }),
-      ]);
+      expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
+        [jasmine.objectContaining({ id: op.id })],
+        jasmine.objectContaining({ skipDeferredLocalActions: true }),
+      );
     });
   });
 

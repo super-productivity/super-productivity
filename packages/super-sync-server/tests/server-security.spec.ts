@@ -1,8 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
+import {
+  escapeHtml,
+  sanitizeRequestUrlForLog,
+  SERVER_HELMET_CONFIG,
+} from '../src/server';
 
 describe('Server Security Configuration', () => {
+  describe('request URL log sanitization', () => {
+    it('should redact sensitive query params without removing non-sensitive context', () => {
+      expect(
+        sanitizeRequestUrlForLog(
+          '/api/sync/ws?token=secret-jwt&clientId=B_AEh6&limit=10',
+        ),
+      ).toBe('/api/sync/ws?token=redacted&clientId=B_AEh6&limit=10');
+    });
+
+    it('should redact sensitive query params case-insensitively', () => {
+      expect(sanitizeRequestUrlForLog('/reset-password?resetPasswordToken=secret')).toBe(
+        '/reset-password?resetPasswordToken=redacted',
+      );
+    });
+  });
+
   describe('Content Security Policy', () => {
     let app: FastifyInstance;
 
@@ -17,22 +38,7 @@ describe('Server Security Configuration', () => {
     });
 
     it('should include CSP headers in response', async () => {
-      // Register helmet with the same config as the server
-      await app.register(helmet, {
-        contentSecurityPolicy: {
-          directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", 'data:'],
-            fontSrc: ["'self'"],
-            objectSrc: ["'none'"],
-            frameAncestors: ["'none'"],
-            formAction: ["'self'"],
-            baseUri: ["'self'"],
-          },
-        },
-      });
+      await app.register(helmet, SERVER_HELMET_CONFIG);
 
       app.get('/test', async () => ({ status: 'ok' }));
       await app.ready();
@@ -82,16 +88,6 @@ describe('Server Security Configuration', () => {
   });
 
   describe('HTML Escape Function', () => {
-    // Test the escapeHtml function that prevents XSS in templates
-    const escapeHtml = (unsafe: string): string => {
-      return unsafe
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    };
-
     it('should escape < and > characters', () => {
       const input = '<script>alert("xss")</script>';
       const escaped = escapeHtml(input);
@@ -201,16 +197,15 @@ describe('Password Reset Page', () => {
     expect(response.body).toBe('Token is required');
   });
 
-  it('should escape malicious token in JavaScript context', async () => {
+  it('should escape malicious token in data attribute', async () => {
     const { pageRoutes } = await import('../src/pages');
 
     app = Fastify();
     await app.register(pageRoutes, { prefix: '/' });
     await app.ready();
 
-    // Test JavaScript injection attempt - single quotes should be safe
-    // because safeJsonForScript wraps in double quotes
-    const maliciousToken = "';alert(1);//";
+    // Test attribute breakout attempt - double quotes should be escaped
+    const maliciousToken = '"><script>alert(1)</script>';
     const response = await app.inject({
       method: 'GET',
       url: `/reset-password?token=${encodeURIComponent(maliciousToken)}`,
@@ -219,11 +214,12 @@ describe('Password Reset Page', () => {
     expect(response.statusCode).toBe(200);
     const html = response.body;
 
-    // Token is wrapped in double quotes by JSON.stringify, so single quotes are safe
-    // The actual string content appears inside double quotes in the JS
-    expect(html).toContain('"');
-    // The raw attack string should not appear unquoted
-    expect(html).not.toMatch(/token:\s*'.*;alert/);
+    // Token is in data-token attribute, escapeHtml prevents attribute breakout
+    expect(html).toContain('data-token="');
+    // The raw attack string should not appear unescaped
+    expect(html).not.toContain('"><script>');
+    // Double quotes are escaped as &quot;
+    expect(html).toContain('&quot;');
   });
 
   it('should escape script tags in token to prevent XSS', async () => {
@@ -242,9 +238,9 @@ describe('Password Reset Page', () => {
     expect(response.statusCode).toBe(200);
     const html = response.body;
 
-    // safeJsonForScript escapes < as \u003c to prevent </script> injection
+    // escapeHtml escapes < as &lt; to prevent injection
     expect(html).not.toContain('</script><script>');
-    expect(html).toContain('\\u003c'); // < escaped as unicode
+    expect(html).toContain('&lt;'); // < escaped as HTML entity
   });
 });
 

@@ -1,6 +1,7 @@
 import { getNewestPossibleDueDate } from './get-newest-possible-due-date.util';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { Log } from '../../../core/log';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 
 /* eslint-disable no-mixed-operators */
@@ -77,27 +78,25 @@ describe('getNewestPossibleDueDate()', () => {
       expect(result).toBeTruthy();
     });
 
-    it('should throw error if repeatEvery is not a positive integer', () => {
+    it('should return null and warn if repeatEvery is not a positive integer', () => {
+      spyOn(Log, 'warn');
+
       const cfg1 = dummyRepeatable('ID1', {
         repeatEvery: 0,
       });
-      expect(() => getNewestPossibleDueDate(cfg1, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNewestPossibleDueDate(cfg1, new Date())).toBeNull();
 
       const cfg2 = dummyRepeatable('ID1', {
         repeatEvery: -1,
       });
-      expect(() => getNewestPossibleDueDate(cfg2, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNewestPossibleDueDate(cfg2, new Date())).toBeNull();
 
       const cfg3 = dummyRepeatable('ID1', {
         repeatEvery: 1.5,
       });
-      expect(() => getNewestPossibleDueDate(cfg3, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNewestPossibleDueDate(cfg3, new Date())).toBeNull();
+
+      expect(Log.warn).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -472,6 +471,112 @@ describe('getNewestPossibleDueDate()', () => {
         });
       },
     );
+  });
+
+  describe('MONTHLY monthlyLastDay (issue #7726)', () => {
+    it('returns the last day of the current month', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: '2026-05-31',
+      });
+      testCase(cfg, new Date(2026, 5, 30), new Date(2026, 4, 31), new Date(2026, 5, 30));
+    });
+
+    it('clamps to month-end even when startDate day-of-month is 30', () => {
+      // A recurrence set up in a 30-day month must still hit 31 in long
+      // months — the anchor is decoupled from startDate's day.
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: '2026-06-30',
+      });
+      testCase(cfg, new Date(2026, 6, 31), new Date(2026, 5, 30), new Date(2026, 6, 31));
+    });
+
+    it('returns null when the latest month-end is already created', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: '2026-06-30',
+      });
+      testCase(cfg, new Date(2026, 6, 15), new Date(2026, 4, 31), null);
+    });
+  });
+
+  describe('MONTHLY Nth weekday (issue #6040)', () => {
+    it('returns the Nth weekday of this month when today equals it', () => {
+      // 1st Thursday of Jan 2026 = Jan 1 (Thu). today = Jan 1.
+      const today = new Date(2026, 0, 1);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
+        lastTaskCreationDay: '2025-12-04', // 1st Thu of Dec 2025
+      });
+      testCase(cfg, today, new Date(2025, 11, 4), new Date(2026, 0, 1));
+    });
+
+    it('returns null when the candidate equals lastTaskCreation (uses > not >=)', () => {
+      // 1st Thursday of Jan 2026 = Jan 1. lastTaskCreation = Jan 1.
+      // today = Jan 1 → no newer occurrence to surface.
+      const today = new Date(2026, 0, 1);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-2', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 0, 1)),
+      });
+      testCase(cfg, today, new Date(2025, 11, 4), null);
+    });
+
+    it('skips off-cycle months when repeatEvery=2', () => {
+      // startDate = Jan 1 2026 (1st Thu). repeatEvery=2 → expect Jan, Mar, May…
+      // today = Feb 28 2026; Feb is off-cycle, so newest valid is Jan's 1st Thu.
+      const today = new Date(2026, 1, 28);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-3', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 2,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
+        lastTaskCreationDay: '1970-01-01',
+      });
+      testCase(cfg, today, new Date(2026, 0, 1), new Date(2026, 0, 1));
+    });
+
+    it('falls back to legacy behavior when anchors are out of range', () => {
+      // monthlyWeekOfMonth=99 should not engage the NTH branch — the cfg
+      // behaves like a plain day-of-month MONTHLY anchored to startDate.
+      const today = new Date(2022, 1, 15);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-4', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 99 as never,
+        monthlyWeekday: 1,
+        lastTaskCreationDay: '1970-01-01',
+      });
+      testCase(cfg, today, new Date(2022, 0, 15), new Date(2022, 1, 15));
+    });
+
+    it('falls back to legacy behavior when monthlyWeekOfMonth is null (form sentinel)', () => {
+      // The form's "(Day of month)" option stores null transiently. Even if
+      // a stray null reaches the calc layer (e.g. a pre-normalization save
+      // path), the gatekeeper rejects it and behavior is day-of-month.
+      const today = new Date(2022, 1, 15);
+      const cfg = dummyRepeatable('ID-NTH-NEWEST-5', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: null as never,
+        monthlyWeekday: 1,
+        lastTaskCreationDay: '1970-01-01',
+      });
+      testCase(cfg, today, new Date(2022, 0, 15), new Date(2022, 1, 15));
+    });
   });
 
   describe('Timezone Edge Cases', () => {

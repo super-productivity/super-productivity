@@ -3,6 +3,7 @@ import { MonoTypeOperatorFunction } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import { HydrationStateService } from '../op-log/apply/hydration-state.service';
 import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
+import { SyncLog } from '../core/log';
 
 /**
  * RxJS operator that skips emissions during the full sync window,
@@ -64,7 +65,18 @@ import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
 export const skipDuringSyncWindow = <T>(): MonoTypeOperatorFunction<T> => {
   const hydrationState = inject(HydrationStateService);
   const syncTrigger = inject(SyncTriggerService);
-  return filter(
-    () => syncTrigger.isInitialSyncDoneSync() && !hydrationState.isInSyncWindow(),
-  );
+  return filter(() => {
+    const initialSyncDone = syncTrigger.isInitialSyncDoneSync();
+    const inSyncWindow = hydrationState.isInSyncWindow();
+    const allow = initialSyncDone && !inSyncWindow;
+    if (!allow) {
+      // Verbose-level so it doesn't spam normal logs. Visible when investigating
+      // whether the wider sync window is silently dropping legitimate emissions.
+      SyncLog.verbose('skipDuringSyncWindow drop', {
+        initialSyncDone,
+        inSyncWindow,
+      });
+    }
+    return allow;
+  });
 };

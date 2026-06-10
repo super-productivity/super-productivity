@@ -1,11 +1,7 @@
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { T } from '../../../t.const';
-import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
-import { TaskReminderOptionId } from '../../tasks/task.model';
 
 const updateParent = (
   field: FormlyFieldConfig,
@@ -26,16 +22,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
       label: T.F.TASK_REPEAT.F.TITLE,
     },
   },
-  {
-    key: 'startDate',
-    type: 'date',
-    defaultValue: new Date(),
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.START_DATE,
-      required: true,
-    },
-    parsers: [(val: unknown) => (val instanceof Date ? getDbDateStr(val) : val)],
-  },
+
   {
     key: 'quickSetting',
     type: 'select',
@@ -96,13 +83,69 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
         ],
       },
       {
-        fieldGroupClassName: 'weekdays',
+        fieldGroupClassName: 'monthly-anchor',
         resetOnHide: false,
-        hideExpression: (model: any) => model.repeatCycle !== 'WEEKLY',
+        hideExpression: (model: any) => model.repeatCycle !== 'MONTHLY',
+        fieldGroup: [
+          {
+            key: 'monthlyWeekOfMonth',
+            type: 'select',
+            // Picking the "Day of month" sentinel clears the anchor; the
+            // gatekeeper falls back to legacy day-of-month behavior.
+            defaultValue: null,
+            templateOptions: {
+              label: T.F.TASK_REPEAT.F.WEEK_OF_MONTH,
+              options: [
+                { value: null, label: T.F.TASK_REPEAT.F.MONTHLY_MODE_DAY_OF_MONTH },
+                { value: 1, label: T.F.TASK_REPEAT.F.ORD_FIRST },
+                { value: 2, label: T.F.TASK_REPEAT.F.ORD_SECOND },
+                { value: 3, label: T.F.TASK_REPEAT.F.ORD_THIRD },
+                { value: 4, label: T.F.TASK_REPEAT.F.ORD_FOURTH },
+                { value: -1, label: T.F.TASK_REPEAT.F.ORD_LAST },
+              ],
+            },
+          },
+          {
+            key: 'monthlyWeekday',
+            type: 'select',
+            defaultValue: 1,
+            resetOnHide: false,
+            hideExpression: (model: any) => model.monthlyWeekOfMonth == null,
+            templateOptions: {
+              label: T.F.TASK_REPEAT.F.WEEKDAY,
+              options: [
+                { value: 1, label: T.F.TASK_REPEAT.F.MONDAY },
+                { value: 2, label: T.F.TASK_REPEAT.F.TUESDAY },
+                { value: 3, label: T.F.TASK_REPEAT.F.WEDNESDAY },
+                { value: 4, label: T.F.TASK_REPEAT.F.THURSDAY },
+                { value: 5, label: T.F.TASK_REPEAT.F.FRIDAY },
+                { value: 6, label: T.F.TASK_REPEAT.F.SATURDAY },
+                { value: 0, label: T.F.TASK_REPEAT.F.SUNDAY },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        // Hide via a dynamic CSS class instead of `hideExpression`. With formly's
+        // default `lazyRender`, hiding a field group destroys its child views and
+        // recreates them on re-show, and the recreated mat-checkboxes lose their
+        // wiring to the (re-registered) FormControls. After a cycle round-trip
+        // (Week -> Month -> Week) the checkboxes then look enabled but are inert:
+        // clicks no longer update the model (#8025). Keeping the group mounted and
+        // toggling only its visibility preserves the control/view binding.
+        // `resetOnHide: false` on each checkbox keeps the selection when the
+        // CUSTOM container itself is hidden (quickSetting != CUSTOM).
+        fieldGroupClassName: 'weekdays',
+        expressionProperties: {
+          className: (model: TaskRepeatCfg) =>
+            model.repeatCycle === 'WEEKLY' ? '' : 'repeat-cfg-hidden',
+        },
         fieldGroup: [
           {
             key: 'monday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.MONDAY,
             },
@@ -110,6 +153,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'tuesday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.TUESDAY,
             },
@@ -117,6 +161,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'wednesday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.WEDNESDAY,
             },
@@ -124,6 +169,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'thursday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.THURSDAY,
             },
@@ -131,6 +177,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'friday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.FRIDAY,
             },
@@ -138,6 +185,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'saturday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.SATURDAY,
             },
@@ -145,6 +193,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
           {
             key: 'sunday',
             type: 'checkbox',
+            resetOnHide: false,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.SUNDAY,
             },
@@ -169,38 +218,7 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       updateOn: 'blur',
     },
   },
-  {
-    fieldGroupClassName: 'formly-row',
-    fieldGroup: [
-      {
-        key: 'startTime',
-        type: 'input',
-        templateOptions: {
-          label: T.F.TASK_REPEAT.F.START_TIME,
-          description: T.F.TASK_REPEAT.F.START_TIME_DESCRIPTION,
-        },
-        validators: {
-          validTimeString: (c: { value: string | undefined }) => {
-            return !c.value || isValidSplitTime(c.value);
-          },
-        },
-      },
-      {
-        key: 'remindAt',
-        type: 'select',
-        defaultValue: TaskReminderOptionId.AtStart,
-        hideExpression: '!model.startTime',
-        templateOptions: {
-          required: true,
-          label: T.F.TASK_REPEAT.F.REMIND_AT,
-          options: TASK_REMINDER_OPTIONS,
-          valueProp: 'value',
-          labelProp: 'label',
-          placeholder: T.F.TASK_REPEAT.F.REMIND_AT_PLACEHOLDER,
-        },
-      },
-    ],
-  },
+
   {
     key: 'notes',
     type: 'textarea',
@@ -218,12 +236,6 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
     hideExpression: (model: any) => {
       // Only show for custom settings with intervals > 1
       if (model.quickSetting !== 'CUSTOM') {
-        return true;
-      }
-      if (model.repeatCycle === 'DAILY' && model.repeatEvery === 1) {
-        return true;
-      }
-      if (model.repeatCycle === 'WEEKLY' && model.repeatEvery === 1) {
         return true;
       }
       return false;
@@ -276,6 +288,15 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION,
     },
     className: 'sp-formly-child-option',
+  },
+  {
+    key: 'waitForCompletion',
+    type: 'checkbox',
+    defaultValue: false,
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION,
+      description: T.F.TASK_REPEAT.F.WAIT_FOR_COMPLETION_DESCRIPTION,
+    },
   },
   {
     key: 'skipOverdue',

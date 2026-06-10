@@ -1,0 +1,49 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "supersync.fullname" . }}
+  labels:
+    {{- include "supersync.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "supersync.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | default "ingress-nginx" }}
+      ports:
+        - port: {{ .Values.supersync.port }}
+          protocol: TCP
+  egress:
+    {{- if .Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "supersync.name" . }}-postgresql
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: 5432
+          protocol: TCP
+    {{- else }}
+    # Allow egress to external database (any destination on port 5432)
+    - ports:
+        - port: 5432
+          protocol: TCP
+    {{- end }}
+    - ports:
+        - port: 53
+          protocol: TCP
+        - port: 53
+          protocol: UDP
+    {{- if .Values.supersync.smtp.enabled }}
+    - ports:
+        - port: {{ .Values.supersync.smtp.port }}
+          protocol: TCP
+    {{- end }}
+{{- end }}

@@ -11,7 +11,7 @@
   yPosition="below"
   xPosition="after"
   [backdropClass]="
-    IS_TOUCH_PRIMARY ? 'cdk-overlay-dark-backdrop' : 'cdk-overlay-transparent-backdrop'
+    isTouchActive() ? 'cdk-overlay-dark-backdrop' : 'cdk-overlay-transparent-backdrop'
   "
   (close)="onClose()"
 >
@@ -40,7 +40,7 @@
       (click)="quickAccessBtnClick(2)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
     >
-      <mat-icon svgIcon="tomorrow"></mat-icon>
+      <mat-icon>wb_twilight</mat-icon>
     </button>
     <button
       mat-icon-button
@@ -48,7 +48,7 @@
       (click)="quickAccessBtnClick(3)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
     >
-      <mat-icon svgIcon="next_week"></mat-icon>
+      <mat-icon>next_week</mat-icon>
     </button>
     <!--      <button-->
     <!--        mat-icon-button-->
@@ -86,7 +86,7 @@
 
   @if (
     isTimeTrackingEnabled() &&
-    ((isAdvancedControls() && IS_TOUCH_PRIMARY) || !isAdvancedControls()) &&
+    ((isAdvancedControls() && isTouchActive()) || !isAdvancedControls()) &&
     !task.isDone &&
     !isCurrent &&
     !task.subTaskIds.length
@@ -121,7 +121,7 @@
   }
   @if (
     isAdvancedControls() &&
-    IS_TOUCH_PRIMARY &&
+    isTouchActive() &&
     !task.isDone &&
     isCurrent &&
     !task.subTaskIds.length
@@ -137,7 +137,7 @@
       <span class="key-i">{{ kb.togglePlay }}</span>
     </button>
   }
-  @if (IS_TOUCH_PRIMARY || !isAdvancedControls()) {
+  @if (isTouchActive() || !isAdvancedControls()) {
     <button
       (click)="toggleTaskDone()"
       mat-menu-item
@@ -148,45 +148,13 @@
         } @else {
           <mat-icon>check</mat-icon>
         }
-        {{ (task.isDone ? T.F.TASK.CMP.MARK_DONE : T.F.TASK.CMP.MARK_DONE) | translate }}
+        {{
+          (task.isDone ? T.F.TASK.CMP.MARK_UNDONE : T.F.TASK.CMP.MARK_DONE) | translate
+        }}
       </span>
       <span class="key-i">{{ kb.taskToggleDone }}</span>
     </button>
   }
-
-  @if (!task.subTaskIds.length) {
-    <button
-      (click)="estimateTime()"
-      class="hide-xs"
-      mat-menu-item
-    >
-      <span class="menuItemLeft">
-        <mat-icon>timer</mat-icon>
-        {{ T.F.TASK.CMP.OPEN_TIME | translate }}
-      </span>
-      <span class="key-i">{{ kb.taskOpenEstimationDialog }}</span>
-    </button>
-  }
-
-  <!--    <button-->
-  <!--      (click)="scheduleTask()"-->
-  <!--      mat-menu-item-->
-  <!--    >-->
-  <!--      <ng-container *ngIf="!task.reminderId">-->
-  <!--        <span>-->
-  <!--          <mat-icon>alarm_add</mat-icon>-->
-  <!--          {{ T.F.TASK.CMP.SCHEDULE|translate }}-->
-  <!--        </span>-->
-  <!--        <span class="key-i">{{ kb.taskSchedule }}</span>-->
-  <!--      </ng-container>-->
-  <!--      <ng-container *ngIf="task.reminderId">-->
-  <!--        <span>-->
-  <!--          <mat-icon>alarm</mat-icon>-->
-  <!--          {{ T.F.TASK.CMP.EDIT_SCHEDULED|translate }}-->
-  <!--        </span>-->
-  <!--        <span class="key-i">{{ kb.taskSchedule }}</span>-->
-  <!--      </ng-container>-->
-  <!--    </button>-->
 
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
     <button
@@ -212,32 +180,6 @@
     </button>
   }
 
-  <button
-    (click)="openDeadlineDialog()"
-    mat-menu-item
-  >
-    <span class="menuItemLeft">
-      <mat-icon>flag</mat-icon>
-      {{
-        (task.deadlineWithTime || task.deadlineDay
-          ? T.F.TASK.CMP.EDIT_DEADLINE
-          : T.F.TASK.CMP.SET_DEADLINE
-        ) | translate
-      }}
-    </span>
-  </button>
-  @if (task.deadlineWithTime || task.deadlineDay) {
-    <button
-      (click)="removeDeadline()"
-      mat-menu-item
-    >
-      <span class="menuItemLeft">
-        <mat-icon>flag_circle</mat-icon>
-        {{ T.F.TASK.CMP.REMOVE_DEADLINE | translate }}
-      </span>
-    </button>
-  }
-
   <!-- Only show the duplicate command if it is a parent unfinished task -->
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
     <button
@@ -250,18 +192,6 @@
       </span>
     </button>
   }
-
-  <button
-    (click)="addAttachment()"
-    class="hide-xs"
-    mat-menu-item
-  >
-    <span class="menuItemLeft">
-      <mat-icon>attachment</mat-icon>
-      {{ T.F.TASK.CMP.OPEN_ATTACH | translate }}
-    </span>
-    <span class="key-i">{{ kb.taskAddAttachment }}</span>
-  </button>
 
   <!--TODO maybe handle dynamically -->
   @if (task.issueId && task.issueType !== ICAL_TYPE) {
@@ -317,14 +247,31 @@
         <mat-icon>arrow_upward</mat-icon>
         {{ T.F.TASK.CMP.MOVE_TO_REGULAR | translate }}
       </span>
-      <span class="key-i">{{ kb.moveToTodaysTasks }}</span>
+      <span class="key-i">{{ kb.taskScheduleToday }}</span>
+    </button>
+  }
+
+  @if (!task.subTaskIds.length) {
+    <button
+      #estimateMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="estimateMenu"
+      mat-menu-item
+      [menuTouchFix]="estimateMenuTrigger"
+    >
+      <span class="menuItemLeft">
+        <mat-icon>hourglass_empty</mat-icon>
+        {{ T.F.TASK.CMP.ESTIMATE | translate }}
+      </span>
+      <span class="key-i">{{ kb.taskOpenEstimationDialog }}</span>
     </button>
   }
 
   <button
+    #tagMenuTrigger="matMenuTrigger"
     [matMenuTriggerFor]="tagMenu"
     mat-menu-item
-    menuTouchFix
+    [menuTouchFix]="tagMenuTrigger"
+    (menuOpened)="focusFirstSubmenuItem(tagMenu)"
     class="e2e-edit-tags-btn"
   >
     <span class="menuItemLeft">
@@ -336,9 +283,11 @@
 
   @if (!task.parentId && ((moveToProjectList$ | async)?.length || 0) > 0) {
     <button
+      #projectMenuTrigger="matMenuTrigger"
       [matMenuTriggerFor]="projectMenu"
       mat-menu-item
-      menuTouchFix
+      [menuTouchFix]="projectMenuTrigger"
+      (menuOpened)="focusFirstSubmenuItem(projectMenu)"
     >
       <span class="menuItemLeft">
         <mat-icon>forward</mat-icon>
@@ -379,26 +328,65 @@
 </mat-menu>
 
 <mat-menu
+  #estimateMenu="matMenu"
+  (closed)="focusRelatedTaskOrNext()"
+>
+  <ng-template matMenuContent>
+    @for (option of ESTIMATE_OPTIONS; track option.value) {
+      <button
+        mat-menu-item
+        menuTouchFix
+        (click)="setEstimate(option.ms)"
+      >
+        @if (option.ms === task.timeEstimate) {
+          <mat-icon>check</mat-icon>
+        }
+        {{ option.label }}
+      </button>
+    }
+    <mat-divider></mat-divider>
+    <button
+      mat-menu-item
+      menuTouchFix
+      (click)="estimateTime()"
+    >
+      <mat-icon>tune</mat-icon>
+      {{ T.F.TASK.CMP.CUSTOM_ESTIMATE | translate }}
+    </button>
+    @if (task.timeEstimate > 0) {
+      <button
+        mat-menu-item
+        menuTouchFix
+        (click)="setEstimate(0)"
+      >
+        <mat-icon>clear</mat-icon>
+        {{ T.F.TASK.CMP.CLEAR_ESTIMATE | translate }}
+      </button>
+    }
+  </ng-template>
+</mat-menu>
+
+<mat-menu
   #projectMenu="matMenu"
   (closed)="focusRelatedTaskOrNext()"
 >
   <ng-template matMenuContent>
-    @for (
-      project of moveToProjectList$ | async;
-      track trackByProjectId($index, project)
-    ) {
-      <button
-        (click)="moveTaskToProject(project.id)"
-        mat-menu-item
-        menuTouchFix
-      >
-        <mat-icon
-          [style.color]="project.theme.primary"
-          class="tag-ico"
-          >{{ project.icon || 'list' }}</mat-icon
+    @if (moveToProjectList$ | async; as list) {
+      @for (project of list; track trackByProjectId($index, project)) {
+        <button
+          (click)="moveTaskToProject(project.id)"
+          mat-menu-item
+          menuTouchFix
         >
-        {{ project.title }}
-      </button>
+          <select-option-row
+            [title]="project.title"
+            [icon]="project.icon"
+            [defaultIcon]="DEFAULT_PROJECT_ICON"
+            [color]="project.theme?.primary"
+            [folderPath]="projectFolderMap().get(project.id)"
+          ></select-option-row>
+        </button>
+      }
     }
   </ng-template>
 </mat-menu>
@@ -409,23 +397,21 @@
 >
   <ng-template matMenuContent>
     <div (click)="$event.stopPropagation()">
-      @for (tag of toggleTagList(); track $index) {
+      @for (tag of toggleTagList(); track tag.id) {
         <button
           (click)="toggleTag(tag.id)"
           mat-menu-item
           menuTouchFix
         >
-          @if (task.tagIds.includes(tag.id)) {
-            <mat-icon class="check-ico">check_box</mat-icon>
-          } @else {
-            <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
-          }
-          <mat-icon
-            [style.color]="tag.color || tag.theme.primary"
-            class="tag-ico"
-            >{{ tag.icon || 'label' }}</mat-icon
-          >
-          {{ tag.title }}
+          <select-option-row
+            [title]="tag.title"
+            [icon]="tag.icon"
+            defaultIcon="label"
+            [color]="tag.color || tag.theme?.primary"
+            [isSelected]="task.tagIds.includes(tag.id)"
+            [showCheckbox]="true"
+            [folderPath]="tagFolderMap().get(tag.id)"
+          ></select-option-row>
         </button>
       }
     </div>

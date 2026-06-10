@@ -9,7 +9,8 @@ import {
   Renderer2,
 } from '@angular/core';
 import { MatMenuTrigger } from '@angular/material/menu';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
+import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { Subscription } from 'rxjs';
 import { lastMenuOpenTime, setLastMenuOpenTime } from './mat-menu-touch-monkey-patch';
 
@@ -34,7 +35,6 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
   @Input() menuTouchFix?: MatMenuTrigger;
 
   private _touchStartTime: number = 0;
-  private _isTouchDevice = IS_TOUCH_PRIMARY;
   private _preventNextClick = false;
   private _subscription?: Subscription;
   private _touchStartX: number = 0;
@@ -42,7 +42,7 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
   private _capturingClickHandler?: (event: MouseEvent) => void;
 
   ngOnInit(): void {
-    if (!this._isTouchDevice) {
+    if (!isTouchActive() && !IS_HYBRID_DEVICE) {
       return;
     }
 
@@ -86,6 +86,9 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
    * This is the key to preventing immediate clicks when submenu opens under finger.
    */
   private _onCapturingClick(event: MouseEvent): void {
+    if (!isTouchActive()) {
+      return;
+    }
     const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
     const timeSinceTouchStart = Date.now() - this._touchStartTime;
     const element = this._elementRef.nativeElement;
@@ -137,7 +140,7 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
 
   @HostListener('touchstart', ['$event'])
   onTouchStart(event: TouchEvent): void {
-    if (!this._isTouchDevice || !event.touches.length) {
+    if (!isTouchActive() || !event.touches.length) {
       return;
     }
 
@@ -159,7 +162,7 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
 
   @HostListener('touchend', ['$event'])
   onTouchEnd(event: TouchEvent): void {
-    if (!this._isTouchDevice || !event.changedTouches.length) {
+    if (!isTouchActive() || !event.changedTouches.length) {
       return;
     }
 
@@ -178,7 +181,7 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
 
   @HostListener('click', ['$event'])
   onClick(event: MouseEvent): void {
-    if (!this._isTouchDevice) {
+    if (!isTouchActive()) {
       return;
     }
 

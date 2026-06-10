@@ -60,6 +60,7 @@ export class IssuePanelComponent {
   private _workContextService = inject(WorkContextService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
 
+  dragStartDelay = { touch: 300, mouse: 0 };
   selectedTabIndex = signal(0);
   isShowIntro = signal(false);
   issueProviders = toSignal(this._store.select(selectIssueProvidersWithDisabledLast));

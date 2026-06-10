@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "supersync.fullname" . }}
+  labels:
+    {{- include "supersync.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.supersync.port | quote }}
+  HOST: {{ .Values.supersync.host | quote }}
+  NODE_ENV: {{ .Values.supersync.nodeEnv | quote }}
+  {{- if .Values.supersync.publicUrl }}
+  PUBLIC_URL: {{ .Values.supersync.publicUrl | quote }}
+  {{- end }}
+  CORS_ORIGINS: {{ .Values.supersync.cors.origins | quote }}
+  OLD_OPS_CLEANUP_DELETE_BATCH_SIZE: {{ .Values.supersync.cleanup.oldOpsDeleteBatchSize | int | quote }}
+  OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN: {{ .Values.supersync.cleanup.oldOpsMaxDeletedPerRun | int | quote }}
+  SUPERSYNC_BATCH_UPLOAD: {{ .Values.supersync.batchUpload.enabled | quote }}
+  SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE: {{ .Values.supersync.batchUpload.payloadBytesBackfillComplete | quote }}
+  {{- if .Values.supersync.webauthn.rpName }}
+  WEBAUTHN_RP_NAME: {{ .Values.supersync.webauthn.rpName | quote }}
+  {{- end }}
+  {{- if .Values.supersync.webauthn.rpId }}
+  WEBAUTHN_RP_ID: {{ .Values.supersync.webauthn.rpId | quote }}
+  {{- end }}
+  {{- if .Values.supersync.webauthn.origin }}
+  WEBAUTHN_ORIGIN: {{ .Values.supersync.webauthn.origin | quote }}
+  {{- end }}
+  {{- if .Values.supersync.smtp.enabled }}
+  SMTP_HOST: {{ .Values.supersync.smtp.host | quote }}
+  SMTP_PORT: {{ .Values.supersync.smtp.port | quote }}
+  SMTP_SECURE: {{ .Values.supersync.smtp.secure | quote }}
+  SMTP_FROM: {{ .Values.supersync.smtp.from | quote }}
+  {{- end }}
+  {{- if .Values.supersync.privacy.contactName }}
+  PRIVACY_CONTACT_NAME: {{ .Values.supersync.privacy.contactName | quote }}
+  PRIVACY_ADDRESS_STREET: {{ .Values.supersync.privacy.addressStreet | quote }}
+  PRIVACY_ADDRESS_CITY: {{ .Values.supersync.privacy.addressCity | quote }}
+  PRIVACY_ADDRESS_COUNTRY: {{ .Values.supersync.privacy.addressCountry | quote }}
+  PRIVACY_CONTACT_EMAIL: {{ .Values.supersync.privacy.contactEmail | quote }}
+  {{- end }}

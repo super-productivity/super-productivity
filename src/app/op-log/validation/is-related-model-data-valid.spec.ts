@@ -1,6 +1,7 @@
 import { AppDataComplete } from '../model/model-config';
 import { OpLog } from '../../core/log';
 import { TODAY_TAG } from '../../features/tag/tag.const';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
 describe('isRelatedModelDataValid', () => {
   let isRelatedModelDataValid: any;
@@ -13,6 +14,7 @@ describe('isRelatedModelDataValid', () => {
     spyOn(OpLog, 'warn');
     spyOn(OpLog, 'err');
     spyOn(OpLog, 'critical');
+    spyOn(OP_LOG_SYNC_LOGGER, 'log');
     /* eslint-disable @typescript-eslint/no-require-imports */
     // Reset modules to allow re-importing with mocks
     // @ts-ignore
@@ -56,6 +58,83 @@ describe('isRelatedModelDataValid', () => {
 
     const result = isRelatedModelDataValid(partialData as AppDataComplete);
     expect(result).toBe(false);
+  });
+
+  it('should log validity error metadata without raw app data', () => {
+    const privateProjectTitle = 'Private Project Title';
+    const data: any = {
+      project: {
+        ids: ['p1'],
+        entities: {
+          p1: {
+            id: 'p1',
+            title: privateProjectTitle,
+            taskIds: ['missing-task'],
+            backlogTaskIds: [],
+            noteIds: [],
+          },
+        },
+      },
+      tag: { ids: [], entities: {} },
+      task: { ids: [], entities: {} },
+      taskRepeatCfg: { ids: [], entities: {} },
+      archiveYoung: { task: { ids: [], entities: {} } },
+      archiveOld: { task: { ids: [], entities: {} } },
+      note: { ids: [], entities: {}, todayOrder: [] },
+      issueProvider: { ids: [], entities: {} },
+      reminders: [],
+      menuTree: { projectTree: [], tagTree: [] },
+    };
+
+    const result = isRelatedModelDataValid(data as AppDataComplete);
+
+    expect(result).toBe(false);
+    expect(OP_LOG_SYNC_LOGGER.log).toHaveBeenCalledWith(
+      '[is-related-model-data-valid] Validity error info',
+      jasmine.objectContaining({
+        error: 'Missing task data for project',
+        tid: 'missing-task',
+        projectId: 'p1',
+      }),
+    );
+    expect(
+      JSON.stringify((OP_LOG_SYNC_LOGGER.log as jasmine.Spy).calls.allArgs()),
+    ).not.toContain(privateProjectTitle);
+  });
+
+  it('should not log raw invalid menu tree node kinds', () => {
+    const privateNodeKind = 'Private Invalid Node Kind';
+    const data: any = {
+      project: { ids: [], entities: {} },
+      tag: { ids: [], entities: {} },
+      task: { ids: [], entities: {} },
+      taskRepeatCfg: { ids: [], entities: {} },
+      archiveYoung: { task: { ids: [], entities: {} } },
+      archiveOld: { task: { ids: [], entities: {} } },
+      note: { ids: [], entities: {}, todayOrder: [] },
+      issueProvider: { ids: [], entities: {} },
+      reminders: [],
+      menuTree: {
+        projectTree: [{ id: 'tree-node-id', k: privateNodeKind }],
+        tagTree: [],
+      },
+    };
+
+    const result = isRelatedModelDataValid(data as AppDataComplete);
+
+    expect(result).toBe(false);
+    expect(OP_LOG_SYNC_LOGGER.log).toHaveBeenCalledWith(
+      '[is-related-model-data-valid] Validity error info',
+      jasmine.objectContaining({
+        error: 'Invalid node kind in projectTree',
+        treeType: 'projectTree',
+        id: 'tree-node-id',
+        nodeKind: 'unknown',
+      }),
+    );
+    expect(
+      JSON.stringify((OP_LOG_SYNC_LOGGER.log as jasmine.Spy).calls.allArgs()),
+    ).not.toContain(privateNodeKind);
   });
 
   it('should fail validation when task has non-existent repeatCfgId', () => {
@@ -127,6 +206,89 @@ describe('isRelatedModelDataValid', () => {
 
     const result = isRelatedModelDataValid(dataWithValidRepeatCfgId);
     expect(result).toBe(true);
+  });
+
+  describe('stale references in archived tasks (issue #6270)', () => {
+    const baseData = (): any => ({
+      project: {
+        ids: ['p1'],
+        entities: { p1: { id: 'p1', taskIds: [], backlogTaskIds: [], noteIds: [] } },
+      },
+      tag: { ids: [], entities: {} },
+      task: { ids: [], entities: {} },
+      taskRepeatCfg: { ids: [], entities: {} },
+      archiveYoung: { task: { ids: [], entities: {} } },
+      archiveOld: { task: { ids: [], entities: {} } },
+      note: { ids: [], entities: {}, todayOrder: [] },
+      issueProvider: { ids: [], entities: {} },
+      reminders: [],
+      menuTree: { projectTree: [], tagTree: [] },
+    });
+
+    const cases = [
+      {
+        archive: 'archiveYoung' as const,
+        field: 'repeatCfgId',
+        taskOverride: { repeatCfgId: 'DELETED_REPEAT_CFG' },
+        logFragment: 'stale repeatCfgId',
+      },
+      {
+        archive: 'archiveOld' as const,
+        field: 'repeatCfgId',
+        taskOverride: { repeatCfgId: 'DELETED_REPEAT_CFG' },
+        logFragment: 'stale repeatCfgId',
+      },
+      {
+        archive: 'archiveYoung' as const,
+        field: 'projectId',
+        taskOverride: { projectId: 'NON_EXISTENT_PROJECT' },
+        logFragment: 'stale projectId',
+      },
+      {
+        archive: 'archiveOld' as const,
+        field: 'projectId',
+        taskOverride: { projectId: 'NON_EXISTENT_PROJECT' },
+        logFragment: 'stale projectId',
+      },
+      {
+        archive: 'archiveYoung' as const,
+        field: 'tagId',
+        taskOverride: { tagIds: ['NON_EXISTENT_TAG'] },
+        logFragment: 'stale tagId',
+      },
+      {
+        archive: 'archiveOld' as const,
+        field: 'tagId',
+        taskOverride: { tagIds: ['NON_EXISTENT_TAG'] },
+        logFragment: 'stale tagId',
+      },
+    ];
+
+    cases.forEach(({ archive, field, taskOverride, logFragment }) => {
+      it(`should pass when ${archive} task has stale ${field} and log warning`, () => {
+        const data = baseData();
+        data[archive].task = {
+          ids: ['t1'],
+          entities: {
+            t1: {
+              id: 't1',
+              projectId: 'p1',
+              tagIds: [],
+              subTaskIds: [],
+              ...taskOverride,
+            },
+          },
+        };
+
+        expect(isRelatedModelDataValid(data)).toBe(true);
+        expect(OpLog.info).toHaveBeenCalledWith(
+          jasmine.stringContaining(
+            `${archive} has 1 tasks with ${logFragment} (harmless)`,
+          ),
+          jasmine.any(Object),
+        );
+      });
+    });
   });
 
   describe('TODAY_TAG orphaned IDs handling', () => {

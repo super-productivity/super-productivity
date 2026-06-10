@@ -1,4 +1,4 @@
-export const isValidSplitTime = (v: string | undefined): boolean => {
+export const isValidSplitTime = (v: string | undefined): v is string => {
   if (v && v.split) {
     const split = v.split(':');
     return (

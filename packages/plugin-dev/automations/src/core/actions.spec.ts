@@ -3,6 +3,7 @@ import {
   ActionCreateTask,
   ActionDeleteTask,
   ActionAddTag,
+  ActionRemoveTag,
   ActionMoveToProject,
   ActionDisplaySnack,
   ActionDisplayDialog,
@@ -120,6 +121,61 @@ describe('Actions', () => {
       } as unknown as TaskEvent;
 
       await ActionAddTag.execute(mockContext, event, 'Urgent');
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ActionRemoveTag', () => {
+    it('should remove a tag if present on the task', async () => {
+      (mockDataCache.getTags as any).mockResolvedValue([{ id: 't1', title: 'Urgent' }]);
+      const event = {
+        task: { id: 'task1', tagIds: ['t1', 'other'] },
+      } as unknown as TaskEvent;
+
+      await ActionRemoveTag.execute(mockContext, event, 'Urgent');
+
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('task1', {
+        tagIds: ['other'],
+      });
+    });
+
+    it('should resolve by tag id as well as title', async () => {
+      (mockDataCache.getTags as any).mockResolvedValue([{ id: 't1', title: 'Urgent' }]);
+      const event = {
+        task: { id: 'task1', tagIds: ['t1'] },
+      } as unknown as TaskEvent;
+
+      await ActionRemoveTag.execute(mockContext, event, 't1');
+
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('task1', { tagIds: [] });
+    });
+
+    it('should warn if task is missing', async () => {
+      await ActionRemoveTag.execute(mockContext, { task: undefined } as TaskEvent, 'Urgent');
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('without task context'),
+      );
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+    });
+
+    it('should warn if tag not found', async () => {
+      (mockDataCache.getTags as any).mockResolvedValue([]);
+      const event = {
+        task: { id: 'task1', tagIds: ['t1'] },
+      } as unknown as TaskEvent;
+
+      await ActionRemoveTag.execute(mockContext, event, 'NonExistent');
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(expect.stringContaining('not found'));
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+    });
+
+    it('should do nothing if tag not on the task', async () => {
+      (mockDataCache.getTags as any).mockResolvedValue([{ id: 't1', title: 'Urgent' }]);
+      const event = {
+        task: { id: 'task1', tagIds: ['other'] },
+      } as unknown as TaskEvent;
+
+      await ActionRemoveTag.execute(mockContext, event, 'Urgent');
       expect(mockPlugin.updateTask).not.toHaveBeenCalled();
     });
   });

@@ -4,7 +4,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 export const getSimpleCounterStreakDuration = (
   simpleCounter: SimpleCounterCopy,
 ): number => {
-  const countOnDay = simpleCounter.countOnDay;
+  const countOnDay = simpleCounter.countOnDay || {};
 
   if (!simpleCounter.streakMinValue) {
     return 0;

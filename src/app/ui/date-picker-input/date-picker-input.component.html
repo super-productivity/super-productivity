@@ -4,7 +4,7 @@
   <input
     matInput
     [matDatepicker]="picker"
-    [(ngModel)]="innerValue"
+    [ngModel]="innerValue()"
     (dateChange)="onValueChange($event.value)"
     [placeholder]="dateTimeFormatService.dateFormat().humanReadable"
     [required]="required()"

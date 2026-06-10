@@ -1,4 +1,5 @@
 import {
+  escapeHtmlAttr,
   markedOptionsFactory,
   parseImageDimensionsFromTitle,
   preprocessMarkdown,
@@ -12,8 +13,7 @@ import { marked } from 'marked';
 const parseWithFactory = (markdown: string): string => {
   marked.setOptions(marked.getDefaults());
   const options = markedOptionsFactory();
-  const renderer = { ...(options.renderer as any) };
-  marked.use({ renderer });
+  marked.setOptions(options);
   return marked.parse(markdown) as string;
 };
 
@@ -28,6 +28,7 @@ describe('markedOptionsFactory', () => {
     expect(options).toBeDefined();
     expect(options.renderer).toBeDefined();
     expect(options.gfm).toBe(true);
+    expect(options.breaks).toBe(true);
   });
 
   describe('checkbox renderer', () => {
@@ -101,7 +102,7 @@ describe('markedOptionsFactory', () => {
       expect(result).toContain('undone');
       expect(result).toContain('check_box_outline_blank');
       expect(result).toContain('Task item');
-      expect(result).toContain('</span> Task item');
+      expect(result).toContain('<span class="checkbox-label">Task item</span>');
     });
 
     it('should render checked task list item with checkbox', () => {
@@ -116,7 +117,7 @@ describe('markedOptionsFactory', () => {
       expect(result).toContain('check_box');
       expect(result).not.toContain('check_box_outline_blank');
       expect(result).toContain('Completed task');
-      expect(result).toContain('</span> Completed task');
+      expect(result).toContain('<span class="checkbox-label">Completed task</span>');
     });
 
     it('should handle undefined checked value as unchecked', () => {
@@ -136,7 +137,9 @@ describe('markedOptionsFactory', () => {
         task: true,
         checked: false,
       } as any);
-      expect(result).toMatch(/<\/span> Spaced item<\/li>/);
+      expect(result).toMatch(
+        /<\/span> <span class="checkbox-label">Spaced item<\/span><\/li>/,
+      );
     });
 
     // Tests for gapped and nested lists (issue #6244)
@@ -325,6 +328,85 @@ describe('markedOptionsFactory', () => {
       } as any);
       expect(result).toContain('title=""');
     });
+
+    it('should add rel="noopener noreferrer"', () => {
+      const mockParser = { parseInline: () => 'x' };
+      const result = options.renderer!.link.bind({ parser: mockParser })({
+        href: 'http://example.com',
+        title: null,
+        tokens: [],
+      } as any);
+      expect(result).toContain('rel="noopener noreferrer"');
+    });
+
+    // Defense-in-depth: parity with the image renderer (XSS, GHSA-4rrp-xhp8-hf4p).
+    it('should escape a malicious href/title so they cannot inject an attribute', () => {
+      const mockParser = { parseInline: () => 'x' };
+      const result = options.renderer!.link.bind({ parser: mockParser })({
+        href: 'http://x" onmouseover="alert(1)',
+        title: '" onfocus="alert(2)',
+        tokens: [],
+      } as any);
+      expect(result).not.toContain('onmouseover="');
+      expect(result).not.toContain('onfocus="');
+      expect(result).toContain('href="http://x&quot; onmouseover=&quot;alert(1)"');
+      expect(result).toContain('title="&quot; onfocus=&quot;alert(2)"');
+    });
+
+    // GHSA-hr87-735w-hfq3: the rendered href is passed verbatim to
+    // shell.openExternal on click, so unsafe schemes must never become anchors.
+    describe('unsafe URL schemes (GHSA-hr87-735w-hfq3)', () => {
+      const mockParser = {
+        parseInline: (tokens: any[]) =>
+          tokens.map((t: any) => t.raw || t.text || '').join(''),
+      };
+
+      [
+        'ms-calculator:',
+        'javascript:alert(1)',
+        'ssh://h',
+        '\\\\host\\share',
+        'file:///%2e%2e/%2F%2Fhost/share',
+      ].forEach((href) => {
+        it(`renders "${href}" as inert text, not an anchor`, () => {
+          const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
+          const result = linkRenderer({
+            href,
+            title: 'x',
+            tokens: [{ type: 'text', raw: 'Click here', text: 'Click here' }],
+          } as any);
+          expect(result).not.toContain('<a ');
+          expect(result).not.toContain(`href="${href}"`);
+          expect(result).toContain('Click here');
+        });
+      });
+
+      it('still renders allowed schemes (mailto:, file:) as anchors', () => {
+        const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
+        ['mailto:a@b.com', 'file:///tmp/x', 'https://example.com'].forEach((href) => {
+          const result = linkRenderer({
+            href,
+            title: '',
+            tokens: [{ type: 'text', raw: 'L', text: 'L' }],
+          } as any);
+          expect(result).toContain(`href="${href}"`);
+        });
+      });
+
+      it('escapes a quote-injection href so it cannot break out of the attribute', () => {
+        const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
+        const result = linkRenderer({
+          href: 'https://example.com/" onmouseover="alert(1)',
+          title: 'a"b',
+          tokens: [{ type: 'text', raw: 'L', text: 'L' }],
+        } as any);
+        expect(result).not.toContain('onmouseover="alert(1)"');
+        expect(result).toContain('&quot;');
+        expect(result).toContain(
+          'href="https://example.com/&quot; onmouseover=&quot;alert(1)"',
+        );
+      });
+    });
   });
 
   describe('image renderer', () => {
@@ -390,9 +472,124 @@ describe('markedOptionsFactory', () => {
       expect(result).not.toContain('title=');
       expect(result).toContain('alt="No title"');
     });
+
+    // Defense-in-depth: the raw renderer output must not be attribute-injectable
+    // even before the Angular HTML sanitizer runs over it (XSS, GHSA-4rrp-xhp8-hf4p).
+    describe('attribute escaping', () => {
+      it('should escape a malicious alt that tries to break out of the attribute', () => {
+        const result = options.renderer!.image({
+          href: 'http://example.com/x.png',
+          title: null,
+          text: '" onerror="alert(1)',
+        } as any);
+        expect(result).not.toContain('onerror="');
+        expect(result).toContain('alt="&quot; onerror=&quot;alert(1)"');
+      });
+
+      it('should escape a malicious href', () => {
+        const result = options.renderer!.image({
+          href: 'x" onerror="alert(1)',
+          title: null,
+          text: 'a',
+        } as any);
+        expect(result).not.toContain('onerror="');
+        expect(result).toContain('src="x&quot; onerror=&quot;alert(1)"');
+      });
+
+      it('should escape a malicious (non-dimension) title', () => {
+        const result = options.renderer!.image({
+          href: 'http://example.com/x.png',
+          title: '" onmouseover="alert(1)',
+          text: 'a',
+        } as any);
+        expect(result).not.toContain('onmouseover="');
+        expect(result).toContain('title="&quot; onmouseover=&quot;alert(1)"');
+      });
+
+      it('should escape & < > so they cannot start a new tag/entity', () => {
+        const result = options.renderer!.image({
+          href: 'http://example.com/x.png?a=1&b=2',
+          title: null,
+          text: '<b>x</b> & y',
+        } as any);
+        expect(result).toContain('src="http://example.com/x.png?a=1&amp;b=2"');
+        expect(result).toContain('alt="&lt;b&gt;x&lt;/b&gt; &amp; y"');
+      });
+
+      it('should still render legitimate images unchanged', () => {
+        const result = options.renderer!.image({
+          href: 'blob:https://app/abc-123',
+          title: null,
+          text: 'pasted image',
+        } as any);
+        expect(result).toBe(
+          '<img alt="pasted image" src="blob:https://app/abc-123" loading="lazy">',
+        );
+      });
+    });
+
+    // GHSA-hr87-735w-hfq3: an image src auto-loads on render (no click), so a
+    // remote file:// / UNC src would silently leak the user's NTLM hash. Such
+    // srcs must never reach the `src` attribute.
+    describe('unsafe image src (GHSA-hr87-735w-hfq3)', () => {
+      [
+        'file://192.168.1.100/share/pixel.png',
+        'file:////host/share/pixel.png',
+        'file:///%5C%5Chost/share/pixel.png',
+        'file:///%2F%2Fhost/share/pixel.png',
+        'file:///%2e%2e/%2F%2Fhost/share/pixel.png',
+        '\\\\host\\share\\pixel.png',
+        '//host/share/pixel.png',
+      ].forEach((href) => {
+        it(`blocks remote/UNC src "${href}" (renders no <img>)`, () => {
+          const result = options.renderer!.image({
+            href,
+            title: null,
+            text: 'Alt text',
+          } as any);
+          expect(result).not.toContain('<img');
+          expect(result).not.toContain(`src="${href}"`);
+          expect(result).toContain('Alt text');
+        });
+      });
+
+      it('still renders local file:// and remote web/data images', () => {
+        [
+          'file:///home/user/img.png',
+          'http://example.com/img.png',
+          'https://example.com/img.png',
+          'data:image/png;base64,iVBORw0KGgo=',
+          'blob:https://example.com/abc',
+        ].forEach((href) => {
+          const result = options.renderer!.image({
+            href,
+            title: null,
+            text: 'L',
+          } as any);
+          expect(result).toContain(`src="${href}"`);
+        });
+      });
+
+      it('escapes the blocked-image alt text so it cannot inject markup', () => {
+        const result = options.renderer!.image({
+          href: 'file://host/share/x.png',
+          title: null,
+          text: '<img src=x onerror=alert(1)>',
+        } as any);
+        expect(result).not.toContain('<img');
+        expect(result).toContain('&lt;img src=x onerror=alert(1)&gt;');
+      });
+    });
   });
 
   describe('paragraph renderer', () => {
+    it('should render soft line breaks in parsed markdown notes (issue #8054)', () => {
+      const html = parseWithFactory('1\n2\n3');
+
+      expect(html).toContain('1<br>2<br>3');
+      expect(html).not.toContain('1 2 3');
+    });
+
     it('should render simple paragraph', () => {
       const mockParser = {
         parseInline: (tokens: any[]) =>
@@ -518,5 +715,19 @@ describe('preprocessMarkdown', () => {
     const input = '# Header\n\n![img](url.png =50x50)\n\nParagraph';
     const result = preprocessMarkdown(input);
     expect(result).toBe('# Header\n\n![img](url.png "50|50")\n\nParagraph');
+  });
+});
+
+describe('escapeHtmlAttr', () => {
+  it('should escape the five significant HTML attribute characters', () => {
+    expect(escapeHtmlAttr(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&#39;');
+  });
+
+  it('should escape & first so existing entities are not double-broken', () => {
+    expect(escapeHtmlAttr('a & "b"')).toBe('a &amp; &quot;b&quot;');
+  });
+
+  it('should leave safe values unchanged', () => {
+    expect(escapeHtmlAttr('blob:https://app/abc-123')).toBe('blob:https://app/abc-123');
   });
 });

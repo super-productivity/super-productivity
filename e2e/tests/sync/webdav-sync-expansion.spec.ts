@@ -69,22 +69,8 @@ test.describe('@webdav WebDAV Sync Expansion', () => {
     // Wait for state persistence to complete after sync
     await waitForStatePersistence(pageB);
 
-    // Wait for the synced project to appear in the sidebar
-    // First ensure Projects group is expanded
-    const projectsTree = pageB.locator('nav-list-tree').filter({ hasText: 'Projects' });
-    const projectsGroupBtn = projectsTree
-      .locator('.g-multi-btn-wrapper nav-item button')
-      .first();
-    await projectsGroupBtn.waitFor({ state: 'visible', timeout: 5000 });
-    const isExpanded = await projectsGroupBtn.getAttribute('aria-expanded');
-    if (isExpanded !== 'true') {
-      await projectsGroupBtn.click();
-    }
-
-    // Now wait for the project to appear
-    const projectBtn = projectsTree.locator('button').filter({ hasText: projectName });
-    await projectBtn.waitFor({ state: 'visible', timeout: 15000 });
-
+    // Navigate to the synced project — navigateToProjectByName handles expanding
+    // the Projects group, waiting for the tree item to appear, and clicking it.
     await projectPageB.navigateToProjectByName(projectName);
 
     // Verify task

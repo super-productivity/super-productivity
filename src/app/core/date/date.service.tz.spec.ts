@@ -41,24 +41,116 @@ describe('DateService timezone test', () => {
     });
 
     it('should handle startOfNextDayDiff correctly', () => {
-      // Set startOfNextDayDiff to 2 hours (simulating work day ending at 2 AM)
-      service.setStartOfNextDayDiff(2);
+      jasmine.clock().install();
 
-      // Test at 1 AM local time
-      const now = new Date();
-      now.setHours(1, 0, 0, 0);
+      try {
+        // Set startOfNextDayDiff to 2 hours (simulating work day ending at 2 AM).
+        service.setStartOfNextDayDiff(2);
+        jasmine.clock().mockDate(new Date(2025, 0, 17, 1, 0, 0));
 
-      const result = service.todayStr(now);
+        const result = service.todayStr();
 
-      console.log('DateService with startOfNextDayDiff:', {
-        startOfNextDayDiff: service.startOfNextDayDiff,
-        localTime: now.toString(),
-        result: result,
-        expectedBehavior: 'Should treat 1 AM as previous day due to 2-hour offset',
-      });
+        console.log('DateService with startOfNextDayDiff:', {
+          startOfNextDayDiffMs: service.getStartOfNextDayDiffMs(),
+          localTime: new Date().toString(),
+          result: result,
+          expectedBehavior: 'Should treat 1 AM as previous day due to 2-hour offset',
+        });
 
-      // This is working as intended - adjusting the date based on work day settings
-      expect(result).toBeDefined();
+        expect(result).toBe('2025-01-16');
+      } finally {
+        jasmine.clock().uninstall();
+      }
     });
+  });
+});
+
+describe('DateService — logical clock helpers', () => {
+  let service: DateService;
+
+  beforeEach(() => {
+    service = new DateService();
+    jasmine.clock().install();
+  });
+
+  afterEach(() => {
+    jasmine.clock().uninstall();
+  });
+
+  it('getLogicalTodayDate() equals Date.now() when offset is 0', () => {
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date('2026-04-17T10:00:00Z'));
+    expect(service.getLogicalTodayDate().getTime()).toBe(
+      new Date('2026-04-17T10:00:00Z').getTime(),
+    );
+  });
+
+  it('getLogicalTodayDate() subtracts offset hours from real now', () => {
+    service.setStartOfNextDayDiff(3);
+    jasmine.clock().mockDate(new Date('2026-04-17T02:00:00Z'));
+    const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+    const expected = new Date('2026-04-17T02:00:00Z').getTime() - THREE_HOURS_MS;
+    expect(service.getLogicalTodayDate().getTime()).toBe(expected);
+  });
+
+  it('getLogicalTomorrowMs() advances the local calendar day by one', () => {
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date(2026, 5, 15, 12, 0));
+    const tomorrow = new Date(service.getLogicalTomorrowMs());
+    expect(tomorrow.getFullYear()).toBe(2026);
+    expect(tomorrow.getMonth()).toBe(5); // June
+    expect(tomorrow.getDate()).toBe(16);
+  });
+
+  it('getLogicalTomorrowMs() advances the local date across a DST fall-back', () => {
+    // 2026-11-01 00:30 is the DST fall-back boundary in US/Pacific.
+    // A naive +24h stays on 2026-11-01 local (wrong); setDate-based advance yields 2026-11-02.
+    // Berlin has no DST transition on this date, so the test passes trivially there.
+    service.setStartOfNextDayDiff(0);
+    jasmine.clock().mockDate(new Date(2026, 10, 1, 0, 30));
+    const tomorrow = new Date(service.getLogicalTomorrowMs());
+    expect(tomorrow.getFullYear()).toBe(2026);
+    expect(tomorrow.getMonth()).toBe(10); // November
+    expect(tomorrow.getDate()).toBe(2);
+  });
+
+  it('getStartOfNextDayDiffMs() returns the current offset in ms', () => {
+    service.setStartOfNextDayDiff(3);
+    expect(service.getStartOfNextDayDiffMs()).toBe(3 * 60 * 60 * 1000);
+    service.setStartOfNextDayDiff(0);
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+  });
+
+  it('setStartOfNextDayDiff() accepts HH:mm strings and stores minutes precision', () => {
+    service.setStartOfNextDayDiff('02:30');
+    expect(service.getStartOfNextDayDiffMs()).toBe(2.5 * 60 * 60 * 1000);
+  });
+
+  it('setStartOfNextDayDiff() falls back to zero for malformed or empty strings', () => {
+    service.setStartOfNextDayDiff(4);
+    service.setStartOfNextDayDiff('');
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+
+    service.setStartOfNextDayDiff(4);
+    service.setStartOfNextDayDiff('not-a-time');
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+
+    service.setStartOfNextDayDiff(4);
+    service.setStartOfNextDayDiff('111');
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+
+    service.setStartOfNextDayDiff(4);
+    service.setStartOfNextDayDiff('24:00');
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
+  });
+
+  it('setStartOfNextDayDiff() falls back to legacy hour when a time string is invalid', () => {
+    service.setStartOfNextDayDiff('24:00', 2);
+    expect(service.getStartOfNextDayDiffMs()).toBe(2 * 60 * 60 * 1000);
+  });
+
+  it('setStartOfNextDayDiff() falls back to legacy hour when time is undefined', () => {
+    service.setStartOfNextDayDiff(undefined, 2);
+    expect(service.getStartOfNextDayDiffMs()).toBe(2 * 60 * 60 * 1000);
   });
 });

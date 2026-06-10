@@ -1,5 +1,24 @@
 import { MarkedOptions, MarkedRenderer } from 'ngx-markdown';
 import { Hooks, Token } from 'marked';
+import {
+  isExternalUrlSchemeAllowed,
+  isPathSafeToOpen,
+} from '../../../electron/shared-with-frontend/is-external-url-allowed';
+
+/**
+ * Escape a string for safe interpolation into a double-quoted HTML attribute.
+ *
+ * Defense-in-depth: note renders are sanitized as HTML before display, but the
+ * raw renderer output still must not be attribute-injectable on its own.
+ * `&` must be replaced first.
+ */
+export const escapeHtmlAttr = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 /**
  * Parses image sizing syntax from title attribute.
@@ -81,7 +100,9 @@ export const markedOptionsFactory = (): MarkedOptions => {
 
       const isChecked = checked === true;
       const checkboxHtml = `<span class="checkbox material-icons">${isChecked ? 'check_box' : 'check_box_outline_blank'}</span>`;
-      return `<li class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml} ${renderedText}</li>`;
+      // Wrap the text in its own element so only the checkbox and the label —
+      // not the empty rest of the row — are clickable (see clickPreview).
+      return `<li class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml} <span class="checkbox-label">${renderedText}</span></li>`;
     }
     return `<li>${renderedText}</li>`;
   };
@@ -97,7 +118,13 @@ export const markedOptionsFactory = (): MarkedOptions => {
     tokens: Token[];
   }) {
     const text = tokens ? this.parser.parseInline(tokens) : '';
-    return `<a target="_blank" href="${href}" title="${title || ''}">${text}</a>`;
+    // Block unsafe URL schemes from rendering as clickable links. On click the
+    // href is passed verbatim to shell.openExternal (Electron), which would let
+    // note content silently invoke OS protocol handlers. See GHSA-hr87-735w-hfq3.
+    if (!isExternalUrlSchemeAllowed(href)) {
+      return `<span class="markdown-blocked-link" title="Link blocked: unsafe URL scheme">${text}</span>`;
+    }
+    return `<a target="_blank" rel="noopener noreferrer" href="${escapeHtmlAttr(href)}" title="${escapeHtmlAttr(title || '')}">${text}</a>`;
   };
 
   // Custom image renderer with support for sizing syntax
@@ -112,18 +139,32 @@ export const markedOptionsFactory = (): MarkedOptions => {
     title: string | null;
     text: string;
   }) => {
+    // Unlike links, an image src auto-loads on render (no click). A remote
+    // `file://host/share` or UNC src would silently make the OS open an SMB
+    // connection and leak the user's NTLM hash just by viewing the note, so
+    // such srcs must never reach the `src` attribute. Remote web images
+    // (http/https/data/blob) are unaffected. See GHSA-hr87-735w-hfq3.
+    if (!isPathSafeToOpen(href)) {
+      return `<span class="markdown-blocked-link" title="Image blocked: unsafe URL">${escapeHtmlAttr(
+        text || '',
+      )}</span>`;
+    }
+
     const { width, height } = parseImageDimensionsFromTitle(title);
 
     // Build width and height attributes (not style, as Angular sanitizer strips inline styles)
     const widthAttr = width ? ` width="${width}"` : '';
     const heightAttr = height ? ` height="${height}"` : '';
 
-    // Only include title if it's not our custom dimension format
+    // Only include title if it's not our custom dimension format.
+    // width/height are digit-only (parsed via regex above), so they need no escaping;
+    // href/title/alt are attacker-controllable and must be escaped.
     const isCustomDimensionTitle = title && /^(\d*)?\|(\d*)?$/.test(title);
-    const titleAttr = title && !isCustomDimensionTitle ? ` title="${title}"` : '';
-    const srcAttr = ` src="${href}"`;
+    const titleAttr =
+      title && !isCustomDimensionTitle ? ` title="${escapeHtmlAttr(title)}"` : '';
+    const srcAttr = ` src="${escapeHtmlAttr(href)}"`;
 
-    return `<img alt="${text}"${srcAttr}${titleAttr}${widthAttr}${heightAttr} loading="lazy">`;
+    return `<img alt="${escapeHtmlAttr(text)}"${srcAttr}${titleAttr}${widthAttr}${heightAttr} loading="lazy">`;
   };
 
   // In marked v17, paragraph renderer receives tokens that need to be parsed
@@ -153,7 +194,7 @@ export const markedOptionsFactory = (): MarkedOptions => {
   const options: MarkedOptions = {
     renderer,
     gfm: true,
-    breaks: false,
+    breaks: true,
     pedantic: false,
   };
 

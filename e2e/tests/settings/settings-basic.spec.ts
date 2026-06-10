@@ -59,20 +59,19 @@ test.describe('Settings', () => {
     await page.goto('/#/config');
     await page.waitForLoadState('networkidle');
 
-    // Find first expansion panel and click to expand
-    const firstSection = page.locator('mat-expansion-panel').first();
-    const isFirstSectionVisible = await firstSection
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
+    // Find first config section and click its collapsible header.
+    const firstSection = page.locator('config-section').first();
+    await expect(firstSection).toBeVisible({ timeout: 5000 });
+    const header = firstSection.locator('collapsible > .collapsible-header').first();
+    const expandedContent = firstSection.locator('.collapsible-panel').first();
 
-    if (isFirstSectionVisible) {
-      await firstSection.click();
-      await page.waitForTimeout(300);
-
-      // Section should be expanded
-      const expandedContent = firstSection.locator('.mat-expansion-panel-content');
-      await expect(expandedContent).toBeVisible();
+    if (await expandedContent.isVisible().catch(() => false)) {
+      await header.click();
+      await expect(expandedContent).toBeHidden();
     }
+
+    await header.click();
+    await expect(expandedContent).toBeVisible();
   });
 
   test('should have multiple config sections', async ({ page, workViewPage }) => {
@@ -101,21 +100,15 @@ test.describe('Settings', () => {
 
     // Expand first config section to reveal form elements
     const firstSection = page.locator('config-section').first();
-    const isSectionVisible = await firstSection
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
+    await expect(firstSection).toBeVisible({ timeout: 5000 });
+    await firstSection.click();
 
-    if (isSectionVisible) {
-      await firstSection.click();
-      await page.waitForTimeout(300);
-
-      // Look for form elements like inputs, checkboxes, or toggles
-      const formElements = page.locator(
-        'config-section input, config-section mat-checkbox, config-section mat-slide-toggle, config-section mat-select',
-      );
-      const formCount = await formElements.count();
-      expect(formCount).toBeGreaterThanOrEqual(0);
-    }
+    // Look for visible form elements in the section we opened.
+    const formElements = firstSection.locator(
+      'input:visible, mat-checkbox:visible, mat-slide-toggle:visible, mat-select:visible',
+    );
+    await expect(formElements.first()).toBeVisible({ timeout: 5000 });
+    await expect.poll(() => formElements.count()).toBeGreaterThan(0);
   });
 
   test('should return to work view from settings', async ({ page, workViewPage }) => {

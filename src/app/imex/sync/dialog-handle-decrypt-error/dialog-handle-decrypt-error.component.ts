@@ -5,6 +5,7 @@ import {
   MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
+import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
@@ -15,6 +16,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { SyncConfigService } from '../sync-config.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { SyncLog } from '../../../core/log';
+import { confirmDialog } from '../../../util/native-dialogs';
 
 @Component({
   selector: 'dialog-handle-decrypt-error',
@@ -37,6 +39,7 @@ import { SyncLog } from '../../../core/log';
 export class DialogHandleDecryptErrorComponent {
   private _syncConfigService = inject(SyncConfigService);
   private _snackService = inject(SnackService);
+  private _translateService = inject(TranslateService);
 
   private _matDialogRef =
     inject<MatDialogRef<DialogHandleDecryptErrorComponent>>(MatDialogRef);
@@ -45,6 +48,9 @@ export class DialogHandleDecryptErrorComponent {
   passwordVal: string = '';
 
   async updatePWAndForceUpload(): Promise<void> {
+    if (!confirmDialog(this._translateService.instant(T.F.SYNC.C.DECRYPT_OVERWRITE))) {
+      return;
+    }
     try {
       await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
       this.passwordVal = '';

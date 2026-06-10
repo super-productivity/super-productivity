@@ -1,6 +1,5 @@
 /* eslint-disable */
 import {
-  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -10,13 +9,25 @@ import {
 } from '@angular/core';
 import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
+import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
+import { getIssueProviderTooltip } from '../../issue/mapping-helper/get-issue-provider-tooltip';
+import { IssueProvider } from '../../issue/issue.model';
+import {
+  MatMenu,
+  MatMenuContent,
+  MatMenuItem,
+  MatMenuTrigger,
+} from '@angular/material/menu';
 import { debounceTime, map, startWith } from 'rxjs/operators';
+import { safeFormatDate } from '../../../util/safe-format-date';
 import { TaskService } from '../../tasks/task.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
-import { MatIconButton, MatButton } from '@angular/material/button';
+import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { LS } from 'src/app/core/persistence/storage-keys.const';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { FH } from '../schedule.const';
 import { mapScheduleDaysToScheduleEvents } from '../map-schedule-data/map-schedule-days-to-schedule-events';
@@ -24,11 +35,14 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { ScheduleMonthComponent } from '../schedule-month/schedule-month.component';
 import { ScheduleService } from '../schedule.service';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { getWeekNumber } from '../../../util/get-week-number';
+import { parseDbDateStr } from '../../../util/parse-db-date-str';
 
 @Component({
   selector: 'schedule',
@@ -36,10 +50,13 @@ import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
     ScheduleWeekComponent,
     ScheduleMonthComponent,
     MatIconButton,
-    MatButton,
     MatIcon,
     MatTooltip,
     TranslatePipe,
+    MatMenu,
+    MatMenuContent,
+    MatMenuItem,
+    MatMenuTrigger,
   ],
   templateUrl: './schedule.component.html',
   styleUrls: ['./schedule.component.scss'],
@@ -58,6 +75,31 @@ export class ScheduleComponent {
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _translate = inject(TranslateService);
+  private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
+
+  readonly hiddenCalendarProviderIds = this._hiddenCalendarProviders.hiddenProviderIds;
+  readonly enabledCalendarProviders = toSignal(
+    this._store
+      .select(selectCalendarProviders)
+      .pipe(map((ps) => ps.filter((p) => p.isEnabled))),
+    { initialValue: [] },
+  );
+  // Show the button with multiple providers, OR with a single provider that
+  // is currently hidden — otherwise the user has no UI to re-enable the only
+  // calendar after, e.g., deleting all but one provider in settings.
+  readonly showCalFilterBtn = computed(() => {
+    const providers = this.enabledCalendarProviders();
+    if (providers.length > 1) return true;
+    const hidden = this.hiddenCalendarProviderIds();
+    return providers.some((p) => hidden.includes(p.id));
+  });
+  readonly calProviderLabel = (p: IssueProvider): string => getIssueProviderTooltip(p);
+
+  toggleCalProvider(providerId: string): void {
+    this._hiddenCalendarProviders.toggle(providerId);
+  }
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
@@ -65,16 +107,12 @@ export class ScheduleComponent {
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
 
-  // Helper computed for UI - compares actual dates, not just null check
+  // True when today falls within the currently displayed range.
+  // Disables the "today" reset button and suppresses navigation jumps.
   isViewingToday = computed(() => {
-    const selected = this._selectedDate();
-    if (selected === null) return true;
-
-    // Compare date strings to check if selected date IS today
-    const selectedDateStr = this.scheduleService.getTodayStr(selected);
+    if (this._selectedDate() === null) return true;
     const todayStr = this._todayDateStr();
-
-    return selectedDateStr === todayStr;
+    return todayStr ? this.daysToShow().includes(todayStr) : false;
   });
 
   protected _todayDateStr = toSignal(this._globalTrackingIntervalService.todayDateStr$);
@@ -143,6 +181,42 @@ export class ScheduleComponent {
 
   weeksToShow = computed(() => Math.ceil(this.daysToShow().length / 7));
 
+  // Memoized so headerTitle only re-runs at the breakpoint boundary,
+  // not on every debounced resize tick.
+  private _isCompact = computed(
+    () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.XS,
+  );
+  private _isVeryCompact = computed(
+    () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.XXS,
+  );
+
+  headerTitle = computed(() => {
+    const days = this.daysToShow();
+    if (!days.length) return '';
+    const locale = this._dateTimeFormatService.currentLocale();
+
+    if (this.isMonthView()) {
+      const mid = parseDbDateStr(days[Math.floor(days.length / 2)]);
+      return safeFormatDate(mid, 'LLLL yyyy', locale);
+    }
+
+    const start = parseDbDateStr(days[0]);
+    const end = parseDbDateStr(days[days.length - 1]);
+    const weekNr = getWeekNumber(start); // ISO — default firstDayOfWeek=1
+    const sameMonth =
+      start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+    const startStr = safeFormatDate(start, 'MMM d', locale);
+    const endStr = sameMonth
+      ? safeFormatDate(end, 'd', locale)
+      : safeFormatDate(end, 'MMM d', locale);
+    const labelKey = this._isCompact()
+      ? T.F.WORKLOG.CMP.WEEK_NR_SHORT
+      : T.F.WORKLOG.CMP.WEEK_NR;
+    const label = this._translate.instant(labelKey, { nr: weekNr });
+    if (this._isVeryCompact()) return label;
+    return `${label} · ${startStr} – ${endStr}`;
+  });
+
   firstDayOfWeek = computed(() => {
     const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
     return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
@@ -153,12 +227,10 @@ export class ScheduleComponent {
   private _contextNow = computed(() => {
     const selectedDate = this._selectedDate();
     if (selectedDate === null) {
-      // Viewing today - use actual current time
       return Date.now();
     }
 
     // Viewing a different date - use that date's midnight as reference
-    // This ensures display calculations (work hours, etc.) are correct for the viewed date
     const contextDate = new Date(selectedDate);
     contextDate.setHours(0, 0, 0, 0);
     return contextDate.getTime();
@@ -168,7 +240,7 @@ export class ScheduleComponent {
     return this.scheduleService.createScheduleDaysWithContext({
       daysToShow: this.daysToShow(),
       contextNow: this._contextNow(),
-      realNow: Date.now(), // Always use actual current time for "current week" calculation
+      realNow: Date.now(),
       currentTaskId: this.taskService.currentTaskId() ?? null,
     });
   });
@@ -195,6 +267,7 @@ export class ScheduleComponent {
 
   events = computed(() => this._eventsAndBeyondBudget().eventsFlat);
   beyondBudget = computed(() => this._eventsAndBeyondBudget().beyondBudgetDays);
+  monthEvents = computed(() => this.events().concat(...this.beyondBudget()));
 
   currentTimeRow = computed(() => {
     // Only show current time indicator when viewing today
@@ -213,11 +286,13 @@ export class ScheduleComponent {
   });
 
   goToPreviousPeriod(): void {
+    // Never navigate into the past — the displayed range must include today or later
+    if (this.isViewingToday()) return;
+
     const currentDate = this._selectedDate() || new Date();
     const selectedView = this._currentTimeViewMode();
 
     if (selectedView === 'month') {
-      // Jump to first day of previous month
       const previousMonth = new Date(
         currentDate.getFullYear(),
         currentDate.getMonth() - 1,
@@ -225,13 +300,19 @@ export class ScheduleComponent {
       );
       this._selectedDate.set(previousMonth);
     } else {
-      // Week view: move backward by the number of days currently shown
-      // (automatically adapts to responsive day count: 2, 3, 5, or 7 days)
       const daysToSkip = this.daysToShow().length;
       const previousPeriod = new Date(currentDate);
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
       previousPeriod.setHours(0, 0, 0, 0);
-      this._selectedDate.set(previousPeriod);
+
+      // If going back would land on or before today, snap to "today view" (null)
+      const todayMidnight = new Date();
+      todayMidnight.setHours(0, 0, 0, 0);
+      if (previousPeriod.getTime() <= todayMidnight.getTime()) {
+        this._selectedDate.set(null);
+      } else {
+        this._selectedDate.set(previousPeriod);
+      }
     }
   }
 
@@ -262,18 +343,66 @@ export class ScheduleComponent {
     this._selectedDate.set(null); // Resets to "today" mode
   }
 
+  // Tracks whether the scroll-wrapper has been scrolled horizontally. Used
+  // by schedule-week so the sticky time column gets a background only once
+  // day-content is actually sliding under it.
+  isHScrolled = signal(false);
+
+  onScrollWrapperScroll(event: Event): void {
+    const el = event.target as HTMLElement;
+    this.isHScrolled.set(el.scrollLeft > 0);
+  }
+
+  // Scroll a target element into view inside the scroll-wrapper, but pull
+  // horizontally back by the sticky time column's width (+ a bit extra) so
+  // the target doesn't end up sitting under the time column.
+  private _scrollIntoViewWithTimeColumnOffset(elementId: string): void {
+    const element = document.getElementById(elementId);
+    const scrollContainer = element?.closest('.scroll-wrapper') as HTMLElement | null;
+    if (!element || !scrollContainer) return;
+
+    const timeCol = scrollContainer.querySelector(
+      'schedule-week .time-column-bg, schedule-week .filler',
+    );
+    // `.filler` is `display:none` in side-panel mode, so a 0-width hit
+    // here means we matched the hidden one — fall back to the default.
+    const timeColWidth = timeCol?.getBoundingClientRect().width || 48;
+    const EXTRA_PX = 12;
+
+    const elRect = element.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetTop = scrollContainer.scrollTop + elRect.top - containerRect.top;
+    const targetLeft =
+      scrollContainer.scrollLeft +
+      elRect.left -
+      containerRect.left -
+      timeColWidth -
+      EXTRA_PX;
+
+    scrollContainer.scrollTo({
+      top: Math.max(0, targetTop),
+      left: Math.max(0, targetLeft),
+      behavior: 'instant',
+    });
+  }
+
+  selectTimeView(view: 'week' | 'month'): void {
+    this.layoutService.selectedTimeView.set(view);
+    localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
+  }
+
+  private getTimeView(): 'week' | 'month' {
+    const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
+    return preservedView === 'month' ? 'month' : 'week';
+  }
+
   constructor() {
-    this.layoutService.selectedTimeView.set('week');
+    this.layoutService.selectedTimeView.set(this.getTimeView());
 
     effect(() => {
       if (this.isMonthView() === false) {
         // scroll to work start whenever view is switched to work-week
-        setTimeout(() => {
-          const element = document.getElementById('work-start');
-          if (element) {
-            element.scrollIntoView({ behavior: 'instant', block: 'start' });
-          }
-        }); // Small delay to ensure DOM is fully rendered
+        setTimeout(() => this._scrollIntoViewWithTimeColumnOffset('work-start'));
       }
     });
   }

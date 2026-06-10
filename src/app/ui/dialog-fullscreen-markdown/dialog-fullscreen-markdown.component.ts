@@ -47,8 +47,11 @@ import {
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { toggleChecklistItemAtIndex } from '../../features/markdown-checklist/checklist-operations';
 import { HISTORY_STATE } from 'src/app/app.constants';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
+import { IS_IOS } from 'src/app/util/is-ios';
+import { Keyboard } from '@capacitor/keyboard';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -133,6 +136,15 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       .subscribe((value) => {
         this._updateResolvedContent(value);
       });
+
+    // Show the iOS keyboard accessory bar while this dialog is open so the
+    // Done button is available; the bar is globally hidden elsewhere.
+    if (IS_IOS) {
+      Keyboard.setAccessoryBarVisible({ isVisible: true });
+      this._destroyRef.onDestroy(() => {
+        Keyboard.setAccessoryBarVisible({ isVisible: false });
+      });
+    }
 
     // Handle Escape key - save and close
     this._matDialogRef.disableClose = true;
@@ -235,39 +247,30 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   clickPreview($event: MouseEvent): void {
-    if (($event.target as HTMLElement).tagName === 'A') {
+    const target = $event.target as HTMLElement;
+    if (target.closest('a')) {
       // links are already handled by the markdown component
-    } else if (
-      $event?.target &&
-      ($event.target as HTMLElement).classList.contains('checkbox')
-    ) {
-      this._handleCheckboxClick(
-        ($event.target as HTMLElement).parentElement as HTMLElement,
-      );
+      return;
+    }
+
+    const wrapper = target.closest('.checkbox-wrapper') as HTMLElement | null;
+    if (wrapper) {
+      this._handleCheckboxClick(wrapper);
     }
   }
 
   private _handleCheckboxClick(targetEl: HTMLElement): void {
     const allCheckboxes =
       this.previewEl()?.element.nativeElement.querySelectorAll('.checkbox-wrapper');
-
     const checkIndex = Array.from(allCheckboxes || []).findIndex((el) => el === targetEl);
-    if (checkIndex !== -1 && this.data.content) {
-      const allLines = this.data.content.split('\n');
-      const todoAllLinesIndexes = allLines
-        .map((line, index) => (line.includes('- [') ? index : null))
-        .filter((i) => i !== null);
-
-      const itemIndex = todoAllLinesIndexes[checkIndex];
-      if (typeof itemIndex === 'number' && itemIndex > -1) {
-        const item = allLines[itemIndex];
-        allLines[itemIndex] = item.includes('[ ]')
-          ? item.replace('[ ]', '[x]').replace('[]', '[x]')
-          : item.replace('[x]', '[ ]');
-        this.data.content = allLines.join('\n');
-        // Emit change for auto-save
-        this._contentChanges$.next(this.data.content);
-      }
+    if (checkIndex === -1 || !this.data.content) {
+      return;
+    }
+    const next = toggleChecklistItemAtIndex(this.data.content, checkIndex);
+    if (next !== this.data.content) {
+      this.data.content = next;
+      // Emit change for auto-save
+      this._contentChanges$.next(this.data.content);
     }
   }
 

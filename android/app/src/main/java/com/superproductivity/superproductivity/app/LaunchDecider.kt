@@ -15,9 +15,25 @@ class LaunchDecider(private val context: Context) {
     companion object {
         // Enum values represented as integers
         private const val LAUNCH_MODE_KEY = "launch_mode"
-        private const val MODE_DEFAULT = 0 // Need to determine
-        private const val MODE_ONLINE = 1  // Use FullscreenActivity (old activity)
-        private const val MODE_OFFLINE = 2 // Use CapacitorMainActivity (new activity)
+        internal const val MODE_DEFAULT = 0 // Need to determine
+        internal const val MODE_ONLINE = 1  // Use FullscreenActivity (old activity)
+        internal const val MODE_OFFLINE = 2 // Use CapacitorMainActivity (new activity)
+
+        internal fun resolveDefaultLaunchMode(
+            storedMode: Int,
+            isFreshInstall: Boolean,
+            hasLegacyData: Boolean
+        ): Int {
+            if (isFreshInstall) {
+                return MODE_OFFLINE
+            }
+
+            if (storedMode != MODE_DEFAULT) {
+                return storedMode
+            }
+
+            return if (hasLegacyData) MODE_ONLINE else MODE_OFFLINE
+        }
     }
 
     private val sharedPrefs: SharedPreferences =
@@ -25,7 +41,8 @@ class LaunchDecider(private val context: Context) {
 
     /**
      * Determines which launch mode to use.
-     * If the mode is MODE_DEFAULT, it will perform checks to decide between MODE_ONLINE and MODE_OFFLINE.
+     * Fresh installs use MODE_OFFLINE, ignoring any stale mode restored by Android backup.
+     * If the mode is MODE_DEFAULT, upgrades check legacy data to decide between MODE_ONLINE and MODE_OFFLINE.
      * If LAUNCH_MODE is set to 1 or 2, it will force the corresponding mode.
      * The result is saved in SharedPreferences for future launches.
      */
@@ -36,16 +53,12 @@ class LaunchDecider(private val context: Context) {
             2 -> MODE_OFFLINE
             else -> {
                 val currentMode = sharedPrefs.getInt(LAUNCH_MODE_KEY, MODE_DEFAULT)
-                if (currentMode != MODE_DEFAULT) {
-                    // If mode is already determined, return it
-                    currentMode
-                } else {
-                    // Mode is MODE_DEFAULT, need to determine
-                    val newMode = determineLaunchMode()
-                    // Save the new mode for future launches
+                val newMode = determineLaunchMode(currentMode)
+                // Save the new mode for future launches
+                if (newMode != currentMode) {
                     sharedPrefs.edit().putInt(LAUNCH_MODE_KEY, newMode).apply()
-                    newMode
                 }
+                newMode
             }
         }
     }
@@ -58,7 +71,7 @@ class LaunchDecider(private val context: Context) {
      *   - If databases/SupKeyValStore file exists, user has data -> MODE_ONLINE
      *   - If not, user might not have data -> MODE_OFFLINE
      */
-    private fun determineLaunchMode(): Int {
+    private fun determineLaunchMode(currentMode: Int): Int {
         val packageManager = context.packageManager
         val packageName = context.packageName
         try {
@@ -66,23 +79,15 @@ class LaunchDecider(private val context: Context) {
             val firstInstallTime = packageInfo.firstInstallTime
             val lastUpdateTime = packageInfo.lastUpdateTime
 
-            return if (firstInstallTime == lastUpdateTime) {
-                // New installation
-                MODE_OFFLINE
-            } else {
-                // Upgrade installation
-                if (hasLegacyData()) {
-                    // User has existing data, use online mode
-                    MODE_ONLINE
-                } else {
-                    // No existing data, use offline mode
-                    MODE_OFFLINE
-                }
-            }
+            return resolveDefaultLaunchMode(
+                storedMode = currentMode,
+                isFreshInstall = firstInstallTime == lastUpdateTime,
+                hasLegacyData = hasLegacyData(),
+            )
         } catch (e: PackageManager.NameNotFoundException) {
             e.printStackTrace()
-            // In case of error, default to online mode to be safe
-            return MODE_ONLINE
+            // In case of error, keep an already stored mode if possible.
+            return if (currentMode != MODE_DEFAULT) currentMode else MODE_ONLINE
         }
     }
 

@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (npr. https://try.gitea.io)",
+    "TOKEN": "Token za pristup",
+    "REPO_FULL_NAME": "Korisničko ime ili ime organizacije/repozitorija",
+    "SCOPE": "Opseg",
+    "SCOPE_ALL": "Sve",
+    "SCOPE_CREATED": "Stvoreno od mene",
+    "SCOPE_ASSIGNED": "Dodijeljeno meni",
+    "FILTER_LABELS": "Filtriraj prema oznakama (opcionalno)",
+    "EXCLUDE_LABELS": "Isključi oznake (opcionalno)",
+    "HOW_TO_GET_TOKEN": "Kako dobiti token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sažetak",
+    "STATE": "Status",
+    "ASSIGNEE": "Dodijeljeno",
+    "LABELS": "Oznake",
+    "DESCRIPTION": "Opis"
+  },
+  "FORM_HELP": "<p>Ovdje možeš podesiti Super Productivity da prikazuje otvorene Gitea probleme za određeni repozitorij u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi i imat će poveznicu na problem kao i dodatne informacije.</p> <p>Također možeš automatski dodati i uvesti sve otvorene probleme.</p><p>Za izbjegavanja ograničenja i dobivanja pristupa, unesi token za pristup.</p>"
+}

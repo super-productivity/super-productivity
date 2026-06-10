@@ -1,0 +1,1145 @@
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import type { IssueProviderPluginDefinition } from '@super-productivity/plugin-api';
+
+let definition: IssueProviderPluginDefinition;
+
+beforeAll(async () => {
+  (globalThis as any).PluginAPI = {
+    registerIssueProvider: vi.fn((def: IssueProviderPluginDefinition) => {
+      definition = def;
+    }),
+    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  };
+  await import('./plugin');
+});
+
+describe('CalDAV Calendar Plugin', () => {
+  describe('fieldMappings', () => {
+    const ctx = { issueId: 'event-1' };
+
+    describe('title <-> summary', () => {
+      it('should pass title through to issue (toIssueValue)', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'title')!;
+        expect(mapping.toIssueValue('My Event', ctx)).toBe('My Event');
+      });
+
+      it('should strip [DONE] prefix from summary (toTaskValue)', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'title')!;
+        expect(mapping.toTaskValue('[DONE] My Event', ctx)).toBe('My Event');
+      });
+
+      it('should return summary as-is when no [DONE] prefix', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'title')!;
+        expect(mapping.toTaskValue('My Event', ctx)).toBe('My Event');
+      });
+
+      it('should return (No title) for empty summary', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'title')!;
+        expect(mapping.toTaskValue('', ctx)).toBe('(No title)');
+      });
+    });
+
+    describe('notes <-> description', () => {
+      it('should pass notes to issue', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'notes')!;
+        expect(mapping.toIssueValue('some notes', ctx)).toBe('some notes');
+      });
+
+      it('should pass description to task', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'notes')!;
+        expect(mapping.toTaskValue('some desc', ctx)).toBe('some desc');
+      });
+
+      it('should return empty string for falsy values', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'notes')!;
+        expect(mapping.toIssueValue('', ctx)).toBe('');
+        expect(mapping.toTaskValue('', ctx)).toBe('');
+      });
+    });
+
+    describe('dueWithTime <-> start_dateTime', () => {
+      it('should convert ms timestamp to UTC ISO string (toIssueValue)', () => {
+        const mapping = definition.fieldMappings!.find(
+          (m) => m.taskField === 'dueWithTime',
+        )!;
+        const ts = new Date('2026-03-20T10:00:00Z').getTime();
+        const result = mapping.toIssueValue(ts, ctx) as string;
+        expect(new Date(result).getTime()).toBe(ts);
+      });
+
+      it('should convert ISO string to ms timestamp (toTaskValue)', () => {
+        const mapping = definition.fieldMappings!.find(
+          (m) => m.taskField === 'dueWithTime',
+        )!;
+        const iso = '2026-03-20T10:00:00Z';
+        expect(mapping.toTaskValue(iso, ctx)).toBe(new Date(iso).getTime());
+      });
+
+      it('should return null for falsy toIssueValue and undefined for falsy toTaskValue', () => {
+        const mapping = definition.fieldMappings!.find(
+          (m) => m.taskField === 'dueWithTime',
+        )!;
+        expect(mapping.toIssueValue(0, ctx)).toBeNull();
+        expect(mapping.toTaskValue('', ctx)).toBeUndefined();
+      });
+
+      it('should declare dueDay as mutually exclusive', () => {
+        const mapping = definition.fieldMappings!.find(
+          (m) => m.taskField === 'dueWithTime',
+        )!;
+        expect(mapping.mutuallyExclusive).toEqual(['dueDay']);
+      });
+    });
+
+    describe('timeEstimate <-> duration_ms', () => {
+      it('should pass number through both directions', () => {
+        const mapping = definition.fieldMappings!.find(
+          (m) => m.taskField === 'timeEstimate',
+        )!;
+        expect(mapping.toIssueValue(3600000, ctx)).toBe(3600000);
+        expect(mapping.toTaskValue(1800000, ctx)).toBe(1800000);
+      });
+
+      it('should return 0 for falsy values', () => {
+        const mapping = definition.fieldMappings!.find(
+          (m) => m.taskField === 'timeEstimate',
+        )!;
+        expect(mapping.toIssueValue(0, ctx)).toBe(0);
+        expect(mapping.toTaskValue(0, ctx)).toBe(0);
+      });
+    });
+
+    describe('dueDay <-> start_date', () => {
+      it('should pass date string through both directions', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'dueDay')!;
+        expect(mapping.toIssueValue('2026-03-20', ctx)).toBe('2026-03-20');
+        expect(mapping.toTaskValue('2026-03-20', ctx)).toBe('2026-03-20');
+      });
+
+      it('should return null for falsy toIssueValue and undefined for falsy toTaskValue', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'dueDay')!;
+        expect(mapping.toIssueValue('', ctx)).toBeNull();
+        expect(mapping.toTaskValue('', ctx)).toBeUndefined();
+      });
+
+      it('should declare dueWithTime as mutually exclusive', () => {
+        const mapping = definition.fieldMappings!.find((m) => m.taskField === 'dueDay')!;
+        expect(mapping.mutuallyExclusive).toEqual(['dueWithTime']);
+      });
+    });
+  });
+
+  describe('extractSyncValues', () => {
+    it('should normalize timed event to UTC ISO', () => {
+      const issue = {
+        id: 'e1',
+        title: 'Meeting',
+        body: 'notes',
+        start: '20260320T120000Z',
+        end: '20260320T130000Z',
+        startParams: '',
+      };
+
+      const result = definition.extractSyncValues!(issue as any);
+
+      expect(result.start_dateTime).toBe('2026-03-20T12:00:00.000Z');
+      expect(result.duration_ms).toBe(3600000);
+      expect(result.summary).toBe('Meeting');
+      expect(result.description).toBe('notes');
+    });
+
+    it('should extract all-day event fields', () => {
+      const issue = {
+        id: 'e1',
+        title: 'Holiday',
+        body: '',
+        start: '20260320',
+        end: '20260321',
+        startParams: 'VALUE=DATE',
+      };
+
+      const result = definition.extractSyncValues!(issue as any);
+
+      expect(result.start_date).toBe('2026-03-20');
+      expect(result.start_dateTime).toBeUndefined();
+      expect(result.duration_ms).toBe(0);
+    });
+
+    it('should handle missing start/end gracefully', () => {
+      const issue = { id: 'e1', title: 'Bare', body: '' };
+
+      const result = definition.extractSyncValues!(issue as any);
+
+      expect(result.start_dateTime).toBeUndefined();
+      expect(result.start_date).toBeUndefined();
+      expect(result.duration_ms).toBe(0);
+    });
+
+    it('should use DURATION property when available', () => {
+      const issue = {
+        id: 'e1',
+        title: 'Event with duration',
+        body: '',
+        start: '20260320T100000Z',
+        startParams: '',
+        duration: 'PT2H30M',
+      };
+
+      const result = definition.extractSyncValues!(issue as any);
+
+      expect(result.start_dateTime).toBe('2026-03-20T10:00:00.000Z');
+      expect(result.duration_ms).toBe(2 * 60 * 60 * 1000 + 30 * 60 * 1000);
+    });
+  });
+
+  describe('updateIssue', () => {
+    let mockHttp: {
+      get: any;
+      post: any;
+      put: any;
+      patch: any;
+      delete: any;
+      request: any;
+    };
+    const cfg = {
+      serverUrl: 'https://cloud.example.com/dav',
+      username: 'user',
+      password: 'pass',
+    };
+
+    const sampleIcal = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:event-1',
+      'DTSTART:20260320T100000Z',
+      'DTEND:20260320T110000Z',
+      'SUMMARY:Original Title',
+      'DESCRIPTION:Original notes',
+      'DTSTAMP:20260320T090000Z',
+      'LAST-MODIFIED:20260320T090000Z',
+      'SEQUENCE:0',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn().mockResolvedValue(sampleIcal),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+        request: vi.fn(),
+      };
+    });
+
+    it('should update summary when title changes', async () => {
+      await definition.updateIssue!(
+        'event-1',
+        { summary: 'New Title' },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.get).toHaveBeenCalledTimes(1);
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('SUMMARY:New Title');
+    });
+
+    it('should update description when notes change', async () => {
+      await definition.updateIssue!(
+        'event-1',
+        { description: 'New notes' },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('DESCRIPTION:New notes');
+    });
+
+    it('should update DTSTART/DTEND for timed event changes', async () => {
+      const startIso = '2026-03-20T14:00:00.000Z';
+      await definition.updateIssue!(
+        'event-1',
+        { start_dateTime: startIso, duration_ms: 3600000 },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('DTSTART:20260320T140000Z');
+      expect(body).toContain('DTEND:20260320T150000Z');
+    });
+
+    it('should update DTSTART/DTEND for all-day event changes', async () => {
+      await definition.updateIssue!(
+        'event-1',
+        { start_date: '2026-03-25' },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('DTSTART;VALUE=DATE:20260325');
+      expect(body).toContain('DTEND;VALUE=DATE:20260326');
+    });
+
+    it('should update end when only duration changes', async () => {
+      await definition.updateIssue!(
+        'event-1',
+        { duration_ms: 7200000 },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.get).toHaveBeenCalledTimes(1);
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('DTEND:20260320T120000Z');
+    });
+
+    it('should not call put when no recognized fields changed', async () => {
+      await definition.updateIssue!(
+        'event-1',
+        { unknown_field: 'value' },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).not.toHaveBeenCalled();
+    });
+
+    it('should strip DURATION when setting DTEND (RFC 5545 mutual exclusion)', async () => {
+      const icalWithDuration = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:event-1',
+        'DTSTART:20260320T100000Z',
+        'DURATION:PT1H',
+        'SUMMARY:Duration Event',
+        'DTSTAMP:20260320T090000Z',
+        'LAST-MODIFIED:20260320T090000Z',
+        'SEQUENCE:0',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      mockHttp.get = vi.fn().mockResolvedValue(icalWithDuration);
+
+      await definition.updateIssue!(
+        'event-1',
+        { start_dateTime: '2026-03-20T14:00:00.000Z', duration_ms: 3600000 },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('DTEND:');
+      expect(body).not.toContain('DURATION:');
+    });
+
+    it('should convert to all-day event when start_dateTime is null (unschedule)', async () => {
+      await definition.updateIssue!(
+        'event-1',
+        { start_dateTime: null },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('DTSTART;VALUE=DATE:');
+      expect(body).toContain('DTEND;VALUE=DATE:');
+    });
+
+    it('should bump SEQUENCE on update', async () => {
+      await definition.updateIssue!(
+        'event-1',
+        { summary: 'Updated' },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      const [, body] = mockHttp.put.mock.calls[0];
+      expect(body).toContain('SEQUENCE:1');
+    });
+  });
+
+  describe('createIssue', () => {
+    it('should create an all-day event with PUT', async () => {
+      const mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+        request: vi.fn(),
+      };
+
+      const result = await definition.createIssue!(
+        'New Task',
+        {
+          serverUrl: 'https://cloud.example.com/dav',
+          username: 'user',
+          password: 'pass',
+          writeCalendarId: '/dav/calendars/user/default/',
+        } as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [url, body, opts] = mockHttp.put.mock.calls[0];
+      expect(url).toContain('/dav/calendars/user/default/');
+      expect(url).toMatch(/\.ics$/);
+      expect(body).toContain('SUMMARY:New Task');
+      expect(body).toContain('DTSTART;VALUE=DATE:');
+      expect(body).toContain('DTEND;VALUE=DATE:');
+      expect(opts.headers['If-None-Match']).toBe('*');
+      expect(result.issueId).toBeDefined();
+      expect(result.issueData.title).toBe('New Task');
+    });
+  });
+
+  describe('deleteIssue', () => {
+    it('should call DELETE on the event URL', async () => {
+      const mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+        request: vi.fn(),
+      };
+
+      await definition.deleteIssue!(
+        '/dav/calendars/user/default/::/dav/calendars/user/default/event-uid.ics',
+        {
+          serverUrl: 'https://cloud.example.com/dav',
+          username: 'user',
+          password: 'pass',
+        } as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.delete).toHaveBeenCalledTimes(1);
+      const [url] = mockHttp.delete.mock.calls[0];
+      expect(url).toContain('event-uid.ics');
+    });
+  });
+
+  describe('getHeaders', () => {
+    it('should return Basic auth header', async () => {
+      const headers = await definition.getHeaders({
+        username: 'user',
+        password: 'pass',
+      } as any);
+
+      // UTF-8 safe encoding: TextEncoder → btoa
+      const expected =
+        'Basic ' + btoa(String.fromCodePoint(...new TextEncoder().encode('user:pass')));
+      expect(headers.Authorization).toBe(expected);
+    });
+
+    it('should return empty headers when credentials are missing', () => {
+      const headers = definition.getHeaders({} as any);
+      expect(headers).toEqual({});
+    });
+  });
+
+  describe('getNewIssuesForBacklog (Nextcloud XML parsing)', () => {
+    const NEXTCLOUD_REPORT_RESPONSE = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/event1.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"abc123"</d:getetag>
+        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:event1-uid
+DTSTART:20260320T100000Z
+DTEND:20260320T110000Z
+SUMMARY:Test Meeting
+DESCRIPTION:A test event
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    it('should parse Nextcloud REPORT response into events', async () => {
+      // Pin "now" so the canned DTSTART:20260320T100000Z falls inside the sync window.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-15T00:00:00Z'));
+      try {
+        const mockHttp = {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          request: vi.fn().mockResolvedValue(NEXTCLOUD_REPORT_RESPONSE),
+        };
+
+        const events = await definition.getNewIssuesForBacklog!(
+          {
+            serverUrl: 'https://example.com/dav',
+            username: 'admin',
+            password: 'pass',
+            readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+          } as any,
+          mockHttp as any,
+        );
+
+        expect(events.length).toBe(1);
+        expect(events[0].title).toBe('Test Meeting');
+        expect(events[0].description).toBe('A test event');
+        expect(events[0].isAllDay).toBe(false);
+        expect(events[0].start).toBeDefined();
+        // Compound ID should contain the event href from REPORT, not the UID
+        expect(events[0].id).toContain('event1.ics');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // Regression coverage for issue #7492 — recurring CalDAV events parsed as one event.
+    describe('RRULE expansion (issue #7492)', () => {
+      const wrapMultistatus = (icsBody: string, eventPath = 'weekly.ics'): string =>
+        `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/${eventPath}</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"rec123"</d:getetag>
+        <cal:calendar-data>${icsBody}</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+      const cfg = {
+        serverUrl: 'https://example.com/dav',
+        username: 'admin',
+        password: 'pass',
+        readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+        syncRangeWeeks: '8',
+      };
+
+      const callBacklog = async (icsBody: string, eventPath?: string) => {
+        const mockHttp = {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          request: vi.fn().mockResolvedValue(wrapMultistatus(icsBody, eventPath)),
+        };
+        return definition.getNewIssuesForBacklog!(cfg as any, mockHttp as any);
+      };
+
+      beforeEach(() => {
+        // Pin "now" so DTSTART:20260105T100000Z falls inside the 8-week sync window.
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('expands FREQ=WEEKLY;COUNT=4 into four occurrences', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+SUMMARY:Weekly Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(4);
+        expect(new Set(events.map((e) => e.title))).toEqual(new Set(['Weekly Standup']));
+        // Compound IDs must be unique per occurrence so the UI can deduplicate.
+        expect(new Set(events.map((e) => e.id)).size).toBe(4);
+        const expectedStarts = [
+          Date.parse('2026-01-05T10:00:00Z'),
+          Date.parse('2026-01-12T10:00:00Z'),
+          Date.parse('2026-01-19T10:00:00Z'),
+          Date.parse('2026-01-26T10:00:00Z'),
+        ];
+        expect(events.map((e) => e.start).sort()).toEqual(expectedStarts);
+        expect(events.every((e) => e.duration === 60 * 60 * 1000)).toBe(true);
+      });
+
+      it('honors EXDATE to skip cancelled occurrences', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+EXDATE:20260112T100000Z
+SUMMARY:Weekly Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(3);
+        expect(events.map((e) => e.start)).not.toContain(
+          Date.parse('2026-01-12T10:00:00Z'),
+        );
+      });
+
+      it('applies a RECURRENCE-ID override to a single occurrence', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+SUMMARY:Weekly Standup
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly-uid
+RECURRENCE-ID:20260112T100000Z
+DTSTART:20260112T140000Z
+DTEND:20260112T150000Z
+SUMMARY:Rescheduled Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(4);
+        const overridden = events.find(
+          (e) => e.start === Date.parse('2026-01-12T14:00:00Z'),
+        );
+        expect(overridden?.title).toBe('Rescheduled Standup');
+        // The original 10:00 slot for Jan 12 must be gone.
+        expect(events.map((e) => e.start)).not.toContain(
+          Date.parse('2026-01-12T10:00:00Z'),
+        );
+      });
+
+      it('skips a cancelled RECURRENCE-ID instance', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:weekly-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=WEEKLY;COUNT=4
+SUMMARY:Weekly Standup
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly-uid
+RECURRENCE-ID:20260119T100000Z
+DTSTART:20260119T100000Z
+STATUS:CANCELLED
+SUMMARY:Weekly Standup
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        expect(events.length).toBe(3);
+        expect(events.map((e) => e.start)).not.toContain(
+          Date.parse('2026-01-19T10:00:00Z'),
+        );
+      });
+
+      it('still emits a single result for non-recurring events', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:single-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+SUMMARY:One-Off Meeting
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics, 'single.ics');
+
+        expect(events.length).toBe(1);
+        expect(events[0].title).toBe('One-Off Meeting');
+      });
+
+      it('limits an unbounded RRULE to occurrences inside the sync window', async () => {
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:daily-uid
+DTSTART:20260105T100000Z
+DTEND:20260105T110000Z
+RRULE:FREQ=DAILY
+SUMMARY:Daily Forever
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics);
+
+        // 8-week window from 2026-01-01T00:00 ends 2026-02-26T00:00 (exclusive).
+        // Recurrence DTSTART is 2026-01-05T10:00; daily occurrences fall on
+        // Jan 5..31 (27 days) + Feb 1..25 (25 days) = 52 occurrences.
+        expect(events.length).toBe(52);
+      });
+
+      it('keeps an in-progress event visible (rangeStart anchored to UTC midnight)', async () => {
+        // Pin "now" to mid-morning so a 09:00 → 10:00 meeting is in progress.
+        vi.setSystemTime(new Date('2026-01-15T09:30:00Z'));
+
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:in-progress-uid
+DTSTART:20260115T090000Z
+DTEND:20260115T100000Z
+SUMMARY:Standup In Progress
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics, 'in-progress.ics');
+
+        expect(events.length).toBe(1);
+        expect(events[0].title).toBe('Standup In Progress');
+      });
+
+      it('expands a master with DTSTART years in the past without hitting the safety cap', async () => {
+        // The master event began two years before the sync window; only the
+        // occurrences inside the window should be emitted, not the years of
+        // skipped iterations counted toward MAX_OCCURRENCES_PER_EVENT.
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:long-running-uid
+DTSTART:20240105T100000Z
+DTEND:20240105T110000Z
+RRULE:FREQ=WEEKLY
+SUMMARY:Long-Running Weekly
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics, 'long-running.ics');
+
+        // 8-week window from 2026-01-01 with weekly recurrence anchored to a
+        // 2024 Monday: occurrences fall on Jan 5, 12, 19, 26, Feb 2, 9, 16, 23
+        // (8 in window). Pre-fix, ~104 past iterations from 2024 would be
+        // counted toward the 1000 cap — fine here, but the regression risk is
+        // a higher-frequency rule. We assert the simple weekly case still
+        // resolves correctly.
+        expect(events.length).toBe(8);
+      });
+    });
+
+    describe('parseCompoundId / toCompoundId (W2 — server-controlled href safety)', () => {
+      // A hostile or quirky CalDAV server returns an href containing what
+      // looks like the old occurrence suffix (`::<digits>`). After fix, the
+      // occurrence delimiter is `#occ=<digits>` so the server-controlled path
+      // segment is never silently stripped.
+      it('does not strip a "::<digits>" tail from a server-supplied href', async () => {
+        vi.setSystemTime(new Date('2026-01-15T09:30:00Z'));
+
+        const HOSTILE_RESPONSE = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/event::1234567890123</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"abc"</d:getetag>
+        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:hostile-uid
+DTSTART:20260115T090000Z
+DTEND:20260115T100000Z
+SUMMARY:Quirky Path
+END:VEVENT
+END:VCALENDAR</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+        const mockHttp = {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          request: vi.fn().mockResolvedValue(HOSTILE_RESPONSE),
+        };
+
+        const events = await definition.getNewIssuesForBacklog!(
+          {
+            serverUrl: 'https://example.com/dav',
+            username: 'admin',
+            password: 'pass',
+            readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+          } as any,
+          mockHttp as any,
+        );
+
+        expect(events.length).toBe(1);
+        // The full server-supplied path must round-trip through getIssueLink.
+        expect(events[0].id).toContain('event::1234567890123');
+        const link = definition.getIssueLink!(events[0].id, {
+          serverUrl: 'https://example.com/dav',
+        } as any);
+        expect(link).toContain('event::1234567890123');
+      });
+    });
+  });
+
+  // Issue #7492 follow-up: an expanded RRULE occurrence (`#occ=<ms>` id) maps
+  // back to the shared master `.ics`. Write paths must NOT silently mutate the
+  // whole series, and getById must report the occurrence's own time.
+  describe('per-occurrence write safety (issue #7492)', () => {
+    const cfg = {
+      serverUrl: 'https://cloud.example.com',
+      username: 'user',
+      password: 'pass',
+      writeCalendarId: '/dav/calendars/user/default/',
+    };
+    const calHref = '/dav/calendars/user/default/';
+    const eventHref = '/dav/calendars/user/default/weekly.ics';
+    const occId = (ms: number): string => `${calHref}::${eventHref}#occ=${ms}`;
+    const masterId = `${calHref}::${eventHref}`;
+
+    const timedMaster = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:weekly-uid',
+      'DTSTART:20260105T100000Z',
+      'DTEND:20260105T110000Z',
+      'RRULE:FREQ=WEEKLY;COUNT=4',
+      'SUMMARY:Weekly Standup',
+      'LAST-MODIFIED:20260101T090000Z',
+      'SEQUENCE:0',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const allDayMaster = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:weekly-allday-uid',
+      'DTSTART;VALUE=DATE:20260105',
+      'DTEND;VALUE=DATE:20260106',
+      'RRULE:FREQ=WEEKLY;COUNT=4',
+      'SUMMARY:Weekly Holiday',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    let mockHttp: any;
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn().mockResolvedValue(timedMaster),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+        request: vi.fn(),
+      };
+    });
+
+    it('updateIssue refuses a single occurrence and writes nothing', async () => {
+      const err: any = await definition.updateIssue!(
+        occId(Date.parse('2026-01-12T10:00:00Z')),
+        { summary: 'Changed' },
+        cfg as any,
+        mockHttp as any,
+      )
+        .then(() => null)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(String(err.message)).toMatch(/single occurrence/i);
+      // Marker tells the host's two-way sync this is an expected limitation, not
+      // a failure, so editing the task stays silent (issue #7492).
+      expect(err.isExpectedSyncSkip).toBe(true);
+      // Guard runs before any network I/O — the master is never touched.
+      expect(mockHttp.get).not.toHaveBeenCalled();
+      expect(mockHttp.put).not.toHaveBeenCalled();
+    });
+
+    it('deleteIssue refuses a single occurrence and deletes nothing', async () => {
+      const err: any = await definition.deleteIssue!(
+        occId(Date.parse('2026-01-12T10:00:00Z')),
+        cfg as any,
+        mockHttp as any,
+      )
+        .then(() => null)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(String(err.message)).toMatch(/single occurrence/i);
+      expect(err.isExpectedSyncSkip).toBe(true);
+      expect(mockHttp.delete).not.toHaveBeenCalled();
+    });
+
+    it('updateIssue still writes a non-occurrence (no #occ=) event', async () => {
+      await definition.updateIssue!(
+        masterId,
+        { summary: 'Changed' },
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('getById re-anchors a timed occurrence to its own start/end', async () => {
+      const occMs = Date.parse('2026-01-19T10:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119T100000Z');
+      expect(issue.end).toBe('20260119T110000Z');
+      // Must NOT collapse onto the master's first (Jan 5) instance.
+      expect(issue.start).not.toBe('20260105T100000Z');
+      // And it round-trips through the two-way-sync extractor to the right instant.
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_dateTime).toBe('2026-01-19T10:00:00.000Z');
+      expect(vals.duration_ms).toBe(60 * 60 * 1000);
+    });
+
+    it('getById re-anchors an all-day occurrence to its own date', async () => {
+      mockHttp.get = vi.fn().mockResolvedValue(allDayMaster);
+      // ical.js represents an all-day occurrence as local midnight, matching
+      // the value the expander stamps into the id.
+      const occMs = new Date(2026, 0, 19).getTime();
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119');
+      expect(issue.startParams).toBe('VALUE=DATE');
+      expect(issue.end).toBe('20260120');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_date).toBe('2026-01-19');
+    });
+
+    it('getById returns the master start for a non-occurrence id', async () => {
+      const issue: any = await definition.getById!(masterId, cfg as any, mockHttp as any);
+      expect(issue.start).toBe('20260105T100000Z');
+    });
+
+    it('getById re-anchors a TZID-master occurrence to the right instant', async () => {
+      const tzidMaster = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:weekly-tzid-uid',
+        'DTSTART;TZID=America/New_York:20260105T090000',
+        'DTEND;TZID=America/New_York:20260105T100000',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'SUMMARY:Weekly NY Standup',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      mockHttp.get = vi.fn().mockResolvedValue(tzidMaster);
+      // Jan 19 2026 09:00 in America/New_York (EST, UTC-5) = 14:00Z.
+      const occMs = Date.parse('2026-01-19T14:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      // The occurrence instant is preserved as UTC, regardless of the runner's TZ.
+      expect(issue.start).toBe('20260119T140000Z');
+      expect(issue.end).toBe('20260119T150000Z');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_dateTime).toBe('2026-01-19T14:00:00.000Z');
+      // Duration comes from the TZID-resolved master (09:00->10:00 = 1h), not a
+      // timezone-skewed value.
+      expect(vals.duration_ms).toBe(60 * 60 * 1000);
+    });
+
+    it('getById re-anchors a floating-time master occurrence and preserves duration', async () => {
+      const floatingMaster = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:weekly-floating-uid',
+        'DTSTART:20260105T090000',
+        'DTEND:20260105T103000',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'SUMMARY:Weekly Floating Standup',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      mockHttp.get = vi.fn().mockResolvedValue(floatingMaster);
+      const occMs = Date.parse('2026-01-19T09:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119T090000Z');
+      expect(issue.end).toBe('20260119T103000Z');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.duration_ms).toBe(90 * 60 * 1000);
+    });
+  });
+
+  describe('timeBlock.upsertEvent', () => {
+    const cfg = {
+      serverUrl: 'https://dav.example.com/',
+      timeBlockCalendarId: 'https://dav.example.com/cal/',
+    };
+    const eventData = {
+      title: 'My Task',
+      dueWithTime: new Date('2026-05-14T15:00:00Z').getTime(),
+      durationMs: 30 * 60 * 1000,
+      isDone: false,
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn().mockResolvedValue(''),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('does a single idempotent PUT (no double-write)', async () => {
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      expect(mockHttp.post).not.toHaveBeenCalled();
+    });
+
+    it('retries on a 429 (rate limited) and then succeeds', async () => {
+      vi.useFakeTimers();
+      mockHttp.put.mockRejectedValueOnce({ status: 429 }).mockResolvedValueOnce('');
+
+      const p = definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries on a 503 (server unavailable) and then succeeds', async () => {
+      vi.useFakeTimers();
+      mockHttp.put.mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce('');
+
+      const p = definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry a non-transient error (e.g. 403)', async () => {
+      mockHttp.put.mockRejectedValue({ status: 403 });
+
+      await expect(
+        definition.timeBlock!.upsertEvent(
+          'task-1',
+          eventData,
+          cfg as any,
+          mockHttp as any,
+        ),
+      ).rejects.toBeDefined();
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('timeBlock.deleteEvent', () => {
+    const cfg = {
+      serverUrl: 'https://dav.example.com/',
+      timeBlockCalendarId: 'https://dav.example.com/cal/',
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn().mockResolvedValue(''),
+      };
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('swallows a 404 (event already gone)', async () => {
+      mockHttp.delete.mockRejectedValue({ status: 404 });
+
+      await expect(
+        definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any),
+      ).resolves.toBeUndefined();
+    });
+
+    it('retries on a 503 and then succeeds', async () => {
+      vi.useFakeTimers();
+      mockHttp.delete.mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce('');
+
+      const p = definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any);
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.delete).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry a non-transient error (e.g. 500)', async () => {
+      mockHttp.delete.mockRejectedValue({ status: 500 });
+
+      await expect(
+        definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any),
+      ).rejects.toBeDefined();
+      expect(mockHttp.delete).toHaveBeenCalledTimes(1);
+    });
+  });
+});

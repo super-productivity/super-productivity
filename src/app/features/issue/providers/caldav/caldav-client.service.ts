@@ -16,6 +16,29 @@ import { catchError } from 'rxjs/operators';
 import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 import { throwHandledError } from '../../../../util/throw-handled-error';
 import { IssueLog } from '../../../../core/log';
+import { Capacitor } from '@capacitor/core';
+import { WebDavHttp } from '../../../../op-log/sync-providers/file-based/webdav/capacitor-webdav-http';
+
+/** Subset of the XMLHttpRequest surface that @nextcloud/cdav-library v1.5.3 actually uses. */
+interface XhrLike {
+  open(method: string, url: string): void;
+  send(body?: string | null): void;
+  setRequestHeader(name: string, value: string): void;
+  getResponseHeader(name: string): string | null;
+  getAllResponseHeaders(): string;
+  addEventListener(type: string, listener: (...args: unknown[]) => void): void;
+  removeEventListener(type: string, listener: (...args: unknown[]) => void): void;
+  abort(): void;
+  status: number;
+  statusText: string;
+  responseText: string;
+  response: string;
+  readyState: number;
+  onload: ((event: unknown) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onabort: ((event: unknown) => void) | null;
+  onreadystatechange: ((event: unknown) => void) | null;
+}
 
 interface ClientCache {
   client: DavClient;
@@ -128,20 +151,25 @@ export class CaldavClientService {
     const todo = comp.getFirstSubcomponent('vtodo');
 
     if (!todo) {
-      IssueLog.log(task);
+      IssueLog.log('No todo found for CalDAV task');
       throw new Error('No todo found for task');
     }
 
     const categoriesProperty = todo.getAllProperties('categories')[0];
     const categories: string[] = categoriesProperty?.getValues() || [];
 
+    const dtstart = todo.getFirstPropertyValue('dtstart') as any;
+    const due = todo.getFirstPropertyValue('due') as any;
+
     return {
       id: todo.getFirstPropertyValue('uid') as string,
       completed: !!todo.getFirstPropertyValue('completed'),
       item_url: task.url,
       summary: (todo.getFirstPropertyValue('summary') as string) || '',
-      start: (todo.getFirstPropertyValue('dtstart') as any)?.toJSDate().getTime(),
-      due: (todo.getFirstPropertyValue('due') as any)?.toJSDate().getTime(),
+      start: dtstart?.toJSDate().getTime(),
+      isAllDay: dtstart ? dtstart.isDate === true : undefined,
+      due: due?.toJSDate().getTime(),
+      isDueAllDay: due ? due.isDate === true : undefined,
       note: (todo.getFirstPropertyValue('description') as string) || undefined,
       status: (todo.getFirstPropertyValue('status') as CaldavIssueStatus) || undefined,
       priority: +(todo.getFirstPropertyValue('priority') as string) || undefined,
@@ -150,8 +178,24 @@ export class CaldavClientService {
       location: todo.getFirstPropertyValue('location') as string,
       labels: categories,
       etag_hash: this._hashEtag(task.etag),
-      related_to: (todo.getFirstPropertyValue('related-to') as string) || undefined,
+      related_to: CaldavClientService._getParentRelatedTo(todo),
     };
+  }
+
+  /**
+   * Returns the UID referenced by the first RELATED-TO property whose RELTYPE
+   * parameter is absent or explicitly set to PARENT (RFC 5545 §3.8.4.5).
+   * CHILD and SIBLING relations are ignored so we never invert the hierarchy.
+   */
+  private static _getParentRelatedTo(todo: any): string | undefined {
+    const props = todo.getAllProperties('related-to') as any[];
+    for (const prop of props) {
+      const reltype = (prop.getParameter('reltype') as string | null) ?? 'PARENT';
+      if (reltype.toUpperCase() === 'PARENT') {
+        return (prop.getFirstValue() as string) || undefined;
+      }
+    }
+    return undefined;
   }
 
   private static _hashEtag(etag: string): number {
@@ -168,6 +212,13 @@ export class CaldavClientService {
       hash |= 0;
     }
     return hash;
+  }
+
+  private static _getResponseHeaderWithDavFallback(
+    name: string,
+    value: string | null,
+  ): string | null {
+    return value === null && name.toLowerCase() === 'dav' ? '' : value;
   }
 
   async _get_client(cfg: CaldavCfg): Promise<ClientCache> {
@@ -266,9 +317,10 @@ export class CaldavClientService {
   }
 
   getByIds$(ids: string[], cfg: CaldavCfg): Observable<CaldavIssue[]> {
+    const idSet = new Set(ids);
     return from(
       this._getTasks(cfg, false, false).then((tasks) =>
-        tasks.filter((task) => task.id in ids),
+        tasks.filter((task) => idSet.has(task.id)),
       ),
     ).pipe(
       catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),
@@ -285,11 +337,29 @@ export class CaldavClientService {
     );
   }
 
+  protected get isNativePlatform(): boolean {
+    return Capacitor.isNativePlatform();
+  }
+
+  protected _webDavRequest(options: {
+    url: string;
+    method: string;
+    headers?: Record<string, string>;
+    data?: string;
+  }): Promise<{ status: number; headers: Record<string, string>; data: string }> {
+    return WebDavHttp.request(options);
+  }
+
   private _getXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
+    if (this.isNativePlatform) {
+      return this._getNativeXhrProvider(cfg);
+    }
+
     // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
     function xhrProvider(): XMLHttpRequest {
       const xhr = new XMLHttpRequest();
       const oldOpen = xhr.open;
+      const oldGetResponseHeader = xhr.getResponseHeader;
 
       // override open() method to add headers
 
@@ -305,10 +375,140 @@ export class CaldavClientService {
         );
         return result;
       };
+      xhr.getResponseHeader = function (
+        this: XMLHttpRequest,
+        name: string,
+      ): string | null {
+        return CaldavClientService._getResponseHeaderWithDavFallback(
+          name,
+          oldGetResponseHeader.call(this, name),
+        );
+      };
       return xhr;
     }
 
     return xhrProvider;
+  }
+
+  // On native platforms (Android WebView, iOS WKWebView), XHR is blocked by
+  // CORS. We use the native WebDavHttp Capacitor plugin (OkHttp / URLSession)
+  // which bypasses the WebView's CORS restrictions.
+  private _getNativeXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
+    return (): XMLHttpRequest => {
+      const headers: Record<string, string> = {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'X-Requested-With': 'SuperProductivity',
+        Authorization: 'Basic ' + btoa(cfg.username + ':' + cfg.password),
+      };
+      let method = 'GET';
+      let url = '';
+      let aborted = false;
+      const responseHeaders: Record<string, string> = {};
+      const eventListeners = new Map<string, ((...args: unknown[]) => void)[]>();
+
+      const fakeXhr: XhrLike = {
+        status: 0,
+        statusText: '',
+        responseText: '',
+        response: '',
+        readyState: 0,
+        onload: null,
+        onerror: null,
+        onabort: null,
+        onreadystatechange: null,
+
+        open: (m: string, u: string): void => {
+          method = m;
+          url = u;
+          fakeXhr.readyState = 1;
+        },
+
+        setRequestHeader: (name: string, value: string): void => {
+          headers[name] = value;
+        },
+
+        send: (body?: string | null): void => {
+          this._webDavRequest({
+            url,
+            method,
+            headers,
+            data: body ?? undefined,
+          }).then(
+            (res) => {
+              if (aborted) return;
+              fakeXhr.status = res.status;
+              fakeXhr.statusText = '';
+              fakeXhr.responseText = res.data || '';
+              fakeXhr.response = res.data || '';
+              fakeXhr.readyState = 4;
+              if (res.headers) {
+                for (const [k, v] of Object.entries(res.headers)) {
+                  responseHeaders[k.toLowerCase()] = v;
+                }
+              }
+              const event = { target: fakeXhr, type: 'load' };
+              // cdav-library v1.5.3 uses onreadystatechange exclusively; fire it
+              // first so its readyState === 4 check passes, then fire onload for
+              // any other consumers.
+              fakeXhr.onreadystatechange?.(event);
+              fakeXhr.onload?.(event);
+              [...(eventListeners.get('load') ?? [])].forEach((fn) => fn(event));
+            },
+            (err: unknown) => {
+              if (aborted) return;
+              fakeXhr.readyState = 4;
+              const event = { target: fakeXhr, type: 'error', error: err };
+              fakeXhr.onreadystatechange?.(event);
+              fakeXhr.onerror?.(event);
+              [...(eventListeners.get('error') ?? [])].forEach((fn) => fn(event));
+            },
+          );
+        },
+
+        getResponseHeader: (name: string): string | null => {
+          return CaldavClientService._getResponseHeaderWithDavFallback(
+            name,
+            responseHeaders[name.toLowerCase()] ?? null,
+          );
+        },
+
+        getAllResponseHeaders: (): string => {
+          return Object.entries(responseHeaders)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\r\n');
+        },
+
+        addEventListener: (
+          type: string,
+          callback: (...args: unknown[]) => void,
+        ): void => {
+          if (!eventListeners.has(type)) {
+            eventListeners.set(type, []);
+          }
+          eventListeners.get(type)!.push(callback);
+        },
+
+        removeEventListener: (
+          type: string,
+          callback: (...args: unknown[]) => void,
+        ): void => {
+          const listeners = eventListeners.get(type);
+          if (listeners) {
+            const idx = listeners.indexOf(callback);
+            if (idx !== -1) listeners.splice(idx, 1);
+          }
+        },
+
+        abort: (): void => {
+          aborted = true;
+          const event = { target: fakeXhr, type: 'abort' };
+          fakeXhr.onabort?.(event);
+          [...(eventListeners.get('abort') ?? [])].forEach((fn) => fn(event));
+        },
+      };
+
+      return fakeXhr as unknown as XMLHttpRequest;
+    };
   }
 
   private _handleNetErr(err: unknown): never {
@@ -410,7 +610,7 @@ export class CaldavClientService {
     const todo = comp.getFirstSubcomponent('vtodo');
 
     if (!todo) {
-      IssueLog.err('No todo found for task', task);
+      IssueLog.err('No todo found for CalDAV task');
       return;
     }
 

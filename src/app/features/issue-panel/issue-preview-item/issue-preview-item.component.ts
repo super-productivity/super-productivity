@@ -12,10 +12,13 @@ import { SearchResultItem } from '../../issue/issue.model';
 import { isIssueDone } from '../../issue/mapping-helper/is-issue-done';
 import { IssueService } from '../../issue/issue.service';
 import { ICAL_TYPE } from '../../issue/issue.const';
+import { IS_ELECTRON } from '../../../app.constants';
+import { T } from '../../../t.const';
+import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({
   selector: 'issue-preview-item',
-  imports: [MatIconButton, MatIcon],
+  imports: [MatIconButton, MatIcon, TranslatePipe],
   templateUrl: './issue-preview-item.component.html',
   styleUrl: './issue-preview-item.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,6 +28,7 @@ import { ICAL_TYPE } from '../../issue/issue.const';
   },
 })
 export class IssuePreviewItemComponent {
+  readonly T: typeof T = T;
   public readonly ICAL_TYPE = ICAL_TYPE;
   private _issueService = inject(IssueService);
 
@@ -43,5 +47,16 @@ export class IssuePreviewItemComponent {
       this.issueProviderId(),
     );
     window.open(url, '_blank');
+  }
+
+  openCalendarEventUrl(): void {
+    const url = (this.itemData().issueData as { url?: string })?.url;
+    if (url) {
+      if (IS_ELECTRON) {
+        window.ea.openExternalUrl(url);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { Log } from '../../../core/log';
 
 const FAKE_MONDAY_THE_10TH = new Date(2022, 0, 10).getTime();
 
@@ -74,27 +75,25 @@ describe('getNextRepeatOccurrence()', () => {
       expect(result).toBeTruthy();
     });
 
-    it('should throw error if repeatEvery is not a positive integer', () => {
+    it('should return null and warn if repeatEvery is not a positive integer', () => {
+      spyOn(Log, 'warn');
+
       const cfg1 = dummyRepeatable('ID1', {
         repeatEvery: 0,
       });
-      expect(() => getNextRepeatOccurrence(cfg1, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNextRepeatOccurrence(cfg1, new Date())).toBeNull();
 
       const cfg2 = dummyRepeatable('ID1', {
         repeatEvery: -1,
       });
-      expect(() => getNextRepeatOccurrence(cfg2, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNextRepeatOccurrence(cfg2, new Date())).toBeNull();
 
       const cfg3 = dummyRepeatable('ID1', {
         repeatEvery: 1.5,
       });
-      expect(() => getNextRepeatOccurrence(cfg3, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNextRepeatOccurrence(cfg3, new Date())).toBeNull();
+
+      expect(Log.warn).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -259,6 +258,113 @@ describe('getNextRepeatOccurrence()', () => {
       const cfg = dummyRepeatable('ID1', {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+  });
+
+  describe('MONTHLY monthlyLastDay (issue #7726)', () => {
+    it('returns the last day of the next month', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 4, 31)),
+      });
+      testCase(cfg, new Date(2026, 5, 1), new Date(2026, 4, 31), new Date(2026, 5, 30));
+    });
+
+    it('clamps to month-end even when startDate day-of-month is 30', () => {
+      // A recurrence set up in a 30-day month must still hit 31 in long
+      // months — the anchor is decoupled from startDate's day.
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 5, 30)),
+      });
+      testCase(cfg, new Date(2026, 6, 1), new Date(2026, 5, 30), new Date(2026, 6, 31));
+    });
+
+    it('clamps to February month-end', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2026, 0, 31)),
+      });
+      testCase(cfg, new Date(2026, 1, 1), new Date(2026, 0, 31), new Date(2026, 1, 28));
+    });
+
+    it('clamps to February 29 in a leap year', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyLastDay: true,
+        lastTaskCreationDay: getDbDateStr(new Date(2024, 0, 31)),
+      });
+      testCase(cfg, new Date(2024, 1, 1), new Date(2024, 0, 31), new Date(2024, 1, 29));
+    });
+  });
+
+  describe('MONTHLY Nth weekday (issue #6040)', () => {
+    it('returns the first Thursday of next month', () => {
+      const startDate = new Date(2026, 0, 1); // Jan 1, 2026 (Thursday)
+      const lastCreation = new Date(2026, 0, 1); // first Thu of Jan 2026 was Jan 1
+      const fromDate = new Date(2026, 0, 2);
+      const expected = new Date(2026, 1, 5); // first Thu of Feb 2026
+      const cfg = dummyRepeatable('ID-NTH-1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4, // Thursday
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('returns the last Monday of next month', () => {
+      const startDate = new Date(2026, 0, 26); // Jan 26, 2026 (last Mon)
+      const lastCreation = new Date(2026, 0, 26);
+      const fromDate = new Date(2026, 0, 27);
+      const expected = new Date(2026, 1, 23); // last Mon of Feb 2026
+      const cfg = dummyRepeatable('ID-NTH-2', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: -1,
+        monthlyWeekday: 1, // Monday
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('handles a month with 5 occurrences of a weekday correctly when "last" is requested', () => {
+      // March 2026 has 5 Tuesdays (3, 10, 17, 24, 31). Last = the 31st.
+      const startDate = new Date(2026, 1, 24); // last Tue of Feb 2026
+      const lastCreation = new Date(2026, 1, 24);
+      const fromDate = new Date(2026, 1, 25);
+      const expected = new Date(2026, 2, 31); // last Tue of Mar 2026
+      const cfg = dummyRepeatable('ID-NTH-4', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: -1,
+        monthlyWeekday: 2, // Tuesday
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('respects repeatEvery > 1 (every 2 months)', () => {
+      const startDate = new Date(2026, 0, 1); // Jan 1, 2026 (1st Thu of Jan)
+      const lastCreation = new Date(2026, 0, 1);
+      const fromDate = new Date(2026, 0, 2);
+      const expected = new Date(2026, 2, 5); // 1st Thu of Mar (skip Feb)
+      const cfg = dummyRepeatable('ID-NTH-5', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 2,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 4,
         lastTaskCreationDay: getDbDateStr(lastCreation),
       });
       testCase(cfg, fromDate, startDate, expected);
@@ -819,6 +925,163 @@ describe('getNextRepeatOccurrence()', () => {
       expect(result).toBeTruthy();
       // Should be today or later
       expect(result!.getTime()).toBeGreaterThanOrEqual(today.getTime());
+    });
+  });
+
+  // Issue #7951: the inclusive variant is used when relocating an existing live
+  // instance on a schedule edit — `fromDate` (today) must be considered instead
+  // of being skipped to the day after the last creation.
+  describe('inclusive option (#7951)', () => {
+    const noon = (d: Date): Date => {
+      const r = new Date(d);
+      r.setHours(12, 0, 0, 0);
+      return r;
+    };
+
+    // Enable exactly one weekday (0 = Sunday … 6 = Saturday).
+    const weekdayFlags = (enabledDay: number): Partial<TaskRepeatCfg> => ({
+      sunday: enabledDay === 0,
+      monday: enabledDay === 1,
+      tuesday: enabledDay === 2,
+      wednesday: enabledDay === 3,
+      thursday: enabledDay === 4,
+      friday: enabledDay === 5,
+      saturday: enabledDay === 6,
+    });
+
+    it('returns today for a DAILY repeat created today (vs tomorrow when exclusive)', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      const tomorrow = noon(new Date(today.getTime() + DAY));
+      expect(getNextRepeatOccurrence(cfg, today)).toEqual(tomorrow);
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('returns today for a WEEKLY repeat when today matches the enabled weekday', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+        ...weekdayFlags(today.getDay()),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('still skips today when today is not a valid occurrence', () => {
+      const today = noon(new Date());
+      const tomorrow = noon(new Date(today.getTime() + DAY));
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+        // only tomorrow's weekday is enabled
+        ...weekdayFlags(tomorrow.getDay()),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(tomorrow);
+    });
+
+    it('returns today for a MONTHLY repeat whose day-of-month is today', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('does not resolve to a past MONTHLY occurrence when this month already passed', () => {
+      // fromDate is the 16th; the monthly anchor (the 10th) already passed this
+      // month, so the soonest inclusive occurrence is next month's 10th — never
+      // the past June 10th. Exercises the floor guard, not just the
+      // epoch-neutralised gating.
+      const fromDate = noon(new Date(2026, 5, 16)); // Tue Jun 16 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: '2026-01-10',
+        lastTaskCreationDay: '2026-06-10',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate, { inclusive: true })).toEqual(
+        noon(new Date(2026, 6, 10)), // Jul 10 2026
+      );
+    });
+
+    it('returns today for a YEARLY repeat whose month and day are today', () => {
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: getDbDateStr(today),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('does not resolve to a past YEARLY occurrence when this year already passed', () => {
+      // Yearly anchor is March 10; fromDate is mid-June, so this year's
+      // occurrence already passed → next year's March 10, never the past one.
+      const fromDate = noon(new Date(2026, 5, 16)); // Tue Jun 16 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: '2020-03-10',
+        lastTaskCreationDay: '2026-03-10',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate, { inclusive: true })).toEqual(
+        noon(new Date(2027, 2, 10)), // Mar 10 2027
+      );
+    });
+
+    it('keeps the repeatFromCompletionDate anchor (lastTaskCreationDay), not startDate', () => {
+      // repeatFromCompletionDate cfgs anchor the pattern on lastTaskCreationDay
+      // (via getEffectiveRepeatStartDate). The inclusive path must preserve that
+      // anchor — it only neutralises the prior-creation *gating*, computed after
+      // the start anchor is resolved. With lastTaskCreationDay = today the
+      // soonest inclusive daily occurrence is today (exclusive would be tomorrow).
+      const today = noon(new Date());
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        // startDate is intentionally far in the past; for repeatFromCompletionDate
+        // the pattern anchors on lastTaskCreationDay, not startDate.
+        startDate: '2020-01-01',
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(today);
+    });
+
+    it('respects repeatEvery when today is off-cycle (returns the next on-cycle day)', () => {
+      // Every-2-days anchored on yesterday → today is off-cycle (diff 1, odd),
+      // so inclusive must NOT force today; the next on-cycle day is tomorrow.
+      const today = noon(new Date());
+      const tomorrow = noon(new Date(today.getTime() + DAY));
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 2,
+        startDate: getDbDateStr(new Date(today.getTime() - DAY)),
+        lastTaskCreationDay: getDbDateStr(today),
+      });
+
+      expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(tomorrow);
     });
   });
 });

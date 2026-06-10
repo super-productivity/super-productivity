@@ -32,4 +32,5 @@ export interface RegisteredPluginIssueProvider {
   issueStrings: { singular: string; plural: string };
   useAgendaView?: boolean;
   defaultAutoAddToBacklog?: boolean;
+  allowPrivateNetwork?: boolean;
 }

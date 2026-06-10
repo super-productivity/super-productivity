@@ -1,12 +1,17 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
+import { prefetchLatestEntityOpsForBatch } from '../src/sync/conflict';
 import { testState, resetTestState } from './sync.service.test-state';
 
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', async () => {
   // Import testState from separate module to avoid circular import
-  const { testState: state } = await import('./sync.service.test-state');
+  const {
+    applyOperationSelect,
+    hasOperationUniqueConflict,
+    testState: state,
+  } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
 
   const createTxMock = () => ({
@@ -28,9 +33,35 @@ vi.mock('../src/db', async () => {
         state.operations.set(args.data.id, op);
         return op;
       }),
+      createMany: vi.fn().mockImplementation(async (args: any) => {
+        const rows = Array.isArray(args.data) ? args.data : [args.data];
+        let count = 0;
+
+        for (const row of rows) {
+          if (hasOperationUniqueConflict(state.operations, row)) {
+            if (args.skipDuplicates) {
+              continue;
+            }
+            throw new PrismaModule.PrismaClientKnownRequestError(
+              'Unique constraint failed',
+              { code: 'P2002', clientVersion: '5.0.0' },
+            );
+          }
+
+          state.operations.set(row.id, {
+            ...row,
+            receivedAt: row.receivedAt ?? BigInt(Date.now()),
+          });
+          count++;
+        }
+
+        return { count };
+      }),
       findFirst: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         if (args.where?.opType?.in) {
           const ops = Array.from(state.operations.values())
@@ -39,9 +70,11 @@ vi.mock('../src/db', async () => {
           for (const op of ops) {
             if (args.where.opType.in.includes(op.opType)) {
               if (args.where.serverSeq?.lte !== undefined) {
-                if (op.serverSeq <= args.where.serverSeq.lte) return op;
+                if (op.serverSeq <= args.where.serverSeq.lte) {
+                  return applyOperationSelect(op, args.select);
+                }
               } else {
-                return op;
+                return applyOperationSelect(op, args.select);
               }
             }
           }
@@ -52,10 +85,12 @@ vi.mock('../src/db', async () => {
               (op: any) =>
                 op.userId === args.where.userId &&
                 op.entityId === args.where.entityId &&
-                op.entityType === args.where.entityType,
+                op.entityType === args.where.entityType &&
+                (args.where.clientId?.not === undefined ||
+                  op.clientId !== args.where.clientId.not),
             )
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-          return ops[0] || null;
+          return applyOperationSelect(ops[0], args.select) || null;
         }
         return null;
       }),
@@ -65,6 +100,7 @@ vi.mock('../src/db', async () => {
           .filter((op: any) => {
             if (args.where?.userId !== undefined && args.where.userId !== op.userId)
               return false;
+            if (args.where?.id?.in && !args.where.id.in.includes(op.id)) return false;
             if (
               args.where?.serverSeq?.gt !== undefined &&
               op.serverSeq <= args.where.serverSeq.gt
@@ -140,7 +176,9 @@ vi.mock('../src/db', async () => {
       }),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
         if (args.where?.id) {
-          return state.operations.get(args.where.id) || null;
+          return (
+            applyOperationSelect(state.operations.get(args.where.id), args.select) || null
+          );
         }
         return null;
       }),
@@ -166,6 +204,13 @@ vi.mock('../src/db', async () => {
             if (typeof value === 'object' && value !== null && 'increment' in value) {
               updated[key] =
                 (existing[key] || 0) + (value as { increment: number }).increment;
+            } else if (
+              typeof value === 'object' &&
+              value !== null &&
+              'decrement' in value
+            ) {
+              updated[key] =
+                (existing[key] || 0) - (value as { decrement: number }).decrement;
             } else {
               updated[key] = value;
             }
@@ -258,6 +303,85 @@ vi.mock('../src/db', async () => {
       }),
       update: vi.fn().mockResolvedValue({}),
     },
+    // The upload transaction now writes the storage counter atomically via
+    // $executeRaw to keep the data write and the counter delta in a single
+    // commit. Mock is a no-op here — the existing spec asserts behaviour at
+    // the op level and does not inspect storage_used_bytes inside this file.
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    // Full-state op uploads aggregate prior vector clocks inside the same
+    // transaction. Dispatch on SQL text so unrelated $queryRaw callers keep
+    // returning their existing default shape.
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
+      const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('INSERT INTO user_sync_state')) {
+        const [txUserId, delta] = params as [number, number];
+        const existing = state.userSyncStates.get(txUserId);
+        const lastSeq = (existing?.lastSeq ?? 0) + delta;
+        state.userSyncStates.set(txUserId, {
+          ...(existing ?? { userId: txUserId }),
+          lastSeq,
+        });
+        state.serverSeqCounter = Math.max(state.serverSeqCounter, lastSeq);
+        return [{ lastSeq }];
+      }
+      if (sql.includes('JOIN (VALUES')) {
+        const txUserId = params[params.length - 1] as number;
+        const touchedParams = params.slice(0, -1).flatMap((param: unknown): unknown[] => {
+          if (
+            param &&
+            typeof param === 'object' &&
+            Array.isArray((param as { values?: unknown[] }).values)
+          ) {
+            return (param as { values: unknown[] }).values;
+          }
+          return [param];
+        });
+        const touchedPairs = new Set<string>();
+        for (let i = 0; i < touchedParams.length; i += 2) {
+          touchedPairs.add(`${touchedParams[i]}\u0000${touchedParams[i + 1]}`);
+        }
+
+        const latestByEntity = new Map<string, any>();
+        for (const op of state.operations.values()) {
+          if (op.userId !== txUserId || !op.entityId) continue;
+          const key = `${op.entityType}\u0000${op.entityId}`;
+          if (!touchedPairs.has(key)) continue;
+          const existing = latestByEntity.get(key);
+          if (!existing || op.serverSeq > existing.serverSeq) {
+            latestByEntity.set(key, op);
+          }
+        }
+
+        return Array.from(latestByEntity.values()).map((op: any) => ({
+          entityType: op.entityType,
+          entityId: op.entityId,
+          clientId: op.clientId,
+          vectorClock: op.vectorClock,
+        }));
+      }
+      if (sql.includes('jsonb_each_text(vector_clock)')) {
+        const [txUserId, beforeServerSeq] = params;
+        const aggregate = new Map<string, number>();
+        for (const op of state.operations.values()) {
+          if (op.userId !== txUserId) continue;
+          if (op.serverSeq >= beforeServerSeq) continue;
+          const vc = op.vectorClock;
+          if (!vc || typeof vc !== 'object') continue;
+          for (const [clientKey, rawVal] of Object.entries(
+            vc as Record<string, unknown>,
+          )) {
+            if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) continue;
+            const cur = aggregate.get(clientKey) ?? 0;
+            if (rawVal > cur) aggregate.set(clientKey, rawVal);
+          }
+        }
+        return Array.from(aggregate, ([client_id, max_counter]) => ({
+          client_id,
+          max_counter: BigInt(max_counter),
+        }));
+      }
+      return [{ total: BigInt(0) }];
+    }),
   });
 
   return {
@@ -287,6 +411,7 @@ vi.mock('../src/db', async () => {
           const ops = Array.from(state.operations.values());
           return ops
             .filter((op: any) => {
+              if (args.where?.id?.in && !args.where.id.in.includes(op.id)) return false;
               if (args.where?.userId !== undefined && args.where.userId !== op.userId)
                 return false;
               if (
@@ -299,6 +424,11 @@ vi.mock('../src/db', async () => {
                 op.serverSeq > args.where.serverSeq.lte
               )
                 return false;
+              if (
+                args.where?.receivedAt?.lt !== undefined &&
+                op.receivedAt >= args.where.receivedAt.lt
+              )
+                return false;
               if (args.where?.clientId?.not && op.clientId === args.where.clientId.not)
                 return false;
               if (args.where?.opType?.in && !args.where.opType.in.includes(op.opType))
@@ -309,7 +439,8 @@ vi.mock('../src/db', async () => {
               if (args.orderBy?.serverSeq === 'desc') return b.serverSeq - a.serverSeq;
               return a.serverSeq - b.serverSeq;
             })
-            .slice(0, args.take || 500);
+            .slice(0, args.take || 500)
+            .map((op: any) => applyOperationSelect(op, args.select));
         }),
         aggregate: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(state.operations.values()).filter(
@@ -348,6 +479,8 @@ vi.mock('../src/db', async () => {
           let deleted = 0;
           for (const [id, op] of state.operations) {
             let shouldDelete = true;
+            if (args.where?.id?.in && !args.where.id.in.includes(id))
+              shouldDelete = false;
             if (args.where?.userId !== undefined && op.userId !== args.where.userId)
               shouldDelete = false;
             if (
@@ -452,22 +585,42 @@ vi.mock('../src/db', async () => {
         update: vi.fn().mockResolvedValue({}),
       },
       $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+      $executeRaw: vi.fn().mockResolvedValue(0),
     },
   };
 });
 
 // Mock auth module
 vi.mock('../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
+  verifyToken: vi
+    .fn()
+    .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
 }));
 
 // Import AFTER mocking
 import { initSyncService, getSyncService, SyncService } from '../src/sync/sync.service';
-import { Operation, DEFAULT_SYNC_CONFIG } from '../src/sync/sync.types';
+import { Operation, DEFAULT_SYNC_CONFIG, SYNC_ERROR_CODES } from '../src/sync/sync.types';
+import { prisma } from '../src/db';
 
 describe('SyncService', () => {
   const userId = 1;
   const clientId = 'test-device-1';
+
+  // Factory for the repeated Operation fixture (mirrors createOp in
+  // sync-fixes.spec.ts). Override only the fields a test cares about.
+  const makeOp = (overrides: Partial<Operation> = {}): Operation => ({
+    id: uuidv7(),
+    clientId,
+    actionType: 'ADD_TASK',
+    opType: 'CRT',
+    entityType: 'TASK',
+    entityId: 'task-1',
+    payload: { title: 'Test Task' },
+    vectorClock: {},
+    timestamp: Date.now(),
+    schemaVersion: 1,
+    ...overrides,
+  });
 
   beforeEach(() => {
     // Reset all test data stores
@@ -487,21 +640,15 @@ describe('SyncService', () => {
     initSyncService();
   });
 
+  afterEach(() => {
+    delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+    delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
+  });
+
   describe('uploadOps', () => {
     it('should correctly upload operations', async () => {
       const service = getSyncService();
-      const op: Operation = {
-        id: uuidv7(),
-        clientId,
-        actionType: 'ADD_TASK',
-        opType: 'CRT',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'Test Task' },
-        vectorClock: {},
-        timestamp: Date.now(),
-        schemaVersion: 1,
-      };
+      const op: Operation = makeOp();
 
       const results = await service.uploadOps(userId, clientId, [op]);
 
@@ -516,6 +663,202 @@ describe('SyncService', () => {
     it('should handle multiple operations in order', async () => {
       const service = getSyncService();
       const ops: Operation[] = [
+        makeOp({ entityId: 'task-1', payload: { title: 'Task 1' } }),
+        makeOp({
+          entityId: 'task-2',
+          payload: { title: 'Task 2' },
+          timestamp: Date.now() + 1,
+        }),
+      ];
+
+      const results = await service.uploadOps(userId, clientId, ops);
+
+      expect(results).toHaveLength(2);
+      expect(results[0].serverSeq).toBe(1);
+      expect(results[1].serverSeq).toBe(2);
+    });
+
+    it('should batch upload operations behind the rollout flag', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const ops: Operation[] = Array.from({ length: 25 }, (_, index) =>
+        makeOp({
+          entityId: `task-${index}`,
+          payload: { title: `Task ${index}` },
+          vectorClock: { [clientId]: index + 1 },
+          timestamp: Date.now() + index,
+        }),
+      );
+
+      const results = await service.uploadOps(userId, clientId, ops);
+
+      expect(results).toHaveLength(25);
+      expect(results.every((result) => result.accepted)).toBe(true);
+      expect(results.map((result) => result.serverSeq)).toEqual(
+        Array.from({ length: 25 }, (_, index) => index + 1),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(25);
+      expect(testState.operations.size).toBe(25);
+    });
+
+    it('rejects an intra-batch same-id op as DUPLICATE_OPERATION even when its content differs (deliberate divergence from the legacy per-op path, which yields INVALID_OP_ID)', async () => {
+      // C4: the batch path dedups intra-batch purely by op.id (plan §1a step 2)
+      // and rejects the later op as DUPLICATE_OPERATION regardless of content.
+      // The legacy per-op path inserts the first then catches the second at the
+      // DB and returns INVALID_OP_ID for differing content. Both are terminal
+      // rejections with no row and no sequence gap, so sync invariants hold;
+      // the client treats DUPLICATE_OPERATION as a silent success and
+      // INVALID_OP_ID as a hard rejection. This test pins the chosen batch
+      // semantics so the divergence stays intentional, not accidental drift.
+      const service = new SyncService({ batchUpload: true });
+      const opId = uuidv7();
+      const first = makeOp({
+        id: opId,
+        entityId: 'task-1',
+        payload: { title: 'Task 1' },
+        vectorClock: { [clientId]: 1 },
+      });
+      const sameIdDifferentContent = makeOp({
+        id: opId,
+        entityId: 'task-2',
+        payload: { title: 'Task 2' },
+        vectorClock: { [clientId]: 2 },
+        timestamp: Date.now() + 1,
+      });
+      // Guard the premise: the two ops genuinely differ in content.
+      expect(sameIdDifferentContent.id).toBe(first.id);
+      expect(sameIdDifferentContent.payload).not.toEqual(first.payload);
+
+      const results = await service.uploadOps(userId, clientId, [
+        first,
+        sameIdDifferentContent,
+      ]);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({ accepted: true, serverSeq: 1 }),
+      );
+      expect(results[1]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+        }),
+      );
+      // No sequence gap: lastSeq advanced by exactly 1, exactly one row.
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+      expect(testState.operations.size).toBe(1);
+    });
+
+    it('should reject intra-batch entity conflicts in order', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const ops: Operation[] = [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'UPDATE_TASK',
+          opType: 'UPD',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'First' },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'UPDATE_TASK',
+          opType: 'UPD',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Concurrent' },
+          vectorClock: { 'other-client': 1 },
+          timestamp: Date.now() + 1,
+          schemaVersion: 1,
+        },
+      ];
+
+      const results = await service.uploadOps(userId, clientId, ops);
+
+      expect(results[0].accepted).toBe(true);
+      expect(results[1]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+        }),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+      expect(testState.operations.size).toBe(1);
+    });
+
+    it('should use entityIds when prefetching batch conflicts', async () => {
+      const service = new SyncService({ batchUpload: true });
+      testState.userSyncStates.set(userId, { userId, lastSeq: 1 });
+      testState.operations.set('existing-op', {
+        id: 'existing-op',
+        userId,
+        clientId: 'other-client',
+        serverSeq: 1,
+        actionType: 'UPDATE_TASK',
+        opType: 'UPD',
+        entityType: 'TASK',
+        entityId: 'task-b',
+        payload: { title: 'Existing' },
+        payloadBytes: BigInt(10),
+        vectorClock: { 'other-client': 1 },
+        schemaVersion: 1,
+        clientTimestamp: BigInt(Date.now() - 1000),
+        receivedAt: BigInt(Date.now() - 1000),
+        isPayloadEncrypted: false,
+        syncImportReason: null,
+      });
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'BATCH_UPDATE_TASKS',
+          opType: 'BATCH',
+          entityType: 'TASK',
+          entityId: 'task-a',
+          entityIds: ['task-a', 'task-b', 'task-c'],
+          payload: { entities: { 'task-a': { title: 'A' } } },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+        }),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+    });
+
+    it('should chunk large batch entity prefetch queries', async () => {
+      const entityPairs = Array.from({ length: 250 }, (_, index) => ({
+        entityType: 'TASK',
+        entityId: `task-${index}`,
+      }));
+      const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
+      };
+
+      await prefetchLatestEntityOpsForBatch(
+        userId,
+        entityPairs,
+        tx as unknown as Prisma.TransactionClient,
+      );
+
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(3);
+    });
+
+    it('should create user sync state for first-time batch uploads', async () => {
+      const service = new SyncService({ batchUpload: true });
+      expect(testState.userSyncStates.get(userId)).toBeUndefined();
+
+      const results = await service.uploadOps(userId, clientId, [
         {
           id: uuidv7(),
           clientId,
@@ -524,29 +867,167 @@ describe('SyncService', () => {
           entityType: 'TASK',
           entityId: 'task-1',
           payload: { title: 'Task 1' },
-          vectorClock: {},
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({ accepted: true, serverSeq: 1 }),
+      );
+      expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
+    });
+
+    it('should update device last seen for all-rejected batch uploads', async () => {
+      const service = new SyncService({ batchUpload: true });
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: 'ADD_TASK',
+          opType: 'INVALID' as Operation['opType'],
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Task 1' },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results[0]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.INVALID_OP_TYPE,
+        }),
+      );
+      expect(testState.operations.size).toBe(0);
+      expect(testState.userSyncStates.get(userId)).toBeUndefined();
+      expect(testState.syncDevices.get(`${userId}:${clientId}`)).toEqual(
+        expect.objectContaining({ userId, clientId }),
+      );
+    });
+
+    it('runs the prior-vector-clock aggregate exactly once per batch and last full-state op wins, even with multiple full-state ops', async () => {
+      // NEW-2: a single full-state op cannot prove the "once" invariant — it
+      // would pass even if the expensive _aggregatePriorVectorClock ran per
+      // full-state op. Use TWO full-state ops so the test catches a regression
+      // that reverts to per-op aggregation (the exact perf footgun the batch
+      // path optimizes away), and assert last-write-wins over N full-state ops.
+      const service = new SyncService({ batchUpload: true });
+      const operationUploadService = (
+        service as unknown as {
+          operationUploadService: {
+            _aggregatePriorVectorClock: (...args: unknown[]) => Promise<unknown>;
+          };
+        }
+      ).operationUploadService;
+      const aggregateSpy = vi.spyOn(operationUploadService, '_aggregatePriorVectorClock');
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: { TASK: {} },
+          vectorClock: { [clientId]: 7 },
           timestamp: Date.now(),
           schemaVersion: 1,
         },
         {
           id: uuidv7(),
           clientId,
-          actionType: 'ADD_TASK',
-          opType: 'CRT',
-          entityType: 'TASK',
-          entityId: 'task-2',
-          payload: { title: 'Task 2' },
-          vectorClock: {},
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: { TASK: {} },
+          vectorClock: { [clientId]: 9 },
           timestamp: Date.now() + 1,
           schemaVersion: 1,
         },
-      ];
+        makeOp({
+          entityId: 'task-after',
+          payload: { title: 'After' },
+          vectorClock: { [clientId]: 10 },
+          timestamp: Date.now() + 2,
+        }),
+      ]);
 
-      const results = await service.uploadOps(userId, clientId, ops);
+      expect(results.map((result) => result.accepted)).toEqual([true, true, true]);
+      // Aggregate is computed once for the batch, not once per full-state op.
+      expect(aggregateSpy).toHaveBeenCalledTimes(1);
+      // Last full-state op wins: marker points at the SECOND import (seq 2),
+      // not the first, with its (merged) clock.
+      expect(testState.userSyncStates.get(userId)).toEqual(
+        expect.objectContaining({
+          lastSeq: 3,
+          latestFullStateSeq: 2,
+          latestFullStateVectorClock: { [clientId]: 9 },
+        }),
+      );
+      aggregateSpy.mockRestore();
+    });
 
-      expect(results).toHaveLength(2);
-      expect(results[0].serverSeq).toBe(1);
-      expect(results[1].serverSeq).toBe(2);
+    it('should classify batch createMany P2002 stale-prefetch races as retryable', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the constraint: operations_pkey',
+        {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: 'operations_pkey' },
+        },
+      );
+      const tx = {
+        operation: {
+          deleteMany: vi.fn(),
+          findMany: vi.fn().mockResolvedValue([]),
+          createMany: vi.fn().mockRejectedValue(p2002),
+        },
+        userSyncState: {
+          updateMany: vi.fn(),
+        },
+        syncDevice: {
+          deleteMany: vi.fn(),
+          upsert: vi.fn(),
+        },
+        user: {
+          update: vi.fn(),
+        },
+        $queryRaw: vi.fn().mockResolvedValue([{ lastSeq: 1 }]),
+        $executeRaw: vi.fn(),
+      };
+
+      vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback) =>
+        callback(tx as unknown as Prisma.TransactionClient),
+      );
+
+      const results = await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: { TASK: {} },
+          vectorClock: { [clientId]: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
+
+      expect(results).toEqual([
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.INTERNAL_ERROR,
+          error: 'Concurrent transaction conflict - please retry',
+        }),
+      ]);
+      expect(tx.syncDevice.upsert).not.toHaveBeenCalled();
     });
 
     it('should reject duplicate operation IDs (idempotency)', async () => {
@@ -767,18 +1248,24 @@ describe('SyncService', () => {
         schemaVersion: 1,
       };
 
-      const results = await service.uploadOps(userId, clientId, [op]);
+      // Freeze the clock so the service samples the same `now` as the test.
+      // Otherwise a 1ms advance between the two Date.now() calls prevents
+      // clamping (the op is then within maxClockDriftMs of the service's now).
+      vi.useFakeTimers();
+      vi.setSystemTime(now);
+      try {
+        const results = await service.uploadOps(userId, clientId, [op]);
 
-      expect(results[0].accepted).toBe(true);
+        expect(results[0].accepted).toBe(true);
 
-      // Timestamp just over the boundary should be clamped
-      const storedOp = testState.operations.get(op.id);
-      const storedTimestamp = Number(storedOp.clientTimestamp);
-      expect(storedTimestamp).toBeLessThan(justOverLimit);
-      // Should be clamped to maxClockDriftMs (within small tolerance for test execution time)
-      expect(storedTimestamp).toBeLessThanOrEqual(
-        now + DEFAULT_SYNC_CONFIG.maxClockDriftMs + 50,
-      );
+        // Timestamp just over the boundary should be clamped to the exact
+        // boundary value (time is frozen, so no tolerance needed).
+        const storedOp = testState.operations.get(op.id);
+        const storedTimestamp = Number(storedOp.clientTimestamp);
+        expect(storedTimestamp).toBe(now + DEFAULT_SYNC_CONFIG.maxClockDriftMs);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should reject operations that are too old', async () => {
@@ -1540,6 +2027,183 @@ describe('SyncService', () => {
 
       const remaining = await service.getOpsSince(userId, 0);
       expect(remaining).toHaveLength(3);
+    });
+
+    it('drains a single user up to the per-run budget', async () => {
+      const service = getSyncService();
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      const totalOps = 255;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+
+      for (let i = 1; i <= totalOps; i++) {
+        testState.operations.set(`old-op-${i}`, {
+          id: `old-op-${i}`,
+          userId,
+          clientId,
+          serverSeq: i,
+          actionType: 'ADD',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: `t${i}`,
+          payload: {},
+          vectorClock: {},
+          schemaVersion: 1,
+          clientTimestamp: BigInt(Date.now()),
+          receivedAt: BigInt(cutoffTime - 1),
+          isPayloadEncrypted: false,
+          syncImportReason: null,
+        });
+      }
+
+      testState.userSyncStates.set(userId, {
+        userId,
+        lastSeq: totalOps,
+        lastSnapshotSeq: totalOps,
+        snapshotAt: BigInt(Date.now()),
+      });
+
+      const { totalDeleted, affectedUserIds } =
+        await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+      delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+      delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
+
+      // Per-run budget is larger than one delete batch. The inner drain loop keeps
+      // deleting until the budget hits zero, not just one batch.
+      expect(totalDeleted).toBe(250);
+      expect(affectedUserIds).toEqual([userId]);
+      expect(testState.operations.size).toBe(5);
+    });
+
+    it('marks user for reconcile when a later batch throws mid-loop', async () => {
+      const service = getSyncService();
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      const totalOps = 120;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+
+      for (let i = 1; i <= totalOps; i++) {
+        testState.operations.set(`old-op-${i}`, {
+          id: `old-op-${i}`,
+          userId,
+          clientId,
+          serverSeq: i,
+          actionType: 'ADD',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: `t${i}`,
+          payload: {},
+          vectorClock: {},
+          schemaVersion: 1,
+          clientTimestamp: BigInt(Date.now()),
+          receivedAt: BigInt(cutoffTime - 1),
+          isPayloadEncrypted: false,
+          syncImportReason: null,
+        });
+      }
+
+      testState.userSyncStates.set(userId, {
+        userId,
+        lastSeq: totalOps,
+        lastSnapshotSeq: totalOps,
+        snapshotAt: BigInt(Date.now()),
+      });
+
+      // Let the first batch run normally, then simulate a transient DB error
+      // on the second batch. Pre-fix this would leave the storage counter
+      // stale-high with no reconcile signal until the next daily pass.
+      const serviceWithPrivates = service as unknown as {
+        storageQuotaService: {
+          deleteOldSyncedOpsBatch: (...args: unknown[]) => Promise<number>;
+          needsReconcile: (userId: number) => boolean;
+        };
+      };
+      const storageQuotaService = serviceWithPrivates.storageQuotaService;
+      const originalBatch =
+        storageQuotaService.deleteOldSyncedOpsBatch.bind(storageQuotaService);
+      let callCount = 0;
+      vi.spyOn(storageQuotaService, 'deleteOldSyncedOpsBatch').mockImplementation(
+        async (...args: unknown[]) => {
+          callCount += 1;
+          if (callCount === 1) return originalBatch(...args);
+          throw new Error('simulated transient DB failure');
+        },
+      );
+
+      await expect(service.deleteOldSyncedOpsForAllUsers(cutoffTime)).rejects.toThrow(
+        'simulated transient DB failure',
+      );
+      delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+      delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
+
+      // First batch committed deletes; the user must still be marked so
+      // the next request reconciles the now-stale-high counter.
+      expect(storageQuotaService.needsReconcile(userId)).toBe(true);
+      expect(testState.operations.size).toBe(totalOps - 50);
+    });
+
+    it('shares the per-run budget across users; tail users wait for next pass', async () => {
+      const service = getSyncService();
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      const user2Id = 2;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+
+      testState.users.set(user2Id, {
+        id: user2Id,
+        email: 'test2@test.com',
+        storageQuotaBytes: BigInt(100 * 1024 * 1024),
+        storageUsedBytes: BigInt(0),
+      });
+
+      // Each user has 200 stale ops — more than the 250 per-run budget combined.
+      const opsPerUser = 200;
+      for (const uid of [userId, user2Id]) {
+        for (let i = 1; i <= opsPerUser; i++) {
+          testState.operations.set(`u${uid}-op-${i}`, {
+            id: `u${uid}-op-${i}`,
+            userId: uid,
+            clientId,
+            serverSeq: i,
+            actionType: 'ADD',
+            opType: 'CRT',
+            entityType: 'TASK',
+            entityId: `t${i}`,
+            payload: {},
+            vectorClock: {},
+            schemaVersion: 1,
+            clientTimestamp: BigInt(Date.now()),
+            receivedAt: BigInt(cutoffTime - 1),
+            isPayloadEncrypted: false,
+            syncImportReason: null,
+          });
+        }
+      }
+
+      // userSyncStates are processed by `orderBy: snapshotAt asc`, so the
+      // stalest snapshot wins the budget first. user1 here is staler.
+      testState.userSyncStates.set(userId, {
+        userId,
+        lastSeq: opsPerUser,
+        lastSnapshotSeq: opsPerUser,
+        snapshotAt: BigInt(Date.now() - 1000),
+      });
+      testState.userSyncStates.set(user2Id, {
+        userId: user2Id,
+        lastSeq: opsPerUser,
+        lastSnapshotSeq: opsPerUser,
+        snapshotAt: BigInt(Date.now()),
+      });
+
+      const { totalDeleted, affectedUserIds } =
+        await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+      delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
+      delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
+
+      // user1 drains fully, user2 only gets the remaining budget.
+      expect(totalDeleted).toBe(250);
+      expect(affectedUserIds).toEqual([userId, user2Id]);
+      expect(testState.operations.size).toBe(150);
     });
 
     it('should delete old operations from all users', async () => {

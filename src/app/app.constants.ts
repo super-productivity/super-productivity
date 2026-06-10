@@ -3,10 +3,19 @@ import { IS_ANDROID_WEB_VIEW } from './util/is-android-web-view';
 export const IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
 // effectively IS_BROWSER
 export const IS_WEB_BROWSER = !IS_ELECTRON && !IS_ANDROID_WEB_VIEW;
+export const IS_GNOME_DESKTOP = IS_ELECTRON && window.ea.isGnomeDesktop();
+// True only inside the Electron build — preload exposes process.arch.
+// Web builds can't reliably distinguish Apple Silicon from Intel and stay false.
+export const IS_APPLE_SILICON = IS_ELECTRON && window.ea.isAppleSilicon();
 
 export const TRACKING_INTERVAL = 1000;
 
 export const DRAG_DELAY_FOR_TOUCH = 500;
+
+// Maximum wall-clock gap credited on iOS resume when the WebView was suspended
+// in the background. Larger gaps are capped to this value so an overnight
+// charge can't silently add 8 h to the active task.
+export const MOBILE_BACKGROUND_IDLE_CAP_MS = 4 * 60 * 60 * 1000;
 
 // TODO use
 // const CORS_SKIP_EXTRA_HEADER_PROP = 'sp_cors_skip' as const;
@@ -38,6 +47,7 @@ export enum BodyClass {
   isDisableBackgroundTint = 'isDisableBackgroundTint',
   isDisableAnimations = 'isDisableAnimations',
   isObsidianStyleHeader = 'isObsidianStyleHeader',
+  isVerticalActionBar = 'isVerticalActionBar',
   isDataImportInProgress = 'isDataImportInProgress',
   hasBgImage = 'hasBgImage',
   hasMobileBottomNav = 'hasMobileBottomNav',
@@ -46,6 +56,7 @@ export enum BodyClass {
   isAndroidKeyboardHidden = 'isAndroidKeyboardHidden',
   isFullScreen = 'isFullScreen',
   isAddTaskBarOpen = 'isAddTaskBarOpen',
+  isMaterialSymbolsLoaded = 'isMaterialSymbolsLoaded',
 
   // iOS-specific classes
   isIOS = 'isIOS',

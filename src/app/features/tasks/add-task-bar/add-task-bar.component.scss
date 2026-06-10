@@ -15,8 +15,8 @@
 
     @include mq(xs, max) {
       transform: translateX(0) !important;
-      left: 4px;
-      right: 4px;
+      left: var(--s-half);
+      right: var(--s-half);
     }
 
     @include mq(xs) {
@@ -33,8 +33,10 @@
 
 :host-context(.isTouchOnly).global {
   top: auto;
-  bottom: calc(var(--keyboard-height) + var(--s));
-  transition: bottom 0.3s ease-out;
+  // Extra gap above the keyboard so the bottom action buttons stay easy to
+  // tap — `--s` alone leaves them flush against the IME's top edge.
+  bottom: calc(var(--keyboard-height) + var(--s2));
+  transition: bottom var(--transition-duration-m) ease-out;
 }
 
 .add-task-container {
@@ -147,7 +149,7 @@
 }
 
 .spinner {
-  animation: 200ms fadeIn;
+  animation: var(--transition-duration-m) fadeIn;
   position: absolute;
   right: 50%;
   bottom: 2px;
@@ -171,7 +173,7 @@
 //// Autocomplete panel styles
 ::ng-deep .isTouchPrimary .add-task-bar-panel {
   top: auto;
-  bottom: 4px;
+  bottom: var(--s-half);
 }
 
 ::ng-deep .add-task-bar-panel {
@@ -184,6 +186,8 @@
     display: flex;
     align-items: center;
     gap: var(--s);
+    justify-content: space-between;
+    width: 100%;
 
     .project-icon {
       font-size: 16px;
@@ -203,6 +207,10 @@
     mat-icon:first-child {
       margin-right: 0;
       flex-shrink: 0;
+    }
+
+    tag {
+      margin-left: auto;
     }
   }
 

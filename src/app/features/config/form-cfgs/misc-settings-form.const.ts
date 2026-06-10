@@ -4,7 +4,7 @@ import {
   MiscConfig,
 } from '../global-config.model';
 import { T } from '../../../t.const';
-import { IS_ELECTRON } from '../../../app.constants';
+import { IS_ELECTRON, IS_GNOME_DESKTOP } from '../../../app.constants';
 
 export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   title: T.GCF.MISC.TITLE,
@@ -37,17 +37,30 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_MINIMIZE_TO_TRAY,
       },
     },
+    ...((IS_ELECTRON
+      ? [
+          {
+            key: 'isLocalRestApiEnabled',
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED,
+              description: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED_HINT,
+            },
+          },
+        ]
+      : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     {
-      key: 'startOfNextDay',
+      key: 'startOfNextDayTime',
       type: 'input',
-      defaultValue: 0,
+      defaultValue: '00:00',
       templateOptions: {
         required: true,
         label: T.GCF.MISC.START_OF_NEXT_DAY,
         description: T.GCF.MISC.START_OF_NEXT_DAY_HINT,
-        type: 'number',
-        min: 0,
-        max: 23,
+        type: 'text',
+        pattern: '^([01]\\d|2[0-3]):([0-5]\\d)$',
+        maxLength: 5,
+        minLength: 5,
       },
     },
     {
@@ -55,6 +68,14 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
       type: 'checkbox',
       templateOptions: {
         label: T.GCF.MISC.IS_DISABLE_ANIMATIONS,
+      },
+    },
+    {
+      key: 'isVerticalActionBar',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.MISC.IS_VERTICAL_ACTION_BAR,
+        description: T.GCF.MISC.IS_VERTICAL_ACTION_BAR_HINT,
       },
     },
     {
@@ -78,11 +99,23 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_TRAY_SHOW_CURRENT_COUNTDOWN,
       },
     },
-    ...((IS_ELECTRON
+    ...((IS_ELECTRON && !IS_GNOME_DESKTOP
       ? [
           {
             key: 'isUseCustomWindowTitleBar',
             type: 'checkbox',
+            // Display-only default: seed the checkbox so it reflects the actual
+            // window state on a fresh install (the custom title bar is on by
+            // default here -- this field is only shown on non-GNOME Electron, see
+            // the enclosing guard). formly seeds the control without an initial
+            // modelChange, so nothing is persisted on load.
+            // KNOWN RESIDUAL (#7891): saving any *other* Misc setting emits the
+            // whole model and persists this seeded value too. We accept that over a
+            // persisted DEFAULT_GLOBAL_CONFIG default, which would be pushed to
+            // Electron on *every* launch and override a legacy `isUseObsidianStyleHeader`
+            // choice. So a pre-2025-12 non-GNOME user who had disabled the old
+            // header may see it re-enabled after editing Misc settings (reversible here).
+            defaultValue: true,
             templateOptions: {
               label: T.GCF.MISC.IS_USE_CUSTOM_WINDOW_TITLE_BAR,
               description: T.GCF.MISC.IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT,
@@ -92,14 +125,10 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
       : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     {
       key: 'defaultStartPage',
-      type: 'select',
+      type: 'start-page-select',
       defaultValue: 0,
       templateOptions: {
         label: T.GCF.MISC.DEFAULT_START_PAGE,
-        options: [
-          { label: T.G.TODAY_TAG_TITLE, value: 0 },
-          { label: T.G.INBOX_PROJECT_TITLE, value: 1 },
-        ],
       },
     },
   ],

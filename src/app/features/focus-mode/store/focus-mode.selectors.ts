@@ -104,12 +104,14 @@ export const selectIsOvertimeEnabled = createSelector(
   (state) => state._isOvertimeEnabled,
 );
 
+// Bug #7715: stays true while paused so the display keeps showing
+// the overtime value (`timeElapsed`) instead of falling back to
+// `timeRemaining`, which clamps to 0:00 once elapsed >= duration.
 export const selectIsInOvertime = createSelector(
   selectTimer,
   selectIsOvertimeEnabled,
   (timer, _isOvertimeEnabled) =>
     _isOvertimeEnabled &&
-    timer.isRunning &&
     timer.purpose === 'work' &&
     timer.duration > 0 &&
     timer.elapsed >= timer.duration,

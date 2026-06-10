@@ -1,6 +1,7 @@
 import { CalendarIntegrationEvent } from '../../calendar-integration/calendar-integration.model';
 import { Log } from '../../../core/log';
 import { loadIcalModule } from './ical-lazy-loader';
+import { isLikelyIcal, NotIcalResponseError } from './is-likely-ical';
 
 type ICalModule = any;
 
@@ -129,12 +130,69 @@ const buildExceptionMap = (vevents: ICalVEvent[]): ExceptionMap => {
   return exceptionMap;
 };
 
+/**
+ * Extracts the calendar email from a Google Calendar iCal URL.
+ * Google iCal URLs follow: https://calendar.google.com/calendar/ical/<email>/basic.ics
+ */
+const getGoogleCalendarEmail = (icalUrl: string): string | undefined => {
+  const match = icalUrl.match(/calendar\.google\.com\/calendar\/ical\/([^/]+)\//i);
+  if (!match) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Checks whether an iCal UID looks like a Google-native event ID.
+ * Google-native UIDs end with @google.com or @group.calendar.google.com.
+ * Imported/subscribed events in Google feeds have foreign UIDs and won't
+ * produce valid Google Calendar links.
+ */
+const isGoogleNativeUid = (uid: string): boolean =>
+  /(@google\.com|@group\.calendar\.google\.com)(_|$)/.test(uid);
+
+/**
+ * Generates a Google Calendar event URL from an event ID and calendar email.
+ * Strips the @google.com / @group.calendar.google.com domain and any
+ * recurring-instance suffix we appended (e.g. "_20240115T100000Z").
+ */
+const generateGoogleCalendarEventUrl = (
+  eventId: string,
+  calendarEmail: string,
+): string | undefined => {
+  try {
+    const cleanId = eventId.replace(/@(group\.calendar\.)?google\.com.*$/, '');
+    const raw = `${cleanId} ${calendarEmail}`;
+    const bytes = new TextEncoder().encode(raw);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const eid = btoa(binary);
+    return `https://calendar.google.com/calendar/event?eid=${eid}`;
+  } catch {
+    return undefined;
+  }
+};
+
 export const getRelevantEventsForCalendarIntegrationFromIcal = async (
   icalData: string,
   calProviderId: string,
   startTimestamp: number,
   endTimestamp: number,
+  icalUrl?: string,
 ): Promise<CalendarIntegrationEvent[]> => {
+  // Reject obviously non-iCal payloads up front (e.g. HTML redirect pages from
+  // revoked Office365 share links — issue #5355). Without this, ICAL.parse
+  // throws a cryptic error deep in its state machine.
+  if (!isLikelyIcal(icalData)) {
+    throw new NotIcalResponseError();
+  }
+
   const ICAL = await loadIcalModule();
   let calendarIntegrationEvents: CalendarIntegrationEvent[] = [];
 
@@ -222,7 +280,58 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
     });
   });
   // Log.timeEnd('TEST');
+
+  // Collapse events that resolve to the same id. Per RFC 5545 a UID (without a
+  // distinct RECURRENCE-ID) identifies a single event, but some providers
+  // (Google/Outlook) emit the same UID twice for invited/modified events — once
+  // fully populated and once sparse — which surfaced as duplicated overlay
+  // entries (#7848, #3837). Recurring occurrences are unaffected because each
+  // carries a unique `<uid>_<occurrence>` id.
+  // Must run BEFORE the Google-URL synthesis below so the richness tie-break
+  // compares only feed-provided data (a generated URL would otherwise inflate
+  // both copies equally) and we synthesize at most one URL per surviving event.
+  calendarIntegrationEvents = dedupeCalendarEventsById(calendarIntegrationEvents);
+
+  // Generate URLs for Google Calendar events that don't already have one
+  if (icalUrl) {
+    const googleEmail = getGoogleCalendarEmail(icalUrl);
+    if (googleEmail) {
+      for (const ev of calendarIntegrationEvents) {
+        if (!ev.url && isGoogleNativeUid(ev.id)) {
+          ev.url = generateGoogleCalendarEventUrl(ev.id, googleEmail);
+        }
+      }
+    }
+  }
+
   return calendarIntegrationEvents;
+};
+
+/**
+ * Scores the optional fields that distinguish a fully-populated copy of an event
+ * from a sparse one (description, url) — the only fields that realistically vary
+ * between the duplicate same-UID copies providers emit. Used purely as the
+ * dedup tie-breaker; on an equal score the first-seen copy is kept.
+ */
+const calendarEventRichness = (ev: CalendarIntegrationEvent): number =>
+  (ev.description ? 1 : 0) + (ev.url ? 1 : 0);
+
+/**
+ * Removes duplicate events that share the same id, keeping the richest copy.
+ * Insertion order is preserved; the original array is returned unchanged when
+ * there are no duplicates (the common case).
+ */
+const dedupeCalendarEventsById = (
+  events: CalendarIntegrationEvent[],
+): CalendarIntegrationEvent[] => {
+  const byId = new Map<string, CalendarIntegrationEvent>();
+  for (const ev of events) {
+    const existing = byId.get(ev.id);
+    if (!existing || calendarEventRichness(ev) > calendarEventRichness(existing)) {
+      byId.set(ev.id, ev);
+    }
+  }
+  return byId.size === events.length ? events : Array.from(byId.values());
 };
 
 const calculateEventDuration = (vevent: ICalVEvent, startTimeStamp: number): number => {
@@ -270,6 +379,7 @@ const getForRecurring = (
   try {
     const title: string = vevent.getFirstPropertyValue('summary') as string;
     const description = vevent.getFirstPropertyValue('description');
+    const url = getSafeVEventUrl(vevent);
     const start = vevent.getFirstPropertyValue('dtstart');
 
     // Handle missing or invalid dtstart for recurring events
@@ -324,8 +434,10 @@ const getForRecurring = (
           duration,
           id: baseId + '_' + next,
           calProviderId,
+          issueProviderKey: 'ICAL',
           description: (description as string) || undefined,
           ...(isAllDay && { isAllDay }),
+          ...(url && { url }),
         });
       } else if (nextTimestamp > endTimeStamp) {
         break;
@@ -371,6 +483,18 @@ const getForRecurring = (
   }
 };
 
+const getSafeVEventUrl = (vevent: ICalVEvent): string | undefined => {
+  const raw = vevent.getFirstPropertyValue('url');
+  if (typeof raw !== 'string') {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return undefined;
+};
+
 interface ConvertOptions {
   overrideId?: string;
   legacyIds?: string[];
@@ -392,6 +516,8 @@ const convertVEventToCalendarIntegrationEvent = (
   const duration = calculateEventDuration(vevent, start);
   const isAllDay = isAllDayEvent(vevent);
 
+  const url = getSafeVEventUrl(vevent);
+
   return {
     id: options?.overrideId || String(vevent.getFirstPropertyValue('uid')),
     title: (vevent.getFirstPropertyValue('summary') as string) || '',
@@ -399,8 +525,10 @@ const convertVEventToCalendarIntegrationEvent = (
     start,
     duration,
     calProviderId,
+    issueProviderKey: 'ICAL',
     legacyIds: options?.legacyIds,
     ...(isAllDay && { isAllDay }),
+    ...(url && { url }),
   };
 };
 

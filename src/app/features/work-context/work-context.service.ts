@@ -27,6 +27,8 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { TODAY_TAG } from '../tag/tag.const';
+import { Tag } from '../tag/tag.model';
+import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
 import { hasTasksToWorkOn, mapEstimateRemainingFromTasks } from './work-context.util';
@@ -55,7 +57,7 @@ import { Note } from '../note/note.model';
 import { selectNotesById } from '../note/store/note.reducer';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
-import { distinctUntilChangedSimpleArray } from '../../util/distinct-until-changed-simple-array';
+import { fastArrayCompare } from '../../util/fast-array-compare';
 import { isShallowEqual } from '../../util/is-shallow-equal';
 import { distinctUntilChangedObject } from '../../util/distinct-until-changed-object';
 import { DateService } from 'src/app/core/date/date.service';
@@ -66,7 +68,6 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { INBOX_PROJECT } from '../project/project.const';
 import { selectProjectById } from '../project/store/project.selectors';
 import { Project } from '../project/project.model';
-import { getDbDateStr } from '../../util/get-db-date-str';
 import { Log } from '../../core/log';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 
@@ -223,7 +224,20 @@ export class WorkContextService {
   );
 
   currentTheme$: Observable<WorkContextThemeCfg> = this.activeWorkContext$.pipe(
-    map((awc) => awc.theme),
+    map((awc) => {
+      // For tags: theme.primary is the explicit override. If it's still at
+      // the auto-default (or unset) and tag.color is set, fall back to
+      // tag.color so newly created tags drive Material theming with their
+      // randomized color while still letting users override explicitly.
+      if (awc.type === WorkContextType.TAG) {
+        const tagColor = (awc as unknown as Tag).color;
+        const primary = awc.theme?.primary;
+        if (tagColor && (!primary || primary === DEFAULT_TAG_COLOR)) {
+          return { ...awc.theme, primary: tagColor };
+        }
+      }
+      return awc.theme;
+    }),
     distinctUntilChanged<WorkContextThemeCfg>(isShallowEqual),
   );
 
@@ -247,7 +261,7 @@ export class WorkContextService {
   // -----------
   notes$: Observable<Note[]> = this.activeWorkContext$.pipe(
     map((ac) => ac.noteIds),
-    distinctUntilChanged(distinctUntilChangedSimpleArray),
+    distinctUntilChanged(fastArrayCompare),
     switchMap((taskIds) => this._getNotesByIds$(taskIds)),
     shareReplay(1),
   );
@@ -256,13 +270,13 @@ export class WorkContextService {
   // ----------
   mainListTaskIds$: Observable<string[]> = this.activeWorkContext$.pipe(
     map((ac) => ac.taskIds),
-    distinctUntilChanged(distinctUntilChangedSimpleArray),
+    distinctUntilChanged(fastArrayCompare),
     shareReplay(1),
   );
 
   backlogTaskIds$: Observable<string[]> = this.activeWorkContext$.pipe(
     map((ac) => ac.backlogTaskIds || []),
-    distinctUntilChanged(distinctUntilChangedSimpleArray),
+    distinctUntilChanged(fastArrayCompare),
     shareReplay(1),
   );
 
@@ -338,7 +352,7 @@ export class WorkContextService {
 
   doneTodayArchived$: Observable<number> =
     this._globalTrackingIntervalService.todayDateStr$.pipe(
-      switchMap((worklogStrDate) => this.getDoneTodayInArchive(worklogStrDate)),
+      switchMap(() => this.getDoneTodayInArchive()),
     );
 
   isTodayList: boolean = false;
@@ -466,9 +480,7 @@ export class WorkContextService {
     );
   }
 
-  async getDoneTodayInArchive(
-    day: string = this._dateService.todayStr(),
-  ): Promise<number> {
+  async getDoneTodayInArchive(): Promise<number> {
     const isToday = await this.isTodayList$.pipe(first()).toPromise();
     const { activeId, activeType } = await this.activeWorkContextTypeAndId$
       .pipe(first())
@@ -480,7 +492,7 @@ export class WorkContextService {
     const tasksDoneToday: ArchiveTask[] = ids
       .map((id) => entities[id])
       .filter(
-        (t) => !!t && !t.parentId && t.doneOn && getDbDateStr(t.doneOn) === day,
+        (t) => !!t && !t.parentId && t.doneOn && this._dateService.isToday(t.doneOn),
       ) as ArchiveTask[];
 
     let tasksToConsider: ArchiveTask[] = [];
@@ -510,7 +522,7 @@ export class WorkContextService {
     const { ids, entities } = taskArchiveState;
     const tasksWorkedOnToday: ArchiveTask[] = ids
       .map((id) => entities[id])
-      .filter((t) => t?.timeSpentOnDay[day]) as ArchiveTask[];
+      .filter((t) => t?.timeSpentOnDay?.[day]) as ArchiveTask[];
 
     let tasksToConsider: ArchiveTask[] = [];
     if (isToday) {

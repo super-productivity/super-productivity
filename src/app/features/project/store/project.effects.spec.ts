@@ -13,6 +13,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { GlobalConfigState } from '../../config/global-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
+import { INBOX_PROJECT } from '../project.const';
 
 describe('ProjectEffects', () => {
   let effects: ProjectEffects;
@@ -61,7 +62,7 @@ describe('ProjectEffects', () => {
   });
 
   describe('deleteProjectRelatedData', () => {
-    it('should clear defaultProjectId when deleted project was the default', (done) => {
+    it('should reset defaultProjectId to the Inbox when deleted project was the default', (done) => {
       // Set up config where project-1 is the default
       globalConfigServiceMock.cfg.and.returnValue({
         ...DEFAULT_GLOBAL_CONFIG,
@@ -73,7 +74,7 @@ describe('ProjectEffects', () => {
 
       effects.deleteProjectRelatedData.subscribe(() => {
         expect(globalConfigServiceMock.updateSection).toHaveBeenCalledWith('tasks', {
-          defaultProjectId: null,
+          defaultProjectId: INBOX_PROJECT.id,
         });
         done();
       });
@@ -128,6 +129,57 @@ describe('ProjectEffects', () => {
       actions$.next(
         TaskSharedActions.deleteProject({
           projectId: 'project-1',
+          noteIds: [],
+          allTaskIds: [],
+        }),
+      );
+    });
+
+    it('should reset misc.defaultStartPage when deleted project was the start page', (done) => {
+      globalConfigServiceMock.cfg.and.returnValue({
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          defaultStartPage: 'project-1',
+        },
+      });
+
+      effects.deleteProjectRelatedData.subscribe(() => {
+        expect(globalConfigServiceMock.updateSection).toHaveBeenCalledWith('misc', {
+          defaultStartPage: 0,
+        });
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.deleteProject({
+          projectId: 'project-1',
+          noteIds: [],
+          allTaskIds: [],
+        }),
+      );
+    });
+
+    it('should NOT reset misc.defaultStartPage when deleted project does not match', (done) => {
+      globalConfigServiceMock.cfg.and.returnValue({
+        ...DEFAULT_GLOBAL_CONFIG,
+        misc: {
+          ...DEFAULT_GLOBAL_CONFIG.misc,
+          defaultStartPage: 'project-1',
+        },
+      });
+
+      effects.deleteProjectRelatedData.subscribe(() => {
+        expect(globalConfigServiceMock.updateSection).not.toHaveBeenCalledWith(
+          'misc',
+          jasmine.any(Object),
+        );
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.deleteProject({
+          projectId: 'project-2',
           noteIds: [],
           allTaskIds: [],
         }),

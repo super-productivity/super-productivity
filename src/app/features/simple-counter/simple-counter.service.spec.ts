@@ -267,11 +267,17 @@ describe('SimpleCounterService', () => {
     }));
 
     it('should flush stopwatch accumulator when type changes', fakeAsync(() => {
-      // Simulate accumulated stopwatch time by accessing the private field
-      // We'll test the effect indirectly by checking dispatch calls
+      const accumulator = (
+        service as unknown as {
+          _stopwatchAccumulator: { flushOne: (id: string) => void };
+        }
+      )._stopwatchAccumulator;
+      const flushOneSpy = spyOn(accumulator, 'flushOne').and.callThrough();
+
       service.updateSimpleCounter('counter1', { type: SimpleCounterType.StopWatch });
       tick();
 
+      expect(flushOneSpy).toHaveBeenCalledOnceWith('counter1');
       expect(dispatchSpy).toHaveBeenCalledWith(
         updateSimpleCounter({
           simpleCounter: {
@@ -293,26 +299,39 @@ describe('SimpleCounterService', () => {
       expect(service.getCountdownRemaining('counter1')).toBe(5000);
     });
 
+    it('should track started countdowns explicitly', () => {
+      expect(service.hasStartedCountdown('counter1')).toBe(false);
+
+      service.startCountdown('counter1', 5000);
+
+      expect(service.hasStartedCountdown('counter1')).toBe(true);
+      expect(service.getCountdownRemaining('counter1')).toBe(5000);
+    });
+
     it('should clear countdown remaining time', () => {
-      service.setCountdownRemaining('counter1', 5000);
+      service.startCountdown('counter1', 5000);
       service.clearCountdownRemaining('counter1');
       expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+      expect(service.hasStartedCountdown('counter1')).toBe(false);
     });
 
     it('should clear countdown cache when deleting a counter', fakeAsync(() => {
-      service.setCountdownRemaining('counter1', 5000);
+      service.startCountdown('counter1', 5000);
       service.deleteSimpleCounter('counter1');
       tick();
       expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+      expect(service.hasStartedCountdown('counter1')).toBe(false);
     }));
 
     it('should clear countdown cache when deleting multiple counters', fakeAsync(() => {
-      service.setCountdownRemaining('counter1', 5000);
-      service.setCountdownRemaining('counter2', 3000);
+      service.startCountdown('counter1', 5000);
+      service.startCountdown('counter2', 3000);
       service.deleteSimpleCounters(['counter1', 'counter2']);
       tick();
       expect(service.getCountdownRemaining('counter1')).toBeUndefined();
       expect(service.getCountdownRemaining('counter2')).toBeUndefined();
+      expect(service.hasStartedCountdown('counter1')).toBe(false);
+      expect(service.hasStartedCountdown('counter2')).toBe(false);
     }));
 
     it('should allow storing zero as remaining time', () => {
@@ -327,17 +346,19 @@ describe('SimpleCounterService', () => {
     });
 
     it('should clear countdown cache when countdownDuration changes', fakeAsync(() => {
-      service.setCountdownRemaining('counter1', 5000);
+      service.startCountdown('counter1', 5000);
       service.updateSimpleCounter('counter1', { countdownDuration: 60000 });
       tick();
       expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+      expect(service.hasStartedCountdown('counter1')).toBe(false);
     }));
 
     it('should clear countdown cache when counter type changes', fakeAsync(() => {
-      service.setCountdownRemaining('counter1', 5000);
+      service.startCountdown('counter1', 5000);
       service.updateSimpleCounter('counter1', { type: SimpleCounterType.StopWatch });
       tick();
       expect(service.getCountdownRemaining('counter1')).toBeUndefined();
+      expect(service.hasStartedCountdown('counter1')).toBe(false);
     }));
   });
 
@@ -352,28 +373,53 @@ describe('SimpleCounterService', () => {
     });
 
     it('should sync stopwatch with absolute value on flush', fakeAsync(() => {
-      // Call flushAccumulatedTime to trigger sync
+      const accumulator = (
+        service as unknown as {
+          _stopwatchAccumulator: {
+            accumulate: (id: string, duration: number, date: string) => void;
+          };
+        }
+      )._stopwatchAccumulator;
+      accumulator.accumulate('stopwatch1', 5000, '2024-01-15');
+
       service.flushAccumulatedTime();
       tick();
 
-      // Note: Since we mock the accumulator callback, this test verifies the service structure.
-      // The actual sync happens via _syncStopwatchAbsoluteValue which dispatches setSimpleCounterCounterToday
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        setSimpleCounterCounterToday({
+          id: 'stopwatch1',
+          newVal: 20000,
+          today: '2024-01-15',
+        }),
+      );
     }));
 
     it('should use setSimpleCounterCounterToday for stopwatch sync (not relative duration)', fakeAsync(() => {
-      // Verify the sync uses absolute values by checking the action type
-      // When stopwatch syncs, it should dispatch setSimpleCounterCounterToday with absolute value
       mockCounters([
         createCounter('stopwatch1', {
           type: SimpleCounterType.StopWatch,
           countOnDay: { '2024-01-15': 20000 },
         }),
       ]);
+      const accumulator = (
+        service as unknown as {
+          _stopwatchAccumulator: {
+            accumulate: (id: string, duration: number, date: string) => void;
+          };
+        }
+      )._stopwatchAccumulator;
+      accumulator.accumulate('stopwatch1', 5000, '2024-01-15');
 
-      // The service should be configured to sync absolute values
-      // This is verified by the accumulator callback using _syncStopwatchAbsoluteValue
       service.flushAccumulatedTime();
       tick();
+
+      const dispatchedTypes = dispatchSpy.calls.allArgs().map(([action]) => action.type);
+      expect(dispatchedTypes).toContain(
+        '[SimpleCounter] Set SimpleCounter Counter Today',
+      );
+      expect(dispatchedTypes).not.toContain(
+        '[SimpleCounter] Increase SimpleCounter Counter Today',
+      );
     }));
   });
 

@@ -29,11 +29,9 @@
     lazy-chart {
       width: 100%;
       display: block;
-
-      ::ng-deep canvas {
-        width: 100% !important;
-        height: auto !important;
-      }
+      // Do NOT force `canvas { width/height }` here. Chart.js writes the canvas
+      // size inline on every responsive resize; overriding it (esp. height:auto)
+      // makes its ResizeObserver chase a size it didn't set -> sub-pixel jitter loop (#7957).
     }
 
     @include mq(xs) {

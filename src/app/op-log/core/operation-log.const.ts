@@ -268,12 +268,38 @@ export const POST_SYNC_COOLDOWN_MS = 2000;
  * Number of retry attempts when opening IndexedDB fails.
  * Total attempts = 1 initial + IDB_OPEN_RETRIES retries.
  * Transient failures (file locks, temporary I/O issues) may resolve on retry.
+ * On Linux desktop environments, session logout/login with autostart can leave
+ * stale LevelDB locks for 5-15+ seconds, so the total retry window must be long
+ * enough to outlast this.
  * @see https://github.com/johannesjo/super-productivity/issues/6255
+ * @see https://github.com/super-productivity/super-productivity/issues/7191
  */
-export const IDB_OPEN_RETRIES = 3;
+export const IDB_OPEN_RETRIES = 5;
+
+/**
+ * Number of retry attempts for IndexedDB open errors that do NOT look like
+ * session-restart file locks (e.g. generic `AbortError`, `UnknownError`).
+ *
+ * Matches master's pre-PR retry count (3) so the non-lock path keeps the
+ * existing behavior; the new long window is only applied when the error
+ * looks lock-related.
+ *
+ * With 3 retries at a 1000ms base, the non-lock wall-clock ceiling is
+ * 1s + 2s + 4s = 7s (delays before attempts 2, 3, 4; no delay after the
+ * final attempt). That matters because every op-log read/write awaits
+ * `_ensureInit()`, so a 31s retry window on a non-lock error would block
+ * the entire op-log subsystem for 31s before the hydrator's alert dialog
+ * (`OperationLogHydratorService._showIndexedDBOpenError`) reaches the user.
+ * For non-lock errors there is no expectation that waiting helps, so fail
+ * fast and let the error surface sooner.
+ *
+ * @see https://github.com/super-productivity/super-productivity/issues/7191
+ */
+export const IDB_OPEN_RETRIES_NON_LOCK = 3;
 
 /**
  * Base delay for IndexedDB open retry exponential backoff (milliseconds).
- * With IDB_OPEN_RETRIES=3: delays are 500ms, 1000ms, 2000ms for retries 1, 2, 3.
+ * Delays follow `BASE * 2^(attempt-1)`; see `IDB_OPEN_RETRIES` and
+ * `IDB_OPEN_RETRIES_NON_LOCK` for the resulting windows.
  */
-export const IDB_OPEN_RETRY_BASE_DELAY_MS = 500;
+export const IDB_OPEN_RETRY_BASE_DELAY_MS = 1000;

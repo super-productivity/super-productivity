@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { IssueProviderPluginDefinition } from '@super-productivity/plugin-api';
 
 let definition: IssueProviderPluginDefinition;
@@ -16,6 +16,32 @@ beforeAll(async () => {
 });
 
 describe('Google Calendar Plugin', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('OAuth config', () => {
+    it('does not expose a browser web OAuth client', () => {
+      const oauthField = definition.configFields.find((field) => field.key === 'oauth');
+      const oauthConfig = oauthField?.oauthConfig;
+
+      expect(oauthConfig?.webClientId).toBeUndefined();
+    });
+
+    it('requests only verified Google Calendar scopes', () => {
+      const oauthField = definition.configFields.find((field) => field.key === 'oauth');
+      const oauthConfig = oauthField?.oauthConfig;
+
+      expect(oauthConfig?.scopes).toEqual([
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+      ]);
+      expect(oauthConfig?.scopes).not.toContain(
+        'https://www.googleapis.com/auth/calendar.readonly',
+      );
+    });
+  });
+
   describe('fieldMappings', () => {
     const ctx = { issueId: 'event-1' };
 
@@ -309,7 +335,229 @@ describe('Google Calendar Plugin', () => {
       expect(body.start.date).toBeDefined();
       expect(body.end.date).toBeDefined();
       expect(body.start.dateTime).toBeUndefined();
-      expect(result.issueId).toBe('new-event-1');
+      expect(result.issueId).toBe('test-cal::new-event-1');
+    });
+  });
+
+  describe('getNewIssuesForBacklog', () => {
+    const makeEvent = (over: Record<string, unknown>): Record<string, unknown> => ({
+      id: 'real-1',
+      summary: 'Real meeting',
+      status: 'confirmed',
+      start: { dateTime: '2026-05-14T15:00:00Z' },
+      end: { dateTime: '2026-05-14T16:00:00Z' },
+      ...over,
+    });
+
+    // #8171: with auto-time-block on, scheduling a task writes a mirror event to
+    // Google Calendar. When the read calendar overlaps the time-block calendar,
+    // that mirror is fetched back and must NOT surface as a separate agenda event
+    // (it would duplicate the local task that created it).
+    it('excludes SP auto-time-block mirror events tagged with spTaskId', async () => {
+      const mockHttp = {
+        get: vi.fn().mockResolvedValue({
+          items: [
+            makeEvent({}),
+            makeEvent({
+              id: 'spdeadbeef',
+              summary: 'My Scheduled Task',
+              extendedProperties: { private: { spTaskId: 'task-1' } },
+            }),
+          ],
+        }),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+
+      const results = await definition.getNewIssuesForBacklog!(
+        { readCalendarIds: ['primary'] } as any,
+        mockHttp as any,
+      );
+
+      expect(results.map((r) => r.title)).toEqual(['Real meeting']);
+      expect(results.some((r) => r.id.includes('spdeadbeef'))).toBe(false);
+    });
+
+    it('keeps regular events that have unrelated extendedProperties', async () => {
+      const mockHttp = {
+        get: vi.fn().mockResolvedValue({
+          items: [
+            makeEvent({
+              extendedProperties: { private: { someOtherApp: 'x' } },
+            }),
+          ],
+        }),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+
+      const results = await definition.getNewIssuesForBacklog!(
+        { readCalendarIds: ['primary'] } as any,
+        mockHttp as any,
+      );
+
+      expect(results).toHaveLength(1);
+    });
+  });
+
+  describe('timeBlock.upsertEvent', () => {
+    const cfg = { timeBlockCalendarId: 'cal-1' };
+    const eventData = {
+      title: 'My Task',
+      dueWithTime: new Date('2026-05-14T15:00:00Z').getTime(),
+      durationMs: 30 * 60 * 1000,
+      isDone: false,
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn().mockResolvedValue({}),
+        put: vi.fn(),
+        patch: vi.fn().mockResolvedValue({}),
+        delete: vi.fn(),
+      };
+    });
+
+    it('patches the existing event without an insert first (single write)', async () => {
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.patch).toHaveBeenCalledTimes(1);
+      expect(mockHttp.post).not.toHaveBeenCalled();
+      const [url, body] = mockHttp.patch.mock.calls[0];
+      expect(url).toContain('/calendars/cal-1/events/');
+      expect(body.summary).toBe('My Task');
+      expect(body.start.dateTime).toBeDefined();
+      expect(body.end.dateTime).toBeDefined();
+    });
+
+    it('falls back to insert with the full body when the event does not exist (patch 404)', async () => {
+      mockHttp.patch.mockRejectedValueOnce({ status: 404 });
+
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.patch).toHaveBeenCalledTimes(1);
+      expect(mockHttp.post).toHaveBeenCalledTimes(1);
+      const [postUrl, postBody] = mockHttp.post.mock.calls[0];
+      expect(postUrl).toContain('/calendars/cal-1/events');
+      expect(postBody.id).toBeDefined();
+      expect(postBody.extendedProperties.private.spTaskId).toBe('task-1');
+    });
+
+    it('recovers when a concurrent create wins the race (insert returns 409)', async () => {
+      mockHttp.patch.mockRejectedValueOnce({ status: 404 }).mockResolvedValueOnce({});
+      mockHttp.post.mockRejectedValueOnce({ status: 409 });
+
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+
+      // patch (404 not-found) -> post (409 lost race) -> patch (now exists) ok
+      expect(mockHttp.post).toHaveBeenCalledTimes(1);
+      expect(mockHttp.patch).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries on a 403 rateLimitExceeded and then succeeds', async () => {
+      vi.useFakeTimers();
+      const rateLimitErr = {
+        status: 403,
+        error: {
+          error: {
+            code: 403,
+            message: 'Rate Limit Exceeded',
+            errors: [
+              {
+                domain: 'usageLimits',
+                reason: 'rateLimitExceeded',
+                message: 'Rate Limit Exceeded',
+              },
+            ],
+          },
+        },
+      };
+      mockHttp.patch.mockRejectedValueOnce(rateLimitErr).mockResolvedValueOnce({});
+
+      const p = definition.timeBlock!.upsertEvent(
+        'task-1',
+        eventData,
+        cfg as any,
+        mockHttp as any,
+      );
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.patch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry a non-rate-limit 403 (forbiddenForNonOrganizer)', async () => {
+      const forbidden = {
+        status: 403,
+        error: { error: { code: 403, errors: [{ reason: 'forbiddenForNonOrganizer' }] } },
+      };
+      mockHttp.patch.mockRejectedValue(forbidden);
+
+      await expect(
+        definition.timeBlock!.upsertEvent(
+          'task-1',
+          eventData,
+          cfg as any,
+          mockHttp as any,
+        ),
+      ).rejects.toBeDefined();
+      expect(mockHttp.patch).toHaveBeenCalledTimes(1);
+      expect(mockHttp.post).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('timeBlock.deleteEvent', () => {
+    const cfg = { timeBlockCalendarId: 'cal-1' };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn().mockResolvedValue({}),
+      };
+    });
+
+    it('swallows a 404 (event already gone)', async () => {
+      mockHttp.delete.mockRejectedValue({ status: 404 });
+
+      await expect(
+        definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any),
+      ).resolves.toBeUndefined();
+    });
+
+    it('retries on a rate-limit error and then succeeds', async () => {
+      vi.useFakeTimers();
+      mockHttp.delete.mockRejectedValueOnce({ status: 429 }).mockResolvedValueOnce({});
+
+      const p = definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any);
+      await vi.runAllTimersAsync();
+      await p;
+
+      expect(mockHttp.delete).toHaveBeenCalledTimes(2);
     });
   });
 });

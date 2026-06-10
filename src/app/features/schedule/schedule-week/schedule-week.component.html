@@ -2,24 +2,51 @@
   class="week-header"
   [class.isInPanel]="isInPanel()"
 >
-  <div class="filler"><!--for time --></div>
-  @for (day of daysToShow(); track $index) {
-    <div class="day">
-      @if (day === todayDateStr()) {
-        <mat-icon>wb_sunny</mat-icon>
-      }
-      <div class="day-num">{{ day | localeDate: 'd' }}</div>
-      <div class="day-day">{{ day | localeDate: 'EEE' }}</div>
-    </div>
-  }
+  <div class="week-header-dates">
+    <div class="filler"><!--for time --></div>
+    @for (day of daysToShow(); track $index) {
+      <div class="day">
+        @if (day === todayDateStr()) {
+          <mat-icon>wb_sunny</mat-icon>
+        }
+        <div class="day-num">{{ day | localeDate: 'd' }}</div>
+        <div class="day-day">{{ day | localeDate: 'EEE' }}</div>
+        @if (beyondBudgetStats()[$index].count > 0) {
+          <span
+            class="over-budget-badge"
+            tabindex="0"
+            [matTooltipPosition]="'below'"
+            [matTooltip]="beyondBudgetTooltips()[$index]"
+            [attr.aria-label]="beyondBudgetTooltips()[$index]"
+          >
+            <span
+              class="over-budget-symbol"
+              aria-hidden="true"
+              >!</span
+            >
+            @if (beyondBudgetStats()[$index].count > 1) {
+              <span class="over-budget-count">
+                {{ beyondBudgetStats()[$index].count }}
+              </span>
+            }
+          </span>
+        }
+      </div>
+    }
+  </div>
 </header>
 
 <div
   #gridContainer
   class="grid-container"
+  [style.--schedule-row-height]="scheduleRowHeightCss()"
+  [style.--schedule-row-height-mobile]="scheduleRowHeightMobileCss()"
   (click)="onGridClick($event)"
   (mousemove)="onMoveOverGrid($event)"
 >
+  <!-- Sticky background strip behind the time column (only when horizontally scrolled) -->
+  <div class="time-column-bg"></div>
+
   <!-- Time -->
   @for (time of times(); track $index) {
     <div
@@ -93,15 +120,15 @@
   }
 
   <!-- Events -->
-  @for (ev of safeEvents(); track ev.id) {
-    @if (isDraggableSE(ev)) {
+  @for (ev of safeEvents(); track trackEventKey(ev)) {
+    @if (canDragEvent(ev)) {
       <schedule-event
         class="draggable"
         [cdkDragData]="ev"
         (cdkDragMoved)="dragMoved($event)"
         (cdkDragStarted)="dragStarted($event)"
         (cdkDragReleased)="dragReleased($event)"
-        [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? 75 : 0"
+        [cdkDragStartDelay]="isTouchActive() ? touchDragStartDelayMs : 0"
         [event]="ev"
       ></schedule-event>
     } @else {
@@ -109,43 +136,6 @@
         [event]="ev"
         [cdkDragDisabled]="true"
       ></schedule-event>
-    }
-  }
-
-  <!-- Excess tasks planned for day -->
-  @for (beyondBudgetDay of safeBeyondBudget(); track i; let i = $index) {
-    @if (beyondBudgetDay.length > 0) {
-      <div
-        class="excess-entries"
-        style="grid-column: {{ i + 2 }}"
-      >
-        <div
-          class="excess-entries-header"
-          [matTooltipPosition]="'above'"
-          [matTooltip]="'Tasks planned for day, but that are beyond the available time budget'"
-        >
-          <mat-icon>hourglass_disabled</mat-icon>
-          {{ beyondBudgetDay.length }}
-        </div>
-        @for (ev of beyondBudgetDay; track ev.id) {
-          @if (isDraggableSE(ev)) {
-            <schedule-event
-              [event]="ev"
-              class="draggable"
-              [cdkDragData]="ev"
-              (cdkDragMoved)="dragMoved($event)"
-              (cdkDragStarted)="dragStarted($event)"
-              (cdkDragReleased)="dragReleased($event)"
-              [cdkDragStartDelay]="IS_TOUCH_PRIMARY ? DRAG_DELAY_FOR_TOUCH : 0"
-            ></schedule-event>
-          } @else {
-            <schedule-event
-              [event]="ev"
-              [cdkDragDisabled]="true"
-            ></schedule-event>
-          }
-        }
-      </div>
     }
   }
 

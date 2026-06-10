@@ -18,7 +18,8 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TaskCopy } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
-import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { isTouchActive } from '../../../util/input-intent';
+import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-context-menu.component';
@@ -69,10 +70,11 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly tagsToHide = input<string[]>();
 
   readonly T = T;
-  readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  readonly isTouchActive = isTouchActive;
   parentTitle: string | null = null;
   isContextMenuLoaded = signal(false);
   showDoneAnimation = signal(false);
+  showUndoneAnimation = signal(false);
   isDragReady = signal(false);
   private _doneAnimationTimeout?: number;
   private _dragReadyTimeout?: number;
@@ -99,7 +101,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
 
   @HostListener('contextmenu', ['$event'])
   onContextMenu(event: MouseEvent): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive()) {
       event.preventDefault();
       return;
     }
@@ -140,17 +142,14 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    if (IS_TOUCH_PRIMARY) {
+    if (isTouchActive() || IS_HYBRID_DEVICE) {
       const el = this._elementRef.nativeElement;
       const onStart = (): void => {
         this._dragReadyTimeout = window.setTimeout(() => {
           this.isDragReady.set(true);
         }, DRAG_DELAY_FOR_TOUCH);
       };
-      const onEnd = (): void => {
-        window.clearTimeout(this._dragReadyTimeout);
-        this.isDragReady.set(false);
-      };
+      const onEnd = (): void => this._cancelDragReady();
       el.addEventListener('touchstart', onStart, { passive: true });
       el.addEventListener('touchend', onEnd, { passive: true });
       el.addEventListener('touchmove', onEnd, { passive: true });
@@ -166,6 +165,25 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     window.clearTimeout(this._doneAnimationTimeout);
     window.clearTimeout(this._dragReadyTimeout);
     this._touchListenerCleanups.forEach((fn) => fn());
+  }
+
+  // A confirmed horizontal swipe (open menu / mark done) is not a drag, so
+  // cancel the pending long-press drag-ready state before it can fire mid-swipe.
+  onSwipeStart(): void {
+    this._cancelDragReady();
+  }
+
+  private _cancelDragReady(): void {
+    window.clearTimeout(this._dragReadyTimeout);
+    this.isDragReady.set(false);
+  }
+
+  onSwipeRightTriggered(isTriggered: boolean): void {
+    if (this.task.isDone) {
+      this.showUndoneAnimation.set(isTriggered);
+    } else {
+      this.showDoneAnimation.set(isTriggered);
+    }
   }
 
   toggleTaskDone(): void {

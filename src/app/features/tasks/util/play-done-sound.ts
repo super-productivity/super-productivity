@@ -30,6 +30,6 @@ export const playDoneSound = async (
       source.detune.value = pitchFactor;
     });
   } catch (e) {
-    console.error('Error playing done sound:', e);
+    TaskLog.err('Error playing done sound:', e);
   }
 };

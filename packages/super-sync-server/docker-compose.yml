@@ -2,11 +2,11 @@
 #
 # Usage:
 #   1. Copy env.example to .env and configure your settings
-#   2. Run: docker-compose up -d
+#   2. Run: ./scripts/deploy.sh
 #   3. View logs: docker-compose logs -f
 #
 # For local builds (development):
-#   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#   ./scripts/deploy.sh --build
 
 x-logging: &default-logging
   driver: 'json-file'
@@ -18,11 +18,13 @@ services:
   supersync:
     image: ${SUPERSYNC_IMAGE:-ghcr.io/super-productivity/supersync:latest}
     container_name: supersync-server
-    restart: always
+    restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=1900
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}
+      - HOST=${HOST:-0.0.0.0}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}}
+      - RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}
       - JWT_SECRET=${JWT_SECRET}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:1900}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://app.super-productivity.com}
@@ -35,6 +37,10 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Super Productivity Sync}
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:1900}
+      - OLD_OPS_CLEANUP_DELETE_BATCH_SIZE=${OLD_OPS_CLEANUP_DELETE_BATCH_SIZE:-5000}
+      - OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN=${OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN:-25000}
+      - SUPERSYNC_BATCH_UPLOAD=${SUPERSYNC_BATCH_UPLOAD:-false}
+      - SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}
     ports:
       - '127.0.0.1:1900:1900'
     volumes:
@@ -55,12 +61,18 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    mem_limit: 512m
+    # 200+ WSS clients each consume an fd; Alpine default soft limit (1024)
+    # would be tight under reconnect bursts.
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    mem_limit: 768m
     cpus: '1.0'
     networks:
       - internal
@@ -69,34 +81,68 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: supersync-postgres
-    restart: always
+    restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-supersync}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB:-supersync}
+    # Tuned for the 1.5g mem_limit. shared_buffers needs shm_size > default 64m.
+    # 120 × 4MB work_mem = 480MB worst-case sort budget + 384MB shared_buffers,
+    # well inside the 1.5g cap. Prisma's DEFAULT pool is ~(host_cpu_count × 2),
+    # read from host cores NOT the container cpu limit — it is NOT single-digit
+    # on this VPS and will silently consume the entire cap. The app MUST bound
+    # it via DATABASE_URL ?connection_limit=N (currently 60). max_connections
+    # stays well above N to reserve slots for migrations, psql, the old-ops
+    # cleanup job, and the reconnect stampede after an in-place crash recovery.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=384MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=120
+      - -c
+      - random_page_cost=1.1
+      - -c
+      # 5 min — kill leaked Prisma idle-in-tx, but well above the
+      # migrate-deploy.sh 30-min STEP_TIMEOUT for CONCURRENTLY index builds.
+      - idle_in_transaction_session_timeout=300000
+      - -c
+      - wal_compression=on
+      - -c
+      - huge_pages=off
+    shm_size: 256m
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test:
-        [
-          'CMD-SHELL',
-          'pg_isready -U ${POSTGRES_USER:-supersync} -d ${POSTGRES_DB:-supersync}',
-        ]
+        - CMD-SHELL
+        - >
+          pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" &&
+          psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1" > /dev/null 2>&1
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     security_opt:
       - no-new-privileges:true
-    mem_limit: 1g
+    mem_limit: 1536m
     networks:
-      - internal
+      internal:
+        aliases:
+          # Keep existing .env files with DATABASE_URL=...@db:5432/... working.
+          - db
     logging: *default-logging
 
   caddy:
     image: caddy:2.11-alpine
     container_name: supersync-caddy
-    restart: always
+    restart: unless-stopped
     ports:
       - '80:80'
       - '443:443'
@@ -106,6 +152,15 @@ services:
       - caddy-config:/config
     environment:
       - DOMAIN=${DOMAIN}
+    healthcheck:
+      # Use 127.0.0.1, not localhost: Caddy binds the admin API to IPv4
+      # 127.0.0.1:2019, but busybox wget resolves `localhost` to ::1 first
+      # and gets "connection refused", marking a healthy Caddy unhealthy.
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:2019/config/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - internal
     cap_drop:
@@ -125,4 +180,7 @@ volumes:
 
 networks:
   internal:
+    # Pinned name so docker-compose.monitoring.yml can attach via
+    # `external: true` regardless of the COMPOSE_PROJECT_NAME used.
+    name: super-sync-server_internal
     driver: bridge

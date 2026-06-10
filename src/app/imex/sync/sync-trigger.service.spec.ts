@@ -4,6 +4,7 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { IdleService } from '../../features/idle/idle.service';
 import { SyncWrapperService } from './sync-wrapper.service';
+import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 import { Store } from '@ngrx/store';
 import { BehaviorSubject, Observable, of, ReplaySubject } from 'rxjs';
 
@@ -287,5 +288,106 @@ describe('SyncTriggerService', () => {
       tick(0);
       expect(secondVal).toBe(true);
     }));
+  });
+
+  describe('getSyncTrigger$', () => {
+    // syncInterval=10000 stays above SYNC_MIN_INTERVAL=5000 so the auditTime
+    // path doesn't fire faster than the periodic timer.
+    const SYNC_INTERVAL = 10000;
+    const DEBOUNCE = 100;
+
+    it('should fire periodically when useIntervalTimer=true (file-based providers)', fakeAsync(() => {
+      const emissions: unknown[] = [];
+      const sub = service
+        .getSyncTrigger$(SYNC_INTERVAL, true)
+        .subscribe((v) => emissions.push(v));
+
+      // Periodic timer fires at SYNC_INTERVAL; debounceTime tail adds DEBOUNCE
+      tick(SYNC_INTERVAL + DEBOUNCE + 50);
+      const afterFirstInterval = emissions.length;
+      expect(afterFirstInterval).toBeGreaterThan(0);
+
+      // Second periodic emission after another SYNC_INTERVAL
+      tick(SYNC_INTERVAL);
+      expect(emissions.length).toBeGreaterThan(afterFirstInterval);
+
+      sub.unsubscribe();
+    }));
+
+    it('should NOT fire periodically when useIntervalTimer=false (SuperSync)', fakeAsync(() => {
+      const emissions: unknown[] = [];
+      const sub = service
+        .getSyncTrigger$(SYNC_INTERVAL, false)
+        .subscribe((v) => emissions.push(v));
+
+      // After one syncInterval, the audit-time path may emit once.
+      tick(SYNC_INTERVAL + DEBOUNCE + 50);
+      const afterFirstInterval = emissions.length;
+
+      // After another full syncInterval, no further emissions
+      // (auditTime's of(null) source has completed; no periodic timer registered)
+      tick(SYNC_INTERVAL);
+      expect(emissions.length).toBe(afterFirstInterval);
+
+      sub.unsubscribe();
+    }));
+  });
+
+  // Regression for the wake-up race: the visibilitychange listener must open
+  // the sync window synchronously. Any debounce/throttle in front would let
+  // the DAY_CHANGE → TODAY_TAG-repair cascade fire on stale state first.
+  it('opens sync window synchronously on visibilitychange to visible', () => {
+    const isAllDataLoaded$ = new ReplaySubject<boolean>(1);
+    isAllDataLoaded$.next(true);
+    const hydrationSpy = jasmine.createSpyObj<HydrationStateService>(
+      'HydrationStateService',
+      ['openSyncWindow', 'isInSyncWindow', 'isApplyingRemoteOps'],
+    );
+    // spyOnProperty is auto-restored per spec — no Document.prototype mutation.
+    spyOnProperty(document, 'visibilityState', 'get').and.returnValue('visible');
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        SyncTriggerService,
+        {
+          provide: GlobalConfigService,
+          useValue: jasmine.createSpyObj('GlobalConfigService', [], {
+            cfg$: of({ sync: { isEnabled: true } }),
+            idle$: of({ isEnableIdleTimeTracking: false }),
+          }),
+        },
+        {
+          provide: DataInitStateService,
+          useValue: jasmine.createSpyObj('DataInitStateService', [], {
+            isAllDataLoadedInitially$: isAllDataLoaded$.asObservable(),
+          }),
+        },
+        {
+          provide: IdleService,
+          useValue: jasmine.createSpyObj('IdleService', [], {
+            isIdle$: of(false),
+          }),
+        },
+        {
+          provide: SyncWrapperService,
+          useValue: jasmine.createSpyObj('SyncWrapperService', [], {
+            syncProviderId$: of(null),
+            isWaitingForUserInput$: of(false),
+          }),
+        },
+        { provide: HydrationStateService, useValue: hydrationSpy },
+        { provide: Store, useValue: jasmine.createSpyObj('Store', ['select']) },
+      ],
+    });
+    TestBed.inject(SyncTriggerService);
+    hydrationSpy.openSyncWindow.calls.reset();
+
+    const before = hydrationSpy.openSyncWindow.calls.count();
+    document.dispatchEvent(new Event('visibilitychange'));
+    const after = hydrationSpy.openSyncWindow.calls.count();
+
+    // Synchronous: a debounceTime/throttleTime regression would yield 0 here.
+    expect(after - before).toBe(1);
   });
 });

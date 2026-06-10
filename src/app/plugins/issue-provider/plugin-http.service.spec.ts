@@ -122,7 +122,7 @@ describe('PluginHttpService', () => {
     it('should block 169.254.x.x link-local range', async () => {
       const http = service.createHttpHelper(noopHeaders);
       await expectAsync(http.get('https://169.254.169.254/api')).toBeRejectedWithError(
-        /private\/local/,
+        /cloud metadata endpoints/,
       );
     });
 
@@ -130,7 +130,7 @@ describe('PluginHttpService', () => {
       const http = service.createHttpHelper(noopHeaders);
       await expectAsync(
         http.get('https://metadata.google.internal/computeMetadata/v1/'),
-      ).toBeRejectedWithError(/private\/local/);
+      ).toBeRejectedWithError(/cloud metadata endpoints/);
     });
 
     it('should block IPv6 ULA (fc00::)', async () => {

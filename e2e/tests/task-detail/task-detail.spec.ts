@@ -14,7 +14,7 @@ test.describe('Task detail', () => {
 
     await workViewPage.addTask('task');
     await page.getByText(/task/).first().hover();
-    await page.getByRole('button', { name: 'Show/Hide additional info' }).click();
+    await page.getByRole('button', { name: 'Show/hide task panel' }).click();
   };
 
   const addAndOpenCompleteTask = async (
@@ -54,7 +54,7 @@ test.describe('Task detail', () => {
     const completedInfoText = await completedInfo.textContent();
     await completedInfo.click();
 
-    await page.getByRole('button', { name: 'Open calendar' }).click();
+    await page.locator('mat-datepicker-toggle button').first().click();
     await page.getByRole('button', { name: 'Next month' }).click();
     // Picking the first day of the next month should guarantee a change
     await page.locator('mat-month-view button').first().click();

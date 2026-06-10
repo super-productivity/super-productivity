@@ -27,15 +27,24 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  isLocalRestApiEnabled?: boolean;
+  /** @deprecated Legacy hour-only representation. Use `startOfNextDayTime` as canonical source of truth. */
   startOfNextDay: number;
+  /** Canonical start-of-next-day value, including minute precision. */
+  startOfNextDayTime?: string;
   isDisableAnimations: boolean;
+  // Experimental: render the header action buttons as a vertical strip on
+  // the right edge of the viewport instead of the horizontal top header.
+  // Desktop only. Optional because it was added later.
+  isVerticalActionBar?: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
   isShowProductivityTipLonger?: boolean;
   isTrayShowCurrentCountdown?: boolean;
   isUseCustomWindowTitleBar?: boolean;
   customTheme?: string;
-  defaultStartPage?: number;
+  // number: one of DefaultStartPage. string: project id.
+  defaultStartPage?: number | string;
   unsplashApiKey?: string | null;
 
   // @todo: remove deprecated items in future major releases, after giving users time to migrate
@@ -46,8 +55,8 @@ export type MiscConfig = Readonly<{
   isTurnOffMarkdown?: boolean; // Deprecated
   defaultProjectId?: string | null | false; // Deprecated
   taskNotesTpl?: string; // Deprecated
-  isOverlayIndicatorEnabled?: boolean; // Deprecated – moved to overlayIndicator.isEnabled
-  overlayIndicatorOpacity?: number; // Deprecated – moved to overlayIndicator.opacity
+  isOverlayIndicatorEnabled?: boolean; // Deprecated – moved to taskWidget.isEnabled
+  overlayIndicatorOpacity?: number; // Deprecated – moved to taskWidget.opacity
 }>;
 
 export type TasksConfig = Readonly<{
@@ -110,6 +119,19 @@ export type PomodoroConfig = Readonly<{
   cyclesBeforeLongerBreak?: number | null;
 }>;
 
+export type FlowtimeBreakRule = Readonly<{
+  minDuration: number; // in milliseconds
+  maxDuration: number | null; // in milliseconds, or null for no upper bound
+  breakDuration: number; // in milliseconds
+}>;
+
+export type FlowtimeConfig = Readonly<{
+  isBreakEnabled?: boolean | null;
+  breakMode?: 'ratio' | 'rule' | null; // ratio-based or rule-based break calculation
+  breakPercentage?: number | null; // percentage of work time (for ratio mode)
+  breakRules?: FlowtimeBreakRule[] | null; // rules for rule-based breaks
+}>;
+
 // NOTE: needs to be writable due to how we use it
 // export type DropboxSyncConfig = object;
 
@@ -130,6 +152,22 @@ export interface SuperSyncConfig extends WebDavConfig {
   encryptKey?: string | null;
 }
 
+export interface NextcloudConfig {
+  serverUrl?: string | null;
+  loginName?: string | null;
+  userName?: string | null;
+  password?: string | null;
+  syncFolderPath?: string | null;
+}
+
+export interface OneDriveConfig {
+  /** View-model only: false = use built-in official app (if available), true = use custom app */
+  useCustomApp?: boolean | null;
+  clientId?: string | null;
+  tenantId?: string | null;
+  syncFolderPath?: string | null;
+}
+
 export interface LocalFileSyncConfig {
   // TODO remove and migrate
   syncFilePath?: string | null;
@@ -138,6 +176,8 @@ export interface LocalFileSyncConfig {
 
 export type LocalBackupConfig = Readonly<{
   isEnabled: boolean;
+  /** Desktop only. Optional for persisted data created before this setting existed. */
+  maxBackupFiles?: number | null;
 }>;
 
 /**
@@ -177,6 +217,10 @@ export type SyncConfig = Readonly<{
   superSync?: SuperSyncConfig;
   /* NOTE: view model for form only*/
   localFileSync?: LocalFileSyncConfig;
+  /* NOTE: view model for form only*/
+  nextcloud?: NextcloudConfig;
+  /* NOTE: view model for form only*/
+  oneDrive?: OneDriveConfig;
 }>;
 
 export type ScheduleConfig = Readonly<{
@@ -219,14 +263,28 @@ export type DominaModeConfig = Readonly<{
 
 export type FocusModeConfig = Readonly<{
   isSkipPreparation: boolean;
+  focusModeSound?: 'off' | 'tick' | 'whiteNoise';
+  /** @deprecated Use focusModeSound instead. Kept for backward-compat validation of old data. */
   isPlayTick?: boolean;
   isPauseTrackingDuringBreak?: boolean;
-  isSyncSessionWithTracking?: boolean;
+  /**
+   * When true, pressing the time-tracking play button on a task also starts a
+   * focus session (using the persistent mode the user last chose). The session
+   * runs quietly via the header indicator — no overlay, no preparation screen.
+   * Off by default; opt-in for users who want play = tracking + focus.
+   */
+  autoStartFocusOnPlay?: boolean;
+  /**
+   * @deprecated The auto-spawned session is now indicator-only by design — the
+   * overlay never opens automatically — so this flag has no behavioural effect.
+   * Kept on the type so old persisted configs deserialize without errors.
+   */
   isStartInBackground?: boolean;
+  /** Note: Controls Pomodoro overtime only (keeps timer running until manually ended) */
   isManualBreakStart?: boolean;
 }>;
 
-export type OverlayIndicatorConfig = Readonly<{
+export type TaskWidgetConfig = Readonly<{
   isEnabled?: boolean;
   isAlwaysShow?: boolean;
   opacity?: number;
@@ -252,6 +310,7 @@ export type GlobalConfigState = Readonly<{
   idle: IdleConfig;
   takeABreak: TakeABreakConfig;
   pomodoro: PomodoroConfig;
+  flowtime: FlowtimeConfig;
   keyboard: KeyboardConfig;
   localBackup: LocalBackupConfig;
   sound: SoundConfig;
@@ -260,7 +319,10 @@ export type GlobalConfigState = Readonly<{
   schedule: ScheduleConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
-  overlayIndicator: OverlayIndicatorConfig;
+  // NOTE: taskWidget is intentionally NOT part of GlobalConfigState — it is a
+  // per-instance setting persisted in localStorage (see TaskWidgetSettingsService)
+  // because OS behavior (window dragging/resizing, transparency) varies enough
+  // between Mac/Linux/Windows that syncing it across devices is undesirable.
   clipboardImages?: ClipboardImagesConfig;
 
   sync: SyncConfig;
@@ -269,17 +331,25 @@ export type GlobalConfigState = Readonly<{
 
 export type GlobalConfigSectionKey = keyof GlobalConfigState | 'EMPTY';
 
+// 'taskWidget' isn't on GlobalConfigState (it's per-instance, see above), but
+// the form layer still uses this key in form configs and the config-page save
+// handler. Kept separate from `GlobalConfigSectionKey` so it cannot leak into
+// `updateGlobalConfigSection` action payloads (which would create phantom ops
+// in the sync log).
+export type GlobalConfigFormSectionKey = GlobalConfigSectionKey | 'taskWidget';
+
 export type GlobalSectionConfig =
   | MiscConfig
   | TasksConfig
   | PomodoroConfig
+  | FlowtimeConfig
   | KeyboardConfig
   | ScheduleConfig
   | ReminderConfig
   | DailySummaryNote
   | SyncConfig
   | ClipboardImagesConfig
-  | OverlayIndicatorConfig;
+  | TaskWidgetConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export interface LimitedFormlyFieldConfig<FormModel> extends Omit<
@@ -295,14 +365,21 @@ export type CustomCfgSection =
   | 'OPENPROJECT_CFG'
   | 'CLIPBOARD_IMAGES_CFG';
 
+export interface ConfigSectionAction {
+  label: string;
+  icon?: string;
+  onClick: () => void | Promise<void>;
+}
+
 // Intermediate model
 export interface ConfigFormSection<FormModel> {
   title: string;
-  key: GlobalConfigSectionKey | ProjectCfgFormKey;
+  key: GlobalConfigFormSectionKey | ProjectCfgFormKey;
   help?: string;
   helpArr?: { h?: string; p: string; p2?: string; p3?: string; p4?: string }[];
   customSection?: CustomCfgSection;
   items?: LimitedFormlyFieldConfig<FormModel>[];
+  actions?: ConfigSectionAction[];
   isElectronOnly?: boolean;
   isHideForAndroidApp?: boolean;
 }

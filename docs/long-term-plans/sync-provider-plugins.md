@@ -73,13 +73,13 @@ Same constraints as `persistDataSynced()` (1 MB limit, rate limiting), but data 
 
 ### 3. PluginSyncProviderAdapter
 
-New class in `src/app/plugins/` that wraps plugin callbacks into `SyncProviderServiceInterface`:
+New class in `src/app/plugins/` that wraps plugin callbacks into `FileSyncProvider`:
 
 ```
 src/app/plugins/plugin-sync-provider-adapter.ts
 ```
 
-- Implements `SyncProviderServiceInterface<SyncProviderId>`
+- Implements `FileSyncProvider<SyncProviderId>`
 - Delegates file operations to plugin callbacks via `PluginBridgeService`
 - `privateCfg` uses a no-op credential store (plugin manages its own creds)
 - `isReady()` delegates to the plugin's `isReady()` callback
@@ -144,7 +144,7 @@ Changes:
 | `src/app/plugins/plugin-api.ts`                             | Implement new API methods                                                            |
 | `src/app/plugins/plugin-bridge.service.ts`                  | Add bridge methods for sync provider registration and local data persistence         |
 | `src/app/plugins/plugin-cleanup.service.ts`                 | Unregister sync provider on plugin disable/unload                                    |
-| **New**: `src/app/plugins/plugin-sync-provider-adapter.ts`  | Adapter wrapping plugin callbacks → `SyncProviderServiceInterface`                   |
+| **New**: `src/app/plugins/plugin-sync-provider-adapter.ts`  | Adapter wrapping plugin callbacks → `FileSyncProvider`                               |
 | `src/app/op-log/sync-providers/provider-manager.service.ts` | Add `registerPluginProvider()` / `unregisterPluginProvider()`, dynamic provider list |
 | `src/app/op-log/sync-providers/provider.const.ts`           | Support dynamic plugin provider IDs alongside the enum                               |
 | `src/app/features/config/form-cfgs/sync-form.const.ts`      | Dynamic provider dropdown, "Configure" button for plugin providers                   |
@@ -155,7 +155,7 @@ Changes:
 
 **`src/app/plugins/plugin-sync-provider-adapter.ts`**
 
-Thin adapter that implements `SyncProviderServiceInterface` by delegating to plugin callbacks. ~50-80 lines.
+Thin adapter that implements `FileSyncProvider` by delegating to plugin callbacks. ~50-80 lines.
 
 ## Verification Plan
 

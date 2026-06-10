@@ -2,10 +2,10 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom, Subject } from 'rxjs';
 import { OAuthFlowConfig, OAuthTokenResult } from '@super-productivity/plugin-api';
+import { generateCodeChallenge, generateCodeVerifier } from '@sp/sync-providers/pkce';
 import { PluginOAuthTokens } from './plugin-oauth.model';
-import { generateCodeVerifier, generateCodeChallenge } from './pkce.util';
 import { IS_ELECTRON } from '../../app.constants';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_NATIVE_PLATFORM, IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 import { PluginLog } from '../../core/log';
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
@@ -37,12 +37,20 @@ export class PluginOAuthService {
   /** Emits the pluginId when a token refresh fails and in-memory tokens are cleared. */
   tokenInvalidated$ = new Subject<string>();
 
-  getRedirectUri(): string {
+  async getRedirectUri(): Promise<string> {
     if (IS_ELECTRON) {
-      return 'super-productivity://oauth';
+      // Google Desktop OAuth requires loopback redirect URIs (http://127.0.0.1:<port>).
+      // Start a temporary loopback server in the main process and use its port.
+      const { port } = await window.ea.pluginOAuthPrepare();
+      return `http://127.0.0.1:${port}`;
     }
-    if (IS_ANDROID_WEB_VIEW) {
-      return 'com.super-productivity.app://plugin-oauth-callback';
+    if (IS_NATIVE_PLATFORM) {
+      // Scheme must match the platform's app identifier:
+      // Android: applicationId from build.gradle
+      // iOS: bundle ID (matches Capacitor appId)
+      return IS_ANDROID_NATIVE
+        ? 'com.superproductivity.superproductivity:/plugin-oauth-callback'
+        : 'com.super-productivity.app:/plugin-oauth-callback';
     }
     return `${window.location.origin}/assets/oauth-callback.html`;
   }
@@ -83,6 +91,11 @@ export class PluginOAuthService {
       codeVerifier,
       state,
     };
+  }
+
+  validateOAuthConfig(config: OAuthFlowConfig): void {
+    this._validateHttpsUrl(config.authUrl, 'authUrl');
+    this._validateHttpsUrl(config.tokenUrl, 'tokenUrl');
   }
 
   private _validateHttpsUrl(url: string, label: string): void {
@@ -310,7 +323,11 @@ export class PluginOAuthService {
 
   handleRedirectError(error: string, state?: string): void {
     if (this._pendingRedirect) {
-      if (state !== this._pendingRedirect.expectedState) {
+      // Allow errors without state — these originate locally (preload/main
+      // process error before reaching the IdP, e.g. failed_to_open_browser)
+      // and are not CSRF-relevant. State validation only matters when state
+      // is provided (e.g., echoed back by the IdP on a real error redirect).
+      if (state != null && state !== this._pendingRedirect.expectedState) {
         PluginLog.warn('OAuth error state mismatch – ignoring callback');
         return;
       }

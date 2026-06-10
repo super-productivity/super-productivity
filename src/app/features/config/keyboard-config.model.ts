@@ -2,6 +2,7 @@ export type KeyboardConfig = Readonly<{
   globalShowHide?: string | null;
   globalAddNote?: string | null;
   globalAddTask?: string | null;
+  globalToggleTaskWidget?: string | null;
   toggleBacklog?: string | null;
   goToFocusMode?: string | null;
   goToWorkView?: string | null;
@@ -15,17 +16,18 @@ export type KeyboardConfig = Readonly<{
   showSearchBar?: string | null;
   addNewNote?: string | null;
   focusSideNav?: string | null;
+  toggleSideNavMode?: string | null;
   openProjectNotes?: string | null;
   toggleTaskViewCustomizerPanel?: string | null;
   toggleIssuePanel?: string | null;
   zoomIn?: string | null;
   zoomOut?: string | null;
   zoomDefault?: string | null;
-  saveNote?: string | null;
   triggerSync?: string | null;
 
   taskEditTitle?: string | null;
   taskToggleDetailPanelOpen?: string | null;
+  taskOpenNotesPanel?: string | null;
   taskOpenNotesFullscreen?: string | null;
   taskOpenEstimationDialog?: string | null;
   taskToggleDone?: string | null;
@@ -35,6 +37,11 @@ export type KeyboardConfig = Readonly<{
   taskOpenContextMenu?: string | null;
   taskDelete?: string | null;
   taskSchedule?: string | null;
+  taskScheduleToday?: string | null;
+  taskScheduleTomorrow?: string | null;
+  taskScheduleNextWeek?: string | null;
+  taskScheduleNextMonth?: string | null;
+  taskScheduleDeadline?: string | null;
   taskUnschedule?: string | null;
   selectPreviousTask?: string | null;
   selectNextTask?: string | null;
@@ -43,7 +50,6 @@ export type KeyboardConfig = Readonly<{
   moveTaskToTop?: string | null;
   moveTaskToBottom?: string | null;
   moveToBacklog?: string | null;
-  moveToTodaysTasks?: string | null;
   expandSubTasks?: string | null;
   collapseSubTasks?: string | null;
   togglePlay?: string | null;

@@ -21,18 +21,21 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
+import { INBOX_PROJECT } from '../../../features/project/project.const';
+import { RECREATE_FALLBACK } from '../../../op-log/core/recreate-fallback.const';
 import { OpLog } from '../../../core/log';
+import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply/bulk-archive-filter.util';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 
 /**
- * Updates project.taskIds arrays when a task's projectId changes via LWW Update.
+ * Updates project.taskIds arrays when a task's project membership changes via LWW Update.
  *
- * When LWW conflict resolution updates a task's projectId, we must also update
- * the corresponding project.taskIds arrays to maintain bidirectional consistency:
- * - Remove task from old project's taskIds (if it exists there)
- * - Add task to new project's taskIds (if not already there)
+ * When LWW conflict resolution updates a task's projectId or parentId, we must
+ * also update the corresponding project.taskIds arrays to maintain consistency:
+ * - Remove task from old project's taskIds if it moved away or became a subtask
+ * - Add task to new project's taskIds if it is now a root task
  *
  * This is necessary because the original moveToOtherProject action updates both
  * the task and project entities atomically, but LWW Update only syncs the TASK
@@ -43,22 +46,17 @@ const syncProjectTaskIds = (
   taskId: string,
   oldProjectId: string | undefined,
   newProjectId: string | undefined,
-  isSubTask: boolean,
+  oldIsSubTask: boolean,
+  newIsSubTask: boolean,
 ): RootState => {
-  // Don't add subtasks to project.taskIds - only parent tasks should be there
-  if (isSubTask) {
-    return state;
-  }
-
-  // If projectId didn't change, nothing to do
-  if (oldProjectId === newProjectId) {
-    return state;
-  }
-
   let projectState = state[PROJECT_FEATURE_NAME];
+  const shouldRemoveFromOldProject =
+    !!oldProjectId && (oldProjectId !== newProjectId || newIsSubTask);
+  const shouldAddToNewProject =
+    !!newProjectId && !newIsSubTask && (oldProjectId !== newProjectId || oldIsSubTask);
 
   // Remove from old project's taskIds
-  if (oldProjectId && projectState.entities[oldProjectId]) {
+  if (shouldRemoveFromOldProject && oldProjectId && projectState.entities[oldProjectId]) {
     const oldProject = projectState.entities[oldProjectId] as Project;
     const filteredTaskIds = oldProject.taskIds.filter((id) => id !== taskId);
     const filteredBacklogTaskIds = oldProject.backlogTaskIds.filter(
@@ -81,7 +79,7 @@ const syncProjectTaskIds = (
         projectState,
       );
     }
-  } else if (oldProjectId) {
+  } else if (shouldRemoveFromOldProject && oldProjectId) {
     // Old project was deleted before LWW update arrived - benign race condition
     OpLog.warn(
       `lwwUpdateMetaReducer: syncProjectTaskIds: old project ${oldProjectId} not found for task ${taskId}`,
@@ -89,7 +87,7 @@ const syncProjectTaskIds = (
   }
 
   // Add to new project's taskIds
-  if (newProjectId && projectState.entities[newProjectId]) {
+  if (shouldAddToNewProject && newProjectId && projectState.entities[newProjectId]) {
     const newProject = projectState.entities[newProjectId] as Project;
     // Only add if not already present
     if (!newProject.taskIds.includes(taskId)) {
@@ -103,17 +101,19 @@ const syncProjectTaskIds = (
         projectState,
       );
     }
-  } else if (newProjectId) {
+  } else if (shouldAddToNewProject && newProjectId) {
     // New project was deleted before LWW update arrived - benign race condition
     OpLog.warn(
       `lwwUpdateMetaReducer: syncProjectTaskIds: new project ${newProjectId} not found for task ${taskId}`,
     );
   }
 
-  return {
-    ...state,
-    [PROJECT_FEATURE_NAME]: projectState,
-  };
+  return projectState === state[PROJECT_FEATURE_NAME]
+    ? state
+    : {
+        ...state,
+        [PROJECT_FEATURE_NAME]: projectState,
+      };
 };
 
 /**
@@ -359,51 +359,31 @@ const syncParentSubTaskIds = (
  *
  * This is necessary because LWW conflict resolution replaces entire entities
  * without checking whether referenced tasks still exist locally.
+ *
+ * Wraps the shared `filterTaskIdArraysFromTagOrProjectPayload` helper. The
+ * sibling filter for in-batch archives is `stripBatchArchivedTaskIdsFromLwwPayload`
+ * in op-log/apply/bulk-archive-filter.util.ts — the two run at different
+ * layers because their predicates resolve at different times.
  */
 const filterOrphanedTaskIdsFromEntityData = (
   entityData: Record<string, unknown>,
   entityType: string,
   rootState: RootState,
 ): Record<string, unknown> => {
-  if (entityType !== 'TAG' && entityType !== 'PROJECT') {
-    return entityData;
-  }
-
   const taskState = rootState[TASK_FEATURE_NAME];
-  if (!taskState) {
-    return entityData;
-  }
+  if (!taskState) return entityData;
   const existingTaskIds = new Set(taskState.ids as string[]);
-
-  let filtered = entityData;
-
-  if (Array.isArray(entityData['taskIds'])) {
-    const original = entityData['taskIds'] as string[];
-    const cleaned = original.filter((id) => existingTaskIds.has(id));
-    if (cleaned.length !== original.length) {
-      const removed = original.filter((id) => !existingTaskIds.has(id));
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
-        { entityId: entityData['id'], removed },
-      );
-      filtered = { ...filtered, taskIds: cleaned };
-    }
-  }
-
-  if (entityType === 'PROJECT' && Array.isArray(entityData['backlogTaskIds'])) {
-    const original = entityData['backlogTaskIds'] as string[];
-    const cleaned = original.filter((id) => existingTaskIds.has(id));
-    if (cleaned.length !== original.length) {
-      const removed = original.filter((id) => !existingTaskIds.has(id));
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Filtered orphaned backlogTaskIds from PROJECT LWW Update`,
-        { entityId: entityData['id'], removed },
-      );
-      filtered = { ...filtered, backlogTaskIds: cleaned };
-    }
-  }
-
-  return filtered;
+  const cleaned = filterTaskIdArraysFromTagOrProjectPayload(
+    entityData,
+    entityType,
+    (id) => !existingTaskIds.has(id),
+    {
+      warnMessage: `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
+      entityId:
+        typeof entityData['id'] === 'string' ? (entityData['id'] as string) : undefined,
+    },
+  );
+  return cleaned ?? entityData;
 };
 
 /**
@@ -503,6 +483,11 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       return reducer(state, action);
     }
 
+    // Note (#7330): backfill of payload.id for adapter LWW Updates lives in
+    // convertOpToAction at the apply boundary — every applied op has its id
+    // set from op.entityId before reaching this reducer. Producers also
+    // force the canonical id on-disk. The check below remains as a hard
+    // guard for actions arriving with no usable id at all.
     if (!entityData['id']) {
       OpLog.warn('lwwUpdateMetaReducer: Entity data has no id');
       return reducer(state, action);
@@ -529,7 +514,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       }
     ).entities?.[entityId];
 
-    let updatedFeatureState;
+    let updatedFeatureState: unknown;
 
     if (!existingEntity) {
       // Entity was deleted locally but UPDATE won via LWW.
@@ -538,18 +523,64 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       OpLog.log(
         `lwwUpdateMetaReducer: Entity ${entityType}:${entityId} not found, recreating from LWW update`,
       );
+
+      // Issue #7330: An LWW Update payload from a partial-delta producer
+      // (e.g. _convertToLWWUpdatesIfNeeded fallback) can lack required fields.
+      // Calling adapter.addOne with such a payload creates an entity that fails
+      // Typia validation (e.g. task with undefined `title` / `timeSpentOnDay`),
+      // which dataRepair has no rule for, leaving the user stuck on the
+      // "Repair attempted but failed" dialog. For TASK entities we merge with
+      // DEFAULT_TASK so the recreated entity is always schema-valid.
+      //
+      // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
+      // Rationale:
+      // - Vector clocks are the authoritative conflict resolution mechanism, not `modified`
+      // - The `modified` field is used for UI display ("last edited X minutes ago")
+      // - Setting it to local time reflects when THIS client applied the winning state
+      // - The original timestamp from the winning client is preserved in entityData but
+      //   gets overwritten here because local display should show local application time
+      let entityToAdd: Record<string, unknown>;
+      const fallback = RECREATE_FALLBACK[entityType];
+      if (fallback) {
+        // null and undefined both count as "missing": producers that emit
+        // explicit `null` for a required field would otherwise slip past the
+        // warn AND have `null` overwrite the default in the spread below.
+        const partialKeys = fallback.requiredKeys.filter((k) => entityData[k] == null);
+        if (partialKeys.length > 0) {
+          OpLog.warn(
+            `lwwUpdateMetaReducer: ${entityType} LWW Update payload missing required ` +
+              `fields [${partialKeys.join(', ')}] for ${entityId} — backfilling from ` +
+              `defaults. Likely cause: the local DELETE op carried only {id} ` +
+              `(or a similarly minimal payload), so _convertToLWWUpdatesIfNeeded ` +
+              `produced a partial merged entity on its happy path.`,
+          );
+        }
+        // Spread does not skip null/undefined-valued keys; strip them so they
+        // can't clobber a backfilled default.
+        const stripped: Record<string, unknown> = { modified: Date.now() };
+        for (const k of Object.keys(entityData)) {
+          if (entityData[k] != null) stripped[k] = entityData[k];
+        }
+        entityToAdd = { ...fallback.defaults, ...stripped };
+
+        // INBOX_PROJECT may legitimately be missing from state (corrupted
+        // import, partial migration). Mirror normalizeRestoredTask's guard at
+        // task-shared-lifecycle.reducer.ts:110 so the recreated task points
+        // at a project that actually exists.
+        if (entityType === 'TASK' && entityToAdd['projectId'] === INBOX_PROJECT.id) {
+          const projectEntities =
+            (state[PROJECT_FEATURE_NAME] as { entities?: Record<string, unknown> })
+              ?.entities ?? {};
+          if (!projectEntities[INBOX_PROJECT.id]) {
+            const firstProjectId = Object.keys(projectEntities)[0];
+            if (firstProjectId) entityToAdd['projectId'] = firstProjectId;
+          }
+        }
+      } else {
+        entityToAdd = { ...entityData, modified: Date.now() };
+      }
       updatedFeatureState = (adapter as EntityAdapter<any>).addOne(
-        {
-          ...entityData,
-          // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
-          // Rationale:
-          // - Vector clocks are the authoritative conflict resolution mechanism, not `modified`
-          // - The `modified` field is used for UI display ("last edited X minutes ago")
-          // - Setting it to local time reflects when THIS client applied the winning state
-          // - The original timestamp from the winning client is preserved in entityData but
-          //   gets overwritten here because local display should show local application time
-          modified: Date.now(),
-        } as any,
+        entityToAdd as any,
         featureState as any,
       );
     } else {
@@ -574,38 +605,41 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       ...rootState,
       [featureName]: updatedFeatureState,
     };
+    const updatedEntity = (
+      updatedFeatureState as unknown as {
+        entities?: Record<string, Record<string, unknown>>;
+      }
+    ).entities?.[entityId];
 
     // For TASK entities, sync related entities when relationships change
-    if (entityType === 'TASK') {
+    if (entityType === 'TASK' && updatedEntity) {
       // Sync project.taskIds when projectId changes
       const oldProjectId = existingEntity?.projectId as string | undefined;
-      const newProjectId = entityData['projectId'] as string | undefined;
-      // Use the NEW parentId to decide subtask status: if the LWW update
-      // clears parentId (promoting to main task), we should add it to project.taskIds.
-      // Fall back to existing only when the LWW update doesn't include parentId at all.
-      const isSubTask = !!('parentId' in entityData
-        ? entityData['parentId']
-        : existingEntity?.parentId);
+      const newProjectId = updatedEntity.projectId as string | undefined;
+      const oldIsSubTask = !!existingEntity?.parentId;
+      const newParentId = updatedEntity.parentId as string | undefined;
+      const newIsSubTask = !!newParentId;
 
       updatedState = syncProjectTaskIds(
         updatedState,
         entityId,
         oldProjectId,
         newProjectId,
-        isSubTask,
+        oldIsSubTask,
+        newIsSubTask,
       );
 
       // Sync tag.taskIds when tagIds changes
       const oldTagIds = (existingEntity?.tagIds as string[]) || [];
-      const newTagIds = (entityData['tagIds'] as string[]) || [];
+      const newTagIds = (updatedEntity.tagIds as string[]) || [];
 
       updatedState = syncTagTaskIds(updatedState, entityId, oldTagIds, newTagIds);
 
       // Sync TODAY_TAG.taskIds when dueDay or dueWithTime changes (virtual tag based on dueDay/dueWithTime)
       const oldDueDay = existingEntity?.dueDay as string | undefined;
-      const newDueDay = entityData['dueDay'] as string | undefined;
+      const newDueDay = updatedEntity.dueDay as string | undefined;
       const oldDueWithTime = existingEntity?.dueWithTime as number | undefined;
-      const newDueWithTime = entityData['dueWithTime'] as number | undefined;
+      const newDueWithTime = updatedEntity.dueWithTime as number | undefined;
       updatedState = syncTodayTagTaskIds(
         updatedState,
         entityId,
@@ -617,7 +651,6 @@ export const lwwUpdateMetaReducer: MetaReducer = (
 
       // Sync parent.subTaskIds when parentId changes
       const oldParentId = existingEntity?.parentId as string | undefined;
-      const newParentId = entityData['parentId'] as string | undefined;
       updatedState = syncParentSubTaskIds(
         updatedState,
         entityId,

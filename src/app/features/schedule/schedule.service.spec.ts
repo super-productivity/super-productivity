@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { ScheduleService } from './schedule.service';
 import { DateService } from '../../core/date/date.service';
 import { provideMockStore } from '@ngrx/store/testing';
@@ -6,10 +7,11 @@ import { selectTimelineTasks } from '../work-context/store/work-context.selector
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
 import { selectPlannerDayMap } from '../planner/store/planner.selectors';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
+import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-calendar-providers.service';
 import { TaskService } from '../tasks/task.service';
-import { ScheduleEvent } from './schedule.model';
+import { ScheduleCalendarMapEntry, ScheduleEvent } from './schedule.model';
 import { SVEType } from './schedule.const';
 
 describe('ScheduleService', () => {
@@ -37,7 +39,7 @@ describe('ScheduleService', () => {
         }),
         {
           provide: CalendarIntegrationService,
-          useValue: { icalEvents$: of([]) },
+          useValue: { calendarEvents$: of([]) },
         },
         {
           provide: TaskService,
@@ -51,68 +53,24 @@ describe('ScheduleService', () => {
 
   describe('getDaysToShow', () => {
     it('should return correct number of days when referenceDate is null', () => {
-      // Arrange
-      const nrOfDaysToShow = 5;
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, null);
-
-      // Assert
+      const result = service.getDaysToShow(5, null);
       expect(result.length).toBe(5);
     });
 
     it('should return days starting from today when referenceDate is null', () => {
-      // Arrange
-      const nrOfDaysToShow = 3;
-      const expectedTodayStr = dateService.todayStr();
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, null);
-
-      // Assert
-      expect(result[0]).toBe(expectedTodayStr);
+      const result = service.getDaysToShow(3, null);
+      expect(result[0]).toBe(dateService.todayStr());
     });
 
-    it('should return days starting from referenceDate', () => {
-      // Arrange
-      const nrOfDaysToShow = 3;
-      const referenceDate = new Date(2028, 5, 15); // June 15, 2028
-      const expectedFirstDay = dateService.todayStr(referenceDate.getTime());
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
-      expect(result[0]).toBe(expectedFirstDay);
-      expect(result.length).toBe(3);
-    });
-
-    it('should return days starting from provided date even if today', () => {
-      // Arrange
-      const nrOfDaysToShow = 3;
-      const referenceDate = new Date();
-      const expectedFirstDay = dateService.todayStr(referenceDate.getTime());
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
-      expect(result[0]).toBe(expectedFirstDay);
-      expect(result.length).toBe(3);
-    });
-
-    it('should return consecutive days from referenceDate', () => {
-      // Arrange
-      const nrOfDaysToShow = 7;
-      // Use a future date to ensure not in current week
-      const referenceDate = new Date(2028, 0, 20); // Jan 20, 2028
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
+    it('should return days starting from referenceDate (rolling)', () => {
+      const referenceDate = new Date(2028, 5, 15); // Thu Jun 15, 2028
+      const result = service.getDaysToShow(7, referenceDate);
+      expect(result[0]).toBe(dateService.todayStr(referenceDate.getTime()));
       expect(result.length).toBe(7);
-      // Check that each day is consecutive
+    });
+
+    it('should return consecutive days', () => {
+      const result = service.getDaysToShow(7, new Date(2028, 0, 20));
       for (let i = 0; i < result.length - 1; i++) {
         const currentDay = new Date(result[i]);
         const nextDay = new Date(result[i + 1]);
@@ -123,17 +81,9 @@ describe('ScheduleService', () => {
     });
 
     it('should handle transition across months', () => {
-      // Arrange
-      const nrOfDaysToShow = 5;
-      // Use a future date to ensure not in current week
       const referenceDate = new Date(2028, 0, 30); // Jan 30, 2028
-
-      // Act
-      const result = service.getDaysToShow(nrOfDaysToShow, referenceDate);
-
-      // Assert
+      const result = service.getDaysToShow(5, referenceDate);
       expect(result.length).toBe(5);
-      // Last days should be in February
       const lastDay = new Date(result[4]);
       expect(lastDay.getMonth()).toBe(1); // February
     });
@@ -285,7 +235,7 @@ describe('ScheduleService', () => {
         daysToShow: ['2026-01-20', '2026-01-21'],
         timelineTasks: null,
         taskRepeatCfgs: { withStartTime: [], withoutStartTime: [] },
-        icalEvents: [],
+        calendarEvents: [],
         plannerDayMap: {},
         timelineCfg: null,
         currentTaskId: null,
@@ -304,7 +254,7 @@ describe('ScheduleService', () => {
         daysToShow: ['2026-01-20', '2026-01-21'],
         timelineTasks: { unPlanned: [], planned: [] },
         taskRepeatCfgs: null,
-        icalEvents: [],
+        calendarEvents: [],
         plannerDayMap: {},
         timelineCfg: null,
         currentTaskId: null,
@@ -323,7 +273,7 @@ describe('ScheduleService', () => {
         daysToShow: ['2026-01-20', '2026-01-21'],
         timelineTasks: { unPlanned: [], planned: [] },
         taskRepeatCfgs: { withStartTime: [], withoutStartTime: [] },
-        icalEvents: [],
+        calendarEvents: [],
         plannerDayMap: null,
         timelineCfg: null,
         currentTaskId: null,
@@ -345,7 +295,7 @@ describe('ScheduleService', () => {
         daysToShow: ['2026-01-20'],
         timelineTasks: { unPlanned: [], planned: [] },
         taskRepeatCfgs: { withStartTime: [], withoutStartTime: [] },
-        icalEvents: [],
+        calendarEvents: [],
         plannerDayMap: {},
         timelineCfg: null,
         currentTaskId: null,
@@ -366,7 +316,7 @@ describe('ScheduleService', () => {
         daysToShow: ['2026-01-20'],
         timelineTasks: { unPlanned: [], planned: [] },
         taskRepeatCfgs: { withStartTime: [], withoutStartTime: [] },
-        icalEvents: [],
+        calendarEvents: [],
         plannerDayMap: {},
         timelineCfg: null,
       };
@@ -552,6 +502,16 @@ describe('ScheduleService', () => {
       const result = service.getEventDayStr(event);
       expect(result).toBe('2026-03-01');
     });
+
+    it('should return event plannedForDay for planned task entries when task data lacks it', () => {
+      const event = createMockEvent(SVEType.TaskPlannedForDay, '2026-05-07', {
+        id: 'task-1',
+        title: 'Due day task',
+        dueDay: '2026-05-07',
+      } as unknown as ScheduleEvent['data']);
+      const result = service.getEventDayStr(event);
+      expect(result).toBe('2026-05-07');
+    });
   });
 
   describe('getEventsForDay', () => {
@@ -642,5 +602,133 @@ describe('ScheduleService', () => {
 
       expect(result).toBe(false);
     });
+  });
+});
+
+describe('ScheduleService – calendar visibility filter', () => {
+  let service: ScheduleService;
+  let dateService: DateService;
+
+  const hiddenProviderIds = signal<string[]>([]);
+  const calendarEvents$ = new BehaviorSubject<ScheduleCalendarMapEntry[]>([]);
+
+  const makeEntry = (calProviderId: string): ScheduleCalendarMapEntry => ({
+    items: [
+      {
+        id: 'ev-' + calProviderId,
+        calProviderId,
+        issueProviderKey: 'ICAL',
+        title: 'Event',
+        start: Date.now() + 60_000,
+        duration: 3_600_000,
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    hiddenProviderIds.set([]);
+    calendarEvents$.next([]);
+
+    TestBed.configureTestingModule({
+      providers: [
+        ScheduleService,
+        DateService,
+        provideMockStore({
+          selectors: [
+            { selector: selectTimelineTasks, value: { unPlanned: [], planned: [] } },
+            {
+              selector: selectTaskRepeatCfgsWithAndWithoutStartTime,
+              value: { withStartTime: [], withoutStartTime: [] },
+            },
+            {
+              selector: selectTimelineConfig,
+              value: { isWorkStartEndEnabled: false, isLunchBreakEnabled: false },
+            },
+            { selector: selectPlannerDayMap, value: {} },
+          ],
+        }),
+        { provide: CalendarIntegrationService, useValue: { calendarEvents$ } },
+        { provide: TaskService, useValue: { currentTaskId: () => null } },
+        {
+          provide: HiddenCalendarProvidersService,
+          useValue: { hiddenProviderIds },
+        },
+      ],
+    });
+
+    service = TestBed.inject(ScheduleService);
+    dateService = TestBed.inject(DateService);
+  });
+
+  const callCreate = (): ScheduleCalendarMapEntry[] => {
+    const spy = spyOn(service, 'buildScheduleDays').and.callThrough();
+    service.createScheduleDaysWithContext({
+      daysToShow: [dateService.todayStr()],
+      contextNow: Date.now(),
+      realNow: Date.now(),
+      currentTaskId: null,
+    });
+    return (spy.calls.mostRecent().args[0].calendarEvents ??
+      []) as ScheduleCalendarMapEntry[];
+  };
+
+  it('should pass all entries through when no providers are hidden', () => {
+    calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);
+    hiddenProviderIds.set([]);
+
+    expect(callCreate().length).toBe(2);
+  });
+
+  it('should exclude the entry for a hidden provider', () => {
+    calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);
+    hiddenProviderIds.set(['provider-A']);
+
+    const passed = callCreate();
+    expect(passed.length).toBe(1);
+    expect(passed[0].items[0].calProviderId).toBe('provider-B');
+  });
+
+  it('should exclude all entries when all providers are hidden', () => {
+    calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);
+    hiddenProviderIds.set(['provider-A', 'provider-B']);
+
+    expect(callCreate().length).toBe(0);
+  });
+
+  it('should drop entries whose items array becomes empty after filtering', () => {
+    calendarEvents$.next([{ items: [] }, makeEntry('provider-A')]);
+    hiddenProviderIds.set(['provider-A']);
+
+    expect(callCreate().length).toBe(0);
+  });
+
+  it('should filter hidden items inside a mixed-provider entry', () => {
+    const mixedEntry: ScheduleCalendarMapEntry = {
+      items: [
+        {
+          id: 'ev-A',
+          calProviderId: 'provider-A',
+          issueProviderKey: 'ICAL',
+          title: 'A',
+          start: Date.now() + 60_000,
+          duration: 3_600_000,
+        },
+        {
+          id: 'ev-B',
+          calProviderId: 'provider-B',
+          issueProviderKey: 'ICAL',
+          title: 'B',
+          start: Date.now() + 60_000,
+          duration: 3_600_000,
+        },
+      ],
+    };
+    calendarEvents$.next([mixedEntry]);
+    hiddenProviderIds.set(['provider-A']);
+
+    const passed = callCreate();
+    expect(passed.length).toBe(1);
+    expect(passed[0].items.length).toBe(1);
+    expect(passed[0].items[0].calProviderId).toBe('provider-B');
   });
 });

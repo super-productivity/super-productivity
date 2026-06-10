@@ -1,7 +1,7 @@
 # Allgemeine Geschäftsbedingungen (AGB)
 
 **Super Productivity Sync**
-_Stand: 08.12.2025_
+_Stand: 25.04.2026_
 
 ## 1. Geltungsbereich und Anbieter
 
@@ -81,6 +81,8 @@ Der Anbieter bemüht sich um hohe Verfügbarkeit, garantiert jedoch keine unterb
 (2) Der Anbieter kann das Vertragsverhältnis jederzeit mit einer Frist von zwei (2) Wochen ordentlich kündigen (bei kostenlosen Diensten) oder bei Vorliegen eines wichtigen Grundes fristlos sperren oder kündigen.
 
 (3) Bei kostenpflichtigen Diensten gelten die im Bestellprozess angegebenen Kündigungsfristen.
+
+(4) **Inaktive Konten:** Konten, bei denen über einen Zeitraum von drei (3) Monaten keinerlei Nutzeraktivität (insbesondere kein Login und keine Synchronisation) erfolgt, gelten als inaktiv. Der Anbieter ist berechtigt, derart inaktive Konten samt der zugehörigen synchronisierten Daten ohne weitere Vorankündigung zu löschen. Der Nutzer ist selbst dafür verantwortlich, regelmäßige lokale Backups seiner Daten vorzuhalten (vgl. Ziffer 4 Abs. 3).
 
 ## 10. Änderungen der AGB
 

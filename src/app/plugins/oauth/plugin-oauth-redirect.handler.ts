@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { PluginOAuthService } from './plugin-oauth.service';
 import { IS_ELECTRON } from '../../app.constants';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 
 /**
  * Bridges platform-specific OAuth redirect callbacks to PluginOAuthService.
@@ -20,8 +20,8 @@ export class PluginOAuthRedirectHandler implements OnDestroy {
   constructor() {
     if (IS_ELECTRON) {
       this._setupElectronListener();
-    } else if (!IS_ANDROID_WEB_VIEW) {
-      // Android/iOS OAuth redirects are handled by OAuthCallbackHandlerService
+    } else if (!IS_NATIVE_PLATFORM) {
+      // Native mobile OAuth redirects are handled by OAuthCallbackHandlerService
       // via Capacitor's appUrlOpen listener, not by this handler.
       this._setupWebListener();
     }

@@ -52,6 +52,29 @@ describe('DatePickerInputComponent', () => {
       const date = new Date(2026, 5, 1);
       expect(comp.validateDate(date)).toBe(false);
     });
+
+    // Regression: the MatDatepicker emits selections at LOCAL midnight, while a
+    // string `min` was parsed as UTC midnight. In positive-offset timezones the
+    // selection then compared as "before min", so picking exactly the min day
+    // (e.g. today, once #7799 clamped the start-date floor to today) was
+    // silently rejected — "can't set start date to today" (#7768).
+    it('should accept a value equal to a string min on the same calendar day (#7768)', () => {
+      const fixture = TestBed.createComponent(DatePickerInputComponent);
+      fixture.componentRef.setInput('min', '2026-05-29');
+      fixture.detectChanges();
+      const comp = fixture.componentInstance;
+      const pickedLocalMidnight = new Date(2026, 4, 29);
+      expect(comp.validateDate(pickedLocalMidnight)).toBe(true);
+    });
+
+    it('should accept a value equal to a string max on the same calendar day (#7768)', () => {
+      const fixture = TestBed.createComponent(DatePickerInputComponent);
+      fixture.componentRef.setInput('max', '2026-05-29');
+      fixture.detectChanges();
+      const comp = fixture.componentInstance;
+      const pickedLocalMidnight = new Date(2026, 4, 29);
+      expect(comp.validateDate(pickedLocalMidnight)).toBe(true);
+    });
   });
 
   describe('onValueChange', () => {
@@ -61,7 +84,7 @@ describe('DatePickerInputComponent', () => {
       const date = new Date(2026, 2, 18);
       component.onValueChange(date);
       expect(spy).toHaveBeenCalledWith(date);
-      expect(component.innerValue).toEqual(date);
+      expect(component.innerValue()).toEqual(date);
     });
 
     it('should emit null when value is null', () => {
@@ -69,7 +92,7 @@ describe('DatePickerInputComponent', () => {
       component.registerOnChange(spy);
       component.onValueChange(null);
       expect(spy).toHaveBeenCalledWith(null);
-      expect(component.innerValue).toBeNull();
+      expect(component.innerValue()).toBeNull();
     });
 
     it('should NOT convert valid dates to epoch (issue #6860)', () => {
@@ -88,26 +111,26 @@ describe('DatePickerInputComponent', () => {
   describe('writeValue', () => {
     it('should set innerValue to null for falsy values', () => {
       component.writeValue(null);
-      expect(component.innerValue).toBeNull();
+      expect(component.innerValue()).toBeNull();
     });
 
     it('should set innerValue for Date objects', () => {
       const date = new Date(2026, 2, 18);
       component.writeValue(date);
-      expect(component.innerValue).toEqual(date);
+      expect(component.innerValue()).toEqual(date);
     });
 
     it('should parse valid date strings', () => {
       component.writeValue('2026-03-18');
-      expect(component.innerValue).toBeTruthy();
-      expect(component.innerValue!.getFullYear()).toBe(2026);
-      expect(component.innerValue!.getMonth()).toBe(2);
-      expect(component.innerValue!.getDate()).toBe(18);
+      expect(component.innerValue()).toBeTruthy();
+      expect(component.innerValue()!.getFullYear()).toBe(2026);
+      expect(component.innerValue()!.getMonth()).toBe(2);
+      expect(component.innerValue()!.getDate()).toBe(18);
     });
 
     it('should set innerValue to null for non-string non-Date values', () => {
       component.writeValue(12345);
-      expect(component.innerValue).toBeNull();
+      expect(component.innerValue()).toBeNull();
     });
   });
 });

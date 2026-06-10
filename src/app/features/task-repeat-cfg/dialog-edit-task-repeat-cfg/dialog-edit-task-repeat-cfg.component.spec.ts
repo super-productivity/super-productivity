@@ -1,6 +1,11 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialog,
+  MatDialogModule,
+  MatDialogRef,
+} from '@angular/material/dialog';
 import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
@@ -21,13 +26,21 @@ import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model
 import { TaskCopy } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
+import { DateService } from '../../../core/date/date.service';
 
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
+  let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockTaskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let mockTagService: jasmine.SpyObj<TagService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockDateTimeFormatService: jasmine.SpyObj<DateTimeFormatService>;
+  let mockDateService: jasmine.SpyObj<DateService>;
+
+  // DateService is mocked to this fixed day; assertions about "today" must
+  // derive from these consts, never from the real clock (see #8017 CI breakage).
+  const MOCK_TODAY = new Date(2026, 5, 9, 0, 0, 0, 0);
+  const MOCK_TODAY_STR = '2026-06-09';
 
   const mockRepeatCfg: TaskRepeatCfg = {
     ...DEFAULT_TASK_REPEAT_CFG,
@@ -61,12 +74,22 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     getTaskRepeatCfgById$ReturnValue?: Observable<TaskRepeatCfg> | Subject<TaskRepeatCfg>,
   ): Promise<ComponentFixture<DialogEditTaskRepeatCfgComponent>> => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
+    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockMatDialog.open.and.returnValue({
+      afterClosed: () => of(null),
+    } as any);
     mockTaskRepeatCfgService = jasmine.createSpyObj('TaskRepeatCfgService', [
       'getTaskRepeatCfgById$',
       'updateTaskRepeatCfg',
       'addTaskRepeatCfgToTask',
       'deleteTaskRepeatCfgWithDialog',
     ]);
+    mockDateService = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getLogicalTodayDate',
+    ]);
+    mockDateService.todayStr.and.returnValue(MOCK_TODAY_STR);
+    mockDateService.getLogicalTodayDate.and.returnValue(new Date(MOCK_TODAY));
 
     // Set up the return value for getTaskRepeatCfgById$ before creating the component
     if (getTaskRepeatCfgById$ReturnValue) {
@@ -88,6 +111,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         parse: 'MM/dd/yyyy',
         display: { dateInput: 'MM/dd/yyyy' },
       }),
+      formatTime: () => '12:00 PM',
     });
 
     await TestBed.configureTestingModule({
@@ -104,11 +128,13 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       providers: [
         provideMockStore(),
         { provide: MatDialogRef, useValue: mockDialogRef },
+        { provide: MatDialog, useValue: mockMatDialog },
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: TaskRepeatCfgService, useValue: mockTaskRepeatCfgService },
         { provide: TagService, useValue: mockTagService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateService, useValue: mockDateService },
         { provide: DateAdapter, useClass: CustomDateAdapter },
       ],
     })
@@ -282,8 +308,9 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
       );
 
-      const today = new Date();
-      const todayDayStr = today.toLocaleDateString('en-US', { day: 'numeric' });
+      // "today" comes from the mocked DateService.getLogicalTodayDate (2026-06-09),
+      // not the wall clock — asserting against new Date() breaks on any other day
+      const todayDayStr = MOCK_TODAY.toLocaleDateString('en-US', { day: 'numeric' });
 
       expect(monthlyCall).toBeDefined();
       expect(monthlyCall!.params.dateDayStr).toBe(todayDayStr);
@@ -358,11 +385,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
 
     it('should preserve WEEKLY_CURRENT_WEEKDAY when startDate weekday differs from today', async () => {
-      // Pick a date whose weekday definitely differs from today
-      const today = new Date();
-      const differentDay = new Date(today);
-      differentDay.setDate(today.getDate() + 3); // 3 days from now is a different weekday
-      const dateStr = differentDay.toISOString().slice(0, 10);
+      // Pick a date whose weekday definitely differs from the mocked today
+      const dateStr = '2026-06-12'; // Friday; MOCK_TODAY is a Tuesday
 
       const cfgWeekly: TaskRepeatCfg = {
         ...DEFAULT_TASK_REPEAT_CFG,
@@ -394,6 +418,106 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       const component = fixture.componentInstance;
 
       expect(component.repeatCfg().quickSetting).toBe('CUSTOM');
+    });
+  });
+
+  describe('_normalizeMonthlyAnchor strips stale monthlyLastDay (#7726)', () => {
+    it('clears monthlyLastDay when quickSetting is no longer MONTHLY_LAST_DAY', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'CUSTOM',
+        monthlyLastDay: true,
+      });
+      expect(normalized.monthlyLastDay).toBeUndefined();
+    });
+
+    it('keeps monthlyLastDay for the MONTHLY_LAST_DAY preset', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'MONTHLY_LAST_DAY',
+        monthlyLastDay: true,
+      });
+      expect(normalized.monthlyLastDay).toBe(true);
+    });
+
+    it('still converts the monthlyWeekOfMonth null sentinel to undefined', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'CUSTOM',
+        monthlyWeekOfMonth: null,
+      });
+      expect(normalized.monthlyWeekOfMonth).toBeUndefined();
+    });
+  });
+
+  describe('startDate min floor (#7768 Bug 4 refined)', () => {
+    it('sets minDate to today for a brand-new repeat cfg (no due date)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+
+      const expectedToday = new Date(MOCK_TODAY);
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: expectedToday,
+          }),
+        }),
+      );
+    });
+
+    it('sets minDate to task due date when creating new cfg for past task', async () => {
+      const pastTask = { ...mockTask, dueDay: '2020-01-15' } as TaskCopy;
+      const fixture = await setupTestBed({ task: pastTask });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+
+      const expectedDate = new Date(2020, 0, 15, 0, 0, 0, 0);
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: expectedDate,
+          }),
+        }),
+      );
+    });
+
+    it('sets minDate to null when editing an existing past cfg (full flexibility)', async () => {
+      const pastCfg: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startDate: '2020-01-15',
+      };
+      const fixture = await setupTestBed({ repeatCfg: pastCfg });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: null,
+          }),
+        }),
+      );
+    });
+
+    it('sets minDate to null when editing a future cfg (full flexibility)', async () => {
+      const futureCfg: TaskRepeatCfg = {
+        ...mockRepeatCfg,
+        startDate: '2027-01-01',
+      };
+      const fixture = await setupTestBed({ repeatCfg: futureCfg });
+      const component = fixture.componentInstance;
+      component.openScheduleDialog();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.any(Function),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            minDate: null,
+          }),
+        }),
+      );
     });
   });
 
@@ -455,5 +579,88 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       // Now the button is disabled until isLoading becomes false,
       // which only happens after repeatCfgInitial is set
     }));
+  });
+
+  describe('isWeekdaySelectionInvalid (issue #8025)', () => {
+    const baseCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      monday: false,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+    };
+
+    it('should be true for a CUSTOM weekly config with no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(true);
+    });
+
+    it('should be false once at least one weekday is selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        wednesday: true,
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should be false for non-weekly cycles even with no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'MONTHLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should be false for non-CUSTOM quick settings (e.g. DAILY)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'DAILY',
+        repeatCycle: 'WEEKLY',
+      });
+
+      expect(component.isWeekdaySelectionInvalid()).toBe(false);
+    });
+
+    it('should block direct save when a CUSTOM weekly config has no weekday selected', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      component.repeatCfg.set({
+        ...baseCfg,
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+      });
+
+      component.save();
+
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
   });
 });

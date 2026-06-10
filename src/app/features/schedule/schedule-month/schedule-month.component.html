@@ -1,7 +1,3 @@
-<header class="month-header">
-  <div class="month-title">{{ daysToShow()[14] | localeDate: 'MMMM yyyy' }}</div>
-</header>
-
 <div class="month-grid-container">
   @for (header of weekdayHeaders(); track $index) {
     <div class="weekday-header">{{ header }}</div>
@@ -28,6 +24,7 @@
               <schedule-event
                 [event]="ev"
                 [isMonthView]="true"
+                [cdkDragDisabled]="true"
                 class="month-schedule-event"
               ></schedule-event>
             </div>

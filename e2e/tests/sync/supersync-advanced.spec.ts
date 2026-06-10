@@ -221,11 +221,26 @@ test.describe('@supersync SuperSync Advanced', () => {
         clientB.page.locator(`task tag:has-text("${tagName}")`),
       ).not.toBeVisible();
 
+      // Wait for the operation to be written to IndexedDB before syncing
+      await clientB.page.waitForTimeout(1000);
+
       // Sync B (Upload removal)
       await clientB.sync.syncAndWait();
+      console.log('[TagTest] Client B synced (uploaded tag removal)');
 
-      // Sync A (Download removal)
+      // Sync A (Download removal) — use multiple rounds for convergence
       await clientA.sync.syncAndWait();
+      console.log('[TagTest] Client A synced round 1');
+      await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
+      console.log('[TagTest] Extra convergence sync rounds complete');
+
+      // Debug: Check what tags are visible on Client A's task
+      const tagCount = await clientA.page.locator('task tag').count();
+      const tagTexts = await clientA.page.locator('task tag').allTextContents();
+      console.log(
+        `[TagTest] Client A has ${tagCount} tag(s) on task: [${tagTexts.join(', ')}]`,
+      );
 
       // Verify tag is gone on A
       await expect(
@@ -243,18 +258,19 @@ test.describe('@supersync SuperSync Advanced', () => {
    * Scenario: Concurrent Delete vs. Update
    *
    * Simulate a conflict where Client A deletes a task while Client B updates it.
-   * This tests the conflict resolution strategy. The operation log sync uses
-   * vector clocks to order operations and achieve eventual consistency.
+   * The LWW system is purely timestamp-based — the newer operation wins regardless
+   * of type. Since Client B's update (mark done) happens after Client A's delete,
+   * the update wins and the task is preserved.
    *
    * Actions:
    * 1. Client A creates Task, syncs
    * 2. Client B syncs (download task)
    * 3. Concurrent changes (no syncs):
    *    - Client A: Deletes the task
-   *    - Client B: Marks the task as done (update)
+   *    - Client B: Marks the task as done (update, later timestamp)
    * 4. Client A syncs (delete goes to server)
    * 5. Client B syncs (update conflicts with deletion)
-   * 6. Verify final state is consistent (both clients agree)
+   * 6. Verify final state is consistent (update wins, task visible and done)
    */
   test('Concurrent Delete vs. Update (Conflict Handling)', async ({
     browser,
@@ -302,13 +318,17 @@ test.describe('@supersync SuperSync Advanced', () => {
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
 
-      // Delete wins over update in LWW resolution — task should be gone on both
+      // LWW: Update wins (later timestamp) — task should be visible and done on both
       const taskOnA = clientA.page.locator(`task:has-text("${taskName}")`);
       const taskOnB = clientB.page.locator(`task:has-text("${taskName}")`);
-      await expect(taskOnA).not.toBeVisible({ timeout: 5000 });
-      await expect(taskOnB).not.toBeVisible({ timeout: 5000 });
+      await expect(taskOnA).toBeVisible({ timeout: 5000 });
+      await expect(taskOnA).toHaveClass(/isDone/, { timeout: 5000 });
+      await expect(taskOnB).toBeVisible({ timeout: 5000 });
+      await expect(taskOnB).toHaveClass(/isDone/, { timeout: 5000 });
 
-      console.log('[ConflictTest] ✓ Concurrent Delete/Update resolved: delete wins');
+      console.log(
+        '[ConflictTest] ✓ Concurrent Delete/Update resolved: update wins (later timestamp)',
+      );
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

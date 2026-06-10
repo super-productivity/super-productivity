@@ -14,6 +14,7 @@ import {
 import { IssueProvider } from '../../features/issue/issue.model';
 import { AppDataComplete } from '../model/model-config';
 import { dirtyDeepCopy } from '../../util/dirtyDeepCopy';
+import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 
 const FAKE_PROJECT_ID = 'FAKE_PROJECT_ID';
 describe('dataRepair()', () => {
@@ -224,7 +225,7 @@ describe('dataRepair()', () => {
     });
   });
 
-  it('should remove non-existent tag ids from archived tasks', () => {
+  it('should preserve stale tag ids on archived tasks (harmless, see #6270)', () => {
     const existingTag: Tag = {
       ...DEFAULT_TAG,
       id: 'existingTag',
@@ -261,7 +262,9 @@ describe('dataRepair()', () => {
 
     const repairedTask = result.data.archiveYoung.task.entities['archived-1'] as Task;
 
-    expect(repairedTask.tagIds).toEqual(['existingTag']);
+    // Stale tagIds on archived tasks are preserved (#6270), but TODAY_TAG is
+    // always stripped (architectural invariant: TODAY_TAG must never be in tagIds)
+    expect(repairedTask.tagIds).toEqual(['existingTag', 'missingTag']);
   });
 
   it('should remove notes with missing data from the project lists', () => {
@@ -586,6 +589,49 @@ describe('dataRepair()', () => {
             entities: {
               AAA: { ...DEFAULT_TASK, id: 'AAA', projectId: FAKE_PROJECT_ID },
               CCC: { ...DEFAULT_TASK, id: 'CCC', projectId: FAKE_PROJECT_ID },
+            },
+          } as any,
+        },
+      });
+    });
+
+    it('taskArchive with malformed undefined entity', () => {
+      expect(
+        dataRepair({
+          ...mock,
+          archiveYoung: {
+            lastTimeTrackingFlush: 0,
+            timeTracking: mock.archiveYoung.timeTracking,
+            task: {
+              ids: ['VALID_TASK', null],
+              entities: {
+                VALID_TASK: {
+                  ...DEFAULT_TASK,
+                  id: 'VALID_TASK',
+                  projectId: FAKE_PROJECT_ID,
+                },
+                undefined: {
+                  isDone: true,
+                  doneOn: 1775783824920,
+                  subTasks: [],
+                },
+              },
+            } as any,
+          },
+        }).data,
+      ).toEqual({
+        ...mock,
+        archiveYoung: {
+          lastTimeTrackingFlush: 0,
+          timeTracking: mock.archiveYoung.timeTracking,
+          task: {
+            ids: ['VALID_TASK'],
+            entities: {
+              VALID_TASK: {
+                ...DEFAULT_TASK,
+                id: 'VALID_TASK',
+                projectId: FAKE_PROJECT_ID,
+              },
             },
           } as any,
         },
@@ -1074,9 +1120,8 @@ describe('dataRepair()', () => {
     });
   });
 
-  it('should delete non-existent project ids for tasks in "taskArchive"', () => {
+  it('should preserve stale projectId on archived tasks (harmless, see #6270)', () => {
     const taskArchiveState = {
-      // ...mock.archiveYoung.task,
       ...fakeEntityStateFromArray<Task>([
         {
           ...DEFAULT_TASK,
@@ -1087,31 +1132,19 @@ describe('dataRepair()', () => {
       ]),
     } as any;
 
-    expect(
-      dataRepair({
-        ...mock,
-
-        archiveYoung: {
-          lastTimeTrackingFlush: 0,
-          timeTracking: mock.archiveYoung.timeTracking,
-          task: taskArchiveState,
-        },
-      } as any).data,
-    ).toEqual({
+    const result = dataRepair({
       ...mock,
       archiveYoung: {
         lastTimeTrackingFlush: 0,
         timeTracking: mock.archiveYoung.timeTracking,
-        task: {
-          ...taskArchiveState,
-          entities: {
-            TEST: {
-              ...taskArchiveState.entities.TEST,
-            },
-          },
-        },
+        task: taskArchiveState,
       },
-    });
+    } as any);
+
+    // Stale projectId on archived tasks is harmless — preserved, not rewritten
+    expect(result.data.archiveYoung.task.entities['TEST']!.projectId).toBe(
+      'NON_EXISTENT',
+    );
   });
 
   it('should delete non-existent project ids for issueProviders', () => {
@@ -1255,7 +1288,7 @@ describe('dataRepair()', () => {
     expect(result.data.task.entities.t2!.repeatCfgId).toBeUndefined();
   });
 
-  it('should clear non-existent repeatCfgId from archived tasks', () => {
+  it('should preserve stale repeatCfgId on archived tasks (harmless, see #6270)', () => {
     const archiveYoungState = {
       task: {
         ...fakeEntityStateFromArray<Task>([
@@ -1276,10 +1309,10 @@ describe('dataRepair()', () => {
       archiveYoung: archiveYoungState,
     } as any);
 
-    // repeatCfgId should be cleared from archived task
-    expect(
-      result.data.archiveYoung.task.entities['archived-t1']!.repeatCfgId,
-    ).toBeUndefined();
+    // Stale repeatCfgId on archived tasks is harmless — preserved, not cleared
+    expect(result.data.archiveYoung.task.entities['archived-t1']!.repeatCfgId).toBe(
+      'NON_EXISTENT_REPEAT_CFG',
+    );
   });
 
   it('should preserve valid repeatCfgId on tasks', () => {
@@ -1922,7 +1955,7 @@ describe('dataRepair()', () => {
     });
   });
 
-  it('should remove non-existent tags from tasks and archive tasks', () => {
+  it('should remove non-existent tags from active tasks but preserve on archived tasks (#6270)', () => {
     const tagState = {
       ...mock.tag,
       ...fakeEntityStateFromArray<Tag>([
@@ -1999,14 +2032,20 @@ describe('dataRepair()', () => {
       },
     });
 
+    // Active tasks: stale tags are stripped
     expect(result.data.task.entities['TASK1']?.tagIds).toEqual(['VALID_TAG']);
     expect(result.data.task.entities['TASK2']?.tagIds).toEqual(['VALID_TAG']);
     expect(result.data.task.entities['TASK3']?.tagIds).toEqual([]);
     expect(result.data.task.entities['TASK4']?.tagIds).toEqual([]);
+    // Archived tasks: stale tags are preserved (#6270), but TODAY_TAG is always
+    // stripped (architectural invariant: TODAY_TAG must never be in tagIds)
     expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK1']?.tagIds).toEqual([
       'VALID_TAG',
+      'NON_EXISTENT_ARCHIVE_TAG',
     ]);
-    expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([]);
+    expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([
+      'MISSING_TAG',
+    ]);
   });
 
   describe('should handle missing or undefined entity states (issue #6428)', () => {
@@ -2229,6 +2268,8 @@ describe('dataRepair()', () => {
 
   describe('invalid dueDay/deadlineDay sanitization (#6908)', () => {
     it('should clear invalid dueDay from task', () => {
+      const invalidDueDay = '-/-/2026';
+      const warnSpy = spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
       const taskState = {
         ...mock.task,
         ...fakeEntityStateFromArray<Task>([
@@ -2237,7 +2278,7 @@ describe('dataRepair()', () => {
             id: 'INVALID_DUE',
             title: 'INVALID_DUE',
             projectId: FAKE_PROJECT_ID,
-            dueDay: '-/-/2026' as any,
+            dueDay: invalidDueDay as any,
           },
         ]),
       } as any;
@@ -2249,6 +2290,15 @@ describe('dataRepair()', () => {
       });
 
       expect(result.data.task.entities['INVALID_DUE']!.dueDay).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[data-repair] Clearing invalid task date field',
+        jasmine.objectContaining({
+          taskId: 'INVALID_DUE',
+          field: 'dueDay',
+          valueStringLength: invalidDueDay.length,
+        }),
+      );
+      expect(JSON.stringify(warnSpy.calls.allArgs())).not.toContain(invalidDueDay);
     });
 
     it('should clear invalid deadlineDay from task', () => {

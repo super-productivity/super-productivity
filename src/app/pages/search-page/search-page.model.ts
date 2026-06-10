@@ -18,6 +18,7 @@ export interface SearchItem {
   tagId: string;
   // NOTE: probably faster this way round
   isArchiveTask: boolean;
+  isDone: boolean;
 
   // for the icons
   issueType: IssueProviderKey | null;
@@ -26,6 +27,7 @@ export interface SearchItem {
   searchText: string;
   // jira only
   titleHighlighted?: string;
+  isNote?: boolean;
 }
 
 export interface SearchQueryParams {

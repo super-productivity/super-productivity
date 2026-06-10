@@ -1,0 +1,6 @@
+# Force text files to LF in repo and working tree
+* text=auto
+*.scss text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+*.ts text eol=lf

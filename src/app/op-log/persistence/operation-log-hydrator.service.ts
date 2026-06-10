@@ -27,6 +27,13 @@ import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
+import { IS_ELECTRON } from '../../app.constants';
+
+/**
+ * sessionStorage key used to track auto-reload attempts after IndexedDB backing store errors.
+ * Exported for use in tests.
+ */
+export const IDB_OPEN_ERROR_RELOAD_KEY = 'sp_idb_open_reload_attempt';
 
 /**
  * Handles the hydration (loading) of the application state from the operation log
@@ -54,9 +61,6 @@ export class OperationLogHydratorService {
   private recoveryService = inject(OperationLogRecoveryService);
   private syncHydrationService = inject(SyncHydrationService);
   private archiveMigrationService = inject(ArchiveMigrationService);
-
-  // Mutex to prevent concurrent repair operations and re-validation during repair
-  private _repairMutex: Promise<void> | null = null;
 
   // Track if schema migration ran during this hydration (requires validation)
   private _migrationRanDuringHydration = false;
@@ -113,11 +117,33 @@ export class OperationLogHydratorService {
 
       // 3. Validate snapshot if it exists
       if (snapshot && !this.snapshotService.isValidSnapshot(snapshot)) {
-        OpLog.warn(
-          'OperationLogHydratorService: Snapshot is invalid/corrupted. Attempting recovery...',
-        );
-        await this.recoveryService.attemptRecovery();
-        return;
+        OpLog.warn('OperationLogHydratorService: Snapshot is invalid/corrupted.');
+        // The snapshot is only a load-time cache — the op-log is the source of
+        // truth. Before surrendering to recovery (which, with no legacy data and
+        // no sync, drops to an EMPTY store), check whether the op-log itself is
+        // intact and rebuild from it (#7892).
+        //
+        // Correctness: compaction only ever prunes *synced* ops, so for a
+        // no-sync client the entire log survives and replay-from-0 fully
+        // reconstructs state; for a synced client any pruned ops still live on
+        // the remote and a subsequent sync restores them. Either way, replaying
+        // the surviving log is strictly better than discarding it for empty.
+        const lastSeq = await this.opLogStore.getLastSeq();
+        if (lastSeq > 0) {
+          OpLog.warn(
+            `OperationLogHydratorService: Discarding corrupt snapshot and replaying ` +
+              `the op-log from the start (lastSeq=${lastSeq}).`,
+          );
+          // Fall through to the "no snapshot → replay all operations" branch.
+          snapshot = null;
+        } else {
+          OpLog.warn(
+            'OperationLogHydratorService: No op-log to replay. Attempting recovery...',
+          );
+          await this.recoveryService.attemptRecovery();
+          sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
+          return;
+        }
       }
 
       if (snapshot) {
@@ -131,26 +157,21 @@ export class OperationLogHydratorService {
         // synchronously if a migration ran (schema changed).
         // TODO: Consider removing this validation after ops-log testing phase.
         // Checkpoint C validates the final state anyway, making this redundant.
-        let stateToLoad = snapshot.state as AppStateSnapshot;
+        const stateToLoad = snapshot.state as AppStateSnapshot;
         const snapshotSchemaVersion = (snapshot as { schemaVersion?: number })
           .schemaVersion;
         const needsSyncValidation =
           this._migrationRanDuringHydration ||
           snapshotSchemaVersion !== CURRENT_SCHEMA_VERSION;
 
-        if (needsSyncValidation && !this._repairMutex) {
+        if (needsSyncValidation) {
           OpLog.normal(
             'OperationLogHydratorService: Running synchronous validation (migration ran or schema mismatch)',
           );
-          const validationResult = await this._validateAndRepairState(
+          await this._validateStateForHydration(
             stateToLoad as unknown as Record<string, unknown>,
             'snapshot',
           );
-          if (validationResult.wasRepaired && validationResult.repairedState) {
-            stateToLoad = validationResult.repairedState as unknown as AppStateSnapshot;
-            // Update snapshot with repaired state
-            snapshot = { ...snapshot, state: stateToLoad };
-          }
         } else {
           OpLog.normal(
             'OperationLogHydratorService: Trusting snapshot (schema version matches, no migration)',
@@ -197,36 +218,25 @@ export class OperationLogHydratorService {
               `OperationLogHydratorService: Last of ${tailOps.length} tail ops is ${lastOp.opType}, loading directly`,
             );
 
-            // Validate and repair the full-state data BEFORE loading to NgRx
-            // This prevents corrupted SyncImport/Repair operations from breaking the app
-            if (!this._repairMutex) {
-              const validationResult = await this._validateAndRepairState(
-                appData as Record<string, unknown>,
-                'tail-full-state-op-load',
-              );
-              const tailStateToLoad =
-                validationResult.wasRepaired && validationResult.repairedState
-                  ? validationResult.repairedState
-                  : (appData as Record<string, unknown>);
-              // FIX: Merge vector clock BEFORE dispatching loadAllData
-              // This ensures any operations created synchronously during loadAllData
-              // (e.g., TODAY_TAG repair) will have the correct merged clock.
-              // Without this, those operations get superseded clocks and are rejected by the server.
-              await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-              this.store.dispatch(
-                loadAllData({
-                  appDataComplete: tailStateToLoad as unknown as AppDataComplete,
-                }),
-              );
-            } else {
-              // FIX: Same fix for the else branch
-              await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-              this.store.dispatch(
-                loadAllData({
-                  appDataComplete: appData as unknown as AppDataComplete,
-                }),
-              );
-            }
+            // Validate the full-state data before loading to NgRx.
+            // The check is non-fatal: we log issues but still dispatch so the user
+            // sees their data rather than a half-loaded UI. Repair is intentionally
+            // not attempted here (it requires a confirm dialog that breaks Electron
+            // focus on Windows — see issue #7631).
+            await this._validateStateForHydration(
+              appData as Record<string, unknown>,
+              'tail-full-state-op-load',
+            );
+            // FIX: Merge vector clock BEFORE dispatching loadAllData
+            // This ensures any operations created synchronously during loadAllData
+            // (e.g., TODAY_TAG repair) will have the correct merged clock.
+            // Without this, those operations get superseded clocks and are rejected by the server.
+            await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+            this.store.dispatch(
+              loadAllData({
+                appDataComplete: appData as unknown as AppDataComplete,
+              }),
+            );
             // No snapshot save needed - full state ops already contain complete state
             // Snapshot will be saved after next batch of regular operations
           } else {
@@ -241,23 +251,32 @@ export class OperationLogHydratorService {
             // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
             // This reduces 500 dispatches to 1, dramatically improving startup performance.
             // The bulkHydrationMetaReducer iterates through ops and applies each action.
+            // Lenient (no throw) so a cold-boot IndexedDB hiccup can't block
+            // startup. A null clientId leaves the bulk-apply flag unset, which
+            // defaults to own-op semantics (apply faithfully) — the safe
+            // direction for the common case (replaying THIS device's own ops).
+            // See bulkOperationsMetaReducer.
+            const localClientId =
+              (await this.clientIdProvider.loadClientId()) ?? undefined;
             this.hydrationStateService.startApplyingRemoteOps();
-            this.store.dispatch(bulkApplyOperations({ operations: opsToReplay }));
+            this.store.dispatch(
+              bulkApplyOperations({ operations: opsToReplay, localClientId }),
+            );
             this.hydrationStateService.endApplyingRemoteOps();
 
             // Merge replayed ops' clocks into local clock
             // This ensures subsequent ops have clocks that dominate these tail ops
             await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
 
-            // CHECKPOINT C: Validate state after replaying tail operations
-            // Must validate BEFORE saving snapshot to avoid persisting corrupted state
-            if (!this._repairMutex) {
-              await this._validateAndRepairCurrentState('tail-replay');
-            }
+            // CHECKPOINT C: Validate state after replaying tail operations.
+            // If invalid, we keep the data on screen but skip the snapshot save so
+            // we don't cache corrupted state for next boot.
+            const isStateValid =
+              await this._validateCurrentStateForHydration('tail-replay');
 
-            // 5. If we replayed many ops, save a new snapshot for faster future loads
-            // Snapshot is saved AFTER validation to ensure we persist valid/repaired state
-            if (opsToReplay.length > 10) {
+            // 5. If we replayed many ops AND state is valid, save a new snapshot
+            // for faster future loads.
+            if (isStateValid && opsToReplay.length > 10) {
               OpLog.normal(
                 `OperationLogHydratorService: Saving new snapshot after replaying ${opsToReplay.length} ops`,
               );
@@ -280,6 +299,7 @@ export class OperationLogHydratorService {
           OpLog.normal(
             'OperationLogHydratorService: Fresh install detected. No data to load.',
           );
+          sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
           return;
         }
 
@@ -291,34 +311,19 @@ export class OperationLogHydratorService {
             `OperationLogHydratorService: Last of ${allOps.length} ops is ${lastOp.opType}, loading directly`,
           );
 
-          // Validate and repair the full-state data BEFORE loading to NgRx
-          // This prevents corrupted SyncImport/Repair operations from breaking the app
-          if (!this._repairMutex) {
-            const validationResult = await this._validateAndRepairState(
-              appData as Record<string, unknown>,
-              'full-state-op-load',
-            );
-            const stateToLoad =
-              validationResult.wasRepaired && validationResult.repairedState
-                ? validationResult.repairedState
-                : (appData as Record<string, unknown>);
-            // FIX: Merge vector clock BEFORE dispatching loadAllData
-            // Same fix as the tail ops branch - prevents superseded clock bug
-            await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-            this.store.dispatch(
-              loadAllData({
-                appDataComplete: stateToLoad as unknown as AppDataComplete,
-              }),
-            );
-          } else {
-            // FIX: Same fix for the else branch
-            await this.opLogStore.mergeRemoteOpClocks([lastOp]);
-            this.store.dispatch(
-              loadAllData({
-                appDataComplete: appData as unknown as AppDataComplete,
-              }),
-            );
-          }
+          // Validate the full-state data before loading to NgRx (non-fatal).
+          await this._validateStateForHydration(
+            appData as Record<string, unknown>,
+            'full-state-op-load',
+          );
+          // FIX: Merge vector clock BEFORE dispatching loadAllData
+          // Same fix as the tail ops branch - prevents superseded clock bug
+          await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+          this.store.dispatch(
+            loadAllData({
+              appDataComplete: appData as unknown as AppDataComplete,
+            }),
+          );
           // No snapshot save needed - full state ops already contain complete state
         } else {
           // A.7.13: Migrate all operations before replay
@@ -332,25 +337,34 @@ export class OperationLogHydratorService {
           // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
           // This reduces 500 dispatches to 1, dramatically improving startup performance.
           // The bulkHydrationMetaReducer iterates through ops and applies each action.
+          // Lenient (no throw) so a cold-boot IndexedDB hiccup can't block
+          // startup. A null clientId leaves the bulk-apply flag unset, which
+          // defaults to own-op semantics (apply faithfully) — the safe direction
+          // for the common case (replaying THIS device's own ops). See
+          // bulkOperationsMetaReducer.
+          const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
           this.hydrationStateService.startApplyingRemoteOps();
-          this.store.dispatch(bulkApplyOperations({ operations: opsToReplay }));
+          this.store.dispatch(
+            bulkApplyOperations({ operations: opsToReplay, localClientId }),
+          );
           this.hydrationStateService.endApplyingRemoteOps();
 
           // Merge replayed ops' clocks into local clock
           await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
 
-          // CHECKPOINT C: Validate state after replaying all operations
-          // Must validate BEFORE saving snapshot to avoid persisting corrupted state
-          if (!this._repairMutex) {
-            await this._validateAndRepairCurrentState('full-replay');
-          }
+          // CHECKPOINT C: Validate state after replaying all operations.
+          // If invalid, we still proceed but skip the snapshot save so we don't
+          // cache corrupted state for next boot.
+          const isStateValid =
+            await this._validateCurrentStateForHydration('full-replay');
 
-          // Save snapshot after replay for faster future loads
-          // Snapshot is saved AFTER validation to ensure we persist valid/repaired state
-          OpLog.normal(
-            `OperationLogHydratorService: Saving snapshot after replaying ${opsToReplay.length} ops`,
-          );
-          await this.snapshotService.saveCurrentStateAsSnapshot();
+          // Save snapshot after replay for faster future loads (only when valid).
+          if (isStateValid) {
+            OpLog.normal(
+              `OperationLogHydratorService: Saving snapshot after replaying ${opsToReplay.length} ops`,
+            );
+            await this.snapshotService.saveCurrentStateAsSnapshot();
+          }
         }
 
         OpLog.normal('OperationLogHydratorService: Full replay complete.');
@@ -362,6 +376,11 @@ export class OperationLogHydratorService {
       // Retry any failed remote ops from previous conflict resolution attempts
       // Now that state is fully hydrated, dependencies might be resolved
       await this.retryFailedRemoteOps();
+
+      // Clear the auto-reload guard so that a fresh backing-store error in the same
+      // tab session gets the auto-reload treatment again rather than going straight
+      // to the manual recovery dialog.
+      sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
     } catch (e) {
       OpLog.err('OperationLogHydratorService: Error during hydration', e);
 
@@ -484,86 +503,44 @@ export class OperationLogHydratorService {
   }
 
   /**
-   * Validates a state object and repairs it if necessary.
-   * Used for validating snapshot state before dispatching.
-   * Uses a mutex to prevent concurrent repair operations.
+   * Validates a state object during hydration without attempting repair.
    *
-   * @param state - The state to validate
-   * @param context - Context string for logging (e.g., 'snapshot', 'tail-replay')
-   * @returns Validation result with optional repaired state
+   * Repair is intentionally not run here: it requires a native `confirm()` dialog
+   * which steals focus from the renderer on Windows and leaves the UI unresponsive
+   * to keyboard/mouse input until the window is refocused (issue #7631). Validation
+   * failures are logged but non-fatal — the caller continues with the original state
+   * so the user sees their data rather than a half-loaded UI.
+   *
+   * @returns Whether the state is valid.
    */
-  private async _validateAndRepairState(
+  private async _validateStateForHydration(
     state: Record<string, unknown>,
     context: string,
-  ): Promise<{ wasRepaired: boolean; repairedState?: Record<string, unknown> }> {
-    // Wait for any ongoing repair to complete before validating
-    if (this._repairMutex) {
-      await this._repairMutex;
+  ): Promise<boolean> {
+    const result = await this.validateStateService.validateState(state);
+    if (!result.isValid) {
+      OpLog.err(`[OperationLogHydratorService] Validation failed for ${context}`, {
+        typiaErrorCount: result.typiaErrors.length,
+        crossModelError: result.crossModelError,
+      });
+      return false;
     }
-
-    const result = await this.validateStateService.validateAndRepair(state as never);
-
-    if (!result.wasRepaired) {
-      return { wasRepaired: false };
-    }
-
-    if (!result.repairedState || !result.repairSummary) {
-      OpLog.err(
-        `[OperationLogHydratorService] Repair failed for ${context}:`,
-        result.error,
-      );
-      return { wasRepaired: false };
-    }
-
-    // DISABLED: Repair system is non-functional - this code path is unreachable
-    // because validateAndRepair() always returns wasRepaired: false
-    //
-    // const repairPromise = (async () => {
-    //   try {
-    //     const clientId = await this.pfapiService.pf.metaModel.loadClientId();
-    //     await this.repairOperationService.createRepairOperation(
-    //       result.repairedState!,
-    //       result.repairSummary!,
-    //       clientId,
-    //     );
-    //     OpLog.log(`[OperationLogHydratorService] Created REPAIR operation for ${context}`);
-    //   } catch (e) {
-    //     OpLog.err(`[OperationLogHydratorService] Failed to create REPAIR operation for ${context}:`, e);
-    //     throw e;
-    //   } finally {
-    //     this._repairMutex = null;
-    //   }
-    // })();
-    // this._repairMutex = repairPromise;
-    // await repairPromise;
-
-    // Should never reach here while repair is disabled
-    return { wasRepaired: false };
+    return true;
   }
 
   /**
-   * Validates the current NgRx state and repairs it if necessary.
-   * Used after replaying operations.
+   * Validates the current NgRx state after replay.
+   * Used to gate the snapshot save — we must not persist a corrupted snapshot.
    *
    * @param context - Context string for logging
+   * @returns Whether the current state is valid.
    */
-  private async _validateAndRepairCurrentState(context: string): Promise<void> {
-    // Get current state from NgRx
+  private async _validateCurrentStateForHydration(context: string): Promise<boolean> {
     const currentState = this.stateSnapshotService.getStateSnapshot();
-
-    const result = await this._validateAndRepairState(
+    return this._validateStateForHydration(
       currentState as unknown as Record<string, unknown>,
       context,
     );
-
-    if (result.wasRepaired && result.repairedState) {
-      // Dispatch the repaired state to NgRx
-      this.store.dispatch(
-        loadAllData({
-          appDataComplete: result.repairedState as unknown as AppDataComplete,
-        }),
-      );
-    }
   }
 
   /**
@@ -658,6 +635,32 @@ export class OperationLogHydratorService {
         ? error.originalError.message
         : String(error.originalError);
 
+    // Hoist platform detection — used in both branches below to avoid computing twice
+    const isFlatpak = IS_ELECTRON && window.ea?.isFlatpak?.();
+    const isSnap = !isFlatpak && IS_ELECTRON && window.ea?.isSnap?.();
+
+    // For backing-store errors (common during Linux session startup with autostart),
+    // auto-reload once after the user dismisses the dialog. By the time the dialog
+    // is dismissed the OS / Flatpak sandbox will usually have finished initializing.
+    // A sessionStorage counter prevents an infinite reload loop on genuine errors.
+    if (error.isBackingStoreError) {
+      const reloadCount = +(sessionStorage.getItem(IDB_OPEN_ERROR_RELOAD_KEY) || '0');
+      if (reloadCount === 0) {
+        // Silent auto-reload on first occurrence — most likely a transient startup
+        // timing issue (Flatpak sandbox not ready, stale LOCK file). The user is
+        // typically not watching (autostart scenario), so a blocking dialog requiring
+        // a click before the reload is unnecessary friction. If the reload fixes it,
+        // the user never needs to know. If it fails again, the dialog below runs.
+        OpLog.warn(
+          'IndexedDB backing-store error on first attempt — triggering silent auto-reload',
+        );
+        sessionStorage.setItem(IDB_OPEN_ERROR_RELOAD_KEY, '1');
+        this._triggerReload();
+        return;
+      }
+    }
+
+    // Second failure, or non-backing-store error: show full manual recovery instructions.
     let message =
       'Database Error - Cannot Load Data\n\n' +
       'Super Productivity cannot open its database. ' +
@@ -671,7 +674,11 @@ export class OperationLogHydratorService {
         'Recovery steps:\n' +
         '1. Close ALL browser tabs and windows\n' +
         '2. Restart the app\n' +
-        '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n' +
+        (isFlatpak
+          ? '3. If using Linux Flatpak with autostart, try disabling autostart and launching manually\n'
+          : isSnap
+            ? '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n'
+            : '3. If using Linux with autostart, try disabling autostart and launching manually\n') +
         '4. If issue persists, check available disk space\n\n';
     }
 
@@ -681,5 +688,17 @@ export class OperationLogHydratorService {
       '(Check browser console for full error details)';
 
     alertDialog(message);
+  }
+
+  /**
+   * Triggers an app reload. Uses Electron IPC in Electron context, browser reload otherwise.
+   * Extracted as a method to allow spying in unit tests.
+   */
+  private _triggerReload(): void {
+    if (IS_ELECTRON) {
+      window.ea.reloadMainWin();
+    } else {
+      window.location.reload();
+    }
   }
 }

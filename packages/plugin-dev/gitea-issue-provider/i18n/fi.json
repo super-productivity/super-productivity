@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Isäntä (esim.: https://try.gitea.io)",
+    "TOKEN": "Käyttöoikeustunnus",
+    "REPO_FULL_NAME": "Käyttäjänimi tai organisaation nimi/projekti",
+    "SCOPE": "Laajuus",
+    "SCOPE_ALL": "Kaikki",
+    "SCOPE_CREATED": "Minun luomat",
+    "SCOPE_ASSIGNED": "Minulle osoitetut",
+    "FILTER_LABELS": "Filter by labels (optional)",
+    "EXCLUDE_LABELS": "Exclude labels (optional)",
+    "HOW_TO_GET_TOKEN": "Miten saan tunnuksen?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Yhteenveto",
+    "STATE": "Tila",
+    "ASSIGNEE": "Vastuuhenkilö",
+    "LABELS": "Tunnisteet",
+    "DESCRIPTION": "Kuvaus"
+  },
+  "FORM_HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan avoimet Gitea-ongelmat tietystä arkistosta tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin ongelmaan sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti lisätä ja tuoda kaikki avoimet ongelmat.</p><p>Käyttörajoitusten ja pääsyn saamiseksi voit antaa käyttöoikeustunnuksen."
+}

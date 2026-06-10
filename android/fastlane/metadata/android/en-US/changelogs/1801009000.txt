@@ -1,0 +1,8 @@
+- transmit syncImportReason through sync pipeline
+- prevent day-change overdue removal from conflicting with user actions (#6992)
+- add runtime input intent tracking for hybrid touch devices
+- lock drag to horizontal axis and add touch delay
+- prevent crashes from null bridge and foreground service contract violations
+- markdown preview not updating in new note dialog
+- add day-change sync convergence test (#6992) and fix lint
+- add warning confirmation dialog for experimental features

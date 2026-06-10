@@ -4,6 +4,13 @@ import { BehaviorSubject, merge, Observable, ReplaySubject, Subject } from 'rxjs
 import { mapTo } from 'rxjs/operators';
 import { DroidLog } from '../../core/log';
 
+export interface AndroidShareData {
+  title: string;
+  subject: string;
+  type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
+  path: string;
+}
+
 export interface AndroidInterface {
   getVersion?(): string;
 
@@ -44,6 +51,7 @@ export interface AndroidInterface {
   stopTrackingService?(): void;
   updateTrackingService?(timeSpentMs: number): void;
   getTrackingElapsed?(): string;
+  openAppNotificationSettings?(): void;
 
   // Foreground service methods for focus mode timer
   startFocusModeService?(
@@ -62,6 +70,9 @@ export interface AndroidInterface {
     isBreak: boolean,
     taskTitle: string | null,
   ): void;
+  // Read back the live focus session for cold-start/resume recovery (#7855).
+  // Returns a JSON string, or 'null' when no focus session is running.
+  getFocusModeElapsed?(): string;
 
   // Native reminder scheduling (snooze handled entirely in background)
   scheduleNativeReminder?(
@@ -91,16 +102,15 @@ export interface AndroidInterface {
   dismissStartupOverlay?(): void;
 
   // added here only
-  onResume$: Subject<void>;
+  // ReplaySubject so cold-start onResume emissions arriving before the JS
+  // subscriber attaches are still delivered (relevant for tracking recovery
+  // after the WebView was killed in the background — issue #7390).
+  onResume$: ReplaySubject<void>;
   onPause$: Subject<void>;
   isInBackground$: Observable<boolean>;
   isKeyboardShown$: Subject<boolean>;
 
-  onShareWithAttachment$: Subject<{
-    title: string;
-    type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
-    path: string;
-  }>;
+  onShareWithAttachment$: Subject<AndroidShareData>;
 
   // Notification action callbacks
   onPauseTracking$: Subject<void>;
@@ -114,6 +124,7 @@ export interface AndroidInterface {
 
   // Focus mode timer completion (native service detected timer reached 0)
   onFocusModeTimerComplete$: Subject<boolean>; // boolean indicates isBreak
+  onForegroundServiceStartFailed$: ReplaySubject<ForegroundServiceStartFailure>;
 
   // Reminder notification action callbacks
   onReminderTap$: ReplaySubject<string>; // emits taskId
@@ -126,6 +137,11 @@ export interface AndroidInterface {
   clearSuperSyncCredentials?(): void;
 }
 
+export type ForegroundServiceStartFailure = {
+  service: 'tracking' | 'focusMode';
+  reason: 'startNotAllowed' | 'promotionFailed';
+};
+
 // setInterval(() => {
 //   androidInterface.updatePermanentNotification?.(new Date().toString(), '', -1);
 // }, 7000);
@@ -137,7 +153,7 @@ if (IS_ANDROID_WEB_VIEW) {
     throw new Error('Cannot initialize androidInterface');
   }
 
-  androidInterface.onResume$ = new Subject();
+  androidInterface.onResume$ = new ReplaySubject(1);
   androidInterface.onPause$ = new Subject();
   androidInterface.onPauseTracking$ = new Subject();
   androidInterface.onMarkTaskDone$ = new Subject();
@@ -146,6 +162,7 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onFocusSkip$ = new Subject();
   androidInterface.onFocusComplete$ = new Subject();
   androidInterface.onFocusModeTimerComplete$ = new Subject();
+  androidInterface.onForegroundServiceStartFailed$ = new ReplaySubject(3);
   androidInterface.onReminderTap$ = new ReplaySubject(5);
   androidInterface.onReminderDone$ = new ReplaySubject(20);
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
@@ -218,7 +235,7 @@ if (IS_ANDROID_WEB_VIEW) {
     const pendingShare = androidInterface.getPendingShareData?.();
     if (pendingShare) {
       const parsed = JSON.parse(pendingShare);
-      DroidLog.log('Pulled pending share data from SharedPreferences', parsed);
+      DroidLog.log('Pulled pending share data from SharedPreferences');
       androidInterface.onShareWithAttachment$.next(parsed);
     }
   } catch (e) {

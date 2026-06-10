@@ -38,8 +38,8 @@ import { TreeIndicatorService } from './tree-indicator.service';
 import { TREE_CONSTANTS } from './tree-constants';
 import { assertTreeId } from './tree-guards';
 import { expandCollapseAni } from './tree.animations';
-import { DRAG_DELAY_FOR_TOUCH } from '../../app.constants';
-import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
+import { Log } from '../../core/log';
+import { dragDelayForTouch } from '../../util/input-intent';
 
 @Component({
   selector: 'tree-dnd',
@@ -74,8 +74,7 @@ export class TreeDndComponent<TData = unknown> {
   readonly isDragInvalid = signal<boolean>(false);
   readonly isRootOver = signal<boolean>(false);
   readonly indicatorStyle = this._indicatorService.indicatorStyle;
-  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
 
   // === PRIVATE STATE ===
   /**
@@ -171,7 +170,7 @@ export class TreeDndComponent<TData = unknown> {
       this._rootDropEl = this._host.nativeElement.querySelector('.root-drop');
       this._indicatorService.clear();
     } catch (error) {
-      console.error('Invalid drag start:', error);
+      Log.err('Invalid drag start:', error);
     }
   }
 
@@ -413,7 +412,7 @@ export class TreeDndComponent<TData = unknown> {
         item.reset();
       } catch (error) {
         // Ignore reset errors - they can happen if the item is already destroyed
-        console.debug('Failed to reset drag item:', error);
+        Log.debug('Failed to reset drag item:', error);
       }
     };
 

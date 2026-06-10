@@ -8,7 +8,7 @@
   flex-flow: row;
   position: relative;
   margin-left: var(--s);
-  margin-right: var(--s);
+  margin-right: var(--s-half);
   align-items: stretch;
 
   //@include verySmallMainContainer {
@@ -207,6 +207,15 @@
   //}
 }
 
+// Hide the time-wrapper while hover-controls are mounted: they're absolutely
+// positioned over .time-wrapper and would let its digits ghost through on
+// translucent themes (velvet, glass) and paint redundantly on solid ones.
+// Angular only renders task-hover-controls on hover (non-touch), so :has()
+// exactly matches the visibility intent without needing :hover guards.
+.first-line:has(task-hover-controls) .time-wrapper {
+  visibility: hidden;
+}
+
 .additional-info {
   display: block;
   // required as sort of a clearfix (fixes padding issue)
@@ -265,6 +274,8 @@ progress-bar {
 }
 
 done-toggle {
+  --done-toggle-size: 34px;
+
   margin-left: var(--s);
   margin-right: 0;
 
@@ -336,7 +347,7 @@ done-toggle {
   height: 24px !important;
   margin-top: -1px !important;
   transform-origin: left top;
-  transition-property: all;
+  transition-property: opacity, transform, background, box-shadow;
   box-shadow: none;
   background: var(--bg-lighter) !important;
 
@@ -390,11 +401,23 @@ done-toggle {
   }
 }
 
+:host.hasTimeConflict {
+  .schedule-btn mat-icon,
+  .schedule-btn .time-badge {
+    color: var(--text-color-muted);
+    border-color: color-mix(in srgb, var(--text-color-muted) 45%, transparent);
+  }
+}
+
 .deadline-btn {
   position: relative;
 
   &.mat-warn mat-icon {
     color: var(--c-warn) !important;
+  }
+
+  &.mat-accent mat-icon {
+    color: var(--c-accent) !important;
   }
 }
 
@@ -410,7 +433,7 @@ done-toggle {
   @include extraBorder();
   border-radius: var(--card-border-radius);
   white-space: nowrap;
-  background: #fff;
+  background: var(--card-bg);
 
   // avoid affecting done toggle
   pointer-events: none;
@@ -422,6 +445,36 @@ done-toggle {
 
   ::ng-deep span {
     font-size: 10px;
+  }
+}
+
+.checklist-progress-btn {
+  position: relative;
+
+  &.isComplete mat-icon {
+    color: var(--c-success, var(--c-accent));
+  }
+}
+
+.checklist-progress-badge {
+  @include center;
+  margin-top: 10px;
+  font-size: 10px;
+  z-index: 10;
+  line-height: 1;
+  text-align: center;
+  padding: 1px var(--s-quarter) 0;
+  @include extraBorder();
+  border-radius: var(--card-border-radius);
+  white-space: nowrap;
+  background: var(--card-bg);
+
+  // let clicks fall through to the button
+  pointer-events: none;
+
+  @include darkTheme() {
+    border-color: var(--extra-border-color);
+    background: var(--bg-lighter);
   }
 }
 

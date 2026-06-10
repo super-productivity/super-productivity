@@ -1,17 +1,23 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  AfterViewInit,
   computed,
   ElementRef,
   inject,
   input,
+  NgZone,
+  OnDestroy,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { CdkDrag } from '@angular/cdk/drag-drop';
 import { ScheduleEvent, ScheduleFromCalendarEvent } from '../schedule.model';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import { MatTooltip } from '@angular/material/tooltip';
 import { delay, first } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { selectProjectById } from '../../project/store/project.selectors';
@@ -25,7 +31,7 @@ import { isDraggableSE } from '../map-schedule-data/is-schedule-types-type';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TaskCopy } from '../../tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors';
@@ -33,15 +39,24 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { TaskService } from '../../tasks/task.service';
 import { DialogTimeEstimateComponent } from '../../tasks/dialog-time-estimate/dialog-time-estimate.component';
 import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-context-menu.component';
-import { IssueService } from '../../issue/issue.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { FH } from '../schedule.const';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'schedule-event',
-  imports: [MatIcon, TranslateModule, TaskContextMenuComponent, RenderLinksPipe],
+  imports: [
+    MatIcon,
+    TranslateModule,
+    TaskContextMenuComponent,
+    RenderLinksPipe,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+    MatTooltip,
+  ],
   templateUrl: './schedule-event.component.html',
   styleUrl: './schedule-event.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -51,7 +66,8 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[title]': 'hoverTitle()',
     '[class]': 'cssClass()',
     '[style]': 'style()',
-    '[style.--project-color]': 'projectColor()',
+    '[style.--title-line-clamp]': '_titleLineClamp()',
+    '[style.--project-color]': 'calEventColor() || projectColor()',
     '[style.height]': '_resizeHeight()',
     '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
@@ -65,29 +81,45 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     },
   ],
 })
-export class ScheduleEventComponent {
+export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   private _store = inject(Store);
   private _elRef = inject(ElementRef);
   private _matDialog = inject(MatDialog);
-  private _issueService = inject(IssueService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _translateService = inject(TranslateService);
   private _taskService = inject(TaskService);
+  private _calEventActions = inject(CalendarEventActionsService);
+  private _ngZone = inject(NgZone);
   readonly titleHasLinks = computed(() => {
     const t = this.title();
     return !!t && hasLinkHints(t);
   });
 
+  readonly hasCalendarEventUrl = computed<boolean>(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return this._calEventActions.hasEventUrl(evt.data as ScheduleFromCalendarEvent);
+  });
+
   readonly T: typeof T = T;
   readonly isDragPreview = input<boolean>(false);
   readonly isMonthView = input<boolean>(false);
+  readonly isResizeDisabled = input<boolean>(false);
   readonly event = input.required<ScheduleEvent>();
 
   readonly taskContextMenu = viewChild('taskContextMenu', {
     read: TaskContextMenuComponent,
   });
 
+  readonly calMenuTrigger = viewChild('calMenuTrigger', { read: MatMenuTrigger });
+  private readonly _calMenuItems = viewChildren(MatMenuItem);
+  private readonly _titleEl = viewChild<ElementRef<HTMLElement>>('titleEl');
+
   protected readonly SVEType = SVEType;
   private _isBeingSubmitted = false;
+  private _resizeObserver?: ResizeObserver;
+  private _measureRafId?: number;
+  readonly _titleLineClamp = signal(1);
 
   // Computed signals for derived state
   readonly se = computed(() => this.event());
@@ -121,6 +153,10 @@ export class ScheduleEventComponent {
     );
   });
 
+  readonly beyondBudgetTooltip = this._translateService.instant(
+    T.F.SCHEDULE.EXCESS_TASK_TOOLTIP,
+  );
+
   readonly hoverTitle = computed(() => {
     const evt = this.se();
     const is12Hour = !this._dateTimeFormatService.is24HourFormat;
@@ -142,6 +178,9 @@ export class ScheduleEventComponent {
       t.timeSpent === 0
     ) {
       result += '  !!!!! ESTIMATE FOR SCHEDULE WAS SET TO 10MIN !!!!!';
+    }
+    if (evt.isBeyondBudget) {
+      result += `  ${this.beyondBudgetTooltip}`;
     }
     return result;
   });
@@ -190,39 +229,102 @@ export class ScheduleEventComponent {
       addClass += ' is-resizing';
     }
 
+    if (this.isReferenceCalendar()) {
+      addClass += ' is-reference-calendar';
+    }
+
+    if (evt.isBeyondBudget) {
+      addClass += ' is-beyond-budget';
+    }
+
     return evt.type + '  ' + addClass;
   });
 
   readonly style = computed(() => {
     const { overlap, style } = this.se();
-    // Arbitrarily chosen value that controls width reduction of this component
-    // whenever the underlying event duration overlaps with others
-    const overlapReductionFactor = 0.75;
     return (
       (!this.isMonthView() && !this.isDragPreview() && overlap
-        ? // eslint-disable-next-line no-mixed-operators -- conflicts with prettier formatting
-          `margin-left: ${100 - 100 * Math.pow(overlapReductionFactor, overlap.offset)}%; ` +
-          `width: calc(${Math.pow(overlapReductionFactor, overlap.count) * 100}% - var(--margin-right)); ` +
+        ? `margin-left: calc(${overlap.offset * (100 / overlap.count)}% + var(--margin-left)); ` +
+          `width: calc(${100 / overlap.count}% - var(--margin-left) - var(--margin-right)); ` +
           // Content inside the event element can spill out when the width is limited enough
           'overflow: hidden !important; '
         : '') + style
     );
   });
 
+  ngAfterViewInit(): void {
+    const hostEl = this._elRef.nativeElement as HTMLElement;
+    const titleEl = this._titleEl()?.nativeElement;
+    if (!titleEl) {
+      return;
+    }
+
+    this._ngZone.runOutsideAngular(() => {
+      this._resizeObserver = new ResizeObserver(() =>
+        this._scheduleTitleLineClampUpdate(),
+      );
+      this._resizeObserver.observe(hostEl);
+      this._scheduleTitleLineClampUpdate();
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this._measureRafId !== undefined) {
+      cancelAnimationFrame(this._measureRafId);
+    }
+    this._resizeObserver?.disconnect();
+  }
+
+  private _scheduleTitleLineClampUpdate(): void {
+    if (this._measureRafId !== undefined) {
+      return;
+    }
+
+    this._measureRafId = requestAnimationFrame(() => {
+      this._measureRafId = undefined;
+      this._updateTitleLineClamp();
+    });
+  }
+
+  private _updateTitleLineClamp(): void {
+    const hostEl = this._elRef.nativeElement as HTMLElement;
+    const titleEl = this._titleEl()?.nativeElement;
+    if (!titleEl) {
+      return;
+    }
+
+    const styles = getComputedStyle(titleEl);
+    const lineHeight = parseFloat(styles.lineHeight);
+    const paddingTop = parseFloat(styles.paddingTop);
+    const paddingBottom = parseFloat(styles.paddingBottom);
+    const availableTitleHeight = hostEl.clientHeight - paddingTop - paddingBottom;
+    const lineClamp = Math.max(1, Math.floor(availableTitleHeight / lineHeight));
+
+    if (Number.isFinite(lineClamp) && lineClamp !== this._titleLineClamp()) {
+      this._ngZone.run(() => this._titleLineClamp.set(lineClamp));
+    }
+  }
+
   private readonly _projectId = computed(() => this.task()?.projectId || null);
 
   readonly projectColor = computed(() => {
     const projectId = this._projectId();
-    if (!projectId) return '';
+    if (!projectId) return null;
     // Use store.select and convert to immediate value
-    let color = '';
+    let color: string | null = null;
     this._store
       .select(selectProjectById, { id: projectId })
       .pipe(first())
       .subscribe((project) => {
-        color = project?.theme?.primary || '';
+        color = project?.theme?.primary || null;
       });
     return color;
+  });
+
+  readonly calEventColor = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return null;
+    return (evt.data as ScheduleFromCalendarEvent).color || null;
   });
 
   readonly elementId = computed(() => {
@@ -290,19 +392,60 @@ export class ScheduleEventComponent {
         },
       });
     } else if (evt.type === SVEType.CalendarEvent) {
-      if (this._isBeingSubmitted) {
-        return;
+      if (this._calMenuItems().length) {
+        this.calMenuTrigger()?.openMenu();
       }
-      this._isBeingSubmitted = true;
-
-      const data = evt.data as ScheduleFromCalendarEvent;
-      this._issueService.addTaskFromIssue({
-        issueDataReduced: data,
-        issueProviderId: data.calProviderId,
-        issueProviderKey: 'ICAL',
-        isForceDefaultProject: true,
-      });
     }
+  }
+
+  readonly isCalendarEventFromPlugin = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return this._calEventActions.isPluginEvent(evt.data as ScheduleFromCalendarEvent);
+  });
+
+  readonly isReferenceCalendar = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return !!(evt.data as ScheduleFromCalendarEvent).isReferenceCalendar;
+  });
+
+  readonly canRescheduleCalendarEvent = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return this._calEventActions.canMoveEvent(evt.data as ScheduleFromCalendarEvent);
+  });
+
+  async openCalendarEventLink(): Promise<void> {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    await this._calEventActions.openEventLink(evt.data as ScheduleFromCalendarEvent);
+  }
+
+  createCalendarEventAsTask(): void {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent || this._isBeingSubmitted) return;
+    this._isBeingSubmitted = true;
+    const data = this.se().data as ScheduleFromCalendarEvent;
+    this._calEventActions.createAsTask(data);
+  }
+
+  async rescheduleCalendarEvent(): Promise<void> {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    await this._calEventActions.reschedule(evt.data as ScheduleFromCalendarEvent);
+  }
+
+  async deleteCalendarEvent(): Promise<void> {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    await this._calEventActions.deleteEvent(evt.data as ScheduleFromCalendarEvent);
+  }
+
+  hideCalendarEvent(): void {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    this._calEventActions.hideForever(evt.data as ScheduleFromCalendarEvent);
   }
 
   onContextMenu(ev: MouseEvent | TouchEvent): void {
@@ -382,6 +525,10 @@ export class ScheduleEventComponent {
   private _startHeight = 0;
 
   isResizable(): boolean {
+    if (this.isResizeDisabled() || this.isDragPreview() || this.isMonthView()) {
+      return false;
+    }
+
     const t = this.task();
     const evt = this.se();
     // Allow resizing for all task types with a time estimate

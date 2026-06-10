@@ -29,8 +29,11 @@ export class StartupOverlayService {
       const partialText = androidInterface.getStartupOverlayPartialText?.() ?? null;
 
       if (partialText === null) {
-        // Bar was never opened: dismiss immediately
-        androidInterface.dismissStartupOverlay?.();
+        // Bar was never opened: delay dismiss until the bottom nav entrance
+        // animation completes so the native add-task button stays visible
+        // until the HTML FAB takes over (avoids a gap with no button).
+        // 1500ms must match ENTRANCE_ANIMATION_DURATION in app.component.ts
+        setTimeout(() => androidInterface.dismissStartupOverlay?.(), 1500);
       } else if (partialText.length > 0) {
         // Bar open with text: transfer text to webapp add task bar
         sessionStorage.setItem(SS.ADD_TASK_BAR_TXT, partialText);

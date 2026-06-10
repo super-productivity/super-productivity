@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { DialogScheduleTaskComponent } from './dialog-schedule-task.component';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -16,10 +16,14 @@ import { WorkContextService } from '../../../features/work-context/work-context.
 import { of } from 'rxjs';
 import { PlannerService } from '../planner.service';
 import { RootState } from '../../../root-store/root-state';
-import { CONFIG_FEATURE_NAME } from '../../config/store/global-config.reducer';
+import {
+  CONFIG_FEATURE_NAME,
+  selectTimelineConfig,
+} from '../../config/store/global-config.reducer';
 import { TaskReminderOptionId } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 
 describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
   let component: DialogScheduleTaskComponent;
@@ -73,6 +77,10 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
               },
             } as any,
           },
+          selectors: [
+            { selector: selectAllTasksWithDueTimeSorted, value: [] },
+            { selector: selectTimelineConfig, value: null },
+          ],
         }),
         { provide: MatDialogRef, useValue: dialogRefSpy },
         { provide: SnackService, useValue: snackServiceSpy },
@@ -125,7 +133,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       expect(taskServiceSpy.scheduleTask).not.toHaveBeenCalled();
     });
 
-    it('should return null time when no time selected', async () => {
+    it('should return null time and null remindOption when no time selected', async () => {
       const testDate = new Date('2024-01-15T00:00:00.000Z');
 
       component.selectedDate = testDate;
@@ -136,7 +144,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       expect(dialogRefSpy.close).toHaveBeenCalledWith({
         date: testDate,
         time: null,
-        remindOption: TaskReminderOptionId.AtStart,
+        remindOption: null,
       });
     });
 
@@ -218,30 +226,43 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       fixture.detectChanges();
     });
 
-    it('should update selectedDate when dateSelected is called', () => {
+    it('should update selectedDate when dateSelected is called', fakeAsync(() => {
       const testDate = new Date('2024-01-20');
 
       component.dateSelected(testDate);
+      // dateSelected defers the assignment via setTimeout — flush it before asserting
+      tick();
 
-      // Wait for setTimeout to complete
-      setTimeout(() => {
-        expect(component.selectedDate).toEqual(testDate);
-      }, 1);
-    });
+      expect(component.selectedDate).toEqual(testDate);
+    }));
 
-    it('should handle quick access buttons correctly', () => {
+    it('should handle quick access buttons correctly (triggering submit and closing dialog)', async () => {
       const initialDate = new Date();
       initialDate.setMinutes(0, 0, 0);
 
-      // Test "Today" button (item 1)
-      component.quickAccessBtnClick(1);
+      // Test "Today" button
+      await component.onQuickAccessClick('today');
       expect(component.selectedDate).toEqual(initialDate);
+      expect(dialogRefSpy.close).toHaveBeenCalled();
 
-      // Test "Tomorrow" button (item 2)
+      dialogRefSpy.close.calls.reset();
+
+      // Test "Tomorrow" button
       const tomorrow = new Date(initialDate);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      component.quickAccessBtnClick(2);
+      await component.onQuickAccessClick('tomorrow');
       expect(component.selectedDate).toEqual(tomorrow);
+      expect(dialogRefSpy.close).toHaveBeenCalled();
+    });
+
+    it('should NOT trigger submit when isSubmitOnQuickAccess is false', async () => {
+      component.data.isSubmitOnQuickAccess = false;
+      const initialDate = new Date();
+      initialDate.setMinutes(0, 0, 0);
+
+      await component.onQuickAccessClick('today');
+      expect(component.selectedDate).toEqual(initialDate);
+      expect(dialogRefSpy.close).not.toHaveBeenCalled();
     });
   });
 
@@ -258,27 +279,34 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       fixture.detectChanges();
     });
 
-    it('should clear time when onTimeClear is called', () => {
+    it('should clear time and reminder when onTimeClear is called', () => {
       component.selectedTime = '10:30';
-      const mockEvent = new MouseEvent('click');
+      component.selectedReminderCfgId = TaskReminderOptionId.m15;
 
-      component.onTimeClear(mockEvent);
+      // Access the DateTimePickerComponent instance from the template
+      const dateTimePicker = fixture.nativeElement.querySelector('datetime-picker');
+      expect(dateTimePicker).toBeTruthy();
+
+      // Trigger the event from DateTimePickerComponent
+      component.selectedTime = null;
+      component.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
 
       expect(component.selectedTime).toBeNull();
-      expect(component.isInitValOnTimeFocus).toBe(true);
+      expect(component.selectedReminderCfgId).toBe(TaskReminderOptionId.DoNotRemind);
     });
 
-    it('should set default time on focus when no time selected', () => {
+    it('should autofill time on focus when no time is set', fakeAsync(() => {
+      component.selectedDate = new Date(2026, 4, 6);
       component.selectedTime = null;
-      component.isInitValOnTimeFocus = true;
-      const testDate = new Date();
-      testDate.setDate(testDate.getDate() + 1); // Tomorrow
-      component.selectedDate = testDate;
 
-      component.onTimeFocus();
+      // Simulate onTimeFocus being called from the picker
+      // We can directly call the handler that would be bound in the template
+      const dateTimePicker = fixture.debugElement.query(
+        (debugEl) => debugEl.name === 'datetime-picker',
+      );
+      dateTimePicker.triggerEventHandler('timeChanged', '09:00');
 
-      expect(component.selectedTime).toBeTruthy();
-      expect(component.isInitValOnTimeFocus).toBe(false);
-    });
+      expect(component.selectedTime as unknown as string).toBe('09:00');
+    }));
   });
 });

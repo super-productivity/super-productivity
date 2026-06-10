@@ -129,3 +129,13 @@ body.isDarkTheme .show-light-only {
   background: rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(20px) saturate(180%);
 }
+
+// Keyboard-only focus ring. Apply to custom interactive elements that don't
+// already get a Material focus treatment. Uses the --focus-ring-* tokens from
+// _css-variables.scss.
+.focus-ring {
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}

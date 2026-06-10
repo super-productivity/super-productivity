@@ -46,10 +46,10 @@ note {
   z-index: 2;
 }
 
-.drag-handle {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  top: 0;
+.highlight-searched-item note ::ng-deep .note {
+  outline: 2px solid var(--c-accent) !important;
+  box-shadow: var(--whiteframe-shadow-6dp) !important;
+  transition:
+    outline 0.2s ease,
+    box-shadow 0.2s ease;
 }

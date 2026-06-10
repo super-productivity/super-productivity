@@ -1,10 +1,27 @@
 // Karma configuration file, see link for more information
 // https://karma-runner.github.io/1.0/config/configuration-file.html
 
+const path = require('node:path');
+
+// sql.js (WASM SQLite) is served into the Karma run so the SqliteOpLogAdapter
+// can be validated against a REAL SQLite engine, not just the in-memory
+// translation-layer fake (see docs/sync-and-op-log/sqlite-migration.md, B2).
+// It is loaded as a plain global <script> rather than imported, because the
+// universal sql.js build statically references node: builtins that the webpack
+// Karma builder cannot bundle. Dev/test only — never reaches the app bundle.
+const SQL_JS_DIST = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist');
+const SQL_JS_WASM_ABS = '/absolute' + path.join(SQL_JS_DIST, 'sql-wasm.wasm');
+
 module.exports = function (config) {
   // NOTE: necessary to fix some of the unit tests with a timezone in them
   // NOTE2: won't work for wallaby, but that's maybe ok for now
   // process.env.TZ = 'Europe/Berlin';
+  const isCodeCoverage = Boolean(config.buildWebpack?.options?.codeCoverage);
+  const reporters = ['spec', 'running-spec'];
+
+  if (isCodeCoverage) {
+    reporters.push('coverage-istanbul');
+  }
 
   config.set({
     basePath: '',
@@ -14,13 +31,27 @@ module.exports = function (config) {
       require('karma-chrome-launcher'),
       require('@angular-devkit/build-angular/plugins/karma'),
       require('./test-helpers/karma-running-spec-on-disconnect'),
+      require('karma-coverage-istanbul-reporter'),
       require('karma-spec-reporter'),
     ],
+    files: [
+      // Global initSqlJs; the wasm is served (not auto-included) and fetched on demand.
+      { pattern: path.join(SQL_JS_DIST, 'sql-wasm.js'), included: true, watched: false },
+      {
+        pattern: path.join(SQL_JS_DIST, 'sql-wasm.wasm'),
+        included: false,
+        watched: false,
+      },
+    ],
+    proxies: {
+      // initSqlJs({ locateFile: () => '/sql-wasm.wasm' }) resolves here.
+      '/sql-wasm.wasm': SQL_JS_WASM_ABS,
+    },
     client: {
       clearContext: false, // leave Jasmine Spec Runner output visible in browser
       captureConsole: false,
     },
-    reporters: process.env.CI ? ['spec', 'running-spec'] : ['spec', 'running-spec'],
+    reporters,
     specReporter: {
       maxLogLines: 5, // limit number of lines logged per test
       suppressSummary: false, // show summary
@@ -31,6 +62,13 @@ module.exports = function (config) {
       showBrowser: false, // don't show browser name
       showSpecTiming: false, // don't show spec timing
       failFast: false, // continue after first failure
+    },
+    coverageIstanbulReporter: {
+      dir: path.join(__dirname, '..', 'coverage', 'sp2'),
+      reports: ['html', 'text-summary'],
+      combineBrowserReports: true,
+      fixWebpackSourcePaths: true,
+      skipFilesWithNoCoverage: true,
     },
     port: 9876,
     colors: true,

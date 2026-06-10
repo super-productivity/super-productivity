@@ -22,6 +22,12 @@ import {
   TASK_WAIT_TIMEOUT,
   UI_VISIBLE_TIMEOUT_SHORT,
 } from './e2e-constants';
+import {
+  assertNoRuntimeBrowserErrors,
+  attachPageErrorCollector,
+  installDevErrorDialogHandler,
+  type RuntimeBrowserError,
+} from './runtime-errors';
 
 /**
  * SuperSync server URL for E2E tests.
@@ -50,6 +56,7 @@ export interface SimulatedE2EClient {
   workView: WorkViewPage;
   sync: SuperSyncPage;
   clientName: string;
+  runtimeErrors: RuntimeBrowserError[];
 }
 
 /**
@@ -204,7 +211,9 @@ export const createSimulatedClient = async (
   baseURL: string,
   clientName: string,
   testPrefix: string,
+  options: { allowExampleTasks?: boolean } = {},
 ): Promise<SimulatedE2EClient> => {
+  const { allowExampleTasks = false } = options;
   // Use provided baseURL or fall back to localhost:4242 (Playwright fixture may be undefined)
   const effectiveBaseURL = baseURL || 'http://localhost:4242';
 
@@ -216,20 +225,21 @@ export const createSimulatedClient = async (
   });
 
   const page = await context.newPage();
+  const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
+  installDevErrorDialogHandler(page, `Client ${clientName}`);
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
-  await page.addInitScript(() => {
+  // Tests of the example-task sync gate opt back in via { allowExampleTasks: true }
+  // so first-run onboarding tasks are actually created.
+  await page.addInitScript((allowExamples) => {
     localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
     localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
     localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-  });
-
-  // Set up error logging
-  page.on('pageerror', (error) => {
-    console.error(`[Client ${clientName}] Page error:`, error.message);
-  });
+    if (!allowExamples) {
+      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+    }
+  }, allowExampleTasks);
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
@@ -239,8 +249,34 @@ export const createSimulatedClient = async (
     }
   });
 
-  // Navigate to app and wait for ready
-  await page.goto('/');
+  // Navigate to app with retry for transient ERR_CONNECTION_REFUSED.
+  // Under parallel load (many workers × 2-3 browser contexts each), the Angular
+  // dev server can temporarily refuse connections. Retrying recovers from this
+  // without failing the test outright.
+  let lastGotoError: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await page.goto('/');
+      lastGotoError = null;
+      break;
+    } catch (e) {
+      lastGotoError = e as Error;
+      const isConnectionRefused = lastGotoError.message.includes(
+        'ERR_CONNECTION_REFUSED',
+      );
+      if (attempt < 2 && isConnectionRefused) {
+        const delay = 1000 * (attempt + 1);
+        console.log(
+          `[Client ${clientName}] page.goto('/') failed (attempt ${attempt + 1}/3): ERR_CONNECTION_REFUSED — retrying in ${delay}ms`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        break; // Non-connection error or last attempt — let it throw below
+      }
+    }
+  }
+  if (lastGotoError) throw lastGotoError;
+
   await waitForAppReady(page);
 
   const workView = new WorkViewPage(page, `${clientName}-${testPrefix}`);
@@ -252,6 +288,7 @@ export const createSimulatedClient = async (
     workView,
     sync,
     clientName,
+    runtimeErrors,
   };
 };
 
@@ -293,6 +330,10 @@ export const closeClient = async (client: SimulatedE2EClient): Promise<void> => 
       `[closeClient] Cleanup error (ignored): ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+
+  // Assert AFTER close so pageerrors emitted during teardown (Angular destroy
+  // hooks, late RxJS errors) are still captured before we throw.
+  assertNoRuntimeBrowserErrors(client.runtimeErrors, `Client ${client.clientName}`);
 };
 
 /**
@@ -491,6 +532,12 @@ export const getParentTaskElement = (
 /**
  * Mark a task as done by hovering and clicking the done button.
  *
+ * Waits for the `.isDone` class to appear before returning. `TaskService.toggleDoneWithAnimation`
+ * schedules the actual `setDone` dispatch via `setTimeout(200ms)` for the mark-done animation,
+ * so without this wait a following sync can start before the updateTask op is captured — the
+ * late op then lands during the sync's upload, leaving `hasPendingOps=true` and the check icon
+ * never appears.
+ *
  * @param client - The simulated E2E client
  * @param taskName - The task name to mark as done
  */
@@ -501,11 +548,17 @@ export const markTaskDone = async (
   const task = getTaskElement(client, taskName);
   await task.hover();
   await task.locator('done-toggle').click();
+  await expect(getDoneTaskElement(client, taskName).first()).toBeVisible({
+    timeout: UI_VISIBLE_TIMEOUT,
+  });
 };
 
 /**
  * Mark a subtask as done by hovering and clicking the done button.
  * Uses getSubtaskElement to avoid matching parent tasks.
+ *
+ * Waits for `.isDone` for the same reason as `markTaskDone` — the 200ms animation delay in
+ * `toggleDoneWithAnimation` would otherwise race the following sync and leave pending ops.
  *
  * @param client - The simulated E2E client
  * @param subtaskName - The subtask name to mark as done
@@ -517,6 +570,9 @@ export const markSubtaskDone = async (
   const subtask = getSubtaskElement(client, subtaskName);
   await subtask.hover();
   await subtask.locator('done-toggle').click();
+  await expect(getDoneSubtaskElement(client, subtaskName).first()).toBeVisible({
+    timeout: UI_VISIBLE_TIMEOUT,
+  });
 };
 
 /**
@@ -586,21 +642,64 @@ export const renameTask = async (
   newName: string,
 ): Promise<void> => {
   const task = getTaskElement(client, oldName);
-  // Click the task-title component to enter edit mode
-  await task.locator('task-title').first().click();
-  await client.page.waitForTimeout(300);
+  // Wait for the task element to be stable before interacting — prevents
+  // "element detached from DOM" errors when Angular re-renders the task list
+  await task.waitFor({ state: 'attached', timeout: 5000 });
 
-  // Wait for the textarea to appear and be focused
-  const textarea = client.page.locator('task-title textarea');
-  await textarea.first().waitFor({ state: 'visible', timeout: 5000 });
-  await textarea.first().focus();
-  await client.page.waitForTimeout(100);
+  // Wait for Angular enter animations to complete. On slower/loaded CI machines the
+  // task element may still carry the `ng-animating` class when first visible,
+  // causing clicks to be swallowed and `task-title` to be temporarily absent.
+  await task
+    .evaluate((el) =>
+      el.classList.contains('ng-animating')
+        ? new Promise<void>((resolve) => {
+            const observer = new MutationObserver(() => {
+              if (!el.classList.contains('ng-animating')) {
+                observer.disconnect();
+                resolve();
+              }
+            });
+            observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+            setTimeout(() => {
+              observer.disconnect();
+              resolve();
+            }, 2000);
+          })
+        : undefined,
+    )
+    .catch(() => {});
 
-  // Select all text and delete it, then type new name using keyboard
-  await client.page.keyboard.press('Control+a');
-  await client.page.keyboard.press('Backspace');
-  await client.page.keyboard.type(newName, { delay: 5 });
-  await client.page.keyboard.press('Tab');
+  // Enter edit mode by dispatching a click event directly on the task-title element.
+  // Using dispatchEvent avoids pointer-events:none and Playwright actionability issues.
+  // Retry up to 3 times: Angular may still re-render the component briefly after
+  // the animation class is removed, causing the click to not open edit mode.
+  const taskTitle = task.locator('task-title').first();
+  const textarea = client.page.locator('task-title textarea').first();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await taskTitle.dispatchEvent('click');
+    try {
+      await textarea.waitFor({ state: 'visible', timeout: 3000 });
+      break;
+    } catch {
+      if (attempt === 2) {
+        throw new Error(
+          `renameTask: textarea did not appear after 3 click attempts on "${oldName}"`,
+        );
+      }
+      await client.page.waitForTimeout(500);
+    }
+  }
+
+  // Type directly into the textarea via evaluate to avoid focus/detach races
+  await textarea.evaluate((el: HTMLTextAreaElement, name: string) => {
+    el.focus();
+    el.value = name;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, newName);
+  // Blur to commit the change
+  await textarea.evaluate((el: HTMLTextAreaElement) => {
+    el.dispatchEvent(new Event('blur', { bubbles: true }));
+  });
   await client.page.waitForTimeout(UI_SETTLE_MEDIUM);
 };
 
@@ -636,6 +735,11 @@ export const stopTimeTracking = async (
   const pauseBtn = task.locator('button:has(mat-icon:has-text("pause"))');
   await pauseBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
   await pauseBtn.click();
+  await client.page.mouse.move(0, 0);
+  await task
+    .locator('task-hover-controls')
+    .waitFor({ state: 'detached', timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .catch(() => {});
 };
 
 // ============================================================================
@@ -675,7 +779,7 @@ export const getTaskTitles = async (client: SimulatedE2EClient): Promise<string[
  *
  * @param client - The simulated E2E client
  * @param taskName - The task name
- * @returns The time display text or null if not visible
+ * @returns The time display text or null if not present
  */
 export const getTaskTimeDisplay = async (
   client: SimulatedE2EClient,
@@ -683,10 +787,168 @@ export const getTaskTimeDisplay = async (
 ): Promise<string | null> => {
   const task = getTaskElement(client, taskName);
   const timeVal = task.locator('.time-wrapper .time-val').first();
-  if (await timeVal.isVisible()) {
+  if ((await timeVal.count()) > 0) {
     return timeVal.textContent();
   }
   return null;
+};
+
+/**
+ * Wait for a task's tracked time text to be present.
+ *
+ * The task row intentionally hides `.time-wrapper` while hover controls are mounted,
+ * so time-tracking assertions should read the rendered text instead of requiring
+ * visual visibility.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @param timeout - Maximum time to wait for non-empty time text
+ * @returns The trimmed time display text
+ */
+export const waitForTaskTimeDisplay = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+  timeout = UI_VISIBLE_TIMEOUT,
+): Promise<string> => {
+  await expect
+    .poll(
+      async () => {
+        const text = await getTaskTimeDisplay(client, taskName);
+        return text?.trim() ?? '';
+      },
+      {
+        timeout,
+        intervals: [250, 500, 1000],
+      },
+    )
+    .not.toBe('');
+
+  return (await getTaskTimeDisplay(client, taskName))!.trim();
+};
+
+/**
+ * Get a task's persisted timeSpent from the app state cache.
+ *
+ * This avoids relying on the task row's time label: sub-minute values render as
+ * "-" in the UI, and the label can be hidden while hover controls are mounted.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @returns The persisted timeSpent value in milliseconds, or null if not found
+ */
+export const getTaskTimeSpentFromState = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<number | null> =>
+  client.page.evaluate(async (name) => {
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null;
+
+    const getTimeSpentFromRootState = (state: Record<string, unknown>): number | null => {
+      const taskState = state.tasks ?? state.task;
+      if (!isRecord(taskState) || !isRecord(taskState.entities)) {
+        return null;
+      }
+
+      for (const task of Object.values(taskState.entities)) {
+        if (
+          isRecord(task) &&
+          typeof task.title === 'string' &&
+          task.title.includes(name)
+        ) {
+          return typeof task.timeSpent === 'number' ? task.timeSpent : 0;
+        }
+      }
+
+      return null;
+    };
+
+    type StoreSubscription = { unsubscribe: () => void };
+    type StoreLike = {
+      subscribe: (next: (state: unknown) => void) => StoreSubscription;
+    };
+
+    const helpers = (
+      window as unknown as {
+        __e2eTestHelpers?: {
+          store?: StoreLike;
+        };
+      }
+    ).__e2eTestHelpers;
+
+    if (helpers?.store) {
+      const liveState = await new Promise<Record<string, unknown> | null>((resolve) => {
+        let isDone = false;
+        const subscriptionRef: { current?: StoreSubscription } = {};
+        const finish = (state: unknown): void => {
+          if (isDone) {
+            return;
+          }
+          isDone = true;
+          window.setTimeout(() => subscriptionRef.current?.unsubscribe());
+          resolve(isRecord(state) ? state : null);
+        };
+
+        subscriptionRef.current = helpers.store.subscribe(finish);
+        window.setTimeout(() => finish(null), 1000);
+      });
+
+      if (liveState) {
+        const timeSpent = getTimeSpentFromRootState(liveState);
+        if (timeSpent !== null) {
+          return timeSpent;
+        }
+      }
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('SUP_OPS');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const stateCacheEntry = await new Promise<
+      { state?: Record<string, unknown> } | undefined
+    >((resolve, reject) => {
+      const tx = db.transaction('state_cache', 'readonly');
+      const store = tx.objectStore('state_cache');
+      const request = store.get('current');
+      request.onsuccess = () =>
+        resolve(
+          isRecord(request.result)
+            ? (request.result as { state?: Record<string, unknown> })
+            : undefined,
+        );
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+
+    return stateCacheEntry?.state
+      ? getTimeSpentFromRootState(stateCacheEntry.state)
+      : null;
+  }, taskName);
+
+/**
+ * Wait for a task's persisted timeSpent to be greater than zero.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name
+ * @param timeout - Maximum time to wait for timeSpent
+ * @returns The persisted timeSpent value in milliseconds
+ */
+export const waitForTaskTimeSpent = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+  timeout = UI_VISIBLE_TIMEOUT,
+): Promise<number> => {
+  await expect
+    .poll(async () => (await getTaskTimeSpentFromState(client, taskName)) ?? 0, {
+      timeout,
+      intervals: [250, 500, 1000],
+    })
+    .toBeGreaterThan(0);
+
+  return (await getTaskTimeSpentFromState(client, taskName))!;
 };
 
 /**
@@ -759,21 +1021,21 @@ export const createProjectReliably = async (
     .first();
   await projectsTree.waitFor({ state: 'visible' });
 
-  // The "Create Project" button is an additional-btn with an 'add' icon
-  const addBtn = projectsTree.locator('.additional-btn mat-icon:has-text("add")').first();
+  // Hover the group header to make additional buttons visible and clickable
+  // (buttons have pointer-events: none by default, only enabled on hover)
+  const groupNavItem = projectsTree.locator('nav-item').first();
+  await groupNavItem.hover();
+  await page.waitForTimeout(UI_SETTLE_SMALL);
 
-  if (await addBtn.isVisible()) {
+  // Target the button element (not the mat-icon inside it)
+  const addBtn = projectsTree.locator(
+    '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
+  );
+  try {
+    await addBtn.waitFor({ state: 'visible', timeout: 5000 });
     await addBtn.click();
-  } else {
-    // Try to hover the group header to make buttons appear
-    const groupNavItem = projectsTree.locator('nav-item').first();
-    await groupNavItem.hover();
-    await page.waitForTimeout(UI_SETTLE_SMALL);
-    if (await addBtn.isVisible()) {
-      await addBtn.click();
-    } else {
-      throw new Error('Could not find Create Project button');
-    }
+  } catch {
+    await addBtn.click({ force: true });
   }
 
   // Dialog
@@ -840,8 +1102,11 @@ export const archiveDoneTasks = async (client: SimulatedE2EClient): Promise<void
   await saveAndGoHomeBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
   await saveAndGoHomeBtn.click();
 
-  // Wait for navigation back to work view
-  await client.page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
+  // Wait for navigation back to work view.
+  // Use negative lookahead: /(active\/tasks|tag\/TODAY)/ would match the
+  // current /daily-summary URL; adding (?!\/daily-summary) ensures we wait
+  // for a real navigation. Also handles tag/TODAY without /tasks suffix.
+  await client.page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary))/);
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 };
 
@@ -875,8 +1140,8 @@ export const hasTaskInWorklog = async (
 ): Promise<boolean> => {
   // Only navigate if not already on worklog page
   const currentUrl = client.page.url();
-  if (!currentUrl.includes('/worklog')) {
-    await client.page.goto('/#/tag/TODAY/worklog');
+  if (!currentUrl.includes('/history')) {
+    await client.page.goto('/#/tag/TODAY/history');
     await client.page.waitForLoadState('networkidle');
     await client.page.waitForTimeout(UI_SETTLE_EXTENDED);
   }
@@ -950,7 +1215,7 @@ export const getWorklogTaskCount = async (
   client: SimulatedE2EClient,
 ): Promise<number> => {
   // Navigate to worklog
-  await client.page.goto('/#/tag/TODAY/worklog');
+  await client.page.goto('/#/tag/TODAY/history');
   await client.page.waitForLoadState('networkidle');
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 

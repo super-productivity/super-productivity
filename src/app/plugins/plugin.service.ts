@@ -19,12 +19,7 @@ import {
   MAX_PLUGIN_MANIFEST_SIZE,
   MAX_PLUGIN_ZIP_SIZE,
 } from './plugin.const';
-import { MatDialog } from '@angular/material/dialog';
-import {
-  PluginNodeConsentDialogComponent,
-  PluginNodeConsentDialogData,
-} from './ui/plugin-node-consent-dialog/plugin-node-consent-dialog-simple.component';
-import { first, take } from 'rxjs/operators';
+import { take } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLoaderService } from './plugin-loader.service';
@@ -38,7 +33,16 @@ import { issueProvidersFeature } from '../features/issue/store/issue-provider.re
 import { selectIsDominaModeConfig } from '../features/config/store/global-config.reducer';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { SnackService } from '../core/snack/snack.service';
+import { pingWithRetry } from './util/ping-with-retry.util';
+import { PluginBridgeService } from './plugin-bridge.service';
 
+// Each plugin's `id` (from its manifest.json, distinct from the asset path
+// here) becomes the entityId prefix for all data it persists via
+// `persistDataSynced` — keyed entries land under `<pluginId>:<key>` in IDB,
+// the op-log, and on the sync wire. Once a plugin ships, renaming its id
+// orphans every user's stored data: there is no automatic re-keying. Treat
+// pluginIds as permanent for any plugin that has ever been published.
 const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/yesterday-tasks-plugin',
   'assets/bundled-plugins/sync-md',
@@ -47,9 +51,30 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/automations',
   'assets/bundled-plugins/github-issue-provider',
   'assets/bundled-plugins/clickup-issue-provider',
+  'assets/bundled-plugins/gitea-issue-provider',
+  'assets/bundled-plugins/linear-issue-provider',
   'assets/bundled-plugins/brain-dump',
   'assets/bundled-plugins/voice-reminder',
+  'assets/bundled-plugins/google-calendar-provider',
+  'assets/bundled-plugins/caldav-calendar-provider',
+  'assets/bundled-plugins/doc-mode',
 ] as const;
+
+const BUNDLED_PLUGIN_IDS = new Set<string>([
+  'ai-productivity-prompts',
+  'api-test-plugin',
+  'automations',
+  'brain-dump',
+  'caldav-calendar-provider',
+  'clickup-issue-provider',
+  'doc-mode',
+  'github-issue-provider',
+  'google-calendar-provider',
+  'procrastination-buster',
+  'sync-md',
+  'voice-reminder',
+  'yesterday-tasks',
+]);
 
 @Injectable({
   providedIn: 'root',
@@ -63,9 +88,9 @@ export class PluginService implements OnDestroy {
   private readonly _pluginMetaPersistenceService = inject(PluginMetaPersistenceService);
   private readonly _pluginUserPersistenceService = inject(PluginUserPersistenceService);
   private readonly _pluginCacheService = inject(PluginCacheService);
-  private readonly _dialog = inject(MatDialog);
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _pluginLoader = inject(PluginLoaderService);
+  private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _translateService = inject(TranslateService);
   private readonly _pluginI18nService = inject(PluginI18nService);
   private readonly _store = inject(Store);
@@ -73,12 +98,14 @@ export class PluginService implements OnDestroy {
     PluginIssueProviderRegistryService,
   );
   private readonly _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
+  private readonly _snackService = inject(SnackService);
 
   private _isInitialized = false;
   private _loadedPlugins: PluginInstance[] = [];
   private _pluginPaths: Map<string, string> = new Map(); // Store plugin ID -> path mapping
   private _pluginIndexHtml: Map<string, string> = new Map(); // Store plugin ID -> index.html content
   private _pluginIcons: Map<string, string> = new Map(); // Store plugin ID -> SVG icon content
+  private _pluginIframeGenerations: Map<string, number> = new Map();
   private _pluginIconsSignal = signal<Map<string, string>>(new Map());
 
   // Lazy loading state management
@@ -237,6 +264,13 @@ export class PluginService implements OnDestroy {
 
           // Parse the manifest from JSON string
           const manifest: PluginManifest = JSON.parse(cachedPlugin.manifest);
+          if (manifest.id !== cachedPlugin.id) {
+            PluginLog.err(
+              `Ignoring cached plugin ${cachedPlugin.id}: manifest id ${manifest.id} does not match cache id`,
+            );
+            continue;
+          }
+          this._assertUploadedPluginAllowed(manifest);
 
           // Create plugin state without loading code
           const state: PluginState = {
@@ -371,6 +405,17 @@ export class PluginService implements OnDestroy {
    * Enable and activate a plugin. Returns the activated instance.
    */
   async enableAndActivatePlugin(pluginId: string): Promise<PluginInstance | null> {
+    const state = this._getPluginState(pluginId);
+    if (!state) {
+      PluginLog.err(`Plugin ${pluginId} not found`);
+      return null;
+    }
+
+    const hasConsent = await this.checkNodeExecutionPermission(state.manifest);
+    if (!hasConsent) {
+      return null;
+    }
+
     await this._pluginMetaPersistenceService.setPluginEnabled(pluginId, true);
     return this.activatePlugin(pluginId, true);
   }
@@ -418,6 +463,13 @@ export class PluginService implements OnDestroy {
       return null;
     }
 
+    if (isManualActivation) {
+      const hasConsent = await this.checkNodeExecutionPermission(state.manifest);
+      if (!hasConsent) {
+        return null;
+      }
+    }
+
     // If manually activated, ensure the state reflects that it's enabled
     if (isManualActivation && !state.isEnabled) {
       this._setPluginState(pluginId, {
@@ -451,7 +503,7 @@ export class PluginService implements OnDestroy {
           }
         }, 100);
       }).catch((err) => {
-        console.error('Plugin activation error:', err);
+        PluginLog.err('Plugin activation error:', err);
       });
 
       const updatedState = this._getPluginState(pluginId);
@@ -471,7 +523,7 @@ export class PluginService implements OnDestroy {
           currentState.manifest,
         );
         if (!hasConsent) {
-          console.log(
+          PluginLog.log(
             'Plugin requires Node.js execution permission but no stored consent found:',
             state.manifest.id,
           );
@@ -481,11 +533,12 @@ export class PluginService implements OnDestroy {
       }
     } else {
       // Plugin is not enabled, don't activate it
-      console.log(`Plugin ${pluginId} is not enabled, skipping activation`);
+      PluginLog.log(`Plugin ${pluginId} is not enabled, skipping activation`);
       return null;
     }
 
-    // Load the plugin
+    // Load the plugin. nodeExecution plugins must have a main-issued session
+    // grant before onReady is fired.
     this._setPluginState(pluginId, {
       ...currentState,
       status: 'loading',
@@ -494,6 +547,12 @@ export class PluginService implements OnDestroy {
     try {
       PluginLog.log(`Activating plugin: ${pluginId}`);
       const instance = await this._loadPluginLazy(currentState);
+      if (!instance.loaded) {
+        throw new Error(
+          instance.error ||
+            this._translateService.instant(T.PLUGINS.ERROR_LOADING_PLUGIN),
+        );
+      }
 
       this._setPluginState(pluginId, {
         ...currentState,
@@ -509,11 +568,38 @@ export class PluginService implements OnDestroy {
       return instance;
     } catch (error) {
       PluginLog.err(`Failed to activate plugin ${pluginId}:`, error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Tear down any partially-registered runtime (hooks, buttons, side effects)
+      // to avoid a "running" plugin while UI shows error state.
+      try {
+        this._pluginRunner.unloadPlugin(pluginId);
+      } catch (unloadError) {
+        PluginLog.err(
+          `Failed to clean up plugin ${pluginId} after activation error:`,
+          unloadError,
+        );
+      }
+      void this._revokeNodeExecutionGrant(pluginId);
+
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        instance: undefined,
+        error: errorMsg,
       });
+      // Only surface a snack on user-initiated activation. Startup auto-activation
+      // failures stay silent; the plugin tile already renders the error state, so
+      // a pile-up of snacks on cold boot would be noise.
+      if (isManualActivation) {
+        this._snackService.open({
+          msg: this._translateService.instant(T.PLUGINS.PLUGIN_LOAD_FAILED, {
+            pluginName: currentState.manifest.name,
+            error: errorMsg,
+          }),
+          type: 'ERROR',
+        });
+      }
       return null;
     }
   }
@@ -547,7 +633,89 @@ export class PluginService implements OnDestroy {
       state.isEnabled,
     );
 
+    await this._fireOnReady(instance);
+
     return instance;
+  }
+
+  /**
+   * Fire onReady for a successfully loaded plugin. For nodeExecution plugins on
+   * Electron, obtains a main-issued execution grant and pings the IPC bridge
+   * first (with retry); throws if the bridge stays unavailable. Called after
+   * every plugin load path.
+   */
+  private async _fireOnReady(instance: PluginInstance): Promise<void> {
+    if (!instance.loaded) {
+      return;
+    }
+    if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
+      const hasGrant = await this._ensureNodeExecutionGrant(instance.manifest);
+      if (!hasGrant) {
+        throw new Error(
+          this._translateService.instant(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
+        );
+      }
+      await this._pingNodeBridge(instance.manifest);
+    }
+    await this._pluginRunner.triggerReady(instance.manifest.id);
+  }
+
+  /**
+   * Same as _fireOnReady but tears down the plugin runtime if onReady fails,
+   * so we never leave a "running" plugin while the UI shows error state.
+   * Used by load paths whose outer catch only logs and rethrows.
+   */
+  private async _fireOnReadyWithCleanup(instance: PluginInstance): Promise<void> {
+    try {
+      await this._fireOnReady(instance);
+    } catch (error) {
+      this._handleReadyFailure(instance, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Tear down a plugin's runtime (hooks, buttons, side effects), remove it from
+   * the loaded list, and update its state to 'error'. Idempotent.
+   */
+  private _handleReadyFailure(instance: PluginInstance, error: unknown): void {
+    const pluginId = instance.manifest.id;
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    PluginLog.err(`onReady failed for plugin ${pluginId}:`, error);
+    this._bumpPluginIframeGeneration(pluginId);
+
+    try {
+      this._pluginRunner.unloadPlugin(pluginId);
+    } catch (unloadError) {
+      PluginLog.err(
+        `Failed to clean up plugin ${pluginId} after onReady error:`,
+        unloadError,
+      );
+    }
+
+    const idx = this._loadedPlugins.findIndex((p) => p.manifest.id === pluginId);
+    if (idx !== -1) {
+      this._loadedPlugins.splice(idx, 1);
+    }
+    void this._revokeNodeExecutionGrant(pluginId);
+
+    const currentState = this._pluginStates().get(pluginId);
+    if (currentState) {
+      this._setPluginState(pluginId, {
+        ...currentState,
+        status: 'error',
+        instance: undefined,
+        error: errorMsg,
+      });
+    }
+
+    this._snackService.open({
+      msg: this._translateService.instant(T.PLUGINS.PLUGIN_LOAD_FAILED, {
+        pluginName: instance.manifest.name,
+        error: errorMsg,
+      }),
+      type: 'ERROR',
+    });
   }
 
   private async _loadUploadedPlugins(): Promise<void> {
@@ -611,6 +779,9 @@ export class PluginService implements OnDestroy {
       // Use the loader service for lazy loading
       const assets = await this._pluginLoader.loadPluginAssets(pluginPath);
       const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
+      if (pluginPath.startsWith('uploaded://')) {
+        this._assertUploadedPluginAllowed(manifest);
+      }
 
       // Store assets if loaded
       if (indexHtml) {
@@ -713,6 +884,8 @@ export class PluginService implements OnDestroy {
         // Mark plugin as enabled in memory only during startup to avoid sync conflicts
         // The enabled state will be persisted later when user explicitly enables/disables plugins
         this._ensurePluginEnabledInMemory(manifest.id);
+
+        await this._fireOnReadyWithCleanup(pluginInstance);
 
         PluginLog.log(`Plugin ${manifest.id} loaded successfully`);
       } else {
@@ -829,6 +1002,10 @@ export class PluginService implements OnDestroy {
     return this._pluginPaths.get(pluginId);
   }
 
+  getPluginIframeGeneration(pluginId: string): number {
+    return this._pluginIframeGenerations.get(pluginId) ?? 0;
+  }
+
   isInitialized(): boolean {
     return this._isInitialized;
   }
@@ -837,6 +1014,9 @@ export class PluginService implements OnDestroy {
    * Get index.html content for a plugin
    */
   getPluginIndexHtml(pluginId: string): string | null {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
     return this._pluginIndexHtml.get(pluginId) || null;
   }
 
@@ -911,6 +1091,10 @@ export class PluginService implements OnDestroy {
    * Load plugin index.html content
    */
   async loadPluginIndexHtml(pluginId: string): Promise<string | null> {
+    if (!this._canServePluginIndexHtml(pluginId)) {
+      return null;
+    }
+
     // First check if we already have it cached
     const cached = this._pluginIndexHtml.get(pluginId);
     if (cached) {
@@ -922,12 +1106,26 @@ export class PluginService implements OnDestroy {
     if (pluginPath?.startsWith('uploaded://')) {
       const cachedPlugin = await this._pluginCacheService.getPlugin(pluginId);
       if (cachedPlugin?.indexHtml) {
+        if (!this._canServePluginIndexHtml(pluginId)) {
+          return null;
+        }
         this._pluginIndexHtml.set(pluginId, cachedPlugin.indexHtml);
         return cachedPlugin.indexHtml;
       }
     }
 
     return null;
+  }
+
+  private _canServePluginIndexHtml(pluginId: string): boolean {
+    const state = this._getPluginState(pluginId);
+    return (
+      !!state &&
+      state.status === 'loaded' &&
+      state.isEnabled &&
+      state.instance?.loaded === true &&
+      !state.error
+    );
   }
 
   async dispatchHook(hookName: Hooks, payload?: unknown): Promise<void> {
@@ -937,6 +1135,17 @@ export class PluginService implements OnDestroy {
       return;
     }
     await this._pluginHooks.dispatchHook(hookName, payload);
+  }
+
+  async dispatchHookToPlugin(
+    pluginId: string,
+    hookName: Hooks,
+    payload?: unknown,
+  ): Promise<void> {
+    if (!this._isInitialized) {
+      return;
+    }
+    await this._pluginHooks.dispatchHookToPlugin(pluginId, hookName, payload);
   }
 
   async loadPluginFromPath(pluginPath: string): Promise<PluginInstance> {
@@ -950,7 +1159,10 @@ export class PluginService implements OnDestroy {
   }
 
   async loadPluginFromZip(file: File): Promise<PluginInstance> {
-    PluginLog.log(`Starting plugin load from ZIP: ${file.name}`);
+    PluginLog.log('Starting plugin load from ZIP', {
+      size: file.size,
+      type: file.type,
+    });
 
     // Import fflate dynamically for better bundle size
     const { unzip } = await import('fflate');
@@ -988,7 +1200,14 @@ export class PluginService implements OnDestroy {
           });
         },
       );
-      PluginLog.log({ extractedFiles });
+      const extractedFileEntries = Object.entries(extractedFiles);
+      PluginLog.log('Plugin ZIP extracted', {
+        fileCount: extractedFileEntries.length,
+        totalBytes: extractedFileEntries.reduce((sum, [, data]) => sum + data.length, 0),
+        hasManifest: !!extractedFiles['manifest.json'],
+        hasPluginJs: !!extractedFiles['plugin.js'],
+        hasIndexHtml: !!extractedFiles['index.html'],
+      });
 
       // Find and extract manifest.json
       if (!extractedFiles['manifest.json']) {
@@ -1001,7 +1220,6 @@ export class PluginService implements OnDestroy {
         throw new Error(
           this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
             maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-            fileSize: (manifestBytes.length / 1024).toFixed(1),
           }),
         );
       }
@@ -1018,51 +1236,53 @@ export class PluginService implements OnDestroy {
           }),
         );
       }
-
-      // Find and extract plugin.js
-      if (!extractedFiles['plugin.js']) {
-        throw new Error(this._translateService.instant(T.PLUGINS.PLUGIN_JS_NOT_FOUND));
-      }
-
-      // Validate plugin.js size
-      const pluginCodeBytes = extractedFiles['plugin.js'];
-      if (pluginCodeBytes.length > MAX_PLUGIN_CODE_SIZE) {
-        throw new Error(
-          this._translateService.instant(T.PLUGINS.CODE_TOO_LARGE, {
-            maxSize: (MAX_PLUGIN_CODE_SIZE / 1024 / 1024).toFixed(1),
-            fileSize: (pluginCodeBytes.length / 1024 / 1024).toFixed(1),
-          }),
-        );
-      }
-
-      const pluginCode = new TextDecoder().decode(pluginCodeBytes);
+      this._assertUploadedPluginAllowed(manifest);
 
       // Extract index.html if it exists (optional) and iFrame is true
       let indexHtml: string | null = null;
-      if (manifest.iFrame && extractedFiles['index.html']) {
+      const hasIndexHtml =
+        manifest.iFrame === true && extractedFiles['index.html'] !== undefined;
+      if (hasIndexHtml) {
         const indexHtmlBytes = extractedFiles['index.html'];
-        // Validate index.html size (same as manifest for now)
+        // Reuse the manifest size limit for index.html.
         if (indexHtmlBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
+            this._translateService.instant(T.PLUGINS.INDEX_HTML_TOO_LARGE, {
               maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-              fileSize: (indexHtmlBytes.length / 1024).toFixed(1),
             }),
           );
         }
         indexHtml = new TextDecoder().decode(indexHtmlBytes);
       }
 
+      // Extract plugin.js when available. Iframe-only plugins can omit it because
+      // PluginRunner auto-registers iframe menu and side-panel entries from the manifest.
+      let pluginCode = '';
+      const pluginCodeBytes = extractedFiles['plugin.js'];
+      if (pluginCodeBytes !== undefined) {
+        if (pluginCodeBytes.length > MAX_PLUGIN_CODE_SIZE) {
+          throw new Error(
+            this._translateService.instant(T.PLUGINS.CODE_TOO_LARGE, {
+              maxSize: (MAX_PLUGIN_CODE_SIZE / 1024 / 1024).toFixed(1),
+            }),
+          );
+        }
+        pluginCode = new TextDecoder().decode(pluginCodeBytes);
+      } else if (!hasIndexHtml) {
+        throw new Error(this._translateService.instant(T.PLUGINS.PLUGIN_JS_NOT_FOUND));
+      } else if (!indexHtml?.trim()) {
+        throw new Error(this._translateService.instant(T.PLUGINS.INDEX_HTML_NOT_LOADED));
+      }
+
       // Extract icon if specified in manifest
       let iconContent: string | null = null;
       if (manifest.icon && extractedFiles[manifest.icon]) {
         const iconBytes = extractedFiles[manifest.icon];
-        // Validate icon size (same as manifest for now)
+        // Reuse the manifest size limit for the SVG icon.
         if (iconBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
           throw new Error(
-            this._translateService.instant(T.PLUGINS.MANIFEST_TOO_LARGE, {
+            this._translateService.instant(T.PLUGINS.ICON_TOO_LARGE, {
               maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
-              fileSize: (iconBytes.length / 1024).toFixed(1),
             }),
           );
         }
@@ -1071,6 +1291,19 @@ export class PluginService implements OnDestroy {
         if (!iconContent.includes('<svg') || !iconContent.includes('</svg>')) {
           PluginLog.err(`Plugin icon ${manifest.icon} does not appear to be a valid SVG`);
           iconContent = null;
+        }
+      }
+
+      // Extract config schema if specified in manifest
+      let configSchema: string | undefined;
+      if (manifest.jsonSchemaCfg && extractedFiles[manifest.jsonSchemaCfg]) {
+        const schemaBytes = extractedFiles[manifest.jsonSchemaCfg];
+        if (schemaBytes.length <= MAX_PLUGIN_MANIFEST_SIZE) {
+          configSchema = new TextDecoder().decode(schemaBytes);
+        } else {
+          PluginLog.err(
+            `Plugin config schema ${manifest.jsonSchemaCfg} is too large, skipping`,
+          );
         }
       }
 
@@ -1108,6 +1341,8 @@ export class PluginService implements OnDestroy {
         pluginCode,
         indexHtml || undefined,
         iconContent || undefined,
+        undefined,
+        configSchema,
       );
 
       // Store index.html content if it exists
@@ -1229,6 +1464,8 @@ export class PluginService implements OnDestroy {
           icon: iconContent || undefined,
         };
         this._setPluginState(manifest.id, state);
+
+        await this._fireOnReadyWithCleanup(pluginInstance);
 
         PluginLog.log(`Uploaded plugin ${manifest.id} loaded successfully`);
       } else {
@@ -1362,6 +1599,8 @@ export class PluginService implements OnDestroy {
    * without changing isEnabled or _pluginStates. Used for re-upload and reload.
    */
   private _teardownPluginRuntime(pluginId: string): void {
+    this._bumpPluginIframeGeneration(pluginId);
+
     // Close the side panel if this plugin is active
     const activePluginId = this.getActiveSidePanelPluginId();
     if (activePluginId === pluginId) {
@@ -1385,6 +1624,20 @@ export class PluginService implements OnDestroy {
     this._pluginHooks.unregisterPluginHooks(pluginId);
     this._pluginI18nService.unloadPluginTranslations(pluginId);
     this._pluginRunner.unloadPlugin(pluginId);
+
+    // SECURITY: revoke the main-process nodeExecution token on teardown, so a
+    // disabled/uninstalled plugin cannot run Node for the rest of the session.
+    // Best-effort and fire-and-forget because teardown is synchronous.
+    void this._revokeNodeExecutionGrant(pluginId).catch((e) =>
+      PluginLog.err(`Failed to revoke nodeExecution grant for ${pluginId}`, e),
+    );
+  }
+
+  private _bumpPluginIframeGeneration(pluginId: string): void {
+    this._pluginIframeGenerations.set(
+      pluginId,
+      this.getPluginIframeGeneration(pluginId) + 1,
+    );
   }
 
   unloadPlugin(pluginId: string): boolean {
@@ -1432,6 +1685,10 @@ export class PluginService implements OnDestroy {
       // Use the loader service for uploaded plugins
       const assets = await this._pluginLoader.loadUploadedPluginAssets(pluginId);
       const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
+      if (manifest.id !== pluginId) {
+        throw new Error(`Cached plugin ${pluginId} manifest id mismatch`);
+      }
+      this._assertUploadedPluginAllowed(manifest);
 
       // Store assets if loaded
       if (indexHtml) {
@@ -1507,6 +1764,7 @@ export class PluginService implements OnDestroy {
           // Replace existing instance
           this._loadedPlugins[existingIndex] = pluginInstance;
         }
+        await this._fireOnReadyWithCleanup(pluginInstance);
         PluginLog.log(`Uploaded plugin ${manifest.id} reloaded successfully`);
       } else {
         PluginLog.err(
@@ -1522,6 +1780,36 @@ export class PluginService implements OnDestroy {
     }
   }
 
+  private async _ensureNodeExecutionGrant(manifest: PluginManifest): Promise<boolean> {
+    if (!this._isElectronRuntime() || !manifest.permissions?.includes('nodeExecution')) {
+      return true;
+    }
+    if (this._pluginBridge.hasNodeExecutionGrantToken(manifest.id)) {
+      return true;
+    }
+    let grant: { token: string } | null;
+    try {
+      grant = await this._pluginBridge.requestNodeExecutionGrant(manifest.id);
+    } catch (error) {
+      PluginLog.err(`Failed to get nodeExecution grant for ${manifest.id}:`, error);
+      return false;
+    }
+    if (!grant) {
+      return false;
+    }
+
+    this._pluginBridge.setNodeExecutionGrantToken(manifest.id, grant.token);
+    return true;
+  }
+
+  private async _revokeNodeExecutionGrant(pluginId: string): Promise<void> {
+    const grantToken = this._pluginBridge.revokeNodeExecutionGrantToken(pluginId);
+    if (!grantToken || !this._isElectronRuntime()) {
+      return;
+    }
+    await this._pluginBridge.revokeNodeExecutionGrant(pluginId, grantToken);
+  }
+
   /**
    * Check if a plugin requires and has consent for Node.js execution
    */
@@ -1532,18 +1820,33 @@ export class PluginService implements OnDestroy {
     }
 
     // Only check consent in Electron environment
-    if (!IS_ELECTRON) {
+    if (!this._isElectronRuntime()) {
       PluginLog.err(
         `Plugin ${manifest.id} requires nodeExecution permission which is not available in web environment`,
       );
       return false;
     }
 
-    return this._getNodeExecutionConsent(manifest);
+    return this._ensureNodeExecutionGrant(manifest);
   }
 
   /**
-   * Check node execution permission on startup (uses stored consent)
+   * Ping the Node.js IPC bridge with a trivial no-op script.
+   * Retries up to 3 times (delays: 1s, 2s) before throwing.
+   * Throws if the bridge is unavailable after all retries.
+   */
+  private async _pingNodeBridge(manifest: PluginManifest): Promise<void> {
+    const ok = await pingWithRetry(() => this._pluginRunner.pingNodeBridge(manifest.id));
+    if (!ok) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BRIDGE_UNAVAILABLE),
+      );
+    }
+  }
+
+  /**
+   * Startup only checks platform availability. Main-owned session grants are
+   * requested later, immediately before onReady fires.
    */
   private async _checkNodeExecutionPermissionForStartup(
     manifest: PluginManifest,
@@ -1553,66 +1856,39 @@ export class PluginService implements OnDestroy {
       return true; // No node execution permission needed
     }
 
-    // Only check consent in Electron environment
-    if (!IS_ELECTRON) {
-      console.warn(
+    // Only check platform availability in Electron environment
+    if (!this._isElectronRuntime()) {
+      PluginLog.warn(
         `Plugin ${manifest.id} requires nodeExecution permission which is not available in web environment`,
       );
       return false;
     }
 
-    // On startup, use stored consent if available
-    const storedConsent =
-      await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
-
-    // Only allow if consent was explicitly granted and stored
-    return storedConsent === true;
+    // Startup may request a main-owned session grant during _fireOnReady.
+    return true;
   }
 
-  /**
-   * Get consent for Node.js execution permissions (KISS approach)
-   */
-  private async _getNodeExecutionConsent(manifest: PluginManifest): Promise<boolean> {
-    // Check if we should pre-check the "remember" checkbox based on previous consent
-    const previousConsent =
-      await this._pluginMetaPersistenceService.getNodeExecutionConsent(manifest.id);
+  private _isElectronRuntime(): boolean {
+    return IS_ELECTRON;
+  }
 
-    // Always show dialog for nodeExecution permission
-    const result = await this._dialog
-      .open(PluginNodeConsentDialogComponent, {
-        data: {
-          manifest,
-          rememberChoice: previousConsent === true, // Pre-check if previously consented
-        } as PluginNodeConsentDialogData,
-        disableClose: false,
-        width: '500px',
-      })
-      .afterClosed()
-      .pipe(first())
-      .toPromise();
+  private _isBundledPluginId(pluginId: string): boolean {
+    return BUNDLED_PLUGIN_IDS.has(pluginId);
+  }
 
-    if (result && result.granted) {
-      // Store consent if user chose to remember
-      if (result.remember) {
-        // Delay write to avoid sync conflicts during startup
-        setTimeout(() => {
-          this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, true);
-        }, 5000);
-      } else {
-        // User unchecked remember - remove stored consent
-        setTimeout(() => {
-          this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
-        }, 5000);
-      }
-      return true;
+  private _assertUploadedPluginAllowed(manifest: PluginManifest): void {
+    if (this._isBundledPluginId(manifest.id)) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.PLUGIN_ID_RESERVED, {
+          pluginId: manifest.id,
+        }),
+      );
     }
-
-    // User denied permission - remove any stored consent
-    setTimeout(() => {
-      this._pluginMetaPersistenceService.setNodeExecutionConsent(manifest.id, false);
-    }, 5000);
-
-    return false;
+    if (manifest.permissions?.includes('nodeExecution')) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.NODE_EXECUTION_BUILT_IN_ONLY),
+      );
+    }
   }
 
   /**

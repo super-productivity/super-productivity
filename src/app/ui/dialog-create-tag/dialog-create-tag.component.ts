@@ -18,10 +18,12 @@ import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
-import { DEFAULT_TAG_COLOR } from '../../features/work-context/work-context.const';
+import { getRandomWorkContextColor } from '../../features/work-context/work-context-color';
 import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatOption } from '@angular/material/core';
 import { MaterialIconsLoaderService } from '../material-icons-loader.service';
+import { InputColorPickerComponent } from '../input-color-picker/input-color-picker.component';
+import { Log } from '../../core/log';
 
 export interface CreateTagData {
   title?: string;
@@ -47,6 +49,7 @@ export interface CreateTagData {
     MatAutocomplete,
     MatAutocompleteTrigger,
     MatOption,
+    InputColorPickerComponent,
   ],
 })
 export class DialogCreateTagComponent {
@@ -57,7 +60,7 @@ export class DialogCreateTagComponent {
   T: typeof T = T;
   title: string = '';
   icon: string | null = null;
-  color: string = DEFAULT_TAG_COLOR;
+  color: string = getRandomWorkContextColor();
   filteredIcons = signal<string[]>([]);
 
   // Get reference to autocomplete trigger for explicit cleanup
@@ -69,7 +72,7 @@ export class DialogCreateTagComponent {
         const icons = await this._iconLoader.loadIcons();
         this.filteredIcons.set(icons.slice(0, 50));
       } catch (error) {
-        console.error('Failed to load material icons:', error);
+        Log.err('Failed to load material icons:', error);
         this.filteredIcons.set([]);
       }
     }
@@ -84,7 +87,7 @@ export class DialogCreateTagComponent {
       filtered.length = Math.min(50, filtered.length);
       this.filteredIcons.set(filtered);
     } catch (error) {
-      console.error('Failed to filter icons:', error);
+      Log.err('Failed to filter icons:', error);
       this.filteredIcons.set([]);
     }
   }

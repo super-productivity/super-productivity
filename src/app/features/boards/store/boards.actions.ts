@@ -68,6 +68,20 @@ export const updatePanelCfgTaskIds = createAction(
   }),
 );
 
+export const sortBoards = createAction(
+  '[Boards] Sort Boards',
+  (actionProps: { ids: string[] }) => ({
+    ...actionProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'BOARD',
+      entityIds: actionProps.ids,
+      opType: OpType.Move,
+      isBulk: true,
+    } satisfies PersistentActionMeta,
+  }),
+);
+
 // Namespace for backward compatibility with existing code using BoardsActions.*
 export const BoardsActions = {
   addBoard,
@@ -75,4 +89,5 @@ export const BoardsActions = {
   removeBoard,
   updatePanelCfg,
   updatePanelCfgTaskIds,
+  sortBoards,
 };

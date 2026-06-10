@@ -16,4 +16,13 @@
   >
     <mat-icon>open_in_new</mat-icon>
   </button>
+} @else if ($any(itemData().issueData)?.url) {
+  <button
+    class="open-issue"
+    mat-icon-button
+    [title]="T.G.OPEN_IN_BROWSER | translate"
+    (click)="openCalendarEventUrl()"
+  >
+    <mat-icon>open_in_new</mat-icon>
+  </button>
 }

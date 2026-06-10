@@ -36,6 +36,7 @@ import { DateService } from 'src/app/core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
+import { Log } from '../../core/log';
 
 @Injectable({
   providedIn: 'root',
@@ -57,6 +58,7 @@ export class SimpleCounterService implements OnDestroy {
 
   // Cache for countdown remaining time (survives component destruction/recreation)
   private _countdownRemaining = new Map<string, number>();
+  private _startedCountdowns = new Set<string>();
 
   simpleCounters$: Observable<SimpleCounter[]> = this._store$.pipe(
     select(selectAllSimpleCounters),
@@ -105,12 +107,26 @@ export class SimpleCounterService implements OnDestroy {
     return this._countdownRemaining.get(id);
   }
 
+  hasStartedCountdown(id: string): boolean {
+    return this._startedCountdowns.has(id);
+  }
+
+  startCountdown(id: string, initialRemaining: number): void {
+    this._startedCountdowns.add(id);
+    this._countdownRemaining.set(id, initialRemaining);
+  }
+
+  /**
+   * Callers must ensure `startCountdown` ran first; otherwise the value won't
+   * display while paused (paused-display is gated by `hasStartedCountdown`).
+   */
   setCountdownRemaining(id: string, remaining: number): void {
     this._countdownRemaining.set(id, remaining);
   }
 
   clearCountdownRemaining(id: string): void {
     this._countdownRemaining.delete(id);
+    this._startedCountdowns.delete(id);
   }
 
   private _setupStopwatchTracking(): void {
@@ -201,14 +217,14 @@ export class SimpleCounterService implements OnDestroy {
     firstValueFrom(this._store$.pipe(select(selectSimpleCounterById, { id })))
       .then((counter) => {
         if (counter) {
-          const newVal = counter.countOnDay[date] || 0;
+          const newVal = counter.countOnDay?.[date] || 0;
           this._store$.dispatch(
             setSimpleCounterCounterToday({ id, newVal, today: date }),
           );
         }
       })
       .catch((error) => {
-        console.error('[SimpleCounterService] Error syncing stopwatch value:', error);
+        Log.err('[SimpleCounterService] Error syncing stopwatch value:', error);
       });
   }
 
@@ -238,7 +254,7 @@ export class SimpleCounterService implements OnDestroy {
       this._store$.pipe(select(selectSimpleCounterById, { id })),
     );
     if (!counter) return null;
-    return counter.countOnDay[today] || 0;
+    return counter.countOnDay?.[today] || 0;
   }
 
   /**
@@ -311,7 +327,7 @@ export class SimpleCounterService implements OnDestroy {
   deleteSimpleCounter(id: string): void {
     // Clean up accumulators to prevent memory leak
     this._stopwatchAccumulator.clearOne(id);
-    this._countdownRemaining.delete(id);
+    this.clearCountdownRemaining(id);
     this._store$.dispatch(deleteSimpleCounter({ id }));
   }
 
@@ -319,7 +335,7 @@ export class SimpleCounterService implements OnDestroy {
     // Clean up accumulators to prevent memory leak
     for (const id of ids) {
       this._stopwatchAccumulator.clearOne(id);
-      this._countdownRemaining.delete(id);
+      this.clearCountdownRemaining(id);
     }
     this._store$.dispatch(deleteSimpleCounters({ ids }));
   }
@@ -331,7 +347,7 @@ export class SimpleCounterService implements OnDestroy {
     }
     // Clear stale countdown cache when duration or type changes
     if (changes.countdownDuration !== undefined || changes.type !== undefined) {
-      this._countdownRemaining.delete(id);
+      this.clearCountdownRemaining(id);
     }
     this._store$.dispatch(updateSimpleCounter({ simpleCounter: { id, changes } }));
   }

@@ -8,10 +8,91 @@ import {
 import { Task } from '../../../features/tasks/task.model';
 import { ActionHandlerMap } from './task-shared-helpers';
 import { isDBDateStr } from '../../../util/get-db-date-str';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { getTag, updateTags, removeTaskFromPlannerDays } from './task-shared-helpers';
+import { unique } from '../../../util/unique';
+import { getDeadlineAutoPlanDecision } from '../../../features/tasks/util/get-deadline-auto-plan-fields';
+import type { DeadlineAutoPlanContext } from '../../../features/tasks/util/get-deadline-auto-plan-fields';
+import { TaskLog } from '../../../core/log';
 
 // =============================================================================
 // ACTION HANDLERS
 // =============================================================================
+
+const getAutoPlanContext = (
+  today?: string,
+  startOfNextDayDiffMs?: number,
+): DeadlineAutoPlanContext | undefined =>
+  today && isDBDateStr(today) && Number.isFinite(startOfNextDayDiffMs)
+    ? { today, startOfNextDayDiffMs: startOfNextDayDiffMs as number }
+    : undefined;
+
+const autoPlanTaskDueToDeadline = (
+  state: RootState,
+  taskId: string,
+  context?: DeadlineAutoPlanContext,
+): RootState => {
+  if (!context) return state;
+
+  const task = state[TASK_FEATURE_NAME].entities[taskId] as Task;
+  if (!task) return state;
+
+  const todayTag = getTag(state, TODAY_TAG.id);
+  const parentTask = task.parentId
+    ? (state[TASK_FEATURE_NAME].entities[task.parentId] as Task | undefined)
+    : undefined;
+  const decision = getDeadlineAutoPlanDecision(
+    task,
+    context,
+    new Set(todayTag.taskIds),
+    parentTask,
+  );
+
+  if (!decision.shouldAutoPlan) {
+    return state;
+  }
+
+  let updatedState = state;
+
+  if (
+    decision.shouldUpdateDueDay ||
+    decision.shouldClearDueWithTime ||
+    decision.shouldClearRemindAt
+  ) {
+    updatedState = {
+      ...updatedState,
+      [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+        {
+          id: taskId,
+          changes: {
+            ...(decision.shouldUpdateDueDay ? { dueDay: context.today } : {}),
+            ...(decision.shouldClearDueWithTime ? { dueWithTime: undefined } : {}),
+            ...(decision.shouldClearRemindAt ? { remindAt: undefined } : {}),
+          },
+        },
+        updatedState[TASK_FEATURE_NAME],
+      ),
+    };
+
+    if (decision.shouldUpdateDueDay) {
+      updatedState = removeTaskFromPlannerDays(updatedState, taskId);
+    }
+  }
+
+  // Add to TODAY_TAG
+  if (!getTag(updatedState, TODAY_TAG.id).taskIds.includes(taskId)) {
+    updatedState = updateTags(updatedState, [
+      {
+        id: TODAY_TAG.id,
+        changes: {
+          taskIds: unique([taskId, ...getTag(updatedState, TODAY_TAG.id).taskIds]),
+        },
+      },
+    ]);
+  }
+
+  return updatedState;
+};
 
 const handleSetDeadline = (
   state: RootState,
@@ -19,25 +100,27 @@ const handleSetDeadline = (
   deadlineDay?: string,
   deadlineWithTime?: number,
   deadlineRemindAt?: number,
+  autoPlanToday?: string,
+  autoPlanStartOfNextDayDiffMs?: number,
 ): RootState => {
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
   if (!currentTask) return state;
 
   // Input validation
   if (deadlineDay && !isDBDateStr(deadlineDay)) {
-    console.error('Invalid deadlineDay format:', deadlineDay);
+    TaskLog.err('Invalid deadlineDay format:', deadlineDay);
     return state;
   }
   if (deadlineWithTime !== undefined && !Number.isFinite(deadlineWithTime)) {
-    console.error('Invalid deadlineWithTime:', deadlineWithTime);
+    TaskLog.err('Invalid deadlineWithTime:', deadlineWithTime);
     return state;
   }
   if (deadlineRemindAt !== undefined && !Number.isFinite(deadlineRemindAt)) {
-    console.error('Invalid deadlineRemindAt:', deadlineRemindAt);
+    TaskLog.err('Invalid deadlineRemindAt:', deadlineRemindAt);
     return state;
   }
 
-  return {
+  const updatedState = {
     ...state,
     [TASK_FEATURE_NAME]: taskAdapter.updateOne(
       {
@@ -52,7 +135,23 @@ const handleSetDeadline = (
       state[TASK_FEATURE_NAME],
     ),
   };
+
+  return autoPlanTaskDueToDeadline(
+    updatedState,
+    taskId,
+    getAutoPlanContext(autoPlanToday, autoPlanStartOfNextDayDiffMs),
+  );
 };
+
+const sortTaskIdsForDeadlinePlanning = (
+  state: RootState,
+  taskIds: readonly string[],
+): string[] =>
+  [...taskIds].sort((a, b) => {
+    const taskA = state[TASK_FEATURE_NAME].entities[a] as Task | undefined;
+    const taskB = state[TASK_FEATURE_NAME].entities[b] as Task | undefined;
+    return Number(!!taskA?.parentId) - Number(!!taskB?.parentId);
+  });
 
 const handleRemoveDeadline = (state: RootState, taskId: string): RootState => {
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
@@ -97,15 +196,75 @@ const handleClearDeadlineReminder = (state: RootState, taskId: string): RootStat
 // =============================================================================
 
 const createActionHandlers = (state: RootState, action: Action): ActionHandlerMap => ({
+  [TaskSharedActions.addTask.type]: () => {
+    const { task, autoPlanToday, autoPlanStartOfNextDayDiffMs } = action as ReturnType<
+      typeof TaskSharedActions.addTask
+    >;
+    if (task.deadlineDay || task.deadlineWithTime !== undefined) {
+      return autoPlanTaskDueToDeadline(
+        state,
+        task.id,
+        getAutoPlanContext(autoPlanToday, autoPlanStartOfNextDayDiffMs),
+      );
+    }
+    return state;
+  },
+  [TaskSharedActions.applyShortSyntax.type]: () => {
+    const { task, taskChanges, autoPlanToday, autoPlanStartOfNextDayDiffMs } =
+      action as ReturnType<typeof TaskSharedActions.applyShortSyntax>;
+    if (
+      taskChanges.deadlineDay !== undefined ||
+      taskChanges.deadlineWithTime !== undefined
+    ) {
+      const updatedState = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          {
+            id: task.id,
+            changes: {
+              deadlineDay: taskChanges.deadlineDay,
+              deadlineWithTime: taskChanges.deadlineWithTime,
+              deadlineRemindAt: taskChanges.deadlineRemindAt,
+            },
+          },
+          state[TASK_FEATURE_NAME],
+        ),
+      };
+      return autoPlanTaskDueToDeadline(
+        updatedState,
+        task.id,
+        getAutoPlanContext(autoPlanToday, autoPlanStartOfNextDayDiffMs),
+      );
+    }
+    return state;
+  },
   [TaskSharedActions.setDeadline.type]: () => {
-    const { taskId, deadlineDay, deadlineWithTime, deadlineRemindAt } =
-      action as ReturnType<typeof TaskSharedActions.setDeadline>;
+    const {
+      taskId,
+      deadlineDay,
+      deadlineWithTime,
+      deadlineRemindAt,
+      autoPlanToday,
+      autoPlanStartOfNextDayDiffMs,
+    } = action as ReturnType<typeof TaskSharedActions.setDeadline>;
     return handleSetDeadline(
       state,
       taskId,
       deadlineDay,
       deadlineWithTime,
       deadlineRemindAt,
+      autoPlanToday,
+      autoPlanStartOfNextDayDiffMs,
+    );
+  },
+  [TaskSharedActions.planDeadlineTasksForToday.type]: () => {
+    const { taskIds, today, startOfNextDayDiffMs } = action as ReturnType<
+      typeof TaskSharedActions.planDeadlineTasksForToday
+    >;
+    const context = getAutoPlanContext(today, startOfNextDayDiffMs);
+    return sortTaskIdsForDeadlinePlanning(state, taskIds).reduce(
+      (updatedState, taskId) => autoPlanTaskDueToDeadline(updatedState, taskId, context),
+      state,
     );
   },
   [TaskSharedActions.removeDeadline.type]: () => {

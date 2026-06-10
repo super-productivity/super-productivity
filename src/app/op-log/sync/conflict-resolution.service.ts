@@ -1,4 +1,24 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
+import {
+  adjustForClockCorruption as adjustForClockCorruptionCore,
+  buildEntityFrontier,
+  convertLocalDeleteRemoteUpdatesToLww,
+  deepEqual,
+  extractEntityFromPayload as extractEntityFromPayloadCore,
+  extractUpdateChanges as extractUpdateChangesCore,
+  getEntityConfig as getEntityConfigFromRegistry,
+  getPayloadKey as getPayloadKeyFromRegistry,
+  isAdapterEntity,
+  isIdenticalConflict as isIdenticalConflictCore,
+  isArrayEntity,
+  isMapEntity,
+  isSingletonEntity,
+  partitionLwwResolutions,
+  planLwwConflictResolutions,
+  suggestConflictResolution,
+  type LwwResolvedConflict,
+} from '@sp/sync-core';
+import type { SelectByIdFactory } from '../core/entity-registry-host.types';
 import { Store } from '@ngrx/store';
 import {
   ActionType,
@@ -14,10 +34,12 @@ import { OperationApplierService } from '../apply/operation-applier.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OpLog } from '../../core/log';
 import { toEntityKey } from '../util/entity-key.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from './sync-session-validation.service';
 import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import {
   compareVectorClocks,
@@ -27,28 +49,19 @@ import {
 } from '../../core/util/vector-clock';
 import { devError } from '../../util/dev-error';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
-import {
-  getEntityConfig,
-  getPayloadKey,
-  isAdapterEntity,
-  isSingletonEntity,
-  isMapEntity,
-  isArrayEntity,
-} from '../core/entity-registry';
-import { selectIssueProviderById } from '../../features/issue/store/issue-provider.selectors';
+import { ENTITY_REGISTRY, isSingletonEntityId } from '../core/entity-registry';
 import { uuidv7 } from '../../util/uuid-v7';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
+import { SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 
 /**
  * Represents the result of LWW (Last-Write-Wins) conflict resolution.
  */
-interface LWWResolution {
-  /** The conflict that was resolved */
-  conflict: EntityConflict;
-  /** Which side won: 'local' or 'remote' */
-  winner: 'local' | 'remote';
-  /** If local wins, this is the new UPDATE operation to sync local state */
-  localWinOp?: Operation;
+type LWWResolution = LwwResolvedConflict<Operation, EntityConflict>;
+
+interface AutoResolveConflictsLwwOptions {
+  callerHoldsOperationLogLock?: boolean;
 }
 
 /**
@@ -84,7 +97,11 @@ export class ConflictResolutionService {
   private opLogStore = inject(OperationLogStoreService);
   private snackService = inject(SnackService);
   private validateStateService = inject(ValidateStateService);
+  private sessionValidation = inject(SyncSessionValidationService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private syncLogger = inject(SYNC_LOGGER);
+  private entityRegistry = inject(ENTITY_REGISTRY);
+  private injector = inject(Injector);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LWW OPERATION FACTORY METHODS
@@ -121,13 +138,28 @@ export class ConflictResolutionService {
     // NOT in the ActionType enum. They are dynamically constructed here and matched
     // by regex in lwwUpdateMetaReducer. This is by design - LWW ops are synthetic,
     // created during conflict resolution to carry the winning local state to remote clients.
+
+    // Force payload.id to the canonical entityId for adapter entities.
+    // lwwUpdateMetaReducer bails with "Entity data has no id" when an adapter
+    // payload lacks a top-level id; a malformed/partial entityState (e.g. an
+    // NgRx selector returning a stripped shape) would silently lose the LWW
+    // write on remote clients. Singletons use the '*' sentinel for entityId
+    // and have no `id` field — injecting `id: '*'` would pollute the singleton
+    // feature state when the consumer reducer spreads entityData. (#7330)
+    const basePayload =
+      entityState && typeof entityState === 'object'
+        ? (entityState as Record<string, unknown>)
+        : {};
+    const payload = isSingletonEntityId(entityId)
+      ? basePayload
+      : { ...basePayload, id: entityId };
     return {
       id: uuidv7(),
       actionType: toLwwUpdateActionType(entityType),
       opType: OpType.Update,
       entityType,
       entityId,
-      payload: entityState,
+      payload,
       clientId,
       vectorClock,
       timestamp,
@@ -165,10 +197,13 @@ export class ConflictResolutionService {
    *
    * @see ValidateStateService for the full validation and repair logic
    */
-  private async _validateAndRepairAfterResolution(): Promise<void> {
-    await this.validateStateService.validateAndRepairCurrentState('conflict-resolution', {
-      callerHoldsLock: true,
-    });
+  private async _validateAndRepairAfterResolution(): Promise<boolean> {
+    return this.validateStateService.validateAndRepairCurrentState(
+      'conflict-resolution',
+      {
+        callerHoldsLock: true,
+      },
+    );
   }
 
   /**
@@ -185,52 +220,8 @@ export class ConflictResolutionService {
    * @returns true if the conflict has identical effects and can be auto-resolved
    */
   isIdenticalConflict(conflict: EntityConflict): boolean {
-    const { localOps, remoteOps } = conflict;
-
-    // Empty ops can't be identical conflicts
-    if (localOps.length === 0 || remoteOps.length === 0) {
-      return false;
-    }
-
-    // Case 1: Both sides DELETE the same entity
-    // This is the most common "identical" conflict
-    const allLocalDelete = localOps.every((op) => op.opType === OpType.Delete);
-    const allRemoteDelete = remoteOps.every((op) => op.opType === OpType.Delete);
-    if (allLocalDelete && allRemoteDelete) {
-      OpLog.verbose(
-        `ConflictResolutionService: Identical conflict (both DELETE) for ${conflict.entityType}:${conflict.entityId}`,
-      );
-      return true;
-    }
-
-    // Case 2: Single ops with same opType and identical payloads
-    // Only check single-op conflicts for payload comparison (multi-op is too complex)
-    if (localOps.length === 1 && remoteOps.length === 1) {
-      const localOp = localOps[0];
-      const remoteOp = remoteOps[0];
-
-      // Must be same operation type
-      if (localOp.opType !== remoteOp.opType) {
-        return false;
-      }
-
-      // Compare payloads using deep equality
-      if (this._deepEqual(localOp.payload, remoteOp.payload)) {
-        OpLog.verbose(
-          `ConflictResolutionService: Identical conflict (same ${localOp.opType} payload) for ${conflict.entityType}:${conflict.entityId}`,
-        );
-        return true;
-      }
-    }
-
-    return false;
+    return isIdenticalConflictCore(conflict, this.syncLogger);
   }
-
-  /**
-   * Maximum depth for deep equality check to prevent stack overflow
-   * from deeply nested or circular structures.
-   */
-  private readonly MAX_DEEP_EQUAL_DEPTH = 50;
 
   /**
    * Deep equality check for payloads.
@@ -239,61 +230,9 @@ export class ConflictResolutionService {
    *
    * @param a First value to compare
    * @param b Second value to compare
-   * @param seen WeakSet to track visited objects (circular reference protection)
-   * @param depth Current recursion depth (deep nesting protection)
    */
-  private _deepEqual(
-    a: unknown,
-    b: unknown,
-    seen: WeakSet<object> = new WeakSet(),
-    depth: number = 0,
-  ): boolean {
-    // Depth limit protection
-    if (depth > this.MAX_DEEP_EQUAL_DEPTH) {
-      OpLog.warn(
-        'ConflictResolutionService: _deepEqual exceeded max depth, returning false',
-      );
-      return false;
-    }
-
-    if (a === b) return true;
-    if (a === null || b === null) return a === b;
-    if (typeof a !== typeof b) return false;
-
-    if (typeof a === 'object') {
-      // Circular reference protection: if we've seen this object before, return false
-      // (comparing circular structures for equality is complex and likely indicates corrupted data)
-      if (seen.has(a as object) || seen.has(b as object)) {
-        OpLog.warn(
-          'ConflictResolutionService: _deepEqual detected circular reference, returning false',
-        );
-        return false;
-      }
-      seen.add(a as object);
-      seen.add(b as object);
-
-      if (Array.isArray(a) && Array.isArray(b)) {
-        if (a.length !== b.length) return false;
-        return a.every((val, i) => this._deepEqual(val, b[i], seen, depth + 1));
-      }
-
-      if (Array.isArray(a) !== Array.isArray(b)) return false;
-
-      const aKeys = Object.keys(a as object);
-      const bKeys = Object.keys(b as object);
-      if (aKeys.length !== bKeys.length) return false;
-
-      return aKeys.every((key) =>
-        this._deepEqual(
-          (a as Record<string, unknown>)[key],
-          (b as Record<string, unknown>)[key],
-          seen,
-          depth + 1,
-        ),
-      );
-    }
-
-    return false;
+  private _deepEqual(a: unknown, b: unknown): boolean {
+    return deepEqual(a, b, { logger: this.syncLogger });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -320,11 +259,14 @@ export class ConflictResolutionService {
    *
    * @param conflicts - Entity conflicts to auto-resolve
    * @param nonConflictingOps - Remote ops that don't conflict (batched for dependency sorting)
+   * @param options - Lock context for deferred local actions flushed after
+   *                  remote clocks and local-win ops are recorded.
    * @returns Promise resolving when all resolutions are applied
    */
   async autoResolveConflictsLWW(
     conflicts: EntityConflict[],
     nonConflictingOps: Operation[] = [],
+    options: AutoResolveConflictsLwwOptions = {},
   ): Promise<{ localWinOpsCreated: number }> {
     if (conflicts.length === 0 && nonConflictingOps.length === 0) {
       return { localWinOpsCreated: 0 };
@@ -339,51 +281,42 @@ export class ConflictResolutionService {
     // ─────────────────────────────────────────────────────────────────────────
     const resolutions = await this._resolveConflictsWithLWW(conflicts);
 
-    // Count results for notification
-    let localWinsCount = 0;
-    let remoteWinsCount = 0;
-
     const allOpsToApply: Operation[] = [];
     const allStoredOps: Array<{ id: string; seq: number }> = [];
-    const localOpsToReject: string[] = [];
-    const remoteOpsToReject: string[] = [];
-    const newLocalWinOps: Operation[] = [];
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Collect all remote ops and categorize by resolution type
-    // ─────────────────────────────────────────────────────────────────────────
-    const remoteWinsOps: Operation[] = [];
-    const localWinsRemoteOps: Operation[] = [];
-
-    for (const resolution of resolutions) {
-      if (resolution.winner === 'remote') {
-        remoteWinsCount++;
-
+    const lwwPartitions = partitionLwwResolutions<Operation, EntityConflict>(
+      resolutions,
+      {
         // Convert remote UPDATE operations to LWW Update format when entity was deleted locally.
         // This ensures lwwUpdateMetaReducer can recreate deleted entities (fixes DELETE vs UPDATE race).
-        const processedRemoteOps = this._convertToLWWUpdatesIfNeeded(resolution.conflict);
-        remoteWinsOps.push(...processedRemoteOps);
+        processRemoteWinnerOps: (conflict) => this._convertToLWWUpdatesIfNeeded(conflict),
+        toEntityKey: (entityType, entityId) =>
+          toEntityKey(entityType as EntityType, entityId),
+      },
+    );
 
-        localOpsToReject.push(...resolution.conflict.localOps.map((op) => op.id));
-      } else {
-        localWinsCount++;
-        localOpsToReject.push(...resolution.conflict.localOps.map((op) => op.id));
-        localWinsRemoteOps.push(...resolution.conflict.remoteOps);
-        remoteOpsToReject.push(...resolution.conflict.remoteOps.map((op) => op.id));
+    const {
+      localWinsCount,
+      remoteWinsCount,
+      remoteWinsOps,
+      localWinsRemoteOps,
+      remoteOpsToReject,
+      newLocalWinOps,
+      remoteWinnerAffectedEntityKeys,
+    } = lwwPartitions;
+    const localOpsToReject = [...lwwPartitions.localOpsToReject];
 
-        // Store the new update op (will be uploaded on next sync).
-        // Note: localWinOp is undefined for archive-wins sibling conflicts
-        // (non-archive conflicts for an entity being archived). These resolve
-        // as local-wins to prevent remote ops from resurrecting the entity,
-        // but no new op is needed — the archive-win op from the sibling
-        // conflict already covers the entity.
-        if (resolution.localWinOp) {
-          newLocalWinOps.push(resolution.localWinOp);
-          OpLog.warn(
-            `ConflictResolutionService: LWW local wins - creating update op for ` +
-              `${resolution.conflict.entityType}:${resolution.conflict.entityId}`,
-          );
-        }
+    for (const resolution of resolutions) {
+      // Note: localWinOp is undefined for archive-wins sibling conflicts
+      // (non-archive conflicts for an entity being archived). These resolve
+      // as local-wins to prevent remote ops from resurrecting the entity,
+      // but no new op is needed — the archive-win op from the sibling
+      // conflict already covers the entity.
+      if (resolution.winner === 'local' && resolution.localWinOp) {
+        OpLog.warn(
+          `ConflictResolutionService: LWW local wins - creating update op for ` +
+            `${resolution.conflict.entityType}:${resolution.conflict.entityId}`,
+        );
       }
     }
 
@@ -419,24 +352,8 @@ export class ConflictResolutionService {
     // STEP 2: Reject ALL pending ops for entities where remote won
     // ─────────────────────────────────────────────────────────────────────────
     if (localOpsToReject.length > 0) {
-      const affectedEntityKeys = new Set<string>();
-      for (const resolution of resolutions) {
-        if (resolution.winner === 'remote') {
-          for (const op of resolution.conflict.remoteOps) {
-            const ids = op.entityIds?.length
-              ? op.entityIds
-              : op.entityId
-                ? [op.entityId]
-                : [];
-            for (const id of ids) {
-              affectedEntityKeys.add(toEntityKey(op.entityType, id));
-            }
-          }
-        }
-      }
-
       const pendingByEntity = await this.opLogStore.getUnsyncedByEntity();
-      for (const entityKey of affectedEntityKeys) {
+      for (const entityKey of remoteWinnerAffectedEntityKeys) {
         const pendingOps = pendingByEntity.get(entityKey) || [];
         for (const op of pendingOps) {
           if (!localOpsToReject.includes(op.id)) {
@@ -482,70 +399,93 @@ export class ConflictResolutionService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // STEP 5: Apply ALL remote operations in a single batch
+    // STEP 5+6: Apply remote ops (single batch) and append local-win update ops.
+    // The deferred-actions flush in `finally` runs whether the apply succeeded
+    // or threw — matches the pre-fix replayOperationBatch.finally semantics
+    // and guarantees buffered local actions don't leak to the next sync. (#7700)
     // ─────────────────────────────────────────────────────────────────────────
-    if (allOpsToApply.length > 0) {
-      OpLog.normal(
-        `ConflictResolutionService: Applying ${allOpsToApply.length} ops in single batch`,
-      );
-
-      const opIdToSeq = new Map(allStoredOps.map((o) => [o.id, o.seq]));
-      const applyResult = await this.operationApplier.applyOperations(allOpsToApply);
-
-      const appliedSeqs = applyResult.appliedOps
-        .map((op) => opIdToSeq.get(op.id))
-        .filter((seq): seq is number => seq !== undefined);
-
-      if (appliedSeqs.length > 0) {
-        await this.opLogStore.markApplied(appliedSeqs);
-
-        // CRITICAL: Merge remote ops' vector clocks into local clock.
-        // This ensures subsequent local operations have clocks that "dominate"
-        // the applied remote ops (GREATER_THAN instead of CONCURRENT).
-        // Without this, ops created after conflict resolution would have clocks
-        // that are CONCURRENT with the applied ops, causing them to be incorrectly
-        // filtered by SyncImportFilterService or rejected as conflicts on next sync.
-        await this.opLogStore.mergeRemoteOpClocks(applyResult.appliedOps);
-
+    let didApplyRemoteOps = false;
+    try {
+      if (allOpsToApply.length > 0) {
         OpLog.normal(
-          `ConflictResolutionService: Successfully applied ${appliedSeqs.length} ops`,
+          `ConflictResolutionService: Applying ${allOpsToApply.length} ops in single batch`,
         );
-      }
+        didApplyRemoteOps = true;
 
-      if (applyResult.failedOp) {
-        const failedOpIndex = allOpsToApply.findIndex(
-          (op) => op.id === applyResult.failedOp!.op.id,
-        );
-        const failedOps = allOpsToApply.slice(failedOpIndex);
-        const failedOpIds = failedOps.map((op) => op.id);
-
-        OpLog.err(
-          `ConflictResolutionService: ${applyResult.appliedOps.length} ops applied before failure. ` +
-            `Marking ${failedOpIds.length} ops as failed.`,
-          applyResult.failedOp.error,
-        );
-        await this.opLogStore.markFailed(failedOpIds, MAX_CONFLICT_RETRY_ATTEMPTS);
-
-        this.snackService.open({
-          type: 'ERROR',
-          msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
-          actionStr: T.PS.RELOAD,
-          actionFn: (): void => {
-            window.location.reload();
-          },
+        const opIdToSeq = new Map(allStoredOps.map((o) => [o.id, o.seq]));
+        const applyResult = await this.operationApplier.applyOperations(allOpsToApply, {
+          skipDeferredLocalActions: true,
         });
-      }
-    }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 6: Append new update ops for local wins (will sync on next cycle)
-    // Uses appendWithVectorClockUpdate to ensure vector clock store stays in sync
-    // ─────────────────────────────────────────────────────────────────────────
-    for (const op of newLocalWinOps) {
-      await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
-      OpLog.normal(
-        `ConflictResolutionService: Appended local-win update op ${op.id} for ${op.entityType}:${op.entityId}`,
-      );
+        const appliedSeqs = applyResult.appliedOps
+          .map((op) => opIdToSeq.get(op.id))
+          .filter((seq): seq is number => seq !== undefined);
+
+        if (appliedSeqs.length > 0) {
+          await this.opLogStore.markApplied(appliedSeqs);
+
+          // CRITICAL: Merge remote ops' vector clocks into local clock.
+          // This ensures subsequent local operations have clocks that "dominate"
+          // the applied remote ops (GREATER_THAN instead of CONCURRENT).
+          // Without this, ops created after conflict resolution would have clocks
+          // that are CONCURRENT with the applied ops, causing them to be incorrectly
+          // filtered by SyncImportFilterService or rejected as conflicts on next sync.
+          await this.opLogStore.mergeRemoteOpClocks(applyResult.appliedOps);
+
+          OpLog.normal(
+            `ConflictResolutionService: Successfully applied ${appliedSeqs.length} ops`,
+          );
+        }
+
+        if (applyResult.failedOp) {
+          const failedOpIndex = allOpsToApply.findIndex(
+            (op) => op.id === applyResult.failedOp!.op.id,
+          );
+          const failedOps = allOpsToApply.slice(failedOpIndex);
+          const failedOpIds = failedOps.map((op) => op.id);
+
+          OpLog.err(
+            `ConflictResolutionService: ${applyResult.appliedOps.length} ops applied before failure. ` +
+              `Marking ${failedOpIds.length} ops as failed.`,
+            applyResult.failedOp.error,
+          );
+          await this.opLogStore.markFailed(failedOpIds, MAX_CONFLICT_RETRY_ATTEMPTS);
+
+          this.snackService.open({
+            type: 'ERROR',
+            msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
+            actionStr: T.PS.RELOAD,
+            actionFn: (): void => {
+              window.location.reload();
+            },
+          });
+
+          // FIX #6571: Throw on apply failure (parity with applyNonConflictingOps).
+          // Previously, apply failures during LWW resolution were logged but not
+          // thrown, causing sync to report IN_SYNC despite lost operations.
+          // Deferred-actions flush runs in the finally below before the throw
+          // propagates.
+          throw applyResult.failedOp.error;
+        }
+      }
+
+      // ───────────────────────────────────────────────────────────────────────
+      // Append new update ops for local wins (will sync on next cycle)
+      // Uses appendWithVectorClockUpdate to ensure vector clock store stays in sync
+      // ───────────────────────────────────────────────────────────────────────
+      for (const op of newLocalWinOps) {
+        await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
+        OpLog.normal(
+          `ConflictResolutionService: Appended local-win update op ${op.id} for ${op.entityType}:${op.entityId}`,
+        );
+      }
+    } finally {
+      if (didApplyRemoteOps) {
+        await processDeferredActionsAfterRemoteApply(
+          this.injector,
+          options.callerHoldsOperationLogLock ?? false,
+        );
+      }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -563,8 +503,11 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 8: Validate and repair state after resolution
+    // Validation failure flips the SyncSessionValidationService latch — the
+    // wrapper reads it before deciding IN_SYNC vs ERROR. (#7330)
     // ─────────────────────────────────────────────────────────────────────────
-    await this._validateAndRepairAfterResolution();
+    const isValid = await this._validateAndRepairAfterResolution();
+    if (!isValid) this.sessionValidation.setFailed();
 
     return { localWinOpsCreated: newLocalWinOps.length };
   }
@@ -580,103 +523,46 @@ export class ConflictResolutionService {
   ): Promise<LWWResolution[]> {
     const resolutions: LWWResolution[] = [];
 
-    // ── Pre-scan: find entities with archive ops in ANY conflict ──
-    // Multiple conflicts can exist for the same entity (e.g., field updates + archive).
-    // When any conflict for an entity involves an archive op, ALL conflicts for that
-    // entity must resolve as archive-wins. Otherwise, non-archive conflicts would
-    // resolve via normal LWW, potentially creating local-win update ops that
-    // resurrect the archived entity via lwwUpdateMetaReducer.addOne().
-    const entitiesWithLocalArchive = new Set<string>();
-    const entitiesWithRemoteArchive = new Set<string>();
-    for (const conflict of conflicts) {
-      const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
-      if (
-        conflict.localOps.some(
-          (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-        )
-      ) {
-        entitiesWithLocalArchive.add(entityKey);
-      }
-      if (
-        conflict.remoteOps.some(
-          (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-        )
-      ) {
-        entitiesWithRemoteArchive.add(entityKey);
-      }
-    }
+    const plans = planLwwConflictResolutions(conflicts, {
+      isArchiveAction: (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      toEntityKey: (entityType, entityId) =>
+        toEntityKey(entityType as EntityType, entityId),
+    });
 
-    for (const conflict of conflicts) {
-      // ── moveToArchive always wins over other operations ──
-      // Archive is an explicit user intent ("I'm done with these tasks").
-      // Allowing other operations (field-level updates, deletes) to win via LWW
-      // would either resurrect archived entities via lwwUpdateMetaReducer.addOne()
-      // (Bug B) or lose archived data.
-      const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
-      const localHasArchive = entitiesWithLocalArchive.has(entityKey);
-      const remoteHasArchive = entitiesWithRemoteArchive.has(entityKey);
+    for (const plan of plans) {
+      let localWinOp: Operation | undefined;
 
-      if (localHasArchive || remoteHasArchive) {
-        if (remoteHasArchive) {
-          // Remote archive wins — will be applied normally
-          resolutions.push({ conflict, winner: 'remote' });
-        } else {
-          // Local archive wins. Only create the archive-win op for the conflict
-          // that actually contains the archive action. For other conflicts affecting
-          // the same entity, resolve as remote to reject local ops (the entity is
-          // being archived, so these local updates are irrelevant).
-          const thisConflictHasArchive = conflict.localOps.some(
-            (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-          );
-          if (thisConflictHasArchive) {
-            const localWinOp = await this._createArchiveWinOp(conflict);
-            resolutions.push({ conflict, winner: 'local', localWinOp });
-          } else {
-            // Entity is being archived locally — don't apply remote ops for
-            // non-archive conflicts to avoid transient entity resurrection via
-            // lwwUpdateMetaReducer.addOne(). Resolve as local-wins without a
-            // localWinOp: local ops get rejected (superseded by the archive-win
-            // op from the sibling conflict), remote ops get stored but not applied.
-            resolutions.push({ conflict, winner: 'local' });
-          }
-        }
+      if (plan.localWinOperationKind === 'archive-win') {
+        localWinOp = await this._createArchiveWinOp(plan.conflict);
+      } else if (plan.localWinOperationKind === 'update') {
+        localWinOp = await this._createLocalWinUpdateOp(plan.conflict);
+      }
+
+      resolutions.push({
+        conflict: plan.conflict,
+        winner: plan.winner,
+        localWinOp,
+      });
+
+      if (
+        plan.reason === 'remote-archive' ||
+        plan.reason === 'local-archive' ||
+        plan.reason === 'local-archive-sibling'
+      ) {
         OpLog.normal(
           `ConflictResolutionService: Archive wins over concurrent operation ` +
-            `(${remoteHasArchive ? 'remote' : 'local'} archive) for ` +
-            `${conflict.entityType}:${conflict.entityId}`,
+            `(${plan.reason === 'remote-archive' ? 'remote' : 'local'} archive) for ` +
+            `${plan.conflict.entityType}:${plan.conflict.entityId}`,
         );
-        continue;
-      }
-
-      // ── Normal LWW timestamp comparison ──
-      // Get max timestamp from each side
-      const localMaxTimestamp = Math.max(...conflict.localOps.map((op) => op.timestamp));
-      const remoteMaxTimestamp = Math.max(
-        ...conflict.remoteOps.map((op) => op.timestamp),
-      );
-
-      // LWW comparison: newer wins, tie goes to remote (server-authoritative)
-      if (localMaxTimestamp > remoteMaxTimestamp) {
-        // Local wins - create update op with current state
-        const localWinOp = await this._createLocalWinUpdateOp(conflict);
-        resolutions.push({
-          conflict,
-          winner: 'local',
-          localWinOp,
-        });
+      } else if (plan.winner === 'local') {
         OpLog.normal(
-          `ConflictResolutionService: LWW resolved ${conflict.entityType}:${conflict.entityId} as LOCAL ` +
-            `(local: ${localMaxTimestamp}, remote: ${remoteMaxTimestamp})`,
+          `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as LOCAL ` +
+            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
         );
       } else {
-        // Remote wins (includes tie)
-        resolutions.push({
-          conflict,
-          winner: 'remote',
-        });
         OpLog.normal(
-          `ConflictResolutionService: LWW resolved ${conflict.entityType}:${conflict.entityId} as REMOTE ` +
-            `(local: ${localMaxTimestamp}, remote: ${remoteMaxTimestamp})`,
+          `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as REMOTE ` +
+            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
         );
       }
     }
@@ -820,8 +706,7 @@ export class ConflictResolutionService {
     // Uses extractActionPayload to handle both MultiEntityPayload format
     // (where actionPayload is nested) and legacy flat payloads.
     const actionPayload = extractActionPayload(deleteOp.payload);
-    const entityKey =
-      getPayloadKey(conflict.entityType) || conflict.entityType.toLowerCase();
+    const entityKey = this._resolvePayloadKey(conflict.entityType);
 
     return actionPayload[entityKey];
   }
@@ -848,54 +733,43 @@ export class ConflictResolutionService {
       return conflict.remoteOps;
     }
 
-    // Extract full entity from local DELETE operation's payload.
-    // The DELETE op carries the complete entity state at time of deletion,
-    // which we need as the base for merging remote UPDATE changes.
-    const localDeleteOp = conflict.localOps.find((op) => op.opType === OpType.Delete);
-    const baseEntity = localDeleteOp
-      ? this._extractEntityFromPayload(localDeleteOp.payload, conflict.entityType)
-      : undefined;
-
-    // Convert remote UPDATE operations to LWW Update format
-    return conflict.remoteOps.map((remoteOp) => {
+    for (const remoteOp of conflict.remoteOps) {
       if (remoteOp.opType === OpType.Update) {
         OpLog.log(
           `ConflictResolutionService: Converting remote UPDATE to LWW Update for ` +
             `${remoteOp.entityType}:${remoteOp.entityId} (local DELETE lost)`,
         );
-
-        if (baseEntity) {
-          // Merge remote UPDATE changes on top of base entity from DELETE.
-          // This produces a flat entity payload that lwwUpdateMetaReducer can use
-          // to recreate the entity with all fields intact (not just the delta).
-          const updateChanges = this._extractUpdateChanges(
-            remoteOp.payload,
-            conflict.entityType,
-          );
-          const mergedEntity = { ...baseEntity, ...updateChanges };
-          return {
-            ...remoteOp,
-            actionType: toLwwUpdateActionType(remoteOp.entityType),
-            payload: mergedEntity,
-          };
-        }
-
-        // Fallback: can't get base entity — the LWW Update keeps the original
-        // UPDATE payload which may lack a top-level `id`, causing lwwUpdateMetaReducer
-        // to skip the update. This is the pre-existing behavior; the merged-entity
-        // path above is the fix. Log with payload shape for diagnostics.
-        OpLog.error(
-          `ConflictResolutionService: Cannot extract base entity from local DELETE for ` +
-            `${remoteOp.entityType}:${remoteOp.entityId}. LWW Update may have incomplete data. ` +
-            `Local DELETE payload keys: ${localDeleteOp ? JSON.stringify(Object.keys(extractActionPayload(localDeleteOp.payload))) : 'N/A'}`,
-        );
-        return {
-          ...remoteOp,
-          actionType: toLwwUpdateActionType(remoteOp.entityType),
-        };
       }
-      return remoteOp;
+    }
+
+    return convertLocalDeleteRemoteUpdatesToLww<Operation>(conflict, {
+      payloadKey: (entityType) => this._resolvePayloadKey(entityType as EntityType),
+      toLwwUpdateActionType: (entityType) =>
+        toLwwUpdateActionType(entityType as EntityType),
+      isSingletonEntityId,
+      onMissingBaseEntity: ({ localDeletePayloadKeys, remoteOp }) => {
+        // Fallback: no full base entity available. Returning the op unchanged
+        // is equivalent to rewriting actionType to LWW Update — both no-op at
+        // the consumer because the payload lacks a top-level id (the LWW path
+        // would bail at lwwUpdateMetaReducer's missing-id guard). The locally
+        // deleted entity stays deleted; remote UPDATE changes are dropped.
+        // Logged so the consumer's RECREATE_FALLBACK warn (which fires only
+        // from the happy-path partial-baseEntity case above) is not the only
+        // signal a partial-payload producer ran.
+        OpLog.warn(
+          `ConflictResolutionService: Cannot extract base entity from local DELETE for ` +
+            `${remoteOp.entityType}:${remoteOp.entityId}. Falling back: entity stays deleted. ` +
+            `Local DELETE payload keys: ${localDeletePayloadKeys ? JSON.stringify(localDeletePayloadKeys) : 'N/A'}`,
+        );
+      },
     });
+  }
+
+  private _resolvePayloadKey(entityType: EntityType): string {
+    return (
+      getPayloadKeyFromRegistry(this.entityRegistry, entityType) ||
+      entityType.toLowerCase()
+    );
   }
 
   /**
@@ -906,17 +780,7 @@ export class ConflictResolutionService {
     payload: unknown,
     entityType: EntityType,
   ): Record<string, unknown> | undefined {
-    const actionPayload = extractActionPayload(payload);
-    const entityKey = getPayloadKey(entityType) || entityType.toLowerCase();
-    const entity = actionPayload[entityKey];
-    if (entity && typeof entity === 'object') {
-      return entity as Record<string, unknown>;
-    }
-    // Fallback: payload might be the entity itself (LWW Update format)
-    if (actionPayload && typeof actionPayload === 'object' && 'id' in actionPayload) {
-      return actionPayload as Record<string, unknown>;
-    }
-    return undefined;
+    return extractEntityFromPayloadCore(payload, this._resolvePayloadKey(entityType));
   }
 
   /**
@@ -928,18 +792,7 @@ export class ConflictResolutionService {
     payload: unknown,
     entityType: EntityType,
   ): Record<string, unknown> {
-    const actionPayload = extractActionPayload(payload);
-    const entityKey = getPayloadKey(entityType) || entityType.toLowerCase();
-    const entityPayload = actionPayload[entityKey] as Record<string, unknown> | undefined;
-    if (!entityPayload) return {};
-    // NgRx adapter format: { id, changes: {...} }
-    if ('changes' in entityPayload && typeof entityPayload['changes'] === 'object') {
-      return entityPayload['changes'] as Record<string, unknown>;
-    }
-    // Flat format: entire object is the changes (exclude 'id')
-    const changes = { ...entityPayload };
-    delete changes['id'];
-    return changes;
+    return extractUpdateChangesCore(payload, this._resolvePayloadKey(entityType));
   }
 
   /**
@@ -954,7 +807,7 @@ export class ConflictResolutionService {
     entityType: EntityType,
     entityId: string,
   ): Promise<unknown> {
-    const config = getEntityConfig(entityType);
+    const config = getEntityConfigFromRegistry(this.entityRegistry, entityType);
     if (!config) {
       OpLog.warn(
         `ConflictResolutionService: No config for entity type ${entityType}, falling back to remote`,
@@ -965,11 +818,10 @@ export class ConflictResolutionService {
     try {
       // Adapter entities - use selectById
       if (isAdapterEntity(config) && config.selectById) {
-        // Special case: ISSUE_PROVIDER has a factory selector (id, key) => selector
+        // ISSUE_PROVIDER uses the registry's factory selector shape: (id, key) => selector.
         if (entityType === 'ISSUE_PROVIDER') {
-          return await firstValueFrom(
-            this.store.select(selectIssueProviderById(entityId, null)),
-          );
+          const selectById = config.selectById as SelectByIdFactory<null>;
+          return await firstValueFrom(this.store.select(selectById(entityId, null)));
         }
         // Standard props-based selector
         // TYPE ASSERTION: NgRx's MemoizedSelectorWithProps requires exact generic
@@ -1042,11 +894,7 @@ export class ConflictResolutionService {
       hasNoSnapshotClock: boolean;
     },
   ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
-    const entityIdsToCheck = remoteOp.entityIds?.length
-      ? remoteOp.entityIds
-      : remoteOp.entityId
-        ? [remoteOp.entityId]
-        : [];
+    const entityIdsToCheck = getOpEntityIds(remoteOp);
 
     for (const entityId of entityIdsToCheck) {
       const entityKey = toEntityKey(remoteOp.entityType, entityId);
@@ -1170,23 +1018,7 @@ export class ConflictResolutionService {
       snapshotEntityKeys: Set<string> | undefined;
     },
   ): VectorClock {
-    // Use snapshot clock only for entities that existed at snapshot time.
-    // When snapshotEntityKeys is undefined (old format), only use the snapshot
-    // clock if we have an applied frontier for this entity. Without both
-    // snapshotEntityKeys AND appliedFrontier, using the snapshot clock would
-    // inflate the frontier for genuinely NEW entities (never seen locally),
-    // causing their remote ops to be incorrectly discarded as superseded/concurrent.
-    const entityExistedAtSnapshot = ctx.snapshotEntityKeys
-      ? ctx.snapshotEntityKeys.has(entityKey)
-      : ctx.appliedFrontier !== undefined;
-    const fallbackClock = entityExistedAtSnapshot ? ctx.snapshotVectorClock : {};
-    const baselineClock = ctx.appliedFrontier || fallbackClock || {};
-
-    const allClocks = [
-      baselineClock,
-      ...ctx.localOpsForEntity.map((op) => op.vectorClock),
-    ];
-    return allClocks.reduce((acc, clock) => mergeVectorClocks(acc, clock), {});
+    return buildEntityFrontier(entityKey, ctx);
   }
 
   /**
@@ -1216,33 +1048,15 @@ export class ConflictResolutionService {
       localFrontierIsEmpty: boolean;
     },
   ): VectorClockComparison {
-    const entityHasPendingOps = ctx.localOpsForEntity.length > 0;
-    const potentialCorruption =
-      entityHasPendingOps && ctx.hasNoSnapshotClock && ctx.localFrontierIsEmpty;
-
-    if (potentialCorruption) {
-      devError(
-        `Clock corruption detected for entity ${entityKey}: ` +
-          `has ${ctx.localOpsForEntity.length} pending ops but no snapshot clock and empty local frontier`,
-      );
-    }
-
-    if (potentialCorruption && comparison === VectorClockComparison.LESS_THAN) {
-      OpLog.warn(
-        `ConflictResolutionService: Converting LESS_THAN to CONCURRENT for entity ${entityKey} due to potential clock corruption`,
-      );
-      return VectorClockComparison.CONCURRENT;
-    }
-
-    if (potentialCorruption && comparison === VectorClockComparison.GREATER_THAN) {
-      OpLog.warn(
-        `ConflictResolutionService: Converting GREATER_THAN to CONCURRENT for entity ${entityKey} due to potential clock corruption. ` +
-          `Remote op will be processed via conflict resolution instead of being skipped.`,
-      );
-      return VectorClockComparison.CONCURRENT;
-    }
-
-    return comparison;
+    return adjustForClockCorruptionCore({
+      comparison,
+      entityKey,
+      pendingOpsCount: ctx.localOpsForEntity.length,
+      hasNoSnapshotClock: ctx.hasNoSnapshotClock,
+      localFrontierIsEmpty: ctx.localFrontierIsEmpty,
+      logger: this.syncLogger,
+      onPotentialCorruption: devError,
+    }) as VectorClockComparison;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1264,43 +1078,7 @@ export class ConflictResolutionService {
     localOps: Operation[],
     remoteOps: Operation[],
   ): 'local' | 'remote' | 'manual' {
-    // Edge case: no ops on one side = clear winner
-    if (localOps.length === 0) return 'remote';
-    if (remoteOps.length === 0) return 'local';
-
-    const latestLocal = Math.max(...localOps.map((op) => op.timestamp));
-    const latestRemote = Math.max(...remoteOps.map((op) => op.timestamp));
-    const timeDiffMs = Math.abs(latestLocal - latestRemote);
-
-    // Heuristic 1: Large time gap (>1 hour) = newer wins
-    // Rationale: User likely made changes in sequence, not concurrently
-    const ONE_HOUR_MS = 60 * 60 * 1000;
-    if (timeDiffMs > ONE_HOUR_MS) {
-      return latestLocal > latestRemote ? 'local' : 'remote';
-    }
-
-    // Heuristic 2: Delete conflicts
-    const hasLocalDelete = localOps.some((op) => op.opType === OpType.Delete);
-    const hasRemoteDelete = remoteOps.some((op) => op.opType === OpType.Delete);
-
-    // Heuristic 2a: Both delete - auto-resolve (outcome is identical either way)
-    // Rationale: Both clients want the entity deleted, no conflict to resolve
-    if (hasLocalDelete && hasRemoteDelete) return 'local';
-
-    // Heuristic 2b: Delete vs Update - prefer Update (preserve data)
-    // Rationale: Users generally prefer not to lose work
-    if (hasLocalDelete && !hasRemoteDelete) return 'remote';
-    if (hasRemoteDelete && !hasLocalDelete) return 'local';
-
-    // Heuristic 3: Create vs anything else - Create wins
-    // Rationale: If one side created entity, that's more significant
-    const hasLocalCreate = localOps.some((op) => op.opType === OpType.Create);
-    const hasRemoteCreate = remoteOps.some((op) => op.opType === OpType.Create);
-    if (hasLocalCreate && !hasRemoteCreate) return 'local';
-    if (hasRemoteCreate && !hasLocalCreate) return 'remote';
-
-    // Default: manual - let user decide
-    return 'manual';
+    return suggestConflictResolution(localOps, remoteOps);
   }
 
   /**

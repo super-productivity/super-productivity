@@ -20,6 +20,14 @@ const execAsync = promisify(exec);
 
 const LOG_DIR = path.join(process.cwd(), 'monitoring-reports');
 
+// When invoked via docker-monitor.sh, this runs as compiled JS from dist/.
+// When invoked via `npm run monitor:all`, this runs as TypeScript via tsx.
+const isCompiled = __filename.includes(`${path.sep}dist${path.sep}`);
+const cmd = (script: string, args: string): string =>
+  isCompiled
+    ? `node dist/scripts/${script}.js ${args}`
+    : `tsx scripts/${script}.ts ${args}`;
+
 interface MonitoringCommand {
   name: string;
   command: string;
@@ -38,57 +46,57 @@ const getMonitoringCommands = (userId?: number): MonitoringCommand[] => {
     // System Health
     {
       name: 'System Stats',
-      command: 'tsx scripts/monitor.ts stats',
+      command: cmd('monitor', 'stats'),
       description: 'System vitals, DB connection, disk space',
     },
     {
       name: 'Active Users',
-      command: 'tsx scripts/monitor.ts active-users',
+      command: cmd('monitor', 'active-users'),
       description: 'Active user counts and recent activity',
       skipInQuick: true,
     },
     {
       name: 'User Storage',
-      command: 'tsx scripts/monitor.ts usage',
+      command: cmd('monitor', 'usage'),
       description: 'Top 20 users by storage usage',
     },
     {
       name: 'Recent Operations',
-      command: `tsx scripts/monitor.ts ops ${userFlag}`,
+      command: cmd('monitor', `ops ${userFlag}`),
       description: 'Recent operations analysis',
     },
 
     // Storage Analysis - Quick checks
     {
       name: 'Operation Size Distribution',
-      command: `tsx scripts/analyze-storage.ts operation-sizes ${userFlag}`,
+      command: cmd('analyze-storage', `operation-sizes ${userFlag}`),
       description: 'Analyze operation size patterns',
     },
     {
       name: 'Operation Types Breakdown',
-      command: `tsx scripts/analyze-storage.ts operation-types ${userFlag}`,
+      command: cmd('analyze-storage', `operation-types ${userFlag}`),
       description: 'Breakdown by operation and entity types',
     },
     {
       name: 'Largest Operations',
-      command: 'tsx scripts/analyze-storage.ts large-ops --limit 20',
+      command: cmd('analyze-storage', 'large-ops --limit 20'),
       description: 'Find and analyze largest operations',
     },
     {
       name: 'Rapid Fire Detection',
-      command: 'tsx scripts/analyze-storage.ts rapid-fire --threshold 5',
+      command: cmd('analyze-storage', 'rapid-fire --threshold 5'),
       description: 'Detect potential sync loops',
     },
     {
       name: 'Snapshot Analysis',
-      command: 'tsx scripts/analyze-storage.ts snapshot-analysis',
+      command: cmd('analyze-storage', 'snapshot-analysis'),
       description: 'Analyze snapshot usage patterns',
     },
 
     // Deep Analysis (skip in quick mode)
     {
       name: 'Operation Timeline',
-      command: `tsx scripts/analyze-storage.ts operation-timeline ${userFlag}`,
+      command: cmd('analyze-storage', `operation-timeline ${userFlag}`),
       description: 'Temporal patterns and trends',
       skipInQuick: true,
     },

@@ -8,11 +8,21 @@ export interface PluginSearchResult {
   url?: string;
   status?: string;
   assignee?: string;
+  /** Labels/tags used by tagIds field mappings during initial import */
+  labels?: string[];
   /** Event start timestamp (ms) - required for agenda view */
   start?: number;
   /** Precise due-with-time timestamp (ms) for timed events. When set, the task is
    *  created with dueWithTime instead of dueDay on initial import. */
   dueWithTime?: number;
+  /** Event duration in milliseconds - used for calendar display */
+  duration?: number;
+  /** True if this is an all-day event */
+  isAllDay?: boolean;
+  /** Event description / body text */
+  description?: string;
+  /** Provider-specific fields used by issue display and field mappings */
+  [key: string]: unknown;
 }
 
 export interface PluginIssue {
@@ -56,7 +66,19 @@ export interface PluginCommentsConfig {
 export type PluginSyncDirection = 'off' | 'pullOnly' | 'pushOnly' | 'both';
 
 export interface PluginFieldMapping {
-  taskField: 'isDone' | 'title' | 'notes' | 'dueDay' | 'dueWithTime' | 'timeEstimate';
+  /**
+   * `tagIds` maps Super Productivity tags by title/label, not by internal tag id:
+   * - `toIssueValue` receives a sorted string[] of local tag titles.
+   * - `toTaskValue` must return a string[] of tag titles/labels to match or create locally.
+   */
+  taskField:
+    | 'isDone'
+    | 'title'
+    | 'notes'
+    | 'dueDay'
+    | 'dueWithTime'
+    | 'timeEstimate'
+    | 'tagIds';
   issueField: string;
   defaultDirection: PluginSyncDirection;
   /** Task fields to clear when this field is set (e.g. dueWithTime and dueDay are mutually exclusive) */
@@ -79,6 +101,7 @@ export interface PluginFormField {
     | 'textarea'
     | 'checkbox'
     | 'select'
+    | 'multiSelect'
     | 'link'
     | 'oauthButton';
   label: string;
@@ -92,6 +115,8 @@ export interface PluginFormField {
   pattern?: string;
   /** Place this field in the collapsible "Advanced Config" section */
   advanced?: boolean;
+  /** Only show this field when the specified config key is truthy */
+  showIf?: string;
   /** For type 'oauthButton': OAuth flow configuration */
   oauthConfig?: OAuthFlowConfig;
   /** For type 'select': dynamically load options at runtime (e.g. after OAuth) */
@@ -105,6 +130,8 @@ export interface PluginHttpOptions {
   params?: Record<string, string>;
   headers?: Record<string, string>;
   timeout?: number;
+  /** Response type — 'json' (default) or 'text' for XML/iCal responses */
+  responseType?: 'json' | 'text';
 }
 
 export interface PluginHttp {
@@ -113,6 +140,13 @@ export interface PluginHttp {
   put<T = unknown>(url: string, body: unknown, options?: PluginHttpOptions): Promise<T>;
   patch<T = unknown>(url: string, body: unknown, options?: PluginHttpOptions): Promise<T>;
   delete<T = unknown>(url: string, options?: PluginHttpOptions): Promise<T>;
+  /** Send a request with an arbitrary HTTP method (e.g. PROPFIND, REPORT) */
+  request<T = unknown>(
+    method: string,
+    url: string,
+    body?: unknown,
+    options?: PluginHttpOptions,
+  ): Promise<T>;
 }
 
 export interface IssueProviderPluginDefinition {
@@ -158,6 +192,28 @@ export interface IssueProviderPluginDefinition {
   ): Promise<void>;
   /** Issue states that indicate the issue was deleted remotely (e.g. ['cancelled'] for Google Calendar) */
   deletedStates?: string[];
+  /** Optional time-block integration. Plugins that implement this allow SP tasks
+   *  to automatically create/update/delete calendar events when scheduled to a specific time. */
+  timeBlock?: {
+    /** Create or update a time-block event for the given task. */
+    upsertEvent(
+      taskId: string,
+      eventData: {
+        title: string;
+        dueWithTime: number;
+        durationMs: number;
+        isDone: boolean;
+      },
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void>;
+    /** Delete the time-block event for the given task. */
+    deleteEvent(
+      taskId: string,
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void>;
+  };
 }
 
 export interface IssueProviderManifestConfig {
@@ -174,4 +230,7 @@ export interface IssueProviderManifestConfig {
   /** Custom issue provider key for migrated built-in providers (e.g. 'GITHUB').
    * When set, the plugin registers under this key instead of 'plugin:<pluginId>'. */
   issueProviderKey?: string;
+  /** Allow requests to private/local network addresses (e.g. for self-hosted CalDAV).
+   * Default is false — SSRF protections block private IPs and localhost. */
+  allowPrivateNetwork?: boolean;
 }

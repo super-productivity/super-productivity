@@ -80,8 +80,12 @@ describe('TaskService', () => {
       },
     );
 
-    const dateServiceSpy = jasmine.createSpyObj('DateService', ['todayStr']);
+    const dateServiceSpy = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
     dateServiceSpy.todayStr.and.returnValue('2026-01-05');
+    dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(0);
 
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
@@ -275,6 +279,16 @@ describe('TaskService', () => {
 
       expect(action.task.notes).toBe('Test notes');
     });
+
+    it('should include auto-plan context when adding a task with a deadline today', () => {
+      service.add('New Task', false, { deadlineDay: '2026-01-05' });
+
+      const dispatchCall = (store.dispatch as jasmine.Spy).calls.mostRecent();
+      const action = dispatchCall.args[0] as ReturnType<typeof TaskSharedActions.addTask>;
+
+      expect(action.autoPlanToday).toBe('2026-01-05');
+      expect(action.autoPlanStartOfNextDayDiffMs).toBe(0);
+    });
   });
 
   describe('addToToday', () => {
@@ -284,7 +298,11 @@ describe('TaskService', () => {
       service.addToToday(task);
 
       expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.planTasksForToday({ taskIds: ['task-1'] }),
+        TaskSharedActions.planTasksForToday({
+          taskIds: ['task-1'],
+          today: '2026-01-05',
+          startOfNextDayDiffMs: 0,
+        }),
       );
     });
   });
@@ -469,6 +487,19 @@ describe('TaskService', () => {
       expect(store.dispatch).not.toHaveBeenCalledWith(
         jasmine.objectContaining({ type: TaskSharedActions.moveToArchive.type }),
       );
+    });
+
+    it('should delegate malformed-task filtering to archive.service', async () => {
+      // Sanitization lives in archive.service (sanitizeTasksForArchiving) so the
+      // same rules apply to both moveTasksToArchiveAndFlushArchiveIfDue and
+      // writeTasksToArchiveForRemoteSync. task.service is a pass-through here.
+      const invalidTask = { title: 'Broken task', subTasks: [] } as any;
+
+      await service.moveToArchive([invalidTask]);
+
+      expect(archiveService.moveTasksToArchiveAndFlushArchiveIfDue).toHaveBeenCalledWith([
+        invalidTask,
+      ]);
     });
   });
 
@@ -906,4 +937,60 @@ describe('TaskService', () => {
 
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
+
+  describe('focusTaskById', () => {
+    let created: HTMLElement[];
+
+    const addTaskEl = (id: string, focusable: boolean): HTMLElement => {
+      const el = document.createElement('div');
+      el.id = `t-${id}`;
+      if (focusable) {
+        el.tabIndex = 0;
+      } else {
+        // display:none mirrors a copy inside a collapsed expansion panel: in the
+        // DOM (matched by querySelectorAll) but unable to receive focus.
+        el.style.display = 'none';
+      }
+      document.body.appendChild(el);
+      created.push(el);
+      return el;
+    };
+
+    beforeEach(() => {
+      created = [];
+      // Run the double requestAnimationFrame synchronously.
+      spyOn(window, 'requestAnimationFrame').and.callFake(
+        (cb: FrameRequestCallback): number => {
+          cb(0);
+          return 0;
+        },
+      );
+    });
+
+    afterEach(() => created.forEach((el) => el.remove()));
+
+    it('focuses the last copy when it is focusable (in-panel preference, #7120)', () => {
+      addTaskEl('X', true);
+      const last = addTaskEl('X', true);
+
+      service.focusTaskById('X', false);
+
+      expect(document.activeElement).toBe(last);
+    });
+
+    it('falls back to an earlier copy when the last one cannot take focus', () => {
+      const visible = addTaskEl('X', true);
+      addTaskEl('X', false); // collapsed/hidden in-panel copy, last in DOM
+
+      service.focusTaskById('X', false);
+
+      expect(document.activeElement).toBe(visible);
+    });
+
+    it('does nothing when no element matches', () => {
+      const active = document.activeElement;
+      service.focusTaskById('missing', false);
+      expect(document.activeElement).toBe(active);
+    });
+  });
 });

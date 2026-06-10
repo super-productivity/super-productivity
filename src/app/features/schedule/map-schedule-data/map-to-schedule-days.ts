@@ -81,6 +81,8 @@ export const mapToScheduleDays = (
     workStartEndCfg,
     lunchBreakCfg,
     now,
+    undefined,
+    realNow,
   );
 
   const v = createScheduleDays(

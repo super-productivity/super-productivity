@@ -12,6 +12,15 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     // Wait for task to be visible
     const firstTask = page.locator('task').first();
     await expect(firstTask).toBeVisible();
+
+    // Start tracking the task so the focus-mode play button is enabled.
+    // Focus mode now requires a current task — sync between focus session
+    // and tracking is always on.
+    await firstTask.hover();
+    const taskPlayBtn = page.locator('.play-btn.tour-playBtn').first();
+    await taskPlayBtn.waitFor({ state: 'visible' });
+    await taskPlayBtn.click();
+    await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });
   });
 
   // NOTE: Pause/resume break functionality is NOT tested in E2E because:
@@ -181,11 +190,12 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     // Skip the break
     await skipBreakButton.click();
 
-    // Verify we're back on main screen and session auto-started
-    // (mode selector should NOT be visible because we're in progress)
+    // Verify we're back on main screen and session auto-started.
+    // The mode selector is hidden during any active session (Preparation only).
     await expect(focusModeMain).toBeVisible({ timeout: 5000 });
-    await expect(modeSelector).not.toBeVisible();
+    await expect(focusModeBreak).not.toBeVisible();
     await expect(completeSessionButton).toBeVisible();
+    await expect(modeSelector).not.toBeVisible();
   });
 
   test('Back to Planning should NOT auto-start next session', async ({ page }) => {

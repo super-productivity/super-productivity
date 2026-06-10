@@ -35,7 +35,10 @@ import {
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
+import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
+import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
+import { isPathSafeToOpen } from '../../../../../electron/shared-with-frontend/is-external-url-allowed';
 
 @Component({
   selector: 'note',
@@ -55,6 +58,7 @@ import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-i
     MatMenuItem,
     AsyncPipe,
     TranslatePipe,
+    RenderLinksPipe,
   ],
 })
 export class NoteComponent implements OnChanges {
@@ -66,10 +70,16 @@ export class NoteComponent implements OnChanges {
 
   note!: Note;
 
+  // The <img> src auto-loads on render (no click), so a synced remote file:// /
+  // UNC imgUrl would silently leak the user's NTLM hash. Only a safe URL reaches
+  // the [src]/[enlargeImg] bindings. See GHSA-hr87-735w-hfq3.
+  safeImgUrl?: string;
+
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input('note') set noteSet(v: Note) {
     this.note = v;
+    this.safeImgUrl = isPathSafeToOpen(v?.imgUrl) ? v.imgUrl : undefined;
     this._note$.next(v);
     this._updateNoteTxt();
   }
@@ -84,6 +94,7 @@ export class NoteComponent implements OnChanges {
   resolvedShortenedContent = signal<string>('');
 
   T: typeof T = T;
+  readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   projectTag$: Observable<TagComponentTag | null> =
     this._workContextService.activeWorkContextTypeAndId$.pipe(
@@ -100,7 +111,7 @@ export class NoteComponent implements OnChanges {
                           ? {
                               ...project,
                               color: project.theme?.primary || DEFAULT_PROJECT_COLOR,
-                              icon: 'list',
+                              icon: project.icon || DEFAULT_PROJECT_ICON,
                               theme: {
                                 primary: project.theme?.primary || DEFAULT_PROJECT_COLOR,
                               },

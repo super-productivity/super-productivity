@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'"
+    />
+    <title>Redirecting to Super Productivity…</title>
+  </head>
+  <body>
+    <p>Redirecting to Super Productivity…</p>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var query = params.toString();
+        var deepLink = 'com.super-productivity.app://plugin-oauth-callback';
+        if (query) {
+          deepLink += '?' + query;
+        }
+        window.location.replace(deepLink);
+      })();
+    </script>
+  </body>
+</html>

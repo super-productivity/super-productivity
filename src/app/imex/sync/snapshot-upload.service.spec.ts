@@ -7,21 +7,28 @@ import { CLIENT_ID_PROVIDER } from '../../op-log/util/client-id.provider';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import {
   OperationSyncCapable,
-  SyncProviderServiceInterface,
+  SyncProviderBase,
 } from '../../op-log/sync-providers/provider.interface';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
-import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
+import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
+import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 
 describe('SnapshotUploadService', () => {
   let service: SnapshotUploadService;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
-  let mockClientIdProvider: { loadClientId: jasmine.Spy };
+  let mockClientIdProvider: {
+    loadClientId: jasmine.Spy;
+    getOrGenerateClientId: jasmine.Spy;
+  };
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockSyncProvider: jasmine.SpyObj<
-    SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
+    SyncProviderBase<SyncProviderId> & OperationSyncCapable
   >;
+  let originalCryptoSubtleDescriptor: PropertyDescriptor | undefined;
+  let originalCryptoSubtle: SubtleCrypto | undefined;
 
   const mockExistingCfg: SuperSyncPrivateCfg = {
     baseUrl: 'https://test.example.com',
@@ -31,6 +38,12 @@ describe('SnapshotUploadService', () => {
   };
 
   beforeEach(() => {
+    originalCryptoSubtle = globalThis.crypto.subtle;
+    originalCryptoSubtleDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis.crypto,
+      'subtle',
+    );
+
     mockSyncProvider = jasmine.createSpyObj('SyncProvider', [
       'uploadSnapshot',
       'setLastServerSeq',
@@ -42,8 +55,9 @@ describe('SnapshotUploadService', () => {
     mockSyncProvider.privateCfg = {
       load: jasmine.createSpy('load').and.resolveTo(mockExistingCfg),
     } as any;
-    // Mark as operation-sync capable (isOperationSyncCapable checks for this property)
-    (mockSyncProvider as any).supportsOperationSync = true;
+    // Mark as operation-sync capable (isOperationSyncCapable checks for these properties)
+    mockSyncProvider.supportsOperationSync = true;
+    mockSyncProvider.providerMode = 'superSyncOps';
     mockSyncProvider.deleteAllData.and.resolveTo({ success: true });
     mockSyncProvider.uploadSnapshot.and.resolveTo({
       accepted: true,
@@ -70,6 +84,9 @@ describe('SnapshotUploadService', () => {
 
     mockClientIdProvider = {
       loadClientId: jasmine.createSpy('loadClientId').and.resolveTo('test-client-id'),
+      getOrGenerateClientId: jasmine
+        .createSpy('getOrGenerateClientId')
+        .and.resolveTo('test-client-id'),
     };
 
     mockEncryptionService = jasmine.createSpyObj('OperationEncryptionService', [
@@ -90,6 +107,34 @@ describe('SnapshotUploadService', () => {
 
     service = TestBed.inject(SnapshotUploadService);
   });
+
+  afterEach(() => {
+    if (originalCryptoSubtleDescriptor) {
+      Object.defineProperty(globalThis.crypto, 'subtle', originalCryptoSubtleDescriptor);
+    } else {
+      Object.defineProperty(globalThis.crypto, 'subtle', {
+        value: originalCryptoSubtle,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
+  const setCryptoSubtle = (subtle: SubtleCrypto | undefined): void => {
+    Object.defineProperty(globalThis.crypto, 'subtle', {
+      value: subtle,
+      writable: true,
+      configurable: true,
+    });
+  };
+
+  const mockCryptoSubtleAvailable = (): void => {
+    setCryptoSubtle({} as SubtleCrypto);
+  };
+
+  const mockCryptoSubtleUnavailable = (): void => {
+    setCryptoSubtle(undefined);
+  };
 
   describe('getValidatedSuperSyncProvider', () => {
     it('should return the provider when valid', () => {
@@ -112,7 +157,7 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should throw when provider is not operation-sync capable', () => {
-      (mockSyncProvider as any).supportsOperationSync = false;
+      mockSyncProvider.supportsOperationSync = false;
       expect(() => service.getValidatedSuperSyncProvider()).toThrowError(
         /does not support operation sync/,
       );
@@ -138,11 +183,38 @@ describe('SnapshotUploadService', () => {
       expect(result.existingCfg).toEqual({ encryptKey: 'test' } as any);
     });
 
-    it('should throw when client ID is not available', async () => {
-      mockClientIdProvider.loadClientId.and.resolveTo(null);
-      await expectAsync(service.gatherSnapshotData()).toBeRejectedWithError(
-        'Client ID not available',
-      );
+    it('should strip local-only sync settings from gathered snapshot state', async () => {
+      const mockState = {
+        globalConfig: {
+          ...DEFAULT_GLOBAL_CONFIG,
+          sync: {
+            ...DEFAULT_GLOBAL_CONFIG.sync,
+            syncProvider: SyncProviderId.WebDAV,
+            syncInterval: 300000,
+            isManualSyncOnly: true,
+            isCompressionEnabled: true,
+          },
+        },
+      };
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
+
+      const result = await service.gatherSnapshotData();
+      const globalConfig = result.state.globalConfig as Record<string, unknown>;
+      const sync = globalConfig['sync'] as Record<string, unknown>;
+
+      expect(sync['syncProvider']).toBeNull();
+      expect(sync['syncInterval']).toBeUndefined();
+      expect(sync['isManualSyncOnly']).toBeUndefined();
+      expect(sync['isCompressionEnabled']).toBe(true);
+    });
+
+    it('should regenerate client ID when getOrGenerateClientId is used', async () => {
+      mockClientIdProvider.getOrGenerateClientId.and.resolveTo('B_regen');
+
+      const result = await service.gatherSnapshotData();
+
+      expect(mockClientIdProvider.getOrGenerateClientId).toHaveBeenCalled();
+      expect(result.clientId).toBe('B_regen');
     });
   });
 
@@ -228,6 +300,7 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should encrypt payload when enabling encryption', async () => {
+      mockCryptoSubtleAvailable();
       const mockState = { task: [] };
       mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
 
@@ -264,6 +337,8 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should update provider config with new encryption settings', async () => {
+      mockCryptoSubtleAvailable();
+
       await service.deleteAndReuploadWithNewEncryption({
         encryptKey: 'new-key',
         isEncryptionEnabled: true,
@@ -382,6 +457,7 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should execute steps in correct order', async () => {
+      mockCryptoSubtleAvailable();
       const callOrder: string[] = [];
 
       mockStateSnapshotService.getStateSnapshotAsync.and.callFake(async () => {
@@ -426,6 +502,23 @@ describe('SnapshotUploadService', () => {
         'uploadSnapshot',
         'setLastServerSeq',
       ]);
+    });
+
+    it('should throw before destructive actions when enabling encryption without WebCrypto', async () => {
+      mockCryptoSubtleUnavailable();
+
+      await expectAsync(
+        service.deleteAndReuploadWithNewEncryption({
+          encryptKey: 'key',
+          isEncryptionEnabled: true,
+          logPrefix: 'TestPrefix',
+        }),
+      ).toBeRejectedWithError(WebCryptoNotAvailableError);
+
+      expect(mockStateSnapshotService.getStateSnapshotAsync).not.toHaveBeenCalled();
+      expect(mockSyncProvider.deleteAllData).not.toHaveBeenCalled();
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
+      expect(mockSyncProvider.uploadSnapshot).not.toHaveBeenCalled();
     });
   });
 });

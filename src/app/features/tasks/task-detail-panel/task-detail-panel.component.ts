@@ -47,14 +47,19 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { devError } from '../../../util/dev-error';
 import { IS_MOBILE } from '../../../util/is-mobile';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
+import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
 import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
+import { IssueLog } from '../../../core/log';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
 import { TaskListComponent } from '../task-list/task-list.component';
@@ -78,7 +83,11 @@ import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-ov
 import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checklist';
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
+import { clipboardHasText } from '../../../util/clipboard-has-text';
 import { checkKeyCombo } from '../../../util/check-key-combo';
+import { IS_MAC } from '../../../util/is-mac';
+import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
+import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
 
 @Component({
   selector: 'task-detail-panel',
@@ -90,6 +99,8 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
     TaskTitleComponent,
     TaskDetailItemComponent,
     MatIcon,
+    MatIconButton,
+    MatTooltip,
     TaskListComponent,
     MatButton,
     ProgressBarComponent,
@@ -113,6 +124,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   taskService = inject(TaskService);
   layoutService = inject(LayoutService);
 
+  private _clipboardImageService = inject(ClipboardImageService);
   private _globalConfigService = inject(GlobalConfigService);
   private _issueService = inject(IssueService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
@@ -130,12 +142,16 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   // View children
   itemEls = viewChildren(TaskDetailItemComponent);
   attachmentPanelElRef = viewChild<TaskDetailItemComponent>('attachmentPanelElRef');
+  noteWrapperElRef = viewChild<TaskDetailItemComponent>('noteWrapperElRef');
 
   // Constants
   IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
   ShowSubTasksMode = HideSubTasksMode;
   T = T;
   ICAL_TYPE = ICAL_TYPE;
+  pasteImageHintKey = IS_MAC
+    ? T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT_MAC
+    : T.F.TASK.ADDITIONAL_INFO.PASTE_IMAGE_HINT;
 
   // Panel state signals grouped together
   panelState = {
@@ -148,6 +164,12 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   // Observable conversions
   private _task$ = toObservable(this.task);
+  private _taskDetailTargetPanel = toSignal(
+    this.taskService.taskDetailPanelTargetPanel$,
+    {
+      initialValue: null,
+    },
+  );
 
   @HostListener('keydown', ['$event'])
   onKeydown(ev: KeyboardEvent): void {
@@ -159,7 +181,18 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     if (!cfg) throw new Error('No config service available');
 
     const keys = cfg.keyboard;
-    if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) this.collapseParent();
+    if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) {
+      this.collapseParent();
+    } else if (checkKeyCombo(ev, keys.taskAddSubTask)) {
+      // Opening the panel auto-focuses a detail item, so focus is inside the
+      // panel rather than on a <task> row. The global task-shortcut handler
+      // can't resolve a focused task in that state and drops the shortcut, so
+      // handle add-subtask here. stopPropagation prevents the document-level
+      // handler from adding a second subtask when focus is on an in-panel row.
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.addSubTask();
+    }
   }
 
   // Parent task data
@@ -195,6 +228,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
           repeatCfg,
           this._dateTimeFormatService.currentLocale(),
           this._dateTimeFormatService,
+          this._translateService,
         );
         return this._translateService.instant(key, params);
       }),
@@ -257,6 +291,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     return tasks?.notesTemplate || '';
   });
 
+  // True only for the app's generic stock template (not a user-customized one).
+  // Used to let the checklist button replace the shown default text with a fresh
+  // checklist; customized templates are treated as real content and preserved.
+  isStockNotesTemplate = computed(
+    () => this.defaultTaskNotes() === DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate,
+  );
+
   // Local attachments computed signal
   localAttachments = computed(() => {
     return this.task().attachments || [];
@@ -268,6 +309,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   });
 
   isExpandedNotesPanel = computed(() => {
+    if (this._taskDetailTargetPanel() === TaskDetailTargetPanel.Notes) {
+      return true;
+    }
+
     const task = this.task();
     return IS_MOBILE
       ? this.isMarkdownChecklist()
@@ -377,9 +422,17 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
           distinctUntilChanged(),
           switchMap((issueProviderId) =>
             issueProviderId
-              ? this._store.select(
-                  selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
-                )
+              ? this._store
+                  .select(
+                    selectIssueProviderById<IssueProviderJira>(issueProviderId, 'JIRA'),
+                  )
+                  .pipe(
+                    // Orphan issueProviderId — see #7135.
+                    catchError((err: unknown) => {
+                      IssueLog.warn('Jira header setup skipped', err);
+                      return of(null);
+                    }),
+                  )
               : of(null),
           ),
           takeUntilDestroyed(this._destroyRef),
@@ -431,6 +484,41 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     this.panelState.isDragOver.set(false);
   }
 
+  @HostListener('paste', ['$event']) async onPaste(ev: ClipboardEvent): Promise<void> {
+    // Let existing textarea/input/contenteditable paste handlers work normally
+    const target = ev.target as HTMLElement;
+    if (isInputElement(target)) {
+      return;
+    }
+
+    // Prioritize text over images (e.g. OneNote puts both on the clipboard).
+    // Otherwise a text paste would be silently turned into an image attachment.
+    if (clipboardHasText(ev.clipboardData)) {
+      return;
+    }
+
+    const progress = this._clipboardImageService.handlePasteWithProgress(ev);
+    if (!progress) return;
+
+    ev.preventDefault();
+    try {
+      const result = await progress.resultPromise;
+      if (result.success && result.imageUrl) {
+        this.attachmentService.addAttachment(this.task().id, {
+          id: null,
+          type: 'IMG',
+          path: result.imageUrl,
+          title: this._translateService.instant(
+            T.F.TASK.ADDITIONAL_INFO.PASTED_IMAGE_TITLE,
+          ),
+          icon: DropPasteIcons.IMG,
+        });
+      }
+    } catch (err) {
+      Log.err('[CLIPBOARD] Paste attachment failed:', err);
+    }
+  }
+
   @HostListener('window:popstate') onBack(): void {
     this.collapseParent();
   }
@@ -451,6 +539,15 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
               this._focusFirst();
             } else {
               this.focusItem(attachmentPanelElRef);
+            }
+          } else if (v === TaskDetailTargetPanel.Notes) {
+            const noteWrapperElRef = this.noteWrapperElRef();
+            this.panelState.isFocusNotes.set(true);
+            if (!noteWrapperElRef) {
+              devError('this.noteWrapperElRef not ready');
+              this._focusFirst();
+            } else {
+              this.focusItem(noteWrapperElRef);
             }
           } else {
             this._focusFirst();
@@ -496,6 +593,11 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
+  removeDeadline(ev: Event): void {
+    ev.stopPropagation();
+    this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task().id }));
+  }
+
   editTaskRepeatCfg(): void {
     this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
       restoreFocus: true,
@@ -523,6 +625,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   addSubTask(): void {
     const task = this.task();
+    // focusTaskById (called by addSubTaskTo) focuses the new sub-task's title
+    // for editing, falling back to the focusable copy when the in-panel one is
+    // inside the collapsed sub-task section.
     this.taskService.addSubTaskTo(task.parentId || task.id);
   }
 
@@ -581,8 +686,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   focusItem(cmpInstance: TaskDetailItemComponent, timeoutDuration: number = 150): void {
-    window.clearTimeout(this._focusTimeout);
-    this._focusTimeout = window.setTimeout(() => {
+    this._scheduleTaskGuardedFocus(timeoutDuration, () => {
       const itemEls = this.itemEls();
       if (!itemEls) {
         throw new Error();
@@ -595,7 +699,24 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         this.panelState.selectedItemIndex.set(i);
         cmpInstance.elementRef.nativeElement.focus();
       }
-    }, timeoutDuration);
+    });
+  }
+
+  /**
+   * Schedules a deferred focus action, but only runs it if the panel still
+   * shows the same task when the timer fires. A focus scheduled for one task
+   * (e.g. the auto-focus on panel open) must not steal focus once the user has
+   * navigated the list to a different task (#6578). Capturing the id at
+   * schedule time — not at fire time — is what makes a late timer a no-op.
+   */
+  private _scheduleTaskGuardedFocus(delayMs: number, focusFn: () => void): void {
+    window.clearTimeout(this._focusTimeout);
+    const scheduledForTaskId = this.task().id;
+    this._focusTimeout = window.setTimeout(() => {
+      if (this.task().id === scheduledForTaskId) {
+        focusFn();
+      }
+    }, delayMs);
   }
 
   updateTaskTitleIfChanged(isChanged: boolean, newTitle: string): void {
@@ -605,7 +726,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   private _focusFirst(): void {
-    this._focusTimeout = window.setTimeout(() => {
+    this._scheduleTaskGuardedFocus(150, () => {
       const itemEls = this.itemEls();
       if (!itemEls) {
         throw new Error('No items found');
@@ -613,6 +734,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       if (itemEls.length && itemEls[0]) {
         this.focusItem(itemEls[0], 0);
       }
-    }, 150);
+    });
   }
 }

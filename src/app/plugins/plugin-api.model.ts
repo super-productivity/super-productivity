@@ -5,6 +5,7 @@ export {
   PluginBaseCfg,
   DialogButtonCfg,
   DialogCfg,
+  DialogResult,
   NotifyCfg,
   PluginManifest,
   PluginHookHandler,
@@ -17,6 +18,9 @@ export {
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginSidePanelBtnCfg,
+  PluginWorkContextHeaderBtnCfg,
+  ActiveWorkContext,
+  WorkContextChangePayload,
   // Export the new unified types
   Task,
   Project,

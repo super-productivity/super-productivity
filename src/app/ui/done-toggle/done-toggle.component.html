@@ -3,21 +3,17 @@
   viewBox="0 0 24 24"
   fill="none"
 >
-  <!-- Background circle (always visible) -->
-  <circle
-    class="done-circle"
-    cx="12"
-    cy="12"
-    r="10"
+  <!-- Background shape (always visible) -->
+  <rect
+    class="done-shape"
+    x="2.5"
+    y="2.5"
+    width="19"
+    height="19"
+    rx="5.5"
+    ry="5.5"
   />
   @if (isCurrent() && !isDone() && !showDoneAnimation()) {
-    <!-- Progress ring (only rendered for current task) -->
-    <circle
-      class="progress-ring"
-      cx="12"
-      cy="12"
-      r="10"
-    />
     <!-- Play triangle (only rendered for current task) -->
     <polygon
       class="play-indicator"

@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   inject,
   input,
@@ -11,17 +12,18 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { DomSanitizer, SafeStyle } from '@angular/platform-browser';
 import { LanguageService } from '../../core/language/language.service';
-import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { isTouchActive } from '../../util/input-intent';
 import { NavigationEnd, NavigationStart, Router } from '@angular/router';
 import { filter, map, startWith, switchMap } from 'rxjs/operators';
 import { of, Subscription, timer } from 'rxjs';
 import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { CssString, StyleObject, StyleObjectToString } from '../../util/styles';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { Log } from '../../core/log';
 import { readNumberLSBounded } from '../../util/ls-util';
 import { MatIconModule } from '@angular/material/icon';
 import { MatRippleModule } from '@angular/material/core';
@@ -86,6 +88,8 @@ const clampWidth = (width: number, maxWidth: number | string): number => {
     '[class.resizing]': 'isResizing()',
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '[class.windowResizing]': 'isWindowResizing()',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '[class.isPanelAnimating]': 'isPanelAnimating()',
   },
   standalone: true,
 })
@@ -98,6 +102,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   private _store = inject(Store);
   private _bottomPanelState = inject(BottomPanelStateService);
   private _panelContentService = inject(PanelContentService);
+  private _destroyRef = inject(DestroyRef);
 
   readonly sideWidth = input<number>(40);
   readonly wasClosed = output<void>();
@@ -146,6 +151,9 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   readonly currentWidth = signal<number>(RIGHT_PANEL_CONFIG.DEFAULT_WIDTH);
   readonly isResizing = signal(false);
   readonly isWindowResizing = signal(false);
+  // True only while the slide-in/out animation runs; clips the transient
+  // width-vs-min-width overflow of the panel content (see component scss).
+  readonly isPanelAnimating = signal(false);
   private readonly _startX = signal(0);
   private readonly _startWidth = signal(0);
 
@@ -228,8 +236,25 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
                 hasBackdrop: true,
                 closeOnNavigation: false,
                 panelClass: 'bottom-panel-sheet',
+                // Default 'first-tabbable' otherwise focuses the tag-edit
+                // input (the bottom-panel close-btn is display:none and gets
+                // skipped), which on touch makes mat-autocomplete pop open
+                // immediately on every task open in portrait.
+                autoFocus: false,
               },
             );
+
+            // Force-blur on backdrop click so pending edits (e.g. task title)
+            // are saved before the bottom sheet dismisses and destroys the component.
+            this._bottomSheetRef
+              .backdropClick()
+              .pipe(takeUntilDestroyed(this._destroyRef))
+              .subscribe(() => {
+                const el = document.activeElement as HTMLElement;
+                if (el && isInputElement(el)) {
+                  el.blur();
+                }
+              });
 
             // Handle bottom sheet dismissal
             this._bottomSheetSubscription = this._bottomSheetRef
@@ -534,7 +559,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     try {
       localStorage.setItem(LS.RIGHT_PANEL_WIDTH, this.currentWidth().toString());
     } catch (error) {
-      console.warn('Failed to save right panel width to localStorage:', error);
+      Log.warn('Failed to save right panel width to localStorage:', error);
     }
   }
 
@@ -553,7 +578,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
 
       // Additional validation
       if (!Number.isFinite(width) || width < RIGHT_PANEL_CONFIG.MIN_WIDTH) {
-        console.warn('Invalid right panel width detected, using default');
+        Log.warn('Invalid right panel width detected, using default');
         this.currentWidth.set(RIGHT_PANEL_CONFIG.DEFAULT_WIDTH);
         return;
       }
@@ -562,10 +587,10 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
       const validatedWidth = clampWidth(width, RIGHT_PANEL_CONFIG.MAX_WIDTH);
       this.currentWidth.set(validatedWidth);
     } catch (error) {
-      console.warn('Failed to initialize right panel width:', error);
+      Log.warn('Failed to initialize right panel width:', error);
       this.currentWidth.set(RIGHT_PANEL_CONFIG.DEFAULT_WIDTH);
     }
   }
 
-  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly isTouchActive = isTouchActive;
 }

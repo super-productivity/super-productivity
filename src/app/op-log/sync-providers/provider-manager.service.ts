@@ -12,6 +12,8 @@ import { Store } from '@ngrx/store';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncLog } from '../../core/log';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 import { SyncProviderId, toSyncProviderId } from './provider.const';
 import { SyncProviderBase } from './provider.interface';
 import {
@@ -41,6 +43,7 @@ export type SyncStatusChangePayload =
 export class SyncProviderManager {
   private _dataInitStateService = inject(DataInitStateService);
   private _store = inject(Store);
+  private _snackService = inject(SnackService);
 
   // Lazily loaded providers (cached after first load)
   private _providers: SyncProviderBase<SyncProviderId>[] | null = null;
@@ -72,6 +75,7 @@ export class SyncProviderManager {
 
   // Emits whenever provider config is updated via setProviderConfig()
   private _providerConfigChanged$ = new Subject<void>();
+  private _hasShownLocalFileReselectSnack = false;
 
   /**
    * Observable for whether the sync provider is enabled and ready
@@ -249,6 +253,7 @@ export class SyncProviderManager {
       // Re-check readiness
       const ready = await provider.isReady();
       this._isProviderReady$.next(ready);
+      this._maybeShowLocalFileReselectSnack(providerId, ready, config);
     }
   }
 
@@ -325,6 +330,7 @@ export class SyncProviderManager {
         }
         this._isProviderReady$.next(ready);
         this._currentProviderPrivateCfg$.next({ providerId, privateCfg });
+        this._maybeShowLocalFileReselectSnack(providerId, ready, privateCfg);
         SyncLog.normal(`SyncProviderManager: Active provider set to ${providerId}`);
       })
       .catch((e) => {
@@ -333,5 +339,30 @@ export class SyncProviderManager {
           this._isProviderReady$.next(false);
         }
       });
+  }
+
+  private _maybeShowLocalFileReselectSnack(
+    providerId: SyncProviderId,
+    isReady: boolean,
+    privateCfg: unknown,
+  ): void {
+    if (
+      this._hasShownLocalFileReselectSnack ||
+      isReady ||
+      providerId !== SyncProviderId.LocalFile
+    ) {
+      return;
+    }
+    const legacyPath = (privateCfg as { syncFolderPath?: unknown } | null)
+      ?.syncFolderPath;
+    if (typeof legacyPath !== 'string' || !legacyPath) {
+      return;
+    }
+    this._hasShownLocalFileReselectSnack = true;
+    this._snackService.open({
+      msg: T.F.SYNC.S.LOCAL_FILE_RESELECT_REQUIRED,
+      type: 'WARNING',
+      config: { duration: 0 },
+    });
   }
 }

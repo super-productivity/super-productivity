@@ -2,7 +2,14 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { setCurrentTask, unsetCurrentTask } from './task.actions';
 import { select, Store } from '@ngrx/store';
-import { filter, startWith, take, tap, withLatestFrom } from 'rxjs/operators';
+import {
+  filter,
+  startWith,
+  take,
+  tap,
+  throttleTime,
+  withLatestFrom,
+} from 'rxjs/operators';
 import { selectCurrentTask, selectTaskEntities } from './task.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -16,6 +23,7 @@ import {
   pauseFocusSession,
   showFocusOverlay,
   startFocusSession,
+  tick,
   unPauseFocusSession,
 } from '../../focus-mode/store/focus-mode.actions';
 import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
@@ -23,6 +31,7 @@ import { ipcAddTaskFromAppUri$ } from '../../../core/ipc-events';
 import { TaskService } from '../task.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { TaskLog } from '../../../core/log';
 
 // TODO send message to electron when current task changes here
 
@@ -46,7 +55,7 @@ export class TaskElectronEffects {
      * - Responds to explicit IPC request, not store-change driven
      * - take(1) ensures single response per request
      */
-    window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_OVERLAY, () => {
+    window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET, () => {
       this._store$
         .pipe(
           select(selectCurrentTask),
@@ -109,8 +118,15 @@ export class TaskElectronEffects {
           pauseFocusSession,
           unPauseFocusSession,
           completeFocusSession,
+          // Keep tray time in sync during focus-mode breaks and focus sessions
+          // without an active task (addTimeSpent is gated on currentTask.id).
+          tick,
         ),
-
+        // addTimeSpent and tick both fire every 1s during an active-task focus
+        // session (same shared globalInterval source), so collapse them into a
+        // single IPC/sec. Leading+trailing preserves immediate feedback for the
+        // non-tick actions (setCurrentTask, startFocusSession, ...).
+        throttleTime(500, undefined, { leading: true, trailing: true }),
         withLatestFrom(
           this._store$.pipe(select(selectCurrentTask)),
           this._store$.pipe(select(selectIsOverlayShown)),
@@ -166,6 +182,10 @@ export class TaskElectronEffects {
     () =>
       this._actions$.pipe(
         ofType(TimeTrackingActions.addTimeSpent),
+        // The OS taskbar progress bar moves imperceptibly per second; throttling
+        // collapses 1 IPC/sec into ~1 IPC/3s. Leading+trailing keeps the first
+        // tick after start instant and the final value at the end of a window.
+        throttleTime(3000, undefined, { leading: true, trailing: true }),
         withLatestFrom(this._store$.select(selectIsOverlayShown)),
         // Don't show progress bar when focus session is running
         filter(([a, isFocusSessionRunning]) => !isFocusSessionRunning),
@@ -186,7 +206,10 @@ export class TaskElectronEffects {
         tap((data) => {
           // Double-check data validity as defensive programming
           if (!data || !data.title || typeof data.title !== 'string') {
-            console.error('handleAddTaskFromProtocol$ received invalid data:', data);
+            TaskLog.err('handleAddTaskFromProtocol$ received invalid data', {
+              hasData: !!data,
+              titleType: typeof data?.title,
+            });
             return;
           }
           this._taskService.add(data.title);

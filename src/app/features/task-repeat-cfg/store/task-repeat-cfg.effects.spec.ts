@@ -7,6 +7,7 @@ import { TaskService } from '../../tasks/task.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskArchiveService } from '../../archive/task-archive.service';
+import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
 import { addTaskRepeatCfgToTask, updateTaskRepeatCfg } from './task-repeat-cfg.actions';
 import {
   DEFAULT_TASK,
@@ -25,6 +26,7 @@ import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clo
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { isToday } from '../../../util/is-today.util';
 import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
+import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 
 describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   let actions$: Observable<Action>;
@@ -32,6 +34,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   let taskService: jasmine.SpyObj<TaskService>;
   let taskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let taskArchiveService: jasmine.SpyObj<TaskArchiveService>;
+  let addTasksForTomorrowService: jasmine.SpyObj<AddTasksForTomorrowService>;
   let testScheduler: TestScheduler;
 
   const mockTask: Task = {
@@ -91,10 +94,16 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
     const taskRepeatCfgServiceSpy = jasmine.createSpyObj('TaskRepeatCfgService', [
       'updateTaskRepeatCfg',
       'getTaskRepeatCfgById$',
+      '_getActionsForTaskRepeatCfg',
     ]);
 
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const taskArchiveServiceSpy = jasmine.createSpyObj('TaskArchiveService', ['load']);
+    const addTasksForTomorrowServiceSpy = jasmine.createSpyObj(
+      'AddTasksForTomorrowService',
+      ['addAllDueToday'],
+    );
+    addTasksForTomorrowServiceSpy.addAllDueToday.and.returnValue(Promise.resolve());
     TestBed.configureTestingModule({
       providers: [
         TaskRepeatCfgEffects,
@@ -103,6 +112,10 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },
+        {
+          provide: AddTasksForTomorrowService,
+          useValue: addTasksForTomorrowServiceSpy,
+        },
       ],
     });
 
@@ -114,6 +127,9 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
     taskArchiveService = TestBed.inject(
       TaskArchiveService,
     ) as jasmine.SpyObj<TaskArchiveService>;
+    addTasksForTomorrowService = TestBed.inject(
+      AddTasksForTomorrowService,
+    ) as jasmine.SpyObj<AddTasksForTomorrowService>;
 
     testScheduler = new TestScheduler((actual, expected) => {
       expect(actual).toEqual(expected);
@@ -260,10 +276,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         saturday: targetDayOfWeek === 6,
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(
-        weeklyRepeatCfg as any,
-        new Date(),
-      )!;
+      const firstOccurrence = getFirstRepeatOccurrence(weeklyRepeatCfg as any)!;
       const firstOccurrenceStr = getDbDateStr(firstOccurrence);
 
       const action = addTaskRepeatCfgToTask({
@@ -333,6 +346,136 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       expect(taskService.update).not.toHaveBeenCalled();
     });
 
+    it('should set dueDay to today when an Inbox task (no dueDay) is made repeatable starting today (#7725)', (done) => {
+      // Scenario from issue #7725: a task added to the Inbox (no dueDay) is
+      // converted to a recurring task via the dialog with start date = today.
+      // It must be scheduled for today instead of staying unscheduled.
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const inboxTask: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: undefined, // Inbox task — not scheduled
+        dueWithTime: undefined,
+        created: today.getTime(),
+      };
+
+      const dailyRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+      };
+
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: dailyRepeatCfg,
+        taskId: 'parent-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(inboxTask));
+
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      let emitted = false;
+      effects.updateTaskAfterMakingItRepeatable$.subscribe(() => {
+        emitted = true;
+      });
+
+      setTimeout(() => {
+        expect(emitted).toBe(false); // today occurrence = no planTaskForDay
+        expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
+          dueDay: todayStr,
+        });
+        done();
+      }, 0);
+    });
+
+    it('should NOT set dueDay for a non-timed config when the task already has dueWithTime', (done) => {
+      // A task scheduled with a time (dueWithTime, no dueDay) is made
+      // repeatable, but the user cleared the start-time field so the config is
+      // non-timed. dueDay must NOT be set: dueDay/dueWithTime are mutually
+      // exclusive and a plain update would not clear dueWithTime.
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const todayNoon = new Date(today);
+      todayNoon.setHours(12, 0, 0, 0);
+
+      const timedTask: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: undefined,
+        dueWithTime: todayNoon.getTime(),
+        created: today.getTime(),
+      };
+
+      const dailyRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+      };
+
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: dailyRepeatCfg,
+        taskId: 'parent-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(timedTask));
+
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      effects.updateTaskAfterMakingItRepeatable$.subscribe();
+
+      setTimeout(() => {
+        const dueDayUpdate = taskService.update.calls
+          .allArgs()
+          .find(([, changes]) => 'dueDay' in (changes as object));
+        expect(dueDayUpdate).toBeUndefined();
+        done();
+      }, 0);
+    });
+
+    it('should update task created when first occurrence is today but task was created earlier', () => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const taskCreatedYesterday: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: todayStr,
+        created: yesterday.getTime(),
+      };
+
+      const dailyRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+      };
+
+      const firstOccurrence = getFirstRepeatOccurrence(dailyRepeatCfg as any)!;
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: dailyRepeatCfg,
+        taskId: 'parent-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskCreatedYesterday));
+
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      effects.updateTaskAfterMakingItRepeatable$.subscribe().unsubscribe();
+
+      expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
+        created: firstOccurrence.getTime(),
+      });
+    });
+
     it('should dispatch planTaskForDay and update created for daily repeat with future start date (#6433)', (done) => {
       // Scenario: Task created today, but start date is 7 days in the future
       const today = new Date();
@@ -347,10 +490,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         ),
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(
-        dailyRepeatCfg as any,
-        new Date(),
-      )!;
+      const firstOccurrence = getFirstRepeatOccurrence(dailyRepeatCfg as any)!;
       const firstOccurrenceStr = getDbDateStr(firstOccurrence);
 
       const taskCreatedToday: TaskWithSubTasks = {
@@ -403,10 +543,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         startDate: startDateStr, // 1st of month
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(
-        monthlyRepeatCfg as any,
-        new Date(),
-      )!;
+      const firstOccurrence = getFirstRepeatOccurrence(monthlyRepeatCfg as any)!;
       const isFirstToday = isToday(firstOccurrence);
 
       // Skip this test on the 1st of the month (first occurrence is today, no planTaskForDay)
@@ -481,10 +618,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         saturday: targetDayOfWeek === 6,
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(
-        weeklyRepeatCfg as any,
-        new Date(),
-      )!;
+      const firstOccurrence = getFirstRepeatOccurrence(weeklyRepeatCfg as any)!;
       const firstOccurrenceStr = getDbDateStr(firstOccurrence);
 
       const action = addTaskRepeatCfgToTask({
@@ -545,10 +679,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         saturday: targetDayOfWeek === 6,
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(
-        weeklyRepeatCfg as any,
-        new Date(),
-      )!;
+      const firstOccurrence = getFirstRepeatOccurrence(weeklyRepeatCfg as any)!;
 
       const action = addTaskRepeatCfgToTask({
         taskRepeatCfg: weeklyRepeatCfg,
@@ -762,10 +893,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         sunday: false,
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(
-        monWedFriRepeatCfg as any,
-        new Date(),
-      )!;
+      const firstOccurrence = getFirstRepeatOccurrence(monWedFriRepeatCfg as any)!;
 
       const action = addTaskRepeatCfgToTask({
         taskRepeatCfg: monWedFriRepeatCfg,
@@ -808,6 +936,77 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
           done();
         });
       }
+    });
+
+    it('should preserve dueDay when converting a task whose dueDay matches startDate to YEARLY recurring (#7344)', (done) => {
+      // Scenario from issue #7344: a task is planned for a past date; user converts
+      // it to a yearly recurrence. The dialog defaults startDate = task.dueDay.
+      // Expected: the task stays planned for its original dueDay, not auto-advanced
+      // to next year's occurrence.
+      const today = new Date();
+      const pastDueDay = new Date(today);
+      pastDueDay.setDate(today.getDate() - 22);
+      const pastDueDayStr = getDbDateStr(pastDueDay);
+      const shiftedByOneYearStr = getDbDateStr(
+        new Date(
+          pastDueDay.getFullYear() + 1,
+          pastDueDay.getMonth(),
+          pastDueDay.getDate(),
+        ),
+      );
+
+      const taskWithPastDueDay: TaskWithSubTasks = {
+        ...mockTask,
+        subTasks: [],
+        dueDay: pastDueDayStr,
+        created: pastDueDay.getTime(),
+      };
+
+      const yearlyRepeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 4,
+        startDate: pastDueDayStr,
+      };
+
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: yearlyRepeatCfg,
+        taskId: 'parent-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskWithPastDueDay));
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      effects.updateTaskAfterMakingItRepeatable$.subscribe((result) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { subTasks: _ignored, ...expectedTask } = taskWithPastDueDay;
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: expectedTask as any,
+            day: pastDueDayStr,
+          }),
+        );
+
+        // Repeat cfg must record pastDueDayStr as the last creation day (so the
+        // next occurrence is computed from the preserved date, not a jumped one).
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({
+            lastTaskCreationDay: pastDueDayStr,
+          }),
+        );
+
+        // No update may shift dueDay to next year.
+        taskService.update.calls.allArgs().forEach(([, changes]) => {
+          const c = changes as { dueDay?: string };
+          if ('dueDay' in c) {
+            expect(c.dueDay).not.toBe(shiftedByOneYearStr);
+            expect(c.dueDay).toBe(pastDueDayStr);
+          }
+        });
+        done();
+      });
     });
   });
 
@@ -903,6 +1102,135 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         );
 
         expectObservable(effects.updateStartDateOnComplete$).toBe('--');
+      });
+    });
+
+    it('should support legacy latest instance identified by dueDay when created predates cursor', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const today = getDbDateStr();
+        const action = TaskSharedActions.updateTask({
+          task: { id: 'parent-task-id', changes: { isDone: true } },
+        });
+        const legacyTask: Task = {
+          ...mockTask,
+          created: dateStrToUtcDate('2020-01-01').getTime(),
+          dueDay: today,
+        };
+
+        actions$ = hot('-a', { a: action });
+        taskService.getByIdOnce$.and.returnValue(of(legacyTask));
+        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+          of({
+            ...mockRepeatCfg,
+            repeatFromCompletionDate: true,
+            lastTaskCreationDay: today,
+          }),
+        );
+
+        const expectedAction = updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { startDate: today, lastTaskCreationDay: today },
+          },
+        });
+
+        expectObservable(effects.updateStartDateOnComplete$).toBe('-a', {
+          a: expectedAction,
+        });
+      });
+    });
+
+    it('should trigger waitForCompletion creation path for archived latest instance', (done) => {
+      const today = getDbDateStr();
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'parent-task-id', changes: { isDone: true } },
+      });
+      const archivedTask: Task = {
+        ...mockTask,
+        created: dateStrToUtcDate(today).getTime(),
+        dueDay: today,
+      };
+      const repeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatFromCompletionDate: false,
+        waitForCompletion: true,
+        lastTaskCreationDay: today,
+      };
+      const expectedAction = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { lastTaskCreationDay: today },
+        },
+      });
+
+      actions$ = of(action);
+      taskService.getByIdOnce$.and.returnValue(of(undefined as unknown as Task));
+      taskArchiveService.load.and.returnValue(
+        Promise.resolve({
+          ids: ['parent-task-id'],
+          entities: {
+            [archivedTask.id]: archivedTask,
+          },
+        } as any),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(repeatCfg));
+      taskRepeatCfgService._getActionsForTaskRepeatCfg.and.returnValue(
+        Promise.resolve([expectedAction]),
+      );
+
+      effects.updateStartDateOnComplete$.subscribe({
+        next: (result) => {
+          expect(result).toEqual(expectedAction);
+          expect(taskRepeatCfgService._getActionsForTaskRepeatCfg).toHaveBeenCalledWith(
+            repeatCfg,
+            jasmine.any(Number),
+          );
+          done();
+        },
+        error: done.fail,
+      });
+    });
+
+    it('should probe waitForCompletion creation path when completing a non-latest blocker', (done) => {
+      const today = getDbDateStr();
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'parent-task-id', changes: { isDone: true } },
+      });
+      const oldTask: Task = {
+        ...mockTask,
+        created: dateStrToUtcDate('2020-01-01').getTime(),
+        dueDay: '2020-01-01',
+      };
+      const repeatCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatFromCompletionDate: false,
+        waitForCompletion: true,
+        lastTaskCreationDay: today,
+      };
+      const expectedAction = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { lastTaskCreationDay: today },
+        },
+      });
+
+      actions$ = of(action);
+      taskService.getByIdOnce$.and.returnValue(of(oldTask));
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(repeatCfg));
+      taskRepeatCfgService._getActionsForTaskRepeatCfg.and.returnValue(
+        Promise.resolve([expectedAction]),
+      );
+
+      effects.updateStartDateOnComplete$.subscribe({
+        next: (result) => {
+          expect(result).toEqual(expectedAction);
+          expect(taskRepeatCfgService._getActionsForTaskRepeatCfg).toHaveBeenCalledWith(
+            repeatCfg,
+            jasmine.any(Number),
+          );
+          done();
+        },
+        error: done.fail,
       });
     });
   });
@@ -1705,6 +2033,28 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         expectObservable(effects.addRepeatCfgToTaskUpdateTask$).toBe('--');
       });
     });
+
+    it('should NOT schedule task when startTime is an invalid clock string (bug #7067)', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const todayStr = getDbDateStr();
+        const action = addTaskRepeatCfgToTask({
+          taskRepeatCfg: {
+            ...mockRepeatCfg,
+            startDate: todayStr,
+            repeatCycle: 'DAILY',
+            repeatEvery: 1,
+          },
+          taskId: 'parent-task-id',
+          startTime: 'INVALID_CLOCK_STRING',
+          remindAt: TaskReminderOptionId.AtStart,
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        // Effect should NOT emit because startTime fails isValidSplitTime
+        expectObservable(effects.addRepeatCfgToTaskUpdateTask$).toBe('--');
+      });
+    });
   });
 
   describe('rescheduleTaskOnRepeatCfgUpdate$', () => {
@@ -1737,7 +2087,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         saturday: targetDayOfWeek === 6,
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(updatedCfg as any, new Date())!;
+      const firstOccurrence = getNextRepeatOccurrence(updatedCfg as any, new Date())!;
       const firstOccurrenceStr = getDbDateStr(firstOccurrence);
 
       const action = updateTaskRepeatCfg({
@@ -1763,6 +2113,102 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
           jasmine.objectContaining({
             lastTaskCreationDay: firstOccurrenceStr,
           }),
+        );
+        done();
+      });
+    });
+
+    // Issue #7951: editing a schedule-affecting field of a DAILY repeat whose
+    // current day is still a valid occurrence must NOT strand today's live
+    // instance by moving it to tomorrow. Before the fix the effect used the
+    // strictly-future getNextRepeatOccurrence(), so today's task disappeared
+    // from Today and lastTaskCreationDay jumped past today — permanently
+    // skipping today's instance.
+    it('should keep the live instance on today when a DAILY repeat still includes today (#7951)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { repeatEvery: 1 },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({ task: liveTask as any, day: todayStr }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
+        );
+        done();
+      });
+    });
+
+    // #7951 follow-up: an OVERDUE undone instance (dueDay in the past) must also
+    // be relocated to today on a schedule edit, not pushed to tomorrow (which
+    // would skip both its overdue day and today).
+    it('relocates an overdue live instance to today for a DAILY repeat (#7951)', (done) => {
+      const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const threeDaysAgo = today.getTime() - THREE_DAYS;
+      const threeDaysAgoStr = getDbDateStr(new Date(threeDaysAgo));
+
+      const overdueTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: threeDaysAgoStr,
+        created: threeDaysAgo,
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: threeDaysAgoStr,
+        lastTaskCreationDay: threeDaysAgoStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { repeatEvery: 1 },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([overdueTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({ task: overdueTask as any, day: todayStr }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
         );
         done();
       });
@@ -1801,6 +2247,56 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
       effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
         expect(result.type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+        done();
+      });
+    });
+
+    // #7951 review (W1): a timed task whose start time has already passed today
+    // must NOT be scheduled at that past time — that would set a past remindAt
+    // and fire an immediate "missed reminder" on save (#7354). It advances to
+    // the next future slot instead.
+    it('does not schedule a past remindAt for a timed task whose start time passed today (#7951)', (done) => {
+      const now = Date.now();
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+        // start of today — always in the past relative to "now"
+        startTime: '00:00',
+        remindAt: TaskReminderOptionId.AtStart,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { repeatEvery: 1 },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        const scheduled = result as ReturnType<
+          typeof TaskSharedActions.scheduleTaskWithTime
+        >;
+        expect(scheduled.type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+        // The scheduled time and reminder must be in the future, not this morning.
+        expect(scheduled.dueWithTime).toBeGreaterThan(now);
+        expect(scheduled.remindAt).toBeGreaterThanOrEqual(now);
         done();
       });
     });
@@ -1855,6 +2351,9 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
       setTimeout(() => {
         expect(emitted).toBe(false);
+        // #7724 guard: startDate present in changes but not moved earlier
+        // (equal to lastTaskCreationDay) must not re-anchor the config.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
         done();
       }, 0);
     });
@@ -1959,7 +2458,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         saturday: targetDayOfWeek === 6,
       };
 
-      const firstOccurrence = getFirstRepeatOccurrence(updatedCfg as any, new Date())!;
+      const firstOccurrence = getNextRepeatOccurrence(updatedCfg as any, new Date())!;
       const firstOccurrenceStr = getDbDateStr(firstOccurrence);
 
       const action = updateTaskRepeatCfg({
@@ -1983,6 +2482,429 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         );
         done();
       });
+    });
+
+    const addDays = (base: Date, days: number): Date => {
+      const d = new Date(base);
+      d.setDate(d.getDate() + days);
+      return d;
+    };
+
+    // Issue #7423: moving startDate earlier than the existing lastTaskCreationDay
+    // must re-anchor on the new startDate. Previously, the stale lastTaskCreationDay
+    // bumped checkDate inside getNextRepeatOccurrence, so the task landed one day
+    // after the OLD startDate instead of on the NEW startDate.
+    it('should plan task for the new startDate when moving startDate earlier than lastTaskCreationDay (#7423)', (done) => {
+      const today = new Date();
+      const oldStartDateStr = getDbDateStr(addDays(today, 29));
+      const newStartDateStr = getDbDateStr(addDays(today, 9));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: oldStartDateStr,
+        created: today.getTime(),
+      };
+
+      // Config as it would look right after the user saves the new startDate:
+      // startDate is the new value but lastTaskCreationDay still points at the
+      // old startDate (set by updateTaskAfterMakingItRepeatable$ on initial save).
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: oldStartDateStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: newStartDateStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: newStartDateStr,
+          }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({
+            lastTaskCreationDay: newStartDateStr,
+          }),
+        );
+        done();
+      });
+    });
+
+    // Issue #7423: same earlier-startDate scenario for WEEKLY repeat.
+    it('should plan task for the new startDate for WEEKLY when moved earlier (#7423)', (done) => {
+      const today = new Date();
+      const todayDayOfWeek = today.getDay();
+
+      // Both old and new startDate land on the same weekday, 28 days and 7 days out.
+      const oldStartDateStr = getDbDateStr(addDays(today, 28));
+      const newStartDateStr = getDbDateStr(addDays(today, 7));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: oldStartDateStr,
+        created: today.getTime(),
+      };
+
+      const weekdayKeys = [
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+      ] as const;
+      const todayWeekdayKey = weekdayKeys[todayDayOfWeek];
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: oldStartDateStr,
+        sunday: todayWeekdayKey === 'sunday',
+        monday: todayWeekdayKey === 'monday',
+        tuesday: todayWeekdayKey === 'tuesday',
+        wednesday: todayWeekdayKey === 'wednesday',
+        thursday: todayWeekdayKey === 'thursday',
+        friday: todayWeekdayKey === 'friday',
+        saturday: todayWeekdayKey === 'saturday',
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: newStartDateStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: newStartDateStr,
+          }),
+        );
+        done();
+      });
+    });
+
+    // Issue #7423: same earlier-startDate scenario for MONTHLY repeat.
+    it('should plan task for the new startDate for MONTHLY when moved earlier (#7423)', (done) => {
+      const today = new Date();
+      const oldStartDateStr = getDbDateStr(addDays(today, 29));
+      const newStartDateStr = getDbDateStr(addDays(today, 9));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: oldStartDateStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: oldStartDateStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: newStartDateStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: newStartDateStr,
+          }),
+        );
+        done();
+      });
+    });
+
+    // Issue #7423 guard: for repeatFromCompletionDate=true, startDate is
+    // decoupled from scheduling (getEffectiveRepeatStartDate returns
+    // lastTaskCreationDay). Editing startDate must NOT take the re-anchor
+    // branch — doing so would wipe completion history and re-schedule from
+    // an arbitrary past anchor.
+    it('should NOT re-anchor on startDate edit when repeatFromCompletionDate is true (#7423)', (done) => {
+      const today = new Date();
+
+      // lastTaskCreationDay (April 15) > new startDate (Feb 1) — the same
+      // shape as the bug, but on a repeatFromCompletionDate config.
+      const lastCompletionStr = getDbDateStr(addDays(today, -16));
+      const newStartDateStr = getDbDateStr(addDays(today, -89));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: lastCompletionStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: lastCompletionStr,
+        repeatFromCompletionDate: true,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: newStartDateStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      // The re-anchor branch (which would call getFirstRepeatOccurrence and
+      // schedule for newStartDateStr) must NOT fire. Capture the planned day
+      // and assert it never equals the past startDate.
+      let emittedDay: string | undefined;
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        if (result.type === PlannerActions.planTaskForDay.type) {
+          emittedDay = result.day;
+        }
+      });
+      setTimeout(() => {
+        expect(emittedDay).not.toBe(newStartDateStr);
+        done();
+      }, 0);
+    });
+
+    // Issue #7423: edge case where the new startDate lies in the past relative
+    // to today. The re-anchor branch should still fire (newStartDate <
+    // lastTaskCreationDay holds), and the task is planned for that past date —
+    // mirroring how updateTaskAfterMakingItRepeatable$ schedules past first
+    // occurrences.
+    it('should plan task for the new startDate even when it is in the past (#7423)', (done) => {
+      const today = new Date();
+      // lastTaskCreationDay 5 days out (set when old startDate was T+5).
+      const oldStartDateStr = getDbDateStr(addDays(today, 5));
+      // New startDate is 3 days in the past.
+      const newStartDateStr = getDbDateStr(addDays(today, -3));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: oldStartDateStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: oldStartDateStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: newStartDateStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: newStartDateStr,
+          }),
+        );
+        done();
+      });
+    });
+
+    // Issue #7724: moving startDate earlier must re-anchor lastTaskCreationDay
+    // even when no live task instance exists (e.g. the user deleted it). The
+    // stale anchor would otherwise suppress every projected/created instance
+    // between the new startDate and the old anchor.
+    it('should re-anchor lastTaskCreationDay when startDate moved earlier and no live instance exists (#7724)', (done) => {
+      const today = new Date();
+      // lastTaskCreationDay set when the (now deleted) instance was created.
+      const oldStartDateStr = getDbDateStr(addDays(today, 8));
+      const newStartDateStr = getDbDateStr(addDays(today, 3));
+      // The fix anchors to the day before the new first occurrence so the new
+      // startDate itself is created/projected fresh.
+      const expectedAnchorStr = getDbDateStr(addDays(today, 2));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: oldStartDateStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: newStartDateStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      // No live instance — it was deleted.
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      let emitted = false;
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe(() => {
+        emitted = true;
+      });
+
+      setTimeout(() => {
+        // No live task to reschedule, so no action is dispatched...
+        expect(emitted).toBe(false);
+        // ...but the stale anchor is still corrected.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({
+            lastTaskCreationDay: expectedAnchorStr,
+          }),
+        );
+        done();
+      }, 0);
+    });
+
+    // Issue #7768 Bug 1: moving startDate to today must move the existing
+    // live instance to today, not leave it stranded on its previous due day.
+    // The pre-fix effect skipped planTaskForDay when first occurrence was
+    // today (the `!isFirstOccurrenceToday_` guard), so the task's dueDay
+    // stayed on the old startDate.
+    it('should plan task for today when startDate is moved to today and a live instance exists (#7768)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const oldStartDateStr = getDbDateStr(addDays(today, 5));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: oldStartDateStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: oldStartDateStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: todayStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: todayStr,
+          }),
+        );
+        done();
+      });
+    });
+
+    // Issue #7768 Bug 2: moving startDate to today when no live instance
+    // exists must create one for today. The re-anchor alone is not enough —
+    // addAllDueToday() is only triggered on date change, so without an
+    // explicit call here the live instance won't appear until app restart
+    // or the next midnight.
+    it('should trigger addAllDueToday when startDate is moved to today and no live instance exists (#7768)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const oldStartDateStr = getDbDateStr(addDays(today, 5));
+      const expectedAnchorStr = getDbDateStr(addDays(today, -1));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: oldStartDateStr,
+      };
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { startDate: todayStr },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      let emitted = false;
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe(() => {
+        emitted = true;
+      });
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        // Anchor is re-set to the day before today so addAllDueToday picks
+        // today up.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({
+            lastTaskCreationDay: expectedAnchorStr,
+          }),
+        );
+        // The live instance for today must actually be created — not only
+        // unblocked for the next date change.
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
     });
   });
 });
@@ -2045,6 +2967,11 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const taskArchiveServiceSpy = jasmine.createSpyObj('TaskArchiveService', ['load']);
+    const addTasksForTomorrowServiceSpy = jasmine.createSpyObj(
+      'AddTasksForTomorrowService',
+      ['addAllDueToday'],
+    );
+    addTasksForTomorrowServiceSpy.addAllDueToday.and.returnValue(Promise.resolve());
     TestBed.configureTestingModule({
       providers: [
         TaskRepeatCfgEffects,
@@ -2053,6 +2980,10 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },
+        {
+          provide: AddTasksForTomorrowService,
+          useValue: addTasksForTomorrowServiceSpy,
+        },
       ],
     });
 
@@ -2160,14 +3091,14 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
   });
 
   describe('Scenario: Monthly repeat patterns', () => {
-    it('should schedule for today when MONTHLY and today matches the day of month', () => {
-      // Today is Jan 15, startDate is also the 15th
+    it('should schedule for today when MONTHLY startDate equals today', () => {
+      // Today is Jan 15, startDate is also Jan 15
       testScheduler.run(({ hot, expectObservable }) => {
         const startTimeStr = '09:00';
 
         const repeatCfg: TaskRepeatCfgCopy = {
           ...baseRepeatCfg,
-          startDate: '2024-12-15', // Previous month, same day
+          startDate: '2025-01-15', // today
           repeatCycle: 'MONTHLY',
           repeatEvery: 1,
         };
@@ -2205,17 +3136,15 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       });
     });
 
-    it('should schedule for future date when MONTHLY day has not occurred yet this month', () => {
-      // Today is Jan 15, repeat is for the 20th
-      // getFirstRepeatOccurrence returns Jan 20 (first future occurrence of the 20th)
+    it('should schedule for future date when MONTHLY startDate is in the future', () => {
+      // Today is Jan 15, startDate is Jan 20 (5 days out)
       testScheduler.run(({ hot, expectObservable }) => {
         const startTimeStr = '09:00';
-        // Jan 20, 2025 is the first 20th ON OR AFTER Jan 15, 2025
         const expectedDateStr = '2025-01-20';
 
         const repeatCfg: TaskRepeatCfgCopy = {
           ...baseRepeatCfg,
-          startDate: '2024-12-20', // 20th of month
+          startDate: '2025-01-20',
           repeatCycle: 'MONTHLY',
           repeatEvery: 1,
         };
@@ -2256,13 +3185,13 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
   });
 
   describe('Scenario: Daily patterns', () => {
-    it('should always schedule for today with DAILY pattern', () => {
+    it('should schedule for startDate when DAILY startDate equals today', () => {
       testScheduler.run(({ hot, expectObservable }) => {
         const startTimeStr = '08:00';
 
         const repeatCfg: TaskRepeatCfgCopy = {
           ...baseRepeatCfg,
-          startDate: '2025-01-01', // Started earlier this month
+          startDate: '2025-01-15', // today
           repeatCycle: 'DAILY',
           repeatEvery: 1,
         };
@@ -2300,15 +3229,14 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       });
     });
 
-    it('should handle DAILY with repeatEvery > 1', () => {
+    it('should schedule for startDate when DAILY repeatEvery > 1', () => {
       testScheduler.run(({ hot, expectObservable }) => {
         const startTimeStr = '08:00';
 
-        // Start date Jan 13, repeatEvery 2 means: Jan 13, 15, 17...
-        // Today is Jan 15, which is a valid day
+        // First occurrence is startDate itself, regardless of repeatEvery.
         const repeatCfg: TaskRepeatCfgCopy = {
           ...baseRepeatCfg,
-          startDate: '2025-01-13',
+          startDate: '2025-01-15',
           repeatCycle: 'DAILY',
           repeatEvery: 2,
         };
@@ -2323,7 +3251,6 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
         actions$ = hot('-a', { a: action });
         taskService.getByIdOnce$.and.returnValue(of(baseTask));
 
-        // Jan 15 is 2 days from Jan 13, so it matches the pattern
         const expectedDateTime = getDateTimeFromClockString(
           startTimeStr,
           dateStrToUtcDate('2025-01-15').getTime(),
@@ -2501,13 +3428,13 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
     });
 
     it('should set isSkipAutoRemoveFromToday=FALSE when task is scheduled for FUTURE (MONTHLY)', () => {
-      // Today is Jan 15, 2025 - MONTHLY on 20th means scheduled for Jan 20
+      // Today is Jan 15, 2025 - startDate Jan 20 means scheduled for Jan 20
       testScheduler.run(({ hot, expectObservable }) => {
         const startTimeStr = '09:00';
 
         const repeatCfg: TaskRepeatCfgCopy = {
           ...baseRepeatCfg,
-          startDate: '2024-12-20', // 20th of month
+          startDate: '2025-01-20', // 5 days out
           repeatCycle: 'MONTHLY',
           repeatEvery: 1,
         };
@@ -2804,12 +3731,13 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       expect((effects as any)._updateRegularTaskInstance).toHaveBeenCalled();
     });
 
-    it('should dispatch planTaskForDay for MONTHLY on the 20th (future from Jan 15)', () => {
+    it('should dispatch planTaskForDay for MONTHLY when startDate is in the future', () => {
+      // Today is Wednesday Jan 15, 2025; startDate is Jan 20 (5 days out).
       const monthlyRepeatCfg: TaskRepeatCfgCopy = {
         ...baseRepeatCfg,
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
-        startDate: '2024-12-20', // 20th of month
+        startDate: '2025-01-20',
       };
 
       const action = addTaskRepeatCfgToTask({
@@ -2842,12 +3770,12 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       });
     });
 
-    it('should NOT dispatch planTaskForDay for MONTHLY on the 15th (today)', () => {
+    it('should NOT dispatch planTaskForDay for MONTHLY when startDate equals today', () => {
       const monthlyRepeatCfg: TaskRepeatCfgCopy = {
         ...baseRepeatCfg,
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
-        startDate: '2024-12-15', // 15th of month = today
+        startDate: '2025-01-15', // today
       };
 
       const action = addTaskRepeatCfgToTask({
@@ -2869,14 +3797,13 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       expect(taskService.update).not.toHaveBeenCalled();
     });
 
-    it('should dispatch planTaskForDay for YEARLY when occurrence is in the future', () => {
-      // startDate is Feb 15 of a past year — this year's Feb 15 is still future
-      // (today is Jan 15)
+    it('should dispatch planTaskForDay for YEARLY when startDate is in the future', () => {
+      // Today is Jan 15, 2025; startDate is Feb 15, 2025 (~1 month out).
       const yearlyRepeatCfg: TaskRepeatCfgCopy = {
         ...baseRepeatCfg,
         repeatCycle: 'YEARLY',
         repeatEvery: 1,
-        startDate: '2024-02-15',
+        startDate: '2025-02-15',
       };
 
       const action = addTaskRepeatCfgToTask({

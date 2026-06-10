@@ -1,19 +1,34 @@
-import { App, ipcMain, IpcMainEvent, Menu, nativeTheme, Tray } from 'electron';
+import {
+  App,
+  ipcMain,
+  IpcMainEvent,
+  Menu,
+  nativeImage,
+  nativeTheme,
+  Tray,
+} from 'electron';
 import { log } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import { getDistChannel } from './shared-with-frontend/get-dist-channel';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
-import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import { release } from 'os';
 import {
-  updateOverlayAlwaysShow,
-  updateOverlayEnabled,
-  updateOverlayOpacity,
-  updateOverlayTask,
-} from './overlay-indicator/overlay-indicator';
+  initTaskWidgetSettingsListener,
+  updateTaskWidgetTask,
+} from './task-widget/task-widget';
 import { getWin } from './main-window';
 
-let tray: Tray;
+type IndicatorConfig = {
+  showApp: () => void;
+  quitApp: () => void;
+  app: App;
+  ICONS_FOLDER: string;
+  forceDarkTray: boolean;
+};
+
+let tray: Tray | undefined;
+let indicatorConfig: IndicatorConfig | undefined;
 let _showApp: () => void;
 let _quitApp: () => void;
 let _todayTasks: {
@@ -40,6 +55,8 @@ let _lastCurrentPomodoroSessionTime: number;
 let _lastIsFocusModeEnabled: boolean;
 let _lastCurrentFocusSessionTime: number;
 let _lastFocusModeMode: string;
+let _isAppListenersInitialized = false;
+let _isListenersInitialized = false;
 
 const IS_MAC = process.platform === 'darwin';
 const IS_LINUX = process.platform === 'linux';
@@ -60,10 +77,11 @@ const WINDOWS_TRAY_GUIDS = {
 } as const;
 
 const getWindowsTrayGuid = (): string => {
-  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+  const channel = getDistChannel();
+  if (channel === 'win-portable') {
     return WINDOWS_TRAY_GUIDS.portable;
   }
-  if ((process as NodeJS.Process & { windowsStore?: boolean }).windowsStore) {
+  if (channel === 'win-store') {
     return WINDOWS_TRAY_GUIDS.store;
   }
   return WINDOWS_TRAY_GUIDS.nsis;
@@ -81,13 +99,24 @@ export const initIndicator = ({
   app: App;
   ICONS_FOLDER: string;
   forceDarkTray: boolean;
-}): Tray => {
+}): Tray | undefined => {
+  indicatorConfig = {
+    showApp,
+    quitApp,
+    app,
+    ICONS_FOLDER,
+    forceDarkTray,
+  };
   DIR = ICONS_FOLDER + 'indicator/';
+  // On macOS we always load the black (`-l`) icons and mark them as template
+  // images in getTrayImage(); the system auto-inverts them for the current
+  // menu bar appearance, so the static dark/light choice doesn't apply.
   shouldUseDarkColors =
-    forceDarkTray ||
-    IS_LINUX ||
-    (IS_WINDOWS && !isWindows11()) ||
-    nativeTheme.shouldUseDarkColors;
+    !IS_MAC &&
+    (forceDarkTray ||
+      IS_LINUX ||
+      (IS_WINDOWS && !isWindows11()) ||
+      nativeTheme.shouldUseDarkColors);
 
   _showApp = showApp;
   _quitApp = quitApp;
@@ -95,61 +124,84 @@ export const initIndicator = ({
   initAppListeners(app);
   initListeners();
 
-  const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
-  const trayIconPath = DIR + `stopped${suf}`;
-  if (IS_WINDOWS) {
-    try {
-      tray = new Tray(trayIconPath, getWindowsTrayGuid());
-    } catch (e) {
-      log('Tray creation with GUID failed, retrying without GUID:', e);
-      tray = new Tray(trayIconPath);
-    }
-  } else {
-    tray = new Tray(trayIconPath);
-  }
-  tray.setContextMenu(createContextMenu());
+  return ensureIndicator();
+};
 
-  tray.on('click', () => {
-    showApp();
-  });
+export const ensureIndicator = (): Tray | undefined => {
+  if (!indicatorConfig) {
+    return undefined;
+  }
+
+  if (tray) {
+    return tray;
+  }
+
+  tray = createTray();
+  syncTray(tray);
 
   return tray;
 };
 
+export const refreshIndicator = (): void => {
+  if (tray) {
+    syncTray(tray);
+  }
+};
+
+const createTray = (): Tray => {
+  const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
+  const trayIconPath = DIR + `stopped${suf}`;
+  const trayIcon = getTrayImage(trayIconPath);
+  let nextTray: Tray;
+  if (IS_WINDOWS) {
+    const guid = getWindowsTrayGuid();
+    try {
+      nextTray = new Tray(trayIcon, guid);
+      log('Tray created on Windows with GUID:', guid);
+    } catch (e) {
+      log('Tray creation with GUID failed, retrying without GUID:', e);
+      nextTray = new Tray(trayIcon);
+      log('Tray created on Windows without GUID');
+    }
+  } else {
+    nextTray = new Tray(trayIcon);
+  }
+  nextTray.setContextMenu(createContextMenu());
+
+  nextTray.on('click', () => {
+    indicatorConfig?.showApp();
+  });
+
+  return nextTray;
+};
+
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function initAppListeners(app: App): void {
-  if (tray) {
-    app.on('before-quit', () => {
-      if (tray) {
-        tray.destroy();
-      }
-    });
+  if (_isAppListenersInitialized) {
+    return;
   }
+
+  _isAppListenersInitialized = true;
+  app.on('before-quit', () => {
+    if (tray) {
+      destroyTray();
+    }
+  });
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function initListeners(): void {
-  let isOverlayEnabled = false;
-  // Listen for settings updates to handle overlay enable/disable
-  ipcMain.on(IPC.UPDATE_SETTINGS, (ev, settings: GlobalConfigState) => {
-    const isOverlayEnabledNew = settings?.overlayIndicator?.isEnabled || false;
+  if (_isListenersInitialized) {
+    return;
+  }
+  _isListenersInitialized = true;
 
-    if (isOverlayEnabledNew !== isOverlayEnabled) {
-      isOverlayEnabled = isOverlayEnabledNew;
-      updateOverlayEnabled(isOverlayEnabled);
-    }
-
-    if (isOverlayEnabled) {
-      const opacity = settings?.overlayIndicator?.opacity ?? 95;
-      updateOverlayOpacity(opacity);
-      updateOverlayAlwaysShow(settings?.overlayIndicator?.isAlwaysShow || false);
-    } else {
-      updateOverlayAlwaysShow(false);
-    }
-  });
+  // Task widget settings are per-instance (not synced) — handled via a
+  // dedicated IPC channel in task-widget.ts.
+  initTaskWidgetSettingsListener();
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
-    if (_isRunning) {
+    if (_isRunning && tray) {
       setTrayIcon(tray, getRunningIconPath(progress));
     }
 
@@ -232,7 +284,7 @@ function initListeners(): void {
       _lastCurrentFocusSessionTime = currentFocusSessionTime;
       _lastFocusModeMode = focusModeMode;
 
-      updateOverlayTask(
+      updateTaskWidgetTask(
         currentTask,
         isPomodoroEnabled,
         currentPomodoroSessionTime,
@@ -345,6 +397,65 @@ function initListeners(): void {
   // });
 }
 
+const syncTray = (tr: Tray): void => {
+  const menuMsg = _lastCurrentTask
+    ? createIndicatorMessage(
+        _lastCurrentTask,
+        _lastIsPomodoroEnabled || false,
+        _lastCurrentPomodoroSessionTime || 0,
+        true,
+        _lastIsFocusModeEnabled || false,
+        _lastCurrentFocusSessionTime || 0,
+        _lastFocusModeMode,
+      )
+    : _lastMsg;
+
+  tr.setContextMenu(createContextMenu(menuMsg));
+
+  const isTrayShowCurrentTask = getIsTrayShowCurrentTask();
+  const isTrayShowCurrentCountdown = getIsTrayShowCurrentCountdown();
+  const trayMsg = _lastCurrentTask
+    ? createIndicatorMessage(
+        _lastCurrentTask,
+        _lastIsPomodoroEnabled || false,
+        _lastCurrentPomodoroSessionTime || 0,
+        isTrayShowCurrentCountdown,
+        _lastIsFocusModeEnabled || false,
+        _lastCurrentFocusSessionTime || 0,
+        _lastFocusModeMode,
+      )
+    : '';
+
+  if (_lastCurrentTask?.title && isTrayShowCurrentTask) {
+    tr.setTitle(trayMsg);
+    if (!IS_MAC) {
+      tr.setToolTip(trayMsg);
+    }
+  } else {
+    tr.setTitle('');
+    if (!IS_MAC) {
+      tr.setToolTip('');
+    }
+  }
+  _lastTrayMsg = trayMsg;
+
+  if (_lastCurrentTask?.title && !_lastIsFocusModeEnabled) {
+    const progress = _lastCurrentTask.timeEstimate
+      ? _lastCurrentTask.timeSpent / _lastCurrentTask.timeEstimate
+      : undefined;
+    setTrayIcon(tr, getRunningIconPath(progress));
+  } else {
+    const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
+    setTrayIcon(tr, DIR + `stopped${suf}`);
+  }
+};
+
+const destroyTray = (): void => {
+  tray?.destroy();
+  tray = undefined;
+  curIco = undefined;
+};
+
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function createIndicatorMessage(
   task: TaskCopy,
@@ -393,8 +504,7 @@ function createIndicatorMessage(
       return timeStr;
     }
 
-    // Fallback if no countdown is supposed to be shown, but we have a running task
-    return getProgressMessage(task.timeSpent);
+    return task.title;
   }
 
   return '';
@@ -449,13 +559,37 @@ function getRunningIconPath(progress?: number): string {
   return DIR + `running${suf}.png`;
 }
 
-let curIco: string;
+let curIco: string | undefined;
+
+// GNOME AppIndicator can fall back to a generic "three dots" icon for
+// sandboxed Electron apps when given only a file path. Passing a NativeImage
+// keeps the actual pixel data attached to the tray item.
+// On macOS we also need a NativeImage so we can mark it as a template image —
+// the system then inverts it for the current menu bar appearance (light/dark,
+// highlight state, accessibility), so it stays visible on any background.
+const getTrayImage = (icoPath: string): string | Electron.NativeImage => {
+  if (!IS_LINUX && !IS_MAC) {
+    return icoPath;
+  }
+
+  const image = nativeImage.createFromPath(icoPath);
+  if (image.isEmpty()) {
+    log('Tray icon NativeImage is empty, falling back to icon path:', icoPath);
+    return icoPath;
+  }
+
+  if (IS_MAC) {
+    image.setTemplateImage(true);
+  }
+
+  return image;
+};
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function setTrayIcon(tr: Tray, icoPath: string): void {
   if (icoPath !== curIco) {
     curIco = icoPath;
-    tr.setImage(icoPath);
+    tr.setImage(getTrayImage(icoPath));
   }
 }
 

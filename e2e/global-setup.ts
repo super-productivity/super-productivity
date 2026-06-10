@@ -2,6 +2,7 @@ import { FullConfig } from '@playwright/test';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { isServerHealthy } from './utils/supersync-helpers';
 
 /**
  * Warm up the dev server by fetching the app once before any tests start.
@@ -69,6 +70,25 @@ const globalSetup = async (config: FullConfig): Promise<void> => {
     config.projects[0]?.use?.baseURL ||
     'http://localhost:4242';
   await warmUpDevServer(baseURL);
+
+  // Check SuperSync server health ONCE here, before workers start.
+  // Without this, each worker checks independently on startup — with many workers
+  // running simultaneously, the concurrent health-check requests can overload the
+  // supersync server and cause false negatives, making workers skip all their tests.
+  // By storing the result in an env var set before workers are forked, every worker
+  // reads the cached result instantly instead of making HTTP requests.
+  const healthy = await isServerHealthy().catch(() => false);
+  process.env.SUPERSYNC_SERVER_HEALTHY = healthy ? 'true' : 'false';
+  if (healthy) {
+    console.log('SuperSync server healthy — supersync tests will run');
+  } else if (process.env.E2E_REQUIRE_SUPERSYNC === 'true') {
+    throw new Error(
+      'SuperSync server is required for this run but is not test-ready. ' +
+        'Use scripts/wait-for-supersync.sh before running required SuperSync E2E.',
+    );
+  } else {
+    console.log('SuperSync server not available — supersync tests will be skipped');
+  }
 };
 
 export default globalSetup;

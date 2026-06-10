@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
+  DestroyRef,
   effect,
   ElementRef,
   afterNextRender,
@@ -13,7 +14,12 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { MatMenuModule } from '@angular/material/menu';
+
 import { TaskService } from '../tasks/task.service';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
@@ -30,14 +36,26 @@ import {
 } from 'rxjs';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
+import { of } from 'rxjs';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
-import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { CdkDropListGroup } from '@angular/cdk/drag-drop';
+import {
+  CustomizedUndoneTasks,
+  TaskViewCustomizerService,
+} from '../task-view-customizer/task-view-customizer.service';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { SectionService } from '../section/section.service';
+import { Section } from '../section/section.model';
+import {
+  CdkDrag,
+  CdkDragDrop,
+  CdkDropList,
+  CdkDropListGroup,
+  moveItemInArray,
+} from '@angular/cdk/drag-drop';
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
@@ -67,6 +85,16 @@ import {
 } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
+import { recordSearchNavDebug } from '../../util/search-nav-debug';
+import { dragDelayForTouch } from '../../util/input-intent';
+import { DateService } from '../../core/date/date.service';
+import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index.component';
+import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
+
+// Stable reference used as the toSignal initial value below so the deselect
+// effect can tell "the customized list hasn't emitted yet" apart from a
+// genuinely empty filtered result. See _getVisibleUndoneTasksForSelection.
+const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
 
 @Component({
   selector: 'work-view',
@@ -81,6 +109,8 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CdkDropListGroup,
+    CdkDropList,
+    CdkDrag,
     CdkScrollable,
     MatTooltip,
     MatIcon,
@@ -94,15 +124,21 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
     TranslatePipe,
     CollapsibleComponent,
     CommonModule,
+    MatMenuModule,
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
+    PluginIndexComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
+  private static readonly _FOCUS_ITEM_RETRY_DELAY = 250;
+  private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
+
   taskService = inject(TaskService);
   takeABreakService = inject(TakeABreakService);
   layoutService = inject(LayoutService);
+  sectionService = inject(SectionService);
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
   private _activatedRoute = inject(ActivatedRoute);
@@ -111,6 +147,43 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _store = inject(Store);
   private _snackService = inject(SnackService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _matDialog = inject(MatDialog);
+  private _destroyRef = inject(DestroyRef);
+  private _dateService = inject(DateService);
+  private _pluginBridge = inject(PluginBridgeService);
+  protected readonly dragDelayForTouch = dragDelayForTouch;
+
+  isProjectContext = toSignal(this.workContextService.isActiveWorkContextProject$, {
+    initialValue: false,
+  });
+
+  private _isTodayContext = toSignal(
+    this.workContextService.activeWorkContext$.pipe(
+      map((ctx) => ctx.id === TODAY_TAG.id),
+    ),
+    { initialValue: false },
+  );
+
+  /**
+   * Whether the current work context allows a plugin embed in the work-view
+   * body. Mirrors the restriction documented on `PluginAPI.showInWorkContext`:
+   * project and TODAY contexts only — a plugin embed is never shown for a
+   * regular tag or a non-work-view route.
+   */
+  private _isEmbeddableContext = computed(
+    () => this.isProjectContext() || this._isTodayContext(),
+  );
+
+  /**
+   * Plugin id currently embedded in the work-view body, or null. The plugin
+   * iframe replaces the task list when a plugin has requested the embed
+   * (`showInWorkContext`) AND the active context is embeddable.
+   */
+  pluginEmbedId = computed(() => {
+    const id = this._pluginBridge.workContextEmbedPluginId();
+    if (!id) return null;
+    return this._isEmbeddableContext() ? id : null;
+  });
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,
@@ -126,7 +199,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
-    { initialValue: { list: [] } },
+    { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },
   );
   doneTasks = input.required<TaskWithSubTasks[]>();
   backlogTasks = input.required<TaskWithSubTasks[]>();
@@ -166,6 +239,50 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       !this.customizerService.isCustomized() && this.repeatCfgsForContext().length > 0,
   );
 
+  // Section Logic
+  sections = toSignal(
+    this.workContextService.activeWorkContextId$.pipe(
+      switchMap((id) =>
+        id
+          ? this.sectionService.getSectionsByContextId$(id)
+          : of([] as readonly Section[]),
+      ),
+    ),
+    { initialValue: [] as readonly Section[] },
+  );
+
+  undoneTasksBySection = computed(() => {
+    const tasks = this.undoneTasks();
+    const sections = this.sections();
+
+    if (!sections.length) {
+      return { dict: {} as Record<string, TaskWithSubTasks[]>, noSection: tasks };
+    }
+
+    // section.taskIds is authoritative for in-section order — drag-drop
+    // reorders go through addTaskToSection's reducer. Walking sections
+    // first (rather than tasks first) lets us respect that order while
+    // staying defensive against stale ids and tasks that aren't yet in
+    // any section.
+    const taskById = new Map(tasks.map((t) => [t.id, t]));
+    const dict: Record<string, TaskWithSubTasks[]> = {};
+    const inSection = new Set<string>();
+    for (const s of sections) {
+      const list: TaskWithSubTasks[] = [];
+      for (const tId of s.taskIds ?? []) {
+        const t = taskById.get(tId);
+        if (t) {
+          list.push(t);
+          inSection.add(tId);
+        }
+      }
+      dict[s.id] = list;
+    }
+    const noSection = tasks.filter((t) => !inSection.has(t.id));
+
+    return { dict, noSection };
+  });
+
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
   );
@@ -196,13 +313,25 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     );
 
   private _subs: Subscription = new Subscription();
+  private _pendingFocusItemTaskId: string | null = null;
+  private _pendingFocusItemTimeout?: number;
+  private _splitTopElement?: HTMLElement;
   private _switchListAnimationTimeout?: number;
 
   // TODO: Skipped for migration because:
   //  Accessor queries cannot be migrated as they are too complex.
   @ViewChild('splitTopEl', { read: ElementRef }) set splitTopElRef(ref: ElementRef) {
     if (ref) {
+      this._splitTopElement = ref.nativeElement;
+      recordSearchNavDebug('workView:splitTopElReady', {
+        selectedTaskId: this.selectedTaskId(),
+        clientHeight: ref.nativeElement.clientHeight,
+        scrollHeight: ref.nativeElement.scrollHeight,
+      });
       this.splitTopEl$.next(ref.nativeElement);
+      if (this._pendingFocusItemTaskId) {
+        this._focusItemInWorkViewWhenReady(this._pendingFocusItemTaskId);
+      }
     }
   }
 
@@ -212,7 +341,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       const currentSelectedId = this.selectedTaskId();
       if (!currentSelectedId) return;
 
-      if (this._hasTaskInList(this.undoneTasks(), currentSelectedId)) return;
+      const visibleUndoneTasks = this._getVisibleUndoneTasksForSelection();
+      if (!visibleUndoneTasks) return;
+
+      if (this._hasTaskInList(visibleUndoneTasks, currentSelectedId)) return;
       if (this._hasTaskInList(this.doneTasks(), currentSelectedId)) return;
       if (this._hasTaskInList(this.laterTodayTasks(), currentSelectedId)) return;
 
@@ -280,6 +412,17 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         } else if (params.isInBacklog === 'true') {
           this.splitInputPos = 50;
         }
+        if (params?.focusItem) {
+          recordSearchNavDebug('workView:focusQueryParam', {
+            focusItem: params.focusItem,
+            selectedTaskId: this.selectedTaskId(),
+            splitInputPos: this.splitInputPos,
+          });
+          this._pendingFocusItemTaskId = params.focusItem;
+          this._focusItemInWorkViewWhenReady(params.focusItem);
+        } else {
+          this._pendingFocusItemTaskId = null;
+        }
         // NOTE: otherwise this is not triggered right away
         this._cd.detectChanges();
       }),
@@ -287,11 +430,47 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this._pendingFocusItemTimeout) {
+      window.clearTimeout(this._pendingFocusItemTimeout);
+    }
     if (this._switchListAnimationTimeout) {
       window.clearTimeout(this._switchListAnimationTimeout);
     }
     this._subs.unsubscribe();
     this.layoutService.isWorkViewScrolled.set(false);
+  }
+
+  deleteSection(id: string): void {
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        data: {
+          message: T.CONFIRM.DELETE_SECTION,
+        },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((isConfirm: boolean) => {
+        if (isConfirm) {
+          this.sectionService.deleteSection(id);
+        }
+      });
+  }
+
+  editSection(id: string, title: string): void {
+    this._matDialog
+      .open(DialogPromptComponent, {
+        data: {
+          placeholder: T.WW.ADD_SECTION_TITLE,
+          txtValue: title,
+        },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((newTitle: string | undefined) => {
+        if (newTitle?.trim()) {
+          this.sectionService.updateSection(id, { title: newTitle });
+        }
+      });
   }
 
   resetBreakTimer(): void {
@@ -321,8 +500,27 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: overdueTasks.map((t) => t.id),
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
       }),
     );
+  }
+
+  // Reject task drags into the section-reorder list (cdkDropListGroup
+  // shares targets). `contextType` is section-exclusive.
+  acceptSectionDragOnly = (drag: CdkDrag): boolean => {
+    const data = drag.data as Section | undefined;
+    return !!data && 'contextType' in data;
+  };
+
+  dropSection(event: CdkDragDrop<Section[]>): void {
+    if (event.previousIndex === event.currentIndex) return;
+    const contextId = this.workContextService.activeWorkContextId;
+    if (!contextId) return;
+
+    const ids = this.sections().map((s) => s.id);
+    moveItemInArray(ids, event.previousIndex, event.currentIndex);
+    this.sectionService.updateSectionOrder(contextId, ids);
   }
 
   private _initScrollTracking(): void {
@@ -334,6 +532,125 @@ export class WorkViewComponent implements OnInit, OnDestroy {
           this.layoutService.isWorkViewScrolled.set(false);
         }
       }),
+    );
+  }
+
+  /**
+   * The list of undone tasks actually visible to the user, used by the deselect
+   * effect to decide whether the selected task has been filtered out of view.
+   * Returns `null` while a customizer filter is active but its list has not
+   * emitted yet — the caller then skips deselecting for this run.
+   *
+   * `isCustomized()` is synchronous, but `customizeUndoneTasks` defers the
+   * customized branch by one animation frame (observeOn(animationFrameScheduler)),
+   * so the two can be momentarily out of step. Until the first emission `toSignal`
+   * still holds the exact INITIAL_CUSTOMIZED_UNDONE_TASKS reference; compare by
+   * identity (not by length) so a genuinely empty filtered result `{ list: [] }`
+   * still counts as "ready" and correctly deselects a now-hidden task.
+   */
+  private _getVisibleUndoneTasksForSelection(): TaskWithSubTasks[] | null {
+    if (!this.customizerService.isCustomized()) {
+      return this.undoneTasks();
+    }
+
+    const customized = this.customizedUndoneTasks();
+    const isCustomizedListReady = customized !== INITIAL_CUSTOMIZED_UNDONE_TASKS;
+    return isCustomizedListReady ? customized.list : null;
+  }
+
+  private _focusItemInWorkViewWhenReady(
+    taskId: string,
+    retriesLeft: number = WorkViewComponent._FOCUS_ITEM_MAX_RETRIES,
+  ): void {
+    if (this._pendingFocusItemTimeout) {
+      window.clearTimeout(this._pendingFocusItemTimeout);
+      this._pendingFocusItemTimeout = undefined;
+    }
+
+    const container = this._splitTopElement;
+    // Avoid querySelector here — task IDs are nanoid-generated and may start
+    // with `-` or a digit, which would throw SyntaxError.
+    const byId = document.getElementById(`t-${taskId}`);
+    const directMatch = byId && container?.contains(byId) ? byId : null;
+    const selectedMatch =
+      this.selectedTaskId() === taskId
+        ? ((container?.querySelector('task.isSelected') as HTMLElement | null) ?? null)
+        : null;
+    const matchedElement = directMatch ?? selectedMatch;
+    const el =
+      matchedElement && this._isTaskElementReady(matchedElement) ? matchedElement : null;
+    recordSearchNavDebug('workView:focusAttempt', {
+      taskId,
+      retriesLeft,
+      selectedTaskId: this.selectedTaskId(),
+      hasContainer: !!container,
+      hasDirectMatch: !!directMatch,
+      hasSelectedMatch: !!selectedMatch,
+      matchedElementHeight: matchedElement?.getBoundingClientRect().height ?? null,
+      containerScrollTop: container?.scrollTop ?? null,
+      containerClientHeight: container?.clientHeight ?? null,
+      containerScrollHeight: container?.scrollHeight ?? null,
+    });
+    if (container && el) {
+      const relativeTop = this._getRelativeTopWithinContainer(el, container);
+      const containerCenterOffset = container.clientHeight / 2;
+      const elementCenterOffset = el.offsetHeight / 2;
+      const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
+      container.scrollTop = Math.max(centeredTop, 0);
+      el.focus({ preventScroll: true });
+      recordSearchNavDebug('workView:focusSuccess', {
+        taskId,
+        selectedTaskId: this.selectedTaskId(),
+        matchedElementId: el.id,
+        relativeTop,
+        elementOffsetHeight: el.offsetHeight,
+        centeredTop,
+        appliedScrollTop: container.scrollTop,
+      });
+      window.setTimeout(() => {
+        recordSearchNavDebug('workView:focusPostTick', {
+          taskId,
+          selectedTaskId: this.selectedTaskId(),
+          matchedElementId: el.id,
+          containerScrollTop: container.scrollTop,
+          containerClientHeight: container.clientHeight,
+          containerScrollHeight: container.scrollHeight,
+        });
+      }, 0);
+      this._pendingFocusItemTaskId = null;
+      return;
+    }
+
+    if (retriesLeft <= 0) {
+      return;
+    }
+
+    this._pendingFocusItemTimeout = window.setTimeout(() => {
+      this._pendingFocusItemTimeout = undefined;
+      this._focusItemInWorkViewWhenReady(taskId, retriesLeft - 1);
+    }, WorkViewComponent._FOCUS_ITEM_RETRY_DELAY);
+  }
+
+  private _getRelativeTopWithinContainer(
+    el: HTMLElement,
+    container: HTMLElement,
+  ): number {
+    let relativeTop = 0;
+    let current: HTMLElement | null = el;
+
+    while (current && current !== container) {
+      relativeTop += current.offsetTop;
+      current = current.offsetParent as HTMLElement | null;
+    }
+
+    return relativeTop;
+  }
+
+  private _isTaskElementReady(el: HTMLElement): boolean {
+    return (
+      document.body.contains(el) &&
+      el.getClientRects().length > 0 &&
+      el.getBoundingClientRect().height > 0
     );
   }
 

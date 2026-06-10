@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { startCleanupJobs, stopCleanupJobs } from '../src/sync/cleanup';
 import { DEFAULT_SYNC_CONFIG, MS_PER_DAY } from '../src/sync/sync.types';
+import { Logger } from '../src/logger';
 
 // Mock the sync service
 const mockSyncService = {
@@ -95,7 +96,11 @@ describe('Cleanup Jobs', () => {
       expect(mockSyncService.deleteOldSyncedOpsForAllUsers).toHaveBeenCalledTimes(3);
     });
 
-    it('should update storage usage for affected users after op cleanup', async () => {
+    it('should not call full-scan updateStorageUsage after op cleanup', async () => {
+      // The daily cleanup used to call updateStorageUsage(userId) for every
+      // affected user, which forced a full-payload TOAST scan and caused the
+      // production disk-I/O DoS. The cached counter is deliberately left
+      // stale-high until a quota miss reconciles that user's exact usage.
       mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce({
         totalDeleted: 100,
         affectedUserIds: [1, 2, 3],
@@ -104,11 +109,60 @@ describe('Cleanup Jobs', () => {
       startCleanupJobs();
       await vi.advanceTimersByTimeAsync(10_000);
 
-      // Should update storage for each affected user
-      expect(mockSyncService.updateStorageUsage).toHaveBeenCalledTimes(3);
-      expect(mockSyncService.updateStorageUsage).toHaveBeenCalledWith(1);
-      expect(mockSyncService.updateStorageUsage).toHaveBeenCalledWith(2);
-      expect(mockSyncService.updateStorageUsage).toHaveBeenCalledWith(3);
+      expect(mockSyncService.updateStorageUsage).not.toHaveBeenCalled();
+    });
+
+    it('should reconcile stalest-first and warn when affected users exceed the budget', async () => {
+      // RECONCILE_BUDGET_MS / RECONCILE_INTERVAL_MS = 720. With more affected
+      // users than that, the cleanup pass reconciles the first 720 — relying
+      // on `deleteOldSyncedOpsForAllUsers` to return ids stalest-first
+      // (orderBy snapshotAt asc). The fresh tail rolls over to the next pass.
+      const totalUsers = 1000;
+      // Stalest first, mimicking what the service now returns.
+      const userIds = Array.from({ length: totalUsers }, (_, i) => i + 1);
+      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce({
+        totalDeleted: totalUsers,
+        affectedUserIds: userIds,
+      });
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      // Warning is emitted with both numbers so operators can see the gap.
+      expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('720/1000 users'));
+
+      // Run all 720 deferred reconciles (1h budget worth of timers).
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+      expect(mockSyncService.updateStorageUsage).toHaveBeenCalledTimes(720);
+
+      // Stalest-first ordering is preserved: callers see the first 720 ids
+      // from `affectedUserIds` in input order.
+      const calledOrder = mockSyncService.updateStorageUsage.mock.calls.map(
+        (c) => c[0] as number,
+      );
+      expect(calledOrder).toEqual(userIds.slice(0, 720));
+    });
+
+    it('should not warn or shuffle when affected users fit in the budget', async () => {
+      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce({
+        totalDeleted: 3,
+        affectedUserIds: [10, 20, 30],
+      });
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      // No starvation warning when everyone fits.
+      const warnCalls = (Logger.warn as ReturnType<typeof vi.fn>).mock.calls;
+      expect(warnCalls.some((c) => String(c[0]).includes('budget covers'))).toBe(false);
+
+      // Drain the 3 deferred reconciles (3 × 5s).
+      await vi.advanceTimersByTimeAsync(3 * 5_000);
+      const calledOrder = mockSyncService.updateStorageUsage.mock.calls.map(
+        (c) => c[0] as number,
+      );
+      // When the budget covers everyone the original order is preserved.
+      expect(calledOrder).toEqual([10, 20, 30]);
     });
   });
 

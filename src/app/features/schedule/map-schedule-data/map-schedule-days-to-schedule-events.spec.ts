@@ -94,6 +94,7 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
           style: 'grid-column: 2;  grid-row: 61 / span 12',
           timeLeftInHours: 1,
           type: 'Task',
+          isBeyondBudget: undefined,
         },
         {
           data: {
@@ -111,9 +112,59 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
           style: 'grid-column: 2;  grid-row: 73 / span 6',
           timeLeftInHours: 0.5,
           type: 'Task',
+          isBeyondBudget: undefined,
         },
       ],
     } as any);
+  });
+
+  it('should preserve incomplete-fit indication on rendered events', () => {
+    const res = mapScheduleDaysToScheduleEvents(
+      [
+        fakeDay({
+          entries: [
+            fakeTaskEntry('OVER', {
+              start: new Date(2020, 0, 1, 9, 0).getTime(),
+              duration: H,
+              isBeyondBudget: true,
+            }),
+          ],
+        }),
+      ],
+      FH,
+    );
+
+    expect(res.eventsFlat[0].isBeyondBudget).toBe(true);
+  });
+
+  it('should set calendar badge day for beyond budget planned tasks', () => {
+    const res = mapScheduleDaysToScheduleEvents(
+      [
+        fakeDay({
+          dayDate: '2020-12-12',
+          beyondBudgetTasks: [
+            {
+              ...FAKE_TASK_ENTRY.data,
+              id: 'BEYOND',
+              title: 'Beyond budget',
+              timeEstimate: H,
+              plannedForDay: '2020-12-12',
+            } as TaskCopy,
+          ],
+        }),
+      ],
+      FH,
+    );
+
+    expect(res.beyondBudgetDays[0][0]).toEqual(
+      jasmine.objectContaining({
+        dayOfMonth: 12,
+        plannedForDay: '2020-12-12',
+        isBeyondBudget: true,
+        style: '',
+        type: SVEType.TaskPlannedForDay,
+      }),
+    );
   });
 
   it('should detect overlap for two zero-duration events at the same time', () => {
@@ -129,7 +180,8 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
       ],
       FH,
     );
-    expect(res.eventsFlat[1].overlap).toEqual({ count: 1, offset: 1 });
+    expect(res.eventsFlat[0].overlap).toEqual({ count: 2, offset: 0 });
+    expect(res.eventsFlat[1].overlap).toEqual({ count: 2, offset: 1 });
   });
 
   it('should detect overlap for three zero-duration events at the same time', () => {
@@ -146,8 +198,9 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
       ],
       FH,
     );
-    expect(res.eventsFlat[1].overlap).toEqual({ count: 1, offset: 1 });
-    expect(res.eventsFlat[2].overlap).toEqual({ count: 2, offset: 2 });
+    expect(res.eventsFlat[0].overlap).toEqual({ count: 3, offset: 0 });
+    expect(res.eventsFlat[1].overlap).toEqual({ count: 3, offset: 1 });
+    expect(res.eventsFlat[2].overlap).toEqual({ count: 3, offset: 2 });
   });
 
   it('should detect overlap for two events with normal duration at the same time', () => {
@@ -163,7 +216,8 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
       ],
       FH,
     );
-    expect(res.eventsFlat[1].overlap).toEqual({ count: 1, offset: 1 });
+    expect(res.eventsFlat[0].overlap).toEqual({ count: 2, offset: 0 });
+    expect(res.eventsFlat[1].overlap).toEqual({ count: 2, offset: 1 });
   });
 
   it('should NOT detect overlap for two zero-duration events at different times', () => {

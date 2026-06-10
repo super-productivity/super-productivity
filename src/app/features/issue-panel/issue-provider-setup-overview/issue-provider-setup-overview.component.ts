@@ -8,13 +8,13 @@ import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { CalendarContextInfoTarget } from '../../issue/providers/calendar/calendar.model';
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
-import { MatButton } from '@angular/material/button';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginService } from '../../../plugins/plugin.service';
+import { IssueLog } from '../../../core/log';
 
 @Component({
   selector: 'issue-provider-setup-overview',
-  imports: [MatIcon, TranslateModule, MatButton],
+  imports: [MatIcon, TranslateModule],
   templateUrl: './issue-provider-setup-overview.component.html',
   styleUrl: './issue-provider-setup-overview.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,7 +70,7 @@ export class IssueProviderSetupOverviewComponent {
     this.pluginProviders = allProviders.filter((p) => !p.useAgendaView);
     this.pluginCalendarProviders = allProviders.filter((p) => p.useAgendaView);
     if (!isValidIssueProviderKey(issueProviderKey)) {
-      console.error(`Invalid issue provider key from plugin: "${issueProviderKey}"`);
+      IssueLog.err(`Invalid issue provider key from plugin: "${issueProviderKey}"`);
       return;
     }
     this.openSetupDialog(issueProviderKey);

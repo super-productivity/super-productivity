@@ -71,6 +71,17 @@ describe('operation-codec.service', () => {
 
       expect(decoded).toEqual(mockOperationWithOptionals);
     });
+
+    it('should preserve syncImportReason through encode/decode', () => {
+      const op: Operation = {
+        ...mockOperation,
+        syncImportReason: 'REPAIR',
+      };
+      const encoded = encodeOperation(op);
+      expect(encoded.r).toBe('REPAIR');
+      const decoded = decodeOperation(encoded);
+      expect(decoded.syncImportReason).toBe('REPAIR');
+    });
   });
 
   describe('encodeOperationLogEntry', () => {

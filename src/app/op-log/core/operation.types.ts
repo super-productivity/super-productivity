@@ -1,25 +1,42 @@
-import { VectorClock } from '../../core/util/vector-clock';
-import { ActionType } from './action-types.enum';
-import { EntityType as SharedEntityType, ENTITY_TYPES } from '@sp/shared-schema';
-export { VectorClock, ActionType, ENTITY_TYPES };
+// Generic, framework-agnostic primitives come from @sp/sync-core.
+// Super Productivity-specific types (entity-type union, app action-type enum,
+// sync-import reasons, repair payloads, full-state wrapper) live alongside this
+// file in the app.
 
-export enum OpType {
-  Create = 'CRT',
-  Update = 'UPD',
-  Delete = 'DEL',
-  Move = 'MOV', // For list reordering
-  Batch = 'BATCH', // For bulk operations (import, mass update)
-  /** Replaces entire app state from remote sync. All concurrent ops are discarded. See CLAUDE.md #12. */
-  SyncImport = 'SYNC_IMPORT',
-  /** Replaces entire app state from backup file. All concurrent ops are discarded. See CLAUDE.md #12. */
-  BackupImport = 'BACKUP_IMPORT',
-  /** Auto-repair operation containing full repaired state. */
-  Repair = 'REPAIR',
-}
+import type {
+  VectorClock,
+  Operation as LibOperation,
+  OperationLogEntry as LibOperationLogEntry,
+  EntityChange as LibEntityChange,
+  EntityConflict as LibEntityConflict,
+  ConflictResult as LibConflictResult,
+  MultiEntityPayload as LibMultiEntityPayload,
+} from '@sp/sync-core';
+import type { EntityType as SharedEntityType } from '@sp/shared-schema';
+import { ENTITY_TYPES } from '@sp/shared-schema';
+import {
+  createFullStateOpTypeHelpers,
+  isMultiEntityPayload as libIsMultiEntityPayload,
+  OpType,
+} from '@sp/sync-core';
+import { ActionType } from './action-types.enum';
+
+export { OpType, extractActionPayload } from '@sp/sync-core';
+export type { VectorClock };
+export { ENTITY_TYPES, ActionType };
+
+const fullStateOpTypeHelpers = createFullStateOpTypeHelpers<OpType>([
+  OpType.SyncImport,
+  OpType.BackupImport,
+  OpType.Repair,
+]);
+
+export const FULL_STATE_OP_TYPES = fullStateOpTypeHelpers.FULL_STATE_OP_TYPES;
+export const isFullStateOpType = fullStateOpTypeHelpers.isFullStateOpType;
 
 /**
- * Entity type - identifies the kind of data entity being operated on.
- * Re-exported from @sp/shared-schema to ensure client/server consistency.
+ * Entity type — Super Productivity's domain set, sourced from `@sp/shared-schema`
+ * so client and server agree on the union.
  */
 export type EntityType = SharedEntityType;
 
@@ -35,83 +52,14 @@ export type SyncImportReason =
   | 'SERVER_MIGRATION'
   | 'REPAIR';
 
-export interface Operation {
-  /**
-   * Unique identifier for the operation.
-   * Should be a UUID v7 (time-ordered) to allow for rough chronological sorting
-   * even without vector clocks, which aids in debugging and indexing.
-   */
-  id: string;
-
-  // ACTION MAPPING
-  /**
-   * The specific NgRx Action type (e.g., '[Task] Update').
-   * Used to replay the operation against the store during application or testing.
-   * Must be a value from the ActionType enum to ensure type safety.
-   */
+/**
+ * Super Productivity's narrowed Operation type: tightens `actionType` and
+ * `entityType` to the app's enums and adds the optional `syncImportReason`
+ * field carried on full-state ops.
+ */
+export interface Operation extends Omit<LibOperation, 'actionType' | 'entityType'> {
   actionType: ActionType;
-
-  /**
-   * High-level operation category (Create, Update, Delete, etc.).
-   * Used for broad logic handling like persistence strategies or conflict resolution rules.
-   */
-  opType: OpType;
-
-  // SCOPE
-  /**
-   * The type of the data model entity being modified (e.g., 'TASK', 'PROJECT').
-   */
   entityType: EntityType;
-
-  /**
-   * The specific ID of the entity being modified.
-   * Use '*' for singleton entities like global config.
-   */
-  entityId?: string;
-
-  /**
-   * List of entity IDs for batch operations that affect multiple items simultaneously.
-   */
-  entityIds?: string[];
-
-  // DATA
-  /**
-   * The actual data change associated with the operation.
-   * - For 'CRT', this is the full object.
-   * - For 'UPD', this is a partial object (changeset).
-   * - For 'DEL', this might be empty or a tombstone.
-   * Validated by Typia at runtime.
-   */
-  payload: unknown;
-
-  // CAUSALITY & ORDERING
-  /**
-   * The ID of the device/client that generated this operation.
-   * Essential for vector clock management and identifying the source of changes.
-   */
-  clientId: string;
-
-  /**
-   * Represents the causal state of the world AFTER this operation was applied.
-   * Used to detect concurrency: if two ops have unordered vector clocks, they are concurrent.
-   * This is the primary mechanism for ensuring consistency across distributed devices.
-   */
-  vectorClock: VectorClock;
-
-  /**
-   * Wall clock time (epoch ms) from the **originating** device.
-   * - Used as a tie-breaker for concurrent operations (Last-Write-Wins logic).
-   * - NOT used for garbage collection or local maintenance.
-   */
-  timestamp: number;
-
-  // META
-  /**
-   * The schema version of the data at the time of operation creation.
-   * Allows the system to migrate or transform payloads if the data structure changes in the future.
-   */
-  schemaVersion: number;
-
   /**
    * Optional reason for full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
    * Used in the conflict dialog to explain why the import was created.
@@ -120,75 +68,42 @@ export interface Operation {
   syncImportReason?: SyncImportReason;
 }
 
-export interface OperationLogEntry {
-  /**
-   * Local, monotonic auto-increment integer (IndexedDB primary key).
-   * Strictly orders operations as they arrived or were generated on THIS specific device.
-   */
-  seq: number;
-
-  /**
-   * The operation data itself (the synchronized part).
-   */
+export interface OperationLogEntry extends Omit<LibOperationLogEntry, 'op'> {
   op: Operation;
-
-  /**
-   * Local timestamp (epoch ms) indicating when this operation was written to the LOCAL database.
-   * - **Usage:** Strictly for local maintenance, such as garbage collection (compaction).
-   * - **Compaction:** Old entries are deleted based on `Date.now() - appliedAt > Retention`.
-   * - **Sync:** This value is NOT synchronized and implies nothing about the global order of events.
-   */
-  appliedAt: number;
-
-  /**
-   * Origin of the operation:
-   * - 'local': Generated by this device.
-   * - 'remote': Received from the sync server.
-   */
-  source: 'local' | 'remote';
-
-  /**
-   * Timestamp (epoch ms) when this operation was successfully acknowledged by the remote server.
-   * - Null/Undefined if the operation is still pending upload.
-   * - Used to determine which operations are safe to compact (must be synced first).
-   */
-  syncedAt?: number;
-
-  /**
-   * Timestamp (epoch ms) if the operation was rejected during conflict resolution.
-   * Effectively marks the operation as "dead" but kept for history/debugging.
-   */
-  rejectedAt?: number;
-
-  /**
-   * For remote ops only: tracks whether the op was successfully applied to the local NgRx store.
-   * - 'pending': Stored in DB but not yet dispatched to state (e.g., during initial download).
-   * - 'applied': Successfully dispatched to NgRx.
-   * - 'failed': Attempted to apply but failed (e.g., missing dependency). Will be retried on startup.
-   * Used for crash recovery: on startup, any 'pending' or 'failed' remote ops are re-dispatched.
-   */
-  applicationStatus?: 'pending' | 'applied' | 'failed';
-
-  /**
-   * For 'failed' ops: number of retry attempts.
-   * After MAX_CONFLICT_RETRY_ATTEMPTS, the op is marked as rejected.
-   */
-  retryCount?: number;
 }
 
-export interface EntityConflict {
+export interface EntityChange extends Omit<LibEntityChange, 'entityType'> {
   entityType: EntityType;
-  entityId: string;
-  localOps: Operation[]; // Local ops affecting this entity
-  remoteOps: Operation[]; // Remote ops affecting the same entity
-  suggestedResolution: 'local' | 'remote' | 'merge' | 'manual';
-  mergedPayload?: unknown; // If auto-mergeable
 }
 
-export interface ConflictResult {
+export interface EntityConflict extends Omit<
+  LibEntityConflict,
+  'entityType' | 'localOps' | 'remoteOps'
+> {
+  entityType: EntityType;
+  localOps: Operation[];
+  remoteOps: Operation[];
+}
+
+export interface ConflictResult extends Omit<
+  LibConflictResult,
+  'nonConflicting' | 'conflicts'
+> {
   nonConflicting: Operation[];
   conflicts: EntityConflict[];
 }
+
+export interface MultiEntityPayload extends Omit<LibMultiEntityPayload, 'entityChanges'> {
+  entityChanges: EntityChange[];
+}
+
+/**
+ * SP-narrowed type guard that mirrors `@sp/sync-core`'s `isMultiEntityPayload`
+ * but narrows to the app's `MultiEntityPayload` (with the SP entity-type union).
+ * The runtime check is identical; only the inferred type changes.
+ */
+export const isMultiEntityPayload = (payload: unknown): payload is MultiEntityPayload =>
+  libIsMultiEntityPayload(payload);
 
 /**
  * Minimal summary of repairs performed, used in REPAIR operation payload.
@@ -211,26 +126,6 @@ export interface RepairPayload {
   appDataComplete: unknown; // AppDataComplete - using unknown to avoid circular deps
   repairSummary: RepairSummary;
 }
-
-// =============================================================================
-// FULL-STATE OPERATION PAYLOADS
-// =============================================================================
-
-/**
- * OpTypes that contain full application state in their payload.
- * Used for type guards and validation.
- */
-export const FULL_STATE_OP_TYPES = new Set<OpType>([
-  OpType.SyncImport,
-  OpType.BackupImport,
-  OpType.Repair,
-]);
-
-/**
- * Type guard to check if an operation is a full-state operation.
- */
-export const isFullStateOpType = (opType: OpType | string): boolean =>
-  FULL_STATE_OP_TYPES.has(opType as OpType);
 
 /**
  * Legacy wrapper format for full-state payloads.
@@ -256,12 +151,6 @@ export const isWrappedFullStatePayload = (
 /**
  * Extracts the raw application state from a full-state operation payload.
  * Handles both wrapped ({ appDataComplete: ... }) and unwrapped formats.
- *
- * IMPORTANT: This should be used when uploading snapshots to ensure
- * consistent format in sync files.
- *
- * @param payload - The operation payload (wrapped or unwrapped)
- * @returns The raw application state
  */
 export const extractFullStateFromPayload = (
   payload: unknown,
@@ -269,17 +158,12 @@ export const extractFullStateFromPayload = (
   if (isWrappedFullStatePayload(payload)) {
     return payload.appDataComplete;
   }
-  // Unwrapped format - payload IS the state
   return payload as Record<string, unknown>;
 };
 
 /**
  * Validates that a full-state payload has the expected structure.
  * Throws an error if the payload is malformed.
- *
- * @param payload - The payload to validate
- * @param context - Description of where this is being called from (for error messages)
- * @throws Error if payload is not a valid full-state payload
  */
 export const assertValidFullStatePayload: (
   payload: unknown,
@@ -293,7 +177,6 @@ export const assertValidFullStatePayload: (
     );
   }
 
-  // Check for expected top-level properties (not exhaustive, just key ones)
   const expectedKeys = ['task', 'project', 'tag', 'globalConfig'];
   const hasExpectedKeys = expectedKeys.some((key) => key in state);
 
@@ -304,77 +187,4 @@ export const assertValidFullStatePayload: (
         `Expected some of [${expectedKeys.join(', ')}], got [${actualKeys}...]`,
     );
   }
-};
-
-// =============================================================================
-// MULTI-ENTITY OPERATIONS
-// =============================================================================
-
-/**
- * Represents a single entity change within a multi-entity operation.
- * Captures the exact changes made to one entity as part of an atomic operation.
- */
-export interface EntityChange {
-  /**
-   * The type of entity being changed.
-   */
-  entityType: EntityType;
-
-  /**
-   * The ID of the entity being changed.
-   */
-  entityId: string;
-
-  /**
-   * The type of change (Create, Update, Delete).
-   */
-  opType: OpType;
-
-  /**
-   * The actual changes:
-   * - For Create: Full entity object
-   * - For Update: Partial object with only changed fields
-   * - For Delete: Minimal tombstone { id: string }
-   */
-  changes: unknown;
-}
-
-/**
- * Payload wrapper for multi-entity operations.
- * Contains the original action payload plus all entity changes computed from state diff.
- */
-export interface MultiEntityPayload {
-  /**
-   * The original action payload (for replaying the action on remote clients).
-   */
-  actionPayload: Record<string, unknown>;
-
-  /**
-   * All entity changes that resulted from this action.
-   * Computed by diffing state before and after the action.
-   */
-  entityChanges: EntityChange[];
-}
-
-/**
- * Type guard to check if a payload is a multi-entity payload.
- */
-export const isMultiEntityPayload = (payload: unknown): payload is MultiEntityPayload => {
-  return (
-    typeof payload === 'object' &&
-    payload !== null &&
-    'entityChanges' in payload &&
-    Array.isArray((payload as MultiEntityPayload).entityChanges)
-  );
-};
-
-/**
- * Extracts the action payload from an operation payload.
- * Handles both multi-entity payloads (new format) and legacy payloads.
- */
-export const extractActionPayload = (payload: unknown): Record<string, unknown> => {
-  if (isMultiEntityPayload(payload)) {
-    return payload.actionPayload;
-  }
-  return payload as Record<string, unknown>;
 };

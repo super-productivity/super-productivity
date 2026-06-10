@@ -38,6 +38,15 @@ function copyRecursive(src, dest) {
   }
 }
 
+function assertFilesExist(basePath, files, pluginName) {
+  const missing = files.filter((file) => !fs.existsSync(path.join(basePath, file)));
+  if (missing.length) {
+    throw new Error(
+      `${pluginName} build is missing required asset(s): ${missing.join(', ')}`,
+    );
+  }
+}
+
 // Plugin configurations
 const plugins = [
   {
@@ -47,6 +56,11 @@ const plugins = [
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
+      assertFilesExist(
+        path.join(pluginPath, 'dist'),
+        ['i18n/en.json', 'i18n/de.json'],
+        'procrastination-buster',
+      );
       // Copy to assets directory
       const targetDir = path.join(
         __dirname,
@@ -64,6 +78,11 @@ const plugins = [
           copyRecursive(src, dest);
         }
       }
+      assertFilesExist(
+        targetDir,
+        ['i18n/en.json', 'i18n/de.json'],
+        'procrastination-buster',
+      );
       return 'Built and copied to assets';
     },
   },
@@ -155,6 +174,10 @@ const plugins = [
         if (fs.existsSync(src)) {
           fs.copyFileSync(src, dest);
         }
+      }
+      const i18nSrc = path.join(pluginPath, 'i18n');
+      if (fs.existsSync(i18nSrc)) {
+        copyRecursive(i18nSrc, path.join(targetDir, 'i18n'));
       }
       return 'Copied to assets';
     },
@@ -294,9 +317,82 @@ const plugins = [
       return 'Built and copied to assets';
     },
   },
-  // google-calendar-provider: disabled from bundled builds pending legal review.
-  // Source remains in packages/plugin-dev/google-calendar-provider/
-  // To re-enable: uncomment and add back to BUNDLED_PLUGIN_PATHS in plugin.service.ts
+  {
+    name: 'google-calendar-provider',
+    path: 'google-calendar-provider',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/google-calendar-provider',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          const src = path.join(distPath, file);
+          const dest = path.join(targetDir, file);
+          copyRecursive(src, dest);
+        }
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
+    name: 'caldav-calendar-provider',
+    path: 'caldav-calendar-provider',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/caldav-calendar-provider',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          const src = path.join(distPath, file);
+          const dest = path.join(targetDir, file);
+          copyRecursive(src, dest);
+        }
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
+    name: 'doc-mode',
+    path: 'doc-mode',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/doc-mode',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      // editor.js is inlined into index.html; only ship the runtime files.
+      const distFiles = ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'];
+      for (const file of distFiles) {
+        const src = path.join(pluginPath, 'dist', file);
+        const dest = path.join(targetDir, file);
+        if (fs.existsSync(src)) copyRecursive(src, dest);
+      }
+      return 'Built and copied to assets';
+    },
+  },
 ];
 
 async function buildPlugin(plugin) {
