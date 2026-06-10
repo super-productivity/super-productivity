@@ -11,6 +11,7 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { ActionType, OpType } from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
+import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
 import { SnackService } from '../../core/snack/snack.service';
 
 describe('SyncHydrationService', () => {
@@ -777,6 +778,56 @@ describe('SyncHydrationService', () => {
       const sync = globalConfig['sync'] as Record<string, unknown>;
       expect(sync['syncProvider']).toBe(SyncProviderId.WebDAV);
       expect(sync['isEnabled']).toBe(true);
+    });
+
+    // Round-trip pin (issue #8233): iterates LOCAL_ONLY_SYNC_KEYS so adding a
+    // new local-only key in the util grows coverage here automatically without
+    // touching this spec.
+    it('preserves every LOCAL_ONLY_SYNC_KEYS value through hydration (round-trip)', async () => {
+      const localSync = {
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: true,
+        isEncryptionEnabled: false,
+        syncProvider: SyncProviderId.WebDAV,
+        syncInterval: 300000,
+        isManualSyncOnly: true,
+      };
+      const remoteSync = {
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: false,
+        isEncryptionEnabled: true,
+        syncProvider: SyncProviderId.Dropbox,
+        syncInterval: 60000,
+        isManualSyncOnly: false,
+      };
+      mockStore.select.and.returnValue(of(localSync));
+
+      await service.hydrateFromRemoteSync({
+        task: {},
+        globalConfig: { sync: remoteSync },
+      });
+
+      const dispatchedAction = mockStore.dispatch.calls.mostRecent()
+        .args[0] as unknown as ReturnType<typeof loadAllData>;
+      const dispatchedSync = (
+        dispatchedAction.appDataComplete.globalConfig as Record<string, unknown>
+      )['sync'] as Record<string, unknown>;
+      for (const key of LOCAL_ONLY_SYNC_KEYS) {
+        expect(dispatchedSync[key])
+          .withContext(`dispatched sync.${key} must match local`)
+          .toBe(localSync[key]);
+      }
+
+      const savedState = mockOpLogStore.saveStateCache.calls.mostRecent().args[0]
+        .state as Record<string, unknown>;
+      const savedSync = (savedState['globalConfig'] as Record<string, unknown>)[
+        'sync'
+      ] as Record<string, unknown>;
+      for (const key of LOCAL_ONLY_SYNC_KEYS) {
+        expect(savedSync[key])
+          .withContext(`saved snapshot sync.${key} must match local`)
+          .toBe(localSync[key]);
+      }
     });
 
     it('should preserve local settings in both snapshot and dispatch', async () => {

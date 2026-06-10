@@ -36,10 +36,16 @@ export const createFocusResumeTick$ = (onResume$: Observable<void>): Observable<
 
 /**
  * Whether the focus-mode notification needs a fresh push to the native service.
- * Elapsed-only changes are throttled to 5s (the native handler already ticks
- * every second), but pause/purpose changes — and the large elapsed jump a resume
- * `tick()` produces (#7856) — must propagate immediately so the notification
- * reconciles with the corrected in-app countdown.
+ * The notification's chronometer ticks natively, so steady-state elapsed
+ * changes need no push at all — and since prev/curr are consecutive per-tick
+ * emissions (~1s apart), the 5s gate suppresses them entirely (#8243). Do not
+ * weaken it: every push re-runs startForeground + a notification rebuild.
+ * Pause/purpose changes — and the large elapsed jump a resume `tick()`
+ * produces (#7856) — must propagate immediately so the notification
+ * reconciles with the corrected in-app countdown. (The 5000 here and
+ * TIME_SPENT_JUMP_THRESHOLD_MS in android-foreground-tracking.effects.ts
+ * encode the same "larger than any tick" idea but differ in semantics —
+ * abs() vs decrease-always-passes — so they are deliberately not shared.)
  */
 export const hasFocusNotificationStateChanged = (
   prevTimer: TimerState | undefined,

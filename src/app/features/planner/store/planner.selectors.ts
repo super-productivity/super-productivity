@@ -191,26 +191,33 @@ const getPlannerDay = (
     noStartTimeRepeatProjections: allNoStartTimeRepeatProjections,
   } = getAllRepeatableTasksForDay(taskRepeatCfgs, currentDayTimestamp);
 
-  // A recurring task can already have a real instance in this day (created, and
-  // possibly marked done). Drop the repeat projection for any config that already
-  // has an instance here, so the same recurring task is not counted twice, once as
-  // the real (done-aware) task and once as a projection. The "Today" view only ever
-  // counts the real task, so without this the two views disagree on remaining time
-  // for done recurring tasks. See #8220.
-  const coveredRepeatCfgIds = new Set(
-    normalTasks.map((t) => t.repeatCfgId).filter((id): id is string => !!id),
+  const scheduledTaskItems = getScheduledTaskItems(
+    allPlannedTasks,
+    dayDate,
+    startOfNextDayDiffMs,
   );
+
+  // A recurring task can already have a real instance in this day, either in
+  // normalTasks (untimed instance, or any non-Today column) or in
+  // scheduledTaskItems (timed `dueWithTime` instance on Today — excluded from
+  // normalTasks because allPlannedTasks owns it). Drop the projection for any
+  // config that already has an instance here so the same recurring task is not
+  // counted twice — once as the real (done-aware) task and once as a full-
+  // estimate projection. The "Today" view only ever counts the real task, so
+  // without this the two views disagree on remaining time for done recurring
+  // tasks. See #8220, #8232.
+  const coveredRepeatCfgIds = new Set<string>();
+  for (const t of normalTasks) {
+    if (t.repeatCfgId) coveredRepeatCfgIds.add(t.repeatCfgId);
+  }
+  for (const si of scheduledTaskItems) {
+    if (si.task.repeatCfgId) coveredRepeatCfgIds.add(si.task.repeatCfgId);
+  }
   const repeatProjectionsForDay = allRepeatProjectionsForDay.filter(
     (rp) => !coveredRepeatCfgIds.has(rp.repeatCfg.id),
   );
   const noStartTimeRepeatProjections = allNoStartTimeRepeatProjections.filter(
     (rp) => !coveredRepeatCfgIds.has(rp.repeatCfg.id),
-  );
-
-  const scheduledTaskItems = getScheduledTaskItems(
-    allPlannedTasks,
-    dayDate,
-    startOfNextDayDiffMs,
   );
   const { timedEvents, allDayEvents } = getIcalEventsForDay(
     calendarEvents,
@@ -344,7 +351,11 @@ const getScheduledTaskItems = (
     )
     .map((task) => {
       const start = task.dueWithTime;
-      const end = start + Math.max(task.timeEstimate - task.timeSpent, 0);
+      // Mirror normalTasks: a done task contributes 0 remaining time. Without
+      // this, a done timed task still adds its full estimate to the day total
+      // (and a done timed recurring task double-counted with its projection
+      // before the dedup above). See #8232.
+      const end = start + (task.isDone ? 0 : getTimeLeftForTask(task));
       return {
         id: task.id,
         type: ScheduleItemType.Task,

@@ -26,10 +26,20 @@
     "RESTORE_FILE_BACKUP": "Es scheint KEINE DATEN zu geben, aber unter \"{{dir}}\" sind Backups verfügbar. Möchtest du das neueste Backup von {{from}} wiederherstellen?",
     "RESTORE_FILE_BACKUP_ANDROID": "Es scheint KEINE DATEN zu geben, aber es ist ein Backup verfügbar. Möchtest du es laden?",
     "RESTORE_FILE_BACKUP_MOBILE": "No data was found on this device, but a backup is available to restore (tasks: {{tasks}}, projects: {{projects}}). Restore it?",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Das letzte automatische Backup wiederherstellen (Aufgaben: {{tasks}}, Projekte: {{projects}})? Dies ersetzt alle aktuellen Daten auf diesem Gerät und überschreibt bei Nutzung der Synchronisation deine anderen Geräte bei der nächsten Synchronisierung.",
     "RESTORE_STRAY_BACKUP": "Bei der letzten Synchronisierung ist möglicherweise ein Fehler aufgetreten. Möchtest du das letzte Backup wiederherstellen?"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Drücke zum Speichern erneut die Eingabetaste"
+    "MONTH": "Monat",
+    "NEXT_24_YEARS": "Nächste 24 Jahre",
+    "NEXT_MONTH": "Nächster Monat",
+    "NEXT_YEAR": "Nächstes Jahr",
+    "PRESS_ENTER_AGAIN": "Drücke zum Speichern erneut die Eingabetaste",
+    "PREVIOUS_24_YEARS": "Vorherige 24 Jahre",
+    "PREVIOUS_MONTH": "Vorheriger Monat",
+    "PREVIOUS_YEAR": "Vorheriges Jahr",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Jahr auswählen",
+    "SWITCH_TO_YEAR_VIEW": "Monat auswählen"
   },
   "DIALOG_LOGS": {
     "COPY": "Kopieren",
@@ -75,6 +85,20 @@
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android blocked the persistent time tracking notification. Time is still tracked in the app, but background recovery may be unavailable. Check notification permission and battery/background restrictions.",
       "OPEN_NOTIFICATION_SETTINGS": "Open settings"
     },
+    "AZURE_DEVOPS": {
+      "FORM": {
+        "HOST": "Host (Organisations- oder Sammlungs-URL)",
+        "HOST_DESCRIPTION": "Verwende die vollständige Azure DevOps-URL, z. B. https://dev.azure.com/your-org oder https://server:8080/tfs/DefaultCollection.",
+        "AUTO_IMPORT_LIMIT": "Automatisches Importlimit",
+        "AUTO_IMPORT_LIMIT_DESCRIPTION": "Maximale Anzahl von Azure DevOps Work Items, die für den automatischen Backlog-Import abgerufen werden. Max. {{max}}.",
+        "PROJECT": "Projekt",
+        "SCOPE": "Umfang (nur automatischer Import)",
+        "SCOPE_ALL": "Alle",
+        "SCOPE_ASSIGNED": "Mir zugewiesen",
+        "SCOPE_CREATED": "Von mir erstellt",
+        "TOKEN": "Persönliches Zugriffstoken"
+      }
+    },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "Dieser Anhang ist nur auf dem Gerät verfügbar, auf dem er hinzugefügt wurde.",
       "DIALOG_EDIT": {
@@ -118,6 +142,13 @@
         "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Nur Rückstand",
         "BACKLOG_TASK_FILTER_TYPE": "Rückstandsaufgaben",
         "COLUMNS": "Spalten",
+        "ONLY_PARENT_TASKS": "Nur übergeordnete Aufgaben",
+        "PROJECT": "Projekt",
+        "PROJECT_ALL": "Alle Projekte",
+        "SCHEDULED_STATE": "Planungsstatus",
+        "SCHEDULED_STATE_ALL": "Alle",
+        "SCHEDULED_STATE_NOT_SCHEDULED": "Nicht geplant",
+        "SCHEDULED_STATE_SCHEDULED": "Geplant",
         "SORT_BY": "Sortieren nach",
         "SORT_BY_CREATED": "Erstellt",
         "SORT_BY_DUE": "Fälligkeitsdatum",
@@ -922,6 +953,32 @@
       "D_DELETE": {
         "MSG": "Bist du sicher, dass du das Projekt \"{{title}}\" löschen möchtest?"
       },
+      "COMPLETE": {
+        "COMPLETED_ON": "Abgeschlossen am {{date}}",
+        "REOPEN": "Erneut öffnen",
+        "NOTICE": "Dieses Projekt ist abgeschlossen.",
+        "ERROR": "Projekt konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+        "RESOLVE": {
+          "MSG": "hat noch {{nr}} unerledigte Aufgaben. Was soll mit ihnen geschehen?",
+          "MSG_ONE": "hat noch {{nr}} unerledigte Aufgabe. Was soll mit ihr geschehen?",
+          "MOVE_TO_INBOX": "In den Eingang verschieben",
+          "MARK_DONE": "Als erledigt markieren"
+        },
+        "CONFIRM": {
+          "TITLE": "Projekt abschließen?",
+          "MSG": "<strong>{{title}}</strong> abschließen und zu den archivierten Projekten verschieben?"
+        },
+        "CELEBRATION": {
+          "TITLE": "Projekt abgeschlossen!",
+          "STARTED": "Gestartet",
+          "FINISHED": "Beendet",
+          "DURATION": "In {{nr}} Tagen abgeschlossen",
+          "TASKS_DONE": "Abgeschlossene Aufgaben",
+          "TIME_SPENT": "Erfasste Zeit",
+          "DAYS_WORKED": "Gearbeitete Tage",
+          "DONE_BTN": "Schließen"
+        }
+      },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Aktiviere das Projekt-Backlog",
         "L_IS_HIDDEN_FROM_MENU": "Projekt aus dem Menü ausblenden",
@@ -954,6 +1011,7 @@
         "ARCHIVED": "Archiviertes Projekt",
         "CREATED": "Erstelltes Projekt <strong>{{title}}</strong>. du kannst es aus dem Menü oben links auswählen.",
         "DELETED": "Gelöschtes Projekt",
+        "REOPENED": "Projekt wiedereröffnet",
         "SHOW_IN_MENU": "Show in menu",
         "UNARCHIVED": "Projekt dearchiviert",
         "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the menu",
@@ -985,11 +1043,6 @@
       },
       "TOOLTIP_CREATE": "Projektordner erstellen",
       "TOOLTIP_VISIBILITY": "Projekte anzeigen/ausblenden"
-    },
-    "QUICK_HISTORY": {
-      "NO_DATA": "Keine Daten für das laufende Jahr",
-      "PAGE_TITLE": "Schnellverlauf",
-      "WEEK_TITLE": "Woche {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
       "DIALOG_TRACK_TIME": {
@@ -1252,6 +1305,8 @@
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Betroffene Änderungen",
+        "FIRST_SYNC_USE_LOCAL_CONFIRM": "Dieses Gerät wurde noch nie synchronisiert. \"Meine Daten verwenden\" wird die Daten auf dem Server dauerhaft durch die lokalen Daten dieses Geräts ersetzen. Dies kann nicht rückgängig gemacht werden. Fortfahren?",
+        "FIRST_SYNC_WARNING": "Dieses Gerät wurde noch nie synchronisiert, daher würde \"Meine Daten verwenden\" die vorhandenen Daten des Servers mit den Daten dieses Geräts überschreiben.",
         "IMPORT_DATE": "Importdatum",
         "MSG_INCOMING": "Deine Daten wurden auf einem anderen Gerät vollständig ersetzt. du hast {{filteredOpCount}} lokale Änderungen, die möglicherweise nicht übernommen werden.",
         "MSG_INCOMING_NO_OPS": "Deine Daten wurden auf einem anderen Gerät vollständig ersetzt. Dieses Gerät wird mit dem neuen Zustand synchronisiert.",
@@ -1266,7 +1321,8 @@
         "RECOMMEND_SERVER": "Empfohlen: Akzeptiere die Serverdaten, um mit dem anderen Gerät synchron zu bleiben.",
         "TITLE": "Synchronisationskonflikt erkannt",
         "USE_LOCAL": "Meine Daten verwenden",
-        "USE_REMOTE": "Serverdaten verwenden"
+        "USE_REMOTE": "Serverdaten verwenden",
+        "USE_REMOTE_CONFIRM": "Dies ersetzt die Daten dieses Geräts durch die des Servers und verwirft {{count}} lokale Änderung(en). Fortfahren?"
       },
       "FORM": {
         "BTN_CHANGE_PASSWORD": "Passwort ändern",
@@ -1491,6 +1547,7 @@
         "LOCAL_CHANGES_DISCARDED": "{{count}} lokale Änderung(en) verworfen – Element(e) wurden auf einem anderen Gerät gelöscht",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} nicht gespeicherte lokale Änderung(en) verworfen – Synchronisierung hat neuere Daten heruntergeladen",
         "LOCAL_DATA_REPLACE_CANCELLED": "Synchronisierung abgebrochen. deine lokalen Daten wurden beibehalten.",
+        "LOCAL_DATA_REPLACE_UNDO": "Deine lokalen Daten wurden durch die Daten des Servers ersetzt.",
         "LOCK_TIMEOUT_ERROR": "Zeitüberschreitung bei der Synchronisierung – eine vorherige Operation war noch nicht abgeschlossen. Bitte versuche es erneut.",
         "LWW_CONFLICTS_AUTO_RESOLVED": "Synchronisierungskonflikte automatisch gelöst: {{localWins}} lokale(r) Gewinn(e), {{remoteWins}} entfernte(r) Gewinn(e)",
         "MIGRATION_FAILED": "Einige Synchronisierungsdaten konnten nicht migriert werden und wurden übersprungen. Dies kann auf Datenbeschädigung oder einen Fehler hindeuten.",
@@ -1503,6 +1560,7 @@
         "PERSIST_FAILED": "Änderungen konnten nicht gespeichert werden. Der Zustand kann inkonsistent sein – bitte lade die Seite neu.",
         "REMOTE_DATA_TOO_OLD": "Remote-Daten sind zu alt, um verarbeitet zu werden. Bitte aktualisiere deine Remote-App.",
         "REPLAY_LOCAL_OPS_FAILED": "Lokale Operationen konnten nach dem Import nicht erneut abgespielt werden. Einige aktuelle Änderungen können verloren gegangen sein. Daten wurden validiert.",
+        "RESTORE_ENCRYPTED": "Die Wiederherstellung aus dem Serververlauf ist nicht verfügbar, wenn die Ende-zu-Ende-Verschlüsselung aktiviert ist. Der Server kann deine verschlüsselten Daten nicht lesen, um einen früheren Zeitpunkt wiederherzustellen.",
         "RESTORE_ERROR": "Datenwiederherstellung fehlgeschlagen",
         "RESTORE_SUCCESS": "Daten erfolgreich wiederhergestellt",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Daten konnten nicht auf den Server migriert werden – lokale Datenvalidierung fehlgeschlagen. Bitte versuche, ein Backup zu importieren.",
@@ -1625,6 +1683,15 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Anhang hinzufügen",
+        "ADD_CHECKLIST_ITEM": "Checklisten-Eintrag hinzufügen",
+        "CHECKLIST_ACTIONS": "Checklisten-Aktionen",
+        "CHECK_ALL": "Alle anhaken",
+        "CLEAR_COMPLETED": "Erledigte löschen",
+        "NOTES_OR_CHECKLIST": "Notizen / Checkliste",
+        "UNCHECK_ALL": "Alle abwählen",
+        "PASTE_IMAGE_HINT": "Strg+V, um ein Bild einzufügen",
+        "PASTE_IMAGE_HINT_MAC": "Cmd+V, um ein Bild einzufügen",
+        "PASTED_IMAGE_TITLE": "Eingefügtes Bild",
         "ADD_SUB_TASK": "Unteraufgabe hinzufügen",
         "ATTACHMENTS": "Anhänge {{nr}}",
         "COMPLETED_ON": "Abgeschlossen am",
@@ -1655,6 +1722,7 @@
         "ADD_SUB_TASK": "Unteraufgabe hinzufügen",
         "ADD_TO_MY_DAY": "Zu meinem Tag hinzufügen",
         "ADD_TO_PROJECT": "Zu einem Projekt hinzufügen",
+        "CHECKLIST_PROGRESS": "Checkliste: {{done}} von {{total}} erledigt",
         "CLEAR_ESTIMATE": "Schätzung löschen",
         "CONVERT_TO_PARENT_TASK": "In übergeordnete Aufgabe konvertieren",
         "CUSTOM_ESTIMATE": "Benutzerdefiniert…",
@@ -1728,6 +1796,9 @@
         "CLEAR_REMINDER": "Erinnerung löschen",
         "COMPLETE": "Abschließen",
         "COMPLETE_ALL": "Alle abschließen",
+        "MARK_AS_DONE": "Als erledigt markieren",
+        "SCHEDULE_FOR_TODAY": "Für heute planen",
+        "DROP_TIME_KEEP_TODAY": "Uhrzeit verwerfen, in Heute behalten",
         "DEADLINE_REMINDER": "Fristen-Erinnerung",
         "DEADLINE_SECTION": "Fristen",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Alle Erinnerungen verwerfen (Behalten in Heute)",
@@ -1923,7 +1994,8 @@
         "WAIT_FOR_COMPLETION_DESCRIPTION": "Verhindert, dass sich mehrere ausstehende wiederkehrende Aufgaben anhäufen. Die nächste Instanz wird erst erstellt, wenn die aktuelle Aufgabe abgeschlossen ist",
         "WEDNESDAY": "Mittwoch",
         "WEEK_OF_MONTH": "Woche des Monats",
-        "WEEKDAY": "Wochentag"
+        "WEEKDAY": "Wochentag",
+        "WEEKDAY_REQUIRED": "Mindestens einen Wochentag auswählen"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Wiederholungskonfigurationsdialog konnte nicht geöffnet werden. du kannst es über das Aufgabenmenü konfigurieren."
     },
@@ -2029,6 +2101,7 @@
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Arbeitstage:",
+        "EXPORT_DATA": "Daten exportieren",
         "MONTH_WORKED": "Monat gearbeitet:",
         "REPEATING_TASK": "Aufgabe wiederholen",
         "RESTORE_TASK_FROM_ARCHIVE": "Aufgabe aus dem Archiv wiederherstellen",
@@ -2037,7 +2110,9 @@
         "VIEW_TASK_DETAILS": "Aufgabendetails anzeigen",
         "WEEK_NR": "Woche {{nr}}",
         "WEEK_NR_SHORT": "W{{nr}}",
-        "WORKED": "Gearbeitet"
+        "WEEK_RANGE_TOOLTIP": "{{start}}.–{{end}}., Tage: {{days}}, Zeit: {{time}}",
+        "WORKED": "Gearbeitet",
+        "WORK_TIMES": "Arbeitszeiten"
       },
       "D_CONFIRM_RESTORE": "Möchtest du die Aufgabe <strong>\"{{title}}\"</strong> wirklich in deine heutige Aufgabenliste verschieben?",
       "D_EXPORT_TITLE": "Worklog-Export {{start}}-{{end}}",
@@ -2186,6 +2261,11 @@
       "HELP": "Speichere alle Daten automatisch in deinem App-Ordner, um sie für den Fall, dass ein Fehler auftritt, bereit zu halten.",
       "LABEL_IS_ENABLED": "Aktiviere automatische Sicherungen",
       "LOCATION_INFO": "Backups werden gespeichert in:",
+      "MAX_BACKUP_FILES": "Maximale Backup-Dateien",
+      "MAX_BACKUP_FILES_DESCRIPTION": "Nur Desktop. Ältere automatische Backup-Dateien werden gelöscht, sobald dieses Limit überschritten wird.",
+      "RESTORE_LATEST": "Letztes automatisches Backup wiederherstellen",
+      "S_NO_BACKUP_AVAILABLE": "Kein automatisches Backup verfügbar.",
+      "S_RESTORE_SUCCESS": "Backup erfolgreich wiederhergestellt.",
       "TITLE": "Automatische Backups"
     },
     "CALENDARS": {
@@ -2278,6 +2358,7 @@
       "GLOBAL_ADD_TASK": "Neue Aufgabe hinzufügen",
       "GLOBAL_SHOW_HIDE": "Super Productivity ein- oder ausblenden",
       "GLOBAL_TOGGLE_TASK_START": "Schaltet die Zeiterfassung für die zuletzt aktive Aufgabe um",
+      "GLOBAL_TOGGLE_TASK_WIDGET": "Aufgaben-Widget ein-/ausblenden",
       "GO_TO_DAILY_AGENDA": "Gehe zur Agenda",
       "GO_TO_FOCUS_MODE": "Wechsle in den Fokusmodus",
       "GO_TO_SCHEDULE": "Gehe zur Zeitleiste",
@@ -2290,7 +2371,6 @@
       "MOVE_TASK_TO_TOP": "Aufgabe an den Anfang der Liste verschieben",
       "MOVE_TASK_UP": "Aufgabe in Liste nach oben verschieben",
       "MOVE_TO_BACKLOG": "Task in Task-Backlog verschieben",
-      "MOVE_TO_REGULARS_TASKS": "Aufgabe in die Aufgabenliste von heute verschieben",
       "OPEN_PROJECT_NOTES": "Projektnotizen ein- oder ausblenden",
       "PLUGIN_SHORTCUTS": "Plugin Tastenkürzel",
       "SELECT_NEXT_TASK": "Nächste Aufgabe auswählen",
@@ -2306,6 +2386,11 @@
       "TASK_OPEN_CONTEXT_MENU": "Öffne das Aufgabenkontextmenü",
       "TASK_OPEN_ESTIMATION_DIALOG": "Schätzung / Zeitaufwand bearbeiten",
       "TASK_SCHEDULE": "Aufgabe planen",
+      "TASK_SCHEDULE_TODAY": "Aufgabe für heute planen",
+      "TASK_SCHEDULE_TOMORROW": "Aufgabe für morgen planen",
+      "TASK_SCHEDULE_NEXT_WEEK": "Aufgabe für nächste Woche planen",
+      "TASK_SCHEDULE_NEXT_MONTH": "Aufgabe für nächsten Monat planen",
+      "TASK_SCHEDULE_DEADLINE": "Frist für Aufgabe festlegen",
       "TASK_SHORTCUTS": "Aufgaben",
       "TASK_SHORTCUTS_INFO": "Die folgenden Verknüpfungen gelten für die aktuell ausgewählte Aufgabe (Auswahl über Tab oder Maus).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Zusätzliche Aufgabeninfo ein- oder ausblenden",
@@ -2567,6 +2652,7 @@
     "CREATE_PROJECT": "Projekt erstellen",
     "CREATE_TAG": "Stichwort erstellen",
     "ARCHIVE_PROJECT": "Projekt archivieren",
+    "COMPLETE_PROJECT": "Projekt abschließen",
     "DELETE_PROJECT": "Projekt löschen",
     "DELETE_TAG": "Stichwort löschen",
     "DISABLE_FEATURE": "Funktion deaktivieren",
@@ -2580,6 +2666,7 @@
     "HM": {
       "CALENDARS": "Howto: Kalender verbinden",
       "CONTRIBUTE": "Beitragen",
+      "CREATE_TASK": "Anleitung: Eine Aufgabe erstellen",
       "GET_HELP_ONLINE": "Online-Hilfe aufrufen",
       "KEYBOARD": "Howto: Erweiterte Tastatursteuerung",
       "REDDIT_COMMUNITY": "Reddit-Gemeinschaft",
@@ -2587,6 +2674,7 @@
       "START_WELCOME": "Willkommenstour starten",
       "SYNC": "Howto: Synchronisierung konfigurieren"
     },
+    "HISTORY": "Verlauf",
     "METRICS": "Metriken",
     "NO_PROJECT_INFO": "Keine Projekte verfügbar. Klicke auf die Schaltfläche 'Projekt erstellen', um ein neues Projekt anzulegen.",
     "NO_TAG_INFO": "Derzeit gibt es keine Tags. Du kannst Tags hinzufügen, indem du `#TagName` beim Hinzufügen oder Bearbeiten von Aufgaben eingibst.",
@@ -2599,7 +2687,6 @@
     "PROJECT_MENU": "Projektmenü",
     "PROJECT_SETTINGS": "Projekteinstellungen",
     "PROJECTS": "Projekte",
-    "QUICK_HISTORY": "Schnellverlauf",
     "SCHEDULE": "Zeitplan",
     "SEARCH": "Suche",
     "SETTINGS": "Einstellungen",
@@ -2621,7 +2708,6 @@
     "TOGGLE_TRACK_TIME": "Tracking-Zeit starten / stoppen",
     "TRIGGER_SYNC": "Synchronisierung manuell auslösen",
     "UNPLAN_ALL_TASKS": "Alle Aufgaben entplanen",
-    "WORKLOG": "Worklog",
     "ARCHIVED_PROJECTS": "Archivierte Projekte"
   },
   "MIGRATE": {
@@ -2646,6 +2732,8 @@
     "TITLE": "Wie möchtest du Super Productivity nutzen?",
     "SUBTITLE": "Wähle ein Setup, das zu deinem Workflow passt. Du kannst das später jederzeit in den Einstellungen ändern.",
     "PRIVACY_HINT": "Deine Daten bleiben sicher auf deinem Gerät. Es wird nichts an einen Server gesendet.",
+    "SYNC_CTA": "Verwendest du Super Productivity bereits auf einem anderen Gerät?",
+    "SYNC_CTA_LINK": "Synchronisation einrichten",
     "PRESETS": {
       "SIMPLE_TODO": {
         "TITLE": "Einfache Aufgabenliste",
@@ -2716,12 +2804,7 @@
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Aktionstyp '{{Typ}}' ist nicht erlaubt",
     "ALREADY_INITIALIZED": "Plugin ist bereits initialisiert",
-    "CANCEL": "Abbrechen",
-    "CAPABILITIES": {
-      "ACCESS_FILES": "Zugriff und Änderung von Dateien auf deinem System",
-      "RUN_COMMANDS": "Ausführen von Systembefehlen",
-      "USE_NODE_APIS": "Node.js-APIs und -Module verwenden"
-    },
+    "AUTHORED_BY": "von {{author}}",
     "CHOOSE_PLUGIN_FILE": "Plugin-Datei auswählen",
     "CLEAR_PLUGIN_CACHE": "Plugin-Cache löschen",
     "CODE_TOO_LARGE": "Plugin-Code ist zu groß (max {{maxSize}}MB)",
@@ -2744,7 +2827,6 @@
     "FAILED_TO_SAVE_CONFIG": "Plugin-Konfiguration konnte nicht gespeichert werden",
     "FILE_TOO_LARGE": "Datei zu groß ({{fileSize}}MB). Maximale Größe ist {{maxSize}}MB",
     "GO_BACK": "Zurückgehen",
-    "GRANT_PERMISSION": "Berechtigung erteilen",
     "HOOKS": "Hooks/Auslöser",
     "ID": "ID:",
     "ICON_TOO_LARGE": "Plugin-Symbol ist zu groß (max. {{maxSize}} KB)",
@@ -2765,7 +2847,9 @@
     "NO_ADDITIONAL_INFO": "Keine weiteren Informationen verfügbar",
     "NO_CONTENT_PROVIDED": "Kein Inhalt vorhanden",
     "NO_PLUGIN_MANIFEST_NODE": "Das Plugin-Manifest enthält kein Node.js-Modul",
+    "NODE_EXECUTION_PERMISSION_DENIED": "Die Berechtigung zur Ausführung von Node.js wurde nicht erteilt",
     "NODE_EXECUTION_REQUIRED": "Dieses Plugin erfordert die Ausführung von Node.js, das nur in der Desktop-App verfügbar ist.",
+    "NODE_EXECUTION_BUILT_IN_ONLY": "Die Ausführung von Node.js ist derzeit nur für integrierte Desktop-Plugins verfügbar.",
     "NODE_ONLY_DESKTOP": "Node.js-Ausführung ist nur in der Desktop-Anwendung verfügbar",
     "OK": "OK",
     "PARENT_TASK_DOES_NOT_EXIST": "Die übergeordnete Aufgabe existiert nicht",
@@ -2773,11 +2857,11 @@
     "PERMISSIONS": "Berechtigungen",
     "PLEASE_SELECT_ZIP_FILE": "Bitte wähle eine ZIP-Datei",
     "PLUGIN_DIALOG_TITLE": "Plugin-Meldung",
+    "PLUGIN_ID_RESERVED": "Die Plugin-ID \"{{pluginId}}\" ist für ein integriertes Plugin reserviert",
     "PLUGIN_JS_NOT_FOUND": "Plugin-JavaScript-Datei (plugin.js) nicht in ZIP-Datei gefunden",
     "PROJECT_DOES_NOT_EXIST": "Das Projekt existiert nicht",
     "PROJECT_NOT_FOUND": "Projekt '{{contextId}}' nicht gefunden",
     "RECOMMENDATION": "Installiere nur Plugins aus vertrauenswürdigen Quellen und überprüfe deren Code, wenn möglich. Sichere immer deine Daten, bevor du neue Plugins installierst.",
-    "REMEMBER_CHOICE": "meine Wahl für dieses Plugin merken",
     "REMOVE": "entfernen",
     "RISK_DATA_ACCESS": "Plugins können ALLE deine Aufgaben, Projekte und persönlichen Daten lesen, ändern und löschen",
     "RISK_MALICIOUS_CODE": "Bösartige Plugins könnten vertrauliche Informationen stehlen oder deine Daten beschädigen",
@@ -2786,14 +2870,11 @@
     "SECURITY_WARNING": "Plugins haben erheblichen Zugriff auf deine Daten und dein System. Die Installation von nicht vertrauenswürdigen Plugins birgt ernsthafte Sicherheitsrisiken:",
     "SIDE_PANEL_LABEL_REQUIRED": "Beschriftung der Schaltfläche im Seitenbereich ist erforderlich",
     "SIDE_PANEL_ONCLICK_REQUIRED": "Seitenpanel-Schaltfläche onClick-Handler ist erforderlich",
-    "SYSTEM_ACCESS_REQUEST_DESC": "Dieses Plugin bittet um die Erlaubnis, Node.js-Code auf deinem System auszuführen. Dies wird es erlauben:",
-    "SYSTEM_ACCESS_REQUEST_TITLE": "Antrag auf Systemzugang",
     "TAGS_DO_NOT_EXIST": "Ein oder mehrere Stichworte existieren nicht.",
     "TASK_NOT_FOUND": "Aufgabe mit ID '{{taskId}}' nicht gefunden",
     "TASKS_NOT_IN_PROJECT": "Eine oder mehrere Aufgaben sind nicht im Projekt '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "Eine oder mehrere Aufgaben sind keine Unteraufgaben von '{{contextId}}'",
     "TOGGLE_PLUGIN": "Umschalten auf {{pluginName}}",
-    "TRUST_WARNING": "Erlaube nur, wenn du diesem Plugin vertraust",
     "TYPE": "Typ: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Daten können nicht in den Plugin-Speicher übernommen werden",
     "UNKNOWN_ERROR": "Ein unbekannter Fehler ist aufgetreten",

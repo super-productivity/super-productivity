@@ -37,8 +37,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDateTimeFormatService: jasmine.SpyObj<DateTimeFormatService>;
   let mockDateService: jasmine.SpyObj<DateService>;
 
-  // Logical "today" pinned by the DateService mock in setupTestBed — tests must
-  // derive "today" expectations from this, never from the real clock.
+  // DateService is mocked to this fixed day; assertions about "today" must
+  // derive from these consts, never from the real clock (see #8017 CI breakage).
   const MOCK_TODAY = new Date(2026, 5, 9, 0, 0, 0, 0);
   const MOCK_TODAY_STR = '2026-06-09';
 
@@ -89,8 +89,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       'getLogicalTodayDate',
     ]);
     mockDateService.todayStr.and.returnValue(MOCK_TODAY_STR);
-    // Fresh copy per call — the component mutates the returned Date via setHours()
-    mockDateService.getLogicalTodayDate.and.callFake(() => new Date(MOCK_TODAY));
+    mockDateService.getLogicalTodayDate.and.returnValue(new Date(MOCK_TODAY));
 
     // Set up the return value for getTaskRepeatCfgById$ before creating the component
     if (getTaskRepeatCfgById$ReturnValue) {
@@ -309,6 +308,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
       );
 
+      // "today" comes from the mocked DateService.getLogicalTodayDate (2026-06-09),
+      // not the wall clock — asserting against new Date() breaks on any other day
       const todayDayStr = MOCK_TODAY.toLocaleDateString('en-US', { day: 'numeric' });
 
       expect(monthlyCall).toBeDefined();
@@ -384,11 +385,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     });
 
     it('should preserve WEEKLY_CURRENT_WEEKDAY when startDate weekday differs from today', async () => {
-      // Pick a date whose weekday definitely differs from today
-      const today = new Date();
-      const differentDay = new Date(today);
-      differentDay.setDate(today.getDate() + 3); // 3 days from now is a different weekday
-      const dateStr = differentDay.toISOString().slice(0, 10);
+      // Pick a date whose weekday definitely differs from the mocked today
+      const dateStr = '2026-06-12'; // Friday; MOCK_TODAY is a Tuesday
 
       const cfgWeekly: TaskRepeatCfg = {
         ...DEFAULT_TASK_REPEAT_CFG,

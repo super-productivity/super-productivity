@@ -1,18 +1,42 @@
 import { SyncConfig } from './global-config.model';
 
-export type LocalOnlySyncSettings = Pick<
-  SyncConfig,
-  | 'isEnabled'
-  | 'isEncryptionEnabled'
-  | 'syncProvider'
-  | 'syncInterval'
-  | 'isManualSyncOnly'
->;
-
+/**
+ * Local-only sync settings — two tiers, both per-device:
+ *
+ * - SCHEDULE keys (`syncInterval`, `isManualSyncOnly`): must NEVER leave the
+ *   device. Stripped (`Omit`-style) at every upload boundary.
+ * - DEVICE-IDENTITY keys (`syncProvider`, `isEnabled`, `isEncryptionEnabled`):
+ *   exist on every device but the local value must win on hydration. On upload
+ *   `syncProvider` is nulled (so a remote import never picks a provider for
+ *   you); on hydration the local values are re-applied via
+ *   {@link applyLocalOnlySyncSettingsToAppData}.
+ *
+ * The key arrays below are the single source of truth — both the
+ * `LocalOnlySyncSettings` type and the reducer-side preservation helper
+ * (`withLocalOnlySyncSettings` in `global-config.reducer.ts`) derive from them.
+ * Add a new local-only key here and the type + reducer + strip helpers pick it
+ * up automatically.
+ */
 export const LOCAL_ONLY_SYNC_SCHEDULE_KEYS = [
   'syncInterval',
   'isManualSyncOnly',
 ] as const satisfies readonly (keyof SyncConfig)[];
+
+export const LOCAL_ONLY_SYNC_DEVICE_KEYS = [
+  'syncProvider',
+  'isEnabled',
+  'isEncryptionEnabled',
+] as const satisfies readonly (keyof SyncConfig)[];
+
+export const LOCAL_ONLY_SYNC_KEYS = [
+  ...LOCAL_ONLY_SYNC_SCHEDULE_KEYS,
+  ...LOCAL_ONLY_SYNC_DEVICE_KEYS,
+] as const;
+
+export type LocalOnlySyncSettings = Pick<
+  SyncConfig,
+  (typeof LOCAL_ONLY_SYNC_KEYS)[number]
+>;
 
 export const stripLocalOnlySyncScheduleSettings = <T extends Record<string, unknown>>(
   syncConfig: T,
