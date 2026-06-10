@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
 import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
+import { ProjectPage } from '../../pages/project.page';
 import { skipOnboardingForE2E } from '../../utils/waits';
 
 /**
@@ -328,36 +329,22 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // STEP 8: Verify UI shows migrated data
       // ========================================================================
-      // Navigate to the test project
-      await page.goto('/#/project/TEST_PROJECT');
-      await page.waitForLoadState('networkidle').catch(() => {});
+      const projectPage = new ProjectPage(page);
 
-      // page.goto only changes the URL hash, so the SPA switches work-context
-      // client-side (load the project's tasks, recompute selectors, re-render)
-      // while the previous view's task-list lingers in the DOM. Gate on the
-      // switch actually landing — the active project's title rendering in <main>
-      // (the main-header page-title), as projectPage.navigateToProjectByName does
-      // — so the assertions below test THIS project's render instead of racing a
-      // stale one. Without this gate the task-title check alone carries the wait
-      // for the context switch, which under heavy parallel load can outlast its
-      // budget (the original flake).
-      await expect(page.locator('main')).toContainText('Migration Test Project', {
-        timeout: 20000,
-      });
+      // Navigate via sidebar so work-context and task-list switch together.
+      // page.goto only changes the hash; a stale task-list can linger in the DOM
+      // and satisfy generic task counts while the migrated parent task is not yet
+      // rendered for the target project.
+      await projectPage.navigateToProjectByName('Migration Test Project');
 
-      // Wait for task list to appear
-      await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
+      const projectTaskList = page.locator('main task-list').first();
+      await expect(projectTaskList).toBeVisible({ timeout: 15000 });
 
-      // Verify tasks are visible in UI
-      const taskElements = page.locator('task');
-      const taskCount = await taskElements.count();
-      expect(taskCount).toBeGreaterThan(0);
-
-      // Verify parent task title is visible
+      // Wait for the migrated parent task in THIS project's list (not a stale render).
       await expect(
-        page.locator('task-title').filter({ hasText: 'Parent Task' }),
-      ).toBeVisible({
-        timeout: 10000,
+        projectTaskList.locator('task[data-task-id="parent-task-1"] task-title'),
+      ).toContainText('Legacy Migration - Parent Task With Subtasks', {
+        timeout: 30000,
       });
 
       // Verify tag exists in sidebar
