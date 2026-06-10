@@ -151,10 +151,12 @@ export class HeatmapMonthCalendarComponent {
   }
 
   onCellClick(cell: CalCell): void {
+    // Mouse clicks only act where the calendar IS interactive — display-only
+    // contexts must not emit on click while keyboard users can't activate.
     // Other-month spill-over cells render greyed with no level/completed
     // styling — emitting for them would trigger consumer actions (e.g. setting
     // a simulation) with zero visual feedback on the clicked cell.
-    if (cell.data && !cell.isOtherMonth) {
+    if (this.interactive() && cell.data && !cell.isOtherMonth) {
       this.dayClick.emit(cell.data);
     }
   }
@@ -176,6 +178,14 @@ export class HeatmapMonthCalendarComponent {
     }
     if (d.isProjected) {
       return `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_PROJECTED)}`;
+    }
+    // A projection calendar has no activity to report — an empty day either
+    // invites the simulation click (interactive) or is just its date; faking
+    // "0 tasks, 0m" would mislabel a valid action as activity data.
+    if (this.legendMode() === 'projection') {
+      return this.interactive()
+        ? `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_SIMULATE_DAY)}`
+        : d.dateStr;
     }
     return `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_ACTIVITY, {
       count: d.taskCount,

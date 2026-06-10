@@ -161,23 +161,31 @@ describe('HeatmapMonthCalendarComponent', () => {
     expect(c.viewMonth()).toEqual({ y: 2024, m: 5 }); // still June
   });
 
-  it('does not emit dayClick for other-month spill-over cells', () => {
+  it('emits dayClick only when interactive, and never for other-month spill-over cells', () => {
     // dayMap covers Apr 28 – May 31, so May's leading grey cells HAVE data.
     const map = buildProjectionDayMap(
       [D('2024-04-29'), D('2024-05-15')],
       D('2024-04-28'),
       D('2024-05-31'),
     );
-    const c = setup(D('2024-04-28'), D('2024-05-31'), map).componentInstance;
+    const fixture = setup(D('2024-04-28'), D('2024-05-31'), map);
+    const c = fixture.componentInstance;
     expect(c.viewMonth()).toEqual({ y: 2024, m: 4 }); // May
     const emitted: unknown[] = [];
     c.dayClick.subscribe((d) => emitted.push(d));
     const flat = c.weeks().flat();
+    const inMonth = flat.find((cell) => !cell.isOtherMonth && !!cell.data);
+    // Display-only (default): mouse clicks must not act — keyboard users
+    // couldn't activate the same cells.
+    c.onCellClick(inMonth!);
+    expect(emitted.length).toBe(0);
+
+    fixture.componentRef.setInput('interactive', true);
+    fixture.detectChanges();
     const greyWithData = flat.find((cell) => cell.isOtherMonth && !!cell.data);
     expect(greyWithData).toBeTruthy();
     c.onCellClick(greyWithData!);
     expect(emitted.length).toBe(0);
-    const inMonth = flat.find((cell) => !cell.isOtherMonth && !!cell.data);
     c.onCellClick(inMonth!);
     expect(emitted.length).toBe(1);
   });

@@ -128,13 +128,11 @@
   width: 12px;
   height: 12px;
   border-radius: 2px;
-  cursor: pointer;
   transition: var(--transition-fast);
   flex-shrink: 0;
 
   &.empty {
     background: transparent;
-    cursor: default;
   }
 
   &.level-0 {
@@ -171,8 +169,14 @@
     outline: 2px solid var(--c-primary);
     outline-offset: 1px;
   }
+}
 
-  &:not(.empty):hover {
+// Pointer/hover affordances only where clicking actually does something
+// (`interactive` input) — display-only heatmaps keep inert cells.
+.heatmap-container.is-interactive .day:not(.empty) {
+  cursor: pointer;
+
+  &:hover {
     transform: scale(1.3);
     outline: 1px solid var(--c-dark-20);
     z-index: 1;
@@ -240,10 +244,10 @@
     &.level-0 {
       background: var(--c-light-05);
     }
+  }
 
-    &:not(.empty):hover {
-      outline-color: var(--c-light-10);
-    }
+  .heatmap-container.is-interactive .day:not(.empty):hover {
+    outline-color: var(--c-light-10);
   }
 
   .heatmap-legend .legend-item.level-0 {

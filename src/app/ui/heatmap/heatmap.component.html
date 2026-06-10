@@ -1,6 +1,9 @@
 @if (data(); as heatmapData) {
   @if (heatmapData.months; as months) {
-    <div class="heatmap-container">
+    <div
+      class="heatmap-container"
+      [class.is-interactive]="interactive()"
+    >
       @if (navLabel()) {
         <div class="heatmap-nav">
           <!-- Arrows only when there is anywhere to go — a single navigable
@@ -47,7 +50,7 @@
                         [attr.role]="interactive() && day ? 'button' : null"
                         [attr.tabindex]="interactive() && day ? 0 : null"
                         [attr.aria-label]="interactive() && day ? getDayTitle(day) : null"
-                        (click)="day && dayClick.emit(day)"
+                        (click)="interactive() && day && dayClick.emit(day)"
                         (keydown.enter)="interactive() && onDayKeydown($event, day)"
                         (keydown.space)="interactive() && onDayKeydown($event, day)"
                       ></div>

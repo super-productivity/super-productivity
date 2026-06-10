@@ -89,13 +89,11 @@
   justify-content: center;
   border-radius: var(--card-border-radius);
   font-size: 13px;
-  cursor: pointer;
   transition: var(--transition-fast);
 
   &.other-month {
     color: var(--text-color-muted);
     opacity: 0.4;
-    cursor: default;
   }
 
   // in-month, no activity → plain number, no fill.
@@ -128,8 +126,14 @@
     outline: 2px solid var(--c-primary);
     outline-offset: 1px;
   }
+}
 
-  &:not(.other-month):hover {
+// Pointer/hover affordances only where clicking actually does something
+// (`interactive` input) — display-only calendars keep inert cells.
+.month-cal.is-interactive .cal-day:not(.other-month) {
+  cursor: pointer;
+
+  &:hover {
     outline: 1px solid var(--c-dark-20);
   }
 }

@@ -71,10 +71,22 @@ export class RepeatTaskHeatmapComponent {
   );
 
   // Year filter: navigate the series one calendar year at a time. Years with
-  // tracked data plus the current year are reachable (newest first).
-  readonly selectedYear = signal<number>(new Date().getFullYear());
+  // tracked data are reachable; the current year joins them only when the
+  // projection overlay can put marks on it (else it's just an empty view).
+  private readonly _userSelectedYear = signal<number | null>(null);
+  readonly selectedYear = computed<number>(() => {
+    const sel = this._userSelectedYear();
+    const years = this.availableYears();
+    if (sel !== null && years.includes(sel)) {
+      return sel;
+    }
+    // Default to the newest year that actually renders something — a cfg whose
+    // only history is in older years must not open on an empty current year
+    // with the nav gone (that made the existing history unreachable).
+    return years[0] ?? new Date().getFullYear();
+  });
   readonly availableYears = computed<number[]>(() => {
-    const years = new Set<number>([new Date().getFullYear()]);
+    const years = new Set<number>();
     for (const task of this._loadedTasks() ?? []) {
       // Zero-value entries (start/stop tracking instantly) don't make a year's
       // heatmap render (`hasData` needs timeSpent > 0) — offering such a year
@@ -85,6 +97,13 @@ export class RepeatTaskHeatmapComponent {
           years.add(y);
         }
       }
+    }
+    const cfg = this._loadedCfg();
+    if (
+      years.size === 0 ||
+      (!!cfg && isRRuleEngineEnabled() && !!cfg.rrule && isRRuleValid(cfg.rrule))
+    ) {
+      years.add(new Date().getFullYear());
     }
     return [...years].sort((a, b) => b - a);
   });
@@ -97,13 +116,13 @@ export class RepeatTaskHeatmapComponent {
   prevYear(): void {
     const y = prevYearOf(this.availableYears(), this.selectedYear());
     if (y !== null) {
-      this.selectedYear.set(y);
+      this._userSelectedYear.set(y);
     }
   }
   nextYear(): void {
     const y = nextYearOf(this.availableYears(), this.selectedYear());
     if (y !== null) {
-      this.selectedYear.set(y);
+      this._userSelectedYear.set(y);
     }
   }
 
@@ -135,8 +154,11 @@ export class RepeatTaskHeatmapComponent {
       return null;
     }
 
-    // Check if there's any actual data
-    if (!rawData.hasData) {
+    // Hide an all-empty heatmap only when there is nowhere else to navigate —
+    // with other years available, returning null would tear down the switcher
+    // INCLUDING its year nav and strand the user (an empty grid keeps the way
+    // back open).
+    if (!rawData.hasData && this.availableYears().length <= 1) {
       return null;
     }
 

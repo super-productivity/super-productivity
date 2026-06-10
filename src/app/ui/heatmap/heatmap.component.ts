@@ -118,6 +118,14 @@ export class HeatmapComponent {
     if (day.isProjected) {
       return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_PROJECTED)}`;
     }
+    // A projection calendar has no activity to report — an empty day either
+    // invites the simulation click (interactive) or is just its date; faking
+    // "0 tasks, 0m" would mislabel a valid action as activity data.
+    if (this.legendMode() === 'projection') {
+      return this.interactive()
+        ? `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_SIMULATE_DAY)}`
+        : day.dateStr;
+    }
     return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_ACTIVITY, {
       count: day.taskCount,
       time: msToString(day.timeSpent),
