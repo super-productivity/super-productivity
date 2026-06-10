@@ -20,8 +20,11 @@ import { map } from 'rxjs/operators';
     `
       .page-wrapper {
         padding: 16px;
-        max-width: 1000px;
-        margin: 0 auto;
+        display: flex;
+        justify-content: center;
+      }
+      habit-tracker {
+        width: 100%;
       }
     `,
   ],
