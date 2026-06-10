@@ -313,6 +313,32 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(firstRule.value).toEqual(initialRules![0]);
   });
 
+  it('should allow deleting restored rule rows after switching back to Rule-based', () => {
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 5,
+        },
+      ],
+    });
+
+    component.updateModel({
+      ...component.model(),
+      breakRules: [],
+    });
+
+    expect(component.model().breakRules).toEqual([]);
+  });
+
   describe('save()', () => {
     it('should convert minutes back to ms and save the config', () => {
       component.save();
@@ -384,6 +410,24 @@ describe('DialogFlowtimeSettingsComponent', () => {
         breakPercentage: 20,
         breakRules: [{ minDuration: 0, maxDuration: 1500000, breakDuration: 300000 }],
       });
+    });
+
+    it('should persist rule edits made before disabling breaks', () => {
+      component.updateModel({
+        ...component.model(),
+        breakRules: [{ minDuration: 0, maxDuration: 30, breakDuration: 10 }],
+      });
+      component.updateModel({
+        ...component.model(),
+        isBreakEnabled: false,
+      });
+
+      component.save();
+      const savedConfig =
+        globalConfigServiceMock.updateSection.calls.mostRecent().args[1];
+      expect(savedConfig.breakRules).toEqual([
+        { minDuration: 0, maxDuration: 30 * 60000, breakDuration: 10 * 60000 },
+      ]);
     });
   });
 

@@ -260,7 +260,7 @@ export class DialogFlowtimeSettingsComponent {
       breakRules:
         currentModel.isBreakEnabled && breakMode === 'rule' && currentModel.breakRules
           ? this._toBreakRulesInMs(currentModel.breakRules)
-          : (this._initialFlowtimeConfig.breakRules ?? []),
+          : this._toBreakRulesInMs(this._lastNonEmptyBreakRules),
     };
 
     this._globalConfigService.updateSection('flowtime', flowtimeConfig, true);
@@ -305,6 +305,17 @@ export class DialogFlowtimeSettingsComponent {
     const isRuleModeVisible = nextModel.isBreakEnabled === true && breakMode === 'rule';
     const shouldRestoreBreakRules =
       didRuleFieldsVisibilityChange || this._isRestoringBreakRules;
+
+    if (
+      this._isRestoringBreakRules &&
+      !didRuleFieldsVisibilityChange &&
+      isRuleModeVisible &&
+      (nextRules?.length ?? 0) < this._lastNonEmptyBreakRules.length
+    ) {
+      this._isRestoringBreakRules = false;
+      return nextRules ? this._copyBreakRules(nextRules) : [];
+    }
+
     const hasRestorableBlankBreakRuleFields =
       this._hasRestorableBlankBreakRuleFields(nextRules);
 
