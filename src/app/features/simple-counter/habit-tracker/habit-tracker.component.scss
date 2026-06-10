@@ -1,16 +1,17 @@
 @use '../../../../styles/_globals.scss' as *;
 
 :host {
-  display: block;
+  display: flex;
+  justify-content: center;
   overflow-x: auto;
   padding: var(--s);
 }
 
 .habit-tracker-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  justify-content: center;
   width: 100%;
+  margin: 0 auto;
 }
 
 .navigation-bar {
@@ -20,7 +21,9 @@
   flex-wrap: wrap;
   gap: 12px var(--s);
   margin-bottom: var(--s2);
+  padding: 0 var(--s-half);
   width: 100%;
+  min-width: 400px;
 
   @include mq(xs, max) {
     margin-bottom: 12px;
@@ -57,6 +60,7 @@
 
 .add-habit-btn {
   font-size: 13px;
+  margin-left: var(--s);
 
   mat-icon {
     margin-right: var(--s-half);
@@ -64,34 +68,35 @@
 }
 
 .habit-grid {
-  display: grid;
-  grid-template-columns: minmax(120px, auto) repeat(7, 44px);
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 auto;
-
-  @include mq(xs, max) {
-    grid-template-columns: 40px repeat(7, 32px);
-  }
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 .header-row {
-  display: contents;
+  display: flex;
+  margin-bottom: var(--s-half);
+  align-items: flex-end;
 }
 
 .header-spacer {
+  flex: 1 1 0px;
+  min-width: 120px;
+
   @include mq(xs, max) {
+    flex: 0 0 40px;
     width: 40px;
   }
 }
 
 .day-header {
+  flex: 0 0 44px;
   text-align: center;
   font-size: 11px;
   opacity: 0.7;
-  padding-bottom: var(--s-half);
 
   @include mq(xs, max) {
+    flex: 0 0 32px;
     font-size: 10px;
   }
 
@@ -111,26 +116,27 @@
 }
 
 .habit-row {
-  display: contents;
+  display: flex;
+  align-items: center;
+  padding: var(--s) 0;
+
+  border-bottom: 1px solid var(--c-dark-10);
+
+  @include darkTheme() {
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+  }
+
+  @include lightTheme() {
+    border-bottom-color: rgba(0, 0, 0, 0.15);
+  }
 
   &.cdk-drag-preview {
-    display: flex;
-    align-items: center;
     box-sizing: border-box;
     border-radius: var(--card-border-radius);
-    background: var(--bg-lighter);
     box-shadow:
       0 5px 5px -3px var(--c-dark-20),
       0 8px 10px 1px rgba(0, 0, 0, 0.14),
       0 3px 14px 2px rgba(0, 0, 0, 0.12);
-
-    .habit-title {
-      flex: 0 0 200px;
-    }
-
-    .day-cell {
-      flex: 0 0 44px;
-    }
   }
 
   &.cdk-drag-placeholder {
@@ -143,29 +149,25 @@
 }
 
 .habit-title {
+  flex: 1 1 0px;
+  min-width: 120px;
   display: flex;
   align-items: center;
-  gap: var(--s);
-  cursor: pointer;
-  padding: var(--s) var(--s);
-  border-bottom: 1px solid var(--c-dark-10);
+  justify-content: flex-start;
   overflow: hidden;
-
-  @include darkTheme() {
-    border-bottom-color: rgba(255, 255, 255, 0.15);
-  }
-
-  @include lightTheme() {
-    border-bottom-color: rgba(0, 0, 0, 0.15);
-  }
+  cursor: pointer;
+  gap: var(--s);
+  padding: 0 var(--s);
 
   &:hover {
     opacity: 0.7;
   }
 
   @include mq(xs, max) {
+    flex: 0 0 40px;
+    width: 40px;
     justify-content: center;
-    padding: var(--s) 0;
+    padding: 0;
   }
 
   .habit-icon {
@@ -226,19 +228,91 @@
   }
 }
 
-.day-cell {
+.footer-actions {
   display: flex;
   justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  border-bottom: 1px solid var(--c-dark-10);
+  padding: var(--s4) var(--s2);
 
-  @include darkTheme() {
-    border-bottom-color: rgba(255, 255, 255, 0.15);
+  .add-habit-btn {
+    opacity: 0.6;
+    transition: var(--transition-standard);
+    background-color: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    padding: var(--s-quarter) var(--s2);
+
+    &:hover {
+      opacity: 1;
+      background-color: var(--c-light-05) !important;
+      border: 1px solid var(--c-light-40) !important;
+    }
+
+    mat-icon {
+      margin-right: var(--s);
+    }
+
+    .mdc-button__label {
+      vertical-align: middle;
+      font-size: 13px;
+    }
   }
+}
 
-  @include lightTheme() {
-    border-bottom-color: rgba(0, 0, 0, 0.15);
+.disabled-section {
+  margin-top: var(--s);
+  padding: 0 var(--s-half);
+  width: 100%;
+}
+
+.disabled-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.6;
+  padding: var(--s) 0;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.disabled-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.disabled-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-half) 0;
+}
+
+.disabled-item-info {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.disabled-item-actions {
+  display: flex;
+  gap: var(--s-half);
+}
+
+.day-cell {
+  flex: 0 0 44px;
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+
+  @include mq(xs, max) {
+    flex: 0 0 32px;
   }
 
   &.is-disabled {
