@@ -303,7 +303,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
       );
 
-      const today = new Date();
+      const today = mockDateService.getLogicalTodayDate();
       const todayDayStr = today.toLocaleDateString('en-US', { day: 'numeric' });
 
       expect(monthlyCall).toBeDefined();
@@ -380,7 +380,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
 
     it('should preserve WEEKLY_CURRENT_WEEKDAY when startDate weekday differs from today', async () => {
       // Pick a date whose weekday definitely differs from today
-      const today = new Date();
+      const today = mockDateService.getLogicalTodayDate();
       const differentDay = new Date(today);
       differentDay.setDate(today.getDate() + 3); // 3 days from now is a different weekday
       const dateStr = differentDay.toISOString().slice(0, 10);
