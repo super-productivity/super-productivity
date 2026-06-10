@@ -5,11 +5,6 @@ import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { setRRuleEngineEnabled } from '../../config/rrule-engine-flag';
 
-// getNewestPossibleDueDate routes to the RRULE engine only when the local
-// per-device flag is on (off by default); enable it for this day-march suite.
-beforeEach(() => setRRuleEngineEnabled(true));
-afterEach(() => setRRuleEngineEnabled(false));
-
 // "Day-march" simulation — the highest-fidelity unit mirror of what the running
 // app does as real days pass. Production (task-repeat-cfg.service.ts) creates an
 // instance by calling getNewestPossibleDueDate(cfg, today) and then advancing
@@ -88,6 +83,13 @@ const occurrencesIn = (cfg: TaskRepeatCfg, startDay: string, days: number): stri
 const hasNoDupes = (xs: string[]): boolean => new Set(xs).size === xs.length;
 
 describe('RRULE day-march — driving the create loop one day at a time', () => {
+  // getNewestPossibleDueDate routes to the RRULE engine only when the local
+  // per-device flag is on (off by default); enable it for this suite. The hooks
+  // live inside the describe — a top-level hook would attach to Jasmine's root
+  // suite and force the flag on around every spec in the bundle.
+  beforeEach(() => setRRuleEngineEnabled(true));
+  afterEach(() => setRRuleEngineEnabled(false));
+
   describe('open every day → created stream equals the occurrence set, no dupes/skips', () => {
     const cases: { name: string; rrule: string; start: string; days: number }[] = [
       { name: 'DAILY', rrule: 'FREQ=DAILY', start: '2024-06-01', days: 30 },

@@ -5,11 +5,6 @@ import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { setRRuleEngineEnabled } from '../../config/rrule-engine-flag';
 
-// The RRULE engine is gated behind a local per-device flag (off by default);
-// these routing tests exercise the engine, so enable it for the suite.
-beforeEach(() => setRRuleEngineEnabled(true));
-afterEach(() => setRRuleEngineEnabled(false));
-
 // Integration: the three routing utils must defer to the RRULE engine whenever
 // `cfg.rrule` is set (via taskRepeatCfgToRRuleInput), bypassing the legacy
 // repeatCycle calculation entirely.
@@ -25,8 +20,7 @@ const rruleCfg = (rrule: string, over: Partial<TaskRepeatCfg> = {}): TaskRepeatC
 });
 
 describe('engine flag OFF → legacy fields drive, rrule ignored', () => {
-  // The suite-level beforeEach enabled the flag; turn it back off here so these
-  // assert the gate routes to the legacy engine when the flag is off.
+  // Force the flag off so these assert the gate routes to the legacy engine.
   beforeEach(() => setRRuleEngineEnabled(false));
 
   it('getNextRepeatOccurrence ignores the rrule and matches a no-rrule legacy cfg', () => {
@@ -56,6 +50,13 @@ describe('engine flag OFF → legacy fields drive, rrule ignored', () => {
 });
 
 describe('repeat occurrence routing on cfg.rrule', () => {
+  // The RRULE engine is gated behind a local per-device flag (off by default);
+  // these routing tests exercise the engine, so enable it for the suite. The
+  // hooks live inside the describe — a top-level hook would attach to Jasmine's
+  // root suite and force the flag on around every spec in the bundle.
+  beforeEach(() => setRRuleEngineEnabled(true));
+  afterEach(() => setRRuleEngineEnabled(false));
+
   it('getNextRepeatOccurrence → weekly Monday', () => {
     // Sat Jun 15 2024 → next Monday is Jun 17.
     const r = getNextRepeatOccurrence(
