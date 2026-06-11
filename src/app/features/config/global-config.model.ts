@@ -274,6 +274,7 @@ export type FocusModeConfig = Readonly<{
    * Off by default; opt-in for users who want play = tracking + focus.
    */
   autoStartFocusOnPlay?: boolean;
+  isAutoStartFlowtimeBreak?: boolean;
   /**
    * @deprecated The auto-spawned session is now indicator-only by design — the
    * overlay never opens automatically — so this flag has no behavioural effect.

@@ -32,7 +32,7 @@ export const pauseFocusSession = createAction(
 );
 export const unPauseFocusSession = createAction('[FocusMode] Resume Session');
 export const clearResumingBreakFlag = createAction(
-  '[FocusMode] Clear Resuming Break Flag',
+  '[Focus Mode] Clear Resuming Break Flag',
 );
 
 export const completeFocusSession = createAction(
@@ -62,15 +62,6 @@ export const completeBreak = createAction(
 export const exitBreakToPlanning = createAction(
   '[FocusMode] Exit Break To Planning',
   props<{ pausedTaskId?: string | null }>(),
-);
-
-export const offerFlowtimeBreak = createAction(
-  '[FocusMode] Offer Flowtime Break',
-  props<{
-    duration: number;
-    isLongBreak?: boolean;
-    pausedTaskId?: string | null;
-  }>(),
 );
 
 export const incrementCycle = createAction('[FocusMode] Next Cycle');

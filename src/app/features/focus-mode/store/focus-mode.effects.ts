@@ -150,15 +150,26 @@ export class FocusModeEffects {
       withLatestFrom(
         this.store.select(selectors.selectTimer),
         this.store.select(selectIsFocusModeEnabled),
+        this.store.select(selectFocusModeConfig),
       ),
-      filter(
-        ([[prevTaskId, currTaskId], timer, isFocusModeEnabled]) =>
+      filter(([[prevTaskId, currTaskId], timer, isFocusModeEnabled, config]) => {
+        const isTrackingStopped = !!prevTaskId && !currTaskId;
+        const isFocusSessionActive =
           isFocusModeEnabled &&
-          (timer.purpose === 'work' || timer.purpose === 'break') &&
           timer.isRunning &&
-          !!prevTaskId &&
-          !currTaskId, // Was tracking (prevTaskId exists) and now stopped (currTaskId is null)
-      ),
+          (timer.purpose === 'work' || timer.purpose === 'break');
+
+        if (!isFocusSessionActive || !isTrackingStopped) {
+          return false;
+        }
+
+        // Bug #5954 fix: only pause breaks if tracking is NOT automatically paused during breaks
+        if (timer.purpose === 'break') {
+          return config.isPauseTrackingDuringBreak === false;
+        }
+
+        return true;
+      }),
       map(([[prevTaskId]]) => actions.pauseFocusSession({ pausedTaskId: prevTaskId })),
     ),
   );
@@ -404,7 +415,8 @@ export class FocusModeEffects {
     ),
   );
 
-  // Effect 3b: Offer Flowtime breaks when user explicitly ends their session
+  // Effect 3b: Auto-start Flowtime breaks when user explicitly ends their session,
+  // unless the user has opted out via isAutoStartFlowtimeBreak.
   // Triggers on endFlowtimeSession — NOT pauseFocusSession (which is fired by
   // sync-stop, idle, and the regular pause button)
   offerFlowtimeBreakOnSessionEnd$ = createEffect(() =>
@@ -413,22 +425,28 @@ export class FocusModeEffects {
       withLatestFrom(
         this.store.select(selectors.selectMode),
         this.store.select(selectors.selectTimer),
+        this.store.select(selectFocusModeConfig),
       ),
-      filter(([_action, mode, timer]) => {
+      filter(([_action, mode, timer, _config]) => {
         if (mode !== FocusModeMode.Flowtime) return false;
         if (timer.purpose !== 'work') return false;
         return true;
       }),
-      switchMap(([action, mode, timer]) => {
+      switchMap(([action, mode, timer, config]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakInfo = strategy.getBreakDuration(timer.elapsed);
 
-        if (!strategy.shouldStartBreakAfterSession || !breakInfo) {
+        if (
+          !strategy.shouldStartBreakAfterSession ||
+          !breakInfo ||
+          config?.isAutoStartFlowtimeBreak === false
+        ) {
           return [actions.completeFocusSession({ isManual: true })];
         }
 
         return [
-          actions.offerFlowtimeBreak({
+          actions.completeFocusSession({ isManual: true }),
+          actions.startBreak({
             duration: breakInfo.duration,
             isLongBreak: breakInfo.isLong,
             pausedTaskId: action.pausedTaskId,
@@ -617,9 +635,7 @@ export class FocusModeEffects {
   logFocusSession$ = createEffect(
     () =>
       this.actions$.pipe(
-        // Flowtime sessions are logged when the break is offered, even if the
-        // user declines the break and never starts it.
-        ofType(actions.completeFocusSession, actions.offerFlowtimeBreak),
+        ofType(actions.completeFocusSession),
         withLatestFrom(this.store.select(selectors.selectLastSessionDuration)),
         tap(([, duration]) => {
           if (duration > 0) {

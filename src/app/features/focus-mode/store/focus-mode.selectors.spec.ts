@@ -436,4 +436,12 @@ describe('FocusModeSelectors', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('selectIsResumingBreak', () => {
+    it('should select selectIsResumingBreak', () => {
+      const focusModeState = createMockFocusModeState({ _isResumingBreak: true });
+      const result = selectors.selectIsResumingBreak.projector(focusModeState);
+      expect(result).toBe(true);
+    });
+  });
 });

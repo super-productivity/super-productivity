@@ -148,7 +148,6 @@ export const focusModeReducer = createReducer(
   on(a.unPauseFocusSession, (state) => {
     // Allow resuming both work sessions and breaks
     if (state.timer.purpose === null) return state;
-    if (state.mainState === FocusMainUIState.BreakOffer) return state;
 
     return {
       ...state,
@@ -248,29 +247,6 @@ export const focusModeReducer = createReducer(
     mainState: FocusMainUIState.Preparation,
     pausedTaskId: null,
   })),
-
-  // Flowtime break offer - show break screen but don't start timer yet
-  // Uses dedicated BreakOffer state so it can be distinguished from active/paused breaks
-  on(a.offerFlowtimeBreak, (state, { duration, isLongBreak, pausedTaskId }) => {
-    const breakTimer: TimerState = {
-      isRunning: false,
-      startedAt: null,
-      elapsed: 0,
-      duration,
-      purpose: 'break',
-      isLongBreak: isLongBreak ?? false,
-    };
-
-    return {
-      ...state,
-      timer: breakTimer,
-      currentScreen: FocusScreen.Break,
-      mainState: FocusMainUIState.BreakOffer,
-      pausedTaskId: pausedTaskId ?? state.pausedTaskId,
-      _isResumingBreak: false,
-      _isOvertimeEnabled: false,
-    };
-  }),
 
   // Timer updates - much simpler!
   on(a.tick, (state) => {

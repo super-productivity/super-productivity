@@ -8,7 +8,6 @@ import {
   pauseFocusSession,
   unPauseFocusSession,
   exitBreakToPlanning,
-  startBreak,
 } from '../store/focus-mode.actions';
 import {
   EnvironmentInjector,
@@ -21,7 +20,6 @@ import { of } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
 import { FocusModeConfig } from '../../config/global-config.model';
-import { unsetCurrentTask } from '../../tasks/store/task.actions';
 
 describe('FocusModeBreakComponent', () => {
   let component: FocusModeBreakComponent;
@@ -142,42 +140,7 @@ describe('FocusModeBreakComponent', () => {
     it('should dispatch unPauseFocusSession action when it is a normal resume', () => {
       (mockFocusModeService.mainState as any).set(FocusMainUIState.InProgress);
       component.resumeBreak();
-
       expect(mockStore.dispatch).toHaveBeenCalledWith(unPauseFocusSession());
-    });
-
-    it('should dispatch startBreak action when it is a break offer', () => {
-      (mockFocusModeService.mainState as any).set(FocusMainUIState.BreakOffer);
-      (mockFocusModeService.isSessionRunning as any).set(false);
-
-      component.resumeBreak();
-
-      expect(mockStore.dispatch).toHaveBeenCalledWith(
-        startBreak({
-          duration: 300000,
-          isLongBreak: false,
-          pausedTaskId: mockPausedTaskId,
-        }),
-      );
-    });
-
-    it('should unset current task before starting break offer when pause-during-break is enabled', () => {
-      (mockFocusModeService.mainState as any).set(FocusMainUIState.BreakOffer);
-      (mockFocusModeService.isSessionRunning as any).set(false);
-      (mockFocusModeService.focusModeConfig as any).set({
-        isPauseTrackingDuringBreak: true,
-      });
-
-      component.resumeBreak();
-
-      expect(mockStore.dispatch).toHaveBeenCalledWith(unsetCurrentTask());
-      expect(mockStore.dispatch).toHaveBeenCalledWith(
-        startBreak({
-          duration: 300000,
-          isLongBreak: false,
-          pausedTaskId: mockPausedTaskId,
-        }),
-      );
     });
   });
 
