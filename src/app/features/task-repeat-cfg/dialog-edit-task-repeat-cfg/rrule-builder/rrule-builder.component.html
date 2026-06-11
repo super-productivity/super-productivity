@@ -1,4 +1,13 @@
 <div class="rb">
+  @if (engineOff()) {
+    <!-- The engine flag is per-device and off: the rule is persisted in full,
+         but scheduling runs from the simplified legacy mirror derived at save.
+         Say so up front instead of describing behavior that won't happen. -->
+    <div class="rb-engine-off">
+      {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_NOTICE | translate }}
+    </div>
+  }
+
   <!-- Frequency + interval, read as a sentence -->
   <div class="rb-row">
     <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate }}</span>
@@ -370,6 +379,11 @@
       />
     }
   </div>
+  @if (engineOff() && model().endType !== 'NEVER') {
+    <div class="rb-hint rb-hint--engine-off">
+      {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_END | translate }}
+    </div>
+  }
 
   <!-- Schedule type: fixed calendar dates vs. count the interval from completion -->
   <div class="rb-field">
@@ -407,6 +421,11 @@
     (isExpandedChange)="setShowAdvanced($event)"
   >
     <div class="rb-adv">
+      @if (engineOff()) {
+        <div class="rb-hint rb-hint--engine-off">
+          {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_ADVANCED | translate }}
+        </div>
+      }
       <div class="rb-field">
         <label>{{ T.F.TASK_REPEAT.F.RRULE_WKST | translate }}</label>
         <select

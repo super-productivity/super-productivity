@@ -15,6 +15,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { CollapsibleComponent } from '../../../../ui/collapsible/collapsible.component';
 import { SnackService } from '../../../../core/snack/snack.service';
+import { RRuleFeatureFlagService } from '../../../config/rrule-feature-flag.service';
 import { T } from '../../../../t.const';
 import { dateStrToUtcDate } from '../../../../util/date-str-to-utc-date';
 import {
@@ -91,6 +92,11 @@ const MONTH_T_KEYS = [
 export class RruleBuilderComponent implements OnInit {
   private _translateService = inject(TranslateService);
   private _snackService = inject(SnackService);
+  private _rruleFlag = inject(RRuleFeatureFlagService);
+  /** With the per-device engine off, the saved rule only drives scheduling
+   *  through its simplified legacy mirror — several fields then describe
+   *  behavior that won't happen, so their hints must say so. */
+  readonly engineOff = computed(() => !this._rruleFlag.isEnabled());
   T: typeof T = T;
 
   rrule = input<string>('');

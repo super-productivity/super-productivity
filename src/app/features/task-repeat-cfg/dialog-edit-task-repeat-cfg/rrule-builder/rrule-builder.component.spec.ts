@@ -3,6 +3,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { RruleBuilderComponent } from './rrule-builder.component';
 import { SnackService } from '../../../../core/snack/snack.service';
+import { setRRuleEngineEnabled } from '../../../config/rrule-engine-flag';
 
 describe('RruleBuilderComponent', () => {
   let fixture: ComponentFixture<RruleBuilderComponent>;
@@ -321,5 +322,24 @@ describe('RruleBuilderComponent', () => {
     component.setRepeatFromCompletion(true);
     expect(component.fromCompletion()).toBe(true);
     expect(emitted[emitted.length - 1]).toBe(true);
+  });
+
+  it('shows the engine-off notice and hint swaps while the flag is off', async () => {
+    setRRuleEngineEnabled(false);
+    await setup('FREQ=DAILY;COUNT=3');
+    expect(fixture.nativeElement.querySelector('.rb-engine-off')).toBeTruthy();
+    // COUNT end condition has no legacy equivalent — its hint must warn.
+    expect(fixture.nativeElement.querySelector('.rb-hint--engine-off')).toBeTruthy();
+  });
+
+  it('hides the engine-off messaging when the flag is on', async () => {
+    setRRuleEngineEnabled(true);
+    try {
+      await setup('FREQ=DAILY;COUNT=3');
+      expect(fixture.nativeElement.querySelector('.rb-engine-off')).toBeFalsy();
+      expect(fixture.nativeElement.querySelector('.rb-hint--engine-off')).toBeFalsy();
+    } finally {
+      setRRuleEngineEnabled(false);
+    }
   });
 });
