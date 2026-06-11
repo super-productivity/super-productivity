@@ -1,11 +1,16 @@
 import {
   MonthlyWeekOfMonth,
   MonthlyWeekday,
+  RepeatCycleOption,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
 import { normalizeWeekdays, toNumArray } from './rrule-weekday.util';
-import { FREQ_TO_CYCLE, safeParseRRuleOptions } from './rrule-parse.util';
+import {
+  FREQ_TO_CYCLE,
+  RRuleParsedOptions,
+  safeParseRRuleOptions,
+} from './rrule-parse.util';
 import { getFirstRRuleOccurrence } from '../store/rrule-occurrence.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
@@ -128,13 +133,238 @@ const RRULE_IDX_TO_FIELD: (keyof TaskRepeatCfg)[] = [
 ];
 
 /**
- * Best-effort inverse of `legacyTaskRepeatCfgToRRule`: derives the legacy schedule
- * fields (`repeatCycle`, `repeatEvery`, weekday flags, monthly anchors) from an
- * RRULE body. Used to keep those fields populated alongside `rrule` so older sync
- * clients — which ignore the unknown `rrule` field — still get a faithful
- * recurrence to fall back on (plan P1.3 reverse direction).
+ * Legacy-field payload that makes old / flag-off clients create NOTHING for
+ * this cfg: the legacy WEEKLY engine requires at least one weekday flag to be
+ * `true` (`get-next-repeat-occurrence` / `get-newest-possible-due-date` scan
+ * loops), so an all-false WEEKLY never fires — deterministically and on every
+ * released version. Written for rules the legacy fields CANNOT faithfully
+ * represent (decided policy): a fabricated wrong-day task syncs back to every
+ * device and is worse than an absent one. Every value is wire-stable (`false`
+ * survives the op-log's JSON partial update; `'WEEKLY'`/`1` are in-union), and
+ * `repeatCycle: 'WEEKLY'` also sidesteps any stale monthly anchor a remote
+ * client may hold — anchors are only read in the legacy MONTHLY branch.
+ */
+export const LEGACY_NEVER_FIRES_FALLBACK: Readonly<Partial<TaskRepeatCfgCopy>> = {
+  repeatCycle: 'WEEKLY',
+  repeatEvery: 1,
+  monday: false,
+  tuesday: false,
+  wednesday: false,
+  thursday: false,
+  friday: false,
+  saturday: false,
+  sunday: false,
+  monthlyWeekOfMonth: undefined,
+  monthlyWeekday: undefined,
+  monthlyLastDay: false,
+};
+
+/**
+ * Exact-or-null inverse mapping: the legacy schedule fields that fire on the
+ * SAME days as the rule, or `null` when the legacy field set cannot express
+ * the rule (end conditions, seasonal BYMONTH, BYWEEKNO/BYYEARDAY, multi-day
+ * lists, out-of-union ordinals, …). `null` is the sentinel trigger — never a
+ * best-effort approximation; see `rruleToLegacyTaskRepeatCfg`.
  *
- * Returns `{}` for an unparseable or sub-daily rule (legacy fields left untouched).
+ * Known accepted divergences (the lazy-migrate class, NOT sentinel material):
+ * WEEKLY INTERVAL>1 week-grouping vs rolling 7-day blocks (+ WKST phase), and
+ * the day>28 clamp-vs-skip edge — pattern and cadence match; only rare edge
+ * days differ.
+ */
+const _legacyEquivalent = (
+  opts: RRuleParsedOptions,
+  cycle: RepeatCycleOption,
+  startDate?: string,
+): Partial<TaskRepeatCfgCopy> | null => {
+  // COUNT/UNTIL have no legacy field: old clients would resurrect an ended
+  // series forever — strictly worse than creating nothing.
+  if (opts.count != null || opts.until != null) return null;
+  // Week-number / year-day constraints have no legacy notion at all.
+  if (toNumArray(opts.byweekno).length || toNumArray(opts.byyearday).length) {
+    return null;
+  }
+
+  const interval = opts.interval && opts.interval > 0 ? opts.interval : 1;
+  // Build on the mutable copy type — TaskRepeatCfg is Readonly.
+  const out: Partial<TaskRepeatCfgCopy> = {
+    repeatCycle: cycle,
+    repeatEvery: interval,
+    // Monthly anchors discriminate the legacy MONTHLY paths — always reset so a
+    // stale nth-weekday/last-day anchor from a previous preset or rule can't
+    // override the new rule's semantics. They are re-set below only when this
+    // rule actually encodes them. The numeric anchors reset to `undefined`:
+    // released clients' typia schema allows these fields only absent-or-numeric,
+    // so a `null` must never reach the wire (it would trip their validation /
+    // repair flow). The cost: a partial update can't clear a stale anchor on
+    // REMOTE clients (JSON.stringify drops undefined keys) — see the
+    // `task-repeat-cfg.model.ts` anchor comment for the full gap analysis.
+    // `monthlyLastDay` resets to `false`, a master-safe value that DOES survive
+    // the JSON wire.
+    monthlyWeekOfMonth: undefined,
+    monthlyWeekday: undefined,
+    monthlyLastDay: false,
+  };
+
+  const weekdays = normalizeWeekdays(opts.byweekday);
+  const monthDays = toNumArray(opts.bymonthday);
+  const setPos = toNumArray(opts.bysetpos);
+  const months = toNumArray(opts.bymonth);
+
+  const setWeekdayFlags = (days: { weekday: number }[]): void => {
+    RRULE_IDX_TO_FIELD.forEach((field) => {
+      (out as Record<string, unknown>)[field] = false;
+    });
+    days.forEach((w) => {
+      const field = RRULE_IDX_TO_FIELD[w.weekday];
+      if (field) (out as Record<string, unknown>)[field] = true;
+    });
+  };
+
+  switch (cycle) {
+    case 'DAILY': {
+      // Seasonal/positional daily (BYMONTH window, BYMONTHDAY, BYSETPOS) has no
+      // legacy DAILY notion.
+      if (monthDays.length || setPos.length || months.length) return null;
+      if (!weekdays.length) return out;
+      // FREQ=DAILY;BYDAY=… at INTERVAL=1 is exactly "weekly on those days" —
+      // legacy WEEKLY interval 1 is a pure weekday filter, so this maps
+      // losslessly. With an interval the daily step is filtered THROUGH the
+      // weekday set, which weekly fields cannot express.
+      if (interval !== 1 || weekdays.some((w) => w.n != null)) return null;
+      out.repeatCycle = 'WEEKLY';
+      setWeekdayFlags(weekdays);
+      return out;
+    }
+
+    case 'WEEKLY': {
+      // Seasonal weekly (BYMONTH) and positional parts have no legacy notion.
+      if (monthDays.length || setPos.length || months.length) return null;
+      if (weekdays.some((w) => w.n != null)) return null;
+      setWeekdayFlags(weekdays);
+      if (!weekdays.length && startDate) {
+        // A BYDAY-less FREQ=WEEKLY means "weekly on the start weekday" — set
+        // that flag (mirroring the forward converter), so the legacy WEEKLY
+        // engine still fires on older clients instead of having every flag
+        // false.
+        const idx = (_parseStart(startDate).dow + 6) % 7; // UTC 0=Sun → RRULE 0=Mon
+        const field = RRULE_IDX_TO_FIELD[idx];
+        if (field) (out as Record<string, unknown>)[field] = true;
+      }
+      return out;
+    }
+
+    case 'MONTHLY': {
+      // A BYMONTH window on a monthly rule (fire only some months) has no
+      // legacy notion.
+      if (months.length) return null;
+      const nthOrdinal = weekdays.length ? weekdays[0].n : undefined;
+      if (nthOrdinal != null) {
+        // "2nd Tuesday" → BYDAY=2TU. legacy monthlyWeekday is 0=Sun…6=Sat.
+        // Ordinals outside the model union (BYDAY=5MO, -2MO — the builder's
+        // custom input allows ±5) must NOT be persisted: released clients
+        // typia-validate monthlyWeekOfMonth against 1|2|3|4|-1, and an
+        // out-of-union value trips their repair flow.
+        if (
+          weekdays.length !== 1 ||
+          !_isLegacyMonthlyOrdinal(nthOrdinal) ||
+          monthDays.length ||
+          setPos.length
+        ) {
+          return null;
+        }
+        out.monthlyWeekOfMonth = nthOrdinal;
+        out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
+        return out;
+      }
+      if (weekdays.length) {
+        // The builder's weekday-set form of the same anchor: BYDAY=FR;
+        // BYSETPOS=-1 ("last Friday") is losslessly equivalent to BYDAY=-1FR.
+        // Multi-weekday sets and out-of-range ordinals have no single legacy
+        // anchor.
+        if (
+          weekdays.length === 1 &&
+          monthDays.length === 0 &&
+          setPos.length === 1 &&
+          _isLegacyMonthlyOrdinal(setPos[0])
+        ) {
+          out.monthlyWeekOfMonth = setPos[0] as MonthlyWeekOfMonth;
+          out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
+          return out;
+        }
+        return null;
+      }
+      if (monthDays.length === 1 && monthDays[0] === -1) {
+        // Pure "last day of month". NOT set for the clamp idiom
+        // (BYMONTHDAY=<d>,-1;BYSETPOS=1) — there the legacy day comes from the
+        // aligned startDate (see getAlignedStartDate), and the legacy engine
+        // clamps it natively.
+        if (setPos.length) return null;
+        out.monthlyLastDay = true;
+        return out;
+      }
+      // Plain day-of-month forms — legacy reads the day from startDate, which
+      // the save path aligns onto the rule's day (getAlignedStartDate):
+      // no BYMONTHDAY (= dtstart's day), a single positive day, or the clamp
+      // idiom BYMONTHDAY=<d>,-1;BYSETPOS=1.
+      if (!monthDays.length) return setPos.length ? null : out;
+      if (monthDays.length === 1 && monthDays[0] > 0 && !setPos.length) return out;
+      if (_isClampIdiom(monthDays, setPos)) return out;
+      return null;
+    }
+
+    case 'YEARLY': {
+      // Legacy YEARLY is exactly "once a year on startDate's month+day" —
+      // weekday modes (e.g. weekdays-within-months) have no legacy notion.
+      if (weekdays.length) return null;
+      if (!months.length) {
+        // No BYMONTH: with any BYMONTHDAY the rule fires that day EVERY month
+        // (RFC expansion) — not a yearly legacy schedule. Bare FREQ=YEARLY is
+        // the dtstart anniversary.
+        return monthDays.length || setPos.length ? null : out;
+      }
+      if (months.length !== 1) return null; // multi-month = several firings/year
+      if (!monthDays.length) {
+        // BYMONTH without BYMONTHDAY: the engine fires in the rule's month,
+        // but old clients read BOTH month and day from startDate, which the
+        // aligner does not move for this shape — they would fire in the
+        // start month. Not representable.
+        return null;
+      }
+      if (monthDays.length === 1 && monthDays[0] > 0 && !setPos.length) return out;
+      if (_isClampIdiom(monthDays, setPos)) return out;
+      return null;
+    }
+  }
+  return null;
+};
+
+/** BYMONTHDAY=<d>,-1;BYSETPOS=1 — the RFC clamp idiom emitted by the forward
+ *  converter for day>28 (see `_clampedMonthDayPart`). */
+const _isClampIdiom = (monthDays: number[], setPos: number[]): boolean =>
+  monthDays.length === 2 &&
+  monthDays.filter((d) => d > 0).length === 1 &&
+  monthDays.includes(-1) &&
+  setPos.length === 1 &&
+  setPos[0] === 1;
+
+/**
+ * Inverse of `legacyTaskRepeatCfgToRRule`: derives the legacy schedule fields
+ * (`repeatCycle`, `repeatEvery`, weekday flags, monthly anchors) from an RRULE
+ * body. Used to keep those fields populated alongside `rrule` as the wire
+ * format for older sync clients — which ignore the unknown `rrule` field and
+ * schedule from the legacy fields.
+ *
+ * Contract (decided policy, not best-effort): when the rule is within legacy
+ * expressiveness the fields fire on the SAME days (modulo the documented
+ * WEEKLY-interval / clamp divergences); when it is NOT —
+ * COUNT/UNTIL, seasonal BYMONTH, BYWEEKNO/BYYEARDAY, multi-day lists,
+ * out-of-union ordinals — the `LEGACY_NEVER_FIRES_FALLBACK` sentinel is
+ * written instead, so old clients create NO tasks rather than tasks on wrong
+ * days that would sync back to every device. The dialog surfaces this state
+ * to the user via `isRRuleLegacyRepresentable`.
+ *
+ * Returns `{}` for an unparseable or sub-daily rule (legacy fields left
+ * untouched — both are rejected at the save/persist boundary anyway).
  * Day-of-month has no legacy field: legacy MONTHLY day recurrence (and YEARLY)
  * reads the day/month from `startDate` — callers that persist must pair this
  * with `getAlignedStartDate` (the dialog does so once at save; doing it here
@@ -147,86 +377,23 @@ export const rruleToLegacyTaskRepeatCfg = (
   const opts = safeParseRRuleOptions(rrule);
   if (!opts) return {};
   const cycle = FREQ_TO_CYCLE[opts.freq];
-  if (!cycle) return {}; // sub-daily — no legacy equivalent
+  if (!cycle) return {}; // sub-daily — no legacy equivalent, rejected upstream
 
-  // Build on the mutable copy type — TaskRepeatCfg is Readonly.
-  const out: Partial<TaskRepeatCfgCopy> = {
-    repeatCycle: cycle,
-    repeatEvery: opts.interval && opts.interval > 0 ? opts.interval : 1,
-    // Monthly anchors discriminate the legacy MONTHLY paths — always reset so a
-    // stale nth-weekday/last-day anchor from a previous preset or rule can't
-    // override the new rule's semantics. They are re-set below only when this
-    // rule actually encodes them. The numeric anchors reset to `undefined`:
-    // released clients' typia schema allows these fields only absent-or-numeric,
-    // so a `null` must never reach the wire (it would trip their validation /
-    // repair flow). The cost: a partial update can't clear a stale anchor on
-    // REMOTE clients (JSON.stringify drops undefined keys) — harmless on
-    // rrule-aware clients (the engine routes on `rrule`) and only a best-effort
-    // approximation gap on legacy ones. `monthlyLastDay` resets to `false`, a
-    // master-safe value that DOES survive the JSON wire.
-    monthlyWeekOfMonth: undefined,
-    monthlyWeekday: undefined,
-    monthlyLastDay: false,
-  };
+  return _legacyEquivalent(opts, cycle, startDate) ?? { ...LEGACY_NEVER_FIRES_FALLBACK };
+};
 
-  const weekdays = normalizeWeekdays(opts.byweekday);
-  const monthDays = toNumArray(opts.bymonthday);
-
-  if (cycle === 'WEEKLY') {
-    // Reset all flags, then enable the rule's weekdays (Mon-indexed).
-    RRULE_IDX_TO_FIELD.forEach((field) => {
-      (out as Record<string, unknown>)[field] = false;
-    });
-    if (weekdays.length) {
-      weekdays.forEach((w) => {
-        const field = RRULE_IDX_TO_FIELD[w.weekday];
-        if (field) (out as Record<string, unknown>)[field] = true;
-      });
-    } else if (startDate) {
-      // A BYDAY-less FREQ=WEEKLY means "weekly on the start weekday" — set that
-      // flag (mirroring the forward converter), so the legacy WEEKLY engine
-      // still fires on older clients instead of having every flag false.
-      const idx = (_parseStart(startDate).dow + 6) % 7; // UTC 0=Sun → RRULE 0=Mon
-      const field = RRULE_IDX_TO_FIELD[idx];
-      if (field) (out as Record<string, unknown>)[field] = true;
-    }
-  } else if (cycle === 'MONTHLY') {
-    const setPos = toNumArray(opts.bysetpos);
-    const nthOrdinal = weekdays.length ? weekdays[0].n : undefined;
-    if (nthOrdinal != null && _isLegacyMonthlyOrdinal(nthOrdinal)) {
-      // "2nd Tuesday" → BYDAY=2TU. legacy monthlyWeekday is 0=Sun…6=Sat.
-      // Ordinals outside the model union (BYDAY=5MO, -2MO — the builder's
-      // custom input allows ±5) must NOT be persisted: released clients
-      // typia-validate monthlyWeekOfMonth against 1|2|3|4|-1, and an
-      // out-of-union value trips their repair flow. Left unset, the rrule
-      // engine still fires correctly and old clients fall back to
-      // day-of-month — an approximation instead of broken validation.
-      out.monthlyWeekOfMonth = nthOrdinal;
-      out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
-    } else if (
-      weekdays.length === 1 &&
-      weekdays[0].n == null &&
-      monthDays.length === 0 &&
-      setPos.length === 1 &&
-      _isLegacyMonthlyOrdinal(setPos[0])
-    ) {
-      // The builder's weekday-set form of the same anchor: BYDAY=FR;BYSETPOS=-1
-      // ("last Friday") is losslessly equivalent to BYDAY=-1FR. Without this
-      // mapping old clients would fall back to startDate's day-of-month — a
-      // wrong recurrence rather than an approximation. Multi-weekday sets and
-      // out-of-range ordinals have no single legacy anchor and stay unmapped.
-      out.monthlyWeekOfMonth = setPos[0] as MonthlyWeekOfMonth;
-      out.monthlyWeekday = ((weekdays[0].weekday + 1) % 7) as MonthlyWeekday;
-    } else if (monthDays.length === 1 && monthDays[0] === -1) {
-      // Pure "last day of month". NOT set for the clamp idiom
-      // (BYMONTHDAY=<d>,-1;BYSETPOS=1) — there the legacy day comes from the
-      // aligned startDate (see getAlignedStartDate), and the legacy engine
-      // clamps it natively.
-      out.monthlyLastDay = true;
-    }
-  }
-
-  return out;
+/**
+ * True when the rule maps onto legacy fields that fire on the same days —
+ * i.e. `rruleToLegacyTaskRepeatCfg` will NOT write the never-fires sentinel.
+ * Unparseable / sub-daily rules return `true`: they never reach persistence
+ * (save-path rejects), so there is nothing to warn about.
+ */
+export const isRRuleLegacyRepresentable = (rrule: string | undefined): boolean => {
+  const opts = safeParseRRuleOptions(rrule);
+  if (!opts) return true;
+  const cycle = FREQ_TO_CYCLE[opts.freq];
+  if (!cycle) return true;
+  return _legacyEquivalent(opts, cycle) != null;
 };
 
 const _pad2 = (n: number): string => String(n).padStart(2, '0');

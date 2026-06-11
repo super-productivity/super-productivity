@@ -66,6 +66,14 @@
   @if (isRRuleMode() && rrulePreview(); as p) {
     <div class="rrule-result">
       <div class="rrule-result__human">&rarr; {{ p.human }}</div>
+      @if (rruleLegacyIncompat()) {
+        <!-- Saving writes the never-fires legacy sentinel for this rule, so
+             older app versions (and flag-off devices) on the same account
+             create no tasks for it — surfaced at authoring time. -->
+        <div class="rrule-result__legacy-warning">
+          {{ T.F.TASK_REPEAT.F.RRULE_LEGACY_INCOMPAT | translate }}
+        </div>
+      }
       @if (repeatCfg().repeatFromCompletionDate) {
         @if (p.completionExample; as ex) {
           <div class="rrule-result__next">

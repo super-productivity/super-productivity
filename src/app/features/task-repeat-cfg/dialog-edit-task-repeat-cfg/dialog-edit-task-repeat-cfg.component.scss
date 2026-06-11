@@ -76,6 +76,12 @@ mat-dialog-actions {
     opacity: 0.85;
   }
 
+  &__legacy-warning {
+    margin-top: var(--s-quarter, 2px);
+    color: var(--c-warn);
+    font-size: 12px;
+  }
+
   &__sep {
     margin: 0 var(--s-quarter, 4px);
     opacity: 0.5;
