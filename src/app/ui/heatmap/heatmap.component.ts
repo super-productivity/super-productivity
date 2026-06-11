@@ -9,6 +9,7 @@ import {
 import { DateAdapter } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { T } from '../../t.const';
@@ -57,7 +58,7 @@ export interface HeatmapViewData extends HeatmapData {
   styleUrls: ['./heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [TranslatePipe, MatIcon, MatIconButton],
+  imports: [TranslatePipe, MatIcon, MatIconButton, MatTooltip],
 })
 export class HeatmapComponent {
   readonly T = T;

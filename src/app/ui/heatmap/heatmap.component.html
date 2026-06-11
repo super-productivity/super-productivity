@@ -46,7 +46,8 @@
                     @for (day of week.days; track $index) {
                       <div
                         [class]="getDayClass(day)"
-                        [title]="getDayTitle(day)"
+                        [matTooltip]="getDayTitle(day)"
+                        matTooltipPosition="above"
                         [attr.role]="interactive() && day ? 'button' : null"
                         [attr.tabindex]="interactive() && day ? 0 : null"
                         [attr.aria-label]="interactive() && day ? getDayTitle(day) : null"

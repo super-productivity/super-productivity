@@ -10,6 +10,7 @@ import {
 import { DateAdapter } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { DayData } from './heatmap.component';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { msToString } from '../duration/ms-to-string.pipe';
@@ -35,7 +36,7 @@ interface CalCell {
   styleUrls: ['./heatmap-month-calendar.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [MatIcon, MatIconButton, TranslatePipe],
+  imports: [MatIcon, MatIconButton, MatTooltip, TranslatePipe],
 })
 export class HeatmapMonthCalendarComponent {
   readonly T = T;

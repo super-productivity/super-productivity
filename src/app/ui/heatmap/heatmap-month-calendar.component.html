@@ -33,7 +33,8 @@
       @for (cell of week; track cell.dateStr) {
         <div
           [class]="getCellClass(cell)"
-          [title]="getCellTitle(cell)"
+          [matTooltip]="getCellTitle(cell)"
+          matTooltipPosition="above"
           [attr.role]="isCellInteractive(cell) ? 'button' : null"
           [attr.tabindex]="isCellInteractive(cell) ? 0 : null"
           [attr.aria-label]="isCellInteractive(cell) ? getCellTitle(cell) : null"
