@@ -1,8 +1,12 @@
 import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
 import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
-import { ProjectPage } from '../../pages/project.page';
 import { skipOnboardingForE2E } from '../../utils/waits';
+
+const MIGRATED_PROJECT_ID = 'TEST_PROJECT';
+const MIGRATED_PROJECT_TITLE = 'Migration Test Project';
+const MIGRATED_PARENT_TASK_ID = 'parent-task-1';
+const MIGRATED_PARENT_TASK_TITLE = 'Legacy Migration - Parent Task With Subtasks';
 
 /**
  * Legacy Data Migration E2E Tests
@@ -128,6 +132,22 @@ const readMigratedArchive = async (
       request.onerror = () => reject(request.error);
     });
   }, archiveType);
+};
+
+/**
+ * Wait until a migrated task is rendered anywhere inside <main>.
+ * Scopes to main (not the first task-list) so overdue/section/group lists are included.
+ */
+const waitForMigratedTaskInMain = async (
+  page: Page,
+  taskId: string,
+  timeout = 30000,
+): Promise<void> => {
+  await page.waitForFunction(
+    (id) => !!document.querySelector(`main task[data-task-id="${id}"]`),
+    taskId,
+    { timeout },
+  );
 };
 
 test.describe('@migration Legacy Data Migration', () => {
@@ -329,23 +349,26 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // STEP 8: Verify UI shows migrated data
       // ========================================================================
-      const projectPage = new ProjectPage(page);
-
-      // Navigate via sidebar so work-context and task-list switch together.
-      // page.goto only changes the hash; a stale task-list can linger in the DOM
-      // and satisfy generic task counts while the migrated parent task is not yet
-      // rendered for the target project.
-      await projectPage.navigateToProjectByName('Migration Test Project');
-
-      const projectTaskList = page.locator('main task-list').first();
-      await expect(projectTaskList).toBeVisible({ timeout: 15000 });
-
-      // Wait for the migrated parent task in THIS project's list (not a stale render).
-      await expect(
-        projectTaskList.locator('task[data-task-id="parent-task-1"] task-title'),
-      ).toContainText('Legacy Migration - Parent Task With Subtasks', {
-        timeout: 30000,
+      // Must include /tasks — project/:id alone does not mount the task work-view.
+      await page.goto(`/#/project/${MIGRATED_PROJECT_ID}/tasks`);
+      await page.waitForURL(new RegExp(`/#/project/${MIGRATED_PROJECT_ID}/tasks`), {
+        timeout: 20000,
       });
+      await page.waitForLoadState('networkidle').catch(() => {});
+
+      await expect(page.locator('main')).toContainText(MIGRATED_PROJECT_TITLE, {
+        timeout: 20000,
+      });
+      await page.waitForSelector('main task-list', {
+        state: 'visible',
+        timeout: 15000,
+      });
+
+      await waitForMigratedTaskInMain(page, MIGRATED_PARENT_TASK_ID);
+
+      await expect(
+        page.locator(`main task[data-task-id="${MIGRATED_PARENT_TASK_ID}"] task-title`),
+      ).toContainText(MIGRATED_PARENT_TASK_TITLE);
 
       // Verify tag exists in sidebar
       const sideNav = page.locator('magic-side-nav');
@@ -354,7 +377,7 @@ test.describe('@migration Legacy Data Migration', () => {
       });
 
       // Verify project exists in sidebar
-      await expect(sideNav.getByText('Migration Test Project')).toBeVisible({
+      await expect(sideNav.getByText(MIGRATED_PROJECT_TITLE)).toBeVisible({
         timeout: 10000,
       });
     } finally {
