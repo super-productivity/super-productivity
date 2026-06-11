@@ -1,6 +1,10 @@
 import { RRule, RRuleSet } from 'rrule';
 import { Log } from '../../../core/log';
-import { RRuleParsedOptions, safeParseRRuleOptions } from '../util/rrule-parse.util';
+import {
+  FREQ_TO_CYCLE,
+  RRuleParsedOptions,
+  safeParseRRuleOptions,
+} from '../util/rrule-parse.util';
 
 /**
  * Day-granular, DST-safe occurrence engine for RFC 5545 RRULE strings.
@@ -226,7 +230,13 @@ export const isRRuleValid = (rrule: string | undefined): rrule is string => {
 
   let valid = false;
   const options = safeParseRRuleOptions(rrule);
-  if (options && !_canNeverFire(options)) {
+  // Sub-daily FREQs (HOURLY/MINUTELY/SECONDLY) are unsupported until Phase 12:
+  // this engine is day-granular (every occurrence resolves to local noon), so
+  // routing one through would silently collapse it to ~daily firing. The dialog
+  // already rejects them at save — this guard covers what the dialog can't see
+  // (synced/imported/REST-ingested rules), dropping them to the legacy
+  // repeatCycle fallback like any other invalid rule.
+  if (options && FREQ_TO_CYCLE[options.freq] != null && !_canNeverFire(options)) {
     try {
       // First occurrence on/after the probe anchor. For a firing rule this
       // returns immediately; the construct + probe also surfaces deeper invalids
@@ -353,8 +363,9 @@ export const getFirstRRuleOccurrence = (input: RRuleOccurrenceInput): Date | nul
 /**
  * All occurrences whose calendar day falls within `[from, to]` (inclusive),
  * returned at local noon. EXDATEs are honored. Empty for a malformed rule.
- * No production caller yet — exercised by the engine invariant/day-march specs
- * and intended for a future calendar/heatmap projection of recurring series.
+ * Drives the repeat-task heatmap's future-occurrence overlay and the edit
+ * dialog's live calendar preview; also exercised by the engine
+ * invariant/day-march specs.
  */
 export const getRRuleOccurrencesInRange = (
   input: RRuleOccurrenceInput,

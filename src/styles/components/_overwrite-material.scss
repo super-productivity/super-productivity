@@ -188,6 +188,35 @@ body.isNativeMobile .project-complete-fullscreen-dialog {
   height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
 }
 
+// Generic runtime-toggleable fullscreen state for any dialog — added/removed
+// via MatDialogRef.addPanelClass('dialog-fullscreen') (e.g. the recurring-task
+// dialog's expand button). Unlike the project-complete variant above, the
+// dialog keeps its normal surface chrome.
+.dialog-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+
+  @supports (height: 100dvh) {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+}
+
+body.isNativeMobile .dialog-fullscreen {
+  width: calc(100vw - var(--safe-area-left) - var(--safe-area-right)) !important;
+  height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
+}
+
 // FORMS
 // --------
 .mat-mdc-form-field {

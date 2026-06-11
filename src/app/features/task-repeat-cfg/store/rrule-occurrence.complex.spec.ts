@@ -251,6 +251,15 @@ describe('rrule-occurrence engine — complex variants × settings', () => {
         expect(isRRuleValid(r as string | undefined)).toBe(false),
       );
     });
+
+    it('rejects sub-daily FREQs (day-granular engine — Phase 12 owns sub-daily)', () => {
+      // The dialog blocks these at save; this engine-level gate covers rules
+      // the dialog never saw (synced / imported / REST-ingested), which would
+      // otherwise silently collapse to ~daily firing at local noon.
+      ['FREQ=HOURLY', 'FREQ=MINUTELY;INTERVAL=30', 'FREQ=SECONDLY'].forEach((r) =>
+        expect(isRRuleValid(r)).withContext(r).toBe(false),
+      );
+    });
   });
 
   describe('isRRuleValid never-firing rules', () => {

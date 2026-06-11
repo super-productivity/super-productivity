@@ -1,0 +1,12 @@
+.heatmap-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+
+  &__toggle {
+    align-self: center;
+    // Material system token — sizes the toggle text without piercing component
+    // internals (no .mat-* override, per the styling rules).
+    --mat-button-toggle-label-text-size: 12px;
+  }
+}

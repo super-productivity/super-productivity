@@ -1,0 +1,40 @@
+<div class="heatmap-switcher">
+  <mat-button-toggle-group
+    class="heatmap-switcher__toggle"
+    [value]="view()"
+    (change)="setView($event.value)"
+    hideSingleSelectionIndicator
+  >
+    <mat-button-toggle value="year">
+      {{ T.G.HEATMAP_VIEW_YEAR | translate }}
+    </mat-button-toggle>
+    <mat-button-toggle value="month">
+      {{ T.G.HEATMAP_VIEW_MONTH | translate }}
+    </mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (view() === 'month') {
+    <heatmap-month-calendar
+      [dayMap]="dayMap()"
+      [rangeStart]="rangeStart()"
+      [rangeEnd]="rangeEnd()"
+      [legendMode]="legendMode()"
+      [interactive]="interactive()"
+      [boundless]="monthBoundless()"
+      (viewMonthChange)="monthViewChange.emit($event)"
+      (dayClick)="dayClick.emit($event)"
+    />
+  } @else if (data(); as d) {
+    <heatmap
+      [data]="d"
+      [legendMode]="legendMode()"
+      [navLabel]="navLabel()"
+      [canNavPrev]="canNavPrev()"
+      [canNavNext]="canNavNext()"
+      [interactive]="interactive()"
+      (navPrev)="navPrev.emit()"
+      (navNext)="navNext.emit()"
+      (dayClick)="dayClick.emit($event)"
+    />
+  }
+</div>

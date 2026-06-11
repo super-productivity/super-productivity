@@ -132,6 +132,40 @@
   opacity: 0.65;
 }
 
+// The assembled rule + copy button beneath the raw-override field.
+.rb-built {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  margin-top: var(--s-half);
+
+  &__expr {
+    font-family: monospace;
+    font-size: 12px;
+    opacity: 0.75;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+}
+
+// Engine-off messaging: the per-device advanced-recurrence flag is off, so
+// parts of the rule won't drive scheduling — accented so it reads as a notice,
+// not as one more field description.
+.rb-engine-off {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: var(--s) var(--s2);
+  border-left: 3px solid var(--c-warn, var(--c-primary));
+  background: var(--c-dark-10);
+  border-radius: var(--card-border-radius);
+}
+
+.rb-hint--engine-off {
+  opacity: 0.9;
+  border-left: 3px solid var(--c-warn, var(--c-primary));
+  padding-left: var(--s);
+}
+
 .rb-adv {
   display: flex;
   flex-direction: column;

@@ -18,6 +18,7 @@ import { TagService } from '../../tag/tag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
+import { DayData } from '../../../ui/heatmap/heatmap.component';
 import { TaskCopy } from '../../tasks/task.model';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -62,7 +63,11 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     },
     getTaskRepeatCfgById$ReturnValue?: Observable<TaskRepeatCfg> | Subject<TaskRepeatCfg>,
   ): Promise<ComponentFixture<DialogEditTaskRepeatCfgComponent>> => {
-    mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
+    mockDialogRef = jasmine.createSpyObj('MatDialogRef', [
+      'close',
+      'addPanelClass',
+      'removePanelClass',
+    ]);
     mockTaskRepeatCfgService = jasmine.createSpyObj('TaskRepeatCfgService', [
       'getTaskRepeatCfgById$',
       'updateTaskRepeatCfg',
@@ -82,7 +87,10 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       tagsNoMyDayAndNoList$: of([]),
     });
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
+      cfg: () => ({ reminder: { defaultTaskRemindOption: null }, tasks: {} }),
+      // CustomDateAdapter.getFirstDayOfWeek() reads this — needed by the result
+      // calendar preview (heatmap) build.
+      localization: () => ({ firstDayOfWeek: 0 }),
     });
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
       currentLocale: () => 'en-US',
@@ -574,6 +582,283 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     }));
   });
 
+  describe('result calendar preview (Phase 2)', () => {
+    const rruleCfg: TaskRepeatCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'rr-cal-preview',
+      title: 'Biweekly Mon',
+      startDate: '2024-06-03',
+      quickSetting: 'RRULE',
+      repeatCycle: 'WEEKLY',
+      rrule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO',
+    };
+
+    it('keeps the calendar hidden until toggled on', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      expect(fixture.componentInstance.resultHeatmapData()).toBeNull();
+    });
+
+    it('projects future occurrences once the calendar is toggled on', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const hd = c.resultHeatmapData();
+      expect(hd).not.toBeNull();
+      expect(hd!.months!.length).toBeGreaterThan(0);
+      const hasProjected = hd!.months!.some((m) =>
+        m.weeks.some((w) => w.days.some((d) => !!d?.isProjected)),
+      );
+      expect(hasProjected).toBe(true);
+    });
+
+    // Simulation only exists for repeat-from-completion schedules.
+    const completionCfg: TaskRepeatCfg = {
+      ...rruleCfg,
+      id: 'rr-cal-completion',
+      repeatFromCompletionDate: true,
+    };
+
+    it('toggles the simulated completion day on click (from-completion cfg)', async () => {
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      // Re-clicking the same day clears it.
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('ignores simulation clicks for a fixed-calendar schedule', async () => {
+      // A fixed calendar never re-anchors on completion — marking the clicked
+      // day "completed" would show a completion on a day the rule never fires
+      // and inflate the month's occurrence count.
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('clears an active simulation when the rule is edited', async () => {
+      // A sim belongs to the rule it was clicked on; keeping it across an edit
+      // would re-anchor the NEW rule's series at a day picked for the old one.
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      c.onRRuleChange('FREQ=MONTHLY;BYMONTHDAY=15');
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('opening the calendar does NOT expand when it fits the dialog', fakeAsync(async () => {
+      // Fullscreen is need-based: the post-render measurement only expands a
+      // calendar that is clipped or forced to scroll. With no rendered
+      // calendar element (minimal test template) nothing is clipped.
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      expect(c.isFullScreen()).toBe(false);
+      c.toggleResultHeatmap(); // preview on
+      tick(); // flush the measurement timeout
+      expect(c.isFullScreen()).toBe(false);
+      expect(mockDialogRef.addPanelClass).not.toHaveBeenCalled();
+    }));
+
+    it('closing the calendar collapses a calendar-owned fullscreen', fakeAsync(async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap(); // preview on
+      tick();
+      // Simulate the measurement outcome "doesn't fit → calendar expands".
+
+      (c as any)._setFullScreen(true);
+
+      (c as any)._fullScreenOwnedByCalendar = true;
+      expect(c.isFullScreen()).toBe(true);
+      c.toggleResultHeatmap(); // preview off → calendar-owned fullscreen reverts
+      expect(c.isFullScreen()).toBe(false);
+      expect(mockDialogRef.removePanelClass).toHaveBeenCalledWith('dialog-fullscreen');
+    }));
+
+    it('a manual fullscreen toggle takes ownership — closing the calendar keeps it', fakeAsync(async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleFullScreen(); // user expands first
+      expect(c.isFullScreen()).toBe(true);
+      c.toggleResultHeatmap(); // preview on — already fullscreen, no ownership
+      tick();
+      c.toggleResultHeatmap(); // preview off — must NOT shrink the user's choice
+      expect(c.isFullScreen()).toBe(true);
+    }));
+
+    it('manually shrinking a calendar-owned fullscreen transfers ownership to the user', fakeAsync(async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap(); // preview on
+      tick();
+
+      (c as any)._setFullScreen(true);
+
+      (c as any)._fullScreenOwnedByCalendar = true;
+      c.toggleFullScreen(); // user shrinks it manually
+      expect(c.isFullScreen()).toBe(false);
+      c.toggleResultHeatmap(); // preview off — nothing left to revert
+      expect(c.isFullScreen()).toBe(false);
+    }));
+
+    it('year arrows shift the projection window by whole years, both directions', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const home = c.resultHeatmapData()!;
+      // Window is padded to full calendar months.
+      expect(home.rangeStart.getDate()).toBe(1);
+      const homeStartYear = home.rangeStart.getFullYear();
+
+      c.previewNextYear();
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear + 1);
+
+      c.previewPrevYear();
+      c.previewPrevYear();
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear - 1);
+      expect(c.previewNavLabel()).toContain(String(homeStartYear - 1));
+    });
+
+    it('renders an empty HOME window with nav + hint instead of nothing (far-future start)', async () => {
+      // A valid rule with no occurrence in the next 365 days used to null out
+      // the preview entirely — including the ‹ › arrows, so the window where
+      // it DOES fire was unreachable.
+      const y = new Date().getFullYear() + 5;
+      const fixture = await setupTestBed({
+        repeatCfg: { ...rruleCfg, rrule: 'FREQ=DAILY', startDate: `${y}-01-15` },
+      });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      expect(c.resultHeatmapData()).not.toBeNull();
+      expect(c.previewWindowEmpty()).toBe(true);
+      for (let i = 0; i < 5; i++) {
+        c.previewNextYear();
+      }
+      expect(c.previewWindowEmpty()).toBe(false);
+    });
+
+    it('keeps a navigated window rendered even when it has no occurrences (no stranding)', async () => {
+      // Far in the past, before the cfg's startDate, the window is empty — the
+      // calendar and its ‹ › nav must survive so the user can navigate back.
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      for (let i = 0; i < 5; i++) {
+        c.previewPrevYear();
+      }
+      expect(c.resultHeatmapData()).not.toBeNull();
+      // Back home it is populated again.
+      for (let i = 0; i < 5; i++) {
+        c.previewNextYear();
+      }
+      expect(c.resultHeatmapData()).not.toBeNull();
+    });
+
+    it('does not mark days already past as projected in the home window', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const home = c.resultHeatmapData()!;
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      [...home.dayMap.values()]
+        .filter((d) => d.isProjected)
+        .forEach((d) => expect(d.dateStr >= todayStr).toBe(true));
+    });
+
+    it('month navigation past the window edge pulls the window along', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const home = c.resultHeatmapData()!;
+      const homeStartYear = home.rangeStart.getFullYear();
+      // A month fully after the window end → window shifts forward a year.
+      c.onPreviewMonthChange({
+        y: home.rangeEnd.getFullYear(),
+        m: home.rangeEnd.getMonth() + 1,
+      });
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear + 1);
+      // A month still inside the window → no shift.
+      const cur = c.resultHeatmapData()!;
+      c.onPreviewMonthChange({
+        y: cur.rangeStart.getFullYear(),
+        m: cur.rangeStart.getMonth() + 2,
+      });
+      expect(c.resultHeatmapData()!.rangeStart.getFullYear()).toBe(homeStartYear + 1);
+    });
+
+    it('hiding the calendar resets the year window to home', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.previewNextYear();
+      c.toggleResultHeatmap(); // off
+      c.toggleResultHeatmap(); // on again
+      expect(c.previewYearOffset()).toBe(0);
+    });
+
+    it('clears an active simulation when startDate or excluded days change (formly model edit)', async () => {
+      // These edits arrive only as a new formly model (no dedicated handler) —
+      // the schedule-slice effect must drop the sim, same as a rule edit.
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      c.repeatCfg.update((cfg) => ({ ...cfg, startDate: '2024-07-01' }) as any);
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBeNull();
+
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      c.repeatCfg.update(
+        (cfg) => ({ ...cfg, deletedInstanceDates: ['2099-01-05'] }) as any,
+      );
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('keeps an active simulation across an unrelated (title) edit', async () => {
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      c.repeatCfg.update((cfg) => ({ ...cfg, title: 'typing…' }) as any);
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+    });
+
+    it('does not rebuild the projection when an unrelated field changes', async () => {
+      // formly emits a cloned model per keystroke in ANY field; the projection
+      // must only recompute when a schedule-relevant field changes.
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const before = c.resultHeatmapData();
+      expect(before).not.toBeNull();
+      c.repeatCfg.update((cfg) => ({ ...cfg, title: 'typing…' }) as any);
+      expect(c.resultHeatmapData()).toBe(before); // same reference — no rebuild
+      c.repeatCfg.update((cfg) => ({ ...cfg, rrule: 'FREQ=DAILY' }) as any);
+      expect(c.resultHeatmapData()).not.toBe(before); // schedule change rebuilds
+    });
+
+    it('hiding the calendar also clears an active simulation', async () => {
+      const fixture = await setupTestBed({ repeatCfg: completionCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      c.onPreviewDayClick({ dateStr: '2099-01-06' } as DayData);
+      c.toggleResultHeatmap(); // off
+      expect(c.simulatedCompletion()).toBeNull();
+      expect(c.resultHeatmapData()).toBeNull();
+    });
+  });
+
   describe('RRULE builder mode', () => {
     it('_processQuickSettingForDate forces RRULE mode for a non-preset rrule cfg', async () => {
       const fixture = await setupTestBed({ task: mockTask });
@@ -922,11 +1207,13 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(fixture.componentInstance.repeatCfg().quickSetting).toBe('RRULE');
     });
 
-    it('offers the RRULE quick-setting option after the ASYNC load migrates a cfg into builder mode (flag off)', fakeAsync(async () => {
-      // includeRRule must be read live, not captured at construction: on the
-      // task/repeatCfgId path the cfg arrives async, AFTER _initializeFormConfig
-      // ran — a snapshot taken then would leave the select holding 'RRULE' with
-      // no matching option on a flag-off device.
+    it('offers the RRULE quick-setting option with the engine flag OFF, incl. on the async edit path', fakeAsync(async () => {
+      // The builder replaced the legacy Custom UI, so the option is ALWAYS
+      // offered regardless of the per-device engine flag — including on the
+      // task/repeatCfgId path, where the cfg arrives async and migrates into
+      // builder mode only after the form config was built. (A flag-gated
+      // option list would leave the select holding 'RRULE' with no matching
+      // option here.)
       setRRuleEngineEnabled(false);
       const taskWithRepeatCfg = {
         ...mockTask,
@@ -945,8 +1232,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         'templateOptions.options'
       ] as unknown as (model: Record<string, unknown>) => { value: string }[];
 
-      // Flag off, nothing loaded yet → no advanced option.
-      expect(evalOptions({}).some((o) => o.value === 'RRULE')).toBe(false);
+      // Flag off, nothing loaded yet — option already on offer.
+      expect(evalOptions({}).some((o) => o.value === 'RRULE')).toBe(true);
 
       // Async load delivers a completion cfg that migrates to builder mode.
       repeatCfgSubject.next({

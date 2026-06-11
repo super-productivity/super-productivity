@@ -1,6 +1,5 @@
 :host {
   display: block;
-  max-width: 500px;
   margin-bottom: var(--s2);
 }
 
@@ -8,6 +7,7 @@
   display: flex;
   gap: var(--s2);
   flex-wrap: wrap;
+  justify-content: center;
   font-size: 13px;
   margin-bottom: var(--s);
 }

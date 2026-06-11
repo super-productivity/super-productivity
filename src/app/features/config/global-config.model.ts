@@ -65,6 +65,8 @@ export type TasksConfig = Readonly<{
   isConfirmBeforeDelete?: boolean;
   isTrayShowCurrent: boolean;
   isMarkdownFormattingInNotesEnabled: boolean;
+  // Open the "Activity" section expanded when editing a recurring task config.
+  isExpandActivityForRepeatEdit?: boolean;
   defaultProjectId?: string | null | false; // allow 'false' because of #569
   notesTemplate: string;
 }>;

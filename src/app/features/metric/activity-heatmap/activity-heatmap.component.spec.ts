@@ -122,7 +122,26 @@ describe('ActivityHeatmapComponent', () => {
     TestBed.configureTestingModule({
       imports: [ActivityHeatmapComponent],
       providers: [
-        { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 0 } },
+        {
+          provide: DateAdapter,
+          useValue: {
+            getFirstDayOfWeek: () => 0,
+            getMonthNames: () => [
+              'Jan',
+              'Feb',
+              'Mar',
+              'Apr',
+              'May',
+              'Jun',
+              'Jul',
+              'Aug',
+              'Sep',
+              'Oct',
+              'Nov',
+              'Dec',
+            ],
+          },
+        },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: ShareService, useValue: shareServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },

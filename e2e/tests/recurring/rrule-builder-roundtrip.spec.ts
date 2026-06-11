@@ -5,7 +5,7 @@ import { type Locator, type Page } from '@playwright/test';
  * Round-trip e2e coverage for the newer RRULE builder widgets: custom nth
  * ordinals, the BYSETPOS multi-select toggles, mode-switch hygiene, and the
  * yearly BYMONTH seeding. The dialog's live result band is the oracle:
- *  - `.rrule-result__expr` shows the exact assembled rrule string
+ *  - `.rb-built__expr` (under Advanced > raw override) shows the exact assembled rrule string
  *  - `.rrule-result__next` shows engine-computed upcoming dates
  * so recurrence semantics are assertable without waiting for real time to
  * pass. Each test also reopens the dialog after save to verify the parsed
@@ -62,7 +62,17 @@ const switchToBuilderMode = async (page: Page, dialog: Locator): Promise<void> =
     .getByRole('option', { name: /custom recurring config/i })
     .first()
     .click();
-  await expect(dialog.locator('.rrule-result__expr')).toBeVisible({ timeout: 5000 });
+  await expect(dialog.locator('.rrule-result__human')).toBeVisible({ timeout: 5000 });
+};
+
+// The assembled-rule readout lives under the builder's Advanced collapsible
+// (next to the raw override) — expand it and return the locator.
+const openBuiltExpr = async (dialog: Locator): Promise<Locator> => {
+  const builder = dialog.locator('rrule-builder');
+  await builder.locator('collapsible .collapsible-header').click();
+  const expr = builder.locator('.rb-built__expr');
+  await expect(expr).toBeVisible({ timeout: 5000 });
+  return expr;
 };
 
 const addTaskWithDetailOpen = async (
@@ -98,7 +108,7 @@ test.describe('RRULE builder round-trips', () => {
     await switchToBuilderMode(page, dialog);
 
     const builder = dialog.locator('rrule-builder');
-    const expr = dialog.locator('.rrule-result__expr');
+    const expr = await openBuiltExpr(dialog);
 
     // MONTHLY → nth-weekday mode → switch the row's ordinal to custom → -2.
     await builder.locator('select').nth(0).selectOption('MONTHLY');
@@ -137,7 +147,7 @@ test.describe('RRULE builder round-trips', () => {
     await switchToBuilderMode(page, dialog);
 
     const builder = dialog.locator('rrule-builder');
-    const expr = dialog.locator('.rrule-result__expr');
+    const expr = await openBuiltExpr(dialog);
 
     // MONTHLY → weekday-set mode (byDay pre-seeded with the start weekday).
     await builder.locator('select').nth(0).selectOption('MONTHLY');
@@ -169,7 +179,7 @@ test.describe('RRULE builder round-trips', () => {
     await switchToBuilderMode(page, dialog);
 
     const builder = dialog.locator('rrule-builder');
-    const expr = dialog.locator('.rrule-result__expr');
+    const expr = await openBuiltExpr(dialog);
 
     // Weekday-set mode with a 'second' narrowing…
     await builder.locator('select').nth(0).selectOption('MONTHLY');
@@ -201,7 +211,7 @@ test.describe('RRULE builder round-trips', () => {
     await switchToBuilderMode(page, dialog);
 
     const builder = dialog.locator('rrule-builder');
-    const expr = dialog.locator('.rrule-result__expr');
+    const expr = await openBuiltExpr(dialog);
 
     await builder.locator('select').nth(0).selectOption('YEARLY');
     // Without BYMONTH a bare yearly BYMONTHDAY would fire EVERY month

@@ -64,9 +64,10 @@ test.describe('Add Task Bar custom recurring option', () => {
     await expect(dialog).toBeVisible({ timeout: 10000 });
     await expect(dialog.locator('dialog-edit-task-repeat-cfg')).toBeVisible();
 
-    // Builder mode is preselected for the custom option; the live result band
-    // shows an assembled rule which saves as the task's rrule.
-    const expr = dialog.locator('.rrule-result__expr');
+    // Builder mode is preselected for the custom option; the assembled rule
+    // (under the builder's Advanced collapsible) saves as the task's rrule.
+    await dialog.locator('rrule-builder collapsible .collapsible-header').click();
+    const expr = dialog.locator('rrule-builder .rb-built__expr');
     await expect(expr).toBeVisible({ timeout: 5000 });
     const builtRule = (await expr.textContent())!.trim();
     expect(builtRule).toMatch(/^FREQ=/);

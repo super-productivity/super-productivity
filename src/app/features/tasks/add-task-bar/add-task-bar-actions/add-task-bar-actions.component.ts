@@ -37,7 +37,6 @@ import { Project } from '../../../project/project.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.model';
 import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
-import { RRuleFeatureFlagService } from '../../../config/rrule-feature-flag.service';
 import { DateService } from '../../../../core/date/date.service';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
@@ -71,7 +70,6 @@ export class AddTaskBarActionsComponent {
   private _translateService = inject(TranslateService);
   private _dateService = inject(DateService);
   private _menuTreeService = inject(MenuTreeService);
-  private _rruleFlag = inject(RRuleFeatureFlagService);
   stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -193,8 +191,6 @@ export class AddTaskBarActionsComponent {
       refDate,
       this._dateTimeFormatService.currentLocale(),
       this._translateService,
-      // Advanced 'RRULE' entry only when the per-device engine flag is on.
-      this._rruleFlag.isEnabled(),
     );
   });
 

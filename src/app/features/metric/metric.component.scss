@@ -59,7 +59,9 @@ section {
 }
 
 .heatmap-section {
-  max-width: 880px;
+  // Wide enough for the 12 month blocks side by side (the year strip), so the
+  // heatmap uses the page's spare width instead of scrolling horizontally.
+  max-width: 1200px;
   margin: var(--s4) auto 0;
 }
 

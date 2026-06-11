@@ -15,10 +15,17 @@
   </div>
 }
 @if (heatmapData(); as data) {
-  <heatmap
+  <heatmap-switcher
     [data]="data"
-    [label]=""
-    [showLegend]="false"
-    [scrollToEnd]="true"
+    [dayMap]="data.dayMap"
+    [rangeStart]="data.rangeStart"
+    [rangeEnd]="data.rangeEnd"
+    legendMode="intensity"
+    persistKey="repeat-history"
+    [navLabel]="selectedYear().toString()"
+    [canNavPrev]="canPrevYear()"
+    [canNavNext]="canNextYear()"
+    (navPrev)="prevYear()"
+    (navNext)="nextYear()"
   />
 }

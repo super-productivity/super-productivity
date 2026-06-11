@@ -2,6 +2,16 @@ h1 mat-icon {
   transform: rotate(45deg);
 }
 
+h1[mat-dialog-title] {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+}
+
+.fullscreen-toggle {
+  margin-left: auto;
+}
+
 // Bound the whole dialog to the viewport and lay it out as a flex column so
 // the scrollable form and the pinned result band share the available height
 // instead of overflowing past the action buttons.
@@ -9,6 +19,14 @@ h1 mat-icon {
   display: flex;
   flex-direction: column;
   max-height: 85vh;
+}
+
+// Fullscreen state (`dialog-fullscreen` panel class on the overlay pane): the
+// pane is viewport-sized, so the wrapper stretches to fill it and the 85vh cap
+// no longer applies.
+:host-context(.dialog-fullscreen) .dialog-help-wrapper {
+  height: 100%;
+  max-height: none;
 }
 
 mat-dialog-content {
@@ -59,6 +77,13 @@ mat-dialog-actions {
 }
 
 // Live RRULE result/preview, pinned above the dialog action buttons.
+.rrule-result__empty-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  text-align: center;
+  margin-top: var(--s-half);
+}
+
 .rrule-result {
   margin: var(--s) 0;
   padding: var(--s) var(--s2);
@@ -86,6 +111,68 @@ mat-dialog-actions {
     font-family: monospace;
     opacity: 0.7;
     word-break: break-all;
+  }
+
+  &__cal-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-quarter, 4px);
+    margin-top: var(--s);
+    padding: 2px var(--s);
+    color: var(--c-primary);
+    background: transparent;
+    border: none;
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+    font-size: 12px;
+
+    .mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      background: var(--c-primary-10, rgba(0, 0, 0, 0.06));
+    }
+  }
+
+  &__cal {
+    display: block;
+    margin-top: var(--s);
+  }
+
+  &__sim-hint {
+    margin-top: var(--s-quarter, 4px);
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  &__cal-empty {
+    margin-top: var(--s-quarter, 4px);
+    font-size: 11px;
+    opacity: 0.6;
+    font-style: italic;
+  }
+
+  &__sim {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+    margin-top: var(--s-quarter, 4px);
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--c-primary);
+  }
+
+  &__sim-reset {
+    padding: 2px var(--s);
+    color: var(--text-color);
+    background: transparent;
+    border: 1px solid var(--extra-border-color);
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+    font-size: 11px;
   }
 }
 

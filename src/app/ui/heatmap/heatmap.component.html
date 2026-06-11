@@ -1,52 +1,95 @@
 @if (data(); as heatmapData) {
-  <div class="heatmap-container">
-    <div class="heatmap-grid">
-      <div class="day-labels">
-        <div class="month-spacer"></div>
-        @for (label of dayLabels(); track $index) {
-          <div class="day-label">{{ label }}</div>
-        }
-      </div>
-
-      <div
-        class="scrollable-content"
-        #scrollableContent
-      >
-        <div class="heatmap-months">
-          @for (month of heatmapData.monthLabels; track $index) {
-            <div class="month-label">{{ month }}</div>
+  @if (heatmapData.months; as months) {
+    <div
+      class="heatmap-container"
+      [class.is-interactive]="interactive()"
+    >
+      @if (navLabel()) {
+        <div class="heatmap-nav">
+          <!-- Arrows only when there is anywhere to go — a single navigable
+               year would render two permanently dead buttons. -->
+          @if (canNavPrev() || canNavNext()) {
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="!canNavPrev()"
+              (click)="navPrev.emit()"
+            >
+              <mat-icon>chevron_left</mat-icon>
+            </button>
+          }
+          <div class="heatmap-nav__title">{{ navLabel() }}</div>
+          @if (canNavPrev() || canNavNext()) {
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="!canNavNext()"
+              (click)="navNext.emit()"
+            >
+              <mat-icon>chevron_right</mat-icon>
+            </button>
           }
         </div>
-
-        <div class="weeks">
-          @for (week of heatmapData.weeks; track $index) {
-            <div class="week">
-              @for (day of week.days; track $index) {
-                <div
-                  [class]="getDayClass(day)"
-                  [title]="getDayTitle(day)"
-                ></div>
+      }
+      <div class="heatmap-month-row">
+        <div class="day-labels day-labels--blocks">
+          @for (label of dayLabels(); track $index) {
+            <div class="day-label">{{ label }}</div>
+          }
+        </div>
+        <div class="heatmap-month-blocks">
+          @for (m of months; track $index) {
+            <div class="heatmap-month">
+              <div class="weeks">
+                @for (week of m.weeks; track $index) {
+                  <div class="week">
+                    @for (day of week.days; track $index) {
+                      <div
+                        [class]="getDayClass(day)"
+                        [matTooltip]="getDayTitle(day)"
+                        matTooltipPosition="above"
+                        [attr.role]="interactive() && day ? 'button' : null"
+                        [attr.tabindex]="interactive() && day ? 0 : null"
+                        [attr.aria-label]="interactive() && day ? getDayTitle(day) : null"
+                        (click)="interactive() && day && dayClick.emit(day)"
+                        (keydown.enter)="interactive() && onDayKeydown($event, day)"
+                        (keydown.space)="interactive() && onDayKeydown($event, day)"
+                      ></div>
+                    }
+                  </div>
+                }
+              </div>
+              <div class="heatmap-month__label">{{ m.label }}</div>
+              @if (m.total) {
+                <div class="heatmap-month__total">{{ m.total }}</div>
               }
             </div>
           }
         </div>
       </div>
+
+      @if (label()) {
+        <div class="heatmap-label">{{ label() }}</div>
+      }
+
+      @if (legendMode() === 'intensity') {
+        <div class="heatmap-legend">
+          <span>{{ T.G.HEATMAP_LOW | translate }}</span>
+          <div class="legend-item level-0"></div>
+          <div class="legend-item level-1"></div>
+          <div class="legend-item level-2"></div>
+          <div class="legend-item level-3"></div>
+          <div class="legend-item level-4"></div>
+          <span>{{ T.G.HEATMAP_HIGH | translate }}</span>
+        </div>
+      } @else if (legendMode() === 'projection') {
+        <div class="heatmap-legend">
+          <div class="legend-item projected"></div>
+          <span>{{ T.G.HEATMAP_PROJECTED | translate }}</span>
+          <div class="legend-item completed"></div>
+          <span>{{ T.G.HEATMAP_COMPLETED_SIM | translate }}</span>
+        </div>
+      }
     </div>
-
-    @if (label()) {
-      <div class="heatmap-label">{{ label() }}</div>
-    }
-
-    @if (showLegend()) {
-      <div class="heatmap-legend">
-        <span>Less</span>
-        <div class="legend-item level-0"></div>
-        <div class="legend-item level-1"></div>
-        <div class="legend-item level-2"></div>
-        <div class="legend-item level-3"></div>
-        <div class="legend-item level-4"></div>
-        <span>More</span>
-      </div>
-    }
-  </div>
+  }
 }

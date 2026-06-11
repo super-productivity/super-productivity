@@ -1,0 +1,72 @@
+<div
+  class="month-cal"
+  [class.is-interactive]="interactive()"
+>
+  <div class="month-cal__header">
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="!canPrev()"
+      (click)="prev()"
+    >
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <div class="month-cal__title">{{ monthLabel() }}</div>
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="!canNext()"
+      (click)="next()"
+    >
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+
+  <div class="month-cal__weekdays">
+    @for (wd of weekdayLabels(); track $index) {
+      <div class="month-cal__weekday">{{ wd }}</div>
+    }
+  </div>
+
+  <div class="month-cal__grid">
+    @for (week of weeks(); track $index) {
+      @for (cell of week; track cell.dateStr) {
+        <div
+          [class]="getCellClass(cell)"
+          [matTooltip]="getCellTitle(cell)"
+          matTooltipPosition="above"
+          [attr.role]="isCellInteractive(cell) ? 'button' : null"
+          [attr.tabindex]="isCellInteractive(cell) ? 0 : null"
+          [attr.aria-label]="isCellInteractive(cell) ? getCellTitle(cell) : null"
+          (click)="onCellClick(cell)"
+          (keydown.enter)="isCellInteractive(cell) && onCellKeydown($event, cell)"
+          (keydown.space)="isCellInteractive(cell) && onCellKeydown($event, cell)"
+        >
+          {{ cell.dayNum }}
+        </div>
+      }
+    }
+  </div>
+
+  @if (legendMode() !== 'none') {
+    <div class="month-cal__legend">
+      @if (legendMode() === 'intensity') {
+        <!-- Coloring is RELATIVE (ratio to the busiest day), so the legend is a
+             Low→High gradient, not absolute hour buckets. -->
+        <span class="month-cal__legend-item">{{ T.G.HEATMAP_LOW | translate }}</span>
+        <span class="month-cal__legend-item"><i class="sw level-1"></i></span>
+        <span class="month-cal__legend-item"><i class="sw level-2"></i></span>
+        <span class="month-cal__legend-item"><i class="sw level-3"></i></span>
+        <span class="month-cal__legend-item"><i class="sw level-4"></i></span>
+        <span class="month-cal__legend-item">{{ T.G.HEATMAP_HIGH | translate }}</span>
+      } @else {
+        <span class="month-cal__legend-item"
+          ><i class="sw projected"></i>{{ T.G.HEATMAP_PROJECTED | translate }}</span
+        >
+        <span class="month-cal__legend-item"
+          ><i class="sw completed"></i>{{ T.G.HEATMAP_COMPLETED_SIM | translate }}</span
+        >
+      }
+    </div>
+  }
+</div>

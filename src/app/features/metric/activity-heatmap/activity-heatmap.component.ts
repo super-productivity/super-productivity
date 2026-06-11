@@ -11,22 +11,22 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { combineLatestWith, map, tap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconButton } from '@angular/material/button';
-import { MatSelectModule } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { SnackService } from '../../../core/snack/snack.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { ShareService } from '../../../core/share/share.service';
+import { DayData, WeekData } from '../../../ui/heatmap/heatmap.component';
+import { HeatmapSwitcherComponent } from '../../../ui/heatmap/heatmap-switcher.component';
 import {
-  DayData,
-  WeekData,
-  HeatmapComponent,
-} from '../../../ui/heatmap/heatmap.component';
+  buildHeatmapMonths,
+  buildHeatmapWeeks,
+  heatmapHoursTotal,
+} from '../../../ui/heatmap/build-heatmap-data.util';
 import { DateAdapter } from '@angular/material/core';
 import { Worklog } from '../../worklog/worklog.model';
+import { nextYearOf, prevYearOf } from '../../../ui/heatmap/year-nav.util';
 
 interface YearlyActivityData {
   dayMap: Map<string, DayData>;
@@ -39,15 +39,7 @@ interface YearlyActivityData {
   templateUrl: './activity-heatmap.component.html',
   styleUrls: ['./activity-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    HeatmapComponent,
-    TranslatePipe,
-    MatFormFieldModule,
-    MatIconButton,
-    MatSelectModule,
-    MatTooltip,
-    MatIcon,
-  ],
+  imports: [HeatmapSwitcherComponent, TranslatePipe, MatIconButton, MatTooltip, MatIcon],
 })
 export class ActivityHeatmapComponent {
   private readonly _worklogService = inject(WorklogService);
@@ -68,7 +60,6 @@ export class ActivityHeatmapComponent {
     return availableYears.length > 0 ? availableYears[0] : new Date().getFullYear();
   });
   T: typeof T = T;
-  weeks: WeekData[] = [];
   isSharing = signal(false);
   private readonly _activeWorkContextTitle = toSignal(
     this._workContextService.activeWorkContextTitle$,
@@ -79,9 +70,31 @@ export class ActivityHeatmapComponent {
     this._userSelectedYear.set(year); // Only update user selection
   }
 
-  // Day labels adjusted for first day of week
+  // Prev/next navigation over the years that actually have data
+  // (availableYears is sorted newest-first).
+  readonly canPrevYear = computed(
+    () => prevYearOf(this.availableYears(), this.selectedYear()) !== null,
+  );
+  readonly canNextYear = computed(
+    () => nextYearOf(this.availableYears(), this.selectedYear()) !== null,
+  );
+  prevYear(): void {
+    const y = prevYearOf(this.availableYears(), this.selectedYear());
+    if (y !== null) {
+      this._userSelectedYear.set(y);
+    }
+  }
+  nextYear(): void {
+    const y = nextYearOf(this.availableYears(), this.selectedYear());
+    if (y !== null) {
+      this._userSelectedYear.set(y);
+    }
+  }
+
+  // Day labels for the share-canvas export — localized via DateAdapter like the
+  // on-screen views, rotated so the locale's first weekday comes first.
   readonly dayLabels = computed(() => {
-    const allDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const allDays = this._dateAdapter.getDayOfWeekNames('short');
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     return [...allDays.slice(firstDay), ...allDays.slice(0, firstDay)];
   });
@@ -112,13 +125,29 @@ export class ActivityHeatmapComponent {
       return null;
     }
 
-    // Rebuild the weeks grid with the current firstDayOfWeek setting
-    return this._buildWeeksGrid(
-      rawData.dayMap,
-      rawData.startDate,
-      rawData.endDate,
-      firstDay,
-    );
+    // Rebuild the weeks grid with the current firstDayOfWeek setting. `weeks`/
+    // `monthLabels` stay for the share-canvas export; `months` drives the
+    // month-grouped on-screen layout.
+    return {
+      ...buildHeatmapWeeks(
+        rawData.dayMap,
+        rawData.startDate,
+        rawData.endDate,
+        firstDay,
+        this._dateAdapter.getMonthNames('short'),
+      ),
+      months: buildHeatmapMonths(
+        rawData.dayMap,
+        rawData.startDate,
+        rawData.endDate,
+        firstDay,
+        this._dateAdapter.getMonthNames('short'),
+        heatmapHoursTotal,
+      ),
+      dayMap: rawData.dayMap,
+      rangeStart: rawData.startDate,
+      rangeEnd: rawData.endDate,
+    };
   });
 
   private _buildHeatmapDataFromWorklog(
@@ -203,111 +232,6 @@ export class ActivityHeatmapComponent {
       startDate,
       endDate,
     };
-  }
-
-  private _buildWeeksGrid(
-    dayMap: Map<string, DayData>,
-    startDate: Date,
-    endDate: Date,
-    firstDayOfWeek: number = 0,
-  ): { weeks: WeekData[]; monthLabels: string[] } {
-    const weeks: WeekData[] = [];
-    const monthLabels: string[] = [];
-    let currentMonth = -1;
-
-    // Find the first day (based on firstDayOfWeek setting) before or on the start date
-    const firstDay = new Date(startDate);
-    const dayOfWeek = firstDay.getDay();
-    // Calculate days to go back to reach the first day of the week
-    const daysToGoBack = (dayOfWeek - firstDayOfWeek + 7) % 7;
-    firstDay.setDate(firstDay.getDate() - daysToGoBack);
-
-    // Build weeks
-    const currentDate = new Date(firstDay);
-    let weekCount = 0;
-
-    while (currentDate <= endDate || weeks.length === 0) {
-      const week: WeekData = { days: [] };
-
-      // Add 7 days for this week
-      for (let i = 0; i < 7; i++) {
-        const dateStr = getDbDateStr(currentDate);
-        const dayData = dayMap.get(dateStr);
-
-        // Only include days within our range
-        if (currentDate >= startDate && currentDate <= endDate) {
-          week.days.push(dayData || null);
-
-          // Track month changes for labels
-          const month = currentDate.getMonth();
-          if (month !== currentMonth && currentDate.getDate() <= 7 && weekCount > 0) {
-            // Add month label at the start of the month
-            const monthNames = [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ];
-            monthLabels.push(monthNames[month]);
-            currentMonth = month;
-          } else if (monthLabels.length === 0 && weekCount === 0) {
-            // Add first month
-            const monthNames = [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ];
-            monthLabels.push(monthNames[month]);
-            currentMonth = month;
-          }
-        } else {
-          week.days.push(null);
-        }
-
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      weeks.push(week);
-      weekCount++;
-
-      // Safety limit
-      if (weeks.length > 54) {
-        break;
-      }
-    }
-
-    return { weeks, monthLabels };
-  }
-
-  getDayClass(day: DayData | null): string {
-    if (!day) {
-      return 'day empty';
-    }
-    return `day level-${day.level}`;
-  }
-
-  getDayTitle(day: DayData | null): string {
-    if (!day) {
-      return '';
-    }
-    return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
   }
 
   private _extractAvailableYearsFromWorklog(worklog: Worklog): number[] {

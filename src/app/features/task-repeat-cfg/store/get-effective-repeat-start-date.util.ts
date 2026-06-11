@@ -1,6 +1,11 @@
 import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 
-export const getEffectiveRepeatStartDate = (cfg: TaskRepeatCfg): string => {
+export const getEffectiveRepeatStartDate = (
+  cfg: Pick<
+    TaskRepeatCfg,
+    'repeatFromCompletionDate' | 'lastTaskCreationDay' | 'startDate'
+  >,
+): string => {
   if (cfg.repeatFromCompletionDate && cfg.lastTaskCreationDay) {
     return cfg.lastTaskCreationDay;
   }

@@ -27,7 +27,6 @@ describe('buildRepeatQuickSettingOptions', () => {
       new Date(2026, 5, 2),
       'en-US',
       translateService,
-      true,
     );
     expect(options.map((o) => o.value)).toEqual([
       'DAILY',
@@ -57,18 +56,6 @@ describe('buildRepeatQuickSettingOptions', () => {
     expect(monthlyNthWeekdayOption?.label).not.toContain('F.TASK_REPEAT.F.ORD_FIRST:');
   });
 
-  it('omits the RRULE option by default (fail-safe for callers that forget the param)', () => {
-    // The advanced builder is gated behind a per-device engine flag; a caller
-    // that doesn't opt in must not surface it on flag-off devices.
-    const options = buildRepeatQuickSettingOptions(
-      new Date(2026, 5, 2),
-      'en-US',
-      translateService,
-    );
-    expect(options.some((o) => o.value === 'RRULE')).toBe(false);
-    expect(options.length).toBe(15);
-  });
-
   // Regression test for #7945: a Date the form's `defaultValue` left unparsed
   // would reach `dateStrToUtcDate`, return Invalid Date, make weekOfMonth NaN,
   // and `ORDINAL_KEYS[NaN-1]` → undefined → instant(undefined) threw.
@@ -83,7 +70,6 @@ describe('buildRepeatQuickSettingOptions', () => {
       new Date('Invalid Date'),
       'en-US',
       translateService,
-      true,
     );
     expect(options.length).toBe(16);
     options.forEach((o) => expect(o.label).toBeTruthy());

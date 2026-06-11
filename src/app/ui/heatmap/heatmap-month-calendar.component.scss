@@ -1,0 +1,145 @@
+.month-cal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+  padding: var(--s2);
+  background: var(--c-dark-10);
+  border-radius: var(--card-border-radius);
+  // The 1fr/aspect-ratio cells scale with the container, so on a wide page
+  // (metrics) the calendar outgrows the viewport — cap it and keep it centered.
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s);
+  }
+
+  &__title {
+    font-weight: bold;
+    min-width: 9em;
+    text-align: center;
+  }
+
+  &__weekdays,
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--s-quarter);
+  }
+
+  &__weekday {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-color-muted);
+  }
+
+  &__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s);
+    justify-content: center;
+    margin-top: var(--s-quarter);
+    font-size: 11px;
+    color: var(--text-color-muted);
+  }
+
+  &__legend-item {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+.sw {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 4px;
+
+  &.level-1 {
+    background: color-mix(in srgb, var(--c-primary) 25%, transparent);
+  }
+  &.level-2 {
+    background: color-mix(in srgb, var(--c-primary) 45%, transparent);
+  }
+  &.level-3 {
+    background: color-mix(in srgb, var(--c-primary) 65%, transparent);
+  }
+  &.level-4 {
+    background: var(--c-primary);
+  }
+  &.projected {
+    background: transparent;
+    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline-offset: -2px;
+  }
+  &.completed {
+    background: var(--c-primary);
+  }
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--card-border-radius);
+  font-size: 13px;
+  transition: var(--transition-fast);
+
+  &.other-month {
+    color: var(--text-color-muted);
+    opacity: 0.4;
+  }
+
+  // in-month, no activity → plain number, no fill.
+  // Translucent fills (levels 1–3) keep the theme's default text color — the
+  // background barely shifts, so the surrounding text color stays readable in
+  // BOTH light and dark themes. Solid-primary cells use the palette's contrast
+  // token (what themes declare as readable ON primary) — never a hex literal.
+  &.level-1 {
+    background: color-mix(in srgb, var(--c-primary) 25%, transparent);
+  }
+  &.level-2 {
+    background: color-mix(in srgb, var(--c-primary) 45%, transparent);
+  }
+  &.level-3 {
+    background: color-mix(in srgb, var(--c-primary) 65%, transparent);
+  }
+  &.level-4 {
+    background: var(--c-primary);
+    color: var(--c-contrast);
+  }
+
+  &.projected {
+    background: transparent;
+    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline-offset: -2px;
+  }
+  &.completed {
+    background: var(--c-primary);
+    color: var(--c-contrast);
+    outline: 2px solid var(--c-primary);
+    outline-offset: 1px;
+  }
+}
+
+// Pointer/hover affordances only where clicking actually does something
+// (`interactive` input) — display-only calendars keep inert cells.
+.month-cal.is-interactive .cal-day:not(.other-month) {
+  cursor: pointer;
+
+  &:hover {
+    outline: 1px solid var(--c-dark-20);
+  }
+}
+
+:host-context(.isDarkTheme) {
+  .month-cal {
+    background: var(--c-light-05);
+  }
+}

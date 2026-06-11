@@ -9,6 +9,16 @@
         ? (T.F.TASK_REPEAT.D_EDIT.EDIT | translate)
         : (T.F.TASK_REPEAT.D_EDIT.ADD | translate)
     }}
+    <button
+      mat-icon-button
+      type="button"
+      class="fullscreen-toggle"
+      [title]="T.G.TOGGLE_FULLSCREEN | translate"
+      [attr.aria-label]="T.G.TOGGLE_FULLSCREEN | translate"
+      (click)="toggleFullScreen()"
+    >
+      <mat-icon>{{ isFullScreen() ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+    </button>
   </h1>
 
   <mat-dialog-content>
@@ -16,6 +26,7 @@
       <collapsible
         [title]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"
         icon="bar_chart"
+        [isExpanded]="isHeatmapExpanded"
         (isExpandedChange)="isHeatmapExpanded = $event"
       >
         @if (isHeatmapExpanded) {
@@ -63,28 +74,102 @@
   </mat-dialog-content>
 
   <!-- Live result/preview — pinned above the action buttons in RRULE mode. -->
-  @if (isRRuleMode() && rrulePreview(); as p) {
+  @if (isRRuleMode()) {
     <div class="rrule-result">
-      <div class="rrule-result__human">&rarr; {{ p.human }}</div>
-      @if (repeatCfg().repeatFromCompletionDate) {
-        @if (p.completionExample; as ex) {
+      @if (rrulePreview(); as p) {
+        <div class="rrule-result__human">&rarr; {{ p.human }}</div>
+        @if (repeatCfg().repeatFromCompletionDate) {
+          @if (p.completionExample; as ex) {
+            <div class="rrule-result__next">
+              {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
+              {{ ex.done | date: 'mediumDate' }} &rarr; {{ ex.next | date: 'mediumDate' }}
+            </div>
+          }
+        } @else if (!showResultHeatmap() && p.upcoming.length) {
+          <!-- The textual "Upcoming: …" line is the no-calendar fallback — the
+               open calendar shows the same occurrences spatially. -->
           <div class="rrule-result__next">
-            {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
-            {{ ex.done | date: 'mediumDate' }} &rarr; {{ ex.next | date: 'mediumDate' }}
+            {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
+            @for (d of p.upcoming; track d.getTime(); let last = $last) {
+              <span>{{ d | date: 'mediumDate' }}</span>
+              @if (!last) {
+                <span class="rrule-result__sep">&middot;</span>
+              }
+            }
           </div>
         }
-      } @else if (p.upcoming.length) {
-        <div class="rrule-result__next">
-          {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
-          @for (d of p.upcoming; track d.getTime(); let last = $last) {
-            <span>{{ d | date: 'mediumDate' }}</span>
-            @if (!last) {
-              <span class="rrule-result__sep">&middot;</span>
+        <button
+          type="button"
+          class="rrule-result__cal-toggle"
+          (click)="toggleResultHeatmap()"
+        >
+          <mat-icon>{{
+            showResultHeatmap() ? 'expand_less' : 'calendar_month'
+          }}</mat-icon>
+          <span>{{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW | translate }}</span>
+        </button>
+        @if (resultHeatmapData(); as hd) {
+          <heatmap-switcher
+            #calRef
+            class="rrule-result__cal"
+            [data]="hd"
+            [dayMap]="hd.dayMap"
+            [rangeStart]="hd.rangeStart"
+            [rangeEnd]="hd.rangeEnd"
+            legendMode="projection"
+            [interactive]="!!repeatCfg().repeatFromCompletionDate"
+            [navLabel]="previewNavLabel()"
+            [canNavPrev]="true"
+            [canNavNext]="true"
+            [monthBoundless]="true"
+            (navPrev)="previewPrevYear()"
+            (navNext)="previewNextYear()"
+            (monthViewChange)="onPreviewMonthChange($event)"
+            (dayClick)="onPreviewDayClick($event)"
+          />
+          @if (previewWindowEmpty()) {
+            <div class="rrule-result__empty-hint">
+              {{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_EMPTY_WINDOW | translate }}
+            </div>
+          }
+          <!-- Simulation only exists for "repeat from completion" schedules — a
+             fixed calendar never re-anchors, so the hint would invite clicks
+             that (correctly) do nothing. -->
+          @if (repeatCfg().repeatFromCompletionDate) {
+            @if (simulatedCompletion(); as sim) {
+              <div class="rrule-result__sim">
+                {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }}
+                {{ sim }}
+                <button
+                  type="button"
+                  class="rrule-result__sim-reset"
+                  (click)="clearSimulation()"
+                >
+                  {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
+                </button>
+              </div>
+            } @else {
+              <div class="rrule-result__sim-hint">
+                {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
+              </div>
             }
           }
+        } @else if (showResultHeatmap()) {
+          <!-- The preview is toggled ON but there is nothing to draw (e.g. no
+             occurrence lands in the 365-day window). Without this the calendar
+             silently vanishes and the toggle looks broken. -->
+          <div class="rrule-result__cal-empty">
+            {{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW_EMPTY | translate }}
+          </div>
+        }
+      } @else {
+        <!-- Mid-edit unparseable rule: keep the strip visible (instead of
+             yanking the whole preview incl. its toggle out of the dialog) and
+             say WHY there's nothing to show. -->
+        <div class="rrule-result__cal-empty">
+          {{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_INVALID | translate }}
         </div>
       }
-      <div class="rrule-result__expr">{{ p.rrule }}</div>
     </div>
   }
 

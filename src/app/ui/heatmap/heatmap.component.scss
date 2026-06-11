@@ -14,23 +14,41 @@
   margin-bottom: -8px;
 }
 
-.heatmap-grid {
+// In-card navigation header (‹ 2026 ›) — mirrors the month calendar's header.
+.heatmap-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s);
+
+  &__title {
+    font-weight: bold;
+    min-width: 4em;
+    text-align: center;
+  }
+}
+
+// Month-grouped layout: each month is its own mini-grid, all
+// months in ONE row (Jan–Dec side by side) with a label + total beneath each;
+// the row scrolls horizontally when it doesn't fit, with the weekday labels
+// pinned outside the scroll area.
+.heatmap-month-row {
   display: flex;
   gap: var(--s);
   align-items: flex-start;
+  // Center the strip when it's narrower than the card (otherwise the leftover
+  // space all sits right of December); overflow still scrolls INSIDE
+  // .heatmap-month-blocks, so centering the row is safe.
+  justify-content: center;
 }
 
-.scrollable-content {
+.heatmap-month-blocks {
   display: flex;
-  flex-direction: column;
-  gap: var(--s);
+  flex-wrap: nowrap;
+  gap: var(--s2);
   overflow-x: auto;
-  overflow-y: hidden;
+  padding-bottom: var(--s-half);
 
-  // Smooth scrolling
-  scroll-behavior: smooth;
-
-  // Better scrollbar styling
   &::-webkit-scrollbar {
     height: 8px;
   }
@@ -50,18 +68,21 @@
   }
 }
 
-.heatmap-months {
+.heatmap-month {
   display: flex;
-  gap: var(--s-quarter);
-  font-size: 12px;
-  line-height: 12px;
-  height: 12px;
-  color: var(--text-color-muted);
-  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-half);
 
-  .month-label {
-    flex: 0 0 auto;
-    width: calc(4 * 12px + 4 * 2px); // 4 weeks * (cell width + gap)
+  &__label {
+    font-size: 12px;
+    color: var(--text-color-muted);
+  }
+
+  &__total {
+    font-size: 11px;
+    opacity: 0.55;
+    margin-top: -4px;
   }
 }
 
@@ -76,15 +97,16 @@
   text-align: right;
   flex-shrink: 0;
 
-  .month-spacer {
-    height: 17px; // 12px (heatmap-months height) + 8px (gap in scrollable-content)
-    flex-shrink: 0;
-  }
-
   .day-label {
     height: 12px;
     line-height: 12px;
     flex-shrink: 0;
+  }
+
+  // Month-block variant: the mini-grids start at the very top (labels/totals
+  // sit BELOW them), so no month-spacer offset is needed.
+  &--blocks {
+    width: auto;
   }
 }
 
@@ -106,13 +128,11 @@
   width: 12px;
   height: 12px;
   border-radius: 2px;
-  cursor: pointer;
   transition: var(--transition-fast);
   flex-shrink: 0;
 
   &.empty {
     background: transparent;
-    cursor: default;
   }
 
   &.level-0 {
@@ -135,7 +155,28 @@
     background: var(--c-primary);
   }
 
-  &:not(.empty):hover {
+  // Projected future occurrence: hollow cell with a dashed primary outline so
+  // it reads as "upcoming", distinct from filled past-activity cells.
+  &.projected {
+    background: transparent;
+    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline-offset: -1px;
+  }
+
+  // Simulated "completed here" day: solid primary with a ring.
+  &.completed {
+    background: var(--c-primary);
+    outline: 2px solid var(--c-primary);
+    outline-offset: 1px;
+  }
+}
+
+// Pointer/hover affordances only where clicking actually does something
+// (`interactive` input) — display-only heatmaps keep inert cells.
+.heatmap-container.is-interactive .day:not(.empty) {
+  cursor: pointer;
+
+  &:hover {
     transform: scale(1.3);
     outline: 1px solid var(--c-dark-20);
     z-index: 1;
@@ -145,10 +186,10 @@
 .heatmap-legend {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--s-half);
   font-size: 11px;
   color: var(--text-color-muted);
-  padding-right: var(--s-half);
 
   span {
     margin: 0 var(--s-half);
@@ -178,6 +219,18 @@
     &.level-4 {
       background: var(--c-primary);
     }
+
+    &.projected {
+      background: transparent;
+      outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+      outline-offset: -1px;
+    }
+
+    &.completed {
+      background: var(--c-primary);
+      outline: 2px solid var(--c-primary);
+      outline-offset: 1px;
+    }
   }
 }
 
@@ -187,28 +240,14 @@
     background: var(--c-light-05);
   }
 
-  .scrollable-content {
-    &::-webkit-scrollbar-track {
-      background: var(--c-light-05);
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--c-light-10);
-
-      &:hover {
-        background: var(--c-light-33);
-      }
-    }
-  }
-
   .day {
     &.level-0 {
       background: var(--c-light-05);
     }
+  }
 
-    &:not(.empty):hover {
-      outline-color: var(--c-light-10);
-    }
+  .heatmap-container.is-interactive .day:not(.empty):hover {
+    outline-color: var(--c-light-10);
   }
 
   .heatmap-legend .legend-item.level-0 {
