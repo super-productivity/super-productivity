@@ -140,6 +140,36 @@ export const creditBackgroundTickGap = (
   taskService.flushAccumulatedTimeSpent();
 };
 
+export type AndroidResumeDeps = {
+  globalTracking: GlobalTrackingIntervalService;
+  taskService: TaskService;
+  syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
+  getNativeTrackingData: () => NativeTrackingData | null;
+  requestRecovery: (data: NativeTrackingData) => void;
+};
+
+/**
+ * Body of syncOnResume$, effect-independent so the spec can pin the
+ * load-bearing ordering (see the effect comment): the gap credit must run
+ * synchronously BEFORE syncElapsedTimeForTask samples the task, else the
+ * native reconcile re-emits the same gap as a second syncTimeSpent op and
+ * remote devices double-count it on op-log replay.
+ */
+export const handleAndroidResume = async (
+  deps: AndroidResumeDeps,
+  currentTask: Task | null,
+): Promise<void> => {
+  creditBackgroundTickGap(deps.globalTracking, deps.taskService);
+  if (currentTask) {
+    await deps.syncElapsedTimeForTask(currentTask.id);
+  } else {
+    const nativeData = deps.getNativeTrackingData();
+    if (nativeData) {
+      deps.requestRecovery(nativeData);
+    }
+  }
+};
+
 @Injectable()
 export class AndroidForegroundTrackingEffects {
   private _store = inject(Store);
@@ -318,20 +348,19 @@ export class AndroidForegroundTrackingEffects {
             this._store.select(selectIsTaskDataLoaded),
           ),
           filter(([, , isTaskDataLoaded]) => isTaskDataLoaded),
-          tap(async ([, currentTask]) => {
-            creditBackgroundTickGap(
-              this._globalTrackingIntervalService,
-              this._taskService,
-            );
-            if (currentTask) {
-              await this._syncElapsedTimeForTask(currentTask.id);
-            } else {
-              const nativeData = this._getNativeTrackingData();
-              if (nativeData) {
-                this._recoveryRequest$.next({ data: nativeData, source: 'resume' });
-              }
-            }
-          }),
+          tap(([, currentTask]) =>
+            handleAndroidResume(
+              {
+                globalTracking: this._globalTrackingIntervalService,
+                taskService: this._taskService,
+                syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),
+                getNativeTrackingData: () => this._getNativeTrackingData(),
+                requestRecovery: (data) =>
+                  this._recoveryRequest$.next({ data, source: 'resume' }),
+              },
+              currentTask,
+            ),
+          ),
         ),
       { dispatch: false },
     );
