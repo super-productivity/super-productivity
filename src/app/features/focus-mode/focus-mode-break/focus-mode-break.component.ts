@@ -47,9 +47,7 @@ export class FocusModeBreakComponent {
   private readonly _taskService = inject(TaskService);
   T: typeof T = T;
 
-  // Get pausedTaskId before break ends (passed in action to avoid race condition)
   private readonly _pausedTaskId = toSignal(this._store.select(selectPausedTaskId));
-
   readonly remainingTime = computed(() => {
     return this.focusModeService.timeRemaining() || 0;
   });
@@ -64,6 +62,7 @@ export class FocusModeBreakComponent {
       !this.focusModeService.isSessionRunning() &&
       this.focusModeService.mainState() === FocusMainUIState.BreakOffer,
   );
+
   readonly isPomodoro = computed(
     () => this.focusModeService.mode() === FocusModeMode.Pomodoro,
   );
@@ -73,33 +72,30 @@ export class FocusModeBreakComponent {
   }
 
   completeBreak(): void {
+    // Get pausedTaskId before break ends (passed in action to avoid race condition)
     this._store.dispatch(completeBreak({ pausedTaskId: this._pausedTaskId() }));
   }
 
   pauseBreak(): void {
-    // Bug #5995 Fix: Prefer currentTaskId (actively tracked task) over stored pausedTaskId
-    // - If tracking is active during break: use currentTaskId (ensures effect fires)
-    // - If tracking was auto-paused: fall back to stored pausedTaskId
-    // This matches the banner's approach for consistent behavior
+    // Bug #5995 Fix: currentTaskId takes precedence because pausedTaskId may not yet
+    // be set in the store when pausing immediately after break starts
     const currentTaskId = this._taskService.currentTaskId();
     const storePausedTaskId = this._pausedTaskId();
     const pausedTaskId = currentTaskId || storePausedTaskId;
-
     this._store.dispatch(pauseFocusSession({ pausedTaskId }));
   }
 
   resumeBreak(): void {
     if (this.isBreakOffer()) {
-      // Prefer the stored pausedTaskId for Flowtime break offers;
-      // fallback to the active current task only when no pausedTaskId exists.
       const currentTaskId = this._taskService.currentTaskId();
       const storePausedTaskId = this._pausedTaskId();
+      // Flowtime: storePausedTaskId takes precedence here (opposite of pauseBreak) because
+      // currentTaskId is cleared when break starts, so store value is the reliable source
       const pausedTaskId = storePausedTaskId ?? currentTaskId;
       const config = this.focusModeService.focusModeConfig();
       if (config?.isPauseTrackingDuringBreak) {
         this._store.dispatch(unsetCurrentTask());
       }
-
       this._store.dispatch(
         startBreak({
           duration: this.focusModeService.sessionDuration(),

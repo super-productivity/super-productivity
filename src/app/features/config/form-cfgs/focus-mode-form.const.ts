@@ -50,6 +50,13 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
             label: T.GCF.FOCUS_MODE.L_MANUAL_BREAK_START,
           },
         },
+        {
+          key: 'isAutoCompleteBreak',
+          type: 'checkbox',
+          templateOptions: {
+            label: T.GCF.FOCUS_MODE.L_AUTO_COMPLETE_BREAK,
+          },
+        },
       ],
     },
   ],
