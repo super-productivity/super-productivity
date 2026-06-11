@@ -3,7 +3,7 @@ import { TaskLog } from '../../../core/log';
 import { getAudioBuffer, playBuffer } from '../../../util/audio-context';
 
 const BASE = './assets/snd';
-const PITCH_OFFSET = -400;
+const PITCH_PER_TASK = 50;
 const MAX_PITCH = 300;
 
 /**
@@ -19,9 +19,11 @@ export const playDoneSound = async (
   const file = `${BASE}/${soundCfg.doneSound}`;
   TaskLog.log(file);
 
-  const pitchIncrement = nrOfDoneTasks * 50;
+  // detune 0 plays the sample at its natural pitch. When the toggle is off we
+  // never shift it; when on, pitch only ever rises above that baseline (50 cents
+  // per completed task, clamped to MAX_PITCH) and never drops below it (#8265).
   const pitchFactor = soundCfg.isIncreaseDoneSoundPitch
-    ? Math.min(PITCH_OFFSET + pitchIncrement, MAX_PITCH)
+    ? Math.min(nrOfDoneTasks * PITCH_PER_TASK, MAX_PITCH)
     : 0;
 
   try {
