@@ -725,6 +725,24 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(c.previewNavLabel()).toContain(String(homeStartYear - 1));
     });
 
+    it('renders an empty HOME window with nav + hint instead of nothing (far-future start)', async () => {
+      // A valid rule with no occurrence in the next 365 days used to null out
+      // the preview entirely — including the ‹ › arrows, so the window where
+      // it DOES fire was unreachable.
+      const y = new Date().getFullYear() + 5;
+      const fixture = await setupTestBed({
+        repeatCfg: { ...rruleCfg, rrule: 'FREQ=DAILY', startDate: `${y}-01-15` },
+      });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      expect(c.resultHeatmapData()).not.toBeNull();
+      expect(c.previewWindowEmpty()).toBe(true);
+      for (let i = 0; i < 5; i++) {
+        c.previewNextYear();
+      }
+      expect(c.previewWindowEmpty()).toBe(false);
+    });
+
     it('keeps a navigated window rendered even when it has no occurrences (no stranding)', async () => {
       // Far in the past, before the cfg's startDate, the window is empty — the
       // calendar and its ‹ › nav must survive so the user can navigate back.

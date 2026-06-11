@@ -218,6 +218,12 @@ export class DialogEditTaskRepeatCfgComponent {
     const b = hd.rangeEnd.getFullYear();
     return a === b ? `${a}` : `${a} – ${b}`;
   });
+  // True when the rendered window holds no occurrence (and no sim) — the grid
+  // alone would read as broken, so the template adds an explanatory hint.
+  previewWindowEmpty = computed(() => {
+    const hd = this.resultHeatmapData();
+    return !!hd && ![...hd.dayMap.values()].some((d) => d.isProjected || d.isCompleted);
+  });
   // The month view navigates without walls; once the shown month leaves the
   // current window, shift the window a year so its data follows.
   onPreviewMonthChange(vm: { y: number; m: number }): void {
@@ -409,13 +415,11 @@ export class DialogEditTaskRepeatCfgComponent {
         to,
       );
     }
-    // Hide an all-empty preview only in the HOME window: a navigated window may
-    // legitimately be empty (e.g. before the start date), and returning null
-    // there would tear down the calendar — and its ‹ › nav — mid-navigation.
-    if (!occ.length && !sim && offset === 0) {
-      return null;
-    }
-
+    // An empty window — home included — still renders: a valid rule can have
+    // no occurrence in the next 365 days (multi-year intervals, a far-future
+    // start), and returning null would also drop the ‹ › nav, stranding the
+    // user with no way to reach the window where it DOES fire. The template
+    // shows an explanatory hint instead of a bare grid (previewWindowEmpty).
     const dayMap = buildProjectionDayMap(occ, from, to);
     if (sim) {
       const day = dayMap.get(sim);

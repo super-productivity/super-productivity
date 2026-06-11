@@ -202,7 +202,14 @@ export class HeatmapMonthCalendarComponent {
     const today = this._dayStart(new Date());
     const inRange =
       today >= this._dayStart(this.rangeStart()) && today <= this.rangeEnd();
-    const ref = inRange ? today : this.rangeEnd();
+    // Out-of-range fallback is direction-aware: a window entirely in the
+    // FUTURE (e.g. a year-jumped projection) opens at its START; a window in
+    // the past (e.g. a history year) at its END — the most recent month.
+    const ref = inRange
+      ? today
+      : today < this._dayStart(this.rangeStart())
+        ? this.rangeStart()
+        : this.rangeEnd();
     return { y: ref.getFullYear(), m: ref.getMonth() };
   }
   /** True when any day of month `vm` overlaps `[rangeStart, rangeEnd]`. */

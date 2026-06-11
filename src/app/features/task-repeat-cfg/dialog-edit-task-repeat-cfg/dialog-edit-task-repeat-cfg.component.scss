@@ -77,6 +77,13 @@ mat-dialog-actions {
 }
 
 // Live RRULE result/preview, pinned above the dialog action buttons.
+.rrule-result__empty-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  text-align: center;
+  margin-top: var(--s-half);
+}
+
 .rrule-result {
   margin: var(--s) 0;
   padding: var(--s) var(--s2);

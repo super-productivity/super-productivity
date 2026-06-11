@@ -110,6 +110,15 @@ describe('HeatmapMonthCalendarComponent', () => {
     }
   });
 
+  it('defaults to the range START for a window entirely in the future', () => {
+    // A year-jumped projection window opens at its first month, not its last —
+    // landing on rangeEnd after a FORWARD jump was disorienting. Past windows
+    // (history years) still open on their most recent month.
+    const y = new Date().getFullYear() + 2;
+    const c = setup(new Date(y, 2, 1), new Date(y, 7, 31)).componentInstance;
+    expect(c.viewMonth()).toEqual({ y, m: 2 });
+  });
+
   it('falls back into range when the data range changes under a navigated month', () => {
     // Regression: metric year select swaps dayMap/range while the component
     // stays mounted; a navigated month outside the new range stranded the user
