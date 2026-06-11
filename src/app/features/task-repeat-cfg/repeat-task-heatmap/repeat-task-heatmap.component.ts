@@ -310,30 +310,47 @@ export class RepeatTaskHeatmapComponent {
       }
     }
 
-    // Overlay projected future occurrences (Phase 2). Per-instance overrides
-    // (moves/RDATE) are Phase 8 — here only EXDATE skips apply. Projection
-    // covers the selected year's days strictly after today — for a past year
-    // the window is empty by construction.
+    // Overlay the schedule (Phase 2). Per-instance overrides (moves/RDATE) are
+    // Phase 8 — here only EXDATE skips apply. Occurrences are computed over the
+    // WHOLE selected year: days after today render as projected upcoming
+    // occurrences; past occurrence days stay as they are (filled when tracked,
+    // level-0 when genuinely missed).
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const projectFrom = tomorrow > yearStart ? tomorrow : yearStart;
-    if (isProjecting && cfg && cfg.rrule && projectFrom <= horizon) {
+    if (isProjecting && cfg && cfg.rrule) {
       const occurrences = getRRuleOccurrencesInRange(
         {
           rrule: cfg.rrule,
+          // For a from-completion schedule this anchors past occurrences at the
+          // CURRENT effective start — a best-effort reading of history, since
+          // every completion re-anchored the series along the way.
           startDate: getEffectiveRepeatStartDate(cfg),
           exdates: cfg.deletedInstanceDates ?? [],
         },
-        projectFrom,
+        yearStart,
         horizon,
       );
+      const scheduledDays = new Set<string>();
       for (const occ of occurrences) {
-        const dayData = dayMap.get(getDbDateStr(occ));
-        // Don't override a day that already has real tracked activity.
-        if (dayData && dayData.timeSpent === 0) {
+        const dateStr = getDbDateStr(occ);
+        scheduledDays.add(dateStr);
+        const dayData = dayMap.get(dateStr);
+        // Future occurrences become the projected overlay — but never override
+        // a day that already has real tracked activity.
+        if (dayData && dayData.timeSpent === 0 && occ >= tomorrow) {
           dayData.isProjected = true;
           dayData.level = 1;
           hasData = true;
+        }
+      }
+      // Days the task is NOT scheduled on (and that carry no tracked time)
+      // disappear from the map entirely: the grid renders them as transparent
+      // placeholder cells in the SAME position, so the visible cells read as
+      // the actual streak — a weekly task no longer shows six grey "missed"
+      // cells per week. Genuinely missed occurrence days stay grey.
+      for (const [dateStr, day] of dayMap) {
+        if (day.timeSpent === 0 && !day.isProjected && !scheduledDays.has(dateStr)) {
+          dayMap.delete(dateStr);
         }
       }
     }

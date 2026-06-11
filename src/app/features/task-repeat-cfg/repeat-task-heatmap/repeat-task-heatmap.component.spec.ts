@@ -121,6 +121,48 @@ describe('RepeatTaskHeatmapComponent year selection', () => {
     }
   });
 
+  it('hides cells for days the task is not scheduled on (streak view, flag on)', async () => {
+    setRRuleEngineEnabled(true);
+    try {
+      const fixture = await setup([task([['2024-03-04', 3_600_000]])], {
+        rrule: 'FREQ=WEEKLY;BYDAY=MO',
+        startDate: '2024-01-01',
+      } as Partial<TaskRepeatCfg>);
+      const c = fixture.componentInstance;
+      // Defaults to the current (projection-capable) year; only Mondays —
+      // scheduled days — survive in the map, so off-schedule days render as
+      // transparent placeholders instead of grey "missed" cells.
+      const dayMap = c.heatmapData()!.dayMap;
+      expect(dayMap.size).toBeGreaterThan(50);
+      for (const d of dayMap.values()) {
+        expect(d.date.getDay()).withContext(d.dateStr).toBe(1);
+      }
+    } finally {
+      setRRuleEngineEnabled(false);
+    }
+  });
+
+  it('keeps off-schedule days that carry tracked time', async () => {
+    setRRuleEngineEnabled(true);
+    try {
+      // 2024-03-05 is a Tuesday — real tracked time on a day the rule never
+      // fires must stay visible (instance moved / done off-schedule).
+      const fixture = await setup([task([['2024-03-05', 3_600_000]])], {
+        rrule: 'FREQ=WEEKLY;BYDAY=MO',
+        startDate: '2024-01-01',
+      } as Partial<TaskRepeatCfg>);
+      const c = fixture.componentInstance;
+      c.prevYear(); // current year is the default — navigate to the data year
+      expect(c.selectedYear()).toBe(2024);
+      const dayMap = c.heatmapData()!.dayMap;
+      expect(dayMap.has('2024-03-05')).toBe(true); // tracked Tuesday stays
+      expect(dayMap.has('2024-03-12')).toBe(false); // bare Tuesday is hidden
+      expect(dayMap.has('2024-03-11')).toBe(true); // scheduled Monday stays
+    } finally {
+      setRRuleEngineEnabled(false);
+    }
+  });
+
   it('keeps an empty navigated year rendered while other years exist (no stranding)', async () => {
     setRRuleEngineEnabled(true);
     try {
