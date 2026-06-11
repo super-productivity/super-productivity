@@ -126,19 +126,24 @@ export interface TaskRepeatCfgCopy {
   // Anchor presence is the discriminator — there is no separate mode field.
   // ONLY absent-or-numeric is sync-safe: released clients' typia schema has no
   // `null` here, so a null must never be persisted (clearing happens via
-  // `undefined`; a stale anchor on remote clients is inert once `rrule` is
-  // set, since the occurrence engine routes on it). Issue #6040.
-  // INHERENT GAP (not fixable, don't try): an `undefined` clear is dropped by
-  // the op-log's JSON partial-update merge, so a remote PRE-rrule client (which
-  // ignores `rrule`) keeps scheduling from a stale anchor after an nth-weekday →
-  // day-of-month switch. There is no in-schema value meaning "no anchor" to send
-  // instead (0 is a valid weekday; null/0 trip released clients' repair dialog).
-  // A `| null` migration would NOT help: it only benefits a client that is
-  // null-aware yet rrule-UNAWARE, but null can only ship with-or-after rrule, so
-  // that band is empty — any client new enough to accept the null clear already
-  // routes on `rrule`, where the stale anchor is inert. Only the UPDATE path is
-  // affected (ADD sends the field absent → no anchor remotely). See the op-log
-  // JSON round-trip spec pinning this behavior.
+  // `undefined`). Issue #6040.
+  // INHERENT GAP (not fixable in-schema, don't try): an `undefined` clear is
+  // dropped by the op-log's JSON partial-update merge, so a remote client that
+  // routes the LEGACY engine keeps scheduling from a stale anchor after an
+  // nth-weekday → day-of-month switch. That is every remote client today:
+  // PRE-rrule versions ignore `rrule` entirely, and rrule-aware builds route
+  // legacy too while the per-device engine flag (default OFF, never synced)
+  // is off — the stale anchor is inert only on flag-ON clients, whose engine
+  // routes on `rrule`. The gap therefore stays live for the whole installed
+  // base until the flag defaults on; it self-heals then, losing no data.
+  // There is no in-schema value meaning "no anchor" to send instead (0 is a
+  // valid weekday; null/0 trip released clients' repair dialog), and a
+  // `| null` migration can't ship sooner than the rrule routing itself. Only
+  // the UPDATE path is affected (ADD sends the field absent → no anchor
+  // remotely). Note the never-fires sentinel path is NOT affected: it switches
+  // `repeatCycle` to 'WEEKLY' (wire-stable), and anchors are only read in the
+  // legacy MONTHLY branch. See the op-log JSON round-trip spec pinning this
+  // behavior, and docs/research/rrule-epic-review-watchlist.md §3.
   monthlyWeekOfMonth?: MonthlyWeekOfMonth;
   monthlyWeekday?: MonthlyWeekday;
 

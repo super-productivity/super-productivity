@@ -2053,6 +2053,7 @@
         "RRULE_RAW_PLACEHOLDER": "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1",
         "RRULE_FREQ_UNSUPPORTED": "Only daily, weekly, monthly and yearly frequencies are supported — sub-daily rules (hourly, minutely) are not yet.",
         "RRULE_INVALID": "This recurrence rule is invalid. Please adjust the options.",
+        "RRULE_LEGACY_INCOMPAT": "This schedule uses options older app versions can't run. Devices on an older version — or with the advanced recurrence engine off — won't create tasks for it.",
         "RRULE_NO_OCCURRENCE": "This recurrence never produces an occurrence. Please check the rule and start date.",
         "RRULE_PREVIEW_EMPTY_WINDOW": "No occurrences in this window — use the arrows to find the next one.",
         "RRULE_COUNT_WITH_COMPLETION": "\"After N times\" cannot be combined with \"from completion\" — completing re-anchors the schedule, so the count would never finish. Use an until date instead.",
@@ -2462,7 +2463,7 @@
     },
     "RRULE_ENGINE": {
       "TITLE": "Advanced recurrence (experimental)",
-      "HELP": "<div><p>Enables the new RFC 5545 (RRULE) recurrence engine for repeating tasks — end conditions, multiple days per month and other custom rules. This is experimental and applies to <strong>this device only</strong>; it is not synced. Leave it off unless you are testing the feature, and reload the app after changing it.</p></div>",
+      "HELP": "<div><p>Enables the new RFC 5545 (RRULE) recurrence engine for repeating tasks — end conditions, multiple days per month and other custom rules. This is experimental and applies to <strong>this device only</strong>; it is not synced. Leave it off unless you are testing the feature, and reload the app after changing it.</p><p><strong>If you sync between several devices, enable it on all of them or on none.</strong> A device with the engine on and one with it off compute occurrences independently — where a schedule diverges between the two engines, each device creates its own task and both sync everywhere (duplicates).</p></div>",
       "IS_ENABLED": "Enable advanced recurrence engine (this device only)"
     },
     "IDLE": {

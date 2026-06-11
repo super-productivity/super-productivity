@@ -1,5 +1,7 @@
 import {
   getAlignedStartDate,
+  isRRuleLegacyRepresentable,
+  LEGACY_NEVER_FIRES_FALLBACK,
   legacyTaskRepeatCfgToRRule,
   rruleToLegacyTaskRepeatCfg,
 } from './legacy-cfg-to-rrule.util';
@@ -189,19 +191,17 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
     expect(second.monthlyWeekday).toBe(2); // Tuesday
   });
 
-  it('never emits an out-of-union monthlyWeekOfMonth for out-of-range BYDAY ordinals', () => {
+  it('writes the never-fires sentinel for out-of-range BYDAY ordinals (no out-of-union anchor, no wrong-day fallback)', () => {
     // The builder's custom ordinal input allows ±5 for monthly rules, but the
     // synced model (and released clients' typia schema) only allows 1..4 | -1.
-    // An out-of-range ordinal must leave the anchor unset — the rrule engine
-    // still fires correctly; old clients fall back to day-of-month.
-    const fifth = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=5MO');
-    expect(fifth.repeatCycle).toBe('MONTHLY');
-    expect(fifth.monthlyWeekOfMonth).toBeUndefined();
-    expect(fifth.monthlyWeekday).toBeUndefined();
-
-    const secondToLast = rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=-2MO');
-    expect(secondToLast.monthlyWeekOfMonth).toBeUndefined();
-    expect(secondToLast.monthlyWeekday).toBeUndefined();
+    // An out-of-range ordinal has no faithful legacy form — old clients get
+    // the sentinel (no tasks) instead of a wrong-day day-of-month fallback.
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=5MO')).toEqual({
+      ...LEGACY_NEVER_FIRES_FALLBACK,
+    });
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=-2MO')).toEqual({
+      ...LEGACY_NEVER_FIRES_FALLBACK,
+    });
 
     // In-range ordinals keep mapping.
     expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=4MO').monthlyWeekOfMonth).toBe(
@@ -215,18 +215,16 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
     expect('repeatCycle' in out).toBe(false);
   });
 
-  it('leaves multi-weekday or out-of-range BYSETPOS rules unmapped (no single anchor)', () => {
-    expect(
-      rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO,TU;BYSETPOS=-1')
-        .monthlyWeekOfMonth,
-    ).toBeUndefined();
-    expect(
-      rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=5').monthlyWeekOfMonth,
-    ).toBeUndefined();
-    expect(
-      rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1,-1')
-        .monthlyWeekOfMonth,
-    ).toBeUndefined();
+  it('writes the never-fires sentinel for multi-weekday or out-of-range BYSETPOS rules (no single anchor)', () => {
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO,TU;BYSETPOS=-1')).toEqual({
+      ...LEGACY_NEVER_FIRES_FALLBACK,
+    });
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=5')).toEqual({
+      ...LEGACY_NEVER_FIRES_FALLBACK,
+    });
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1,-1')).toEqual({
+      ...LEGACY_NEVER_FIRES_FALLBACK,
+    });
   });
 
   it('MONTHLY last day → monthlyLastDay', () => {
@@ -296,6 +294,105 @@ describe('rruleToLegacyTaskRepeatCfg', () => {
     expect(out.monthlyLastDay).toBe(false);
     // The converter never emits startDate — alignment is getAlignedStartDate.
     expect('startDate' in out).toBe(false);
+  });
+
+  it('maps interval-1 DAILY with plain BYDAY losslessly onto WEEKLY flags', () => {
+    // FREQ=DAILY;BYDAY=MO,WE,FR ≡ weekly-interval-1 on those days — legacy
+    // WEEKLY interval 1 is a pure weekday filter, so this is exact.
+    const out = rruleToLegacyTaskRepeatCfg('FREQ=DAILY;BYDAY=MO,WE,FR');
+    expect(out.repeatCycle).toBe('WEEKLY');
+    expect(out.repeatEvery).toBe(1);
+    expect(out.monday).toBe(true);
+    expect(out.wednesday).toBe(true);
+    expect(out.friday).toBe(true);
+    expect(out.tuesday).toBe(false);
+    expect(out.sunday).toBe(false);
+    // With an interval the daily step is filtered THROUGH the weekday set —
+    // weekly fields cannot express that.
+    expect(rruleToLegacyTaskRepeatCfg('FREQ=DAILY;INTERVAL=2;BYDAY=MO')).toEqual({
+      ...LEGACY_NEVER_FIRES_FALLBACK,
+    });
+  });
+
+  describe('never-fires sentinel for non-representable rules', () => {
+    // Decided contract: a rule the legacy fields cannot faithfully represent
+    // writes LEGACY_NEVER_FIRES_FALLBACK, so old/flag-off clients create NO
+    // tasks rather than tasks on wrong days (which would sync to every
+    // device). The classes below are exactly the RRULE differentiators.
+    const NON_REPRESENTABLE: [string, string][] = [
+      ['COUNT end condition', 'FREQ=WEEKLY;BYDAY=MO;COUNT=10'],
+      ['UNTIL end condition', 'FREQ=DAILY;UNTIL=20301231T120000Z'],
+      ['seasonal BYMONTH window (weekly)', 'FREQ=WEEKLY;BYDAY=SA;BYMONTH=3,4,5'],
+      ['seasonal BYMONTH window (monthly)', 'FREQ=MONTHLY;BYMONTHDAY=1;BYMONTH=6'],
+      ['filtered daily (BYMONTH)', 'FREQ=DAILY;BYMONTH=2'],
+      ['week numbers', 'FREQ=YEARLY;BYWEEKNO=20'],
+      ['year days', 'FREQ=YEARLY;BYYEARDAY=100'],
+      ['multiple month days', 'FREQ=MONTHLY;BYMONTHDAY=1,15'],
+      ['yearly BYMONTHDAY without BYMONTH (fires monthly)', 'FREQ=YEARLY;BYMONTHDAY=10'],
+      ['yearly BYMONTH without BYMONTHDAY', 'FREQ=YEARLY;BYMONTH=6'],
+      ['multi-month yearly', 'FREQ=YEARLY;BYMONTH=3,9;BYMONTHDAY=1'],
+      ['yearly weekday mode', 'FREQ=YEARLY;BYMONTH=3;BYDAY=SA'],
+      ['last business day', 'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1'],
+    ];
+
+    NON_REPRESENTABLE.forEach(([label, rule]) => {
+      it(`sentinels: ${label}`, () => {
+        expect(rruleToLegacyTaskRepeatCfg(rule, '2024-06-03')).toEqual({
+          ...LEGACY_NEVER_FIRES_FALLBACK,
+        });
+        expect(isRRuleLegacyRepresentable(rule)).toBe(false);
+      });
+    });
+
+    it('the sentinel never fires on the legacy WEEKLY engine and is wire-stable', () => {
+      // All-false weekday flags = the legacy WEEKLY scan loops can never match.
+      expect(LEGACY_NEVER_FIRES_FALLBACK.repeatCycle).toBe('WEEKLY');
+      const flagKeys = [
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+        'sunday',
+      ] as const;
+      flagKeys.forEach((k) => expect(LEGACY_NEVER_FIRES_FALLBACK[k]).toBe(false));
+      // Every load-bearing value survives the op-log's JSON partial update —
+      // a remote legacy client MUST receive the cycle switch and the false
+      // flags (an undefined-dropped key would leave it firing the old rule).
+      const wire = JSON.parse(JSON.stringify(LEGACY_NEVER_FIRES_FALLBACK));
+      expect(wire.repeatCycle).toBe('WEEKLY');
+      expect(wire.repeatEvery).toBe(1);
+      flagKeys.forEach((k) => expect(wire[k]).toBe(false));
+      expect(wire.monthlyLastDay).toBe(false);
+      // The numeric anchors stay absent on the wire (undefined → dropped) —
+      // master-safe; a stale remote anchor is harmless under repeatCycle
+      // WEEKLY (anchors are only read in the legacy MONTHLY branch).
+      expect('monthlyWeekOfMonth' in wire).toBe(false);
+    });
+
+    it('representable rules report representable', () => {
+      [
+        'FREQ=DAILY;INTERVAL=3',
+        'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR',
+        'FREQ=MONTHLY;BYDAY=2TU',
+        'FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1',
+        'FREQ=MONTHLY;BYMONTHDAY=-1',
+        'FREQ=MONTHLY;BYMONTHDAY=15',
+        'FREQ=MONTHLY;BYMONTHDAY=31,-1;BYSETPOS=1',
+        'FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=17',
+        'FREQ=YEARLY',
+        'FREQ=DAILY;BYDAY=MO,WE,FR',
+      ].forEach((rule) => {
+        expect(isRRuleLegacyRepresentable(rule)).withContext(rule).toBe(true);
+      });
+    });
+
+    it('unparseable and sub-daily rules are not flagged (rejected upstream)', () => {
+      expect(isRRuleLegacyRepresentable('not an rrule')).toBe(true);
+      expect(isRRuleLegacyRepresentable('FREQ=HOURLY')).toBe(true);
+      expect(isRRuleLegacyRepresentable(undefined)).toBe(true);
+    });
   });
 
   it('round-trips a weekly cfg (legacy → rrule → legacy)', () => {

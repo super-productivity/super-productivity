@@ -99,6 +99,88 @@ recurrence is single-assignee.
 
 ---
 
+## The governing risk model: duplicates, not shifted dates
+
+Occurrence creation is **per-device recomputation**, not a replayed derivation: each
+device independently computes "what's due" and emits concrete ops, deduped only by the
+deterministic id `rpt_<cfgId>_<dueDay>` (`get-repeatable-task-id.util.ts`). The flag
+gates **evaluation** (it sits inside all three calculators), so two devices routing
+different engines that disagree on the day produce **different ids → both instances are
+created and sync to every device** — and each side's `lastTaskCreationDay` update then
+feeds the other engine a foreign anchor (creation/suppression flip-flop). Any engine
+divergence on a multi-device account is therefore a **duplicate-task generator for the
+whole mixed window**, which is why:
+
+- the flag help text warns multi-device accounts to enable it everywhere or nowhere
+  (the flag is per-device localStorage, never synced — the mixed window opens the
+  moment ONE device opts in, not at default-flip);
+- the converter divergence classes are pinned as expected-output contract cases, not
+  an exclusion list (see flip gates below);
+- `rrule` is **pinned to an exact version** (`2.8.1`, no caret): a caret upgrade that
+  changes rrule.js parsing on some devices mid-account re-creates the same duplicate
+  mechanics between identical app versions. Treat an rrule bump like an engine change —
+  the differential/invariants specs are the upgrade tripwire.
+
+## Legacy-fallback contract (decided policy)
+
+The legacy fields written alongside `rrule` are the **wire format** for old clients and
+the schedule for flag-off devices. The contract
+(`rruleToLegacyTaskRepeatCfg`, decided 2026-06-11):
+
+- **Within legacy expressiveness** → fields fire on the **same days** (modulo the two
+  documented divergence classes: WEEKLY `INTERVAL>1` week-grouping/WKST phase, and the
+  day>28 clamp-vs-skip edge — the lazy-migrate class).
+- **Outside legacy expressiveness** (COUNT/UNTIL, seasonal `BYMONTH`, `BYWEEKNO` /
+  `BYYEARDAY`, multi-day lists, out-of-union ordinals, yearly weekday modes) → the
+  **never-fires sentinel** `LEGACY_NEVER_FIRES_FALLBACK` (`repeatCycle: 'WEEKLY'`, all
+  weekday flags `false` — deterministically dead on every released legacy engine, every
+  value wire-stable). Old/flag-off devices create **no** tasks rather than tasks on
+  wrong days that would sync back to every device. The dialog warns at authoring time
+  (`isRRuleLegacyRepresentable` → `RRULE_LEGACY_INCOMPAT`).
+- Never a silent best-effort approximation in between.
+
+## Dual-engine endgame (written down so the second engine cannot become immortal)
+
+1. **Now (flag default-off):** lazy-migrate on edit — the dialog already converts
+   legacy `CUSTOM` cfgs in the builder, the migration rides a user-intent op, and the
+   preview shows the user the new schedule at exactly the moment semantics could shift.
+2. **At flag default-on:** a one-time data-repair backfill of `rrule` for **only the
+   provably-lossless class** (`interval=1` — empirically exact and DST-proof). Never
+   bulk-convert the divergent classes; they lazy-migrate or age out.
+3. **Then:** flag default-on → soak (one release minimum) → flag removed → legacy
+   engine deleted one release later.
+4. **Forever:** legacy-field dual-write stays — it is the wire format for old clients,
+   cheap, and independent of the engine question.
+5. **Post-legacy-engine fallback for an invalid `rrule`:** pause + repair prompt
+   (`isPaused` already exists on the model) — never silent rescheduling. Decided now so
+   deleting the legacy engine has no open design question attached.
+
+## Flip gates — what must be green before flag default-on (and before engine deletion)
+
+In priority order; #1 models the production failure mode and outranks the rest:
+
+1. **Mixed-version convergence simulation** — two simulated devices sharing an op
+   stream, one routing RRULE and one legacy, driven through day rollovers; assert no
+   duplicate `rpt_<cfgId>_<day>` instances and no `lastTaskCreationDay` flip-flop
+   suppression.
+2. **Differential fuzz spec** over the legacy cfg space (cycle × interval 1–6 ×
+   weekday masks incl. empty × monthly anchors × day-29/30/31 + Feb-29 starts),
+   comparing multi-year streams legacy vs converted-RRULE under both CI timezones —
+   with the known divergences pinned as **expected-output cases**, not excluded. Must
+   run against **all three calculators**, especially `getNewestPossibleDueDate` (what
+   task creation actually consumes).
+3. **typia wire round-trip per producer path** (builder save, converter, backfill,
+   later REST/repair) against the released schema — guards the catastrophic mode
+   (out-of-union value → old-client data-repair, no rollback).
+
+Note on the engine-robustness alternative considered and rejected (2026-06-11): a
+bounded `between`/`until` probe **cannot** replace the `_canNeverFire` heuristics —
+rrule.js checks `until` only against _emitted_ occurrences, so a never-firing rule
+walks to year 275760 regardless (measured: 10.1 s with `UNTIL` set). The heuristics
+stay; new BY-part interplay checks belong there (watchlist §5).
+
+---
+
 ## Feature comparison (RFC 5545 baseline, expanded)
 
 **SP now** = released Super Productivity (master, legacy repeat). **SP this epic** = after

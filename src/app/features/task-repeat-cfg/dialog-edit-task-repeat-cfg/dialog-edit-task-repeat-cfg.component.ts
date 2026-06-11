@@ -53,6 +53,7 @@ import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start
 import { FREQ_TO_CYCLE, safeParseRRuleOptions } from '../util/rrule-parse.util';
 import {
   getAlignedStartDate,
+  isRRuleLegacyRepresentable,
   legacyTaskRepeatCfgToRRule,
   rruleToLegacyTaskRepeatCfg,
 } from '../util/legacy-cfg-to-rrule.util';
@@ -184,14 +185,31 @@ export class DialogEditTaskRepeatCfgComponent {
   private _humanize = buildRRuleHumanizeOpts(
     (k) => this._translateService.instant(k) as string,
   );
+  // Gated on isRRuleValid like the save path — getRRulePreview's
+  // rule.after() walk is otherwise unbounded for a never-firing rule
+  // (e.g. raw override FREQ=DAILY;BYWEEKNO=53;BYMONTH=2: a multi-second
+  // main-thread freeze PER KEYSTROKE). isRRuleValid is memoised and pre-screens
+  // exactly that class, the same guard the save path applies.
   rrulePreview = computed(() =>
-    this.isRRuleMode()
+    this.isRRuleMode() && isRRuleValid(this.repeatCfg().rrule)
       ? getRRulePreview(
           this.repeatCfg().rrule,
           this.repeatCfg().startDate,
           this._humanize,
         )
       : null,
+  );
+  // Sentinel warning: this rule is outside what the legacy fallback fields can
+  // represent, so the save writes the never-fires sentinel
+  // (LEGACY_NEVER_FIRES_FALLBACK) — devices on older app versions (and
+  // flag-off devices, which also route the legacy engine) will create no tasks
+  // for it. Decided contract: absent tasks beat fabricated wrong-day tasks
+  // that would sync back to every device.
+  rruleLegacyIncompat = computed(
+    () =>
+      this.isRRuleMode() &&
+      isRRuleValid(this.repeatCfg().rrule) &&
+      !isRRuleLegacyRepresentable(this.repeatCfg().rrule),
   );
 
   // Togglable calendar (heatmap) preview of the next year's occurrences for the
