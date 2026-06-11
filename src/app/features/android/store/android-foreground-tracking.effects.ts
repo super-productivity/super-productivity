@@ -23,7 +23,7 @@ import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
 import { combineLatest, firstValueFrom, Observable, Subject } from 'rxjs';
-import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
+import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -136,7 +136,7 @@ export const createReconcileTicksOnResume$ = (
 ): Observable<unknown> =>
   onResume$.pipe(
     tap(() => {
-      globalTracking.triggerWakeUpTick(MOBILE_BACKGROUND_IDLE_CAP_MS);
+      globalTracking.triggerWakeUpTick(ANDROID_BACKGROUND_TICK_CAP_MS);
       globalTracking.resetTrackingStart();
       taskService.flushAccumulatedTimeSpent();
     }),

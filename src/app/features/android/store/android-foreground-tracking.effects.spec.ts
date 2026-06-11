@@ -11,7 +11,7 @@ import {
   TIME_SPENT_JUMP_THRESHOLD_MS,
 } from './android-foreground-tracking.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
-import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
+import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 
 // We need to test the effect logic by reimplementing it in tests since
 // the actual effects are conditionally created based on IS_ANDROID_WEB_VIEW
@@ -1818,7 +1818,7 @@ describe('createReconcileTicksOnResume$ - background tick gap (#8243)', () => {
     onResume$.next();
 
     expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledWith(
-      MOBILE_BACKGROUND_IDLE_CAP_MS,
+      ANDROID_BACKGROUND_TICK_CAP_MS,
     );
     expect(globalTracking.resetTrackingStart).toHaveBeenCalledTimes(1);
     expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(1);

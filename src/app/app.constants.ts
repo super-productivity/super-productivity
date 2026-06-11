@@ -17,6 +17,15 @@ export const DRAG_DELAY_FOR_TOUCH = 500;
 // charge can't silently add 8 h to the active task.
 export const MOBILE_BACKGROUND_IDLE_CAP_MS = 4 * 60 * 60 * 1000;
 
+// Maximum wall-clock gap credited to generic tick$ consumers (running
+// stopwatch counters, break tracking) when the Android tick interval — paused
+// while backgrounded (#8243) — restarts on resume. Deliberately more generous
+// than the iOS cap above (a stopwatch left running through a workday away
+// from the app keeps counting): unlike iOS, the active task is unaffected by
+// this cap either way, since it reconciles from the native foreground-service
+// counter.
+export const ANDROID_BACKGROUND_TICK_CAP_MS = 8 * 60 * 60 * 1000;
+
 // TODO use
 // const CORS_SKIP_EXTRA_HEADER_PROP = 'sp_cors_skip' as const;
 // export const CORS_SKIP_EXTRA_HEADERS: { [name: string]: string } = IS_ANDROID_WEB_VIEW
