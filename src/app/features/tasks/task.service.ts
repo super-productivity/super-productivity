@@ -56,6 +56,7 @@ import {
   selectTasksByRepeatConfigId,
   selectTasksByTag,
   selectTaskWithSubTasksByRepeatConfigId,
+  selectTimeConflictTaskIds,
 } from './store/task.selectors';
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { RoundTimeOption } from '../project/project.model';
@@ -152,6 +153,11 @@ export class TaskService {
 
   // Set version for O(1) lookup - used by task components to check membership
   todayListSet = computed(() => new Set(this.todayList()));
+
+  // Shared signal to avoid one store subscription per rendered task component
+  timeConflictTaskIds = toSignal(this._store.pipe(select(selectTimeConflictTaskIds)), {
+    initialValue: new Set<string>(),
+  });
 
   selectedTask$: Observable<TaskWithSubTasks | null> = this._store.pipe(
     select(selectSelectedTask),

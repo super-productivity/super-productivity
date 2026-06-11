@@ -74,7 +74,7 @@ import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.comp
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
@@ -98,7 +98,6 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
-import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
@@ -172,10 +171,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
-  private readonly _timeConflictTaskIds = toSignal(
-    this._store.select(selectTimeConflictTaskIds),
-    { initialValue: new Set<string>() },
-  );
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -251,7 +246,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   hasTimeConflict = computed(() => {
     const task = this.task();
     return (
-      typeof task.dueWithTime === 'number' && this._timeConflictTaskIds().has(task.id)
+      typeof task.dueWithTime === 'number' &&
+      this._taskService.timeConflictTaskIds().has(task.id)
     );
   });
 

@@ -77,6 +77,7 @@ describe('TaskComponent shortcut handling', () => {
         currentTaskId: signal<string | null>(null),
         selectedTaskId: signal<string | null>(null),
         todayListSet: signal<Set<string>>(new Set<string>()),
+        timeConflictTaskIds: signal<Set<string>>(new Set<string>()),
       },
     );
     // Default: any parent lookup returns an empty-subTasks shell.
