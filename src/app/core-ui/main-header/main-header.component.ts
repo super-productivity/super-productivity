@@ -48,6 +48,8 @@ import { DateService } from '../../core/date/date.service';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
+import { isFileEml, parseEml } from 'src/app/core/parser/eml-parser.service';
+import { TaskAttachmentService } from 'src/app/features/tasks/task-attachment/task-attachment.service';
 
 @Component({
   selector: 'main-header',
@@ -80,6 +82,7 @@ export class MainHeaderComponent implements OnDestroy {
   readonly matDialog = inject(MatDialog);
   readonly workContextService = inject(WorkContextService);
   readonly taskService = inject(TaskService);
+  readonly taskAttachmentService = inject(TaskAttachmentService);
   readonly layoutService = inject(LayoutService);
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly syncWrapperService = inject(SyncWrapperService);
@@ -313,6 +316,28 @@ export class MainHeaderComponent implements OnDestroy {
       this.sync();
     } else {
       this.setupSync();
+    }
+  }
+  async onDrop(ev: DragEvent): Promise<void> {
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const file = ev.dataTransfer?.files[0];
+    if (file === undefined) return;
+
+    // EML File Addition on button hover
+    // Adds a task with the information inside the eml
+    if (isFileEml(file)) {
+      try {
+        const data = await parseEml(file);
+        const email = Array.isArray(data.from) ? data.from![0].name : data.from!.name;
+        const message = `<from ${email}}>:\n${data.subject}`;
+        this.taskService.add(message);
+        // TODO: add attachment to task
+        // this.taskAttachmentService.addAttachment(taskId, file);
+      } catch (e) {
+        console.error('Couldnt upload eml');
+      }
     }
   }
 

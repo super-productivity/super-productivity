@@ -36,6 +36,7 @@
       @if (showDesktopButtons()) {
         <button
           (click)="layoutService.showAddTaskBar()"
+          (drop)="onDrop($event)"
           matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
             kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
           }}"
