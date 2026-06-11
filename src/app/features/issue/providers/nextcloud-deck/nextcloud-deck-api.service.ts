@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, from, throwError } from 'rxjs';
-import { catchError, map, first } from 'rxjs/operators';
+import { Observable, forkJoin, from, of, throwError } from 'rxjs';
+import { catchError, first, map, switchMap } from 'rxjs/operators';
 import { NextcloudDeckCfg } from './nextcloud-deck.model';
 import {
   NextcloudDeckIssue,
@@ -39,7 +39,7 @@ interface DeckStackResponse {
   id: number;
   title: string;
   boardId: number;
-  cards: DeckCardResponse[];
+  cards?: DeckCardResponse[] | null;
 }
 
 @Injectable({
@@ -65,6 +65,18 @@ export class NextcloudDeckApiService {
     const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks`;
     return this._http
       .get<DeckStackResponse[]>(url, { headers: this._getHeaders(cfg) })
+      .pipe(catchError((err) => this._handleError(err)));
+  }
+
+  getStack$(
+    cfg: NextcloudDeckCfg,
+    boardId: number,
+    stackId: number,
+  ): Observable<DeckStackResponse> {
+    this._checkSettings(cfg);
+    const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks/${stackId}`;
+    return this._http
+      .get<DeckStackResponse>(url, { headers: this._getHeaders(cfg) })
       .pipe(catchError((err) => this._handleError(err)));
   }
 
@@ -123,6 +135,7 @@ export class NextcloudDeckApiService {
       }));
     }
     return this.getStacks$(cfg, boardId).pipe(
+      switchMap((stacks) => this._getStacksWithCards$(cfg, boardId, stacks, true)),
       map((stacks) => this._mapStacksToCards(stacks, cfg)),
     );
   }
@@ -187,14 +200,7 @@ export class NextcloudDeckApiService {
   ): NextcloudDeckIssueReduced[] {
     const results: NextcloudDeckIssueReduced[] = [];
     for (const stack of stacks) {
-      if (
-        cfg.importStackIds &&
-        cfg.importStackIds.length > 0 &&
-        !cfg.importStackIds.includes(stack.id)
-      ) {
-        continue;
-      }
-      if (cfg.doneStackId && stack.id === cfg.doneStackId) {
+      if (!this._isImportStack(stack, cfg)) {
         continue;
       }
       if (!stack.cards) {
@@ -253,9 +259,8 @@ export class NextcloudDeckApiService {
     boardId: number,
     cardId: number,
   ): Promise<NextcloudDeckIssue | null> {
-    const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks`;
-    const stacks = await this._http
-      .get<DeckStackResponse[]>(url, { headers: this._getHeaders(cfg) })
+    const stacks = await this.getStacks$(cfg, boardId)
+      .pipe(switchMap((res) => this._getStacksWithCards$(cfg, boardId, res)))
       .pipe(first())
       .toPromise();
     if (!stacks) {
@@ -272,6 +277,50 @@ export class NextcloudDeckApiService {
       }
     }
     return null;
+  }
+
+  private _getStacksWithCards$(
+    cfg: NextcloudDeckCfg,
+    boardId: number,
+    stacks: DeckStackResponse[],
+    onlyImportStacks = false,
+  ): Observable<DeckStackResponse[]> {
+    const stacksWithoutCards = stacks.filter(
+      (stack) =>
+        (!onlyImportStacks || this._isImportStack(stack, cfg)) &&
+        !Array.isArray(stack.cards),
+    );
+
+    if (stacksWithoutCards.length === 0) {
+      return of(stacks);
+    }
+
+    return forkJoin(
+      stacksWithoutCards.map((stack) => this.getStack$(cfg, boardId, stack.id)),
+    ).pipe(
+      map((stackDetails) => {
+        const stackDetailsById = new Map(stackDetails.map((stack) => [stack.id, stack]));
+        return stacks.map((stack) =>
+          Array.isArray(stack.cards)
+            ? stack
+            : {
+                ...stack,
+                cards: stackDetailsById.get(stack.id)?.cards || [],
+              },
+        );
+      }),
+    );
+  }
+
+  private _isImportStack(stack: DeckStackResponse, cfg: NextcloudDeckCfg): boolean {
+    if (
+      cfg.importStackIds &&
+      cfg.importStackIds.length > 0 &&
+      !cfg.importStackIds.includes(stack.id)
+    ) {
+      return false;
+    }
+    return !(cfg.doneStackId && stack.id === cfg.doneStackId);
   }
 
   private _checkSettings(cfg: NextcloudDeckCfg): void {
