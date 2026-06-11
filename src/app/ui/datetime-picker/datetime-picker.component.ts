@@ -280,6 +280,12 @@ export class DateTimePickerComponent implements AfterViewInit {
     this._resetKeyboardNav(ev);
   }
 
+  @HostListener('mouseleave', ['$event'])
+  onHostMouseLeave(ev: MouseEvent): void {
+    this.isKeyboardNavigating = true;
+    this._cdr.markForCheck();
+  }
+
   @HostListener('click', ['$event'])
   onHostClick(ev: MouseEvent): void {
     const target = ev.target as HTMLElement;

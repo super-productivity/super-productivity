@@ -357,4 +357,19 @@ describe('DateTimePickerComponent', () => {
     expect(calendar.activeDate).toEqual(new Date(2026, 4, 10)); // Should jump to May 10 (minDate)
     expect(activeCell.focus).toHaveBeenCalled();
   }));
+
+  it('should enable isKeyboardNavigating when the mouse leaves the host', () => {
+    fixture.detectChanges();
+    // Simulate mousemove to disable keyboard nav first
+    fixture.nativeElement.dispatchEvent(
+      new MouseEvent('mousemove', { clientX: 30, clientY: 40, bubbles: true }),
+    );
+    fixture.detectChanges();
+    expect(component.isKeyboardNavigating).toBeFalse();
+
+    // Trigger mouseleave
+    fixture.nativeElement.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+    fixture.detectChanges();
+    expect(component.isKeyboardNavigating).toBeTrue();
+  });
 });
