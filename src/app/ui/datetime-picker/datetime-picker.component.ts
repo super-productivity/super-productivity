@@ -122,8 +122,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   });
 
   private _lastSyncedDate: number | null = null;
-  private _monthBeforeClick: number | null = null;
-  private _yearBeforeClick: number | null = null;
   private _syncActiveDateEffect = effect(() => {
     const date = this.selectedDate();
     const dateMs = date ? new Date(date).getTime() : null;
@@ -253,25 +251,14 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
     // Focus the active calendar cell when the picker opens
-    this._focusActiveCell();
-
-    // Listen to click in capture phase to record activeDate before calendar updates it
-    this._el.nativeElement.addEventListener(
-      'click',
-      (ev: MouseEvent) => {
-        const target = ev.target as HTMLElement;
-        const prevBtn = target.closest('.mat-calendar-previous-button');
-        const nextBtn = target.closest('.mat-calendar-next-button');
-        if (prevBtn || nextBtn) {
-          const cal = this.calendar();
-          if (cal && cal.currentView === 'month') {
-            this._monthBeforeClick = cal.activeDate.getMonth();
-            this._yearBeforeClick = cal.activeDate.getFullYear();
-          }
-        }
-      },
-      true,
-    );
+    setTimeout(() => {
+      const activeCell = this._el.nativeElement.querySelector(
+        '.mat-calendar-body-active',
+      ) as HTMLElement;
+      if (activeCell) {
+        activeCell.focus();
+      }
+    }, 50);
   }
 
   @HostListener('mousemove', ['$event'])
@@ -284,91 +271,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   onHostMouseLeave(ev: MouseEvent): void {
     this.isKeyboardNavigating = true;
     this._cdr.markForCheck();
-  }
-
-  @HostListener('click', ['$event'])
-  onHostClick(ev: MouseEvent): void {
-    const target = ev.target as HTMLElement;
-    const prevBtn = target.closest('.mat-calendar-previous-button');
-    const nextBtn = target.closest('.mat-calendar-next-button');
-
-    if (prevBtn) {
-      this._onMonthChange('prev');
-    } else if (nextBtn) {
-      this._onMonthChange('next');
-    }
-  }
-
-  private _onMonthChange(direction: 'prev' | 'next'): void {
-    const cal = this.calendar();
-    if (!cal) {
-      return;
-    }
-
-    // Ensure we are in month view
-    if (cal.currentView !== 'month') {
-      return;
-    }
-
-    // The calendar has already moved to the new activeDate (new month)
-    const currentDate = cal.activeDate;
-
-    this.isInitialFocus = false;
-    this.isKeyboardNavigating = true;
-
-    let targetDate: Date;
-    const monthChanged =
-      this._monthBeforeClick !== currentDate.getMonth() ||
-      this._yearBeforeClick !== currentDate.getFullYear();
-
-    if (direction === 'prev') {
-      if (monthChanged) {
-        // Last day of the activeDate's month
-        targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-
-        // If going back to the first possible month, jump to the first possible date (minDate)
-        const min = this.minDate();
-        if (
-          min &&
-          targetDate.getFullYear() === min.getFullYear() &&
-          targetDate.getMonth() === min.getMonth()
-        ) {
-          targetDate = min;
-        }
-      } else {
-        // Month did not change (already in the first month): jump to minDate (first possible date)
-        const min = this.minDate();
-        targetDate =
-          min || new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      }
-    } else {
-      // First day of the activeDate's month
-      targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    }
-
-    // Clamp to minDate if necessary
-    const min = this.minDate();
-    if (min && targetDate.getTime() < min.getTime()) {
-      targetDate = min;
-    }
-
-    // Set the active date to the target date
-    cal.activeDate = targetDate;
-    this._cdr.markForCheck();
-
-    // Focus the new active cell
-    this._focusActiveCell();
-  }
-
-  private _focusActiveCell(): void {
-    setTimeout(() => {
-      const activeCell = this._el.nativeElement.querySelector(
-        '.mat-calendar-body-active',
-      ) as HTMLElement;
-      if (activeCell) {
-        activeCell.focus();
-      }
-    }, 50);
   }
 
   private _resetKeyboardNav(ev: MouseEvent): boolean {
