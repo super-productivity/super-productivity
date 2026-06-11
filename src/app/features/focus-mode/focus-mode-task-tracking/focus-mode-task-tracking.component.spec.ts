@@ -14,7 +14,6 @@ const mockTask = (overrides: Partial<Task> = {}): Task =>
   }) as Task;
 
 describe('FocusModeTaskTrackingComponent', () => {
-  let component: FocusModeTaskTrackingComponent;
   let fixture: ComponentFixture<FocusModeTaskTrackingComponent>;
   const el = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
@@ -28,7 +27,6 @@ describe('FocusModeTaskTrackingComponent', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(FocusModeTaskTrackingComponent);
-    component = fixture.componentInstance;
     fixture.componentRef.setInput('task', mockTask());
     fixture.detectChanges();
   });
@@ -49,27 +47,8 @@ describe('FocusModeTaskTrackingComponent', () => {
     expect(el().querySelector('.time-wrapper')).toBeNull();
   });
 
-  it('shows the pause icon while tracking and play when paused', () => {
-    fixture.componentRef.setInput('isTracking', true);
-    fixture.detectChanges();
-    expect(el().querySelector('mat-icon')?.textContent?.trim()).toBe('pause');
-
-    fixture.componentRef.setInput('isTracking', false);
-    fixture.detectChanges();
-    expect(el().querySelector('mat-icon')?.textContent?.trim()).toBe('play_arrow');
-  });
-
-  it('emits toggleTracking when the button is clicked', () => {
-    let emitted = false;
-    component.toggleTracking.subscribe(() => (emitted = true));
-    (el().querySelector('.play-pause-btn') as HTMLButtonElement).click();
-    expect(emitted).toBe(true);
-  });
-
-  it('renders read-only (no toggle button) when showToggle is false', () => {
-    fixture.componentRef.setInput('showToggle', false);
-    fixture.detectChanges();
-    expect(el().querySelector('.play-pause-btn')).toBeNull();
+  it('is read-only — renders no interactive control', () => {
+    expect(el().querySelector('button')).toBeNull();
     expect(el().querySelector('.time-wrapper')).not.toBeNull();
   });
 });

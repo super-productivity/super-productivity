@@ -53,18 +53,30 @@
 // layout's reserved top slot; that slot's min-height keeps the row height (and
 // the rows below) stable when the active control is removed.
 .focus-mode-select-mode {
-  z-index: var(--z-focus-mode-main-selector);
+  // Stacking above the centered timer content is handled by the layout's .top
+  // slot (z-index), which lifts the whole top row — see focus-mode-layout.scss.
   padding: 0 var(--s2);
   max-width: 600px;
 }
 
 .mode-settings-btn {
+  // Match the in-progress session controls (.bottom-controls): 56px hit area,
+  // 32px icon, --s2 gap to the FAB — so the cog's size and spacing read the
+  // same before and during a session.
   position: absolute;
   left: 100%;
-  margin-left: var(--s);
+  margin-left: var(--s2);
+  width: 56px !important;
+  height: 56px !important;
   opacity: var(--revealed-opacity);
   transition: var(--transition-standard);
   pointer-events: var(--revealed-pointer-events);
+
+  mat-icon {
+    font-size: 32px !important;
+    width: 32px !important;
+    height: 32px !important;
+  }
 }
 
 // ========== ROW 2: TASK SECTION ==========
@@ -78,97 +90,6 @@
   width: calc(100% - var(--s2));
   max-width: var(--component-max-width);
   min-width: 0;
-}
-
-// Three-track grid so the title stays centered in the viewport regardless of
-// the flanking controls' widths: switch in the left 1fr track (hugging the
-// title), title in the auto center track, tracking + finish in the right 1fr
-// track (hugging the title). Equal 1fr side tracks => the center never shifts
-// when the time numbers or the play/pause icon change width.
-.task-title-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--s2);
-  width: 100%;
-}
-
-.task-side-btn {
-  flex: 0 0 auto;
-  opacity: var(--revealed-opacity);
-  transition: var(--transition-standard);
-  pointer-events: var(--revealed-pointer-events);
-}
-
-// Switch hugs the title's left edge; the end controls hug its right edge.
-.task-side-btn--switch {
-  justify-self: end;
-}
-
-.task-end-controls {
-  justify-self: start;
-  display: flex;
-  align-items: center;
-  gap: var(--s);
-}
-
-.task-title {
-  text-align: center;
-  font-size: 30px;
-  line-height: 1.5;
-  border-radius: var(--card-border-radius);
-  border: 1px solid transparent;
-  margin: 0;
-  padding: var(--s-half);
-
-  @include mq(xs, max) {
-    font-size: 24px;
-  }
-
-  @include mq(xxxs, max) {
-    font-size: 18px;
-  }
-}
-
-.parent-title {
-  text-align: center;
-  margin-bottom: 6px;
-  opacity: 0.8;
-  font-size: 15px;
-  line-height: 1.2;
-  max-width: 90%;
-  overflow-wrap: break-word;
-
-  @include mq(xs, max) {
-    font-size: 12px;
-  }
-
-  @include mq(xxxs, max) {
-    font-size: 10px;
-  }
-}
-
-.task-title {
-  width: 100%;
-  max-width: 100%;
-  max-height: min(24vh, 8em);
-  overflow-x: hidden;
-  overflow-y: auto;
-
-  ::ng-deep textarea {
-    text-align: center;
-  }
-
-  &.is-focused {
-    outline: 1px solid var(--c-accent);
-  }
-}
-
-// Extended FAB CTA shown when no task is selected — the gating action that
-// unlocks the rest of focus mode. Echoes the play FAB style so the prep flow
-// reads as one beat: "select task" → "start session".
-.select-task-cta {
-  margin: var(--s);
 }
 
 // ========== ROW 3: CLOCK DISPLAY ==========

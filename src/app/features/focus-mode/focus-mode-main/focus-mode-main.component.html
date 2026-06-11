@@ -11,12 +11,13 @@
 <focus-mode-layout>
   <!-- ========== ROW 1: TOP CONTROLS ========== -->
   <!-- Mode selector (Preparation) and simple counters (In Progress) are mutually
-       exclusive; whichever is active projects into the layout's top slot. The
-       slot keeps its reserved height when neither is present (the layout's
-       min-height), so the rows below don't jump. The selector is removed from
-       the DOM when not in preparation — hiding it via visibility would leave its
-       mat-icons painted (the global isMaterialSymbolsLoaded rule forces icons
-       visible), so removal is the only clean way to make it disappear. -->
+       exclusive; whichever is active projects into the layout's top slot. That
+       slot is positioned out of flow (absolute), so swapping the active control
+       in/out never shifts the centered task/clock/bottom group below. The
+       selector is removed from the DOM when not in preparation — hiding it via
+       visibility would leave its mat-icons painted (the global
+       isMaterialSymbolsLoaded rule forces icons visible), so removal is the only
+       clean way to make it disappear. -->
   @if (isShowModeSelector()) {
     <segmented-button-group
       fmTop
@@ -50,68 +51,19 @@
     }
   }
 
-  <!-- ========== ROW 2: Task title (switch on left, finish on right) ========== -->
+  <!-- ========== ROW 2: Task module (switch · title · time · finish) ========== -->
   <div
     fmTask
     class="task-section"
   >
-    @if (displayed) {
-      @if (displayed.parentId && parentTaskTitle()) {
-        <div class="parent-title">
-          <div class="title">{{ parentTaskTitle() }}</div>
-        </div>
-      }
-      <!-- Grid keeps the title dead-centered in the viewport: the switch (left
-           cell) and the tracking + finish controls (right cell) sit in equal
-           1fr tracks, so changing time values or swapping the play/pause icon
-           never shifts the centered title. -->
-      <div class="task-title-row">
-        <button
-          mat-icon-button
-          class="task-side-btn task-side-btn--switch"
-          (click)="openTaskSelector(); $event.stopPropagation()"
-          [matTooltip]="T.F.FOCUS_MODE.SWITCH_TASK | translate"
-        >
-          <mat-icon>swap_horiz</mat-icon>
-        </button>
-
-        <task-title
-          @fade
-          (valueEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
-          [value]="displayed.title"
-          class="task-title"
-        ></task-title>
-
-        <div class="task-end-controls">
-          <!-- Time spent/estimate, shown read-only as soon as a task is selected
-               (the session pause/resume control lives in the bottom row). -->
-          <focus-mode-task-tracking
-            [task]="displayed"
-            [showToggle]="false"
-          ></focus-mode-task-tracking>
-
-          <button
-            mat-icon-button
-            class="task-side-btn"
-            [matTooltip]="T.F.FOCUS_MODE.FINISH_TASK_AND_SELECT_NEXT | translate"
-            (click)="finishCurrentTask()"
-          >
-            <mat-icon>done</mat-icon>
-          </button>
-        </div>
-      </div>
-    } @else {
-      <button
-        mat-fab
-        extended
-        color="primary"
-        class="select-task-cta task-title-placeholder"
-        (click)="openTaskSelector(); $event.stopPropagation()"
-      >
-        <mat-icon>add_task</mat-icon>
-        {{ T.F.FOCUS_MODE.SELECT_TASK_TO_FOCUS | translate }}
-      </button>
-    }
+    <focus-mode-task-row
+      [task]="displayed"
+      [parentTitle]="parentTaskTitle()"
+      (switchTask)="openTaskSelector()"
+      (finishTask)="finishCurrentTask()"
+      (selectTask)="openTaskSelector()"
+      (titleEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
+    ></focus-mode-task-row>
   </div>
 
   <!-- ========== ROW 3: Clock Display (fills, centers the clock) ========== -->

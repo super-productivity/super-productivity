@@ -2,29 +2,22 @@
   <!-- Row 1 (top controls) is intentionally empty for breaks; the layout still
        reserves its height so the title/clock baseline matches the focus session. -->
 
-  <!-- ========== ROW 2: Task name + tracking control ========== -->
+  <!-- ========== ROW 2: Task module (shared with the focus session) ========== -->
+  <!-- Same module as the focus session: switch · title · time · finish when a
+       task is tracked through the break ("pause tracking during breaks" off);
+       the relax message when tracking is paused for the break (currentTask null
+       → showRelaxMessage). -->
   <div
     fmTask
     class="task-section"
   >
-    @if (!isTrackingPausedDuringBreak() && displayedTask(); as t) {
-      <div class="task-title-row">
-        <div class="task-title">{{ t.title }}</div>
-        <!-- Read-only: during a break, task tracking is coupled to the break
-             timer (start tracking skips the break, stop tracking pauses it), so
-             a play/pause here can't act on tracking alone. Shows the time only. -->
-        <focus-mode-task-tracking
-          [task]="t"
-          [showToggle]="false"
-        ></focus-mode-task-tracking>
-      </div>
-    } @else {
-      <!-- No task title to show — fill the reserved row with a gentle reminder
-           so the break reads as a moment to relax, not just a countdown. -->
-      <p class="task-title break-message">
-        {{ T.F.FOCUS_MODE.BREAK_RELAX_MSG | translate }}
-      </p>
-    }
+    <focus-mode-task-row
+      [task]="currentTask() ?? null"
+      [showRelaxMessage]="true"
+      (switchTask)="openTaskSelector()"
+      (finishTask)="finishCurrentTask()"
+      (titleEdited)="updateTaskTitle($event.wasChanged, $event.newVal)"
+    ></focus-mode-task-row>
   </div>
 
   <!-- ========== ROW 3: Clock ========== -->
@@ -133,3 +126,12 @@
     }
   </section>
 </focus-mode-layout>
+
+<!-- Task selector — opened by the shared task row's switch / finish controls
+     (anchored to :host, above the layout, like the focus session). -->
+@if (isTaskSelectorOpen()) {
+  <focus-mode-task-selector
+    (taskSelected)="onTaskSelected($event)"
+    (closed)="closeTaskSelector()"
+  ></focus-mode-task-selector>
+}

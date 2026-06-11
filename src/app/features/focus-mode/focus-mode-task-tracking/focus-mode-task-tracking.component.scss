@@ -42,12 +42,3 @@
   width: 100%;
   opacity: 0.1;
 }
-
-// Follows the focus session's hover-reveal (--revealed-opacity, set on the
-// host of focus-mode-main). The fallback keeps it visible where no hover-reveal
-// mechanism exists.
-.play-pause-btn {
-  opacity: var(--revealed-opacity, 1);
-  pointer-events: var(--revealed-pointer-events, auto);
-  transition: var(--transition-standard);
-}

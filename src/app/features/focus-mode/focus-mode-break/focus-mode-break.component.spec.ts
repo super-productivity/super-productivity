@@ -5,10 +5,12 @@ import { FocusModeService } from '../focus-mode.service';
 import {
   skipBreak,
   completeBreak,
+  completeTask,
   pauseFocusSession,
   unPauseFocusSession,
   cancelFocusSession,
 } from '../store/focus-mode.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import {
   EnvironmentInjector,
   runInInjectionContext,
@@ -16,8 +18,9 @@ import {
   Signal,
 } from '@angular/core';
 import { T } from '../../../t.const';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
+import { TaskCopy } from '../../tasks/task.model';
 import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
 import { FocusModeConfig } from '../../config/global-config.model';
 
@@ -37,14 +40,21 @@ describe('FocusModeBreakComponent', () => {
     focusModeConfig: Signal<FocusModeConfig | undefined>;
   };
   let environmentInjector: EnvironmentInjector;
+  let currentTaskSubject: BehaviorSubject<TaskCopy | null>;
   const mockPausedTaskId = 'test-task-id';
   const mockCurrentTaskId = 'current-task-id';
+  const mockTask = { id: 'cur-task', title: 'Current task' } as TaskCopy;
 
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch', 'select']);
     mockStore.select.and.returnValue(of(mockPausedTaskId));
 
-    mockTaskService = jasmine.createSpyObj('TaskService', ['currentTaskId']);
+    currentTaskSubject = new BehaviorSubject<TaskCopy | null>(null);
+    mockTaskService = jasmine.createSpyObj(
+      'TaskService',
+      ['currentTaskId', 'setCurrentId', 'update'],
+      { currentTask$: currentTaskSubject.asObservable() },
+    );
     mockTaskService.currentTaskId.and.returnValue(mockCurrentTaskId);
 
     mockFocusModeService = {
@@ -161,6 +171,47 @@ describe('FocusModeBreakComponent', () => {
     it('should return true when break is paused', () => {
       (mockFocusModeService.isSessionPaused as any).set(true);
       expect(component.isBreakPaused()).toBe(true);
+    });
+  });
+
+  describe('shared task-row controls', () => {
+    it('opens and closes the task selector', () => {
+      expect(component.isTaskSelectorOpen()).toBe(false);
+      component.openTaskSelector();
+      expect(component.isTaskSelectorOpen()).toBe(true);
+      component.closeTaskSelector();
+      expect(component.isTaskSelectorOpen()).toBe(false);
+    });
+
+    it('selects a task and closes the selector', () => {
+      component.openTaskSelector();
+      component.onTaskSelected('new-task');
+      expect(mockTaskService.setCurrentId).toHaveBeenCalledWith('new-task');
+      expect(component.isTaskSelectorOpen()).toBe(false);
+    });
+
+    it('finishCurrentTask completes + marks the tracked task done, then opens the selector', () => {
+      currentTaskSubject.next(mockTask);
+
+      component.finishCurrentTask();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(completeTask());
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: TaskSharedActions.updateTask.type }),
+      );
+      expect(component.isTaskSelectorOpen()).toBe(true);
+    });
+
+    it('updateTaskTitle updates the tracked task only when changed', () => {
+      currentTaskSubject.next(mockTask);
+
+      component.updateTaskTitle(false, 'ignored');
+      expect(mockTaskService.update).not.toHaveBeenCalled();
+
+      component.updateTaskTitle(true, 'New title');
+      expect(mockTaskService.update).toHaveBeenCalledWith(mockTask.id, {
+        title: 'New title',
+      });
     });
   });
 });

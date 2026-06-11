@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { MatButtonModule, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { FocusModeService } from '../focus-mode.service';
@@ -10,19 +16,20 @@ import { Store } from '@ngrx/store';
 import {
   cancelFocusSession,
   completeBreak,
+  completeTask,
   pauseFocusSession,
   resetCycles,
   skipBreak,
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
 import { selectPausedTaskId } from '../store/focus-mode.selectors';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
-import { FocusModeTaskTrackingComponent } from '../focus-mode-task-tracking/focus-mode-task-tracking.component';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { FocusModeTaskRowComponent } from '../focus-mode-task-row/focus-mode-task-row.component';
+import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
 
 @Component({
@@ -36,7 +43,8 @@ import { TaskService } from '../../tasks/task.service';
     MsToMinuteClockStringPipe,
     MatIcon,
     TranslatePipe,
-    FocusModeTaskTrackingComponent,
+    FocusModeTaskRowComponent,
+    FocusModeTaskSelectorComponent,
     FocusClockFaceComponent,
   ],
   templateUrl: './focus-mode-break.component.html',
@@ -52,13 +60,12 @@ export class FocusModeBreakComponent {
   // Get pausedTaskId before break ends (passed in action to avoid race condition)
   private readonly _pausedTaskId = toSignal(this._store.select(selectPausedTaskId));
 
-  // Resolve the paused task so we can show its title above the circle —
-  // the focus session's task is unset for the duration of the break.
-  readonly displayedTask = toSignal(
-    toObservable(this._pausedTaskId).pipe(
-      switchMap((id) => (id ? this._taskService.getByIdLive$(id) : of(null))),
-    ),
-  );
+  // The live tracked task. Set only when tracking continues through the break
+  // ("pause tracking during breaks" off); null when tracking is paused for the
+  // break, which makes the shared task row fall back to the relax message.
+  readonly currentTask = toSignal(this._taskService.currentTask$);
+
+  readonly isTaskSelectorOpen = signal(false);
 
   readonly remainingTime = computed(() => {
     return this.focusModeService.timeRemaining() || 0;
@@ -79,12 +86,6 @@ export class FocusModeBreakComponent {
   // matching the user's mental model of "Focus + Break = one cycle".
   readonly displayedCycle = computed(() =>
     getBreakCycle(this.focusModeService.currentCycle() ?? 1),
-  );
-
-  // Hide the focused task's title while tracking is paused for the break — the
-  // user has stepped away from the task, so showing it is just noise.
-  readonly isTrackingPausedDuringBreak = computed(
-    () => !!this.focusModeService.focusModeConfig()?.isPauseTrackingDuringBreak,
   );
 
   // Which break-label translation key to show above the digits. Flowtime breaks
@@ -131,5 +132,48 @@ export class FocusModeBreakComponent {
     // cancelFocusSession$ effect), returning the user to wherever they were
     // before focus mode — no forced navigation.
     this._store.dispatch(cancelFocusSession());
+  }
+
+  // --- Shared task-row controls (only reachable when tracking continues through
+  // the break; otherwise the row shows the relax message and these aren't shown).
+
+  openTaskSelector(): void {
+    this.isTaskSelectorOpen.set(true);
+  }
+
+  closeTaskSelector(): void {
+    this.isTaskSelectorOpen.set(false);
+  }
+
+  switchToTask(taskId: string): void {
+    this._taskService.setCurrentId(taskId);
+  }
+
+  onTaskSelected(taskId: string): void {
+    this.switchToTask(taskId);
+    this.closeTaskSelector();
+  }
+
+  finishCurrentTask(): void {
+    this._store.dispatch(completeTask());
+    const t = this.currentTask();
+    if (t) {
+      this._store.dispatch(
+        TaskSharedActions.updateTask({
+          task: { id: t.id, changes: { isDone: true, doneOn: Date.now() } },
+        }),
+      );
+    }
+    this.openTaskSelector();
+  }
+
+  updateTaskTitle(wasChanged: boolean, newVal: string): void {
+    if (!wasChanged) {
+      return;
+    }
+    const t = this.currentTask();
+    if (t) {
+      this._taskService.update(t.id, { title: newVal });
+    }
   }
 }

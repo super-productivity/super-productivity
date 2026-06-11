@@ -38,7 +38,6 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { SimpleCounterService } from '../../simple-counter/simple-counter.service';
 import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import { ICAL_TYPE } from '../../issue/issue.const';
-import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatFabButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -55,7 +54,7 @@ import { slideInOutFromBottomAni } from '../../../ui/animations/slide-in-out-fro
 import { FocusModeService } from '../focus-mode.service';
 import { FocusModeLayoutComponent } from '../focus-mode-layout/focus-mode-layout.component';
 import { FocusClockFaceComponent } from '../focus-clock-face/focus-clock-face.component';
-import { FocusModeTaskTrackingComponent } from '../focus-mode-task-tracking/focus-mode-task-tracking.component';
+import { FocusModeTaskRowComponent } from '../focus-mode-task-row/focus-mode-task-row.component';
 import {
   FOCUS_MODE_DEFAULTS,
   FocusMainUIState,
@@ -91,9 +90,8 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
   ],
   imports: [
     FocusModeLayoutComponent,
-    TaskTitleComponent,
     FocusClockFaceComponent,
-    FocusModeTaskTrackingComponent,
+    FocusModeTaskRowComponent,
     MatIconButton,
     MatTooltip,
     MatIcon,
