@@ -1,14 +1,17 @@
 import { TestBed, fakeAsync } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import {
+  createReconcileTicksOnResume$,
   isTimeSpentJumpForNotification,
   parseNativeTrackingData,
   TIME_SPENT_JUMP_THRESHOLD_MS,
 } from './android-foreground-tracking.effects';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
 
 // We need to test the effect logic by reimplementing it in tests since
 // the actual effects are conditionally created based on IS_ANDROID_WEB_VIEW
@@ -1773,5 +1776,67 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
     expect(addTimeSpentSpy).not.toHaveBeenCalled();
     expect(resetTrackingStartSpy).toHaveBeenCalled();
     expect(snackOpenSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('createReconcileTicksOnResume$ - background tick gap (#8243)', () => {
+  let onResume$: Subject<void>;
+  let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
+  let taskService: jasmine.SpyObj<TaskService>;
+
+  beforeEach(() => {
+    onResume$ = new Subject<void>();
+    globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
+      'GlobalTrackingIntervalService',
+      ['triggerWakeUpTick', 'resetTrackingStart'],
+    );
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', [
+      'flushAccumulatedTimeSpent',
+    ]);
+  });
+
+  it('should do nothing before a resume arrives', () => {
+    const sub = createReconcileTicksOnResume$(
+      onResume$,
+      globalTracking,
+      taskService,
+    ).subscribe();
+
+    expect(globalTracking.triggerWakeUpTick).not.toHaveBeenCalled();
+    expect(globalTracking.resetTrackingStart).not.toHaveBeenCalled();
+    expect(taskService.flushAccumulatedTimeSpent).not.toHaveBeenCalled();
+    sub.unsubscribe();
+  });
+
+  it('should credit a capped wake-up tick, reset the anchor and flush on resume', () => {
+    const sub = createReconcileTicksOnResume$(
+      onResume$,
+      globalTracking,
+      taskService,
+    ).subscribe();
+
+    onResume$.next();
+
+    expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledWith(
+      MOBILE_BACKGROUND_IDLE_CAP_MS,
+    );
+    expect(globalTracking.resetTrackingStart).toHaveBeenCalledTimes(1);
+    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(1);
+    sub.unsubscribe();
+  });
+
+  it('should reconcile once per resume', () => {
+    const sub = createReconcileTicksOnResume$(
+      onResume$,
+      globalTracking,
+      taskService,
+    ).subscribe();
+
+    onResume$.next();
+    onResume$.next();
+
+    expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(2);
+    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(2);
+    sub.unsubscribe();
   });
 });

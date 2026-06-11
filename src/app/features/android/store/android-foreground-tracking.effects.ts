@@ -22,7 +22,8 @@ import { DroidLog } from '../../../core/log';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
-import { combineLatest, firstValueFrom, Subject } from 'rxjs';
+import { combineLatest, firstValueFrom, Observable, Subject } from 'rxjs';
+import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -112,6 +113,34 @@ export const isTimeSpentJumpForNotification = (
 ): boolean =>
   currTimeSpent < prevTimeSpent ||
   currTimeSpent - prevTimeSpent > TIME_SPENT_JUMP_THRESHOLD_MS;
+
+/**
+ * The shared 1s interval is paused while the app is backgrounded (see
+ * createGlobalInterval$ — the web-layer half of the #8243 battery drain). On
+ * resume, credit the backgrounded wall-clock gap to tick$ consumers (running
+ * stopwatch counters, break tracking) with a single capped wake-up tick,
+ * mirroring the iOS resume path (handleIosResume). Current-task time does NOT
+ * depend on this: syncOnResume$ reconciles it from the native counter
+ * (authoritative) and computes a ~0 delta when this tick ran first; if the
+ * gap exceeded the cap, the native reconcile adds the uncapped remainder.
+ * resetTrackingStart() drops that remainder from the tick anchor so the next
+ * interval tick can't deliver it a second time.
+ *
+ * Exported (effect-independent) so the spec can drive it without tripping
+ * the IS_ANDROID_WEB_VIEW gate on createEffect.
+ */
+export const createReconcileTicksOnResume$ = (
+  onResume$: Observable<void>,
+  globalTracking: GlobalTrackingIntervalService,
+  taskService: TaskService,
+): Observable<unknown> =>
+  onResume$.pipe(
+    tap(() => {
+      globalTracking.triggerWakeUpTick(MOBILE_BACKGROUND_IDLE_CAP_MS);
+      globalTracking.resetTrackingStart();
+      taskService.flushAccumulatedTimeSpent();
+    }),
+  );
 
 @Injectable()
 export class AndroidForegroundTrackingEffects {
@@ -290,6 +319,22 @@ export class AndroidForegroundTrackingEffects {
               }
             }
           }),
+        ),
+      { dispatch: false },
+    );
+
+  /**
+   * See createReconcileTicksOnResume$ — credits the backgrounded gap to
+   * generic tick$ consumers after the paused 1s interval restarts.
+   */
+  reconcileTicksOnResume$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        createReconcileTicksOnResume$(
+          androidInterface.onResume$,
+          this._globalTrackingIntervalService,
+          this._taskService,
         ),
       { dispatch: false },
     );
