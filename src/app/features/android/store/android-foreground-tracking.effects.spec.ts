@@ -1,11 +1,11 @@
 import { TestBed, fakeAsync } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import {
-  createReconcileTicksOnResume$,
+  creditBackgroundTickGap,
   isTimeSpentJumpForNotification,
   parseNativeTrackingData,
   TIME_SPENT_JUMP_THRESHOLD_MS,
@@ -1779,13 +1779,11 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
   });
 });
 
-describe('createReconcileTicksOnResume$ - background tick gap (#8243)', () => {
-  let onResume$: Subject<void>;
+describe('creditBackgroundTickGap - background tick gap (#8243)', () => {
   let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let taskService: jasmine.SpyObj<TaskService>;
 
   beforeEach(() => {
-    onResume$ = new Subject<void>();
     globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
       'GlobalTrackingIntervalService',
       ['triggerWakeUpTick', 'resetTrackingStart'],
@@ -1795,48 +1793,27 @@ describe('createReconcileTicksOnResume$ - background tick gap (#8243)', () => {
     ]);
   });
 
-  it('should do nothing before a resume arrives', () => {
-    const sub = createReconcileTicksOnResume$(
-      onResume$,
-      globalTracking,
-      taskService,
-    ).subscribe();
-
-    expect(globalTracking.triggerWakeUpTick).not.toHaveBeenCalled();
-    expect(globalTracking.resetTrackingStart).not.toHaveBeenCalled();
-    expect(taskService.flushAccumulatedTimeSpent).not.toHaveBeenCalled();
-    sub.unsubscribe();
-  });
-
-  it('should credit a capped wake-up tick, reset the anchor and flush on resume', () => {
-    const sub = createReconcileTicksOnResume$(
-      onResume$,
-      globalTracking,
-      taskService,
-    ).subscribe();
-
-    onResume$.next();
+  it('should credit a capped wake-up tick, reset the anchor and flush', () => {
+    creditBackgroundTickGap(globalTracking, taskService);
 
     expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledWith(
       ANDROID_BACKGROUND_TICK_CAP_MS,
     );
     expect(globalTracking.resetTrackingStart).toHaveBeenCalledTimes(1);
     expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(1);
-    sub.unsubscribe();
   });
 
-  it('should reconcile once per resume', () => {
-    const sub = createReconcileTicksOnResume$(
-      onResume$,
-      globalTracking,
-      taskService,
-    ).subscribe();
+  it('should credit the gap before flushing it into a syncTimeSpent op', () => {
+    const callOrder: string[] = [];
+    globalTracking.triggerWakeUpTick.and.callFake(() => {
+      callOrder.push('wakeUpTick');
+      return { duration: 0, date: '2026-06-11', timestamp: 0 };
+    });
+    globalTracking.resetTrackingStart.and.callFake(() => callOrder.push('reset'));
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => callOrder.push('flush'));
 
-    onResume$.next();
-    onResume$.next();
+    creditBackgroundTickGap(globalTracking, taskService);
 
-    expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(2);
-    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(2);
-    sub.unsubscribe();
+    expect(callOrder).toEqual(['wakeUpTick', 'reset', 'flush']);
   });
 });
