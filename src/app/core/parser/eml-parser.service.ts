@@ -9,5 +9,9 @@ export const parseEml = async (file: File): Promise<ReadedEmlJson> => {
   const content = await file.text();
   const data = readEml(content) as ReadedEmlJson;
 
+  if (typeof data === 'string') throw Error(data);
+
+  if (data instanceof Error) throw data;
+
   return data;
 };

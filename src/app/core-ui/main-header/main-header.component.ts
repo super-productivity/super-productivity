@@ -323,20 +323,23 @@ export class MainHeaderComponent implements OnDestroy {
     ev.stopPropagation();
 
     const file = ev.dataTransfer?.files[0];
-    if (file === undefined) return;
 
     // EML File Addition on button hover
     // Adds a task with the information inside the eml
-    if (isFileEml(file)) {
+    if (file !== undefined && isFileEml(file)) {
       try {
         const data = await parseEml(file);
-        const email = Array.isArray(data.from) ? data.from![0].name : data.from!.name;
-        const message = `<from ${email}}>:\n${data.subject}`;
+
+        const from = Array.isArray(data.from) ? data.from[0] : data.from;
+        const email = from === null ? '' : from.name;
+
+        const message = `<from ${email}>:\n${data.subject}`;
         this.taskService.add(message);
         // TODO: add attachment to task
         // this.taskAttachmentService.addAttachment(taskId, file);
       } catch (e) {
-        console.error('Couldnt upload eml');
+        // console.error('Couldnt upload eml');
+        return;
       }
     }
   }
