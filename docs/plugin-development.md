@@ -297,6 +297,8 @@ Iframe plugins automatically receive:
 - `getTasks()` - Get all active tasks
 - `getArchivedTasks()` - Get archived tasks
 - `getCurrentContextTasks()` - Get tasks in current context
+- `getSelectedTask()` - Get the task selected in the task detail panel, or `null`
+- `getFocusedTask()` - Get the currently focused task row, or `null`. Task-row focus is cleared when focus moves elsewhere, including into iframe side panels; use `getSelectedTask()` for persistent side-panel task context.
 - `addTask(task)` - Create a new task
 - `updateTask(taskId, updates)` - Update existing task
 

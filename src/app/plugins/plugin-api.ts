@@ -207,6 +207,18 @@ export class PluginAPI implements PluginAPIInterface {
     return tasks.map(taskCopyToTaskData);
   }
 
+  async getSelectedTask(): Promise<Task | null> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested selected task`);
+    const task = await this.#boundMethods.getSelectedTask();
+    return task ? taskCopyToTaskData(task) : null;
+  }
+
+  async getFocusedTask(): Promise<Task | null> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested focused task`);
+    const task = await this.#boundMethods.getFocusedTask();
+    return task ? taskCopyToTaskData(task) : null;
+  }
+
   async getAppState(): Promise<PluginAppState> {
     PluginLog.log(`Plugin ${this.#pluginId} requested app state snapshot`);
     return this.#pluginBridge.getAppState();
