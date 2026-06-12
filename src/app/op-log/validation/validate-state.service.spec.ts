@@ -17,6 +17,7 @@ import {
 } from '../../features/menu-tree/store/menu-tree.model';
 import { environment } from '../../../environments/environment';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { createValidAppData } from './state-validity-test-utils';
 
 describe('ValidateStateService', () => {
   let service: ValidateStateService;
@@ -238,28 +239,83 @@ describe('ValidateStateService', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     });
 
-    it('should return false when clientId is null', async () => {
-      const originalEnvProduction = environment.production;
-      (environment as any).production = false;
+    // #8279: During automatic sync, post-merge validation must NEVER pop a
+    // blocking repair modal nor auto-repair. Repair can un-archive tasks and
+    // emits a REPAIR op to every device, so a (possibly false-positive)
+    // detection mid-sync must not mutate data unattended. Instead we defer:
+    // the remote change is already applied and the state is usable.
+    (['sync', 'conflict-resolution', 'partial-apply-failure'] as const).forEach(
+      (syncContext) => {
+        it(`defers repair in sync context "${syncContext}" (no modal, no repair, no dispatch)`, async () => {
+          const invalidState = createEmptyState();
+          invalidState.menuTree = {
+            ...(invalidState.menuTree as MenuTreeState),
+            projectTree: [{ id: 'ORPHAN', k: MenuTreeKind.PROJECT }],
+          };
+          mockStateSnapshotService.getStateSnapshot.and.returnValue(invalidState as any);
+          mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+            invalidState as any,
+          );
+          // window.confirm is a global, never-restored spy (src/test.ts) whose call
+          // count accumulates across specs — reset before asserting "not called".
+          (window.confirm as jasmine.Spy).calls.reset();
 
-      try {
-        // Create invalid state that needs repair
-        const invalidState = createEmptyState();
-        invalidState.menuTree = {
-          ...(invalidState.menuTree as MenuTreeState),
-          projectTree: [{ id: 'ORPHAN', k: MenuTreeKind.PROJECT }],
-        };
-        mockStateSnapshotService.getStateSnapshot.and.returnValue(invalidState as any);
-        mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(invalidState as any);
-        mockClientIdProvider.loadClientId.and.returnValue(Promise.resolve(null));
+          const result = await service.validateAndRepairCurrentState(syncContext);
 
-        const result = await service.validateAndRepairCurrentState('sync');
+          expect(result).toBeFalse();
+          // The key regression assertion: no blocking confirm() dialog.
+          expect(window.confirm).not.toHaveBeenCalled();
+          // No data mutation: no repair op, no state dispatch.
+          expect(mockRepairService.createRepairOperation).not.toHaveBeenCalled();
+          expect(store.dispatch).not.toHaveBeenCalled();
+          // No hydration/effect-suppression machinery is engaged on the defer path.
+          expect(mockHydrationStateService.startApplyingRemoteOps).not.toHaveBeenCalled();
+        });
+      },
+    );
 
-        expect(result).toBeFalse();
-        expect(mockRepairService.createRepairOperation).not.toHaveBeenCalled();
-      } finally {
-        (environment as any).production = originalEnvProduction;
-      }
+    it('does not escalate when the quick check fails but the full snapshot is valid', async () => {
+      // The sync getStateSnapshot() hardcodes empty archives, so an archive-only
+      // dependency can make the quick (NgRx-only) check fail while the full
+      // snapshot (with archives) is valid. That must not produce a false deferral.
+      const quickInvalid = createEmptyState();
+      quickInvalid.menuTree = {
+        ...(quickInvalid.menuTree as MenuTreeState),
+        projectTree: [{ id: 'ORPHAN', k: MenuTreeKind.PROJECT }],
+      };
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(quickInvalid as any);
+      // Full snapshot (with archives) is genuinely valid.
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        createValidAppData() as any,
+      );
+      (window.confirm as jasmine.Spy).calls.reset();
+
+      const result = await service.validateAndRepairCurrentState('sync');
+
+      expect(result).toBeTrue();
+      expect(window.confirm).not.toHaveBeenCalled();
+      expect(mockRepairService.createRepairOperation).not.toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    // The interactive repair path below is retained for non-sync (user-initiated)
+    // repair contexts. Sync contexts intentionally defer (see #8279 tests above).
+    it('should return false when clientId is null (non-sync repair path)', async () => {
+      const state = createEmptyState();
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(state as any);
+      spyOn(service, 'validateAndRepair').and.resolveTo({
+        isValid: true,
+        wasRepaired: true,
+        repairedState: state,
+        repairSummary: { typeErrorsFixed: 1 } as any,
+      });
+      mockClientIdProvider.loadClientId.and.returnValue(Promise.resolve(null));
+
+      const result = await service.validateAndRepairCurrentState('other-context');
+
+      expect(result).toBeFalse();
+      expect(mockRepairService.createRepairOperation).not.toHaveBeenCalled();
     });
 
     it('should pass skipLock option to repair service when callerHoldsLock is true', async () => {
@@ -275,7 +331,9 @@ describe('ValidateStateService', () => {
         repairSummary: { typeErrorsFixed: 1 } as any,
       });
 
-      await service.validateAndRepairCurrentState('sync', { callerHoldsLock: true });
+      await service.validateAndRepairCurrentState('other-context', {
+        callerHoldsLock: true,
+      });
 
       expect(mockRepairService.createRepairOperation).toHaveBeenCalledWith(
         jasmine.anything(),
@@ -283,26 +341,6 @@ describe('ValidateStateService', () => {
         'test-client',
         { skipLock: true },
       );
-    });
-
-    it('should start/end hydration state for sync contexts', async () => {
-      const state = createEmptyState();
-      mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(state as any);
-
-      // Mock validateAndRepair to return repaired state
-      spyOn(service, 'validateAndRepair').and.resolveTo({
-        isValid: true,
-        wasRepaired: true,
-        repairedState: state,
-        repairSummary: { typeErrorsFixed: 1 } as any,
-      });
-
-      await service.validateAndRepairCurrentState('sync');
-
-      expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalled();
-      expect(mockHydrationStateService.endApplyingRemoteOps).toHaveBeenCalled();
-      expect(mockHydrationStateService.startPostSyncCooldown).toHaveBeenCalled();
     });
 
     it('should not start/end hydration state for non-sync contexts', async () => {
@@ -325,50 +363,6 @@ describe('ValidateStateService', () => {
       } finally {
         (environment as any).production = originalEnvProduction;
       }
-    });
-
-    it('should not start hydration state if already applying (nested call)', async () => {
-      const originalEnvProduction = environment.production;
-      (environment as any).production = false;
-
-      try {
-        const invalidState = createEmptyState();
-        invalidState.menuTree = {
-          ...(invalidState.menuTree as MenuTreeState),
-          projectTree: [{ id: 'ORPHAN', k: MenuTreeKind.PROJECT }],
-        };
-        mockStateSnapshotService.getStateSnapshot.and.returnValue(invalidState as any);
-        mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(invalidState as any);
-        mockHydrationStateService.isApplyingRemoteOps.and.returnValue(true);
-
-        await service.validateAndRepairCurrentState('sync');
-
-        expect(mockHydrationStateService.startApplyingRemoteOps).not.toHaveBeenCalled();
-        expect(mockHydrationStateService.endApplyingRemoteOps).not.toHaveBeenCalled();
-        expect(mockHydrationStateService.startPostSyncCooldown).not.toHaveBeenCalled();
-      } finally {
-        (environment as any).production = originalEnvProduction;
-      }
-    });
-
-    it('should dispatch loadAllData with isRemote flag for sync contexts', async () => {
-      const state = createEmptyState();
-      mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(state as any);
-
-      // Mock validateAndRepair to return repaired state
-      spyOn(service, 'validateAndRepair').and.resolveTo({
-        isValid: true,
-        wasRepaired: true,
-        repairedState: state,
-        repairSummary: { typeErrorsFixed: 1 } as any,
-      });
-
-      await service.validateAndRepairCurrentState('sync');
-
-      expect(store.dispatch).toHaveBeenCalled();
-      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
-      expect(dispatchedAction.meta?.isRemote).toBeTrue();
     });
 
     it('should dispatch loadAllData without isRemote flag for non-sync contexts', async () => {
@@ -406,7 +400,7 @@ describe('ValidateStateService', () => {
         timeTracking: initialTimeTrackingState,
         lastTimeTrackingFlush: 0,
       };
-      // Quick (sync) validation fails → the repair path loads the async snapshot.
+      // Quick validation fails → the repair path loads the async snapshot.
       mockStateSnapshotService.getStateSnapshot.and.returnValue(
         createEmptyState() as any,
       );
@@ -421,7 +415,7 @@ describe('ValidateStateService', () => {
         repairSummary: { typeErrorsFixed: 1 } as any,
       });
 
-      await service.validateAndRepairCurrentState('sync');
+      await service.validateAndRepairCurrentState('other-context');
 
       // The repair path must load the async snapshot (archives from IndexedDB).
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
