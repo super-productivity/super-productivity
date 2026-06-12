@@ -50,6 +50,7 @@ import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { isFileEml, parseEml } from 'src/app/util/eml-parser';
 import { TaskAttachmentService } from 'src/app/features/tasks/task-attachment/task-attachment.service';
+import { Log } from 'src/app/core/log';
 
 @Component({
   selector: 'main-header',
@@ -331,14 +332,15 @@ export class MainHeaderComponent implements OnDestroy {
         const data = await parseEml(file);
 
         const from = Array.isArray(data.from) ? data.from[0] : data.from;
-        const email = from === null ? '' : from.name;
 
         const message = `<from ${email}>:\n${data.subject}`;
+        const message = `${sender}: ${data.subject}`;
         this.taskService.add(message);
         // TODO: add attachment to task
         // this.taskAttachmentService.addAttachment(taskId, file);
       } catch (e) {
-        // console.error('Couldnt upload eml');
+        Log.err(e);
+        this._snackService.open("Couldn't create eml file");
         return;
       }
     }
