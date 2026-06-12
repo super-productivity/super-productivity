@@ -54,7 +54,9 @@ import { IS_IOS } from 'src/app/util/is-ios';
 import { Keyboard } from '@capacitor/keyboard';
 import { DialogMarkdownShortcutsComponent } from './dialog-markdown-shortcuts.component';
 import {
+  isShortcutWithKey,
   MARKDOWN_SHORTCUTS,
+  MarkdownShortcut,
   shortcutLabels,
   ShortcutNames,
 } from './markdown-shortcuts.const';
@@ -221,6 +223,10 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       case 'quote':
         this.onApplyQuote();
         break;
+      default: {
+        const _exhaustive: never = name;
+        return _exhaustive;
+      }
     }
   }
 
@@ -239,10 +245,17 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     }
 
     if (hasModifier) {
-      const shortcut = MARKDOWN_SHORTCUTS.find((s) => {
-        const keyMatch = s.code ? ev.code === s.code : ev.key.toLowerCase() === s.key;
-        return keyMatch && ev.shiftKey === s.shiftKey;
-      });
+      const shortcutIndex = (MARKDOWN_SHORTCUTS as readonly MarkdownShortcut[]).findIndex(
+        (s) => {
+          const keyMatch = isShortcutWithKey(s)
+            ? ev.key.toLowerCase() === s.key
+            : ev.code === s.code;
+          return keyMatch && ev.shiftKey === s.shiftKey;
+        },
+      );
+
+      const shortcut =
+        shortcutIndex !== -1 ? MARKDOWN_SHORTCUTS[shortcutIndex] : undefined;
 
       if (shortcut) {
         ev.preventDefault();

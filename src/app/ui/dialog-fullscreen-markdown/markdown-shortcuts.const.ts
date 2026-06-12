@@ -1,17 +1,7 @@
 import { IS_MAC } from 'src/app/util/is-mac';
 
-export type ShortcutNames =
-  | 'bold'
-  | 'italic'
-  | 'link'
-  | 'strikethrough'
-  | 'bullet'
-  | 'numbered'
-  | 'code'
-  | 'quote';
-
 type BaseShortcut = {
-  name: ShortcutNames;
+  name: string;
   translationKey: string;
   shiftKey: boolean;
 };
@@ -28,10 +18,9 @@ type ShortcutWithCode = BaseShortcut & {
 
 export type MarkdownShortcut = ShortcutWithKey | ShortcutWithCode;
 
-export type ShortcutLabel = Record<ShortcutNames, { keys: string[]; tooltip: string }>;
 export const MOD = IS_MAC ? 'Cmd' : 'Ctrl';
 
-export const MARKDOWN_SHORTCUTS: MarkdownShortcut[] = [
+export const MARKDOWN_SHORTCUTS = [
   {
     name: 'bold',
     translationKey: 'BOLD',
@@ -80,9 +69,14 @@ export const MARKDOWN_SHORTCUTS: MarkdownShortcut[] = [
     key: 'e',
     shiftKey: false,
   },
-];
+] as const satisfies readonly MarkdownShortcut[];
 
-const isShortcutWithKey = (shortcut: MarkdownShortcut): shortcut is ShortcutWithKey => {
+export type ShortcutNames = (typeof MARKDOWN_SHORTCUTS)[number]['name'];
+
+export type ShortcutLabel = Record<ShortcutNames, { keys: string[]; tooltip: string }>;
+export const isShortcutWithKey = (
+  shortcut: MarkdownShortcut,
+): shortcut is ShortcutWithKey => {
   return shortcut.key !== undefined;
 };
 
@@ -95,9 +89,11 @@ const formatKeyDisplay = (shortcut: MarkdownShortcut): string => {
 
 export const shortcutLabels = MARKDOWN_SHORTCUTS.reduce((acc, s) => {
   const keys = [MOD, ...(s.shiftKey ? ['Shift'] : []), formatKeyDisplay(s)];
+
   acc[s.name] = {
     keys,
     tooltip: ` (${keys.join('+')})`,
   };
+
   return acc;
 }, {} as ShortcutLabel);
