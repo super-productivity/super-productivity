@@ -46,6 +46,7 @@ import {
   isPluginIssueProvider,
 } from '../issue/issue.model';
 import { CalendarProviderCfg } from '../issue/providers/calendar/calendar.model';
+import { getCalendarProviderColor } from '../issue/mapping-helper/get-issue-provider-color';
 import { CORS_SKIP_EXTRA_HEADERS, IS_WEB_BROWSER } from '../../app.constants';
 import { Log } from '../../core/log';
 import { getErrorTxt } from '../../util/get-error-text';
@@ -322,6 +323,7 @@ export class CalendarIntegrationService {
     const results: PluginSearchResult[] =
       await provider.definition.getNewIssuesForBacklog(pluginProvider.pluginConfig, http);
 
+    const color = getCalendarProviderColor(pluginProvider);
     return results
       .filter((r) => r.start != null)
       .map((r) => ({
@@ -334,6 +336,7 @@ export class CalendarIntegrationService {
         isAllDay: r.isAllDay,
         issueProviderKey: pluginProvider.issueProviderKey,
         dueWithTime: r.dueWithTime,
+        color,
       }));
   }
 
