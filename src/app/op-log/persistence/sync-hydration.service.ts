@@ -228,34 +228,34 @@ export class SyncHydrationService {
         lastSeq = await this.opLogStore.getLastSeq();
       }
 
-      // 7. Validate and repair synced data before dispatching.
-      // This fixes stale task references (e.g., tags/projects referencing deleted tasks).
-      // If the validator reports the data is *not* valid (and repair didn't
-      // succeed), flip the SyncSessionValidationService latch so the wrapper
-      // can refuse IN_SYNC. Without this, snapshot hydration would silently
-      // accept corrupt remote data — a gap not covered by validateAfterSync
-      // since this path bypasses processRemoteOps entirely. (#7330)
+      // 7. Validate synced data before dispatching (detect-only).
+      // #8279: this is a sync-receive path (full snapshot download), so it must
+      // NOT block with a repair modal and must NOT auto-repair — a cross-device
+      // merge can leave benign orphan references (tasks pointing at an entity the
+      // other device deleted) which are tolerated by selectors. Mirroring the
+      // Checkpoint D deferral, we detect-only: load the snapshot as-is and flip
+      // the SyncSessionValidationService latch so the wrapper refuses IN_SYNC.
+      // Without this flag, snapshot hydration would silently accept corrupt remote
+      // data — a gap not covered by validateAfterSync since this path bypasses
+      // processRemoteOps entirely. (#7330)
       const downloadedAppData = locallyReplayableSyncedData as AppDataComplete;
       const normalizedGlobalConfig = normalizeGlobalConfigStartOfNextDay(
         downloadedAppData.globalConfig,
       );
-      let dataToLoad = normalizedGlobalConfig
+      const dataToLoad = normalizedGlobalConfig
         ? {
             ...downloadedAppData,
             globalConfig: normalizedGlobalConfig,
           }
         : downloadedAppData;
-      const validationResult =
-        await this.validateStateService.validateAndRepair(dataToLoad);
-      if (validationResult.wasRepaired && validationResult.repairedState) {
-        // Cast to any since Record<string, unknown> doesn't directly map to AppDataComplete
-        dataToLoad = validationResult.repairedState as any;
-        OpLog.normal('SyncHydrationService: Repaired synced data before loading');
-      }
+      const validationResult = await this.validateStateService.validateState(
+        dataToLoad as unknown as Record<string, unknown>,
+      );
       if (!validationResult.isValid) {
         OpLog.err(
-          'SyncHydrationService: Validation failed for hydrated remote snapshot — flagging session',
-          { error: validationResult.error },
+          'SyncHydrationService: Validation failed for hydrated remote snapshot — ' +
+            'flagging session (deferring repair, #8279)',
+          { crossModelError: validationResult.crossModelError },
         );
         this.sessionValidation.setFailed();
       }
