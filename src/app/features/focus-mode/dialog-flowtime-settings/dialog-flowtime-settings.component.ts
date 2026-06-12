@@ -11,6 +11,7 @@ import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { T } from '../../../t.const';
 import { FlowtimeBreakRule, FlowtimeConfig } from '../../config/global-config.model';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -69,6 +70,12 @@ export class DialogFlowtimeSettingsComponent {
     maxDuration: 25,
     breakDuration: 5,
   };
+  private readonly _initialFlowtimeConfig: FlowtimeConfig;
+  private _lastIsBreakEnabled: FlowtimeFormModel['isBreakEnabled'];
+  private _lastBreakMode: FlowtimeFormModel['breakMode'];
+  private _lastBreakPercentage: FlowtimeFormModel['breakPercentage'];
+  private _lastNonEmptyBreakRules: FlowtimeBreakRuleInMinutes[];
+  private _isRestoringBreakRules = false;
 
   T = T;
   form = new FormGroup({});
@@ -89,6 +96,7 @@ export class DialogFlowtimeSettingsComponent {
     {
       key: 'breakMode',
       type: 'select',
+      resetOnHide: false,
       expressions: {
         hide: (field: FormlyFieldConfig) => !field.parent?.model?.isBreakEnabled,
       },
@@ -109,6 +117,7 @@ export class DialogFlowtimeSettingsComponent {
     {
       key: 'breakPercentage',
       type: 'input',
+      resetOnHide: false,
       expressions: {
         hide: (field: FormlyFieldConfig) =>
           !field.parent?.model?.isBreakEnabled ||
@@ -127,6 +136,7 @@ export class DialogFlowtimeSettingsComponent {
       key: 'breakRules',
       description: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULES_DESC,
       type: 'repeat',
+      resetOnHide: false,
       expressions: {
         hide: (field: FormlyFieldConfig) =>
           !field.parent?.model?.isBreakEnabled ||
@@ -194,13 +204,268 @@ export class DialogFlowtimeSettingsComponent {
 
   constructor() {
     const cfg = this._globalConfigService.cfg();
-    const flowtime = cfg?.flowtime ?? {
-      isBreakEnabled: false,
-      breakMode: 'ratio',
-      breakPercentage: 20,
-      breakRules: [],
+    const flowtime = {
+      ...DEFAULT_GLOBAL_CONFIG.flowtime,
+      ...(cfg?.flowtime ?? {}),
+    };
+    const breakRules = this._toBreakRulesInMinutes(flowtime);
+    this._initialFlowtimeConfig = flowtime;
+    this._lastIsBreakEnabled = flowtime.isBreakEnabled;
+    this._lastBreakMode = flowtime.breakMode;
+    this._lastBreakPercentage = flowtime.breakPercentage;
+    this._lastNonEmptyBreakRules = this._copyBreakRules(breakRules);
+
+    this.model.set({
+      ...flowtime,
+      breakRules,
+    });
+  }
+
+  updateModel(nextModel: FlowtimeFormModel): void {
+    const previousIsBreakEnabled = this._lastIsBreakEnabled;
+    const previousBreakMode = this._lastBreakMode;
+    const breakMode = this._getNextBreakMode(nextModel);
+    const breakRules = this._getNextBreakRules(
+      nextModel,
+      previousIsBreakEnabled,
+      previousBreakMode,
+      breakMode,
+    );
+    const nextModelToSet = {
+      ...nextModel,
+      breakMode,
+      breakPercentage: this._getNextBreakPercentage(nextModel, breakMode),
+      breakRules,
     };
 
+    this.model.set(nextModelToSet);
+    if (this._hasBreakRuleValueDiff(nextModel.breakRules, breakRules)) {
+      this._patchBreakRulesFormValue(breakRules);
+    }
+    this._rememberModelState(nextModelToSet);
+  }
+
+  save(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+    const currentModel = this.model();
+    const breakMode = currentModel.breakMode ?? this._initialFlowtimeConfig.breakMode;
+    const flowtimeConfig: FlowtimeConfig = {
+      isBreakEnabled: currentModel.isBreakEnabled,
+      breakMode,
+      breakPercentage:
+        currentModel.breakPercentage ?? this._initialFlowtimeConfig.breakPercentage,
+      breakRules:
+        currentModel.isBreakEnabled && breakMode === 'rule' && currentModel.breakRules
+          ? this._toBreakRulesInMs(currentModel.breakRules)
+          : this._toBreakRulesInMs(this._lastNonEmptyBreakRules),
+    };
+
+    this._globalConfigService.updateSection('flowtime', flowtimeConfig, true);
+    this._dialogRef.close(flowtimeConfig);
+  }
+
+  close(): void {
+    this._dialogRef.close();
+  }
+
+  private _getNextBreakMode(
+    nextModel: FlowtimeFormModel,
+  ): FlowtimeFormModel['breakMode'] {
+    const isBreakModeHidden = !nextModel.isBreakEnabled;
+
+    return nextModel.breakMode == null && isBreakModeHidden
+      ? (this._lastBreakMode ?? this._initialFlowtimeConfig.breakMode)
+      : nextModel.breakMode;
+  }
+
+  private _getNextBreakPercentage(
+    nextModel: FlowtimeFormModel,
+    breakMode: FlowtimeFormModel['breakMode'],
+  ): FlowtimeFormModel['breakPercentage'] {
+    const isBreakPercentageHidden = !nextModel.isBreakEnabled || breakMode !== 'ratio';
+
+    return nextModel.breakPercentage == null && isBreakPercentageHidden
+      ? (this._lastBreakPercentage ?? this._initialFlowtimeConfig.breakPercentage)
+      : nextModel.breakPercentage;
+  }
+
+  private _getNextBreakRules(
+    nextModel: FlowtimeFormModel,
+    previousIsBreakEnabled: FlowtimeFormModel['isBreakEnabled'],
+    previousBreakMode: FlowtimeFormModel['breakMode'],
+    breakMode: FlowtimeFormModel['breakMode'],
+  ): FlowtimeBreakRuleInMinutes[] {
+    const nextRules = nextModel.breakRules;
+    const didRuleFieldsVisibilityChange =
+      previousIsBreakEnabled !== nextModel.isBreakEnabled ||
+      previousBreakMode !== breakMode;
+    const isRuleModeVisible = nextModel.isBreakEnabled === true && breakMode === 'rule';
+    const shouldRestoreBreakRules =
+      didRuleFieldsVisibilityChange || this._isRestoringBreakRules;
+
+    if (
+      this._isRestoringBreakRules &&
+      !didRuleFieldsVisibilityChange &&
+      isRuleModeVisible &&
+      (nextRules?.length ?? 0) < this._lastNonEmptyBreakRules.length
+    ) {
+      this._isRestoringBreakRules = false;
+      return nextRules ? this._copyBreakRules(nextRules) : [];
+    }
+
+    const hasRestorableBlankBreakRuleFields =
+      this._hasRestorableBlankBreakRuleFields(nextRules);
+
+    this._isRestoringBreakRules =
+      isRuleModeVisible && shouldRestoreBreakRules && hasRestorableBlankBreakRuleFields;
+
+    if (shouldRestoreBreakRules && hasRestorableBlankBreakRuleFields) {
+      return this._restoreBreakRulesFromLastNonEmpty(nextRules);
+    }
+
+    return !this._isEmptyBreakRules(nextRules)
+      ? this._copyBreakRules(nextRules!)
+      : (nextRules ?? []);
+  }
+
+  private _isEmptyBreakRules(
+    breakRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): boolean {
+    return (
+      !breakRules ||
+      breakRules.length === 0 ||
+      breakRules.every(
+        (rule: FlowtimeBreakRuleInMinutes) =>
+          this._isBlankFormValue(rule.minDuration) &&
+          this._isBlankFormValue(rule.maxDuration) &&
+          this._isBlankFormValue(rule.breakDuration),
+      )
+    );
+  }
+
+  private _isBlankFormValue(value: unknown): boolean {
+    return value == null || value === '';
+  }
+
+  private _hasRestorableBlankBreakRuleFields(
+    breakRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): boolean {
+    const fallbackRules = this._lastNonEmptyBreakRules.length
+      ? this._lastNonEmptyBreakRules
+      : [this._defaultRuleInMinutes];
+
+    return fallbackRules.some((fallbackRule, index) => {
+      const rule = breakRules?.[index];
+
+      return (
+        !rule ||
+        this._isBlankFormValue(rule.minDuration) ||
+        this._isBlankFormValue(rule.breakDuration) ||
+        (fallbackRule.maxDuration !== null && this._isBlankFormValue(rule.maxDuration))
+      );
+    });
+  }
+
+  private _restoreBreakRulesFromLastNonEmpty(
+    nextRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): FlowtimeBreakRuleInMinutes[] {
+    const fallbackRules = this._lastNonEmptyBreakRules.length
+      ? this._lastNonEmptyBreakRules
+      : [this._defaultRuleInMinutes];
+    const rowCount = Math.max(nextRules?.length ?? 0, fallbackRules.length);
+
+    return Array.from({ length: rowCount }, (_, index) => {
+      const nextRule = nextRules?.[index];
+      const fallbackRule =
+        fallbackRules[index] ?? fallbackRules[fallbackRules.length - 1];
+
+      return {
+        minDuration: this._isBlankFormValue(nextRule?.minDuration)
+          ? fallbackRule.minDuration
+          : nextRule!.minDuration,
+        maxDuration: this._isBlankFormValue(nextRule?.maxDuration)
+          ? fallbackRule.maxDuration
+          : nextRule!.maxDuration,
+        breakDuration: this._isBlankFormValue(nextRule?.breakDuration)
+          ? fallbackRule.breakDuration
+          : nextRule!.breakDuration,
+      };
+    });
+  }
+
+  private _hasBreakRuleValueDiff(
+    nextRules: FlowtimeBreakRuleInMinutes[] | undefined,
+    restoredRules: FlowtimeBreakRuleInMinutes[],
+  ): boolean {
+    if ((nextRules?.length ?? 0) !== restoredRules.length) {
+      return true;
+    }
+
+    return restoredRules.some((restoredRule, index) => {
+      const nextRule = nextRules?.[index];
+
+      return (
+        !nextRule ||
+        nextRule.minDuration !== restoredRule.minDuration ||
+        nextRule.maxDuration !== restoredRule.maxDuration ||
+        nextRule.breakDuration !== restoredRule.breakDuration
+      );
+    });
+  }
+
+  private _patchBreakRulesFormValue(breakRules: FlowtimeBreakRuleInMinutes[]): void {
+    const breakRulesControl = this.form.get('breakRules') as AbstractControl | null;
+
+    breakRulesControl?.patchValue(this._copyBreakRules(breakRules), {
+      emitEvent: false,
+    });
+  }
+
+  private _rememberModelState(model: FlowtimeFormModel): void {
+    this._lastIsBreakEnabled = model.isBreakEnabled;
+    this._lastBreakMode = model.breakMode;
+
+    if (!this._isBlankFormValue(model.breakPercentage)) {
+      this._lastBreakPercentage = model.breakPercentage;
+    }
+
+    if (
+      this._isRuleModeVisible(model) &&
+      this._hasCacheableBreakRules(model.breakRules)
+    ) {
+      this._lastNonEmptyBreakRules = this._copyBreakRules(model.breakRules!);
+    }
+  }
+
+  private _isRuleModeVisible(model: FlowtimeFormModel): boolean {
+    return model.isBreakEnabled === true && model.breakMode === 'rule';
+  }
+
+  private _hasCacheableBreakRules(
+    breakRules: FlowtimeBreakRuleInMinutes[] | undefined,
+  ): breakRules is FlowtimeBreakRuleInMinutes[] {
+    return (
+      !!breakRules?.length &&
+      breakRules.every(
+        (rule: FlowtimeBreakRuleInMinutes) =>
+          !this._isBlankFormValue(rule.minDuration) &&
+          !this._isBlankFormValue(rule.breakDuration),
+      )
+    );
+  }
+
+  private _copyBreakRules(
+    breakRules: FlowtimeBreakRuleInMinutes[],
+  ): FlowtimeBreakRuleInMinutes[] {
+    return breakRules.map((rule: FlowtimeBreakRuleInMinutes) => ({ ...rule }));
+  }
+
+  private _toBreakRulesInMinutes(
+    flowtime: Pick<FlowtimeConfig, 'breakRules'>,
+  ): FlowtimeBreakRuleInMinutes[] {
     const breakRulesInMinutes = (flowtime.breakRules ?? []).map(
       (rule: FlowtimeBreakRule) => ({
         minDuration: Math.round(rule.minDuration / 60000),
@@ -210,49 +475,30 @@ export class DialogFlowtimeSettingsComponent {
       }),
     );
 
-    this.model.set({
-      ...flowtime,
-      breakRules:
-        breakRulesInMinutes.length > 0
-          ? breakRulesInMinutes
-          : [{ ...this._defaultRuleInMinutes }],
-    });
+    return breakRulesInMinutes.length > 0
+      ? breakRulesInMinutes
+      : [{ ...this._defaultRuleInMinutes }];
   }
 
-  save(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      return;
-    }
-    const currentModel = this.model();
-    const flowtimeConfig: FlowtimeConfig = {
-      isBreakEnabled: currentModel.isBreakEnabled,
-      breakMode: currentModel.breakMode,
-      breakPercentage: currentModel.breakPercentage,
-      breakRules: [...(currentModel.breakRules ?? [])]
-        .sort((a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0))
-        .map((rule: FlowtimeBreakRuleInMinutes) => {
-          const min = rule.minDuration ?? 0;
+  private _toBreakRulesInMs(
+    breakRules: FlowtimeBreakRuleInMinutes[],
+  ): FlowtimeBreakRule[] {
+    return [...breakRules]
+      .sort((a, b) => (a.minDuration ?? 0) - (b.minDuration ?? 0))
+      .map((rule: FlowtimeBreakRuleInMinutes) => {
+        const min = rule.minDuration ?? 0;
 
-          let max = rule.maxDuration == null ? null : rule.maxDuration;
+        let max = rule.maxDuration == null ? null : rule.maxDuration;
 
-          if (max !== null && max < min) {
-            max = min;
-          }
+        if (max !== null && max < min) {
+          max = min;
+        }
 
-          return {
-            minDuration: Math.round(min * 60000),
-            maxDuration: max === null ? null : Math.round(max * 60000),
-            breakDuration: Math.round((rule.breakDuration ?? 0) * 60000),
-          };
-        }),
-    };
-
-    this._globalConfigService.updateSection('flowtime', flowtimeConfig, true);
-    this._dialogRef.close(flowtimeConfig);
-  }
-
-  close(): void {
-    this._dialogRef.close();
+        return {
+          minDuration: Math.round(min * 60000),
+          maxDuration: max === null ? null : Math.round(max * 60000),
+          breakDuration: Math.round((rule.breakDuration ?? 0) * 60000),
+        };
+      });
   }
 }

@@ -65,6 +65,280 @@ describe('DialogFlowtimeSettingsComponent', () => {
     expect(model.breakRules![0].breakDuration).toBe(5); // 300000 / 60000
   });
 
+  it('should keep mode-specific settings when fields are hidden', () => {
+    const fields = component.fields();
+
+    expect(fields.find((field) => field.key === 'breakMode')?.resetOnHide).toBe(false);
+    expect(fields.find((field) => field.key === 'breakPercentage')?.resetOnHide).toBe(
+      false,
+    );
+    expect(fields.find((field) => field.key === 'breakRules')?.resetOnHide).toBe(false);
+  });
+
+  it('should keep rule fields while switching Rule-based -> Ratio-based -> Rule-based', () => {
+    const initialRules = component.model().breakRules;
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: null as unknown as number,
+          maxDuration: null,
+          breakDuration: null as unknown as number,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
+  it('should keep rule fields when Formly emits blank strings while restoring the rule section', () => {
+    const initialRules = component.model().breakRules;
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: '' as unknown as number,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
+  it('should restore partially blank rule rows while switching back to Rule-based', () => {
+    const initialRules = [
+      { minDuration: 0, maxDuration: 25, breakDuration: 5 },
+      { minDuration: 25, maxDuration: null, breakDuration: 10 },
+    ];
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: initialRules,
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: '' as unknown as number,
+        },
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 10,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
+  it('should keep restoring if Formly emits a delayed partially blank rule payload', () => {
+    const initialRules = [
+      { minDuration: 0, maxDuration: 25, breakDuration: 5 },
+      { minDuration: 25, maxDuration: null, breakDuration: 10 },
+    ];
+
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: initialRules,
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: '' as unknown as number,
+        },
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 10,
+        },
+      ],
+    });
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
+  it('should patch restored partially blank rule values back to the form controls', () => {
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 5,
+        },
+      ],
+    });
+
+    const firstRule = (component.form.get('breakRules') as any).at(0);
+    expect(firstRule.value).toEqual({
+      minDuration: 0,
+      maxDuration: 25,
+      breakDuration: 5,
+    });
+  });
+
+  it('should keep rule fields when Formly mutates the model object while switching modes', () => {
+    fixture.destroy();
+    globalConfigServiceMock.cfg.and.returnValue({
+      flowtime: {
+        isBreakEnabled: false,
+        breakMode: 'ratio',
+        breakPercentage: 20,
+        breakRules: [],
+      },
+    });
+    fixture = TestBed.createComponent(DialogFlowtimeSettingsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const initialRules = component.model().breakRules;
+    const enabledModel = component.model();
+    enabledModel.isBreakEnabled = true;
+    component.updateModel(enabledModel);
+
+    const ruleModel = component.model();
+    ruleModel.breakMode = 'rule';
+    component.updateModel(ruleModel);
+
+    const ratioModel = component.model();
+    ratioModel.breakMode = 'ratio';
+    ratioModel.breakRules = [];
+    component.updateModel(ratioModel);
+
+    const restoredRuleModel = component.model();
+    restoredRuleModel.breakMode = 'rule';
+    restoredRuleModel.breakRules = [
+      {
+        minDuration: '' as unknown as number,
+        maxDuration: '' as unknown as number,
+        breakDuration: '' as unknown as number,
+      },
+    ];
+    component.updateModel(restoredRuleModel);
+
+    expect(component.model().breakRules).toEqual(initialRules);
+  });
+
+  it('should ignore partial hidden rule rows emitted while Ratio-based is visible', () => {
+    fixture.destroy();
+    globalConfigServiceMock.cfg.and.returnValue({
+      flowtime: {
+        isBreakEnabled: false,
+        breakMode: 'ratio',
+        breakPercentage: 20,
+        breakRules: [],
+      },
+    });
+    fixture = TestBed.createComponent(DialogFlowtimeSettingsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const initialRules = component.model().breakRules;
+    const enabledRatioModel = component.model();
+    enabledRatioModel.isBreakEnabled = true;
+    enabledRatioModel.breakRules = [
+      {
+        minDuration: '' as unknown as number,
+        maxDuration: '' as unknown as number,
+        breakDuration: 5,
+      },
+    ];
+    component.updateModel(enabledRatioModel);
+
+    const restoredRuleModel = component.model();
+    restoredRuleModel.breakMode = 'rule';
+    restoredRuleModel.breakRules = [
+      {
+        minDuration: '' as unknown as number,
+        maxDuration: '' as unknown as number,
+        breakDuration: 5,
+      },
+    ];
+    component.updateModel(restoredRuleModel);
+    fixture.detectChanges();
+
+    expect(component.model().breakRules).toEqual(initialRules);
+    const firstRule = (component.form.get('breakRules') as any).at(0);
+    expect(firstRule.value).toEqual(initialRules![0]);
+  });
+
+  it('should allow deleting restored rule rows after switching back to Rule-based', () => {
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'ratio',
+      breakRules: [],
+    });
+    component.updateModel({
+      ...component.model(),
+      breakMode: 'rule',
+      breakRules: [
+        {
+          minDuration: '' as unknown as number,
+          maxDuration: '' as unknown as number,
+          breakDuration: 5,
+        },
+      ],
+    });
+
+    component.updateModel({
+      ...component.model(),
+      breakRules: [],
+    });
+
+    expect(component.model().breakRules).toEqual([]);
+  });
+
   describe('save()', () => {
     it('should convert minutes back to ms and save the config', () => {
       component.save();
@@ -120,6 +394,40 @@ describe('DialogFlowtimeSettingsComponent', () => {
         maxDuration: null,
         breakDuration: 15 * 60000,
       });
+    });
+
+    it('should preserve hidden break settings when Flowtime breaks are disabled', () => {
+      component.model.set({
+        isBreakEnabled: false,
+      });
+
+      component.save();
+      const savedConfig =
+        globalConfigServiceMock.updateSection.calls.mostRecent().args[1];
+      expect(savedConfig).toEqual({
+        isBreakEnabled: false,
+        breakMode: 'rule',
+        breakPercentage: 20,
+        breakRules: [{ minDuration: 0, maxDuration: 1500000, breakDuration: 300000 }],
+      });
+    });
+
+    it('should persist rule edits made before disabling breaks', () => {
+      component.updateModel({
+        ...component.model(),
+        breakRules: [{ minDuration: 0, maxDuration: 30, breakDuration: 10 }],
+      });
+      component.updateModel({
+        ...component.model(),
+        isBreakEnabled: false,
+      });
+
+      component.save();
+      const savedConfig =
+        globalConfigServiceMock.updateSection.calls.mostRecent().args[1];
+      expect(savedConfig.breakRules).toEqual([
+        { minDuration: 0, maxDuration: 30 * 60000, breakDuration: 10 * 60000 },
+      ]);
     });
   });
 
