@@ -332,8 +332,8 @@ export class MainHeaderComponent implements OnDestroy {
         const data = await parseEml(file);
 
         const from = Array.isArray(data.from) ? data.from[0] : data.from;
+        const sender = from?.name || from?.email || '';
 
-        const message = `<from ${email}>:\n${data.subject}`;
         const message = `${sender}: ${data.subject}`;
         this.taskService.add(message);
         // TODO: add attachment to task
