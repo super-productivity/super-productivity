@@ -649,7 +649,6 @@ export class GlobalThemeService {
    */
   private _initVisualViewportKeyboardTracking(): void {
     const vv = window.visualViewport;
-    if (!vv) return;
     const root = this.document.documentElement;
     // Filter out small differences from URL bar / overlay UI rather than the
     // IME — keeps us from setting a phantom keyboard offset.
@@ -665,15 +664,24 @@ export class GlobalThemeService {
     const KEYBOARD_RESIZE_DEBOUNCE_MS = 200;
     let resizeTimer: number | null = null;
 
+    let nativeKeyboardHeight = 0;
+    let baseInnerHeight = window.innerHeight;
+
+    const measureKeyboardHeight = (): number => {
+      const obscured = vv ? window.innerHeight - vv.height : 0;
+      const layoutShrink = Math.max(0, baseInnerHeight - window.innerHeight);
+      const nativeCovered = Math.max(0, nativeKeyboardHeight - layoutShrink);
+      return Math.max(obscured, nativeCovered);
+    };
+
     const commit = (): void => {
-      const obscured = window.innerHeight - vv.height;
-      const keyboardHeight = obscured > KEYBOARD_THRESHOLD_PX ? obscured : 0;
+      const raw = measureKeyboardHeight();
+      const keyboardHeight = raw > KEYBOARD_THRESHOLD_PX ? raw : 0;
       root.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, `${keyboardHeight}px`);
     };
 
-    const onViewportResize = (): void => {
-      const obscured = window.innerHeight - vv.height;
-      if (obscured <= KEYBOARD_THRESHOLD_PX) {
+    const scheduleCommit = (): void => {
+      if (measureKeyboardHeight() <= KEYBOARD_THRESHOLD_PX) {
         if (resizeTimer !== null) {
           window.clearTimeout(resizeTimer);
           resizeTimer = null;
@@ -691,9 +699,31 @@ export class GlobalThemeService {
     };
 
     commit();
-    vv.addEventListener('resize', onViewportResize, { passive: true });
+
+    if (vv) {
+      vv.addEventListener('resize', scheduleCommit, { passive: true });
+    }
+
+    if (IS_ANDROID_WEB_VIEW && androidInterface.keyboardHeightPx$) {
+      androidInterface.keyboardHeightPx$
+        .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
+        .subscribe((physicalPx) => {
+          const cssPx = physicalPx / (window.devicePixelRatio || 1);
+          if (cssPx <= 0) {
+            nativeKeyboardHeight = 0;
+            // Refresh the baseline while the keyboard is closed.
+            baseInnerHeight = window.innerHeight;
+          } else {
+            nativeKeyboardHeight = cssPx;
+          }
+          scheduleCommit();
+        });
+    }
+
     this._destroyRef.onDestroy(() => {
-      vv.removeEventListener('resize', onViewportResize);
+      if (vv) {
+        vv.removeEventListener('resize', scheduleCommit);
+      }
       if (resizeTimer !== null) {
         window.clearTimeout(resizeTimer);
       }
