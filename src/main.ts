@@ -91,7 +91,7 @@ import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
 import { TranslateMatDatepickerIntl } from './app/core/date-time-format/translate-mat-datepicker-intl';
-import { unlockAudioContext } from './app/util/audio-context';
+import { suspendAudioContext, unlockAudioContext } from './app/util/audio-context';
 import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 
 if (environment.production || environment.stage) {
@@ -488,6 +488,9 @@ if (IS_ANDROID_WEB_VIEW) {
     if (isActive) {
       return;
     }
+    // Release the audio output stream so a silent-but-running AudioContext does
+    // not keep the audio hardware (and the process) awake in the background (#8243).
+    suspendAudioContext();
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
         await flushPendingOperations('Android');
@@ -505,6 +508,9 @@ if (IS_IOS_NATIVE) {
     if (isActive) {
       return;
     }
+    // Release the audio output stream so a silent-but-running AudioContext does
+    // not keep the audio hardware (and the process) awake in the background (#8243).
+    suspendAudioContext();
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
         // Dispatch any accumulated tracked time so it is enqueued before the

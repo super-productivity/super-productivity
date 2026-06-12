@@ -1,4 +1,4 @@
-import { ensureAudioContextRunning } from './audio-context';
+import { ensureAudioContextRunning, setAudioContextKeepAwake } from './audio-context';
 
 let activeSource: AudioBufferSourceNode | null = null;
 let activeGain: GainNode | null = null;
@@ -40,10 +40,13 @@ export const startWhiteNoise = async (volume: number): Promise<void> => {
   source.start(0);
   activeSource = source;
   activeGain = gain;
+  // Keep the context running while backgrounded so the focus sound keeps playing.
+  setAudioContextKeepAwake(true);
 };
 
 export const stopWhiteNoise = (): void => {
   startCancelled = true;
+  setAudioContextKeepAwake(false);
   if (activeSource) {
     try {
       activeSource.stop();
