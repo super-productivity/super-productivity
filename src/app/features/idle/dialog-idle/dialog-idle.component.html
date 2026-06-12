@@ -105,12 +105,14 @@
               >
                 <mat-button-toggle
                   value="BREAK"
+                  [aria-label]="T.F.TIME_TRACKING.D_IDLE.BREAK | translate"
                   [matTooltip]="T.F.TIME_TRACKING.D_IDLE.BREAK | translate"
                 >
                   <mat-icon>free_breakfast</mat-icon>
                 </mat-button-toggle>
                 <mat-button-toggle
                   value="TASK"
+                  [aria-label]="T.F.TIME_TRACKING.D_IDLE.TASK | translate"
                   [matTooltip]="T.F.TIME_TRACKING.D_IDLE.TASK | translate"
                 >
                   <mat-icon>track_changes</mat-icon>
@@ -149,6 +151,9 @@
                     mat-icon-button
                     type="button"
                     (click)="assignRemainingTime(item)"
+                    [attr.aria-label]="
+                      T.F.TIME_TRACKING.D_IDLE.USE_REMAINING_TIME | translate
+                    "
                     [matTooltip]="T.F.TIME_TRACKING.D_IDLE.USE_REMAINING_TIME | translate"
                   >
                     <mat-icon>more_time</mat-icon>
@@ -172,6 +177,7 @@
                 type="button"
                 (click)="removeSplitItem(item)"
                 [disabled]="splitItems.length <= 1"
+                [attr.aria-label]="T.G.REMOVE | translate"
                 [matTooltip]="T.G.REMOVE | translate"
               >
                 <mat-icon>close</mat-icon>
@@ -251,18 +257,19 @@
     #simpleCounterBtnTpl
     let-simpleCounterBtn
   >
+    @let simpleCounterLabel =
+      (simpleCounterBtn.isTrackTo
+        ? T.F.TIME_TRACKING.D_IDLE.SIMPLE_COUNTER_TOOLTIP_DISABLE
+        : T.F.TIME_TRACKING.D_IDLE.SIMPLE_COUNTER_TOOLTIP
+      ) | translate: { title: simpleCounterBtn.title };
     <button
       mat-mini-fab
       class="simple-counter"
       type="button"
       (click)="simpleCounterBtn.isTrackTo = !simpleCounterBtn.isTrackTo"
       [class.is-track-to]="simpleCounterBtn.isTrackTo"
-      [matTooltip]="
-        (simpleCounterBtn.isTrackTo
-          ? T.F.TIME_TRACKING.D_IDLE.SIMPLE_COUNTER_TOOLTIP_DISABLE
-          : T.F.TIME_TRACKING.D_IDLE.SIMPLE_COUNTER_TOOLTIP
-        ) | translate: { title: simpleCounterBtn.title }
-      "
+      [attr.aria-label]="simpleCounterLabel"
+      [matTooltip]="simpleCounterLabel"
       [color]="simpleCounterBtn.isTrackTo ? 'primary' : ''"
     >
       <mat-icon>{{ simpleCounterBtn.icon }}</mat-icon>

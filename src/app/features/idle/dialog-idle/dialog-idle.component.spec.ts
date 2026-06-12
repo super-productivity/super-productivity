@@ -17,9 +17,13 @@ import {
 } from '../../work-context/store/work-context.selectors';
 import { selectAllProjects } from '../../project/store/project.selectors';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
 
 describe('DialogIdleComponent', () => {
   let dialogRefSpy: jasmine.SpyObj<MatDialogRef<DialogIdleComponent>>;
+
+  // selectMode() persists the choice, so reset it to keep tests independent
+  beforeEach(() => localStorage.removeItem(LS.LAST_IDLE_DIALOG_MODE));
 
   const FAKE_TASK = { id: 'LAST_TASK_ID', title: 'Last task' } as Task;
   const IDLE_TIME = 19 * 60 * 1000;
@@ -84,6 +88,33 @@ describe('DialogIdleComponent', () => {
       expect(c.mode).toBe('TASK');
       expect(c.selectedTask).toEqual(FAKE_TASK);
       expect(c.isConfirmEnabled).toBeTrue();
+    });
+  });
+
+  describe('remembered mode', () => {
+    it('should persist the selected mode', () => {
+      const c = setup();
+      c.selectMode('BREAK');
+      expect(localStorage.getItem(LS.LAST_IDLE_DIALOG_MODE)).toBe('BREAK');
+    });
+
+    it('should preselect the remembered mode when there is no last task', () => {
+      localStorage.setItem(LS.LAST_IDLE_DIALOG_MODE, 'SPLIT');
+      const c = setup();
+      expect(c.mode).toBe('SPLIT');
+      expect(c.splitItems.length).toBe(2);
+    });
+
+    it('should let a live current task override the remembered mode', () => {
+      localStorage.setItem(LS.LAST_IDLE_DIALOG_MODE, 'BREAK');
+      const c = setup({ lastCurrentTaskId: 'LAST_TASK_ID' });
+      expect(c.mode).toBe('TASK');
+    });
+
+    it('should ignore an invalid stored value', () => {
+      localStorage.setItem(LS.LAST_IDLE_DIALOG_MODE, 'NONSENSE');
+      const c = setup();
+      expect(c.mode).toBeNull();
     });
   });
 

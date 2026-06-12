@@ -46,6 +46,9 @@ export enum LS {
 
   LAST_FULLSCREEN_EDIT_VIEW_MODE = 'SUP_LAST_FULLSCREEN_EDIT_VIEW_MODE',
 
+  // Remembers the last-used idle-dialog mode so it pre-selects next time
+  LAST_IDLE_DIALOG_MODE = 'SUP_LAST_IDLE_DIALOG_MODE',
+
   WEB_APP_INSTALL = 'WEB_APP_INSTALL',
 
   IS_ADD_TO_BOTTOM = 'SUP_IS_ADD_TO_BOTTOM',

@@ -22,6 +22,7 @@ import { IS_ELECTRON } from '../../../app.constants';
 import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import { Store } from '@ngrx/store';
 import { selectIdleTime } from '../store/idle.selectors';
+import { LS } from '../../../core/persistence/storage-keys.const';
 import {
   DialogIdlePassedData,
   DialogIdleReturnData,
@@ -130,7 +131,13 @@ export class DialogIdleComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     if (this.data.lastCurrentTaskId) {
+      // a live current task is a stronger signal than the remembered choice
       this.mode = 'TASK';
+    } else {
+      const lastMode = localStorage.getItem(LS.LAST_IDLE_DIALOG_MODE);
+      if (lastMode === 'BREAK' || lastMode === 'TASK' || lastMode === 'SPLIT') {
+        this.selectMode(lastMode);
+      }
     }
 
     this._subs.add(
@@ -152,6 +159,7 @@ export class DialogIdleComponent implements OnInit, OnDestroy {
 
   selectMode(mode: IdleDialogMode): void {
     this.mode = mode;
+    localStorage.setItem(LS.LAST_IDLE_DIALOG_MODE, mode);
     // re-seed as long as no time has been entered yet, so a task selected or
     // counter toggled after an earlier SPLIT visit is reflected on re-entry
     if (mode === 'SPLIT' && this.splitItems.every((item) => !item.time)) {
