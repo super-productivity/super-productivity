@@ -1,8 +1,4 @@
-import {
-  ensureAudioContextRunning,
-  setAudioContextKeepAwake,
-  suspendAudioContext,
-} from './audio-context';
+import { ensureAudioContextRunning, setAudioContextKeepAwake } from './audio-context';
 
 let activeSource: AudioBufferSourceNode | null = null;
 let activeGain: GainNode | null = null;
@@ -64,10 +60,9 @@ export const stopWhiteNoise = (): void => {
     activeGain.disconnect();
     activeGain = null;
   }
-  // The only long-lived background sound is gone, so release the audio output
-  // stream right away. We may be backgrounded (focus session ended while the app
-  // was away), where appStateChange won't fire another suspend; the next playback
-  // lazily resumes the context. Without this the silent-but-running context keeps
-  // draining until the next foreground/background cycle (#8243).
-  suspendAudioContext();
+  // NOTE: intentionally does NOT suspend the AudioContext here. stopWhiteNoise()
+  // runs (via the whiteNoiseSound$ selector effect) right as a session completes,
+  // racing the session-done chime (playSound) on the shared context — suspending
+  // would cut the chime off. The context is released instead by the appStateChange
+  // background handler in main.ts (#8243).
 };
