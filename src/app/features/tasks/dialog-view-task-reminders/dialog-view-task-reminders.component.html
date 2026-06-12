@@ -42,76 +42,78 @@
     }
   </mat-dialog-content>
   <mat-dialog-actions align="end">
-    <div class="wrap-buttons">
-      <button
-        (dblclick)="snoozeAll(10)"
-        [disabled]="isDisableControls"
-        [matMenuTriggerFor]="snoozeAllMenu"
-        color="primary"
-        mat-button
-        type="button"
-      >
-        <mat-icon>snooze</mat-icon>
-        {{
-          (isMultiple
-            ? T.F.TASK.D_REMINDER_VIEW.SNOOZE_ALL
-            : T.F.TASK.D_REMINDER_VIEW.SNOOZE
-          ) | translate
-        }}
-      </button>
+    <div class="footer-wrapper">
       @if (isMultiple) {
-        <button
-          (click)="markAllAsDone()"
-          [disabled]="isDisableControls"
-          mat-button
-          color="primary"
-          type="button"
-        >
-          <mat-icon>check</mat-icon>
-          {{ T.F.TASK.D_REMINDER_VIEW.COMPLETE_ALL | translate }}
-        </button>
+        <div class="bulk-actions-header">
+          {{ T.F.TASK.D_REMINDER_VIEW.OR_DIRECTLY_FOR_ALL | translate }}
+        </div>
       }
-      @if (!isMultiple) {
+      <div class="wrap-buttons">
         <button
-          (click)="markSingleAsDone()"
+          (dblclick)="snoozeAll(10)"
           [disabled]="isDisableControls"
+          [matMenuTriggerFor]="snoozeAllMenu"
           color="primary"
           mat-stroked-button
           type="button"
         >
-          <mat-icon>check</mat-icon>
-          {{ T.F.TASK.D_REMINDER_VIEW.DONE | translate }}
+          <mat-icon>snooze</mat-icon>
+          {{ T.F.TASK.D_REMINDER_VIEW.SNOOZE | translate }}
         </button>
-      }
-      @if (!(isSingleOnToday$ | async)) {
-        <button
-          (click)="addAllToToday()"
-          [disabled]="isDisableControls"
-          color="primary"
-          mat-stroked-button
-          type="button"
-        >
-          <mat-icon>wb_sunny</mat-icon>
-          {{
-            (isMultiple
-              ? T.F.TASK.D_REMINDER_VIEW.ADD_ALL_TO_TODAY
-              : T.F.TASK.D_REMINDER_VIEW.ADD_TO_TODAY
-            ) | translate
-          }}
-        </button>
-      }
-      @if (!isMultiple || (isSingleOnToday$ | async)) {
-        <button
-          (click)="play()"
-          [disabled]="isDisableControls"
-          color="primary"
-          mat-stroked-button
-          type="button"
-        >
-          <mat-icon>play_arrow</mat-icon>
-          {{ T.F.TASK.D_REMINDER_VIEW.START | translate }}
-        </button>
-      }
+        @if (isMultiple) {
+          <button
+            (click)="markAllAsDone()"
+            [disabled]="isDisableControls"
+            mat-stroked-button
+            color="primary"
+            type="button"
+          >
+            <mat-icon>check</mat-icon>
+            {{ T.F.TASK.D_REMINDER_VIEW.COMPLETE | translate }}
+          </button>
+        }
+        @if (!isMultiple) {
+          <button
+            (click)="markSingleAsDone()"
+            [disabled]="isDisableControls"
+            color="primary"
+            mat-stroked-button
+            type="button"
+          >
+            <mat-icon>check</mat-icon>
+            {{ T.F.TASK.D_REMINDER_VIEW.DONE | translate }}
+          </button>
+        }
+        @if (!(isSingleOnToday$ | async)) {
+          <button
+            (click)="addAllToToday()"
+            [disabled]="isDisableControls"
+            color="primary"
+            mat-stroked-button
+            type="button"
+          >
+            <mat-icon>wb_sunny</mat-icon>
+            {{
+              (isMultiple
+                ? T.F.TASK.D_REMINDER_VIEW.SCHEDULE_FOR_TODAY
+                : T.F.TASK.D_REMINDER_VIEW.ADD_TO_TODAY
+              ) | translate
+            }}
+          </button>
+        }
+        @if (!isMultiple || (isSingleOnToday$ | async)) {
+          <button
+            (click)="play()"
+            [disabled]="isDisableControls"
+            color="primary"
+            mat-stroked-button
+            type="button"
+          >
+            <mat-icon>play_arrow</mat-icon>
+            {{ T.F.TASK.D_REMINDER_VIEW.START | translate }}
+          </button>
+        }
+      </div>
     </div>
   </mat-dialog-actions>
   <mat-menu #snoozeAllMenu="matMenu">
