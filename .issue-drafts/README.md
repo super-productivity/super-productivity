@@ -1,6 +1,15 @@
 # Architecture issue drafts
 
-Six issue drafts produced from the 2026-06 architecture review. Each file contains a
+Six issue drafts produced from the 2026-06 architecture review.
+
+**Posted 2026-06-12:** 01 → [#8296](https://github.com/super-productivity/super-productivity/issues/8296),
+02 → [#8297](https://github.com/super-productivity/super-productivity/issues/8297),
+03 → [#8298](https://github.com/super-productivity/super-productivity/issues/8298),
+04 → [#8299](https://github.com/super-productivity/super-productivity/issues/8299),
+05 → [#8300](https://github.com/super-productivity/super-productivity/issues/8300),
+06 → [#8301](https://github.com/super-productivity/super-productivity/issues/8301) (umbrella, cross-links the rest).
+Issue bodies contain the issue draft + implementation plan; the verification notes
+below each draft remain only in these files. Each file contains a
 self-contained GitHub issue body (`## Issue draft (for GitHub)`), a phased
 implementation plan, and verification notes documenting which review claims were
 confirmed, corrected, or dropped against the working tree.
