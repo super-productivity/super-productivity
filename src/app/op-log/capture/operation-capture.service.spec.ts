@@ -1,6 +1,9 @@
+import { TestBed } from '@angular/core/testing';
 import { OperationCaptureService } from './operation-capture.service';
 import { OpType, EntityType } from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 
 describe('OperationCaptureService', () => {
   let service: OperationCaptureService;
@@ -264,6 +267,51 @@ describe('OperationCaptureService', () => {
       const pending = service.peekPendingOperations();
       expect(pending.length).toBe(1);
       expect(service.getQueueSize()).toBe(1); // Still in queue
+    });
+  });
+
+  describe('notifyDeferredActionsDropped', () => {
+    let mockSnackService: jasmine.SpyObj<SnackService>;
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
+      TestBed.configureTestingModule({
+        providers: [{ provide: SnackService, useValue: mockSnackService }],
+      });
+    });
+
+    afterEach(() => {
+      jasmine.clock().uninstall();
+    });
+
+    it('should open a sticky ERROR snack, deferred out of the reducer call stack', () => {
+      // Created via DI so the service picks up the injection context
+      const serviceWithInjector = TestBed.inject(OperationCaptureService);
+
+      serviceWithInjector.notifyDeferredActionsDropped('[TaskShared] Update Task', 1);
+
+      // Must NOT open synchronously - the call originates inside a reducer pass
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+
+      jasmine.clock().tick(0);
+
+      expect(mockSnackService.open).toHaveBeenCalledTimes(1);
+      const cfg = mockSnackService.open.calls.mostRecent().args[0] as {
+        type: string;
+        msg: string;
+        config: { duration: number };
+      };
+      expect(cfg.type).toBe('ERROR');
+      expect(cfg.msg).toBe(T.F.SYNC.S.DEFERRED_ACTIONS_DROPPED);
+      expect(cfg.config.duration).toBe(0);
+    });
+
+    it('should not throw when constructed without an injector', () => {
+      expect(() =>
+        service.notifyDeferredActionsDropped('[TaskShared] Update Task', 1),
+      ).not.toThrow();
+      jasmine.clock().tick(0);
     });
   });
 });

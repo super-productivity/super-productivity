@@ -1,7 +1,9 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
 import { EntityChange, OpType } from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { OpLog } from '../../core/log';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 
 /**
  * Captures action payloads and queues them for persistence using a simple FIFO queue.
@@ -27,6 +29,21 @@ import { OpLog } from '../../core/log';
   providedIn: 'root',
 })
 export class OperationCaptureService {
+  /**
+   * Used to resolve SnackService lazily — this service is instantiated in an
+   * APP_INITIALIZER, before the snack/translate stack should be pulled in.
+   * Falls back to null when constructed outside an injection context (several
+   * specs use `new OperationCaptureService()`); notification then degrades to
+   * log-only.
+   */
+  private readonly _injector: Injector | null = (() => {
+    try {
+      return inject(Injector);
+    } catch {
+      return null;
+    }
+  })();
+
   /**
    * Warning threshold for queue size.
    * If effects fail to dequeue, we log a warning.
@@ -123,6 +140,48 @@ export class OperationCaptureService {
   clear(): void {
     this.queue = [];
     this.hasWarnedAboutQueueSize = false;
+  }
+
+  /**
+   * Notifies the user that deferred actions were dropped from the buffer.
+   * Called (at most once per sync window) by the operation-capture meta-reducer
+   * when the deferred-action buffer overflows: the dropped change is on screen
+   * but will never be written as an operation, so it silently diverges across
+   * devices and may be lost on the next hydration. The user's only recovery is
+   * a reload, hence the sticky error snack.
+   *
+   * Logs action type and count only — never payloads/user content (rule 9).
+   */
+  notifyDeferredActionsDropped(
+    droppedActionType: string,
+    droppedCountInWindow: number,
+  ): void {
+    OpLog.err(
+      'OperationCaptureService: Deferred action(s) dropped during sync window - data loss',
+      { droppedActionType, droppedCountInWindow },
+    );
+
+    const injector = this._injector;
+    if (!injector) {
+      return;
+    }
+
+    // Defer out of the reducer call stack: this method is invoked synchronously
+    // from within a reducer pass, and opening a Material snackbar (change
+    // detection, possible follow-up dispatches) inside a reducer is unsafe.
+    setTimeout(() => {
+      injector.get(SnackService).open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.DEFERRED_ACTIONS_DROPPED,
+        actionStr: T.PS.RELOAD,
+        actionFn: (): void => {
+          window.location.reload();
+        },
+        config: {
+          duration: 0, // Sticky - data loss requires user action
+        },
+      });
+    });
   }
 
   /**

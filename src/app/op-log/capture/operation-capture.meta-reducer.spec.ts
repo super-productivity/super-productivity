@@ -7,6 +7,7 @@ import {
   bufferDeferredAction,
   getDeferredActions,
   clearDeferredActions,
+  MAX_DEFERRED_ACTIONS_HARD_LIMIT,
 } from './operation-capture.meta-reducer';
 import { OperationCaptureService } from './operation-capture.service';
 import { Action } from '@ngrx/store';
@@ -56,6 +57,7 @@ describe('operationCaptureMetaReducer', () => {
       'dequeue',
       'getQueueSize',
       'clear',
+      'notifyDeferredActionsDropped',
     ]);
 
     mockReducer = jasmine.createSpy('reducer').and.returnValue(mockModifiedState);
@@ -267,6 +269,99 @@ describe('operationCaptureMetaReducer', () => {
         clearDeferredActions();
 
         expect(getDeferredActions()).toEqual([]);
+      });
+    });
+
+    describe('buffer overflow', () => {
+      beforeEach(() => {
+        // devError fires native dialogs in non-production builds; stub them so
+        // filling the buffer past the warning threshold stays silent and never
+        // throws (the global test.ts stub returns true for confirm, which would
+        // make devError throw). alert/confirm may already be spies from test.ts.
+        if (!jasmine.isSpy(window.alert)) {
+          spyOn(window, 'alert');
+        }
+        if (jasmine.isSpy(window.confirm)) {
+          (window.confirm as jasmine.Spy).and.returnValue(false);
+        } else {
+          spyOn(window, 'confirm').and.returnValue(false);
+        }
+      });
+
+      const fillBufferToLimit = (): PersistentAction[] => {
+        const actions: PersistentAction[] = [];
+        for (let i = 0; i < MAX_DEFERRED_ACTIONS_HARD_LIMIT; i++) {
+          const action = createMockAction({ type: `[TaskShared] Update Task ${i}` });
+          actions.push(action);
+          bufferDeferredAction(action);
+        }
+        return actions;
+      };
+
+      it('should drop the oldest action and keep the newest when over the limit', () => {
+        const initial = fillBufferToLimit();
+        const overflowAction = createMockAction({ type: '[TaskShared] Overflow' });
+
+        bufferDeferredAction(overflowAction);
+
+        const buffered = getDeferredActions();
+        expect(buffered.length).toBe(MAX_DEFERRED_ACTIONS_HARD_LIMIT);
+        expect(buffered[0]).toBe(initial[1]);
+        expect(buffered[buffered.length - 1]).toBe(overflowAction);
+      });
+
+      it('should NOT notify below the limit', () => {
+        fillBufferToLimit();
+
+        expect(mockCaptureService.notifyDeferredActionsDropped).not.toHaveBeenCalled();
+      });
+
+      it('should notify exactly once per window with dropped type and count', () => {
+        const initial = fillBufferToLimit();
+
+        bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow 1' }));
+        bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow 2' }));
+        bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow 3' }));
+
+        expect(mockCaptureService.notifyDeferredActionsDropped).toHaveBeenCalledTimes(1);
+        expect(mockCaptureService.notifyDeferredActionsDropped).toHaveBeenCalledWith(
+          initial[0].type,
+          1,
+        );
+      });
+
+      it('should notify again after the buffer is consumed (new window)', () => {
+        fillBufferToLimit();
+        bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow 1' }));
+        expect(mockCaptureService.notifyDeferredActionsDropped).toHaveBeenCalledTimes(1);
+
+        // Consuming the buffer ends the window and resets the notification flag
+        getDeferredActions();
+
+        fillBufferToLimit();
+        bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow 2' }));
+        expect(mockCaptureService.notifyDeferredActionsDropped).toHaveBeenCalledTimes(2);
+      });
+
+      it('should reset the notification flag on clearDeferredActions', () => {
+        fillBufferToLimit();
+        bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow 1' }));
+        expect(mockCaptureService.notifyDeferredActionsDropped).toHaveBeenCalledTimes(1);
+
+        clearDeferredActions();
+
+        fillBufferToLimit();
+        bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow 2' }));
+        expect(mockCaptureService.notifyDeferredActionsDropped).toHaveBeenCalledTimes(2);
+      });
+
+      it('should not throw when no capture service is set', () => {
+        setOperationCaptureService(null as any);
+        fillBufferToLimit();
+
+        expect(() =>
+          bufferDeferredAction(createMockAction({ type: '[TaskShared] Overflow' })),
+        ).not.toThrow();
       });
     });
   });

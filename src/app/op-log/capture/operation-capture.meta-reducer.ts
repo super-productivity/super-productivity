@@ -141,8 +141,26 @@ const MAX_DEFERRED_ACTIONS_WARNING = 10;
 /**
  * Hard limit for deferred actions buffer.
  * If reached, oldest actions are dropped to prevent unbounded memory growth.
+ *
+ * Buffered actions are small plain objects, so the memory cost of a large cap is
+ * negligible. A healthy apply window is sub-second and per-second tracking ticks
+ * are not persistent actions, so reaching this limit in practice means the apply
+ * window is stuck — an error condition that is reported loudly (see
+ * notifyDeferredActionsDropped), not a normal-load scenario to size for.
  */
-const MAX_DEFERRED_ACTIONS_HARD_LIMIT = 100;
+export const MAX_DEFERRED_ACTIONS_HARD_LIMIT = 1000;
+
+/**
+ * Number of actions dropped from the buffer during the current sync window.
+ * Reset when the buffer is consumed (getDeferredActions) or cleared.
+ */
+let droppedActionsInWindowCount = 0;
+
+/**
+ * Ensures the user-facing drop notification fires at most once per sync window.
+ * Reset when the buffer is consumed (getDeferredActions) or cleared.
+ */
+let hasNotifiedDropInWindow = false;
 
 /**
  * Buffers an action for processing after sync completes.
@@ -152,14 +170,30 @@ export const bufferDeferredAction = (action: PersistentAction): void => {
   // Hard limit: drop oldest action if buffer is full (sync stuck scenario).
   // NOTE: The shifted action remains in deferredActionSet (WeakSet has no delete-by-value).
   // The effect filters it via isDeferredAction(), and getDeferredActions() won't return it,
-  // so it is silently lost. This is acceptable: the hard limit is itself an error condition
-  // (sync stuck), and dropping the oldest action is the lesser evil vs unbounded growth.
+  // so it is permanently lost. The inner reducer has already applied it to local state,
+  // so a drop means on-screen state with no operation behind it — report it loudly.
   if (deferredActions.length >= MAX_DEFERRED_ACTIONS_HARD_LIMIT) {
+    const dropped = deferredActions.shift();
+    droppedActionsInWindowCount++;
+    // Rule 9: log action type and count only, never payloads/user content.
+    OpLog.err(
+      `operationCaptureMetaReducer: Deferred actions buffer exceeded ${MAX_DEFERRED_ACTIONS_HARD_LIMIT} items - dropping oldest action`,
+      {
+        droppedActionType: dropped?.type,
+        droppedCountInWindow: droppedActionsInWindowCount,
+      },
+    );
     devError(
       `[operationCaptureMetaReducer] Deferred actions buffer exceeded ${MAX_DEFERRED_ACTIONS_HARD_LIMIT} items. ` +
         `Dropping oldest action. Sync may be stuck - consider reloading the app.`,
     );
-    deferredActions.shift();
+    if (!hasNotifiedDropInWindow) {
+      hasNotifiedDropInWindow = true;
+      operationCaptureService?.notifyDeferredActionsDropped(
+        dropped?.type ?? 'unknown',
+        droppedActionsInWindowCount,
+      );
+    }
   }
 
   deferredActions.push(action);
@@ -180,6 +214,8 @@ export const bufferDeferredAction = (action: PersistentAction): void => {
 export const getDeferredActions = (): PersistentAction[] => {
   const actions = deferredActions;
   deferredActions = [];
+  droppedActionsInWindowCount = 0;
+  hasNotifiedDropInWindow = false;
   return actions;
 };
 
@@ -194,6 +230,8 @@ export const getDeferredActions = (): PersistentAction[] => {
  */
 export const clearDeferredActions = (): void => {
   deferredActions = [];
+  droppedActionsInWindowCount = 0;
+  hasNotifiedDropInWindow = false;
 };
 
 /**

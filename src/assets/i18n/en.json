@@ -1522,6 +1522,7 @@
         "DATA_REPAIRED": "Sync cleanup: {{count}} reference(s) resolved",
         "DECRYPTION_FAILED": "Failed to decrypt synced data. Please check your encryption password.",
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved. Please reload to recover.",
+        "DEFERRED_ACTIONS_DROPPED": "Sync is taking unusually long and some recent changes could not be recorded. Please reload the app to avoid losing data.",
         "DIALOG_RESULT_ERROR": "An error occurred while processing the sync dialog. Please try again.",
         "DISABLE_ENCRYPTION_FAILED": "Failed to disable encryption: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Failed to enable encryption: {{message}}",
