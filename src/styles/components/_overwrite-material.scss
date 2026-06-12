@@ -194,6 +194,38 @@ body.isNativeMobile .project-complete-fullscreen-dialog {
 // --------
 .mat-mdc-form-field {
   margin-bottom: var(--s2);
+
+  // Targets default filled text boxes to transform them into hovering containers
+  .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    background: var(--task-detail-bg) !important;
+    border-radius: var(--card-border-radius) !important;
+    box-shadow: var(--whiteframe-shadow-1dp) !important;
+    border: 1px solid transparent !important;
+    transition:
+      background var(--transition-duration-s) ease-out,
+      border-color var(--transition-duration-s) ease-out,
+      box-shadow var(--transition-duration-s) ease-out !important;
+
+    // Hides the standard material underline active indicator ripple
+    .mdc-line-ripple,
+    &::before,
+    &::after {
+      display: none !important;
+    }
+
+    &:hover {
+      background: var(--task-detail-bg-hover) !important;
+    }
+  }
+
+  // Active / Focus state
+  &.mat-focused .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    background: var(--task-detail-bg-hover) !important;
+    border-color: var(--focus-ring-color) !important;
+    box-shadow:
+      var(--whiteframe-shadow-1dp),
+      0 0 0 1px var(--focus-ring-color) !important;
+  }
 }
 
 // needs to be global cause of cdk overlay
