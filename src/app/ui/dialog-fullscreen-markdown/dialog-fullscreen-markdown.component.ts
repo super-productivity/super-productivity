@@ -210,16 +210,16 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
         this.onApplyStrikethrough();
         break;
       case 'bullet':
-        this.onApplyBulletList(true);
+        this.onApplyBulletList();
         break;
       case 'numbered':
-        this.onApplyNumberedList(true);
+        this.onApplyNumberedList();
         break;
       case 'code':
         this.onApplyInlineCode();
         break;
       case 'quote':
-        this.onApplyQuote(true);
+        this.onApplyQuote();
         break;
     }
   }
@@ -361,16 +361,16 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     );
   }
 
-  onApplyQuote(isKeyboard = false): void {
-    this._applyTransformWithArgs(applyQuote, isKeyboard);
+  onApplyQuote(): void {
+    this._applyTransformWithArgs(applyQuote);
   }
 
-  onApplyBulletList(isKeyboard = false): void {
-    this._applyTransformWithArgs(applyBulletList, isKeyboard);
+  onApplyBulletList(): void {
+    this._applyTransformWithArgs(applyBulletList);
   }
 
-  onApplyNumberedList(isKeyboard = false): void {
-    this._applyTransformWithArgs(applyNumberedList, isKeyboard);
+  onApplyNumberedList(): void {
+    this._applyTransformWithArgs(applyNumberedList);
   }
 
   onApplyTaskList(): void {
@@ -399,7 +399,6 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
   private _applyTransformWithArgs(
     transformFn: (text: string, start: number, end: number) => TextTransformResult,
-    isKeyboard = false,
   ): void {
     const textarea = this.textareaEl()?.nativeElement;
     if (!textarea) {
@@ -415,11 +414,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     // Wait for Angular to update the DOM after ngModel change before restoring selection
     setTimeout(() => {
       textarea.focus();
-      if (!isKeyboard) {
-        textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
-      } else {
-        textarea.setSelectionRange(result.selectionEnd, result.selectionEnd);
-      }
+      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
     });
   }
 }

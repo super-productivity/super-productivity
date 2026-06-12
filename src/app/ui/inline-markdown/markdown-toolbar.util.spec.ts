@@ -138,6 +138,22 @@ describe('markdown-toolbar.util', () => {
       const result = applyQuote('line one\nline two', 0, 17);
       expect(result.text).toBe('> line one\n> line two');
     });
+
+    it('collapses caret when input selection is collapsed', () => {
+      const result = applyQuote('some text', 4, 4);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+    });
+
+    it('preserves transformed block selection when input has a range', () => {
+      const result = applyQuote('some text', 0, 9);
+      expect(result.selectionStart).toBeLessThan(result.selectionEnd);
+    });
+
+    it('moves caret back when removing prefix with collapsed selection', () => {
+      const result = applyQuote('> some text', 5, 5);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+      expect(result.selectionStart).toBeLessThan(5);
+    });
   });
 
   describe('applyBulletList', () => {
@@ -159,6 +175,28 @@ describe('markdown-toolbar.util', () => {
     it('should convert task list to bullet list', () => {
       const result = applyBulletList('- [ ] hello world', 0, 17);
       expect(result.text).toBe('- hello world');
+    });
+
+    it('collapses caret when input selection is collapsed', () => {
+      const result = applyBulletList('item one', 4, 4);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+    });
+
+    it('preserves transformed block selection when input has a range', () => {
+      const result = applyBulletList('item one', 0, 8);
+      expect(result.selectionStart).toBeLessThan(result.selectionEnd);
+    });
+
+    it('moves caret back when removing prefix with collapsed selection', () => {
+      const result = applyBulletList('- item one', 4, 4);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+      expect(result.selectionStart).toBeLessThan(4);
+    });
+
+    it('does not produce a negative caret position when removing prefix at position 0', () => {
+      const result = applyBulletList('- item', 0, 0);
+      expect(result.selectionStart).toBe(0);
+      expect(result.selectionEnd).toBe(0);
     });
   });
 
@@ -182,6 +220,21 @@ describe('markdown-toolbar.util', () => {
       const result = applyNumberedList('- hello', 0, 7);
       expect(result.text).toBe('1. hello');
     });
+    it('collapses caret when input selection is collapsed', () => {
+      const result = applyNumberedList('item one', 4, 4);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+    });
+
+    it('preserves transformed block selection when input has a range', () => {
+      const result = applyNumberedList('item one', 0, 8);
+      expect(result.selectionStart).toBeLessThan(result.selectionEnd);
+    });
+
+    it('moves caret back when removing prefix with collapsed selection', () => {
+      const result = applyNumberedList('1. item one', 5, 5);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+      expect(result.selectionStart).toBeLessThan(5);
+    });
   });
 
   describe('applyTaskList', () => {
@@ -203,6 +256,28 @@ describe('markdown-toolbar.util', () => {
     it('should convert numbered list to task list', () => {
       const result = applyTaskList('1. hello world', 0, 14);
       expect(result.text).toBe('- [ ] hello world');
+    });
+
+    it('collapses caret when input selection is collapsed', () => {
+      const result = applyTaskList('item one', 4, 4);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+    });
+
+    it('preserves transformed block selection when input has a range', () => {
+      const result = applyTaskList('item one', 0, 8);
+      expect(result.selectionStart).toBeLessThan(result.selectionEnd);
+    });
+
+    it('moves caret back when removing prefix with collapsed selection', () => {
+      const result = applyTaskList('- [ ] item', 5, 5);
+      expect(result.selectionStart).toEqual(result.selectionEnd);
+      expect(result.selectionStart).toBeLessThan(5);
+    });
+
+    it('does not produce a negative caret position when removing prefix at position 0', () => {
+      const result = applyTaskList('- [ ] item', 0, 0);
+      expect(result.selectionStart).toBe(0);
+      expect(result.selectionEnd).toBe(0);
     });
   });
 

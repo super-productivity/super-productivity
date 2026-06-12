@@ -351,43 +351,4 @@ describe('DialogFullscreenMarkdownComponent', () => {
       expect(shortcutLabels.bullet.keys).toEqual([MOD, 'Shift', '8']);
     });
   });
-
-  describe('caret placement after transform', () => {
-    let mockTextarea: HTMLTextAreaElement;
-
-    beforeEach(() => {
-      mockTextarea = document.createElement('textarea');
-      mockTextarea.value = 'item one';
-      mockTextarea.selectionStart = 0;
-      mockTextarea.selectionEnd = 8;
-
-      spyOn(component, 'textareaEl').and.returnValue({
-        nativeElement: mockTextarea,
-      } as any);
-    });
-
-    it('toolbar call (isKeyboard=false) preserves a selection range', fakeAsync(() => {
-      spyOn(mockTextarea, 'setSelectionRange').and.callThrough();
-
-      component.onApplyBulletList(false);
-      tick();
-
-      const [start, end] = (
-        mockTextarea.setSelectionRange as jasmine.Spy
-      ).calls.mostRecent().args;
-      expect(start).toBeLessThan(end);
-    }));
-
-    it('keyboard call (isKeyboard=true) collapses caret to end', fakeAsync(() => {
-      spyOn(mockTextarea, 'setSelectionRange').and.callThrough();
-
-      component.onApplyBulletList(true);
-      tick();
-
-      const [start, end] = (
-        mockTextarea.setSelectionRange as jasmine.Spy
-      ).calls.mostRecent().args;
-      expect(start).toEqual(end);
-    }));
-  });
 });
