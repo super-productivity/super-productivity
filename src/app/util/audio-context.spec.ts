@@ -427,6 +427,20 @@ describe('audio-context', () => {
 
       expect(suspend).toHaveBeenCalled();
     });
+
+    it('should re-allow suspend after closeAudioContext resets keep-awake', () => {
+      mockRunningContext();
+      getAudioContext();
+      setAudioContextKeepAwake(true);
+      closeAudioContext();
+
+      // Fresh running context after teardown; keep-awake must no longer block.
+      const { suspend } = mockRunningContext();
+      getAudioContext();
+      suspendAudioContext();
+
+      expect(suspend).toHaveBeenCalled();
+    });
   });
 
   describe('closeAudioContext', () => {

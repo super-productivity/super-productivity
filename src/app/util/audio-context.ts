@@ -101,9 +101,13 @@ export const playBuffer = async (
  * Marks (or clears) a need to keep the AudioContext running even while the app is
  * backgrounded. Used by long-lived background audio such as the focus-mode white
  * noise so that suspendAudioContext() does not cut it off mid-playback.
+ *
+ * Single-owner: white noise is currently the only caller. If a second long-lived
+ * background sound is ever added, replace this boolean with a reference count so
+ * one source clearing the flag cannot release another's.
  */
-export const setAudioContextKeepAwake = (value: boolean): void => {
-  keepAwake = value;
+export const setAudioContextKeepAwake = (keep: boolean): void => {
+  keepAwake = keep;
 };
 
 /**
