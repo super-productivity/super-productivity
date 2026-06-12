@@ -1813,8 +1813,8 @@
         "SNOOZE_ALL": "Alle schlummern lassen",
         "START": "Start",
         "TASK_REMINDERS": "Aufgaben-Erinnerungen",
-        "UNSCHEDULE": "Ablegen",
-        "UNSCHEDULE_ALL": "Alle ablegen"
+        "UNSCHEDULE": "Planung aufheben",
+        "UNSCHEDULE_ALL": "Alle Planungen aufheben"
       },
       "D_SCHEDULE_TASK": {
         "INFO_OUTSIDE_WORK_HOURS": "Falls outside your configured work hours.",
