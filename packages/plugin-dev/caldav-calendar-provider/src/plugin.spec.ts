@@ -1391,8 +1391,14 @@ END:VCALENDAR</cal:calendar-data>
           http as any,
         ),
       ).rejects.toThrow();
-      const calledUrls = http.request.mock.calls.map((c: unknown[]) => c[1]);
-      expect(calledUrls.some((u: string) => u.includes('evil.example.com'))).toBe(false);
+      // Every request must have stayed on the entered server origin — no
+      // credentialed PROPFIND escaped to the attacker-named host.
+      const calledOrigins = http.request.mock.calls.map(
+        (c: unknown[]) => new URL(c[1] as string).origin,
+      );
+      expect(calledOrigins.every((o: string) => o === 'https://nc.example.com')).toBe(
+        true,
+      );
     });
   });
 });
