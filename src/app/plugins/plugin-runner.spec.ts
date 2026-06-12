@@ -280,6 +280,22 @@ describe('PluginRunner', () => {
     it('should resolve silently for unknown plugin id', async () => {
       await expectAsync(service.triggerReady('does-not-exist')).toBeResolved();
     });
+
+    it('should ignore onReady registrations from a stale API instance', async () => {
+      const staleSpy = jasmine.createSpy('staleReady');
+      // plugin leaks its API object so the test can register after unload
+      const code = `globalThis['${READY_GLOBAL}']['leakedApi'] = plugin;`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+      service.unloadPlugin(mockManifest.id);
+
+      const leakedApi = getGlobal()['leakedApi'] as unknown as PluginAPI;
+      leakedApi.onReady(staleSpy);
+
+      // reload the plugin: the stale registration must not run in its activation
+      await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      await service.triggerReady(mockManifest.id);
+      expect(staleSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('onUnload', () => {

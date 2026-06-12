@@ -45,11 +45,16 @@ export class PluginRunner {
         this._pluginI18nService,
         manifest,
         {
-          onReady: (fn) => this._readyCallbacks.set(manifest.id, fn),
+          // both registers ignore calls from a stale API instance — leaked
+          // plugin code can run after its own unload (the failure class the
+          // onUnload hook fixes) and must not clobber a reloaded instance's
+          // callbacks
+          onReady: (fn) => {
+            if (this._pluginApis.get(manifest.id) === pluginAPI) {
+              this._readyCallbacks.set(manifest.id, fn);
+            }
+          },
           onUnload: (fn) => {
-            // ignore registrations from a stale API instance — leaked plugin
-            // code can run after its own unload (the failure class this hook
-            // fixes) and must not clobber a reloaded instance's callback
             if (this._pluginApis.get(manifest.id) === pluginAPI) {
               this._unloadCallbacks.set(manifest.id, fn);
             }
@@ -193,15 +198,14 @@ export class PluginRunner {
    * Unload a plugin and clean up resources
    */
   unloadPlugin(pluginId: string): boolean {
+    // Fallback for teardown routes that bypass PluginService's
+    // _teardownPluginRuntime (activation-error cleanup) — no-op when the
+    // service already fired it. Outside the loaded-check so a plugin whose
+    // loadPlugin threw after API creation still gets cleaned up.
+    this.triggerUnload(pluginId);
+
     const plugin = this._loadedPlugins.get(pluginId);
     if (plugin) {
-      // Fallback for teardown routes that bypass PluginService's
-      // _teardownPluginRuntime (activation-error cleanup) — no-op when the
-      // service already fired it.
-      this.triggerUnload(pluginId);
-
-      // Clean up API reference
-      this._pluginApis.delete(pluginId);
       this._readyCallbacks.delete(pluginId);
 
       // Clean up all resources
@@ -231,9 +235,14 @@ export class PluginRunner {
    * listeners it created in the renderer — code-based plugins outlive their
    * unload otherwise (see #8281). Idempotent: the callback fires at most once.
    * Fire-and-forget: teardown is sync and a buggy callback must not block it;
-   * the returned promise of an async callback is not awaited.
-   * Called by plugin.service.ts at the start of teardown (while hooks and
-   * translations are still registered) and from unloadPlugin() as a fallback.
+   * the returned promise of an async callback is not awaited (unlike
+   * triggerReady, which is awaited and may throw).
+   *
+   * Side effect: also drops the plugin's API reference, which disables
+   * sendMessageToPlugin and further lifecycle registrations for this instance.
+   * Callers must follow up with unloadPlugin() — it is only called separately
+   * by plugin.service.ts at the start of teardown, while hooks and
+   * translations are still registered.
    */
   triggerUnload(pluginId: string): void {
     const unloadFn = this._unloadCallbacks.get(pluginId);

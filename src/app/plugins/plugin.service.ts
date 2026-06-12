@@ -1632,6 +1632,9 @@ export class PluginService implements OnDestroy {
     // SECURITY: revoke the main-process nodeExecution token on teardown, so a
     // disabled/uninstalled plugin cannot run Node for the rest of the session.
     // Best-effort and fire-and-forget because teardown is synchronous.
+    // Deliberately AFTER triggerUnload above: the onUnload callback may make
+    // one final node call for cleanup — same capability the plugin held while
+    // enabled, just at a guaranteed point.
     void this._revokeNodeExecutionGrant(pluginId).catch((e) =>
       PluginLog.err(`Failed to revoke nodeExecution grant for ${pluginId}`, e),
     );

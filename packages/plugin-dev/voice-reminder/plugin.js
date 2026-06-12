@@ -9,6 +9,7 @@ if (!window.speechSynthesis) {
   var _vrCurrentTask = null;
   var _vrDefaultTtsRate = 0.7;
   var _vrUnloaded = false;
+  var _vrStartGen = 0;
 
   var _vrDefaults = {
     isEnabled: false,
@@ -73,15 +74,15 @@ if (!window.speechSynthesis) {
   }
 
   async function _vrStartTimer() {
+    var myGen = ++_vrStartGen;
     _vrStopTimer();
     var cfg = await _vrLoadConfig();
-    // re-check after the await: the plugin may have been unloaded while the
-    // config was loading — arming the interval then would leak it (#8281)
-    if (!cfg.isEnabled || _vrUnloaded) return;
-
-    // stop again: an interleaved _vrStartTimer call may have armed its own
-    // interval during the await — without this that handle is orphaned
+    // overlapping calls (e.g. Save racing the initial load) resume with stale
+    // config — only the latest call may touch the timer, and only while the
+    // plugin is still loaded (#8281)
+    if (myGen !== _vrStartGen) return;
     _vrStopTimer();
+    if (!cfg.isEnabled || _vrUnloaded) return;
 
     var intervalMs = Math.max(cfg.interval || 300000, 5000);
     _vrInterval = setInterval(function () {

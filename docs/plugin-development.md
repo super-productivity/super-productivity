@@ -616,10 +616,12 @@ plugin.onUnload(() => {
 ```
 
 The host invokes the callback at the start of plugin teardown, while the Plugin API is
-still usable. The returned promise is **not awaited** — do synchronous cleanup
-(`clearInterval` etc.) before any `await`, since teardown continues immediately.
-Registering again replaces the previous callback, so register once and do all cleanup
-there. Errors thrown by the callback are logged and do not block teardown.
+still usable for calls like persisting data — but don't register new hooks or listeners
+from inside it (the plugin is going away; re-registering `onUnload` there is ignored).
+The returned promise is **not awaited** — do synchronous cleanup (`clearInterval` etc.)
+before any `await`, since teardown continues immediately. Registering again replaces the
+previous callback, so register once and do all cleanup there. Errors thrown by the
+callback are logged and do not block teardown.
 
 Plugins distributed independently of the app should feature-detect it
 (`if (plugin.onUnload) { ... }`) — hosts predating the hook don't provide it.
