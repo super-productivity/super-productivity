@@ -217,29 +217,24 @@ describe('PluginAPI', () => {
     });
   });
 
-  describe('onReady()', () => {
-    it('should register a callback via the onReadyRegister function', async () => {
-      let registeredFn: (() => void | Promise<void>) | undefined;
-      const mockBridge2 = jasmine.createSpyObj('PluginBridgeService', [
-        'createBoundMethods',
-      ]);
-      mockBridge2.createBoundMethods.and.returnValue({
+  describe('lifecycle registration', () => {
+    type LifecycleRegisters = NonNullable<ConstructorParameters<typeof PluginAPI>[5]>;
+
+    const buildApiWithLifecycle = (lifecycle: LifecycleRegisters): PluginAPI => {
+      const bridge = jasmine.createSpyObj('PluginBridgeService', ['createBoundMethods']);
+      bridge.createBoundMethods.and.returnValue({
         log: jasmine.createSpyObj('log', ['log', 'err', 'info', 'warn', 'debug']),
       });
-      const mockI18n2 = jasmine.createSpyObj('PluginI18nService', [
+      const i18n = jasmine.createSpyObj('PluginI18nService', [
         'translate',
         'getCurrentLanguage',
       ]);
-      const api = new PluginAPI(
-        baseCfg,
-        'test-plugin-2',
-        mockBridge2,
-        mockI18n2,
-        undefined,
-        (fn) => {
-          registeredFn = fn;
-        },
-      );
+      return new PluginAPI(baseCfg, 'test-plugin-2', bridge, i18n, undefined, lifecycle);
+    };
+
+    it('should register an onReady callback via the lifecycle register', async () => {
+      let registeredFn: (() => void | Promise<void>) | undefined;
+      const api = buildApiWithLifecycle({ onReady: (fn) => (registeredFn = fn) });
 
       const readySpy = jasmine.createSpy('readyFn').and.resolveTo();
       api.onReady(readySpy);
@@ -249,9 +244,22 @@ describe('PluginAPI', () => {
       expect(readySpy).toHaveBeenCalledTimes(1);
     });
 
-    it('should be a no-op when no onReadyRegister is provided', () => {
-      // pluginAPI was constructed without onReadyRegister — should not throw
+    it('should register an onUnload callback via the lifecycle register', async () => {
+      let registeredFn: (() => void | Promise<void>) | undefined;
+      const api = buildApiWithLifecycle({ onUnload: (fn) => (registeredFn = fn) });
+
+      const unloadSpy = jasmine.createSpy('unloadFn').and.resolveTo();
+      api.onUnload(unloadSpy);
+      expect(registeredFn).toBeDefined();
+
+      await registeredFn!();
+      expect(unloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should be a no-op when no lifecycle registers are provided', () => {
+      // pluginAPI was constructed without lifecycle registers — should not throw
       expect(() => pluginAPI.onReady(() => {})).not.toThrow();
+      expect(() => pluginAPI.onUnload(() => {})).not.toThrow();
     });
   });
 });

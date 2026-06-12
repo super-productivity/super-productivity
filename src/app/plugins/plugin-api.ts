@@ -52,6 +52,7 @@ export class PluginAPI implements PluginAPIInterface {
   #pluginI18nService: PluginI18nService;
   #manifest?: PluginManifest;
   #onReadyRegister?: (fn: () => void | Promise<void>) => void;
+  #onUnloadRegister?: (fn: () => void | Promise<void>) => void;
   #hookHandlers = new Map<string, Map<Hooks, Array<PluginHookHandler<Hooks>>>>();
   #messageHandler?: (message: unknown) => Promise<unknown>;
   #boundMethods: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
@@ -72,13 +73,17 @@ export class PluginAPI implements PluginAPIInterface {
     pluginBridge: PluginBridgeService,
     pluginI18nService: PluginI18nService,
     manifest?: PluginManifest,
-    onReadyRegister?: (fn: () => void | Promise<void>) => void,
+    lifecycleRegisters?: {
+      onReady?: (fn: () => void | Promise<void>) => void;
+      onUnload?: (fn: () => void | Promise<void>) => void;
+    },
   ) {
     this.#pluginId = pluginId;
     this.#pluginBridge = pluginBridge;
     this.#pluginI18nService = pluginI18nService;
     this.#manifest = manifest;
-    this.#onReadyRegister = onReadyRegister;
+    this.#onReadyRegister = lifecycleRegisters?.onReady;
+    this.#onUnloadRegister = lifecycleRegisters?.onUnload;
 
     // Get bound methods for this plugin
     this.#boundMethods = this.#pluginBridge.createBoundMethods(
@@ -341,6 +346,17 @@ export class PluginAPI implements PluginAPIInterface {
    */
   onReady(fn: () => void | Promise<void>): void {
     this.#onReadyRegister?.(fn);
+  }
+
+  /**
+   * Register a callback the host invokes when the plugin is disabled, reloaded,
+   * or uninstalled. Code-based plugins must clear timers/listeners they created
+   * here, since they run directly in the renderer and outlive their unload
+   * otherwise. The returned promise is not awaited — do synchronous cleanup
+   * before any await. Registering again replaces the previous callback.
+   */
+  onUnload(fn: () => void | Promise<void>): void {
+    this.#onUnloadRegister?.(fn);
   }
 
   /**

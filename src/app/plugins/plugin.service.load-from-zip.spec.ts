@@ -60,6 +60,7 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
       'loadPlugin',
       'triggerReady',
       'unloadPlugin',
+      'triggerUnload',
       'pingNodeBridge',
     ]);
     pluginRunner.loadPlugin.and.callFake(

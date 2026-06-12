@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { PluginRunner } from './plugin-runner';
+import { PluginAPI } from './plugin-api';
 import { PluginBridgeService } from './plugin-bridge.service';
 import { PluginSecurityService } from './plugin-security';
 import { SnackService } from '../core/snack/snack.service';
@@ -278,6 +279,158 @@ describe('PluginRunner', () => {
 
     it('should resolve silently for unknown plugin id', async () => {
       await expectAsync(service.triggerReady('does-not-exist')).toBeResolved();
+    });
+
+    it('should ignore onReady registrations from a stale API instance', async () => {
+      const staleSpy = jasmine.createSpy('staleReady');
+      // plugin leaks its API object so the test can register after unload
+      const code = `globalThis['${READY_GLOBAL}']['leakedApi'] = plugin;`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+      service.unloadPlugin(mockManifest.id);
+
+      const leakedApi = getGlobal()['leakedApi'] as unknown as PluginAPI;
+      leakedApi.onReady(staleSpy);
+
+      // reload the plugin: the stale registration must not run in its activation
+      await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      await service.triggerReady(mockManifest.id);
+      expect(staleSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onUnload', () => {
+    // Same globalThis-spy pattern as the triggerReady() tests above.
+    const UNLOAD_GLOBAL = '__pluginRunnerSpec_onUnload__';
+    const getGlobal = (): Record<string, jasmine.Spy> =>
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        UNLOAD_GLOBAL
+      ];
+
+    beforeEach(() => {
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        UNLOAD_GLOBAL
+      ] = {};
+    });
+
+    afterEach(() => {
+      delete (globalThis as unknown as Record<string, unknown>)[UNLOAD_GLOBAL];
+    });
+
+    it('should call the registered onUnload callback when unloading', async () => {
+      const unloadSpy = jasmine.createSpy('unload');
+      getGlobal()[mockManifest.id] = unloadSpy;
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      expect(unloadSpy).not.toHaveBeenCalled();
+      const result = service.unloadPlugin(mockManifest.id);
+
+      expect(result).toBe(true);
+      expect(unloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should invoke the callback before hooks are unregistered', async () => {
+      const callOrder: string[] = [];
+      getGlobal()[mockManifest.id] = jasmine
+        .createSpy('unload')
+        .and.callFake(() => callOrder.push('onUnload'));
+      mockPluginBridge.unregisterPluginHooks.and.callFake(() => {
+        callOrder.push('unregisterPluginHooks');
+      });
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+      service.unloadPlugin(mockManifest.id);
+
+      expect(callOrder).toEqual(['onUnload', 'unregisterPluginHooks']);
+    });
+
+    it('should not block teardown when the callback throws', async () => {
+      getGlobal()[mockManifest.id] = jasmine.createSpy('unload').and.throwError('boom');
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      const result = service.unloadPlugin(mockManifest.id);
+
+      expect(result).toBe(true);
+      expect(mockCleanupService.cleanupPlugin).toHaveBeenCalledWith(mockManifest.id);
+      expect(mockPluginBridge.unregisterPluginHooks).toHaveBeenCalledWith(
+        mockManifest.id,
+      );
+    });
+
+    it('should not block teardown when the callback rejects asynchronously', async () => {
+      getGlobal()[mockManifest.id] = jasmine
+        .createSpy('unload')
+        .and.rejectWith(new Error('async boom'));
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      const result = service.unloadPlugin(mockManifest.id);
+
+      expect(result).toBe(true);
+      expect(mockCleanupService.cleanupPlugin).toHaveBeenCalledWith(mockManifest.id);
+      // let the rejected promise settle so it doesn't leak into other specs
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    it('should fire the callback at most once across triggerUnload and unloadPlugin', async () => {
+      const unloadSpy = jasmine.createSpy('unload');
+      getGlobal()[mockManifest.id] = unloadSpy;
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      // plugin.service fires triggerUnload at the start of teardown, then
+      // unloadPlugin runs as part of the same teardown — must not double-fire
+      service.triggerUnload(mockManifest.id);
+      expect(unloadSpy).toHaveBeenCalledTimes(1);
+
+      const result = service.unloadPlugin(mockManifest.id);
+      expect(result).toBe(true);
+      expect(unloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should ignore onUnload registrations from a stale API instance', async () => {
+      const staleSpy = jasmine.createSpy('staleUnload');
+      // plugin leaks its API object so the test can register after unload
+      const code = `globalThis['${UNLOAD_GLOBAL}']['leakedApi'] = plugin;`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+      service.unloadPlugin(mockManifest.id);
+
+      const leakedApi = getGlobal()['leakedApi'] as unknown as PluginAPI;
+      leakedApi.onUnload(staleSpy);
+
+      // reload the plugin: the stale registration must not fire on its unload
+      await service.loadPlugin(mockManifest, `/* no-op */`, mockBaseCfg);
+      service.unloadPlugin(mockManifest.id);
+      expect(staleSpy).not.toHaveBeenCalled();
+    });
+
+    it('should only fire the callback of the unloaded plugin', async () => {
+      const manifestB = { ...mockManifest, id: 'plugin-b', name: 'Plugin B' };
+      const aSpy = jasmine.createSpy('aUnload');
+      const bSpy = jasmine.createSpy('bUnload');
+      getGlobal()[mockManifest.id] = aSpy;
+      getGlobal()[manifestB.id] = bSpy;
+
+      await service.loadPlugin(
+        mockManifest,
+        `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`,
+        mockBaseCfg,
+      );
+      await service.loadPlugin(
+        manifestB,
+        `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${manifestB.id}']());`,
+        mockBaseCfg,
+      );
+
+      service.unloadPlugin(mockManifest.id);
+      expect(aSpy).toHaveBeenCalledTimes(1);
+      expect(bSpy).not.toHaveBeenCalled();
     });
   });
 

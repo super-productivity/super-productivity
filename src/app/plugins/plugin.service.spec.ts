@@ -78,6 +78,7 @@ describe('PluginService', () => {
     pluginRunner = jasmine.createSpyObj<PluginRunner>('PluginRunner', [
       'loadPlugin',
       'unloadPlugin',
+      'triggerUnload',
       'getLoadedPlugin',
       'triggerReady',
       'pingNodeBridge',

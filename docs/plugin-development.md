@@ -599,6 +599,37 @@ fine in practice because iframe plugins are rendered on user navigation (well af
 startup). Iframe API calls still go through the host bridge when they are made;
 cold-boot bridge pings are only performed for host-side plugin code.
 
+**Clean up with `plugin.onUnload()`:**
+
+Code-based plugins (`plugin.js`) run directly in the app's renderer, so timers and
+listeners they create are **not** cleaned up automatically when the plugin is disabled,
+reloaded, or uninstalled — a `setInterval` started by your plugin keeps firing until the
+app is fully reloaded. Register a teardown callback to clear them yourself:
+
+```javascript
+const intervalId = setInterval(doWork, 60000);
+
+plugin.onUnload(() => {
+  clearInterval(intervalId);
+  // also: removeEventListener, speechSynthesis.cancel(), close connections, …
+});
+```
+
+The host invokes the callback at the start of plugin teardown, while the Plugin API is
+still usable for calls like persisting data — but don't register new hooks or listeners
+from inside it (the plugin is going away; re-registering `onUnload` there is ignored).
+The returned promise is **not awaited** — do synchronous cleanup (`clearInterval` etc.)
+before any `await`, since teardown continues immediately. Registering again replaces the
+previous callback, so register once and do all cleanup there. Errors thrown by the
+callback are logged and do not block teardown.
+
+Plugins distributed independently of the app should feature-detect it
+(`if (plugin.onUnload) { ... }`) — hosts predating the hook don't provide it.
+
+**Iframe plugins:** `onUnload` exists but is a no-op — the host unmounts the iframe on
+unload, which takes its timers and listeners with it. Don't rely on it for unload-time
+persistence in iframes; persist when the data changes instead.
+
 ### 4. Don't spam the logs
 
 `console.logs` should be kept to a minimum.
