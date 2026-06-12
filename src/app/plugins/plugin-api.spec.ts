@@ -254,4 +254,43 @@ describe('PluginAPI', () => {
       expect(() => pluginAPI.onReady(() => {})).not.toThrow();
     });
   });
+
+  describe('onUnload()', () => {
+    it('should register a callback via the onUnloadRegister function', async () => {
+      let registeredFn: (() => void | Promise<void>) | undefined;
+      const mockBridge2 = jasmine.createSpyObj('PluginBridgeService', [
+        'createBoundMethods',
+      ]);
+      mockBridge2.createBoundMethods.and.returnValue({
+        log: jasmine.createSpyObj('log', ['log', 'err', 'info', 'warn', 'debug']),
+      });
+      const mockI18n2 = jasmine.createSpyObj('PluginI18nService', [
+        'translate',
+        'getCurrentLanguage',
+      ]);
+      const api = new PluginAPI(
+        baseCfg,
+        'test-plugin-2',
+        mockBridge2,
+        mockI18n2,
+        undefined,
+        undefined,
+        (fn) => {
+          registeredFn = fn;
+        },
+      );
+
+      const unloadSpy = jasmine.createSpy('unloadFn').and.resolveTo();
+      api.onUnload(unloadSpy);
+      expect(registeredFn).toBeDefined();
+
+      await registeredFn!();
+      expect(unloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should be a no-op when no onUnloadRegister is provided', () => {
+      // pluginAPI was constructed without onUnloadRegister — should not throw
+      expect(() => pluginAPI.onUnload(() => {})).not.toThrow();
+    });
+  });
 });

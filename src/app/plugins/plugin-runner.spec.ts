@@ -281,6 +281,109 @@ describe('PluginRunner', () => {
     });
   });
 
+  describe('onUnload', () => {
+    // Same globalThis-spy pattern as the triggerReady() tests above.
+    const UNLOAD_GLOBAL = '__pluginRunnerSpec_onUnload__';
+    const getGlobal = (): Record<string, jasmine.Spy> =>
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        UNLOAD_GLOBAL
+      ];
+
+    beforeEach(() => {
+      (globalThis as unknown as Record<string, Record<string, jasmine.Spy>>)[
+        UNLOAD_GLOBAL
+      ] = {};
+    });
+
+    afterEach(() => {
+      delete (globalThis as unknown as Record<string, unknown>)[UNLOAD_GLOBAL];
+    });
+
+    it('should call the registered onUnload callback when unloading', async () => {
+      const unloadSpy = jasmine.createSpy('unload');
+      getGlobal()[mockManifest.id] = unloadSpy;
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      expect(unloadSpy).not.toHaveBeenCalled();
+      const result = service.unloadPlugin(mockManifest.id);
+
+      expect(result).toBe(true);
+      expect(unloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should invoke the callback before hooks are unregistered', async () => {
+      const callOrder: string[] = [];
+      getGlobal()[mockManifest.id] = jasmine
+        .createSpy('unload')
+        .and.callFake(() => callOrder.push('onUnload'));
+      mockPluginBridge.unregisterPluginHooks.and.callFake(() => {
+        callOrder.push('unregisterPluginHooks');
+      });
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+      service.unloadPlugin(mockManifest.id);
+
+      expect(callOrder).toEqual(['onUnload', 'unregisterPluginHooks']);
+    });
+
+    it('should not block teardown when the callback throws', async () => {
+      getGlobal()[mockManifest.id] = jasmine.createSpy('unload').and.throwError('boom');
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      const result = service.unloadPlugin(mockManifest.id);
+
+      expect(result).toBe(true);
+      expect(mockCleanupService.cleanupPlugin).toHaveBeenCalledWith(mockManifest.id);
+      expect(mockPluginBridge.unregisterPluginHooks).toHaveBeenCalledWith(
+        mockManifest.id,
+      );
+    });
+
+    it('should not block teardown when the callback rejects asynchronously', async () => {
+      getGlobal()[mockManifest.id] = jasmine
+        .createSpy('unload')
+        .and.rejectWith(new Error('async boom'));
+
+      const code = `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`;
+      await service.loadPlugin(mockManifest, code, mockBaseCfg);
+
+      const result = service.unloadPlugin(mockManifest.id);
+
+      expect(result).toBe(true);
+      expect(mockCleanupService.cleanupPlugin).toHaveBeenCalledWith(mockManifest.id);
+      // let the rejected promise settle so it doesn't leak into other specs
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    it('should only fire the callback of the unloaded plugin', async () => {
+      const manifestB = { ...mockManifest, id: 'plugin-b', name: 'Plugin B' };
+      const aSpy = jasmine.createSpy('aUnload');
+      const bSpy = jasmine.createSpy('bUnload');
+      getGlobal()[mockManifest.id] = aSpy;
+      getGlobal()[manifestB.id] = bSpy;
+
+      await service.loadPlugin(
+        mockManifest,
+        `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${mockManifest.id}']());`,
+        mockBaseCfg,
+      );
+      await service.loadPlugin(
+        manifestB,
+        `plugin.onUnload(() => globalThis['${UNLOAD_GLOBAL}']['${manifestB.id}']());`,
+        mockBaseCfg,
+      );
+
+      service.unloadPlugin(mockManifest.id);
+      expect(aSpy).toHaveBeenCalledTimes(1);
+      expect(bSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('pingNodeBridge()', () => {
     it('should return false for unknown plugin', async () => {
       const result = await service.pingNodeBridge('unknown-plugin');

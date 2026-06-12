@@ -25,6 +25,7 @@ export class PluginRunner {
   private _loadedPlugins = new Map<string, PluginInstance>();
   private _pluginApis = new Map<string, PluginAPI>();
   private _readyCallbacks = new Map<string, () => void | Promise<void>>();
+  private _unloadCallbacks = new Map<string, () => void | Promise<void>>();
 
   /**
    * Load and execute a plugin
@@ -44,6 +45,7 @@ export class PluginRunner {
         this._pluginI18nService,
         manifest,
         (fn) => this._readyCallbacks.set(manifest.id, fn),
+        (fn) => this._unloadCallbacks.set(manifest.id, fn),
       );
 
       // executeNodeScript is now automatically bound if permitted via createBoundMethods
@@ -184,6 +186,22 @@ export class PluginRunner {
   unloadPlugin(pluginId: string): boolean {
     const plugin = this._loadedPlugins.get(pluginId);
     if (plugin) {
+      // Give the plugin a chance to clear timers/listeners it created in the
+      // renderer (code-based plugins outlive their unload otherwise — see #8281).
+      // Fire-and-forget: unloadPlugin is sync and a buggy callback must not
+      // block teardown.
+      const unloadFn = this._unloadCallbacks.get(pluginId);
+      this._unloadCallbacks.delete(pluginId);
+      if (unloadFn) {
+        try {
+          Promise.resolve(unloadFn()).catch((e) =>
+            PluginLog.err(`Plugin ${pluginId} onUnload callback failed:`, e),
+          );
+        } catch (e) {
+          PluginLog.err(`Plugin ${pluginId} onUnload callback failed:`, e);
+        }
+      }
+
       // Clean up API reference
       this._pluginApis.delete(pluginId);
       this._readyCallbacks.delete(pluginId);

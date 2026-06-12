@@ -8,6 +8,7 @@ if (!window.speechSynthesis) {
   var _vrInterval = null;
   var _vrCurrentTask = null;
   var _vrDefaultTtsRate = 0.7;
+  var _vrUnloaded = false;
 
   var _vrDefaults = {
     isEnabled: false,
@@ -72,7 +73,9 @@ if (!window.speechSynthesis) {
   async function _vrStartTimer() {
     _vrStopTimer();
     var cfg = await _vrLoadConfig();
-    if (!cfg.isEnabled) return;
+    // re-check after the await: the plugin may have been unloaded while the
+    // config was loading — arming the interval then would leak it (#8281)
+    if (!cfg.isEnabled || _vrUnloaded) return;
 
     var intervalMs = Math.max(cfg.interval || 300000, 5000);
     _vrInterval = setInterval(function () {
@@ -88,6 +91,16 @@ if (!window.speechSynthesis) {
   // Track current task via hook. The host emits { current, previous }.
   PluginAPI.registerHook('currentTaskChange', function (payload) {
     _vrCurrentTask = payload && payload.current ? payload.current : null;
+  });
+
+  // Stop the reminder timer and any in-flight speech when the plugin is
+  // disabled/reloaded — without this the interval survives unload (#8281).
+  // shortcut: cancel() clears ALL renderer TTS, not just ours — fine while
+  // this is the only plugin using speechSynthesis
+  PluginAPI.onUnload(function () {
+    _vrUnloaded = true;
+    _vrStopTimer();
+    window.speechSynthesis.cancel();
   });
 
   // Initial load and start

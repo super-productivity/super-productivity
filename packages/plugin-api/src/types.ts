@@ -541,6 +541,16 @@ export interface PluginAPI {
   // plugin API typings remain assignable; the host always provides it.
   onReady?(fn: () => void | Promise<void>): void;
 
+  // teardown signal — register a callback the host invokes when the plugin is
+  // disabled, reloaded, or uninstalled. Code-based plugins run directly in the
+  // renderer, so timers/listeners they create survive unload unless cleared
+  // here (clearInterval, removeEventListener, speechSynthesis.cancel, …).
+  // In iframe plugins this is a no-op: the iframe is destroyed on unload and
+  // takes its timers with it. Registering again replaces the previous callback.
+  // Optional so older plugin API typings remain assignable; the host always
+  // provides it.
+  onUnload?(fn: () => void | Promise<void>): void;
+
   // cross-process communication
   onMessage?(handler: (message: unknown) => Promise<unknown> | unknown): void;
 
