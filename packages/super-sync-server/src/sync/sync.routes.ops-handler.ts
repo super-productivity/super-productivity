@@ -199,8 +199,17 @@ export const uploadOpsHandler = async (
     );
     if (!results) return;
 
-    // Cache results for deduplication if requestId was provided
-    if (requestId) {
+    // Cache results for deduplication if requestId was provided.
+    // Skip caching when the whole batch rolled back (INTERNAL_ERROR): nothing
+    // was committed, so the deterministic-requestId retry must re-process
+    // rather than be served the cached transient failure for the dedup TTL
+    // (REQUEST_DEDUP_TTL_MS = 5 min). INTERNAL_ERROR is produced ONLY by
+    // uploadOps' rollback catch (sync.service.ts), which maps the *entire*
+    // batch to it, so a single match means the transaction failed. #8332
+    if (
+      requestId &&
+      !results.some((r) => r.errorCode === SYNC_ERROR_CODES.INTERNAL_ERROR)
+    ) {
       syncService.cacheOpsRequestResults(userId, requestId, results);
     }
 
