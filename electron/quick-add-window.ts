@@ -42,7 +42,7 @@ const createQuickAddWindow = (): void => {
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
   const width = 640;
-  const height = 120;
+  const height = 450;
   const x = Math.round((screenWidth - width) / 2);
   const y = Math.round((screenHeight - height) / 3); // Upper third
 
@@ -100,7 +100,7 @@ export const showQuickAddWindow = (): void => {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
     const width = 640;
-    const height = 120;
+    const height = 450;
     quickAddWin.setBounds({
       width,
       height,
