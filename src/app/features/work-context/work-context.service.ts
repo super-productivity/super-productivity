@@ -297,17 +297,17 @@ export class WorkContextService {
   mainListTasksInProject$: Observable<TaskWithSubTasks[]> = this.mainListTasks$.pipe(
     map((tasks) => {
       const todayStr = this._dateService.todayStr();
-      return tasks
-        .filter(
-          (task) =>
-            !!task &&
-            (task.dueDay === todayStr ||
-              task.subTasks?.some((subTask) => subTask.dueDay === todayStr)),
-        )
-        .map((task) => ({
-          ...task,
-          subTasks: task.subTasks.filter((subTask) => subTask.dueDay === todayStr),
-        }));
+      const isDueTodayTree = (task: TaskWithSubTasks): boolean =>
+        !!task &&
+        (task.dueDay === todayStr ||
+          task.subTasks?.some((subTask) => isDueTodayTree(subTask)));
+      const filterDueTodayTree = (task: TaskWithSubTasks): TaskWithSubTasks => ({
+        ...task,
+        subTasks: task.subTasks
+          .filter((subTask) => isDueTodayTree(subTask))
+          .map((subTask) => filterDueTodayTree(subTask)),
+      });
+      return tasks.filter((task) => isDueTodayTree(task)).map(filterDueTodayTree);
     }),
   );
 

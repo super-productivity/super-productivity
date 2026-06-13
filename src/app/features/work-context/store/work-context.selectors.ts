@@ -13,6 +13,12 @@ import {
   selectTaskFeatureState,
 } from '../../tasks/store/task.selectors';
 import { Task, TaskWithDueTime, TaskWithSubTasks } from '../../tasks/task.model';
+import {
+  buildTaskWithSubTasks,
+  getAncestorIds,
+  getDescendantIds,
+} from '../../tasks/util/task-tree.util';
+import { Dictionary } from '@ngrx/entity';
 import { devError } from '../../../util/dev-error';
 import { selectProjectFeatureState } from '../../project/store/project.selectors';
 import { selectNoteTodayOrder } from '../../note/store/note.reducer';
@@ -86,9 +92,20 @@ const computeOrderedTaskIdsForToday = (
   // Filter out subtasks whose parent is also in TODAY
   // (subtasks should only appear nested under their parent, not as separate top-level items)
   const tasksForTodaySet = new Set(tasksForToday);
+  const hasAncestorInToday = (taskId: string): boolean => {
+    let parentId = taskEntities[taskId]?.parentId;
+    const visited = new Set<string>([taskId]);
+    while (parentId && !visited.has(parentId)) {
+      if (tasksForTodaySet.has(parentId)) {
+        return true;
+      }
+      visited.add(parentId);
+      parentId = taskEntities[parentId]?.parentId;
+    }
+    return false;
+  };
   const topLevelTasksForToday = tasksForToday.filter((taskId) => {
-    const task = taskEntities[taskId];
-    return !task?.parentId || !tasksForTodaySet.has(task.parentId);
+    return !hasAncestorInToday(taskId);
   });
 
   if (topLevelTasksForToday.length === 0) {
@@ -246,7 +263,9 @@ export const selectTrackableTasksForActiveContext = createSelector(
         devError('Task not found');
       } else if (task.subTaskIds && task.subTaskIds.length) {
         trackableTasks = trackableTasks.concat(
-          task.subTaskIds.map((sid) => entities[sid]).filter((t): t is Task => !!t),
+          getDescendantIds(task.id, entities)
+            .map((sid) => entities[sid])
+            .filter((t): t is Task => !!t && t.subTaskIds.length === 0),
         );
       } else {
         trackableTasks.push(task);
@@ -271,7 +290,7 @@ export const selectTrackableTasksActiveContextFirst = createSelector(
     const activeContextIdSet = new Set(forActiveContext.map((item) => item.id));
     const otherTasks = allActiveTasks.filter(
       (task): task is Task =>
-        (!!task.parentId || !task.subTaskIds?.length) && !activeContextIdSet.has(task.id),
+        (task.subTaskIds?.length ?? 0) === 0 && !activeContextIdSet.has(task.id),
     );
     return [...forActiveContext, ...otherTasks].sort(sortDoneLast);
   },
@@ -376,15 +395,14 @@ export const selectTimelineTasks = createSelector(
     const taskIdsToTasks = (taskIds: string[]): Task[] =>
       taskIds.map((id) => activeTaskMap.get(id)).filter((t): t is Task => !!t);
 
+    // Resolve the full (depth-capped) subtree per task so nested sub-tasks show
+    // on the timeline, not just the first level (#2657).
+    const entities: Dictionary<Task> = Object.fromEntries(activeTaskMap);
+
     return {
       planned: allPlannedTasks,
       unPlanned: taskIdsToTasks(todayIds)
-        .map(
-          (t): TaskWithSubTasks => ({
-            ...t,
-            subTasks: taskIdsToTasks(t.subTaskIds),
-          }),
-        )
+        .map((t): TaskWithSubTasks => buildTaskWithSubTasks(t, entities))
         .filter((t) => !t.isDone && !allPlannedIdSet.has(t.id)),
     };
   },
@@ -445,15 +463,12 @@ export const selectTodayTagRepair = createSelector(
       const task = taskState.entities[id];
       if (!task) continue;
 
-      if (!task.parentId) {
-        // Parent task with dueDay === today
+      if (
+        !getAncestorIds(task.id, taskState.entities).some((ancestorId) =>
+          allTasksWithDueToday.has(ancestorId),
+        )
+      ) {
         tasksForTodaySet.add(task.id);
-      } else {
-        // Subtask: only include if parent is NOT in today list
-        // (otherwise it will appear nested under parent)
-        if (!allTasksWithDueToday.has(task.parentId)) {
-          tasksForTodaySet.add(task.id);
-        }
       }
     }
 

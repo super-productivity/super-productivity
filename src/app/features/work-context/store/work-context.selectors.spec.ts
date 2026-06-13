@@ -256,6 +256,37 @@ describe('workContext selectors', () => {
         },
       ] as any[]);
     });
+
+    it('should select leaf descendants for nested task trees', () => {
+      const root = {
+        id: 'root',
+        tagIds: [],
+        subTaskIds: ['mid'],
+      } as Partial<TaskCopy> as TaskCopy;
+      const mid = {
+        id: 'mid',
+        parentId: 'root',
+        tagIds: [],
+        subTaskIds: ['leaf'],
+      } as Partial<TaskCopy> as TaskCopy;
+      const leaf = {
+        id: 'leaf',
+        parentId: 'mid',
+        tagIds: [],
+        subTaskIds: [],
+      } as Partial<TaskCopy> as TaskCopy;
+      const ctx: Partial<WorkContext> = {
+        id: TODAY_TAG.id,
+        taskIds: [root.id],
+      };
+
+      const result = selectTrackableTasksForActiveContext.projector(
+        ctx as WorkContext,
+        fakeEntityStateFromArray([root, mid, leaf]).entities,
+      );
+
+      expect(result.map((task) => task.id)).toEqual(['leaf']);
+    });
   });
 
   describe('selectStartableTasksForActiveContext', () => {

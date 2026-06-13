@@ -67,19 +67,22 @@ export const sanitizeTasksForArchiving = (
   let droppedRootTasks = 0;
   let droppedSubTasks = 0;
 
-  const sanitizedTasks = tasksIn.flatMap((task) => {
+  const sanitizeTask = (
+    task: TaskWithSubTasks,
+    isRootTask: boolean,
+  ): TaskWithSubTasks | null => {
     if (!task || !isValidEntityId(task.id)) {
-      droppedRootTasks++;
-      return [];
-    }
-
-    const subTasks = (task.subTasks || []).filter((subTask) => {
-      const isValid = !!subTask && isValidEntityId(subTask.id);
-      if (!isValid) {
+      if (isRootTask) {
+        droppedRootTasks++;
+      } else {
         droppedSubTasks++;
       }
-      return isValid;
-    });
+      return null;
+    }
+
+    const subTasks = (task.subTasks || [])
+      .map((subTask) => sanitizeTask(subTask, false))
+      .filter((subTask): subTask is TaskWithSubTasks => !!subTask);
 
     // Keep subTaskIds in sync with the surviving subTasks so the archived
     // parent cannot carry dangling references when subtasks are dropped.
@@ -88,14 +91,16 @@ export const sanitizeTasksForArchiving = (
       ? task.subTaskIds.filter((id) => survivingSubTaskIds.has(id))
       : [];
 
-    return [
-      {
-        ...task,
-        subTasks,
-        subTaskIds,
-      },
-    ];
-  });
+    return {
+      ...task,
+      subTasks,
+      subTaskIds,
+    };
+  };
+
+  const sanitizedTasks = tasksIn
+    .map((task) => sanitizeTask(task, true))
+    .filter((task): task is TaskWithSubTasks => !!task);
 
   if (droppedRootTasks > 0 || droppedSubTasks > 0) {
     Log.warn(`[ArchiveService] ${logPrefix}: Dropped malformed archive payload tasks`, {

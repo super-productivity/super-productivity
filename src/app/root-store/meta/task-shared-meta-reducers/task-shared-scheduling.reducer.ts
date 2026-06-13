@@ -188,14 +188,29 @@ const handlePlanTasksForToday = (
     startOfNextDayDiffMsFromAction ??
     state[appStateFeatureKey]?.startOfNextDayDiffMs ??
     0;
+  const hasAncestorInToday = (taskId: string): boolean => {
+    let parentId =
+      (state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined)?.parentId ??
+      parentTaskMap[taskId];
+    const visited = new Set<string>([taskId]);
+    while (parentId && !visited.has(parentId)) {
+      if (todayTag.taskIds.includes(parentId)) {
+        return true;
+      }
+      visited.add(parentId);
+      parentId =
+        (state[TASK_FEATURE_NAME].entities[parentId] as Task | undefined)?.parentId ??
+        parentTaskMap[parentId];
+    }
+    return false;
+  };
 
-  // Filter out tasks that don't exist, are already in today, or whose parent is in today
+  // Filter out tasks that don't exist, are already in today, or whose ancestor is in today
   const newTasksForToday = taskIds.filter((taskId) => {
     // Skip tasks that don't exist in the store (can happen during sync)
     if (!state[TASK_FEATURE_NAME].entities[taskId]) return false;
     if (todayTag.taskIds.includes(taskId)) return false;
-    const parentId = parentTaskMap[taskId];
-    return !parentId || !todayTag.taskIds.includes(parentId);
+    return !hasAncestorInToday(taskId);
   });
 
   // Filter for tasks that need updates:

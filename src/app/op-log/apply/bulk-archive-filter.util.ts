@@ -85,6 +85,8 @@ const harvestSubTaskIdsFromTaskLike = (taskLike: unknown, sink: Set<string>): vo
     for (const st of subTasks) {
       const id = (st as { id?: unknown } | null)?.id;
       if (typeof id === 'string') sink.add(id);
+      // Embedded sub-tasks are recursive (#2657) — descend the whole payload tree.
+      harvestSubTaskIdsFromTaskLike(st, sink);
     }
   }
   const subTaskIds = (taskLike as { subTaskIds?: unknown }).subTaskIds;
@@ -135,24 +137,47 @@ const harvestTaskEntityMapSubTaskIdsForParents = (
 ): void => {
   if (parentIds.size === 0) return;
 
-  for (const parentId of parentIds) {
-    harvestSubTaskIdsFromTaskLike(entityMap[parentId], sink);
+  // Build a parent→children back-ref index once for transitive expansion.
+  // Mirrors deleteTaskHelper's defensive path: a parent's subTaskIds can be
+  // stale while child.parentId is already present in state.
+  const childrenByParent = new Map<string, string[]>();
+  if (options.includeParentIdBackRefs) {
+    for (const taskLike of Object.values(entityMap)) {
+      if (!taskLike || typeof taskLike !== 'object') continue;
+      const task = taskLike as { id?: unknown; parentId?: unknown };
+      if (typeof task.id === 'string' && typeof task.parentId === 'string') {
+        const siblings = childrenByParent.get(task.parentId);
+        if (siblings) {
+          siblings.push(task.id);
+        } else {
+          childrenByParent.set(task.parentId, [task.id]);
+        }
+      }
+    }
   }
 
-  if (!options.includeParentIdBackRefs) return;
-
-  // Mirror deleteTaskHelper's defensive path: the parent payload/subTaskIds can
-  // be stale while child.parentId is already present in state.
-  for (const taskLike of Object.values(entityMap)) {
-    if (!taskLike || typeof taskLike !== 'object') continue;
-    const task = taskLike as { id?: unknown; parentId?: unknown };
-    if (
-      typeof task.id === 'string' &&
-      typeof task.parentId === 'string' &&
-      parentIds.has(task.parentId)
-    ) {
-      sink.add(task.id);
+  // BFS the FULL subtree under each parent — harvest via subTaskIds/embedded
+  // subTasks AND parentId back-refs, recursing into newly-found descendants so
+  // deep (>1 level) sub-tasks are not left behind (#2657).
+  const queued = new Set<string>(parentIds);
+  let frontier = Array.from(parentIds);
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      const childIds = new Set<string>();
+      harvestSubTaskIdsFromTaskLike(entityMap[id], childIds);
+      for (const backRefChildId of childrenByParent.get(id) ?? []) {
+        childIds.add(backRefChildId);
+      }
+      for (const childId of childIds) {
+        sink.add(childId);
+        if (!queued.has(childId)) {
+          queued.add(childId);
+          next.push(childId);
+        }
+      }
     }
+    frontier = next;
   }
 };
 

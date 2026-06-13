@@ -18,6 +18,7 @@ import { TaskService } from '../task.service';
 import { EMPTY, forkJoin, Subscription } from 'rxjs';
 import {
   HideSubTasksMode,
+  MAX_TASK_DEPTH,
   SubmitTrigger,
   TaskCopy,
   TaskDetailTargetPanel,
@@ -173,6 +174,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
 
   task = input.required<TaskWithSubTasks>();
+  treeDepth = input(1);
   isBacklog = input<boolean>(false);
   isInSubTaskList = input<boolean>(false);
   showDoneAnimation = signal(false);
@@ -181,6 +183,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
+  isAtMaxTaskDepth = computed(() => this.treeDepth() >= MAX_TASK_DEPTH);
   isShowCloseButton = computed(() => {
     // Only show close button when task is selected AND not on mobile (bottom panel)
     return this.isSelected() && !this.layoutService.isXs();
@@ -888,7 +891,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   addSubTask(): void {
-    this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
+    if (this.isAtMaxTaskDepth()) {
+      return;
+    }
+    this._taskService.addSubTaskNested(this.task());
   }
 
   /**

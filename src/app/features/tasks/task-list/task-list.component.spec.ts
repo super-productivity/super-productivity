@@ -400,11 +400,11 @@ describe('TaskListComponent', () => {
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block parent task with subtasks from dropping to subtask list', () => {
+      it('should allow parent task with subtasks to drop to subtask list', () => {
         const task = { id: 'task1', parentId: null, subTaskIds: ['sub1'] };
         const drag = createMockDrag(task);
         const drop = createMockDrop('some-task-id', 'SUB');
-        expect(component.enterPredicate(drag, drop)).toBe(false);
+        expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
       it('should allow parent task with a plain due day to drop to subtask list', () => {

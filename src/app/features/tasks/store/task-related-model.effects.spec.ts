@@ -14,6 +14,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DateService } from '../../../core/date/date.service';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
+import { selectTaskEntities } from './task.selectors';
 
 describe('TaskRelatedModelEffects', () => {
   let effects: TaskRelatedModelEffects;
@@ -52,7 +53,10 @@ describe('TaskRelatedModelEffects', () => {
         TaskRelatedModelEffects,
         provideMockActions(() => actions$),
         provideMockStore({
-          selectors: [{ selector: selectTodayTaskIds, value: [] }],
+          selectors: [
+            { selector: selectTodayTaskIds, value: [] },
+            { selector: selectTaskEntities, value: {} },
+          ],
         }),
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: DateService, useValue: dateServiceSpy },

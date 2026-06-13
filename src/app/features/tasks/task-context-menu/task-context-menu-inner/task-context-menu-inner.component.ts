@@ -23,7 +23,7 @@ import {
 } from '@angular/material/menu';
 import { MatDivider } from '@angular/material/divider';
 import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
-import { Task, TaskCopy, TaskWithSubTasks } from '../../task.model';
+import { MAX_TASK_DEPTH, Task, TaskCopy, TaskWithSubTasks } from '../../task.model';
 import { EMPTY, forkJoin, from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
   concatMap,
@@ -130,6 +130,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   isAdvancedControls = input<boolean>(false);
+  taskDepth = input(1);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
   isOnTodayList = computed(() => this.task && this.todayList().includes(this.task.id));
   readonly isTimeTrackingEnabled = computed(
@@ -138,6 +139,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly isFocusModeEnabled = computed(
     () => this._globalConfigService.appFeatures().isFocusModeEnabled,
   );
+  readonly isAtMaxTaskDepth = computed(() => this.taskDepth() >= MAX_TASK_DEPTH);
 
   // eslint-disable-next-line @angular-eslint/no-output-native
   close = output();
@@ -449,7 +451,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   addSubTask(): void {
-    this._taskService.addSubTaskTo(this.task.parentId || this.task.id);
+    if (this.isAtMaxTaskDepth()) {
+      return;
+    }
+    this._taskService.addSubTaskNested(this.task);
   }
 
   async duplicate(): Promise<void> {
@@ -472,23 +477,27 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     );
     if (this.task.subTaskIds.length) {
       const taskWithSubtasks = await this._getTaskWithSubtasks();
-      for (const subTask of taskWithSubtasks.subTasks) {
-        const subTaskInfo = {
+      // Clone the WHOLE subtree, not just direct children (#2657). Dispatch is
+      // synchronous, so each freshly-created parent is in state before its own
+      // children are added in the recursive step.
+      this._duplicateSubTasks(taskWithSubtasks.subTasks, taskId);
+    }
+  }
+
+  private _duplicateSubTasks(subTasks: TaskWithSubTasks[], parentId: string): void {
+    for (const subTask of subTasks) {
+      const subTaskObj = this._taskService.createNewTaskWithDefaults({
+        title: subTask.title,
+        additional: {
           isDone: subTask.isDone,
           projectId: subTask.projectId,
           timeEstimate: subTask.timeEstimate,
           notes: subTask.notes,
-        };
-        const subTaskObj = this._taskService.createNewTaskWithDefaults({
-          title: subTask.title,
-          additional: subTaskInfo,
-        });
-        this._store.dispatch(
-          addSubTask({
-            task: subTaskObj,
-            parentId: taskId,
-          }),
-        );
+        },
+      });
+      this._store.dispatch(addSubTask({ task: subTaskObj, parentId }));
+      if (subTask.subTasks?.length) {
+        this._duplicateSubTasks(subTask.subTasks, subTaskObj.id);
       }
     }
   }

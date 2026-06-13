@@ -77,7 +77,9 @@ describe('IssueService', () => {
       'addAndSchedule',
       'addSubTaskTo',
       'restoreTask',
+      'getTaskDepth',
     ]);
+    taskServiceSpy.getTaskDepth.and.returnValue(1);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
       activeWorkContextId: TODAY_TAG.id,
@@ -552,6 +554,108 @@ describe('IssueService', () => {
 
     it('should add child as top-level task when parent is not in SP yet', async () => {
       taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    });
+
+    it('should add child under an active nested parent when below max depth', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.callFake(async (id: string) => {
+        if (id === 'parent-uid') {
+          return {
+            task: { id: 'parent-task-id', parentId: 'root-task-id' } as any,
+            subTasks: null,
+            isFromArchive: false,
+          };
+        }
+        return null;
+      });
+      taskServiceSpy.getTaskDepth.and.returnValue(3);
+      taskServiceSpy.addSubTaskTo.and.returnValue('child-task-id');
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.add).not.toHaveBeenCalled();
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith(
+        'parent-task-id',
+        jasmine.objectContaining({
+          title: 'Child Task',
+          issueId: 'child-uid',
+        }),
+      );
+    });
+
+    it('should add provider children under the newly created subtask', async () => {
+      (caldavServiceMock as any).getAddTaskData = (issue: any) => ({
+        title: issue.title,
+        related_to: issue.related_to,
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.callFake(async (id: string) => {
+        if (id === 'parent-uid') {
+          return {
+            task: { id: 'parent-task-id', parentId: 'root-task-id' } as any,
+            subTasks: null,
+            isFromArchive: false,
+          };
+        }
+        return null;
+      });
+      taskServiceSpy.getTaskDepth.and.callFake((taskId: string) =>
+        taskId === 'child-task-id' ? 3 : 2,
+      );
+      taskServiceSpy.addSubTaskTo.and.callFake((parentTaskId: string) =>
+        parentTaskId === 'parent-task-id' ? 'child-task-id' : 'grandchild-task-id',
+      );
+      (caldavServiceMock as any).getSubTasks = jasmine
+        .createSpy('getSubTasks')
+        .and.resolveTo([{ id: 'grandchild-uid', title: 'Grandchild Task' }]);
+
+      await service.addTaskFromIssue({
+        issueDataReduced: caldavIssue as any,
+        issueProviderId: 'caldav-provider-1',
+        issueProviderKey: 'CALDAV',
+      });
+
+      expect(taskServiceSpy.addSubTaskTo.calls.allArgs()).toEqual([
+        [
+          'parent-task-id',
+          jasmine.objectContaining({
+            title: 'Child Task',
+            issueId: 'child-uid',
+          }),
+        ],
+        [
+          'child-task-id',
+          jasmine.objectContaining({
+            title: 'Grandchild Task',
+            issueId: 'grandchild-uid',
+          }),
+        ],
+      ]);
+    });
+
+    it('should add child as top-level task when the active parent is at max depth', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.callFake(async (id: string) => {
+        if (id === 'parent-uid') {
+          return {
+            task: { id: 'parent-task-id', parentId: 'level-3-task-id' } as any,
+            subTasks: null,
+            isFromArchive: false,
+          };
+        }
+        return null;
+      });
+      taskServiceSpy.getTaskDepth.and.returnValue(4);
 
       await service.addTaskFromIssue({
         issueDataReduced: caldavIssue as any,

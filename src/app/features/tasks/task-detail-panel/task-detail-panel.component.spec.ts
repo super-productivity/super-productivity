@@ -44,12 +44,20 @@ describe('TaskDetailPanelComponent paste handler', () => {
     ]);
     const mockTaskService = jasmine.createSpyObj(
       'TaskService',
-      ['update', 'setSelectedId', 'focusTaskIfPossible', 'addSubTaskTo'],
+      [
+        'update',
+        'setSelectedId',
+        'focusTaskIfPossible',
+        'addSubTaskTo',
+        'addSubTaskNested',
+        'getTaskDepth',
+      ],
       {
         taskDetailPanelTargetPanel$: of(null),
         selectedTaskId: jasmine.createSpy().and.returnValue(null),
       },
     );
+    mockTaskService.getTaskDepth.and.returnValue(1);
     const mockLayoutService = jasmine.createSpyObj('LayoutService', [], {
       isShowList: jasmine.createSpy().and.returnValue(true),
     });
@@ -337,7 +345,7 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
  */
 describe('TaskDetailPanelComponent add sub-task', () => {
   let component: TaskDetailPanelComponent;
-  let addSubTaskToSpy: jasmine.Spy;
+  let addSubTaskNestedSpy: jasmine.Spy;
 
   const keydown = (key: string, target: HTMLElement): KeyboardEvent => {
     const ev = new KeyboardEvent('keydown', {
@@ -350,7 +358,9 @@ describe('TaskDetailPanelComponent add sub-task', () => {
   };
 
   beforeEach(async () => {
-    addSubTaskToSpy = jasmine.createSpy('addSubTaskTo').and.returnValue('new-sub-id');
+    addSubTaskNestedSpy = jasmine
+      .createSpy('addSubTaskNested')
+      .and.returnValue('new-sub-id');
 
     await TestBed.configureTestingModule({
       imports: [TaskDetailPanelComponent],
@@ -364,7 +374,8 @@ describe('TaskDetailPanelComponent add sub-task', () => {
             update: () => undefined,
             setSelectedId: () => undefined,
             focusTaskIfPossible: () => undefined,
-            addSubTaskTo: addSubTaskToSpy,
+            addSubTaskNested: addSubTaskNestedSpy,
+            getTaskDepth: () => 1,
             focusTaskById: () => undefined,
           },
         },
@@ -398,9 +409,11 @@ describe('TaskDetailPanelComponent add sub-task', () => {
     fixture.detectChanges();
   });
 
-  it('adds a sub-task to the shown task', () => {
+  it('adds a nested sub-task to the shown task', () => {
     component.addSubTask();
-    expect(addSubTaskToSpy).toHaveBeenCalledWith('P');
+    expect(addSubTaskNestedSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({ id: 'P' }),
+    );
   });
 
   it('routes the add-subtask shortcut to addSubTask (with prevent/stopPropagation)', () => {

@@ -50,7 +50,7 @@ describe('TaskService', () => {
     subTasks: Task[] = [],
   ): TaskWithSubTasks => ({
     ...task,
-    subTasks,
+    subTasks: subTasks.map((t) => ({ ...t, subTasks: [] })),
   });
 
   beforeEach(() => {
@@ -437,6 +437,45 @@ describe('TaskService', () => {
         }),
       );
       expect(id).toBeTruthy();
+    });
+  });
+
+  describe('addSubTaskNested', () => {
+    it('should dispatch addSubTask under the task itself when below max depth', () => {
+      const id = service.addSubTaskNested({ id: 'task-1', parentId: undefined });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'task-1',
+        }),
+      );
+      expect(id).toBeTruthy();
+    });
+
+    it('should not add a sibling when the task is already at max depth', () => {
+      store.setState({
+        tasks: {
+          ids: ['l1', 'l2', 'l3', 'l4'],
+          entities: {
+            l1: createMockTask('l1', { subTaskIds: ['l2'] }),
+            l2: createMockTask('l2', { parentId: 'l1', subTaskIds: ['l3'] }),
+            l3: createMockTask('l3', { parentId: 'l2', subTaskIds: ['l4'] }),
+            l4: createMockTask('l4', { parentId: 'l3' }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          lastCurrentTaskId: null,
+          isDataLoaded: true,
+        },
+      });
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      const id = service.addSubTaskNested({ id: 'l4', parentId: 'l3' });
+
+      expect(id).toBe('');
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 

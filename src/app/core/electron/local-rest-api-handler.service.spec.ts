@@ -45,7 +45,7 @@ describe('LocalRestApiHandlerService', () => {
     subTasks: Task[] = [],
   ): TaskWithSubTasks => ({
     ...task,
-    subTasks,
+    subTasks: subTasks.map((t) => ({ ...t, subTasks: [] })),
   });
 
   const mockElectronApi = (): void => {
@@ -114,6 +114,7 @@ describe('LocalRestApiHandlerService', () => {
         'moveToArchive',
         'restoreTask',
         'getAllTasksEverywhere',
+        'getTaskDepth',
       ],
       {
         allTasks$: of([]),
@@ -124,6 +125,7 @@ describe('LocalRestApiHandlerService', () => {
     );
     (taskServiceMock as any).add.and.returnValue('new-task-id');
     (taskServiceMock as any).addSubTaskTo.and.returnValue('new-subtask-id');
+    (taskServiceMock as any).getTaskDepth.and.returnValue(1);
 
     taskArchiveServiceMock = jasmine.createSpyObj(
       'TaskArchiveService',
@@ -594,11 +596,37 @@ describe('LocalRestApiHandlerService', () => {
           expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
         });
 
-        it('should return 400 when parentId refers to a task that is itself a subtask', async () => {
+        it('should create a nested subtask when parentId is below max depth', async () => {
+          const nestedParent = createMockTask('parent-1', { parentId: 'grandparent' });
+          const newSubTask = createMockTask('new-subtask-id', {
+            parentId: 'parent-1',
+            projectId: nestedParent.projectId,
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (id: string) =>
+              id === 'parent-1' ? of(nestedParent) : of(newSubTask),
+          });
+          taskServiceMock.getTaskDepth.and.returnValue(3);
+
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Child', parentId: 'parent-1' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(true);
+          expect(response.status).toBe(201);
+          expect(taskServiceMock.addSubTaskTo).toHaveBeenCalledWith('parent-1', {
+            title: 'Child',
+          });
+        });
+
+        it('should return 400 when parentId is already at max depth', async () => {
           const nestedParent = createMockTask('parent-1', { parentId: 'grandparent' });
           Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
             get: () => (_id: string) => of(nestedParent),
           });
+          taskServiceMock.getTaskDepth.and.returnValue(4);
 
           const response = await sendRequestAndWait(
             createRequest('POST', '/tasks', {
@@ -872,13 +900,32 @@ describe('LocalRestApiHandlerService', () => {
 
     describe('POST /tasks/:id/restore', () => {
       it('should restore an archived task', async () => {
-        const archivedTask = createMockTask('archivedTask1', { isDone: true });
+        const archivedGrandchild = createMockTask('archivedGrandchild1', {
+          isDone: true,
+          parentId: 'archivedSubtask1',
+        });
+        const archivedSubtask = createMockTask('archivedSubtask1', {
+          isDone: true,
+          parentId: 'archivedTask1',
+          subTaskIds: ['archivedGrandchild1'],
+        });
+        const archivedTask = createMockTask('archivedTask1', {
+          isDone: true,
+          subTaskIds: ['archivedSubtask1'],
+        });
         (taskArchiveServiceMock as any).hasTask.and.returnValue(Promise.resolve(true));
         (taskArchiveServiceMock as any).getById.and.returnValue(
           Promise.resolve(archivedTask),
         );
         (taskArchiveServiceMock as any).load.and.returnValue(
-          Promise.resolve({ ids: [], entities: {} } as TaskArchive),
+          Promise.resolve({
+            ids: ['archivedTask1', 'archivedSubtask1', 'archivedGrandchild1'],
+            entities: {
+              archivedTask1: archivedTask,
+              archivedSubtask1: archivedSubtask,
+              archivedGrandchild1: archivedGrandchild,
+            },
+          } as TaskArchive),
         );
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (_id: string) => of(archivedTask),
@@ -889,7 +936,10 @@ describe('LocalRestApiHandlerService', () => {
         );
 
         expect(response.body.ok).toBe(true);
-        expect(taskServiceMock.restoreTask).toHaveBeenCalled();
+        expect(taskServiceMock.restoreTask).toHaveBeenCalledWith(archivedTask, [
+          archivedSubtask,
+          archivedGrandchild,
+        ]);
       });
 
       it('should return 404 if task not in archive', async () => {

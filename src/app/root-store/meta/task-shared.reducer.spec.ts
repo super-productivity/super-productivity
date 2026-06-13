@@ -618,7 +618,10 @@ describe('taskSharedMetaReducer', () => {
       const action = createDeleteAction({
         id: 'task1',
         subTaskIds: ['subtask1'],
-        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task],
+        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task].map((t) => ({
+          ...t,
+          subTasks: [],
+        })),
       });
 
       expectStateUpdate(
@@ -654,7 +657,10 @@ describe('taskSharedMetaReducer', () => {
       const action = createDeleteAction({
         projectId: '',
         subTaskIds: ['subtask1'],
-        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task],
+        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task].map((t) => ({
+          ...t,
+          subTasks: [],
+        })),
       });
 
       expectStateUpdate(
@@ -824,7 +830,7 @@ describe('taskSharedMetaReducer', () => {
       subTasks: Task[] = [],
     ): TaskWithSubTasks => ({
       ...createMockTask(taskOverrides),
-      subTasks,
+      subTasks: subTasks.map((t) => ({ ...t, subTasks: [] })),
     });
 
     // Helper to create archive action with tasks
@@ -1698,7 +1704,7 @@ describe('taskSharedMetaReducer', () => {
         subTasks: [
           createMockTask({ id: 'subtask1', projectId: 'project1' }),
           createMockTask({ id: 'subtask2', projectId: 'project1' }),
-        ],
+        ].map((t) => ({ ...t, subTasks: [] })),
         subTaskIds: ['subtask1', 'subtask2'],
       };
 

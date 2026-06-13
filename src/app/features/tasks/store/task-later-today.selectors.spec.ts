@@ -606,7 +606,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     expect(subTaskIds).toContain('SUB_UNSCHEDULED_M');
   });
 
-  it('should expose scheduled nested subtasks as top-level when their direct parent is not included', () => {
+  it('should keep scheduled nested subtasks under the included top ancestor', () => {
     const grandparent = createMockTask({
       id: 'GRANDPARENT',
       title: 'Grandparent',
@@ -637,8 +637,11 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
 
     expect(result.length).toBe(1);
-    expect(result[0].id).toBe('CHILD_SCHEDULED');
-    expect(result[0].subTasks).toEqual([]);
+    expect(result[0].id).toBe('GRANDPARENT');
+    expect(result[0].subTasks.map((st) => st.id)).toEqual(['PARENT_MIDDLE']);
+    expect(result[0].subTasks[0].subTasks.map((st) => st.id)).toEqual([
+      'CHILD_SCHEDULED',
+    ]);
   });
 
   it('should include task with dueWithTime for today but no dueDay (virtual tag pattern)', () => {

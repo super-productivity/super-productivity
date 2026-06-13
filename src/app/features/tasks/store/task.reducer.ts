@@ -16,14 +16,15 @@ import {
   unsetCurrentTask,
   updateTaskUi,
 } from './task.actions';
-import { Task, TaskDetailTargetPanel, TaskState } from '../task.model';
+import { MAX_TASK_DEPTH, Task, TaskDetailTargetPanel, TaskState } from '../task.model';
 import { calcTotalTimeSpent } from '../util/calc-total-time-spent';
+import { canNestUnder, getDescendantIds, getTaskDepth } from '../util/task-tree.util';
 import { addTaskRepeatCfgToTask } from '../../task-repeat-cfg/store/task-repeat-cfg.actions';
 import {
   deleteTaskHelper,
   getTaskById,
   reCalcTimesForParentIfParent,
-  reCalcTimeSpentForParentIfParent,
+  reCalcTimeSpentForAncestors,
   updateTimeSpentForTask,
 } from './task.reducer.util';
 import { taskAdapter } from './task.adapter';
@@ -273,10 +274,12 @@ export const taskReducer = createReducer<TaskState>(
       const subTaskIds = task.subTaskIds;
       let taskToStartId = id;
       if (subTaskIds && subTaskIds.length) {
-        const undoneTasks = subTaskIds
-          .map((tid) => getTaskById(tid, state))
-          .filter((ta: Task) => !ta.isDone);
-        taskToStartId = undoneTasks.length ? undoneTasks[0].id : subTaskIds[0];
+        const descendants = getDescendantIds(id, state.entities)
+          .map((tid) => state.entities[tid])
+          .filter((ta): ta is Task => !!ta);
+        const leafDescendants = descendants.filter((ta) => ta.subTaskIds.length === 0);
+        const undoneLeaf = leafDescendants.find((ta) => !ta.isDone);
+        taskToStartId = undoneLeaf?.id ?? leafDescendants[0]?.id ?? subTaskIds[0];
       }
       return {
         ...taskAdapter.updateOne(
@@ -432,9 +435,20 @@ export const taskReducer = createReducer<TaskState>(
       return state;
     }
 
+    // Hard depth gate (#2657): the reducer is authoritative because op-log
+    // replay / REST / plugins all bypass the UI guard. Rejects a move that would
+    // push the moved subtree past MAX_TASK_DEPTH.
+    if (!canNestUnder(taskId, targetTaskId, state.entities)) {
+      TaskLog.warn(
+        `Cannot move task ${taskId} under ${targetTaskId}: would exceed max depth ${MAX_TASK_DEPTH}`,
+      );
+      return state;
+    }
+
     let newState = state;
     const oldPar = getTaskById(srcTaskId, state);
     const newPar = getTaskById(targetTaskId, state);
+    const movingDescendantIds = getDescendantIds(taskId, state.entities);
 
     // for old parent remove
     newState = taskAdapter.updateOne(
@@ -472,6 +486,20 @@ export const taskReducer = createReducer<TaskState>(
       },
       newState,
     );
+
+    if (movingDescendantIds.length) {
+      newState = taskAdapter.updateMany(
+        movingDescendantIds.map(
+          (id): Update<Task> => ({
+            id,
+            changes: {
+              projectId: newPar.projectId,
+            },
+          }),
+        ),
+        newState,
+      );
+    }
 
     return newState;
   }),
@@ -511,6 +539,16 @@ export const taskReducer = createReducer<TaskState>(
     const parentTask = state.entities[parentId];
     if (!parentTask) {
       devError(`Parent task ${parentId} not found when trying to add sub task`);
+      return state;
+    }
+
+    // Hard depth gate (#2657): a sub-task of a parent already at MAX_TASK_DEPTH
+    // would exceed the cap. Authoritative here since op-log replay / REST /
+    // plugins bypass the UI.
+    if (getTaskDepth(parentId, state.entities) >= MAX_TASK_DEPTH) {
+      devError(
+        `Cannot add sub task under ${parentId}: max nesting depth ${MAX_TASK_DEPTH} reached`,
+      );
       return state;
     }
 
@@ -579,7 +617,7 @@ export const taskReducer = createReducer<TaskState>(
     const idsToUpdateDirectly: string[] = taskIds.filter((id) => {
       const task: Task = getTaskById(id, state);
       return (
-        (task.subTaskIds.length === 0 || !!task.parentId) &&
+        task.subTaskIds.length === 0 &&
         (!isLimitToProject || task.projectId === projectId)
       );
     });
@@ -610,7 +648,7 @@ export const taskReducer = createReducer<TaskState>(
     const newState = taskAdapter.updateMany(updateSubsAndMainWithoutSubs, state);
     // reCalc parents
     return parentTaskToReCalcIds.reduce(
-      (acc, parentId) => reCalcTimeSpentForParentIfParent(parentId, acc),
+      (acc, parentId) => reCalcTimeSpentForAncestors(parentId, acc),
       newState,
     );
   }),

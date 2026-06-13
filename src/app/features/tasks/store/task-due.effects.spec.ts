@@ -392,6 +392,7 @@ describe('TaskDueEffects', () => {
       });
 
       store.overrideSelector(selectTasksDueForDay, [parentTask, subtask]);
+      store.overrideSelector(selectAllTasks, [parentTask, subtask]);
       // Parent is in TODAY, subtask is not
       store.overrideSelector(selectTodayTaskIds, ['parent-1']);
       store.refreshState();

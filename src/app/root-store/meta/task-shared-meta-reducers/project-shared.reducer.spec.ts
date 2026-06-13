@@ -155,7 +155,7 @@ describe('projectSharedMetaReducer', () => {
         subTasks: [
           createMockTask({ id: 'subtask1', projectId: 'project1' }),
           createMockTask({ id: 'subtask2', projectId: 'project1' }),
-        ],
+        ].map((t) => ({ ...t, subTasks: [] })),
         subTaskIds: ['subtask1', 'subtask2'],
       };
 
@@ -249,7 +249,7 @@ describe('projectSharedMetaReducer', () => {
             projectId: 'project1',
             parentId: 'parent-task',
           }),
-        ],
+        ].map((t) => ({ ...t, subTasks: [] })),
         subTaskIds: ['subtask1', 'subtask2', 'subtask3'],
       };
 

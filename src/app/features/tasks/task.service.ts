@@ -9,6 +9,7 @@ import {
   DEFAULT_TASK,
   DropListModelSource,
   HideSubTasksMode,
+  MAX_TASK_DEPTH,
   Task,
   TaskArchive,
   TaskCopy,
@@ -17,6 +18,7 @@ import {
   TaskState,
   TaskWithSubTasks,
 } from './task.model';
+import { getDescendantIds, getTaskDepth } from './util/task-tree.util';
 import { select, Store } from '@ngrx/store';
 import {
   addSubTask,
@@ -780,6 +782,25 @@ export class TaskService {
     return task.id;
   }
 
+  getTaskDepth(taskId: string): number {
+    return getTaskDepth(taskId, this._taskEntities());
+  }
+
+  /**
+   * Add a sub-task nested under `task` (building tree depth). The UI hides this
+   * action at MAX_TASK_DEPTH; keep the service guarded too so keyboard/menu
+   * callers cannot create a 5th level.
+   */
+  addSubTaskNested(task: Pick<Task, 'id' | 'parentId'>): string {
+    if (this.getTaskDepth(task.id) >= MAX_TASK_DEPTH) {
+      TaskLog.warn('Cannot add nested sub task: max task depth reached', {
+        taskId: task.id,
+      });
+      return '';
+    }
+    return this.addSubTaskTo(task.id);
+  }
+
   /**
    * Focus a task element by id, deferred via double-RAF so it runs after
    * Angular renders the next frame. When `shouldStartEditing` is true and
@@ -1306,7 +1327,7 @@ export class TaskService {
           ? {
               task: archiveTaskWithSameIssue as Task,
               subTasks: archiveTaskWithSameIssue.subTaskIds
-                ? archiveTaskWithSameIssue.subTaskIds
+                ? getDescendantIds(archiveTaskWithSameIssue.id, archiveTaskState.entities)
                     .map((id) => archiveTaskState.entities[id])
                     .filter((task): task is Task => !!task)
                 : null,

@@ -19,6 +19,7 @@ import { WorkContextType } from '../../../features/work-context/work-context.mod
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
+import { getDescendantIds } from '../../../features/tasks/util/task-tree.util';
 
 // Must run before taskSharedCrudMetaReducer — handlers read pre-update
 // task state to compute cleanups. Position pinned by
@@ -36,10 +37,8 @@ const collectAffectedTaskIds = (
   const taskState = state[TASK_FEATURE_NAME];
   const all = new Set<string>(primaryTaskIds);
   for (const id of primaryTaskIds) {
-    const t = taskState.entities[id];
-    if (t?.subTaskIds?.length) {
-      for (const sub of t.subTaskIds) all.add(sub);
-    }
+    // Collect the whole subtree, not just direct children (#2657).
+    for (const sub of getDescendantIds(id, taskState.entities)) all.add(sub);
   }
   return Array.from(all);
 };
@@ -370,7 +369,9 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     const targetParent = state[TASK_FEATURE_NAME].entities[targetParentId] as
       | Task
       | undefined;
-    if (!canApplyConvertToSubTask(task, targetParent)) {
+    if (
+      !canApplyConvertToSubTask(task, targetParent, state[TASK_FEATURE_NAME].entities)
+    ) {
       return state;
     }
     return handleTaskRemoval(state, [taskId]);

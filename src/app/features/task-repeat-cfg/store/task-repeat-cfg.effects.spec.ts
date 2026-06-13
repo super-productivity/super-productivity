@@ -69,7 +69,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
   const mockTaskWithSubTasks: TaskWithSubTasks = {
     ...mockTask,
-    subTasks: [mockSubTask1, mockSubTask2],
+    subTasks: [mockSubTask1, mockSubTask2].map((t) => ({ ...t, subTasks: [] })),
   };
 
   const mockRepeatCfg: TaskRepeatCfgCopy = {

@@ -20,11 +20,11 @@ const createTask = (overrides: Partial<Task> = {}): Task =>
   }) as Task;
 
 const createTaskWithSubTasks = (
-  overrides: Partial<TaskWithSubTasks> = {},
+  overrides: Partial<Omit<TaskWithSubTasks, 'subTasks'>> & { subTasks?: Task[] } = {},
 ): TaskWithSubTasks => ({
   ...createTask(),
-  subTasks: [],
   ...overrides,
+  subTasks: (overrides.subTasks ?? []).map((t) => ({ ...t, subTasks: [] })),
 });
 
 describe('isBlankTask', () => {

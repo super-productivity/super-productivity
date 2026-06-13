@@ -1,13 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { TaskService } from '../../features/tasks/task.service';
-import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+import { MAX_TASK_DEPTH, Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
+import { getDescendantIds } from '../../features/tasks/util/task-tree.util';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -381,12 +382,12 @@ export class LocalRestApiHandlerService {
         );
       }
 
-      if (parent.parentId) {
+      if (this._taskService.getTaskDepth(body.parentId) >= MAX_TASK_DEPTH) {
         return createErrorResponse(
           requestId,
           400,
           'INVALID_PARENT',
-          'Cannot nest subtasks: parent task is itself a subtask',
+          `Cannot create subtask below maximum task depth of ${MAX_TASK_DEPTH}`,
         );
       }
 
@@ -514,7 +515,7 @@ export class LocalRestApiHandlerService {
 
     if (archivedTask.subTaskIds?.length) {
       const archive = await this._taskArchiveService.load();
-      for (const subTaskId of archivedTask.subTaskIds) {
+      for (const subTaskId of getDescendantIds(archivedTask.id, archive.entities)) {
         if (archive.entities[subTaskId]) {
           subTasks.push(archive.entities[subTaskId]);
         }

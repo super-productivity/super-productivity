@@ -5,6 +5,7 @@ import {
   parseMarkdownTasks,
   convertToMarkdownNotes,
   parseMarkdownTasksWithStructure,
+  type ParsedMarkdownSubTask,
 } from '../../util/parse-markdown-tasks';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
@@ -112,21 +113,7 @@ export class MarkdownPasteService {
 
           // Create sub-tasks if any
           if (mainTask.subTasks && mainTask.subTasks.length > 0) {
-            for (const subTask of mainTask.subTasks) {
-              const { title, timeProps } = this._parseTimeProps(subTask.title);
-              const subTaskObj = this._taskService.createNewTaskWithDefaults({
-                title,
-                additional: {
-                  isDone: subTask.isCompleted,
-                  parentId: parentTaskId,
-                  notes: subTask.notes,
-                  ...timeProps,
-                },
-              });
-              this._store.dispatch(
-                addSubTask({ task: subTaskObj, parentId: parentTaskId }),
-              );
-            }
+            this._createNestedSubTasks(parentTaskId, mainTask.subTasks);
           }
         }
         return;
@@ -215,5 +202,28 @@ export class MarkdownPasteService {
       title: originalTitle,
     });
     return { title: cleanedTitle ?? originalTitle, timeProps };
+  }
+
+  private _createNestedSubTasks(
+    parentTaskId: string,
+    subTasks: ParsedMarkdownSubTask[],
+  ): void {
+    for (const subTask of subTasks) {
+      const { title, timeProps } = this._parseTimeProps(subTask.title);
+      const subTaskObj = this._taskService.createNewTaskWithDefaults({
+        title,
+        additional: {
+          isDone: subTask.isCompleted,
+          parentId: parentTaskId,
+          notes: subTask.notes,
+          ...timeProps,
+        },
+      });
+      this._store.dispatch(addSubTask({ task: subTaskObj, parentId: parentTaskId }));
+
+      if (subTask.subTasks?.length) {
+        this._createNestedSubTasks(subTaskObj.id, subTask.subTasks);
+      }
+    }
   }
 }

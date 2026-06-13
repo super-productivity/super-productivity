@@ -300,6 +300,7 @@
           [listModelId]="t.id"
           [parentId]="t.id"
           [tasks]="t.subTasks"
+          [treeDepth]="treeDepth() + 1"
           listId="SUB"
         ></task-list>
       </div>
@@ -320,6 +321,7 @@
     #taskContextMenu
     [isAdvancedControls]="true"
     [task]="t"
+    [taskDepth]="treeDepth()"
   ></task-context-menu>
 }
 

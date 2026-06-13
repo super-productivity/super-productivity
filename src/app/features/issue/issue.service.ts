@@ -29,7 +29,7 @@ import {
   NEXTCLOUD_DECK_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
-import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
+import { IssueTask, MAX_TASK_DEPTH, Task, TaskCopy } from '../tasks/task.model';
 import { IssueServiceInterface } from './issue-service-interface';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
 import { TrelloCommonInterfacesService } from './providers/trello/trello-common-interfaces.service';
@@ -587,10 +587,9 @@ export class IssueService {
 
     let taskId: string | undefined;
 
-    // parentTaskId is the SP task under which _addSubTasks should attach children.
-    // When the task is added as a sub-task, this is the root SP parent (not the
-    // newly-added sub-task itself) so that CalDAV grandchildren are flattened to
-    // the same nesting level instead of creating unsupported grandchildren.
+    // parentTaskId is the SP task under which _addSubTasks should attach provider
+    // children. When the imported issue is itself added as a subtask, this is
+    // the newly-created task so the provider hierarchy stays intact.
     let subTaskParentId: string | undefined;
 
     if (related_to) {
@@ -655,6 +654,15 @@ export class IssueService {
         return;
       }
 
+      if (this._taskService.getTaskDepth(parentTaskId) >= MAX_TASK_DEPTH) {
+        IssueLog.warn('Failed to add provider subtasks: max task depth reached', {
+          issueProviderKey,
+          issueProviderId,
+          parentTaskId,
+        });
+        return;
+      }
+
       for (const subtask of subtasks) {
         const subTaskData = this._getAddTaskData(issueProviderKey, subtask);
         const { title: subTaskTitle, ...subTaskAdditional } = subTaskData;
@@ -704,12 +712,18 @@ export class IssueService {
       subTaskData.dueDay = undefined;
     }
 
-    // SP supports only one nesting level. If the resolved parent is itself a
-    // sub-task (has a parentId), attach to its root parent so the new task
-    // becomes a sibling of the parent rather than a grandchild.
-    const effectiveParentId = parentTask.task.parentId || parentTask.task.id;
+    const effectiveParentId = parentTask.task.id;
+    if (this._taskService.getTaskDepth(effectiveParentId) >= MAX_TASK_DEPTH) {
+      IssueLog.warn('Failed to add subtask: max task depth reached', {
+        issueProviderKey,
+        issueProviderId,
+        issueParentId,
+        parentTaskId: effectiveParentId,
+      });
+      return undefined;
+    }
     const taskId = await this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
-    return { taskId, parentTaskId: effectiveParentId };
+    return { taskId, parentTaskId: taskId };
   }
 
   private async _checkAndHandleIssueAlreadyAdded(

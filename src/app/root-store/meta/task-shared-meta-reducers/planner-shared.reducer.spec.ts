@@ -345,12 +345,30 @@ describe('plannerSharedMetaReducer', () => {
       expect(resultState.planner.days['2024-01-16']).toEqual(['task1', 'task2']);
     });
 
-    it('should remove subtasks when moving parent task to planner day', () => {
-      const testState = createStateWithExistingTasks([], [], [], []);
+    it('should remove the subtask tree when moving parent task to planner day', () => {
+      const testState = createStateWithExistingTasks(
+        ['parent', 'sub1', 'grandchild1', 'task1', 'task2', 'sub2'],
+        [],
+        [],
+        [],
+      );
       testState.planner = {
         ...testState.planner,
-        days: { '2024-01-16': ['task1', 'sub1', 'task2', 'sub2'] },
+        days: { '2024-01-16': ['task1', 'sub1', 'grandchild1', 'task2', 'sub2'] },
       };
+      testState.tasks.entities['parent'] = createMockTask({
+        id: 'parent',
+        subTaskIds: ['sub1', 'sub2'],
+      });
+      testState.tasks.entities['sub1'] = createMockTask({
+        id: 'sub1',
+        parentId: 'parent',
+        subTaskIds: ['grandchild1'],
+      });
+      testState.tasks.entities['grandchild1'] = createMockTask({
+        id: 'grandchild1',
+        parentId: 'sub1',
+      });
       const task = createMockTask({
         id: 'parent',
         subTaskIds: ['sub1', 'sub2'],

@@ -5,6 +5,7 @@ import { SimpleCounter } from '../simple-counter/simple-counter.model';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
+import { getDescendantIds } from '../tasks/util/task-tree.util';
 import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -149,7 +150,7 @@ export class HistoryComponent {
           let subTasks: Task[] | undefined;
           if (task.subTaskIds && task.subTaskIds.length) {
             const archiveState = await this._taskArchiveService.load();
-            subTasks = task.subTaskIds
+            subTasks = getDescendantIds(task.id, archiveState.entities)
               .map((id) => archiveState.entities[id])
               .filter((t): t is Task => !!t);
           }

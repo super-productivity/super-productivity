@@ -309,6 +309,37 @@ describe('Task Reducer', () => {
         const result = taskReducer(state, action);
         expect(result.entities['sub1']!.projectId).toBe('project2');
       });
+
+      it('should update descendant projectIds when moving an intermediate subtask', () => {
+        const state: TaskState = {
+          ...initialTaskState,
+          ids: ['parent1', 'parent2', 'sub1', 'leaf'],
+          entities: {
+            parent1: createTask('parent1', {
+              subTaskIds: ['sub1'],
+              projectId: 'project1',
+            }),
+            parent2: createTask('parent2', { subTaskIds: [], projectId: 'project2' }),
+            sub1: createTask('sub1', {
+              parentId: 'parent1',
+              projectId: 'project1',
+              subTaskIds: ['leaf'],
+            }),
+            leaf: createTask('leaf', { parentId: 'sub1', projectId: 'project1' }),
+          },
+        };
+
+        const action = fromActions.moveSubTask({
+          taskId: 'sub1',
+          srcTaskId: 'parent1',
+          targetTaskId: 'parent2',
+          afterTaskId: null,
+        });
+
+        const result = taskReducer(state, action);
+        expect(result.entities['sub1']!.projectId).toBe('project2');
+        expect(result.entities['leaf']!.projectId).toBe('project2');
+      });
     });
 
     describe('edge cases', () => {
@@ -578,6 +609,23 @@ describe('Task Reducer', () => {
       const state = taskReducer(stateWithTasks, action);
 
       expect(state.currentTaskId).toBe('task2');
+    });
+
+    it('should start the first undone leaf descendant for a nested parent', () => {
+      const nestedState: TaskState = {
+        ...initialTaskState,
+        ids: ['root', 'mid', 'doneLeaf', 'leaf'],
+        entities: {
+          root: createTask('root', { subTaskIds: ['mid'] }),
+          mid: createTask('mid', { parentId: 'root', subTaskIds: ['doneLeaf', 'leaf'] }),
+          doneLeaf: createTask('doneLeaf', { parentId: 'mid', isDone: true }),
+          leaf: createTask('leaf', { parentId: 'mid' }),
+        },
+      };
+      const state = taskReducer(nestedState, fromActions.setCurrentTask({ id: 'root' }));
+
+      expect(state.currentTaskId).toBe('leaf');
+      expect(state.entities['leaf']!.isDone).toBe(false);
     });
 
     it('should unset current task', () => {
@@ -1112,6 +1160,45 @@ describe('Task Reducer', () => {
       });
 
       expect(() => taskReducer(stateWithUndefined, action)).not.toThrow();
+    });
+
+    it('should not directly round an intermediate nested task', () => {
+      const day = '2026-04-02';
+      const twentyMinutes = 20 * 60 * 1000;
+      const stateWithNestedTask: TaskState = {
+        ...initialTaskState,
+        ids: ['root', 'mid', 'leaf'],
+        entities: {
+          root: createTask('root', {
+            subTaskIds: ['mid'],
+            timeSpentOnDay: { [day]: twentyMinutes },
+            timeSpent: twentyMinutes,
+          }),
+          mid: createTask('mid', {
+            parentId: 'root',
+            subTaskIds: ['leaf'],
+            timeSpentOnDay: { [day]: twentyMinutes },
+            timeSpent: twentyMinutes,
+          }),
+          leaf: createTask('leaf', {
+            parentId: 'mid',
+            timeSpentOnDay: { [day]: twentyMinutes },
+            timeSpent: twentyMinutes,
+          }),
+        },
+      };
+      const action = fromActions.roundTimeSpentForDay({
+        day,
+        taskIds: ['mid'],
+        isRoundUp: false,
+        roundTo: 'QUARTER',
+        projectId: undefined,
+      });
+
+      const result = taskReducer(stateWithNestedTask, action);
+
+      expect(result.entities['mid']!.timeSpentOnDay[day]).toBe(twentyMinutes);
+      expect(result.entities['root']!.timeSpentOnDay[day]).toBe(twentyMinutes);
     });
   });
 });

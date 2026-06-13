@@ -28,7 +28,7 @@ describe('Issue #4846: Move to Archive with Subtasks', () => {
     subTasks: Task[] = [],
   ): TaskWithSubTasks => ({
     ...task,
-    subTasks,
+    subTasks: subTasks.map((t) => ({ ...t, subTasks: [] })),
   });
 
   describe('Bug Demonstration', () => {

@@ -636,7 +636,8 @@ describe('TaskRepeatCleanupEffects', () => {
         parentId: 'subtasks-yesterday',
         isDone: false,
         timeSpent: 0,
-      } as Task);
+        subTasks: [],
+      });
       const todayInstance = wrapWithSubTasks({
         ...DEFAULT_TASK,
         projectId: 'p1',
@@ -656,7 +657,8 @@ describe('TaskRepeatCleanupEffects', () => {
         parentId: 'subtasks-today',
         isDone: false,
         timeSpent: 0,
-      } as Task);
+        subTasks: [],
+      });
 
       repeatableTasks$.next([yesterdayEdited, todayInstance]);
 
@@ -698,7 +700,8 @@ describe('TaskRepeatCleanupEffects', () => {
         isDone: false,
         timeSpent: 0,
         attachments: [{ id: 'sub-a1', type: 'LINK', path: 'https://x', title: 'x' }],
-      } as Task);
+        subTasks: [],
+      });
       const todayInstance = wrapWithSubTasks({
         ...DEFAULT_TASK,
         projectId: 'p1',
@@ -718,7 +721,8 @@ describe('TaskRepeatCleanupEffects', () => {
         parentId: 'subtask-meta-today',
         isDone: false,
         timeSpent: 0,
-      } as Task);
+        subTasks: [],
+      });
 
       repeatableTasks$.next([yesterdayEdited, todayInstance]);
 
@@ -945,7 +949,8 @@ describe('TaskRepeatCleanupEffects', () => {
         parentId: 'sub-done-yesterday',
         isDone: true,
         timeSpent: 0,
-      } as Task);
+        subTasks: [],
+      });
       const todayInstance = wrapWithSubTasks({
         ...DEFAULT_TASK,
         projectId: 'p1',
@@ -965,7 +970,8 @@ describe('TaskRepeatCleanupEffects', () => {
         parentId: 'sub-done-today',
         isDone: false,
         timeSpent: 0,
-      } as Task);
+        subTasks: [],
+      });
 
       repeatableTasks$.next([yesterdayWithDoneSub, todayInstance]);
 

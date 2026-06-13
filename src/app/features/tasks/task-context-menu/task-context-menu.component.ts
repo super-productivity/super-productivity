@@ -21,6 +21,7 @@ export class TaskContextMenuComponent {
 
   task = input.required<TaskWithSubTasks | Task>();
   isAdvancedControls = input<boolean>(false);
+  taskDepth = input(1);
 
   isShowInner: boolean = false;
 

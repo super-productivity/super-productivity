@@ -16,6 +16,7 @@ import { first } from 'rxjs/operators';
 import { selectTasksWithSubTasksByIds } from '../../../features/tasks/store/task.selectors';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslatePipe } from '@ngx-translate/core';
+import { TaskWithSubTasks } from '../../../features/tasks/task.model';
 
 @Component({
   selector: 'plan-tasks-tomorrow',
@@ -49,19 +50,22 @@ export class PlanTasksTomorrowComponent {
       .select(selectTasksWithSubTasksByIds, { ids })
       .pipe(first())
       .toPromise();
+    const planDueTodaySubTasks = (subTasks: TaskWithSubTasks[] = []): void => {
+      subTasks.forEach((subTask) => {
+        if (subTask.dueDay && subTask.dueDay === todayStr) {
+          this._store.dispatch(
+            PlannerActions.planTaskForDay({ day: tomorrow!.dayDate, task: subTask }),
+          );
+        }
+        planDueTodaySubTasks(subTask.subTasks);
+      });
+    };
+
     tasks.forEach((task) => {
       this._store.dispatch(
         PlannerActions.planTaskForDay({ day: tomorrow!.dayDate, task }),
       );
-      if (task.subTasks) {
-        task.subTasks.forEach((subTask) => {
-          if (subTask.dueDay && subTask.dueDay === todayStr) {
-            this._store.dispatch(
-              PlannerActions.planTaskForDay({ day: tomorrow!.dayDate, task: subTask }),
-            );
-          }
-        });
-      }
+      planDueTodaySubTasks(task.subTasks);
     });
   }
 }

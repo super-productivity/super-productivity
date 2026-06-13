@@ -29,8 +29,18 @@ export const reCalcTimesForParentIfParent = (
   parentId: string,
   state: TaskState,
 ): TaskState => {
-  const stateWithTimeEstimate = reCalcTimeEstimateForParentIfParent(parentId, state);
-  return reCalcTimeSpentForParentIfParent(parentId, stateWithTimeEstimate);
+  // Roll up estimate + spent for the parent AND every ancestor above it, bottom-up
+  // so each level reads its children's already-recalculated values (#2657).
+  let s = state;
+  let currentId: string | undefined = parentId;
+  const visited = new Set<string>();
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    s = reCalcTimeEstimateForParentIfParent(currentId, s);
+    s = reCalcTimeSpentForParentIfParent(currentId, s);
+    currentId = s.entities[currentId]?.parentId;
+  }
+  return s;
 };
 
 export const reCalcTimeSpentForParentIfParent = (
@@ -116,15 +126,63 @@ export const reCalcTimeEstimateForParentIfParent = (
     {
       id: parentId,
       changes: {
-        timeEstimate: subTasks.reduce(
-          (acc: number, st: Task) =>
-            acc + (st.isDone ? 0 : Math.max(0, st.timeEstimate - st.timeSpent)),
-          0,
-        ),
+        timeEstimate: subTasks.reduce((acc: number, st: Task) => {
+          if (st.isDone) {
+            return acc;
+          }
+          // A non-leaf child's timeEstimate is ALREADY its rolled-up remaining
+          // estimate (sum of its own children's remaining); subtracting its
+          // also-rolled-up timeSpent again would double-count. Only leaves
+          // compute remaining as est - spent. (#2657)
+          const remaining = st.subTaskIds?.length
+            ? st.timeEstimate
+            : Math.max(0, st.timeEstimate - st.timeSpent);
+          return acc + remaining;
+        }, 0),
       },
     },
     state,
   );
+};
+
+/**
+ * Roll up the time *estimate* for `parentId` and every ancestor above it. `upd`
+ * (a pending child change not yet in state, e.g. an isDone toggle) is only
+ * considered at the immediate-parent level. Bottom-up so each level reads its
+ * children's freshly-rolled-up estimate. (#2657)
+ */
+export const reCalcTimeEstimateForAncestors = (
+  parentId: string,
+  state: TaskState,
+  upd?: Update<TaskCopy>,
+): TaskState => {
+  let s = state;
+  let currentId: string | undefined = parentId;
+  let pendingUpd = upd;
+  const visited = new Set<string>();
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    s = reCalcTimeEstimateForParentIfParent(currentId, s, pendingUpd);
+    pendingUpd = undefined;
+    currentId = s.entities[currentId]?.parentId;
+  }
+  return s;
+};
+
+/** Roll up the time *spent* for `parentId` and every ancestor above it. (#2657) */
+export const reCalcTimeSpentForAncestors = (
+  parentId: string,
+  state: TaskState,
+): TaskState => {
+  let s = state;
+  let currentId: string | undefined = parentId;
+  const visited = new Set<string>();
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    s = reCalcTimeSpentForParentIfParent(currentId, s);
+    currentId = s.entities[currentId]?.parentId;
+  }
+  return s;
 };
 
 export const updateDoneOnForTask = (
@@ -260,7 +318,7 @@ export const updateTimeSpentForTask = (
   const oldTimeSpentOnDay = task.timeSpentOnDay;
   const timeSpent = calcTotalTimeSpent(newTimeSpentOnDay);
 
-  const stateAfterUpdate = taskAdapter.updateOne(
+  let stateAfterUpdate = taskAdapter.updateOne(
     {
       id,
       changes: {
@@ -271,15 +329,21 @@ export const updateTimeSpentForTask = (
     state,
   );
 
-  // Use incremental update for parent instead of full recalculation
-  return task.parentId
-    ? updateParentTimeSpentIncremental(
-        task.parentId,
-        oldTimeSpentOnDay,
-        newTimeSpentOnDay,
-        stateAfterUpdate,
-      )
-    : stateAfterUpdate;
+  // Use incremental update instead of full recalculation, climbing the whole
+  // ancestor chain — the per-day delta propagates equally to every ancestor (#2657).
+  let parentId = task.parentId;
+  const visited = new Set<string>([id]);
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    stateAfterUpdate = updateParentTimeSpentIncremental(
+      parentId,
+      oldTimeSpentOnDay,
+      newTimeSpentOnDay,
+      stateAfterUpdate,
+    );
+    parentId = stateAfterUpdate.entities[parentId]?.parentId;
+  }
+  return stateAfterUpdate;
 };
 
 export const updateTimeEstimateForTask = (
@@ -302,7 +366,7 @@ export const updateTimeEstimateForTask = (
           )
         : state;
     return task.parentId
-      ? reCalcTimeEstimateForParentIfParent(task.parentId, stateAfterUpdate, upd)
+      ? reCalcTimeEstimateForAncestors(task.parentId, stateAfterUpdate, upd)
       : stateAfterUpdate;
   }
   return state;
@@ -323,24 +387,52 @@ export const deleteTaskHelper = (
     stateCopy = removeTaskFromParentSideEffects(stateCopy, taskToDelete, true);
   }
 
-  // SUB TASK side effects
-  // also delete all sub tasks if any
+  // SUB TASK side effects — recursively delete the WHOLE subtree (#2657), not
+  // just direct children.
   const payloadSubTaskIds = taskToDelete.subTaskIds || [];
 
-  // DEFENSIVE FIX: Also check state for subtasks not in subTaskIds.
-  // This handles race conditions where subtasks were added but parent's
-  // subTaskIds wasn't synced before a SYNC_IMPORT + moveToArchive.
-  // See: https://github.com/johannesjo/super-productivity/issues/XXXX
-  const stateSubTaskIds = (state.ids as string[]).filter(
-    (id) => state.entities[id]?.parentId === taskToDelete.id,
-  );
+  // Build a parent→children index from state once, then BFS the full subtree.
+  // We walk parentId back-references (the source of truth for membership, even
+  // when a parent's subTaskIds is stale after a sync race) so no descendant is
+  // left orphaned at any depth.
+  const childrenByParent = new Map<string, string[]>();
+  for (const id of state.ids as string[]) {
+    const pid = state.entities[id]?.parentId;
+    if (pid) {
+      const siblings = childrenByParent.get(pid);
+      if (siblings) {
+        siblings.push(id);
+      } else {
+        childrenByParent.set(pid, [id]);
+      }
+    }
+  }
 
-  // Find orphans: subtasks in state but NOT in payload's subTaskIds
-  const orphanSubTaskIds = stateSubTaskIds.filter(
+  const stateSubTaskIds: string[] = [];
+  const visited = new Set<string>([taskToDelete.id]);
+  let frontier: string[] = [taskToDelete.id];
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const childId of childrenByParent.get(id) ?? []) {
+        if (!visited.has(childId)) {
+          visited.add(childId);
+          stateSubTaskIds.push(childId);
+          next.push(childId);
+        }
+      }
+    }
+    frontier = next;
+  }
+
+  // DEFENSIVE diagnostic: direct subtasks present in state but missing from the
+  // payload's subTaskIds indicate a sync race (subtask added but parent's
+  // subTaskIds not synced before a SYNC_IMPORT + moveToArchive). Scoped to
+  // DIRECT children so legitimately-nested grandchildren don't trip the warning.
+  const directStateChildren = childrenByParent.get(taskToDelete.id) ?? [];
+  const orphanSubTaskIds = directStateChildren.filter(
     (id) => !payloadSubTaskIds.includes(id),
   );
-
-  // Log devError if we found orphan subtasks - this indicates an upstream bug
   if (orphanSubTaskIds.length > 0) {
     devError(
       `[deleteTaskHelper] Found ${orphanSubTaskIds.length} orphan subtask(s) not in parent's subTaskIds. ` +
@@ -349,7 +441,7 @@ export const deleteTaskHelper = (
     );
   }
 
-  // Combine both lists to ensure all subtasks are removed
+  // Combine both lists to ensure all subtasks (at any depth) are removed
   const allSubTaskIds = [...new Set([...payloadSubTaskIds, ...stateSubTaskIds])];
 
   if (allSubTaskIds.length > 0) {
@@ -397,10 +489,10 @@ export const removeTaskFromParentSideEffects = (
     },
     state,
   );
-  // also update time spent for parent if it was not copied over from sub task
+  // also update time spent for parent (and all ancestors) if it was not copied
+  // over from sub task
   if (!isWasLastSubTask || !isCopyTimesAfterLast) {
-    newState = reCalcTimeSpentForParentIfParent(parentId, newState);
-    newState = reCalcTimeEstimateForParentIfParent(parentId, newState);
+    newState = reCalcTimesForParentIfParent(parentId, newState);
   }
   return newState;
 };

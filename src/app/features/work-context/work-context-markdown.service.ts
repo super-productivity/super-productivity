@@ -138,15 +138,14 @@ export class WorkContextMarkdownService {
   private _buildMarkdownChecklist(tasks: TaskWithSubTasks[]): string {
     const lines: string[] = [];
 
-    tasks.forEach((task) => {
-      lines.push(this._formatTaskLine(task));
-
+    const walk = (task: TaskWithSubTasks, depth: number): void => {
+      lines.push(this._formatTaskLine(task, depth));
       if (task.subTasks?.length) {
-        task.subTasks.forEach((subTask) => {
-          lines.push(this._formatTaskLine(subTask, 1));
-        });
+        task.subTasks.forEach((subTask) => walk(subTask, depth + 1));
       }
-    });
+    };
+
+    tasks.forEach((task) => walk(task, 0));
 
     return lines.join('\n');
   }
