@@ -18,6 +18,7 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
+import { KeyboardConfig } from '../keyboard-config.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 
@@ -356,7 +357,7 @@ describe('GlobalConfigEffects', () => {
           globalAddTask: null,
           globalToggleTaskWidget: undefined,
           toggleBacklog: 'Ctrl+Y',
-        } as any;
+        } as KeyboardConfig;
 
         const result = mapKeyboardConfigToQwerty(keyboardCfg, mockLayout);
 
