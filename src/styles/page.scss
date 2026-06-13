@@ -287,7 +287,11 @@ body.isQuickAddRoute {
   .mat-mdc-menu-panel,
   .mat-mdc-select-panel,
   .mat-mdc-autocomplete-panel,
-  .mat-mdc-snack-bar-container {
+  .mat-mdc-snack-bar-container,
+  .mat-datepicker-content,
+  .mat-mdc-datepicker-content,
+  .mention-menu,
+  .mention-dropdown {
     background-color: var(--surface-2) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
