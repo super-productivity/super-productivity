@@ -35,6 +35,7 @@ const EXPECTED_REPLAY_OPERATION_SELECT = {
   opType: true,
   entityType: true,
   entityId: true,
+  entityIds: true,
   payload: true,
   schemaVersion: true,
   isPayloadEncrypted: true,
