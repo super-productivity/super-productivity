@@ -505,6 +505,33 @@ describe('OperationLogEffects', () => {
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
     }));
 
+    it('should NOT dequeue a second time on the quota-exceeded retry (#8307)', fakeAsync(() => {
+      // Regression: the first attempt consumes this action's queue entry via
+      // dequeue() BEFORE appendWithVectorClockUpdate throws the quota error. The
+      // retry after emergency compaction must skip dequeue, otherwise it steals
+      // the NEXT pending action's entry.
+      const quotaError = new DOMException('Quota exceeded', 'QuotaExceededError');
+      let appendCount = 0;
+      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(() => {
+        appendCount++;
+        if (appendCount === 1) {
+          return Promise.reject(quotaError);
+        }
+        return Promise.resolve(1);
+      });
+      mockOperationCaptureService.dequeue.and.returnValue([]);
+
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe();
+
+      tick(100);
+      // Append ran twice (initial + retry) but dequeue ran exactly once.
+      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+      expect(mockOperationCaptureService.dequeue).toHaveBeenCalledTimes(1);
+    }));
+
     it('should use updated clientId after backup import generates new one', (done) => {
       const action1 = createPersistentAction(ActionType.TASK_SHARED_ADD);
       const action2 = createPersistentAction(ActionType.TASK_SHARED_UPDATE);

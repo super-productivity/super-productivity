@@ -329,7 +329,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
           );
           this.notifyUserAndTriggerRollback();
         } else {
-          await this.handleQuotaExceeded(action, skipDequeue, options);
+          await this.handleQuotaExceeded(action, options);
         }
       } else {
         this.notifyUserAndTriggerRollback();
@@ -455,7 +455,6 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    */
   private async handleQuotaExceeded(
     action: PersistentAction,
-    skipDequeue = false,
     options: WriteOperationOptions = {},
   ): Promise<void> {
     OpLog.err(
@@ -487,8 +486,17 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         try {
           // Set circuit breaker before retry to prevent recursive handling
           this.isHandlingQuotaExceeded = true;
-          // Retry the failed operation after compaction freed space
-          await this.writeOperation(action, skipDequeue, options);
+          // Retry the failed operation after compaction freed space.
+          // #8307: force skipDequeue=true. The first attempt already consumed
+          // this action's queue entry (dequeue runs at the top of the lock,
+          // BEFORE the appendWithVectorClockUpdate that threw the quota error),
+          // so re-passing the original skipDequeue=false would dequeue a SECOND
+          // time and steal the NEXT pending action's entityChanges. This mirrors
+          // the deferred path (processDeferredActions), which also hardcodes
+          // true. Trade-off: the first attempt's entityChanges are not
+          // re-captured, so the retried op carries empty entityChanges —
+          // acceptable for this rare quota-recovery edge case.
+          await this.writeOperation(action, true, options);
           this.snackService.open({
             type: 'SUCCESS',
             msg: T.F.SYNC.S.STORAGE_RECOVERED_AFTER_COMPACTION,
