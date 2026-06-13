@@ -183,7 +183,7 @@ body.isDarkTheme {
   --input-bg: var(--velvet-fill-2);
   --input-bg-hover: color-mix(in srgb, var(--c-primary) 6%, transparent);
   --input-border-color: transparent;
-  --input-border-color-focus: color-mix(in srgb, var(--c-primary) 40%, transparent);
+  --input-border-color-focus: var(--c-primary);
   --input-border-radius: 8px;
 
   /* Schedule events read as cards, not list rows — they have borders, a
@@ -323,6 +323,22 @@ body.isDarkTheme add-task-bar.global .add-task-container {
     0 24px 64px rgba(0, 0, 0, 0.65),
     0 6px 16px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 var(--velvet-fill-2);
+}
+
+/* Form fields outline: restore fill for outline inputs in Velvet */
+body.isDarkTheme .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+  background: var(--velvet-fill-2) !important;
+  border-radius: 8px !important;
+  transition:
+    background 120ms ease-out,
+    border-color 120ms ease-out !important;
+}
+
+body.isDarkTheme .mdc-text-field--outlined:not(.mdc-text-field--disabled):hover,
+body.isDarkTheme
+  .mat-mdc-form-field.mat-focused
+  .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+  background: color-mix(in srgb, var(--c-primary) 6%, transparent) !important;
 }
 
 /* Primary buttons get a subtle coral gradient — like Raycast's CTAs */

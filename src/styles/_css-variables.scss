@@ -380,7 +380,7 @@ body {
   // Input fields
   --input-bg: rgba(var(--ink-on-channel), 0.04);
   --input-bg-hover: rgba(var(--ink-on-channel), 0.07);
-  --input-border-color: transparent;
+  --input-border-color: rgba(var(--ink-on-channel), 0.08);
 }
 
 body.isDarkTheme {
@@ -514,6 +514,7 @@ body.isDarkTheme {
 
   // Input fields semantic aliases
   --input-border-color-focus: var(--focus-ring-color);
+  --input-border-color-invalid: var(--palette-warn-500);
   --input-border-radius: var(--card-border-radius);
 }
 
