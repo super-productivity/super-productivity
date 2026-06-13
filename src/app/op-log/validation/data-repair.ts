@@ -28,12 +28,13 @@ export interface DataRepairResult {
 }
 
 /**
- * Deeply-immutable view of a type. `dataRepair`'s input is typed with this so
- * the compiler rejects any in-place mutation of the caller's state (which, on
- * the live-state path, is a direct NgRx store reference — #8333). It also
- * forces the deep clone below: a shallow `{ ...data }` keeps the nested
- * `readonly` types and fails to assign to the mutable `dataOut`, so detaching
- * via `structuredClone` becomes the only way to get a writable working copy.
+ * Deeply-immutable view of a type. `dataRepair`'s input is typed with this to
+ * force the deep clone below and block in-place mutation of `data` inside this
+ * function: a shallow `{ ...data }` keeps the nested `readonly` types and won't
+ * assign to the mutable `dataOut`, so `structuredClone` is the only way to get
+ * a writable working copy (#8333). Note this guards the function body, not the
+ * call sites — callers still pass live store references (a mutable type widens
+ * to readonly), which is exactly why the unconditional clone is what matters.
  */
 type DeepReadonly<T> = T extends (infer R)[]
   ? readonly DeepReadonly<R>[]
@@ -61,6 +62,7 @@ export const dataRepair = (
   data: DeepReadonly<AppDataComplete>,
   errors: IValidation.IError[] = [],
 ): DataRepairResult => {
+  // cast only to satisfy the signature — isDataRepairPossible is a read-only check
   if (!isDataRepairPossible(data as AppDataComplete)) {
     throw new Error('Data repair attempted but not possible');
   }
