@@ -15,7 +15,6 @@ export class EmlDropDirective {
 
     const file = ev.dataTransfer?.files[0];
 
-    // EML File Addition on button hover
     // Adds a task with the information inside the eml
     if (file !== undefined && isFileEml(file)) {
       await this._emlDropService.createTaskFromEml(file);
