@@ -25,6 +25,7 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
     'globalAddNote',
     'globalAddTask',
     'globalToggleTaskWidget',
+    'globalTaskQuickAdd',
   ];
 
   if (cfg) {
@@ -78,6 +79,13 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
             break;
 
           case 'globalAddTask':
+            actionFn = () => {
+              showOrFocus(mainWin);
+              mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
+            };
+            break;
+
+          case 'globalTaskQuickAdd':
             actionFn = () => {
               showQuickAddWindow();
             };
