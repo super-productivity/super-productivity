@@ -269,3 +269,27 @@ img {
   height: auto;
   display: block;
 }
+
+html.isQuickAddRoute,
+body.isQuickAddRoute {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+body.isQuickAddRoute:before {
+  display: none !important;
+}
+body.isQuickAddRoute.isElectron:not(.isFullScreen) {
+  border: none !important;
+}
+
+body.isQuickAddRoute {
+  .mat-mdc-dialog-surface,
+  .mat-mdc-menu-panel,
+  .mat-mdc-select-panel,
+  .mat-mdc-autocomplete-panel,
+  .mat-mdc-snack-bar-container {
+    background-color: var(--surface-2) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

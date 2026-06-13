@@ -236,11 +236,26 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   constructor() {
     const router = inject(Router);
+
+    const checkAndToggleClass = (url: string): void => {
+      const isQuickAdd = url.includes('/quick-add') && !url.includes('index.html');
+      this.isQuickAddRoute.set(isQuickAdd);
+      if (isQuickAdd) {
+        document.body.classList.add('isQuickAddRoute');
+        document.documentElement.classList.add('isQuickAddRoute');
+      } else {
+        document.body.classList.remove('isQuickAddRoute');
+        document.documentElement.classList.remove('isQuickAddRoute');
+      }
+    };
+
+    checkAndToggleClass(window.location.hash);
+
     this._subs.add(
       router.events
         .pipe(filter((event) => event instanceof NavigationEnd))
         .subscribe((event: any) => {
-          this.isQuickAddRoute.set(event.urlAfterRedirects.includes('/quick-add'));
+          checkAndToggleClass(event.urlAfterRedirects);
         }),
     );
 
