@@ -1,0 +1,122 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host {
+  display: block;
+}
+
+.task-comments {
+  padding: var(--s);
+}
+
+.comment-empty-hint {
+  margin: 0 0 var(--s2);
+  padding: var(--s);
+  border-radius: var(--card-border-radius);
+  background: var(--task-c-bg);
+  color: var(--text-color-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.comment-item {
+  position: relative;
+  z-index: 1;
+  padding: var(--s);
+  margin-bottom: var(--s);
+  border-radius: var(--card-border-radius);
+  background: var(--task-c-bg);
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  &:hover .comment-actions,
+  &:focus-within .comment-actions {
+    opacity: 1;
+  }
+}
+
+.comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-half);
+  margin-bottom: var(--s-half);
+  font-size: 12px;
+  color: var(--text-color-muted);
+}
+
+.comment-edited {
+  font-style: italic;
+}
+
+.comment-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--text-color);
+  line-height: 1.45;
+}
+
+.comment-input {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--s);
+  border: 1px solid var(--extra-border-color, rgba(0, 0, 0, var(--border-alpha)));
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+  color: var(--text-color);
+  font: inherit;
+  resize: vertical;
+  min-height: 4em;
+  pointer-events: auto;
+  transition: var(--transition-standard);
+
+  &:focus-visible {
+    outline: 2px solid var(--c-primary);
+    outline-offset: 2px;
+  }
+}
+
+.comment-actions {
+  display: flex;
+  gap: var(--s-quarter);
+  margin-top: var(--s-half);
+  opacity: 0;
+  transition: var(--transition-standard);
+
+  &--visible {
+    opacity: 1;
+  }
+}
+
+.add-comment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-half);
+  padding: var(--s-half) var(--s);
+  border: none;
+  border-radius: var(--card-border-radius);
+  background: transparent;
+  color: var(--text-color-muted);
+  cursor: pointer;
+  font: inherit;
+  transition: var(--transition-standard);
+
+  &:hover {
+    color: var(--text-color);
+    background: var(--task-c-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--c-primary);
+    outline-offset: 2px;
+  }
+}

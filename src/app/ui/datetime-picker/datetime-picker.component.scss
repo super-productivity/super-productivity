@@ -94,6 +94,18 @@
       background-color: var(--calendar-hover-bg) !important;
       border-radius: 50% !important;
     }
+
+    mat-year-view .mat-calendar-body-today,
+    mat-multi-year-view .mat-calendar-body-today {
+      border: none !important;
+      border-color: transparent !important;
+      outline: none !important;
+      box-shadow: none !important;
+
+      &:not(.mat-calendar-body-selected) {
+        color: var(--c-accent) !important;
+      }
+    }
   }
 
   :host-context([dir='rtl']) {
@@ -142,20 +154,6 @@
 
   &.mat-calendar-body-selected:after {
     color: var(--c-contrast) !important;
-  }
-}
-
-:host ::ng-deep {
-  mat-year-view .mat-calendar-body-today,
-  mat-multi-year-view .mat-calendar-body-today {
-    border: none !important;
-    border-color: transparent !important;
-    outline: none !important;
-    box-shadow: none !important;
-
-    &:not(.mat-calendar-body-selected) {
-      color: var(--c-accent) !important;
-    }
   }
 }
 

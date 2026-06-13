@@ -249,10 +249,21 @@ export type PluginHookHandler<T extends Hooks = Hooks> = (
 ) => void | Promise<void>;
 
 // Core data types - Single source of truth for both plugins and app
+/** Timestamped status update on a task (synced via task update operations). */
+export interface TaskComment {
+  id: string;
+  body: string;
+  /** Unix timestamp in milliseconds when the comment was created. */
+  created: number;
+  /** Set when the comment body was edited after creation. */
+  updated?: number;
+}
+
 export interface Task {
   id: string;
   title: string;
   notes?: string;
+  comments?: TaskComment[];
   timeEstimate: number;
   timeSpent: number;
   isDone: boolean;

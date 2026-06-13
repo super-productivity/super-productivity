@@ -54,9 +54,14 @@ export class TaskDetailItemComponent {
   @HostBinding('tabindex') readonly tabindex: number = 3;
 
   @HostListener('keydown', ['$event']) onKeyDown(ev: KeyboardEvent): void {
-    // Skip handling inside input elements
+    // Skip handling inside input elements (including bubbled events from task-comments)
     const targetEl = ev.target as HTMLElement;
-    if (isInputElement(targetEl)) return;
+    if (isInputElement(targetEl)) {
+      return;
+    }
+    if (targetEl.closest('task-comments')) {
+      return;
+    }
 
     this.keyPress.emit(ev);
     if (ev.code === 'Escape') {
