@@ -376,6 +376,11 @@ body {
   // light-mode contrast issue.
   --brand: var(--palette-primary-600);
   --focus-ring: var(--brand);
+
+  // Input fields
+  --input-bg: rgba(var(--ink-on-channel), 0.04);
+  --input-bg-hover: rgba(var(--ink-on-channel), 0.07);
+  --input-border-color: rgba(var(--ink-on-channel), 0.08);
 }
 
 body.isDarkTheme {
@@ -397,6 +402,11 @@ body.isDarkTheme {
 
   --brand: var(--palette-primary-400);
   --focus-ring: var(--brand);
+
+  // Input fields
+  --input-bg: rgba(var(--ink-on-channel), 0.06);
+  --input-bg-hover: rgba(var(--ink-on-channel), 0.1);
+  --input-border-color: transparent;
 }
 
 // -----------------------------
@@ -501,6 +511,11 @@ body.isDarkTheme {
   --state-focus: rgba(var(--ink-on-channel), var(--state-focus-alpha));
   --state-pressed: rgba(var(--ink-on-channel), var(--state-pressed-alpha));
   --state-selected: rgba(var(--ink-on-channel), var(--state-selected-alpha));
+
+  // Input fields semantic aliases
+  --input-border-color-focus: var(--focus-ring-color);
+  --input-border-color-invalid: var(--palette-warn-500);
+  --input-border-radius: var(--card-border-radius);
 }
 
 // -----------------------------
