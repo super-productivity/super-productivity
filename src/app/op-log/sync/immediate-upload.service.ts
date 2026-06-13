@@ -10,6 +10,7 @@ import { DataInitStateService } from '../../core/data-init/data-init-state.servi
 import { handleStorageQuotaError } from './sync-error-utils';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
+import { SyncCycleGuardService } from './sync-cycle-guard.service';
 
 const IMMEDIATE_UPLOAD_DEBOUNCE_MS = 2000;
 
@@ -53,6 +54,7 @@ export class ImmediateUploadService implements OnDestroy {
   private _dataInitStateService = inject(DataInitStateService);
   private _syncWrapper = inject(SyncWrapperService);
   private _sessionValidation = inject(SyncSessionValidationService);
+  private _syncCycleGuard = inject(SyncCycleGuardService);
 
   private _uploadTrigger$ = new Subject<void>();
   private _subscription: Subscription | null = null;
@@ -182,6 +184,25 @@ export class ImmediateUploadService implements OnDestroy {
    * the immediate-upload path.
    */
   private async _performUpload(): Promise<void> {
+    // #8309: opportunistically claim the sync cycle. Skip if any cycle (the
+    // main sync, a force flow, or the WS-download side channel) is already
+    // active — the running cycle or the next trigger covers this upload, and a
+    // background upload must not mutate state / flip the session-validation
+    // latch while another cycle (or its conflict dialog) is open.
+    if (!this._syncCycleGuard.tryBegin()) {
+      OpLog.verbose(
+        'ImmediateUploadService: Skipping immediate upload — another sync cycle is active',
+      );
+      return;
+    }
+    try {
+      await this._performUploadInner();
+    } finally {
+      this._syncCycleGuard.end();
+    }
+  }
+
+  private async _performUploadInner(): Promise<void> {
     const provider = this._providerManager.getActiveProvider();
     if (!provider) {
       return;

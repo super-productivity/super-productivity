@@ -6,6 +6,7 @@ import { OperationLogSyncService } from './operation-log-sync.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { WrappedProviderService } from '../sync-providers/wrapped-provider.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
+import { SyncCycleGuardService } from './sync-cycle-guard.service';
 import { SyncLog } from '../../core/log';
 import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
 
@@ -28,6 +29,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
   private _providerManager = inject(SyncProviderManager);
   private _wrappedProvider = inject(WrappedProviderService);
   private _sessionValidation = inject(SyncSessionValidationService);
+  private _syncCycleGuard = inject(SyncCycleGuardService);
 
   private _subscription: Subscription | null = null;
 
@@ -64,6 +66,27 @@ export class WsTriggeredDownloadService implements OnDestroy {
       return;
     }
 
+    // #8309: claim the sync cycle. Both this check and the isSyncInProgress
+    // check above are synchronous (no await between), so the claim is atomic.
+    // Skip if any cycle (main sync, force flow, or the immediate-upload side
+    // channel) is active — its apply or its conflict dialog must not race this
+    // download's gate decision / setLastServerSeq, and overlapping withSession()
+    // calls would misattribute the validation latch.
+    if (!this._syncCycleGuard.tryBegin()) {
+      SyncLog.log(
+        'WsTriggeredDownloadService: Another sync cycle is active, skipping WS download',
+      );
+      return;
+    }
+
+    try {
+      return await this._downloadOpsInner(latestSeq);
+    } finally {
+      this._syncCycleGuard.end();
+    }
+  }
+
+  private async _downloadOpsInner(latestSeq: number): Promise<void> {
     // WS-triggered downloads are their own session boundary. The session
     // wrapper resets the latch up-front so the read at the end reflects
     // only this session, and a leaked-failed latch from a prior path can't

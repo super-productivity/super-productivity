@@ -75,6 +75,7 @@ import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { SyncSessionValidationService } from '../../op-log/sync/sync-session-validation.service';
+import { SyncCycleGuardService } from '../../op-log/sync/sync-cycle-guard.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { isSuperSyncWebSocketAccess } from '@sp/sync-providers/super-sync';
 import { isTransientNetworkError } from '@sp/sync-providers/http';
@@ -116,6 +117,7 @@ export class SyncWrapperService {
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
   private _sessionValidation = inject(SyncSessionValidationService);
+  private _syncCycleGuard = inject(SyncCycleGuardService);
   private _wrappedProvider = inject(WrappedProviderService);
   private _hydrationState = inject(HydrationStateService);
 
@@ -280,6 +282,19 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     }
     this._isSyncInProgress$.next(true);
+
+    // #8309: claim the in-tab sync cycle so the conflict-gate decision,
+    // setLastServerSeq, and the session-validation latch are serialized against
+    // the side channels (immediate upload / WS download). Both this claim and
+    // the re-entry check above are synchronous (no await between), so the
+    // check-and-set stays atomic. If a (short-lived) side channel is mid-cycle
+    // we skip rather than block — the next trigger retries. Released in the
+    // finally below.
+    if (!this._syncCycleGuard.tryBegin()) {
+      this._isSyncInProgress$.next(false);
+      SyncLog.log('Sync skipped: another sync cycle is in progress');
+      return 'HANDLED_ERROR';
+    }
     // Open before any async work — see `HydrationStateService.isInSyncWindow`.
     // Pass 0 to disable the failsafe: the `finally` block below is the
     // authoritative close, and a slow sync (provider I/O > 2s) would
@@ -290,6 +305,7 @@ export class SyncWrapperService {
     const result = await this._sync(isUserTriggered).finally(() => {
       this._isSyncInProgress$.next(false);
       this._hydrationState.closeSyncWindow();
+      this._syncCycleGuard.end();
       // Safeguard: if _sync() threw or completed without setting a final status,
       // reset from SYNCING to UNKNOWN_OR_CHANGED to avoid getting stuck in SYNCING state
       if (this._providerManager.isSyncInProgress) {
@@ -976,42 +992,60 @@ export class SyncWrapperService {
   private async _forceDownload(): Promise<void> {
     SyncLog.log('SyncWrapperService: forceDownload called - downloading remote state');
 
+    await this.runWithSyncBlocked(async () => {
+      // #8309: claim the sync cycle so this flow's conflict-gate / session
+      // latch are isolated from the immediate-upload / WS-download side
+      // channels. runWithSyncBlocked has already drained any main sync and set
+      // isEncryptionOperationInProgress, so the only thing that could hold the
+      // guard here is a short-lived side channel; skip-and-let-the-user-retry
+      // rather than block.
+      if (!this._syncCycleGuard.tryBegin()) {
+        SyncLog.log('Force download skipped: another sync cycle is in progress');
+        return;
+      }
+      try {
+        await this._forceDownloadInner();
+      } finally {
+        this._syncCycleGuard.end();
+      }
+    });
+  }
+
+  private async _forceDownloadInner(): Promise<void> {
     // Open a session-validation scope — read after forceDownloadRemoteState
     // returns so a corrupt downloaded state is reported as ERROR. (#7330)
-    await this.runWithSyncBlocked(() =>
-      this._sessionValidation.withSession(async () => {
-        try {
-          const rawProvider = this._providerManager.getActiveProvider();
-          const syncCapableProvider =
-            await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+    await this._sessionValidation.withSession(async () => {
+      try {
+        const rawProvider = this._providerManager.getActiveProvider();
+        const syncCapableProvider =
+          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
 
-          if (!syncCapableProvider) {
-            SyncLog.warn(
-              'SyncWrapperService: Cannot force download - provider not available',
-            );
-            return;
-          }
-
-          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-          if (this._sessionValidation.hasFailed()) {
-            SyncLog.err(
-              'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
-            );
-            this._providerManager.setSyncStatus('ERROR');
-          } else {
-            this._providerManager.setSyncStatus('IN_SYNC');
-          }
-          SyncLog.log('SyncWrapperService: Force download complete');
-        } catch (error) {
-          SyncLog.err('SyncWrapperService: Force download failed:', error);
-          const errStr = getSyncErrorStr(error);
-          this._snackService.open({
-            msg: errStr,
-            type: 'ERROR',
-          });
+        if (!syncCapableProvider) {
+          SyncLog.warn(
+            'SyncWrapperService: Cannot force download - provider not available',
+          );
+          return;
         }
-      }),
-    );
+
+        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        if (this._sessionValidation.hasFailed()) {
+          SyncLog.err(
+            'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+        } else {
+          this._providerManager.setSyncStatus('IN_SYNC');
+        }
+        SyncLog.log('SyncWrapperService: Force download complete');
+      } catch (error) {
+        SyncLog.err('SyncWrapperService: Force download failed:', error);
+        const errStr = getSyncErrorStr(error);
+        this._snackService.open({
+          msg: errStr,
+          type: 'ERROR',
+        });
+      }
+    });
   }
 
   async configuredAuthForSyncProviderIfNecessary(
