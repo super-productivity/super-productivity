@@ -62,6 +62,10 @@ describe('WsTriggeredDownloadService', () => {
     });
 
     service = TestBed.inject(WsTriggeredDownloadService);
+    // The cycle guard is a root singleton; reset it so a prior test that left
+    // it claimed (e.g. an assertion threw before guard.end()) can't poison this
+    // one. Mirrors SyncSessionValidationService's per-test reset.
+    TestBed.inject(SyncCycleGuardService)._resetForTest();
   });
 
   afterEach(() => {
