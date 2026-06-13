@@ -463,6 +463,19 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         devError(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         return reducer(state, action);
       }
+
+      // Strip device-local fields from GLOBAL_CONFIG before applying the winning state.
+      // These fields control per-device network behaviour and must never be overwritten
+      // by a remote LWW Update — each device must opt in explicitly.
+      if (entityType === 'GLOBAL_CONFIG' && entityData['misc']) {
+        const {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          isLocalRestApiExternalAccessEnabled: _dropped,
+          ...safeMisc
+        } = entityData['misc'] as Record<string, unknown>;
+        entityData = { ...entityData, misc: safeMisc };
+      }
+
       const updatedState: RootState = {
         ...rootState,
         [featureName]: { ...entityData },

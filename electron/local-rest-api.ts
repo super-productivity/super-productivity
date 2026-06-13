@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron';
-import { log, warn } from 'electron-log/main';
+import { error, log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
+import { isIP } from 'net';
+import { networkInterfaces } from 'os';
 import { randomUUID } from 'crypto';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady, getWin } from './main-window';
@@ -20,17 +22,116 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
 };
 
+// ---------------------------------------------------------------------------
+// Helpers — exported for unit tests
+// ---------------------------------------------------------------------------
+
+// Returns true for the IPv4 "bind to all interfaces" address.
+export const isAllInterfaces = (host: string): boolean => host === '0.0.0.0';
+
+// Builds the Host allowlist for a specific-address bind (e.g. 127.0.0.1).
+export const buildLocalhostAllowedHosts = (host: string): Set<string> =>
+  new Set([
+    `${host}:${LOCAL_REST_API_PORT}`,
+    `localhost:${LOCAL_REST_API_PORT}`,
+    host,
+    'localhost',
+  ]);
+
+// Builds the Host allowlist for all-interfaces mode from the machine's current IPv4
+// addresses. Called per request so new adapters (VPN, WSL vEthernet) are included
+// without a server restart.
+export const buildAllInterfacesAllowedHosts = (): Set<string> => {
+  const hosts = new Set<string>();
+  hosts.add('localhost');
+  hosts.add(`localhost:${LOCAL_REST_API_PORT}`);
+  for (const ifaces of Object.values(networkInterfaces())) {
+    for (const iface of ifaces ?? []) {
+      if (iface.family === 'IPv4') {
+        hosts.add(iface.address);
+        hosts.add(`${iface.address}:${LOCAL_REST_API_PORT}`);
+      }
+    }
+  }
+  return hosts;
+};
+
+// Resolves the bind host from the SP_LOCAL_REST_API_HOST env var only.
+// Returns LOCAL_REST_API_HOST if the var is unset, not a valid IP, or IPv6.
+export const resolveHostFromEnv = (): string => {
+  const envHost = process.env['SP_LOCAL_REST_API_HOST'];
+  if (!envHost) {
+    return LOCAL_REST_API_HOST;
+  }
+  const ipVersion = isIP(envHost);
+  if (ipVersion === 0) {
+    warn(
+      `[local-rest-api] SP_LOCAL_REST_API_HOST="${envHost}" is not a valid IP address — ignoring, falling back to ${LOCAL_REST_API_HOST}`,
+    );
+    return LOCAL_REST_API_HOST;
+  }
+  if (ipVersion === 6) {
+    warn(
+      `[local-rest-api] SP_LOCAL_REST_API_HOST="${envHost}" is an IPv6 address — IPv6 is not supported, falling back to ${LOCAL_REST_API_HOST}`,
+    );
+    return LOCAL_REST_API_HOST;
+  }
+  return envHost;
+};
+
+export const resolveHost = (cfg: GlobalConfigState): string => {
+  if (process.env['SP_LOCAL_REST_API_HOST']) {
+    return resolveHostFromEnv();
+  }
+  return cfg.misc.isLocalRestApiEnabled && cfg.misc.isLocalRestApiExternalAccessEnabled
+    ? '0.0.0.0'
+    : LOCAL_REST_API_HOST;
+};
+
+// ---------------------------------------------------------------------------
+// Module-level state
+// ---------------------------------------------------------------------------
+
 let server: Server | null = null;
 let isInitialized = false;
-let isEnabled = false;
 let isListening = false;
+let isStopping = false;
+
+// Desired state — written by updateLocalRestApiConfig, consumed by reconcile().
+let desiredEnabled = false;
+let desiredHost = LOCAL_REST_API_HOST;
+
+// Current running state — written only by startServer/stopServer callbacks.
+let currentHost = LOCAL_REST_API_HOST;
+// Memoised allowlist for non-all-interfaces mode; recomputed when currentHost changes.
+let localhostAllowedHosts: Set<string> = buildLocalhostAllowedHosts(LOCAL_REST_API_HOST);
+
+// TTL cache for all-interfaces allowlist — avoids a syscall on every request.
+const ALL_INTERFACES_CACHE_TTL_MS = 1000;
+let allInterfacesHostsCache: Set<string> | null = null;
+let allInterfacesCachedAt = 0;
+
+// Listen-failure backoff state.
+const MAX_LISTEN_RETRIES = 5;
+let listenRetryCount = 0;
+let isStarting = false;
+
+// Drain state — set by stopServer() when there are in-flight IPC requests.
+// handleResponse() notifies this callback each time a pending request settles.
+let drainCallback: (() => void) | null = null;
+
 const pendingRequests = new Map<
   string,
   {
     resolve: (response: LocalRestApiResponsePayload) => void;
+    reject: (reason: Error) => void;
     timeout: NodeJS.Timeout;
   }
 >();
+
+// ---------------------------------------------------------------------------
+// Request handling
+// ---------------------------------------------------------------------------
 
 const writeJson = (
   res: ServerResponse,
@@ -90,6 +191,7 @@ const forwardRequestToRenderer = async (
 
     pendingRequests.set(payload.requestId, {
       resolve,
+      reject,
       timeout,
     });
 
@@ -106,14 +208,23 @@ const handleResponse = (_event: unknown, payload: LocalRestApiResponsePayload): 
   clearTimeout(pending.timeout);
   pendingRequests.delete(payload.requestId);
   pending.resolve(payload);
+  drainCallback?.();
 };
 
-const ALLOWED_HOSTS = new Set([
-  `${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
-  `localhost:${LOCAL_REST_API_PORT}`,
-  LOCAL_REST_API_HOST,
-  'localhost',
-]);
+export const isAllowedHost = (host: string): boolean => {
+  if (isAllInterfaces(currentHost)) {
+    const now = Date.now();
+    if (
+      !allInterfacesHostsCache ||
+      now - allInterfacesCachedAt >= ALL_INTERFACES_CACHE_TTL_MS
+    ) {
+      allInterfacesHostsCache = buildAllInterfacesAllowedHosts();
+      allInterfacesCachedAt = now;
+    }
+    return allInterfacesHostsCache.has(host);
+  }
+  return localhostAllowedHosts.has(host);
+};
 
 const isForceEnabledForDev = (): boolean =>
   process.env.NODE_ENV === 'DEV' && process.env.SP_FORCE_LOCAL_REST_API === '1';
@@ -122,9 +233,9 @@ const handleHttpRequest = async (
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> => {
-  // Block DNS rebinding: reject requests with unexpected Host headers
+  // Block DNS rebinding: reject requests with unexpected Host headers.
   const host = req.headers.host;
-  if (!host || !ALLOWED_HOSTS.has(host)) {
+  if (!host || !isAllowedHost(host)) {
     writeJson(res, 403, {
       ok: false,
       error: {
@@ -140,8 +251,9 @@ const handleHttpRequest = async (
   // Browsers always set Origin on cross-origin POSTs (and on simple POSTs
   // with text/plain bodies, which CORS does not preflight); rejecting here
   // closes that gap on top of the Host-header check above.
+  // Origin: null (from sandboxed iframes or data: URIs) is also rejected.
   const origin = req.headers.origin;
-  if (origin && origin !== 'null') {
+  if (origin) {
     writeJson(res, 403, {
       ok: false,
       error: {
@@ -163,7 +275,8 @@ const handleHttpRequest = async (
     return;
   }
 
-  const requestUrl = new URL(req.url ?? '/', `http://${LOCAL_REST_API_HOST}`);
+  // Use localhost as the URL base — we only need pathname and query, not the authority.
+  const requestUrl = new URL(req.url ?? '/', `http://localhost`);
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && requestUrl.pathname === '/health') {
@@ -191,12 +304,12 @@ const handleHttpRequest = async (
   let body: unknown;
   try {
     body = await readJsonBody(req);
-  } catch (error) {
+  } catch (bodyError) {
     writeJson(res, 400, {
       ok: false,
       error: {
         code: 'INVALID_REQUEST_BODY',
-        message: error instanceof Error ? error.message : 'Invalid request body',
+        message: bodyError instanceof Error ? bodyError.message : 'Invalid request body',
       },
     });
     return;
@@ -211,18 +324,51 @@ const handleHttpRequest = async (
       body,
     });
     writeJson(res, rendererResponse.status, rendererResponse.body);
-  } catch (error) {
-    warn('[local-rest-api] Request failed', requestUrl.pathname, error);
+  } catch (requestError) {
+    warn('[local-rest-api] Request failed', requestUrl.pathname, requestError);
     const isTimeout =
-      error instanceof Error && error.message === 'Renderer request timed out';
+      requestError instanceof Error &&
+      requestError.message === 'Renderer request timed out';
     writeJson(res, isTimeout ? 504 : 500, {
       ok: false,
       error: {
         code: isTimeout ? 'RENDERER_TIMEOUT' : 'INTERNAL_ERROR',
-        message: error instanceof Error ? error.message : 'Unknown internal error',
+        message:
+          requestError instanceof Error ? requestError.message : 'Unknown internal error',
       },
     });
   }
+};
+
+// ---------------------------------------------------------------------------
+// Server lifecycle — desired-state + reconcile model
+// ---------------------------------------------------------------------------
+
+// Brings the running server into alignment with desiredEnabled/desiredHost.
+// Must be called whenever desired state changes or a stop/start completes.
+const reconcile = (): void => {
+  if (isStopping) {
+    // stopServer's callback will call reconcile() once the stop completes.
+    return;
+  }
+
+  if (
+    desiredEnabled &&
+    !isListening &&
+    !isStarting &&
+    listenRetryCount <= MAX_LISTEN_RETRIES
+  ) {
+    currentHost = desiredHost;
+    localhostAllowedHosts = buildLocalhostAllowedHosts(currentHost);
+    allInterfacesHostsCache = null;
+    startServer();
+  } else if (!desiredEnabled && isListening) {
+    stopServer();
+  } else if (desiredEnabled && isListening && desiredHost !== currentHost) {
+    // Host changed while running — stop first; reconcile() in the callback restarts.
+    stopServer();
+  }
+  // Otherwise already in the correct state.
 };
 
 export const initLocalRestApi = (): void => {
@@ -237,63 +383,124 @@ export const initLocalRestApi = (): void => {
     void handleHttpRequest(req, res);
   });
 
-  server.on('error', (error) => {
-    isListening = false;
-    warn('[local-rest-api] Server error', error);
+  // Persistent safety net: catches post-listen server errors (e.g. EMFILE) that
+  // would otherwise become uncaught exceptions and crash the app.
+  server.on('error', (serverError: Error) => {
+    if (isListening) {
+      isListening = false;
+      warn('[local-rest-api] Server error while listening', serverError);
+      reconcile();
+    }
+    // Errors during listen are handled by the one-shot listener in startServer;
+    // by that point isListening is already false, so this guard is a no-op.
   });
 
   if (isForceEnabledForDev()) {
     warn('[local-rest-api] Enabled by SP_FORCE_LOCAL_REST_API=1 for DEV runtime');
-    isEnabled = true;
-    startServer();
+    desiredEnabled = true;
+    desiredHost = resolveHostFromEnv();
+    reconcile();
   }
 };
 
 const startServer = (): void => {
-  if (!server || isListening) {
+  if (!server || isListening || isStopping || isStarting) {
     return;
   }
 
-  server.listen(LOCAL_REST_API_PORT, LOCAL_REST_API_HOST, () => {
-    isListening = true;
-    log(
-      `[local-rest-api] Listening on http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
+  isStarting = true;
+
+  // One-shot error listener for this particular listen attempt.
+  const onListenError = (listenError: Error): void => {
+    isStarting = false;
+    isListening = false;
+    listenRetryCount++;
+    if (listenRetryCount > MAX_LISTEN_RETRIES) {
+      error(
+        `[local-rest-api] Giving up after ${MAX_LISTEN_RETRIES} consecutive listen failures`,
+        listenError,
+      );
+      return;
+    }
+    const backoff = Math.pow(2, listenRetryCount - 1);
+    const delay = Math.min(1000 * backoff, 30_000);
+    warn(
+      `[local-rest-api] Failed to start server (attempt ${listenRetryCount}/${MAX_LISTEN_RETRIES}), retrying in ${delay} ms`,
+      listenError,
     );
+    setTimeout(reconcile, delay);
+  };
+  server.once('error', onListenError);
+
+  server.listen(LOCAL_REST_API_PORT, currentHost, () => {
+    server?.removeListener('error', onListenError);
+    isStarting = false;
+    isListening = true;
+    listenRetryCount = 0;
+    if (isAllInterfaces(currentHost)) {
+      log(`[local-rest-api] Listening on all interfaces, port ${LOCAL_REST_API_PORT}`);
+    } else {
+      log(`[local-rest-api] Listening on http://${currentHost}:${LOCAL_REST_API_PORT}`);
+    }
+    // Converge to desired state if it changed while we were starting up.
+    reconcile();
   });
 };
 
 const stopServer = (): void => {
-  if (!server || !isListening) {
+  if (!server || !isListening || isStopping) {
     return;
   }
 
-  server.close((error) => {
-    if (error) {
-      warn('[local-rest-api] Failed to stop server', error);
-      return;
-    }
+  isStopping = true;
 
-    isListening = false;
-    log('[local-rest-api] Server stopped');
-  });
+  const doClose = (): void => {
+    // Close keep-alive connections so server.close() resolves promptly.
+    server?.closeAllConnections();
+    server?.close((stopError) => {
+      isStopping = false;
+      isListening = false;
+      if (stopError) {
+        warn('[local-rest-api] Failed to stop server', stopError);
+      } else {
+        log('[local-rest-api] Server stopped');
+      }
+      reconcile();
+    });
+  };
+
+  if (pendingRequests.size === 0) {
+    doClose();
+    return;
+  }
+
+  // There are in-flight IPC round-trips. Drain them before closing connections so
+  // the renderer can commit its mutation and the HTTP client receives a proper
+  // response. The per-request timeout (LOCAL_REST_API_TIMEOUT_MS) already bounds
+  // each request; we add a safety-valve timeout here in case something leaks.
+  const drainTimeoutId = setTimeout(() => {
+    drainCallback = null;
+    for (const { timeout, reject: rejectPending } of pendingRequests.values()) {
+      clearTimeout(timeout);
+      rejectPending(new Error('Server stopped'));
+    }
+    pendingRequests.clear();
+    doClose();
+  }, LOCAL_REST_API_TIMEOUT_MS);
+
+  drainCallback = (): void => {
+    if (pendingRequests.size === 0) {
+      clearTimeout(drainTimeoutId);
+      drainCallback = null;
+      doClose();
+    }
+  };
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   const isForcedForDev = isForceEnabledForDev();
-  const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
-  if (nextEnabled === isEnabled) {
-    if (nextEnabled && !isListening) {
-      startServer();
-    } else if (!nextEnabled && isListening) {
-      stopServer();
-    }
-    return;
-  }
-
-  isEnabled = nextEnabled;
-  if (isEnabled) {
-    startServer();
-  } else {
-    stopServer();
-  }
+  desiredEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
+  desiredHost = resolveHost(cfg);
+  listenRetryCount = 0;
+  reconcile();
 };

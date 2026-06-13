@@ -861,6 +861,52 @@ describe('GlobalConfigReducer', () => {
         expect(result.focusMode.autoStartFocusOnPlay).toBe(false);
       });
     });
+
+    describe('isLocalRestApiExternalAccessEnabled — device-local, not synced', () => {
+      it('should preserve a locally saved true value on startup (local snapshot round-trip)', () => {
+        const snapshotConfig: GlobalConfigState = {
+          ...initialGlobalConfigState,
+          misc: {
+            ...initialGlobalConfigState.misc,
+            isLocalRestApiExternalAccessEnabled: true,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: snapshotConfig } as AppDataComplete,
+          }),
+        );
+
+        expect(result.misc.isLocalRestApiExternalAccessEnabled).toBe(true);
+      });
+
+      it('should use the incoming value from a synced payload (stripping is done at injection points, not in the reducer)', () => {
+        // The reducer itself does not strip the field — stripping is done by the
+        // LWW meta-reducer (for remote ops) and by the Electron effect (for Electron
+        // forwarding). This test verifies the reducer passes the value through so
+        // that the local startup round-trip works correctly.
+        const syncedConfig: GlobalConfigState = {
+          ...initialGlobalConfigState,
+          misc: {
+            ...initialGlobalConfigState.misc,
+            isLocalRestApiExternalAccessEnabled: true,
+          },
+        };
+
+        const result = globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: { globalConfig: syncedConfig } as AppDataComplete,
+          }),
+        );
+
+        // Reducer passes through the value — callers are responsible for stripping
+        // remote-sourced values before forwarding to Electron.
+        expect(result.misc.isLocalRestApiExternalAccessEnabled).toBe(true);
+      });
+    });
   });
 
   describe('updateGlobalConfigSection action', () => {

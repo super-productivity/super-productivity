@@ -48,6 +48,15 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
               description: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED_HINT,
             },
           },
+          {
+            key: 'isLocalRestApiExternalAccessEnabled',
+            type: 'checkbox',
+            hideExpression: '!model.isLocalRestApiEnabled',
+            templateOptions: {
+              label: T.GCF.MISC.IS_LOCAL_REST_API_EXTERNAL_ACCESS_ENABLED,
+              description: T.GCF.MISC.IS_LOCAL_REST_API_EXTERNAL_ACCESS_ENABLED_HINT,
+            },
+          },
         ]
       : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     {

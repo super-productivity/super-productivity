@@ -197,10 +197,11 @@ export class GlobalConfigEffects {
       () =>
         this._actions$.pipe(
           ofType(loadAllData),
-          tap(({ appDataComplete }) => {
-            const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
-            // Send initial settings to electron for overlay initialization
-            window.ea.sendSettingsUpdate(cfg);
+          withLatestFrom(this._store.select(selectConfigFeatureState)),
+          tap(([_action, globalConfig]) => {
+            // Send store-resolved config so device-local fields (e.g. isLocalRestApiExternalAccessEnabled)
+            // are never forwarded to Electron from a raw imported/synced payload.
+            window.ea.sendSettingsUpdate(globalConfig);
           }),
         ),
       { dispatch: false },

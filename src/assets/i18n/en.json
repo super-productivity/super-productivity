@@ -2497,6 +2497,8 @@
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
       "IS_LOCAL_REST_API_ENABLED": "Enable local REST API (desktop only)",
       "IS_LOCAL_REST_API_ENABLED_HINT": "Allows local scripts to control the running app via http://127.0.0.1:3876. Any application running on this computer will be able to read and modify your tasks.",
+      "IS_LOCAL_REST_API_EXTERNAL_ACCESS_ENABLED": "Allow external network access to REST API",
+      "IS_LOCAL_REST_API_EXTERNAL_ACCESS_ENABLED_HINT": "Allows other devices on the same network (including WSL) to access the REST API. Warning: there is no password protection — anyone on your network (including shared or guest Wi-Fi) can read and modify your tasks. Only enable on trusted networks.",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
