@@ -85,6 +85,35 @@ describe('InputDurationSliderComponent', () => {
     sub.unsubscribe();
   });
 
+  describe('Enter handling (blurOnEnter)', () => {
+    // Guards the #7586 regression: blurring on Enter cancels a host form's
+    // implicit submit, so it must stay opt-in or the time-estimate dialogs
+    // can no longer be saved with Enter.
+    const pressEnter = (): { preventDefault: jasmine.Spy; blur: jasmine.Spy } => {
+      const ev = { preventDefault: jasmine.createSpy('preventDefault') };
+      const inputEl = { blur: jasmine.createSpy('blur') };
+      component.onEnterKey(
+        ev as unknown as KeyboardEvent,
+        inputEl as unknown as HTMLInputElement,
+      );
+      return { preventDefault: ev.preventDefault, blur: inputEl.blur };
+    };
+
+    it('does nothing by default so the host form can submit on Enter', () => {
+      const { preventDefault, blur } = pressEnter();
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(blur).not.toHaveBeenCalled();
+    });
+
+    it('commits and blurs on Enter when opted in', () => {
+      fixture.componentRef.setInput('blurOnEnter', true);
+      fixture.detectChanges();
+      const { preventDefault, blur } = pressEnter();
+      expect(preventDefault).toHaveBeenCalled();
+      expect(blur).toHaveBeenCalled();
+    });
+  });
+
   describe('flexible increment (hybrid drag)', () => {
     // Apply a single drag tick at the given raw pointer angle and return the
     // value emitted by modelChange.

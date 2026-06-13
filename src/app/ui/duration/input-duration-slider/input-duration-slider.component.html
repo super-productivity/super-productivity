@@ -24,7 +24,7 @@
     <input
       #durationInput
       (ngModelChange)="onInputChange($event)"
-      (keydown.enter)="$event.preventDefault(); durationInput.blur()"
+      (keydown.enter)="onEnterKey($event, durationInput)"
       [id]="uid"
       [ngModel]="_model()"
       [placeholder]="T.G.EXAMPLE_VAL | translate"
