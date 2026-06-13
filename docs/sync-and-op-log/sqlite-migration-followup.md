@@ -41,9 +41,16 @@ ordered so each item is independently shippable and reviewable.
   restore prompt is informed (`summarizeBackupStr` shows task / project
   counts). Electron continues to use its own rotated backup folder.
 
+- ✅ **B1 + B3 + C1 code landed (flag-gated, default off).** The native plugin
+  (`@capacitor-community/sqlite`) + `CapacitorSqliteDb` wrapper, the
+  flag-gated DI token flip (`native-sqlite-backend.ts`), and the one-time
+  first-launch IDB→SQLite migration bootstrap are all wired. Inert until
+  `SUP_USE_NATIVE_SQLITE_OP_LOG` is set on a native build (which needs
+  `npx cap sync`). On-device validation + staged rollout (C2) remain.
+
 Nothing in the SQLite tracks below changes runtime behavior for existing users
-until step B3 flips a platform to the SQLite backend. The #7924 local-backup
-work is already live on Android/iOS.
+until the `SUP_USE_NATIVE_SQLITE_OP_LOG` flag flips a native build to the SQLite
+backend. The #7924 local-backup work is already live on Android/iOS.
 
 ---
 
@@ -95,15 +102,25 @@ captured on the next tick.
 
 ## Track B — Finish the SQLite backend (native)
 
-### B1. Add `@capacitor-community/sqlite` + a `SqliteDb` wrapper
+### B1. Add `@capacitor-community/sqlite` + a `SqliteDb` wrapper — ✅ code landed, `npx cap sync` + on-device remains
 
-- **Do:** add the plugin (+ iOS/Android native config), and a ~20-line adapter
-  from its `SQLiteDBConnection` to the `SqliteDb` port
-  (`run`/`query`). Open one DB named `SUP_OPS` in `Directory.Data`.
-- **Gotcha:** the plugin's **web** build is WASM-SQLite persisted into
-  IndexedDB — i.e. it reintroduces the eviction risk. Bind SQLite **only** when
-  `IS_NATIVE_PLATFORM`; web/PWA/Electron stay on IndexedDB.
-- **Size:** small. **Risk:** native build/CI surface.
+- ✅ **Plugin added** (`@capacitor-community/sqlite`, `dependencies`) and
+  `CapacitorSqliteDb` (`capacitor-sqlite-db.ts`) wraps its `SQLiteDBConnection`
+  into the `SqliteDb` port (`run`/`query`), opening one `SUP_OPS` connection. The
+  plugin is pulled in via a **dynamic `import()`** so its web WASM build never
+  enters the eager bundle; only a `import type` reaches the web build.
+- ✅ **Web-eviction gotcha respected:** construction is gated behind
+  `shouldUseNativeSqliteOpLogBackend()` (native **and** the opt-in flag). The
+  plugin's **web** build is WASM-SQLite persisted into IndexedDB — never bound on
+  web/PWA/Electron.
+- ✅ **Perf mitigation 1 baked in:** `run` returns the plugin's own `lastId` from
+  the insert response — no separate `SELECT last_insert_rowid()`. `run` is issued
+  with `transaction = false` so the adapter's explicit `BEGIN/COMMIT/ROLLBACK` is
+  the single transaction in force.
+- ⏳ **Remains (device-gated):** run `npx cap sync` so the Android/iOS projects
+  pick up the native plugin, then build + run on a real device. Perf mitigation 2
+  (the `executeSet` bulk-write path) is still deferred — see the note below; it
+  only matters on the bridge and can't be measured with in-process sql.js.
 - **⚡ Perf — bake two mitigations into the wrapper from the start.** On native
   the dominant cost is the Capacitor JS↔native bridge round-trip, not SQLite
   itself. Reads (`getAll`/`count`) are already one query = one crossing.
@@ -152,18 +169,22 @@ captured on the next tick.
   unchanged. Two unit tests cover both branches; the store-port integration spec
   now drives the store fully on SQLite (no pre-init workaround). The new branch is
   **dead in production** until the token flip below, so it shipped risk-free.
-- ⏳ **Remains (device-gated):** override `OP_LOG_DB_ADAPTER_FACTORY` to return
-  `SqliteOpLogAdapter` when `IS_NATIVE_PLATFORM`, behind a feature flag defaulting
-  **off**. The factory must hand **both** services' adapters the **same**
-  `SqliteDb` (one SQLite file, all tables) — mirroring how they share one IDB
-  connection today. Needs B1 (the native `SqliteDb` wrapper) first.
-- **Size:** tiny token flip (init change done). **Risk:** gated by the flag.
+- ✅ **Token flip landed (flag-gated, default off).** `OP_LOG_DB_ADAPTER_FACTORY`
+  now returns the native SQLite factory when `shouldUseNativeSqliteOpLogBackend()`
+  (`native-sqlite-backend.ts`) — i.e. on native **and** the
+  `SUP_USE_NATIVE_SQLITE_OP_LOG` localStorage flag is `'true'`. Otherwise the
+  IndexedDB default is unchanged. `createNativeSqliteOpLogAdapterFactory()` closes
+  over ONE `CapacitorSqliteDb` and vends every service its own adapter over that
+  single connection (mirroring the shared IDB connection); the bootstrap runs once
+  regardless of how many adapters init. Unit-covered (`native-sqlite-backend.spec.ts`).
+- ⏳ **Remains (device-gated):** flip the flag on a real native build and verify.
+- **Size:** done. **Risk:** gated by the flag — dead in production until set.
 
 ---
 
 ## Track C — Data migration (native, one-time)
 
-### C1. IDB → SQLite copy on first launch after enabling B3 — ✅ algorithm done + tested, wiring remains
+### C1. IDB → SQLite copy on first launch after enabling B3 — ✅ algorithm + wiring done, on-device run remains
 
 - ✅ **Algorithm:** `migrateOpLogBackend(source, dest)` in
   `op-log-backend-migration.ts` copies **all** stores in one `dest` transaction
@@ -172,13 +193,18 @@ captured on the next tick.
   (incl. gaps) via put-honors-seq, writes singletons at their out-of-line key,
   no per-store special-casing. Adapter-agnostic, so validated real-Chrome-IDB →
   sql.js in CI; the native plugin dest behaves identically through the port.
-- ⏳ **Remains (wiring, with B3):** detect "SQLite empty/absent **and** legacy
-  `SUP_OPS` present" on first launch and call `migrateOpLogBackend`. Set a
-  migration-complete marker. **Keep the IDB copy** untouched for ≥1 release as a
-  fallback. Note: the copy uses the adapter port's read side, independent of the
-  store-init IDB-open fix in B3.
+- ✅ **Wiring landed (with B3):** `bootstrapNativeOpLogBackend()` runs once on the
+  first adapter `init()` — it creates the SQLite schema, then (guarded by a
+  `sup_op_log_meta` marker table, a non-empty destination, and a best-effort
+  `indexedDB.databases()` presence check) calls `migrateOpLogBackend` to copy the
+  legacy `SUP_OPS` IndexedDB across. The marker is set only **after** a successful
+  verified copy, so a failed/aborted run retries next launch; the IDB copy is left
+  **untouched** as a ≥ 1-release fallback. Unit-covered (idempotency, empty-source,
+  shared-connection) in `native-sqlite-backend.spec.ts`.
+- ⏳ **Remains (device-gated):** run on a real device with the flag set and confirm
+  a populated legacy install migrates end-to-end.
 - **Risk:** high (data movement) — mitigated by the verify-before-commit safety
-  net (now tested to actually roll back) + retain-source.
+  net (tested to actually roll back) + retain-source + the run-once marker.
 
 ### C2. Staged rollout
 
@@ -205,10 +231,15 @@ and the `adoptConnection` bridge once SQLite is the sole native backend.
 1. ✅ Track A complete — **A1** (storage-persistence diagnostics) → **A2**
    (debounced data-change trigger) → **A3** (near-empty write-time overwrite
    guard) all shipped.
-2. **B1 → B2 → B3** (gets SQLite runnable + validated behind a flag) —
-   tracked in #7931.
-3. **C1 → C2** (migrate real users' data, staged) — tracked in #7931.
+2. ✅ **B1 → B2 → B3** code landed (SQLite runnable behind the
+   `SUP_USE_NATIVE_SQLITE_OP_LOG` flag, default off); the on-device run +
+   `npx cap sync` remain — tracked in #7931.
+3. ✅ **C1** wiring landed (first-launch IDB→SQLite copy, verify-before-commit);
+   **C2** staged on-device rollout remains — tracked in #7931.
 4. **D** (tidy up once SQLite is the native default) — tracked in #7931.
+
+> **Enabling on a native build:** `localStorage.setItem('SUP_USE_NATIVE_SQLITE_OP_LOG', 'true')`
+> then restart. Requires `npx cap sync` first so the native plugin is built in.
 
 Tracks A and B/C/D are independent — A shipped while B/C/D moves at its own
 device-gated cadence.

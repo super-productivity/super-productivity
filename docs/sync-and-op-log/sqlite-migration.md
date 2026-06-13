@@ -38,13 +38,15 @@
 > - ✅ **Phase C step (algorithm) — backend migration:** `migrateOpLogBackend`
 >   (`op-log-backend-migration.ts`) copies the whole DB source→dest with
 >   verify-before-commit; tested real-IDB → sql.js. Not yet wired into startup.
-> - ⏳ Remaining (device-gated): add `@capacitor-community/sqlite` + a thin
->   `SqliteDb` wrapper over its `SQLiteDBConnection` (with the bridge-perf
->   mitigations — see followup B1), override `OP_LOG_DB_ADAPTER_FACTORY` for
->   native behind a flag, fix the store `init()` to call `adapter.init()` / skip
->   the IDB open on SQLite (see followup B3), wire the C1 migration trigger, and
->   run on-device. The other small IDB consumers (theme, credential, oauth,
->   client-id) are out of the data-loss scope (Phase D).
+> - ✅ **Native wiring landed (flag-gated, default off):** the
+>   `@capacitor-community/sqlite` plugin and the `CapacitorSqliteDb` wrapper (with
+>   the lastId-from-run and `transaction:false` bridge-perf mitigations); the
+>   flag-gated `OP_LOG_DB_ADAPTER_FACTORY` override (`native-sqlite-backend.ts`,
+>   `SUP_USE_NATIVE_SQLITE_OP_LOG`); and the one-time C1 migration trigger
+>   (first-launch IDB→SQLite copy with verify-before-commit and a run-once marker).
+> - ⏳ Remaining (device-gated): `npx cap sync` + an on-device run with the flag
+>   set, then the staged rollout. The other small IDB consumers (theme,
+>   credential, oauth, client-id) are out of the data-loss scope (Phase D).
 >
 > **Open decisions (need on-device validation):**
 >

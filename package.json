@@ -178,6 +178,7 @@
     "@ctrl/tinycolor": "4.1.0"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^8.1.0",
     "@capacitor/browser": "^8.0.3",
     "@capacitor/ios": "^8.3.4",
     "@capacitor/keyboard": "8.0.1",

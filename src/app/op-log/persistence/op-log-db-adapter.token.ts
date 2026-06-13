@@ -1,6 +1,10 @@
 import { InjectionToken } from '@angular/core';
 import { OpLogDbAdapter } from './op-log-db-adapter';
 import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
+import {
+  createNativeSqliteOpLogAdapterFactory,
+  shouldUseNativeSqliteOpLogBackend,
+} from './native-sqlite-backend';
 
 /**
  * Factory that produces a fresh {@link OpLogDbAdapter}.
@@ -17,14 +21,20 @@ export type OpLogDbAdapterFactory = () => OpLogDbAdapter;
  * DI seam for the op-log persistence backend (Phase B of the SQLite migration;
  * see docs/sync-and-op-log/sqlite-migration.md).
  *
- * Defaults to IndexedDB on every platform. Phase B will override this provider
- * to return a `SqliteOpLogAdapter` when `PlatformService.isNative`, leaving the
- * stores untouched — they only know `OpLogDbAdapter`.
+ * Defaults to IndexedDB on every platform. On native, when the
+ * `SUP_USE_NATIVE_SQLITE_OP_LOG` opt-in flag is set
+ * ({@link shouldUseNativeSqliteOpLogBackend}), it returns the SQLite-backed
+ * factory instead — one shared SQLite connection across both stores, with the
+ * one-time IDB→SQLite migration run on first init. The stores are untouched;
+ * they only know `OpLogDbAdapter`.
  */
 export const OP_LOG_DB_ADAPTER_FACTORY = new InjectionToken<OpLogDbAdapterFactory>(
   'OP_LOG_DB_ADAPTER_FACTORY',
   {
     providedIn: 'root',
-    factory: () => () => new IndexedDbOpLogAdapter(),
+    factory: () =>
+      shouldUseNativeSqliteOpLogBackend()
+        ? createNativeSqliteOpLogAdapterFactory()
+        : () => new IndexedDbOpLogAdapter(),
   },
 );
