@@ -18,9 +18,15 @@ class KeyValStore(private val context: Context) :
         db?.execSQL(CREATE_TABLE)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase?, p1: Int, p2: Int) {
-        Log.v(TAG, "onUpgrade")
-        db?.execSQL("DROP TABLE IF EXISTS $DATABASE_TABLE")
+    override fun onUpgrade(db: SQLiteDatabase?, oldVersion: Int, newVersion: Int) {
+        Log.v(TAG, "onUpgrade $oldVersion -> $newVersion")
+        // #7901: NEVER drop this table on upgrade. It holds the durable on-device
+        // backup ('backup' / 'backup_prev') — the last line of defence against
+        // WebView IndexedDB eviction (#7892). The previous "DROP TABLE; onCreate"
+        // would destroy that backup the moment DATABASE_VERSION was ever bumped,
+        // i.e. a self-inflicted total data loss. Keep upgrades strictly additive:
+        // ensure the table exists and leave existing rows intact. Add real
+        // column/table migrations here as future versions need them.
         onCreate(db)
     }
 
@@ -97,7 +103,9 @@ class KeyValStore(private val context: Context) :
         private const val VALUE: String = "VALUE"
         private const val KEY_CREATED_AT: String = "KEY_CREATED_AT"
         private const val TAG: String = "SupKeyValStore"
+        // IF NOT EXISTS so the additive onUpgrade() (which calls onCreate) is safe
+        // to run against an already-populated DB without throwing (#7901).
         private const val CREATE_TABLE =
-            ("CREATE TABLE $DATABASE_TABLE($KEY TEXT PRIMARY KEY,$VALUE TEXT,$KEY_CREATED_AT DATETIME)")
+            ("CREATE TABLE IF NOT EXISTS $DATABASE_TABLE($KEY TEXT PRIMARY KEY,$VALUE TEXT,$KEY_CREATED_AT DATETIME)")
     }
 }

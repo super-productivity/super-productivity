@@ -2278,10 +2278,12 @@
     "AUTO_BACKUPS": {
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
+      "LAST_BACKUP_INFO": "Last backup: {{date}}",
       "LOCATION_INFO": "Backups are saved to:",
       "MAX_BACKUP_FILES": "Maximum backup files",
       "MAX_BACKUP_FILES_DESCRIPTION": "Desktop only. Older automatic backup files are deleted once this limit is exceeded.",
       "RESTORE_LATEST": "Restore latest automatic backup",
+      "S_AUTO_RESTORED": "Restored {{tasks}} tasks and {{projects}} projects from an on-device backup.",
       "S_NO_BACKUP_AVAILABLE": "No automatic backup available.",
       "S_RESTORE_SUCCESS": "Backup restored successfully.",
       "TITLE": "Automatic Backups"

@@ -12,12 +12,29 @@ import {
 export const getAutomaticBackUpFormCfg = (
   backupPath?: string,
   actions?: ConfigSectionAction[],
+  // Pre-formatted, already-translated "Last backup: <date>" line. Passed in
+  // (rather than a raw timestamp) because the 'tpl' field streams its text
+  // verbatim and has no interpolation; non-key strings pass through translate
+  // unchanged, matching how the Electron backupPath link is rendered (#7901).
+  lastBackupInfo?: string,
 ): ConfigFormSection<LocalBackupConfig> => ({
   title: T.GCF.AUTO_BACKUPS.TITLE,
   key: 'localBackup',
   help: T.GCF.AUTO_BACKUPS.HELP,
   actions,
   items: [
+    ...(lastBackupInfo
+      ? [
+          {
+            type: 'tpl',
+            className: `tpl`,
+            templateOptions: {
+              tag: 'p',
+              text: lastBackupInfo,
+            },
+          },
+        ]
+      : []),
     ...(backupPath
       ? [
           {

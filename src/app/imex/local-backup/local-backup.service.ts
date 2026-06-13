@@ -28,6 +28,7 @@ import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 const DEFAULT_BACKUP_INTERVAL = 5 * 60 * 1000;
 // A2 (#7925): high enough that a flurry of UI actions settles into one backup;
@@ -167,15 +168,40 @@ export class LocalBackupService {
       return;
     }
 
-    // MOBILE (Android / iOS) — load the best ring generation first so the prompt
-    // can tell the user what they would restore (#7901). Loading is cheap and
-    // lets a blind "discard my data?" dialog become an informed one — they should
-    // never dismiss the only copy of their data without seeing it exists.
+    // MOBILE (Android / iOS) — recovery path. The only realistic way to reach
+    // this branch is "no state cache, but a durable on-device backup survived":
+    // in practice WebView IndexedDB eviction (#7901/#7892). A deliberate in-app
+    // "delete all data" leaves a valid (empty) state cache so it never lands here;
+    // uninstall / "clear storage" drops the SQLite backup too. The only
+    // alternative to restoring is a blank app, so auto-restore a backup that holds
+    // real user data instead of gating recovery behind a confirm dialog users
+    // routinely dismiss — thereby losing their only copy. Stay conservative:
+    // selectBestBackupStr can still hand back a non-empty corrupt/empty blob as a
+    // last resort, so only auto-restore a *usable* backup and fall back to the
+    // informed prompt for anything that isn't clearly restorable.
     const backupData = await this._loadBestMobileBackupStr();
     if (!backupData) {
       // Nothing usable to restore — stay silent rather than prompt for nothing.
       return;
     }
+    if (isUsableBackupStr(backupData)) {
+      Log.log('mobile backupData auto-restored, length: ' + backupData.length);
+      const didImport = await this._importBackup(backupData);
+      if (didImport) {
+        const summary = summarizeBackupStr(backupData);
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.GCF.AUTO_BACKUPS.S_AUTO_RESTORED,
+          translateParams: {
+            tasks: summary?.taskCount ?? 0,
+            projects: summary?.projectCount ?? 0,
+          },
+        });
+      }
+      return;
+    }
+    // Non-empty but not clearly usable (corrupt / data-less): don't silently act
+    // — surface the informed prompt so the user decides.
     if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
       Log.log('mobile backupData loaded, length: ' + backupData.length);
       await this._importBackup(backupData);
@@ -267,6 +293,30 @@ export class LocalBackupService {
     if (this._platformService.isIOS()) {
       await this._backupIOS(data);
     }
+
+    // #7901: record when a good backup was last written so Settings can show the
+    // user they're protected, and so the timestamp rides along in exported logs
+    // for the next eviction report. Reached only after the meaningful-data guard
+    // above, so it never advances on an empty/degraded write.
+    this._recordLastBackupTime();
+  }
+
+  private _recordLastBackupTime(): void {
+    try {
+      localStorage.setItem(LS.LAST_LOCAL_BACKUP, Date.now().toString());
+    } catch (e) {
+      Log.warn('LocalBackupService: failed to record last backup time', e);
+    }
+  }
+
+  /** Epoch ms of the last successful local backup write, or null if none yet. */
+  getLastBackupTime(): number | null {
+    const raw = localStorage.getItem(LS.LAST_LOCAL_BACKUP);
+    if (!raw) {
+      return null;
+    }
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
   }
 
   private async _backupElectron(data: AppDataComplete): Promise<void> {

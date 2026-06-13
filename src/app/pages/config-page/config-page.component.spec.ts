@@ -44,8 +44,10 @@ describe('ConfigPageComponent', () => {
     mockProviderManager.getProviderById.and.returnValue(Promise.resolve(undefined));
     mockLocalBackupService = jasmine.createSpyObj('LocalBackupService', [
       'restoreLatestMobileBackupFromSettings',
+      'getLastBackupTime',
     ]);
     mockLocalBackupService.restoreLatestMobileBackupFromSettings.and.resolveTo();
+    mockLocalBackupService.getLastBackupTime.and.returnValue(null);
 
     await TestBed.configureTestingModule({
       providers: [
