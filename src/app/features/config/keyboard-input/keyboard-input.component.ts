@@ -13,6 +13,10 @@ const MODIFIER_KEY_CODES = [
   'ControlRight',
   'AltLeft',
   'AltRight',
+  'MetaLeft',
+  'MetaRight',
+  'OSLeft',
+  'OSRight',
 ];
 
 const hasModifier = (ev: KeyboardEvent): boolean =>

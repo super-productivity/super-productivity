@@ -50,4 +50,34 @@ describe('KeyboardInputComponent', () => {
     component.onKeyDown(createKeydown('Delete', { shiftKey: true }));
     expect(component.formControl.value).toBe('Shift+Delete');
   });
+
+  it('ignores modifier keys pressed alone', () => {
+    const component = createComponent('Meta+N');
+
+    for (const code of [
+      'ShiftLeft',
+      'ShiftRight',
+      'ControlLeft',
+      'ControlRight',
+      'AltLeft',
+      'AltRight',
+      'MetaLeft',
+      'MetaRight',
+      'OSLeft',
+      'OSRight',
+    ]) {
+      component.onKeyDown(createKeydown(code));
+      expect(component.formControl.value).toBe('Meta+N'); // Value is unchanged
+    }
+  });
+
+  it('correctly registers combinations with Meta/OS modifiers', () => {
+    const component = createComponent(null);
+
+    component.onKeyDown(createKeydown('KeyA', { metaKey: true }));
+    expect(component.formControl.value).toBe('Meta+A');
+
+    component.onKeyDown(createKeydown('KeyB', { metaKey: true, shiftKey: true }));
+    expect(component.formControl.value).toBe('Shift+Meta+B');
+  });
 });
