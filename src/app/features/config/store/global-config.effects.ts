@@ -298,7 +298,7 @@ const mapShortcutToQwerty = (
 
   if (shortcut.endsWith('++')) {
     keyName = '+';
-    modifiersPart = shortcut.slice(0, -2);
+    modifiersPart = shortcut.slice(0, -1);
   } else if (shortcut === '+') {
     keyName = '+';
     modifiersPart = '';
