@@ -47,6 +47,7 @@ import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+import { calcKeyboardHeight } from './calc-keyboard-height';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
@@ -667,12 +668,13 @@ export class GlobalThemeService {
     let nativeKeyboardHeight = 0;
     let baseInnerHeight = window.innerHeight;
 
-    const measureKeyboardHeight = (): number => {
-      const obscured = vv ? window.innerHeight - vv.height : 0;
-      const layoutShrink = Math.max(0, baseInnerHeight - window.innerHeight);
-      const nativeCovered = Math.max(0, nativeKeyboardHeight - layoutShrink);
-      return Math.max(obscured, nativeCovered);
-    };
+    const measureKeyboardHeight = (): number =>
+      calcKeyboardHeight({
+        innerHeight: window.innerHeight,
+        visualViewportHeight: vv ? vv.height : null,
+        nativeKeyboardHeight,
+        baseInnerHeight,
+      });
 
     const commit = (): void => {
       const raw = measureKeyboardHeight();
@@ -682,6 +684,9 @@ export class GlobalThemeService {
 
     const scheduleCommit = (): void => {
       if (measureKeyboardHeight() <= KEYBOARD_THRESHOLD_PX) {
+        // Keyboard is (or just became) closed — keep the baseline fresh so a
+        // later rotation/resize doesn't leave a stale value behind.
+        baseInnerHeight = window.innerHeight;
         if (resizeTimer !== null) {
           window.clearTimeout(resizeTimer);
           resizeTimer = null;
@@ -708,14 +713,7 @@ export class GlobalThemeService {
       androidInterface.keyboardHeightPx$
         .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
         .subscribe((physicalPx) => {
-          const cssPx = physicalPx / (window.devicePixelRatio || 1);
-          if (cssPx <= 0) {
-            nativeKeyboardHeight = 0;
-            // Refresh the baseline while the keyboard is closed.
-            baseInnerHeight = window.innerHeight;
-          } else {
-            nativeKeyboardHeight = cssPx;
-          }
+          nativeKeyboardHeight = Math.max(0, physicalPx / (window.devicePixelRatio || 1));
           scheduleCommit();
         });
     }
