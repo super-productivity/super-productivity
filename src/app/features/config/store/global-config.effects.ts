@@ -287,7 +287,7 @@ export class GlobalConfigEffects {
   );
 }
 
-const mapShortcutToQwerty = (
+export const mapShortcutToQwerty = (
   shortcut: string | null | undefined,
   layout: KeyboardLayout,
 ): string | null | undefined => {
@@ -349,11 +349,11 @@ const mapShortcutToQwerty = (
   return modifiersPart + qwertyKey;
 };
 
-const mapKeyboardConfigToQwerty = (
+export const mapKeyboardConfigToQwerty = (
   keyboardCfg: KeyboardConfig,
   layout: KeyboardLayout,
 ): KeyboardConfig => {
-  const mappedCfg = { ...keyboardCfg };
+  const mappedCfg: Record<string, string | null | undefined> = { ...keyboardCfg };
   const GLOBAL_KEY_CFG_KEYS: (keyof KeyboardConfig)[] = [
     'globalShowHide',
     'globalToggleTaskStart',
@@ -365,9 +365,9 @@ const mapKeyboardConfigToQwerty = (
   for (const key of GLOBAL_KEY_CFG_KEYS) {
     const originalVal = mappedCfg[key];
     if (originalVal) {
-      mappedCfg[key] = mapShortcutToQwerty(originalVal, layout) as any;
+      mappedCfg[key] = mapShortcutToQwerty(originalVal, layout);
     }
   }
 
-  return mappedCfg;
+  return mappedCfg as KeyboardConfig;
 };
