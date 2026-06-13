@@ -127,6 +127,13 @@ export const APP_ROUTES: Routes = [
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.ConfigPageComponent),
   },
+  {
+    path: 'quick-add',
+    loadComponent: () =>
+      import('./pages/quick-add-page/quick-add-page.component').then(
+        (m) => m.QuickAddTaskPageComponent,
+      ),
+  },
   // Wildcard — redirects to default start page
   {
     path: '**',

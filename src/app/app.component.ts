@@ -34,8 +34,8 @@ import { resolveBgImageToDataUrl } from './core/theme/resolve-bg-image-to-data-u
 import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
-import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { concatMap, first, take } from 'rxjs/operators';
+import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { concatMap, filter, first, take } from 'rxjs/operators';
 
 import { IS_MOBILE } from './util/is-mobile';
 import { recordSearchNavDebug } from './util/search-nav-debug';
@@ -230,9 +230,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       !localStorage.getItem(LS.IS_SKIP_TOUR),
   );
 
+  isQuickAddRoute = signal(false);
+
   private _subs: Subscription = new Subscription();
 
   constructor() {
+    const router = inject(Router);
+    this._subs.add(
+      router.events
+        .pipe(filter((event) => event instanceof NavigationEnd))
+        .subscribe((event: any) => {
+          this.isQuickAddRoute.set(event.urlAfterRedirects.includes('/quick-add'));
+        }),
+    );
+
     this._startupService.init();
     void this._materialIconsLoaderService.ensureFontReady();
 
