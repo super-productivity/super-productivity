@@ -70,6 +70,7 @@ describe('PageTitleComponent', () => {
       ['/scheduled-list', T.MH.ALL_PLANNED_LIST],
       ['/donate', T.MH.DONATE],
       ['/config', T.PS.GLOBAL_SETTINGS],
+      ['/all-tasks', T.MH.ALL_TASKS],
     ];
 
     cases.forEach(([url, expectedKey]) => {
@@ -110,6 +111,11 @@ describe('PageTitleComponent', () => {
     it('is true for /config', () => {
       const c = setupComponent('/config');
       expect(c.isSpecialSection()).toBe(true);
+    });
+
+    it('is true for /all-tasks', () => {
+      const c = setupComponent('/all-tasks');
+      expect(c.isSpecialSection()).toBe(false);
     });
 
     it('is false for /active/tasks', () => {

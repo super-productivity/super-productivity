@@ -43,6 +43,7 @@ describe('DefaultStartPageGuard', () => {
       isPlannerEnabled: true,
       isSchedulerEnabled: true,
       isBoardsEnabled: true,
+      isAllTasksEnabled: true,
     });
     getByIdOnce$ = jasmine.createSpy('getByIdOnce$').and.returnValue(of(undefined));
 
@@ -96,6 +97,7 @@ describe('DefaultStartPageGuard', () => {
       isPlannerEnabled: false,
       isSchedulerEnabled: true,
       isBoardsEnabled: true,
+      isAllTasksEnabled: true,
     });
     misc$.next({ defaultStartPage: 2 });
     expectUrl(await runGuard(), TODAY_URL);
@@ -106,6 +108,7 @@ describe('DefaultStartPageGuard', () => {
       isPlannerEnabled: true,
       isSchedulerEnabled: false,
       isBoardsEnabled: true,
+      isAllTasksEnabled: true,
     });
     misc$.next({ defaultStartPage: 3 });
     expectUrl(await runGuard(), TODAY_URL);
@@ -116,8 +119,20 @@ describe('DefaultStartPageGuard', () => {
       isPlannerEnabled: true,
       isSchedulerEnabled: true,
       isBoardsEnabled: false,
+      isAllTasksEnabled: true,
     });
     misc$.next({ defaultStartPage: 4 });
+    expectUrl(await runGuard(), TODAY_URL);
+  });
+
+  it('falls back to Today when All Tasks disabled', async () => {
+    appFeatures.and.returnValue({
+      isPlannerEnabled: true,
+      isSchedulerEnabled: true,
+      isBoardsEnabled: true,
+      isAllTasksEnabled: false,
+    });
+    misc$.next({ defaultStartPage: 5 });
     expectUrl(await runGuard(), TODAY_URL);
   });
 

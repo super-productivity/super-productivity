@@ -198,6 +198,15 @@ export class MainHeaderComponent implements OnDestroy {
     return this.globalConfigService.appFeatures().isSyncIconEnabled;
   });
 
+  private _url = toSignal(
+    this._router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this._router.url },
+  );
+  isAllTasksRoute = computed(() => /all-tasks/.test(this._url()));
+
   // Check if there are any undone tasks that can be tracked
   private readonly _hasTrackableTasks$ = this.workContextService.undoneTasks$.pipe(
     map((tasks) => tasks.length > 0),
