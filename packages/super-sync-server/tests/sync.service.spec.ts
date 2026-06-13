@@ -325,17 +325,19 @@ vi.mock('../src/db', async () => {
         return [{ lastSeq }];
       }
       if (sql.includes('JOIN (VALUES')) {
-        const txUserId = params[params.length - 1] as number;
-        const touchedParams = params.slice(0, -1).flatMap((param: unknown): unknown[] => {
-          if (
-            param &&
-            typeof param === 'object' &&
-            Array.isArray((param as { values?: unknown[] }).values)
-          ) {
-            return (param as { values: unknown[] }).values;
-          }
-          return [param];
-        });
+        // Params are [touchedRows (VALUES join), userId, idArray, idArray]: userId
+        // is the only number; the VALUES join is the first Sql fragment, whose
+        // .values hold the flattened (entity_type, entity_id) touched pairs. The
+        // idArray prefilter params (#8334) are not needed by the mock. (Previously
+        // userId was the last param and the join the only fragment.)
+        const txUserId = params.find((p: unknown) => typeof p === 'number') as number;
+        const valuesParam = params.find(
+          (p: unknown) =>
+            !!p &&
+            typeof p === 'object' &&
+            Array.isArray((p as { values?: unknown[] }).values),
+        ) as { values: unknown[] } | undefined;
+        const touchedParams = valuesParam?.values ?? [];
         const touchedPairs = new Set<string>();
         for (let i = 0; i < touchedParams.length; i += 2) {
           touchedPairs.add(`${touchedParams[i]}\u0000${touchedParams[i + 1]}`);
