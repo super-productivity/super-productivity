@@ -10,13 +10,12 @@ import {
   removeTimeSpent,
   roundTimeSpentForDay,
   setCurrentTask,
+  setHideSubTasksMode,
   setSelectedTask,
   toggleStart,
-  toggleTaskHideSubTasks,
   unsetCurrentTask,
-  updateTaskUi,
 } from './task.actions';
-import { Task, TaskDetailTargetPanel, TaskState } from '../task.model';
+import { HideSubTasksMode, Task, TaskDetailTargetPanel, TaskState } from '../task.model';
 import { calcTotalTimeSpent } from '../util/calc-total-time-spent';
 import { addTaskRepeatCfgToTask } from '../../task-repeat-cfg/store/task-repeat-cfg.actions';
 import {
@@ -353,56 +352,21 @@ export const taskReducer = createReducer<TaskState>(
     return taskAdapter.updateMany(taskUpdates, state);
   }),
 
-  on(updateTaskUi, (state, { task }) => {
-    return taskAdapter.updateOne(task, state);
+  on(setHideSubTasksMode, (state, { id, mode }) => {
+    // Anything but an explicit hide value normalizes to undefined (= Show):
+    // remote op payloads are untrusted input, and persisted state must stay
+    // within {undefined, HideDone, HideAll} — see PersistedHideSubTasksMode
+    // in task.model.ts.
+    const _hideSubTasksMode =
+      mode === HideSubTasksMode.HideDone || mode === HideSubTasksMode.HideAll
+        ? mode
+        : undefined;
+    return taskAdapter.updateOne({ id, changes: { _hideSubTasksMode } }, state);
   }),
 
   // Bulk task updates - used for archive task batch operations
   on(TaskSharedActions.updateTasks, (state, { tasks }) => {
     return taskAdapter.updateMany(tasks, state);
-  }),
-
-  // TODO simplify
-  on(toggleTaskHideSubTasks, (state, { taskId, isShowLess, isEndless }) => {
-    const task = getTaskById(taskId, state);
-    const subTasks = task.subTaskIds.map((id) => getTaskById(id, state));
-    const doneTasksLength = subTasks.filter((t) => t.isDone).length;
-    const isDoneTaskCaseNeeded = doneTasksLength && doneTasksLength < subTasks.length;
-    // for easier calculations we use 0 instead of undefined for show state
-    const oldVal = task._hideSubTasksMode || 0;
-    let newVal: number = isShowLess ? oldVal + 1 : oldVal - 1;
-
-    if (!isDoneTaskCaseNeeded && newVal === 1) {
-      if (isShowLess) {
-        newVal = 2;
-      } else {
-        newVal = 0;
-      }
-    }
-
-    if (isEndless) {
-      if (newVal < 0) {
-        newVal = 2;
-      } else if (newVal > 2) {
-        newVal = 0;
-      }
-    } else {
-      if (newVal < 0) {
-        newVal = 0;
-      } else if (newVal > 2) {
-        newVal = 2;
-      }
-    }
-
-    return taskAdapter.updateOne(
-      {
-        id: taskId,
-        changes: {
-          _hideSubTasksMode: newVal || undefined,
-        },
-      },
-      state,
-    );
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {

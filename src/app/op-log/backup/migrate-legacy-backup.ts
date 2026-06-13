@@ -13,6 +13,7 @@
 /* eslint-disable prefer-arrow/prefer-arrow-functions */
 import {
   HideSubTasksMode,
+  PersistedHideSubTasksMode,
   TaskArchive,
   TaskCopy,
   TimeSpentOnDayCopy,
@@ -308,29 +309,37 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
       delete taskDict[taskId]!.notes;
     }
 
-    // Convert _showSubTasksMode → _hideSubTasksMode
-    if (!taskDict[taskId]!._hideSubTasksMode) {
-      const oldValue = (taskDict[taskId] as unknown as Record<string, unknown>)?.[
+    // Convert legacy _showSubTasksMode → _hideSubTasksMode. Anything outside
+    // {HideDone, HideAll} (e.g. an explicit 0 or a null in legacy data) is
+    // converted or removed: persisted state must stay within
+    // {undefined, HideDone, HideAll}, see PersistedHideSubTasksMode.
+    const hideMode = taskDict[taskId]!._hideSubTasksMode as
+      | HideSubTasksMode
+      | null
+      | undefined;
+    if (hideMode !== HideSubTasksMode.HideDone && hideMode !== HideSubTasksMode.HideAll) {
+      const oldValue = (taskDict[taskId] as unknown as Record<string, unknown>)[
         '_showSubTasksMode'
       ] as number | undefined;
-      let newValue: HideSubTasksMode | undefined;
+      let newValue: PersistedHideSubTasksMode | undefined;
       if (oldValue === 1) {
-        newValue = 1;
+        newValue = HideSubTasksMode.HideDone;
       } else if (oldValue === 0) {
-        newValue = 2;
+        newValue = HideSubTasksMode.HideAll;
       }
-      if (
-        '_showSubTasksMode' in (taskDict[taskId] as unknown as Record<string, unknown>)
-      ) {
-        delete (taskDict[taskId] as unknown as Record<string, unknown>)[
-          '_showSubTasksMode'
-        ];
-      }
+      delete (taskDict[taskId] as unknown as Record<string, unknown>)[
+        '_showSubTasksMode'
+      ];
       if (newValue) {
         taskDict[taskId] = {
           ...taskDict[taskId]!,
-          _hideSubTasksMode: newValue as HideSubTasksMode,
+          _hideSubTasksMode: newValue,
         };
+      } else if (hideMode !== undefined) {
+        taskDict[taskId] = { ...taskDict[taskId]! };
+        delete (taskDict[taskId] as unknown as Record<string, unknown>)[
+          '_hideSubTasksMode'
+        ];
       }
     }
 

@@ -185,6 +185,7 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
 
   // Task actions (T)
   [ActionType.TASK_UPDATE_MULTIPLE_SIMPLE]: 'TU',
+  [ActionType.TASK_SET_HIDE_SUB_TASKS_MODE]: 'TSH',
   [ActionType.TASK_ADD_SUB]: 'TA',
   [ActionType.TASK_MOVE_SUB]: 'TMS',
   [ActionType.TASK_MOVE_UP]: 'TMU',

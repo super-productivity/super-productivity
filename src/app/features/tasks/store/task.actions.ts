@@ -1,6 +1,6 @@
 import { createAction, props } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
-import { Task, TaskDetailTargetPanel } from '../task.model';
+import { HideSubTasksMode, Task, TaskDetailTargetPanel } from '../task.model';
 import { RoundTimeOption } from '../../project/project.model';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { OpType } from '../../../op-log/core/operation.types';
@@ -37,19 +37,31 @@ export const __updateMultipleTaskSimple = createAction(
   }),
 );
 
-export const updateTaskUi = createAction(
-  '[Task] Update Task Ui',
-  props<{ task: Update<Task> }>(),
+// Dedicated action (instead of reusing a generic task update): old clients
+// apply ops for action types they know; an unknown action type is a clean
+// no-op for them, so collapse-state sync degrades silently on old versions
+// instead of triggering the repair flow. See PersistedHideSubTasksMode in
+// task.model.ts for the full invariant.
+// Known limitation: the local-DELETE-vs-remote-UPDATE conflict path extracts
+// resurrection changes from `payload.task` only, so this op's `{ id, mode }`
+// payload contributes nothing there and the hide mode is dropped (acceptable
+// for a cosmetic field).
+export const setHideSubTasksMode = createAction(
+  '[Task] Set Hide Sub Tasks Mode',
+  (taskProps: { id: string; mode: HideSubTasksMode }) => ({
+    ...taskProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'TASK',
+      entityId: taskProps.id,
+      opType: OpType.Update,
+    } satisfies PersistentActionMeta,
+  }),
 );
 
 export const removeTagsForAllTasks = createAction(
   '[Task] Remove Tags from all Tasks',
   props<{ tagIdsToRemove: string[] }>(),
-);
-
-export const toggleTaskHideSubTasks = createAction(
-  '[Task] Toggle Show Sub Tasks',
-  props<{ taskId: string; isShowLess: boolean; isEndless: boolean }>(),
 );
 
 export const moveSubTask = createAction(

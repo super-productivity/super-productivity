@@ -1,8 +1,8 @@
-import { type Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
+import { dismissViteOverlay } from '../../utils/element-helpers';
 import {
   WEBDAV_CONFIG_TEMPLATE,
   setupSyncClient,
@@ -11,21 +11,6 @@ import {
   generateSyncFolderName,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
-
-/**
- * Dismiss the Vite error overlay if present.
- * In development mode, TypeScript errors can cause a full-page overlay
- * that intercepts all pointer events. Pressing Escape dismisses it.
- */
-const dismissViteOverlay = async (page: Page): Promise<void> => {
-  const overlay = page.locator('vite-error-overlay');
-  const isVisible = await overlay.isVisible().catch(() => false);
-  if (isVisible) {
-    console.log('[Test] Dismissing vite-error-overlay');
-    await page.keyboard.press('Escape');
-    await overlay.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
-  }
-};
 
 test.describe('@webdav WebDAV Sync Full Flow', () => {
   // Run sync tests serially to avoid WebDAV server contention

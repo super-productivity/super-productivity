@@ -56,3 +56,19 @@ export const ensureGlobalAddTaskBarOpen = async (page: Page): Promise<Locator> =
   await addTaskInput.waitFor({ state: 'visible', timeout: 10000 });
   return addTaskInput;
 };
+
+/**
+ * Dismisses the dev-server error overlay if present.
+ * In development mode, TypeScript errors can cause a full-page overlay
+ * that intercepts all pointer events. Pressing Escape dismisses it.
+ *
+ * @param page - Playwright page object
+ */
+export const dismissViteOverlay = async (page: Page): Promise<void> => {
+  const overlay = page.locator('vite-error-overlay');
+  const isVisible = await overlay.isVisible().catch(() => false);
+  if (isVisible) {
+    await page.keyboard.press('Escape');
+    await overlay.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+  }
+};

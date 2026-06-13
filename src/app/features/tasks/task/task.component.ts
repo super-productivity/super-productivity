@@ -730,7 +730,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const t = this.task();
     const hasSubTasks = t.subTasks && t.subTasks.length > 0;
 
-    if (hasSubTasks && t._hideSubTasksMode !== undefined) {
+    if (hasSubTasks && !!t._hideSubTasksMode) {
       this._taskService.toggleSubTaskMode(t.id, false, false);
     } else if (!this.isSelected()) {
       this.showDetailPanel();

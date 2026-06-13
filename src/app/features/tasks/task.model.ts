@@ -5,10 +5,31 @@ import { TaskAttachment } from './task-attachment/task-attachment.model';
 import { Task as PluginTask } from '@super-productivity/plugin-api';
 
 export enum HideSubTasksMode {
-  // Show is undefined
+  // Legacy/never-toggled tasks may have this undefined (treated as Show).
+  Show = 0,
   HideDone = 1,
   HideAll = 2,
 }
+
+/**
+ * CANONICAL backward-compat invariant for subtask hide/show sync:
+ *
+ * Persisted/synced Task state must stay within {undefined, HideDone, HideAll}.
+ * Old clients' typia validators were compiled when the enum was {1, 2} and
+ * reject an explicit 0 in state as data corruption (blocking repair loop).
+ * `Show = 0` may therefore exist ONLY in `setHideSubTasksMode` action payloads
+ * (a serializable value is needed there because JSON.stringify drops
+ * `undefined`, and the "show all" transition must survive the wire). The
+ * reducer normalizes 0 → undefined before writing state.
+ *
+ * This subset type enforces the invariant at compile time AND in the
+ * typia-generated state validators (so a stray 0 in state is still caught
+ * as invalid on new clients, e.g. via the plugin bridge's
+ * `typia.assert<Partial<TaskCopy>>`).
+ */
+export type PersistedHideSubTasksMode =
+  | HideSubTasksMode.HideDone
+  | HideSubTasksMode.HideAll;
 
 export enum TaskDetailTargetPanel {
   Default = 'Default',
@@ -139,7 +160,7 @@ export interface TaskCopy
   parentId?: string;
   remindAt?: number;
   repeatCfgId?: string;
-  _hideSubTasksMode?: HideSubTasksMode;
+  _hideSubTasksMode?: PersistedHideSubTasksMode;
 }
 
 /**
