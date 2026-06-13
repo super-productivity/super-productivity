@@ -11,7 +11,7 @@ import { LayoutService } from '../../core-ui/layout/layout.service';
       <add-task-bar
         (closed)="closeWindow()"
         (done)="closeWindow()"
-        [isGlobalBarVariant]="false"
+        [isGlobalBarVariant]="true"
         [isSubmitViaIpc]="true"
       ></add-task-bar>
     </div>
@@ -19,18 +19,24 @@ import { LayoutService } from '../../core-ui/layout/layout.service';
   styles: [
     `
       .quick-add-container {
-        padding: 12px;
-        box-sizing: border-box;
-        height: 100%;
         display: flex;
         flex-direction: column;
+        align-items: center;
         justify-content: flex-start;
+        padding-top: 15vh;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+      }
+      add-task-bar {
+        width: 640px;
+        max-width: 90vw;
       }
       :host {
         display: block;
         width: 100%;
         height: 100%;
-        background: transparent;
+        background: rgba(0, 0, 0, 0.15);
       }
     `,
   ],

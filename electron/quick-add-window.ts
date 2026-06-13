@@ -31,20 +31,29 @@ export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): 
     } catch (e) {
       console.error('Error forwarding quick-add task submission to main window:', e);
     }
-    hideQuickAddWindow();
   });
+};
+
+const getActiveDisplayBounds = (): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} => {
+  try {
+    const cursorPoint = screen.getCursorScreenPoint();
+    const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
+    return activeDisplay.bounds;
+  } catch (e) {
+    console.error('Error getting cursor display, falling back to primary display:', e);
+    return screen.getPrimaryDisplay().bounds;
+  }
 };
 
 const createQuickAddWindow = (): void => {
   if (quickAddWin && !quickAddWin.isDestroyed()) return;
 
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-
-  const width = 640;
-  const height = 450;
-  const x = Math.round((screenWidth - width) / 2);
-  const y = Math.round((screenHeight - height) / 3); // Upper third
+  const { x, y, width, height } = getActiveDisplayBounds();
 
   quickAddWin = new BrowserWindow({
     width,
@@ -95,17 +104,13 @@ export const showQuickAddWindow = (): void => {
   }
 
   if (quickAddWin) {
-    // Re-center on the active screen / current cursor position screen if desired,
-    // or just show in center of primary screen.
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-    const width = 640;
-    const height = 450;
+    // Re-center on the active screen / current cursor position screen
+    const { x, y, width, height } = getActiveDisplayBounds();
     quickAddWin.setBounds({
       width,
       height,
-      x: Math.round((screenWidth - width) / 2),
-      y: Math.round((screenHeight - height) / 3),
+      x,
+      y,
     });
 
     quickAddWin.show();
