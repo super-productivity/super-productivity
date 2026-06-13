@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { detectConflict } from '../src/sync/conflict';
+import { detectConflict, getStoredEntityIds } from '../src/sync/conflict';
 import type { Operation } from '../src/sync/sync.types';
 
 /**
  * Unit-level regression for #8334's single-entity lookup path
  * (detectConflict → detectConflictForEntity). It exercises the REAL function
- * against a tx mock that models how production now persists ops: one row per op
- * carrying entity_id = entityIds[0] AND the full entity_ids array. The mock's
- * findFirst mirrors the Prisma `OR: [{entityId}, {entityIds:{has}}]` filter.
+ * against a tx mock modelling how production persists ops: multi-entity ops carry
+ * the full entity_ids array, single-entity ops store []. detectConflictForEntity
+ * issues two ordered findFirst lookups (scalar entity_id + entityIds:{has}) and
+ * takes the higher server_seq, which the mock's findFirst reproduces per branch.
  *
  * The batch lookup paths (raw unnest SQL) are validated separately against real
  * Postgres semantics and in conflict-detection.spec.ts.
@@ -97,5 +98,34 @@ describe('#8334 detectConflict single-entity path', () => {
   it('does not flag an unrelated entity', async () => {
     const result = await detectConflict(1, staleOp('task-9'), makeTx([multiEntityRow]));
     expect(result.hasConflict).toBe(false);
+  });
+});
+
+describe('#8334 getStoredEntityIds', () => {
+  const op = (over: Partial<Operation>): Operation => over as unknown as Operation;
+
+  it('stores [] for a single-entity op (covered by the scalar)', () => {
+    expect(getStoredEntityIds(op({ entityId: 'task-1' }))).toEqual([]);
+    expect(getStoredEntityIds(op({ entityId: 'task-1', entityIds: ['task-1'] }))).toEqual(
+      [],
+    );
+  });
+
+  it('stores the full set for a multi-entity op', () => {
+    expect(
+      getStoredEntityIds(op({ entityId: 'task-1', entityIds: ['task-1', 'task-2'] })),
+    ).toEqual(['task-1', 'task-2']);
+  });
+
+  it('stores [] for an entity-less op', () => {
+    expect(getStoredEntityIds(op({}))).toEqual([]);
+  });
+
+  it('stores the id when a batch op dedups to one value that differs from entityId', () => {
+    // The server does not enforce entityId === entityIds[0]; without this the
+    // entity would be invisible to conflict lookups (#8334).
+    expect(
+      getStoredEntityIds(op({ entityId: 'task-Z', entityIds: ['task-A', 'task-A'] })),
+    ).toEqual(['task-A']);
   });
 });

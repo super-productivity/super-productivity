@@ -197,9 +197,12 @@ export const detectConflictForEntity = async (
     orderBy: { serverSeq: 'desc' },
   });
 
-  // Array branch: catches a non-first entity of a multi-entity op. entity_ids is
-  // populated only for multi-entity ops (single-entity ops store an empty array
-  // and are covered by the scalar branch), so this GIN lookup matches a small set.
+  // Array branch: catches a non-first entity of a multi-entity op. Unlike the
+  // scalar branch this is NOT an ordered walk — a GIN index carries no server_seq,
+  // so Postgres fetches all entity_ids @> [entityId] matches and Top-N sorts them.
+  // It stays cheap only because entity_ids is populated for multi-entity ops alone
+  // (single-entity ops store [] and are covered by the scalar branch), so the match
+  // set is small — which is why multi-entity-only storage is load-bearing here.
   const byArray = await tx.operation.findFirst({
     where: { userId, entityType: op.entityType, entityIds: { has: entityId } },
     select: { clientId: true, vectorClock: true, serverSeq: true },
@@ -310,6 +313,11 @@ export const toStableJsonValue = (value: unknown): unknown => {
   return value;
 };
 
+/**
+ * All entities an op touches (full set, including single-entity ops). Use for the
+ * incoming-op conflict check and the in-memory in-batch map — NOT for the persisted
+ * `entity_ids` column, which uses {@link getStoredEntityIds} (multi-entity only).
+ */
 export const getConflictEntityIds = (op: Operation): string[] => {
   const rawEntityIds = op.entityIds?.length
     ? op.entityIds
@@ -320,15 +328,22 @@ export const getConflictEntityIds = (op: Operation): string[] => {
 };
 
 /**
- * The entity_ids array to persist with an op. Only multi-entity ops store the
- * full set; single-entity ops store an empty array and are matched via the
- * scalar entity_id in conflict detection. Keeping single-entity rows out of the
- * entity_ids GIN index keeps that index small and the array-branch lookup in
- * `detectConflictForEntity` cheap (#8334).
+ * The entity_ids array to persist with an op. Ops whose touched-entity set is
+ * already covered by the scalar entity_id store an empty array (so single-entity
+ * ops stay out of the entity_ids GIN index, keeping it small and the array-branch
+ * lookup in `detectConflictForEntity` cheap). Any other set is stored in full.
+ *
+ * The gate is "is the set exactly [entity_id]?", NOT "length > 1": a batch op
+ * whose ids dedup to a single value that differs from entity_id (the server does
+ * not enforce entity_id === entityIds[0]) must still be stored, or that entity
+ * would be invisible to conflict lookups (#8334).
  */
 export const getStoredEntityIds = (op: Operation): string[] => {
   const ids = getConflictEntityIds(op);
-  return ids.length > 1 ? ids : [];
+  if (ids.length <= 1 && ids[0] === op.entityId) {
+    return [];
+  }
+  return ids;
 };
 
 export const getEntityConflictKey = (entityType: string, entityId: string): string => {
