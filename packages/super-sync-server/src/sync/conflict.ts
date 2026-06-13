@@ -72,7 +72,9 @@ export const detectConflictForEntities = async (
     // present, else the scalar entity_id (pre-migration rows). The `&&`/`= ANY`
     // prefilter keeps the GIN(entity_ids) + entity_id indexes usable; the unnest
     // + `eid = ANY` keeps only the requested entities, then DISTINCT ON picks the
-    // latest op per entity. (#8334)
+    // latest op per entity. Kept inline (not a shared fragment) so the positional
+    // params stay stable for the conflict-detection.spec mock; the same shape is
+    // duplicated in prefetchLatestEntityOpsForBatch — keep them in sync. (#8334)
     const idArray = Prisma.sql`ARRAY[${Prisma.join(batchEntityIds)}]::text[]`;
     const latestOps = await tx.$queryRaw<LatestEntityOperationRow[]>`
       SELECT DISTINCT ON (eid)
@@ -183,37 +185,29 @@ export const detectConflictForEntity = async (
   entityId: string,
   tx: Prisma.TransactionClient,
 ): Promise<ConflictResult> => {
-  // Find the latest op that touched this entity via two ordered LIMIT-1 lookups,
-  // taking the higher server_seq. A single `entity_id = ? OR entity_ids @> ?`
-  // query spans two indexes, forcing a BitmapOr + sort that scans every stored
-  // version of the entity; splitting keeps each side an ordered index walk (#8334).
+  // Get the latest op that touched this entity. A multi-entity (batch) op stores
+  // its full set in entity_ids, so match the entity as the scalar entity_id OR a
+  // member of entity_ids. Single-entity ops store an empty array and are matched
+  // via the scalar; pre-migration rows likewise fall back to the scalar (#8334).
   //
-  // Scalar branch: the common/hot path — single-entity ops and the first entity
-  // of multi-entity ops. Served by the (user_id, entity_type, entity_id,
-  // server_seq) btree as an ordered Index Scan Backward, LIMIT 1 (one tuple).
-  const byScalar = await tx.operation.findFirst({
-    where: { userId, entityType: op.entityType, entityId },
-    select: { clientId: true, vectorClock: true, serverSeq: true },
+  // PERF: the OR spans the entity_id btree + the entity_ids GIN, so the planner
+  // uses a BitmapOr + sort rather than an ordered LIMIT-1 walk. Bounded by one
+  // entity's stored version depth (op-log pruning keeps that small, so the sort is
+  // sub-ms in practice). If a real-Postgres EXPLAIN on a deep-history entity ever
+  // shows this hot path (run per single-entity upload) is a problem, split into two
+  // ordered LIMIT-1 lookups (scalar btree + entity_ids GIN) and take the higher
+  // server_seq — the array branch stays small because entity_ids is multi-entity-only.
+  // The batch unnest paths (detectConflictForEntities / prefetchLatestEntityOpsForBatch)
+  // carry the larger sort, so EXPLAIN those first under heavy-user latency.
+  const existingOp = await tx.operation.findFirst({
+    where: {
+      userId,
+      entityType: op.entityType,
+      OR: [{ entityId }, { entityIds: { has: entityId } }],
+    },
+    select: { clientId: true, vectorClock: true },
     orderBy: { serverSeq: 'desc' },
   });
-
-  // Array branch: catches a non-first entity of a multi-entity op. Unlike the
-  // scalar branch this is NOT an ordered walk — a GIN index carries no server_seq,
-  // so Postgres fetches all entity_ids @> [entityId] matches and Top-N sorts them.
-  // It stays cheap only because entity_ids is populated for multi-entity ops alone
-  // (single-entity ops store [] and are covered by the scalar branch), so the match
-  // set is small — which is why multi-entity-only storage is load-bearing here.
-  const byArray = await tx.operation.findFirst({
-    where: { userId, entityType: op.entityType, entityIds: { has: entityId } },
-    select: { clientId: true, vectorClock: true, serverSeq: true },
-    orderBy: { serverSeq: 'desc' },
-  });
-
-  // The latest writer is whichever has the higher server_seq (global order).
-  let existingOp = byScalar;
-  if (byArray && (!existingOp || byArray.serverSeq > existingOp.serverSeq)) {
-    existingOp = byArray;
-  }
 
   // No existing operation = no conflict
   if (!existingOp) {
@@ -329,9 +323,10 @@ export const getConflictEntityIds = (op: Operation): string[] => {
 
 /**
  * The entity_ids array to persist with an op. Ops whose touched-entity set is
- * already covered by the scalar entity_id store an empty array (so single-entity
- * ops stay out of the entity_ids GIN index, keeping it small and the array-branch
- * lookup in `detectConflictForEntity` cheap). Any other set is stored in full.
+ * already covered by the scalar entity_id store an empty array, so single-entity
+ * ops (the vast majority) stay out of the entity_ids GIN index — keeping it small
+ * and off their insert write path (Postgres GIN indexes no keys for an empty
+ * array). Any other set is stored in full.
  *
  * The gate is "is the set exactly [entity_id]?", NOT "length > 1": a batch op
  * whose ids dedup to a single value that differs from entity_id (the server does

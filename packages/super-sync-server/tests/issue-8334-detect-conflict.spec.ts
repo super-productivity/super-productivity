@@ -7,8 +7,8 @@ import type { Operation } from '../src/sync/sync.types';
  * (detectConflict → detectConflictForEntity). It exercises the REAL function
  * against a tx mock modelling how production persists ops: multi-entity ops carry
  * the full entity_ids array, single-entity ops store []. detectConflictForEntity
- * issues two ordered findFirst lookups (scalar entity_id + entityIds:{has}) and
- * takes the higher server_seq, which the mock's findFirst reproduces per branch.
+ * matches an entity via a Prisma `OR: [{entityId}, {entityIds:{has}}]` filter,
+ * which the mock's findFirst reproduces.
  *
  * The batch lookup paths (raw unnest SQL) are validated separately against real
  * Postgres semantics and in conflict-detection.spec.ts.
@@ -25,21 +25,18 @@ type StoredRow = {
 
 const makeTx = (rows: StoredRow[]): any => ({
   operation: {
-    // detectConflictForEntity runs two ordered LIMIT-1 lookups:
-    //   scalar branch → where { userId, entityType, entityId }
-    //   array branch  → where { userId, entityType, entityIds: { has } }
+    // Mirrors: where { userId, entityType, OR: [{entityId:X}, {entityIds:{has:X}}] }
     findFirst: async ({ where }: any) => {
-      const matches =
-        where.entityId !== undefined
-          ? (r: StoredRow) => r.entityId === where.entityId
-          : (r: StoredRow) => r.entityIds.includes(where.entityIds.has);
+      const target =
+        where.OR.find((c: any) => 'entityId' in c)?.entityId ??
+        where.OR.find((c: any) => c.entityIds?.has !== undefined)?.entityIds?.has;
       return (
         rows
           .filter(
             (r) =>
               r.userId === where.userId &&
               r.entityType === where.entityType &&
-              matches(r),
+              (r.entityId === target || r.entityIds.includes(target)),
           )
           .sort((a, b) => b.serverSeq - a.serverSeq)[0] ?? null
       );

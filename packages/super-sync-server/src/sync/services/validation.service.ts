@@ -125,7 +125,7 @@ export class ValidationService {
         if (typeof id !== 'string' || id.length > 255 || id.trim().length === 0) {
           return {
             valid: false,
-            error: 'Invalid entityIds element: must be a non-empty string ≤255 chars',
+            error: 'Invalid entityIds element: must be a non-empty string <= 255 chars',
             errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
           };
         }

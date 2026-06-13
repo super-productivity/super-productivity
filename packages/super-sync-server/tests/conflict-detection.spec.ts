@@ -63,25 +63,28 @@ vi.mock('../src/db', async () => {
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
           );
         }
-        // Array branch of the single-entity conflict lookup: where { userId,
-        // entityType, entityIds: { has: X } } — match X as a member of the stored
-        // entity_ids array (multi-entity ops) (#8334).
-        if (args.where?.entityIds?.has !== undefined && args.where?.entityType) {
+        // Single-entity conflict lookup: where { userId, entityType,
+        // OR: [{ entityId: X }, { entityIds: { has: X } }] } — match X as the
+        // scalar entity_id OR a member of the entity_ids array (#8334).
+        if (Array.isArray(args.where?.OR) && args.where?.entityType) {
           state.entityConflictFindFirstCount++;
-          const target = args.where.entityIds.has;
+          const scalarClause = args.where.OR.find((c: any) => 'entityId' in c);
+          const hasClause = args.where.OR.find(
+            (c: any) => c.entityIds?.has !== undefined,
+          );
+          const targetId = scalarClause?.entityId ?? hasClause?.entityIds?.has;
           const ops = Array.from(state.operations.values())
             .filter(
               (op: any) =>
                 op.userId === args.where.userId &&
                 op.entityType === args.where.entityType &&
-                Array.isArray(op.entityIds) &&
-                op.entityIds.includes(target),
+                (op.entityId === targetId ||
+                  (Array.isArray(op.entityIds) && op.entityIds.includes(targetId))),
             )
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
           return applyOperationSelect(ops[0], args.select) || null;
         }
-        // Scalar branch of the single-entity conflict lookup: where { userId,
-        // entityType, entityId: X }.
+        // Scalar-only lookup (other callers): where { userId, entityType, entityId }.
         if (args.where?.entityId && args.where?.entityType) {
           state.entityConflictFindFirstCount++;
           const ops = Array.from(state.operations.values())
