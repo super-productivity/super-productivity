@@ -128,7 +128,6 @@ body .mat-mdc-dialog-surface {
   // Enable flex layout for proper content scrolling
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-lg) !important;
 }
 
 .mat-mdc-dialog-panel {
@@ -441,13 +440,6 @@ body .mat-mdc-button-base .mat-icon {
 // MAT MENU
 .mat-mdc-menu-panel {
   overflow-x: hidden !important;
-  border-radius: var(--radius-sm) !important;
-}
-
-// AUTOCOMPLETE & SELECT PANEL
-.cdk-overlay-pane .mat-mdc-autocomplete-panel,
-.mat-mdc-select-panel {
-  border-radius: var(--radius-sm) !important;
 }
 
 .mat-mdc-menu-content {
