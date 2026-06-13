@@ -50,16 +50,29 @@ export const APPROX_BYTES_PER_OP = 1024;
  * be bypassed by submitting unserializable ops that still persist as JSONB.
  * `fallback` is `true` in that case so callers can observe the rate of
  * unserializable ops via a single log line (never the op content).
+ *
+ * `cachedPayloadBytes` lets a caller pass the payload's UTF-8 byte size when it
+ * was already measured upstream (validation stringifies the payload to enforce
+ * the size limit; the payload is immutable across the upload pipeline), so a
+ * multi-megabyte payload isn't re-stringified here. The vector clock is always
+ * (re)measured because it is pruned AFTER validation (see
+ * `limitVectorClockSize` / `pruneVectorClockForStorage`) — the stored clock
+ * differs from the validation/gate-time clock, so its size must be computed at
+ * the persist site.
  */
-export const computeOpStorageBytes = (op: {
-  payload: unknown;
-  vectorClock: unknown;
-}): { bytes: number; fallback: boolean } => {
+export const computeOpStorageBytes = (
+  op: {
+    payload: unknown;
+    vectorClock: unknown;
+  },
+  cachedPayloadBytes?: number,
+): { bytes: number; fallback: boolean } => {
   try {
+    const payloadBytes =
+      cachedPayloadBytes ?? Buffer.byteLength(JSON.stringify(op.payload ?? null), 'utf8');
     return {
       bytes:
-        Buffer.byteLength(JSON.stringify(op.payload ?? null), 'utf8') +
-        Buffer.byteLength(JSON.stringify(op.vectorClock ?? {}), 'utf8'),
+        payloadBytes + Buffer.byteLength(JSON.stringify(op.vectorClock ?? {}), 'utf8'),
       fallback: false,
     };
   } catch {

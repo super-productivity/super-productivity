@@ -360,6 +360,43 @@ describe('ValidationService', () => {
       expect(result.errorCode).toBe(SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE);
     });
 
+    it('should measure the size limit in UTF-8 bytes, not UTF-16 code units', () => {
+      // '✓' (U+2713) is one UTF-16 code unit but three UTF-8 bytes.
+      // JSON.stringify({ data: '✓'×100 }) is 111 UTF-16 code units but 311 UTF-8
+      // bytes. With a 200-byte limit the old String#length check (111) wrongly
+      // passed; the UTF-8 byte measure (311) correctly rejects.
+      const service = new ValidationService({
+        ...DEFAULT_SYNC_CONFIG,
+        maxPayloadSizeBytes: 200,
+      });
+      const payload = { data: '✓'.repeat(100) };
+      expect(JSON.stringify(payload).length).toBeLessThanOrEqual(200);
+      expect(Buffer.byteLength(JSON.stringify(payload), 'utf8')).toBeGreaterThan(200);
+      const result = service.validateOp(createValidOp({ payload }), clientId);
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE);
+    });
+
+    it('returns the UTF-8 payload byte size on the valid result', () => {
+      const asciiOp = createValidOp({ payload: { name: 'Test' } });
+      const asciiResult = validationService.validateOp(asciiOp, clientId);
+      expect(asciiResult.valid).toBe(true);
+      expect(asciiResult.payloadBytes).toBe(
+        Buffer.byteLength(JSON.stringify(asciiOp.payload), 'utf8'),
+      );
+
+      // Non-ASCII: byte size exceeds the UTF-16 code-unit count.
+      const unicodeOp = createValidOp({ payload: { note: '日本語✓' } });
+      const unicodeResult = validationService.validateOp(unicodeOp, clientId);
+      expect(unicodeResult.valid).toBe(true);
+      expect(unicodeResult.payloadBytes).toBe(
+        Buffer.byteLength(JSON.stringify(unicodeOp.payload), 'utf8'),
+      );
+      expect(unicodeResult.payloadBytes).toBeGreaterThan(
+        JSON.stringify(unicodeOp.payload).length,
+      );
+    });
+
     it('should accept timestamps in the future (clamping handled during upload)', () => {
       // Future timestamp validation removed - clamping is handled in OperationUploadService.
       const futureTime = Date.now() + 10 * 60 * 1000; // 10 minutes in future

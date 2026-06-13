@@ -28,6 +28,12 @@ export interface ValidationResult {
   valid: boolean;
   error?: string;
   errorCode?: SyncErrorCode;
+  /**
+   * UTF-8 byte size of `op.payload`, measured once here to enforce the size
+   * limit and threaded to the persist site so the payload isn't re-stringified.
+   * Set only on the `valid: true` result.
+   */
+  payloadBytes?: number;
 }
 
 export class ValidationService {
@@ -167,8 +173,13 @@ export class ValidationService {
       };
     }
 
-    const payloadSize = JSON.stringify(op.payload).length;
-    if (payloadSize > this.config.maxPayloadSizeBytes) {
+    // Measure UTF-8 bytes, not String#length (UTF-16 code units), so this
+    // per-payload limit agrees with the UTF-8 byte accounting used by the quota
+    // gate, the persisted payloadBytes column, and the storage counter. With
+    // `.length`, a non-ASCII payload undercounts and could pass this check while
+    // exceeding the same byte limit everywhere else.
+    const payloadBytes = Buffer.byteLength(JSON.stringify(op.payload), 'utf8');
+    if (payloadBytes > this.config.maxPayloadSizeBytes) {
       return {
         valid: false,
         error: 'Payload too large',
@@ -196,7 +207,7 @@ export class ValidationService {
       };
     }
 
-    return { valid: true };
+    return { valid: true, payloadBytes };
   }
 
   /**
