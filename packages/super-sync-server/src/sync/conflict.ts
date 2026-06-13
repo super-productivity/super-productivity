@@ -68,16 +68,26 @@ export const detectConflictForEntities = async (
       start,
       start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
     );
+    // Match each requested id against the op's full entity set: entity_ids when
+    // present, else the scalar entity_id (pre-migration rows). The `&&`/`= ANY`
+    // prefilter keeps the GIN(entity_ids) + entity_id indexes usable; the unnest
+    // + `eid = ANY` keeps only the requested entities, then DISTINCT ON picks the
+    // latest op per entity. (#8334)
+    const idArray = Prisma.sql`ARRAY[${Prisma.join(batchEntityIds)}]::text[]`;
     const latestOps = await tx.$queryRaw<LatestEntityOperationRow[]>`
-      SELECT DISTINCT ON (entity_id)
-        entity_id AS "entityId",
-        client_id AS "clientId",
-        vector_clock AS "vectorClock"
-      FROM operations
-      WHERE user_id = ${userId}
-        AND entity_type = ${op.entityType}
-        AND entity_id IN (${Prisma.join(batchEntityIds)})
-      ORDER BY entity_id, server_seq DESC
+      SELECT DISTINCT ON (eid)
+        eid AS "entityId",
+        o.client_id AS "clientId",
+        o.vector_clock AS "vectorClock"
+      FROM operations o
+      CROSS JOIN LATERAL unnest(
+        CASE WHEN cardinality(o.entity_ids) > 0 THEN o.entity_ids ELSE ARRAY[o.entity_id] END
+      ) AS eid
+      WHERE o.user_id = ${userId}
+        AND o.entity_type = ${op.entityType}
+        AND (o.entity_ids && ${idArray} OR o.entity_id = ANY(${idArray}))
+        AND eid = ANY(${idArray})
+      ORDER BY eid, o.server_seq DESC
     `;
 
     const latestOpByEntityId = new Map<string, LatestEntityOperationRow>();
@@ -173,21 +183,34 @@ export const detectConflictForEntity = async (
   entityId: string,
   tx: Prisma.TransactionClient,
 ): Promise<ConflictResult> => {
-  // Get the latest operation for this entity
-  const existingOp = await tx.operation.findFirst({
-    where: {
-      userId,
-      entityType: op.entityType,
-      entityId,
-    },
-    select: {
-      clientId: true,
-      vectorClock: true,
-    },
-    orderBy: {
-      serverSeq: 'desc',
-    },
+  // Find the latest op that touched this entity via two ordered LIMIT-1 lookups,
+  // taking the higher server_seq. A single `entity_id = ? OR entity_ids @> ?`
+  // query spans two indexes, forcing a BitmapOr + sort that scans every stored
+  // version of the entity; splitting keeps each side an ordered index walk (#8334).
+  //
+  // Scalar branch: the common/hot path — single-entity ops and the first entity
+  // of multi-entity ops. Served by the (user_id, entity_type, entity_id,
+  // server_seq) btree as an ordered Index Scan Backward, LIMIT 1 (one tuple).
+  const byScalar = await tx.operation.findFirst({
+    where: { userId, entityType: op.entityType, entityId },
+    select: { clientId: true, vectorClock: true, serverSeq: true },
+    orderBy: { serverSeq: 'desc' },
   });
+
+  // Array branch: catches a non-first entity of a multi-entity op. entity_ids is
+  // populated only for multi-entity ops (single-entity ops store an empty array
+  // and are covered by the scalar branch), so this GIN lookup matches a small set.
+  const byArray = await tx.operation.findFirst({
+    where: { userId, entityType: op.entityType, entityIds: { has: entityId } },
+    select: { clientId: true, vectorClock: true, serverSeq: true },
+    orderBy: { serverSeq: 'desc' },
+  });
+
+  // The latest writer is whichever has the higher server_seq (global order).
+  let existingOp = byScalar;
+  if (byArray && (!existingOp || byArray.serverSeq > existingOp.serverSeq)) {
+    existingOp = byArray;
+  }
 
   // No existing operation = no conflict
   if (!existingOp) {
@@ -296,6 +319,18 @@ export const getConflictEntityIds = (op: Operation): string[] => {
   return Array.from(new Set(rawEntityIds));
 };
 
+/**
+ * The entity_ids array to persist with an op. Only multi-entity ops store the
+ * full set; single-entity ops store an empty array and are matched via the
+ * scalar entity_id in conflict detection. Keeping single-entity rows out of the
+ * entity_ids GIN index keeps that index small and the array-branch lookup in
+ * `detectConflictForEntity` cheap (#8334).
+ */
+export const getStoredEntityIds = (op: Operation): string[] => {
+  const ids = getConflictEntityIds(op);
+  return ids.length > 1 ? ids : [];
+};
+
 export const getEntityConflictKey = (entityType: string, entityId: string): string => {
   return `${entityType}\u0000${entityId}`;
 };
@@ -332,22 +367,36 @@ export const prefetchLatestEntityOpsForBatch = async (
     start < entityPairs.length;
     start += CONFLICT_DETECTION_ENTITY_BATCH_SIZE
   ) {
-    const touchedRows = entityPairs
-      .slice(start, start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE)
-      .map(({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`);
+    const batchPairs = entityPairs.slice(
+      start,
+      start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+    );
+    const touchedRows = batchPairs.map(
+      ({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`,
+    );
+    // Prefilter array (all requested ids) so the JOIN below can match a requested
+    // id inside a stored op's entity_ids set, not just its scalar entity_id, while
+    // keeping the GIN(entity_ids) + entity_id indexes usable. (#8334)
+    const idArray = Prisma.sql`ARRAY[${Prisma.join(
+      batchPairs.map((pair) => pair.entityId),
+    )}]::text[]`;
 
     const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
-      SELECT DISTINCT ON (o.entity_type, o.entity_id)
+      SELECT DISTINCT ON (o.entity_type, eid)
         o.entity_type AS "entityType",
-        o.entity_id AS "entityId",
+        eid AS "entityId",
         o.client_id AS "clientId",
         o.vector_clock AS "vectorClock"
       FROM operations o
+      CROSS JOIN LATERAL unnest(
+        CASE WHEN cardinality(o.entity_ids) > 0 THEN o.entity_ids ELSE ARRAY[o.entity_id] END
+      ) AS eid
       JOIN (VALUES ${Prisma.join(touchedRows)}) AS touched(entity_type, entity_id)
         ON touched.entity_type = o.entity_type
-       AND touched.entity_id = o.entity_id
+       AND touched.entity_id = eid
       WHERE o.user_id = ${userId}
-      ORDER BY o.entity_type, o.entity_id, o.server_seq DESC
+        AND (o.entity_ids && ${idArray} OR o.entity_id = ANY(${idArray}))
+      ORDER BY o.entity_type, eid, o.server_seq DESC
     `;
 
     for (const latestOp of latestOps) {

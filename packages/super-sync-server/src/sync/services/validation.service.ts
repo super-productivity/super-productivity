@@ -13,7 +13,7 @@ import {
   sanitizeVectorClock,
   validatePayload,
 } from '../sync.types';
-import { ENTITY_TYPES } from '@sp/shared-schema';
+import { ENTITY_TYPES, SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
 import { Logger } from '../../logger';
 
 /**
@@ -103,6 +103,32 @@ export class ValidationService {
           error: 'entityId cannot be empty or whitespace-only',
           errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
         };
+      }
+    }
+
+    // Validate the multi-entity set the same way as the scalar entityId. The HTTP
+    // contract Zod schema also bounds this, but enforcing it here keeps the invariant
+    // with the op (defense-in-depth for any non-HTTP caller) since entityIds is now
+    // persisted and consulted by conflict detection (#8334).
+    if (op.entityIds !== undefined && op.entityIds !== null) {
+      if (
+        !Array.isArray(op.entityIds) ||
+        op.entityIds.length > SUPER_SYNC_MAX_ENTITY_IDS_PER_OP
+      ) {
+        return {
+          valid: false,
+          error: 'Invalid entityIds: not an array or too many entries',
+          errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
+        };
+      }
+      for (const id of op.entityIds) {
+        if (typeof id !== 'string' || id.length > 255 || id.trim().length === 0) {
+          return {
+            valid: false,
+            error: 'Invalid entityIds element: must be a non-empty string ≤255 chars',
+            errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
+          };
+        }
       }
     }
 

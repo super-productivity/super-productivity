@@ -133,6 +133,38 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
+  it('adds the operation entity_ids column as a metadata-only column (no table rewrite)', () => {
+    const migrationSql = readMigration('20260613000000_add_operation_entity_ids');
+
+    // Same fast-path guards as payload_bytes: ADD COLUMN with a constant default is
+    // metadata-only on PG 11+. A future edit to an expression default or a separate
+    // UPDATE backfill would rewrite/lock a 100M-row table — #8334 is forward-only by
+    // design (pre-migration rows fall back to the scalar entity_id), so no backfill.
+    expect(migrationSql).toMatch(
+      /ALTER TABLE "operations"\s+ADD COLUMN "entity_ids" TEXT\[\] NOT NULL DEFAULT '\{\}'/i,
+    );
+    expect(migrationSql).not.toMatch(/\bUPDATE\b/i);
+    expect(migrationSql).not.toMatch(/\bUSING\b/i);
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('adds the entity_ids GIN index concurrently as a single native-apply statement', () => {
+    const migrationSql = readMigration(
+      '20260613000001_add_operation_entity_ids_gin_index',
+    );
+
+    expect(migrationSql).toContain('CREATE INDEX CONCURRENTLY');
+    expect(migrationSql).toContain('"operations_entity_ids_gin"');
+    expect(migrationSql).toContain('USING GIN ("entity_ids")');
+    // Bare CREATE (no IF NOT EXISTS / no drop-then-create): an interrupted concurrent
+    // build must fail loudly, matching the 20260511000000 precedent.
+    expect(migrationSql).not.toMatch(/\bIF\s+NOT\s+EXISTS\b/i);
+    expect(migrationSql).not.toMatch(/\bALTER\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
   it('runs migrations before replacing the app during compose deploys', () => {
     const deployScript = readFileSync(join(currentDir, '../scripts/deploy.sh'), 'utf8');
     const runtimeMigrateScript = readFileSync(

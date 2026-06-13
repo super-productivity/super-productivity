@@ -114,6 +114,37 @@ describe('ValidationService', () => {
       expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_ENTITY_ID);
     });
 
+    // === entityIds (multi-entity batch ops) validation (#8334) ===
+
+    it('should accept a valid entityIds array', () => {
+      const op = createValidOp({ entityIds: ['task-1', 'task-2'] });
+      expect(validationService.validateOp(op, clientId).valid).toBe(true);
+    });
+
+    it('should reject an entityIds element longer than 255 characters', () => {
+      const op = createValidOp({ entityIds: ['ok', 'x'.repeat(256)] });
+      const result = validationService.validateOp(op, clientId);
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_ENTITY_ID);
+    });
+
+    it('should reject a non-string / empty entityIds element', () => {
+      expect(
+        validationService.validateOp(createValidOp({ entityIds: [123] }), clientId).valid,
+      ).toBe(false);
+      expect(
+        validationService.validateOp(createValidOp({ entityIds: ['  '] }), clientId)
+          .valid,
+      ).toBe(false);
+    });
+
+    it('should reject more than SUPER_SYNC_MAX_ENTITY_IDS_PER_OP entries', () => {
+      const op = createValidOp({ entityIds: new Array(1001).fill('id') });
+      const result = validationService.validateOp(op, clientId);
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_ENTITY_ID);
+    });
+
     // === entityId validation for regular entity types ===
 
     it('should reject null entityId for regular entity type (TASK)', () => {

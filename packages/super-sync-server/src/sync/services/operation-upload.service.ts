@@ -21,6 +21,7 @@ import {
   detectConflict,
   getBatchConflictEntityPairs,
   getConflictEntityIds,
+  getStoredEntityIds,
   getEntityConflictKey,
   isSameDuplicateOperation,
   prefetchLatestEntityOpsForBatch,
@@ -544,6 +545,10 @@ export class OperationUploadService {
         opType: candidate.op.opType,
         entityType: candidate.op.entityType,
         entityId: candidate.op.entityId ?? null,
+        // Persist the full entity set for multi-entity ops so conflict detection
+        // can match a write to any touched entity across uploads, not just
+        // entityIds[0]; single-entity ops store [] and use the scalar (#8334).
+        entityIds: getStoredEntityIds(candidate.op),
         payload: candidate.op.payload as Prisma.InputJsonValue,
         payloadBytes: BigInt(candidate.storageBytes),
         vectorClock: candidate.op.vectorClock as Prisma.InputJsonValue,
@@ -800,6 +805,10 @@ export class OperationUploadService {
           opType: op.opType,
           entityType: op.entityType,
           entityId: op.entityId ?? null,
+          // Persist the full entity set for multi-entity ops so conflict detection
+          // can match a write to any touched entity across uploads, not just
+          // entityIds[0]; single-entity ops store [] and use the scalar (#8334).
+          entityIds: getStoredEntityIds(op),
           payload: op.payload as Prisma.InputJsonValue,
           payloadBytes: BigInt(sized.bytes),
           vectorClock: op.vectorClock as Prisma.InputJsonValue,

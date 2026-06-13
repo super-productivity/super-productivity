@@ -63,6 +63,25 @@ vi.mock('../src/db', async () => {
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
           );
         }
+        // Array branch of the single-entity conflict lookup: where { userId,
+        // entityType, entityIds: { has: X } } — match X as a member of the stored
+        // entity_ids array (multi-entity ops) (#8334).
+        if (args.where?.entityIds?.has !== undefined && args.where?.entityType) {
+          state.entityConflictFindFirstCount++;
+          const target = args.where.entityIds.has;
+          const ops = Array.from(state.operations.values())
+            .filter(
+              (op: any) =>
+                op.userId === args.where.userId &&
+                op.entityType === args.where.entityType &&
+                Array.isArray(op.entityIds) &&
+                op.entityIds.includes(target),
+            )
+            .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+          return applyOperationSelect(ops[0], args.select) || null;
+        }
+        // Scalar branch of the single-entity conflict lookup: where { userId,
+        // entityType, entityId: X }.
         if (args.where?.entityId && args.where?.entityType) {
           state.entityConflictFindFirstCount++;
           const ops = Array.from(state.operations.values())
@@ -200,23 +219,29 @@ vi.mock('../src/db', async () => {
           (entityId): entityId is string => typeof entityId === 'string',
         ),
       );
+      // An op covers an entity via its full entity_ids set (multi-entity ops),
+      // falling back to the scalar entity_id for pre-migration rows (#8334).
+      const coveredEntityIds = (op: any): string[] =>
+        Array.isArray(op.entityIds) && op.entityIds.length > 0
+          ? op.entityIds
+          : op.entityId != null
+            ? [op.entityId]
+            : [];
       const latestByEntityId = new Map<string, any>();
       const ops = Array.from(state.operations.values())
-        .filter(
-          (op: any) =>
-            op.userId === userId &&
-            op.entityType === entityType &&
-            batchEntityIds.has(op.entityId),
-        )
+        .filter((op: any) => op.userId === userId && op.entityType === entityType)
         .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
 
       for (const op of ops) {
-        if (!op.entityId || latestByEntityId.has(op.entityId)) continue;
-        latestByEntityId.set(op.entityId, op);
+        for (const eid of coveredEntityIds(op)) {
+          if (batchEntityIds.has(eid) && !latestByEntityId.has(eid)) {
+            latestByEntityId.set(eid, op);
+          }
+        }
       }
 
-      return Array.from(latestByEntityId.values()).map((op: any) => ({
-        entityId: op.entityId,
+      return Array.from(latestByEntityId.entries()).map(([eid, op]) => ({
+        entityId: eid,
         clientId: op.clientId,
         vectorClock: op.vectorClock,
       }));
@@ -966,6 +991,76 @@ describe('Conflict Detection', () => {
         accepted: false,
         errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
         existingClock: { [clientB]: 1 },
+      });
+      expect(result[0].error).toContain('TASK:task-2');
+    });
+
+    // Regression for #8334. The test above proves an *incoming* multi-entity op
+    // is checked against all its ids. These two prove the reverse — a *stored*
+    // multi-entity op exposes every entity to later conflict lookups, not just
+    // entityIds[0] — across both the single-entity and batch lookup paths.
+    it('#8334 single path: stale write to a non-first stored entity conflicts', async () => {
+      const service = getSyncService();
+
+      // clientA stores a multi-entity op over [task-1, task-2]
+      // (persisted scalar entity_id = task-1, entity_ids = both).
+      const stored = await service.uploadOps(userId, clientA, [
+        createOp({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          clientId: clientA,
+          vectorClock: { [clientA]: 1 },
+        }),
+      ]);
+      expect(stored[0].accepted).toBe(true);
+
+      // clientB sends a stale single-entity op for task-2 (the SECOND entity).
+      // {clientB:1} is CONCURRENT with {clientA:1}.
+      const result = await service.uploadOps(userId, clientB, [
+        createOp({
+          entityId: 'task-2',
+          clientId: clientB,
+          vectorClock: { [clientB]: 1 },
+        }),
+      ]);
+
+      expect(result[0]).toMatchObject({
+        accepted: false,
+        errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+      });
+    });
+
+    // NOTE: with the default (non-batch) upload config this exercises
+    // `detectConflictForEntities`. The `prefetchLatestEntityOpsForBatch` variant
+    // (batchUpload=true) shares the same entity_ids matching SQL but is not driven
+    // here; its raw query is validated separately against real Postgres.
+    it('#8334 batch path: incoming multi-entity op hits a non-first stored entity', async () => {
+      const service = getSyncService();
+
+      const stored = await service.uploadOps(userId, clientA, [
+        createOp({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          clientId: clientA,
+          vectorClock: { [clientA]: 1 },
+        }),
+      ]);
+      expect(stored[0].accepted).toBe(true);
+
+      // Incoming *multi-entity* op (→ batch lookup path) touching task-2.
+      const result = await service.uploadOps(userId, clientB, [
+        createOp({
+          entityId: 'task-2',
+          entityIds: ['task-2', 'task-9'],
+          clientId: clientB,
+          vectorClock: { [clientB]: 1 },
+        }),
+      ]);
+
+      expect(testState.batchConflictQueryCount).toBeGreaterThan(0);
+      expect(result[0]).toMatchObject({
+        accepted: false,
+        errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
       });
       expect(result[0].error).toContain('TASK:task-2');
     });
