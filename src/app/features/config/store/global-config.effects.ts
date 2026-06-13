@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
+  concatMap,
   distinctUntilChanged,
   filter,
   map,
@@ -10,6 +11,11 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { Action, Store } from '@ngrx/store';
+import { IS_MAC } from '../../../util/is-mac';
+import {
+  KeyboardLayout,
+  KeyboardLayoutService,
+} from '../../../core/keyboard-layout/keyboard-layout.service';
 import { IS_ELECTRON } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { LanguageService } from '../../../core/language/language.service';
@@ -39,6 +45,7 @@ export class GlobalConfigEffects {
   private _snackService = inject(SnackService);
   private _store = inject(Store);
   private _userProfileService = inject(UserProfileService);
+  private _keyboardLayoutService = inject(KeyboardLayoutService);
 
   snackUpdate$ = createEffect(
     () =>
@@ -67,7 +74,13 @@ export class GlobalConfigEffects {
         ofType(updateGlobalConfigSection),
         filter(({ sectionKey, sectionCfg }) => IS_ELECTRON && sectionKey === 'keyboard'),
         tap(({ sectionKey, sectionCfg }) => {
-          const keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
+          let keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
+          if (IS_MAC) {
+            keyboardCfg = mapKeyboardConfigToQwerty(
+              keyboardCfg,
+              this._keyboardLayoutService.layout,
+            );
+          }
           window.ea.registerGlobalShortcuts(keyboardCfg);
         }),
       ),
@@ -79,12 +92,23 @@ export class GlobalConfigEffects {
       this._actions$.pipe(
         ofType(loadAllData),
         filter(() => IS_ELECTRON),
-        tap((action) => {
+        concatMap(async (action) => {
           const appDataComplete = action.appDataComplete;
           const keyboardCfg: KeyboardConfig = (
             appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG
           ).keyboard;
-          window.ea.registerGlobalShortcuts(keyboardCfg);
+          let layout: KeyboardLayout = new Map();
+          if (IS_MAC) {
+            layout = await this._keyboardLayoutService.layoutReady;
+          }
+          return { keyboardCfg, layout };
+        }),
+        tap(({ keyboardCfg, layout }) => {
+          let cfg = keyboardCfg;
+          if (IS_MAC) {
+            cfg = mapKeyboardConfigToQwerty(keyboardCfg, layout);
+          }
+          window.ea.registerGlobalShortcuts(cfg);
         }),
       ),
     { dispatch: false },
@@ -259,3 +283,107 @@ export class GlobalConfigEffects {
     { dispatch: false },
   );
 }
+
+/**
+ * Maps a single shortcut character to its physical US-QWERTY representation.
+ * On macOS, Electron's globalShortcut API registers shortcuts by physical keyboard position
+ * (US-QWERTY), regardless of the user's localized keyboard layout.
+ * We resolve this by finding the layout key code that produces the user's localized keyName,
+ * and mapping that key code back to its physical US-QWERTY character.
+ *
+ * Note: If multiple key codes map to the same character, the first matching code in the layout
+ * map's iteration order will be selected.
+ *
+ * @see https://github.com/johannesjo/super-productivity/issues/8378
+ */
+export const mapShortcutToQwerty = (
+  shortcut: string | null | undefined,
+  layout: KeyboardLayout,
+): string | null | undefined => {
+  if (!shortcut || !layout || !layout.size) return shortcut;
+
+  let keyName = '';
+  let modifiersPart = '';
+
+  if (shortcut.endsWith('++')) {
+    keyName = '+';
+    modifiersPart = shortcut.slice(0, -1);
+  } else if (shortcut === '+') {
+    keyName = '+';
+    modifiersPart = '';
+  } else {
+    const parts = shortcut.split('+');
+    keyName = parts[parts.length - 1];
+    modifiersPart = parts.slice(0, -1).join('+') + (parts.length > 1 ? '+' : '');
+  }
+
+  if (!keyName) return shortcut;
+
+  let foundCode: string | null = null;
+  for (const [code, val] of layout.entries()) {
+    if (val.toUpperCase() === keyName.toUpperCase()) {
+      foundCode = code;
+      break;
+    }
+  }
+
+  if (!foundCode) {
+    return shortcut;
+  }
+
+  let qwertyKey = foundCode;
+  if (qwertyKey.startsWith('Key')) {
+    qwertyKey = qwertyKey.substring(3);
+  } else if (qwertyKey.startsWith('Digit')) {
+    qwertyKey = qwertyKey.substring(5);
+  } else {
+    const qwertyCodeMap: Record<string, string> = {
+      Minus: '-',
+      Equal: '+',
+      Semicolon: ';',
+      Comma: ',',
+      Period: '.',
+      Slash: '/',
+      Backquote: '`',
+      BracketLeft: '[',
+      BracketRight: ']',
+      Backslash: '\\',
+      Quote: "'",
+    };
+    if (qwertyCodeMap[qwertyKey]) {
+      qwertyKey = qwertyCodeMap[qwertyKey];
+    }
+  }
+
+  return modifiersPart + qwertyKey;
+};
+
+/**
+ * Maps macOS-specific global shortcuts in KeyboardConfig to their US-QWERTY layout equivalents.
+ * Only translates properties defined in GLOBAL_KEY_CFG_KEYS (system-wide global shortcuts).
+ * On macOS, Electron's globalShortcut API registers shortcuts by physical keyboard position.
+ *
+ * @see https://github.com/johannesjo/super-productivity/issues/8378
+ */
+export const mapKeyboardConfigToQwerty = (
+  keyboardCfg: KeyboardConfig,
+  layout: KeyboardLayout,
+): KeyboardConfig => {
+  const mappedCfg: Record<string, string | null | undefined> = { ...keyboardCfg };
+  const GLOBAL_KEY_CFG_KEYS: (keyof KeyboardConfig)[] = [
+    'globalShowHide',
+    'globalToggleTaskStart',
+    'globalAddNote',
+    'globalAddTask',
+    'globalToggleTaskWidget',
+  ];
+
+  for (const key of GLOBAL_KEY_CFG_KEYS) {
+    const originalVal = mappedCfg[key];
+    if (originalVal) {
+      mappedCfg[key] = mapShortcutToQwerty(originalVal, layout);
+    }
+  }
+
+  return mappedCfg as KeyboardConfig;
+};
