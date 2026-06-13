@@ -30,6 +30,16 @@ export interface PluginNodeExecutionElectronApi {
   revokeGrant(pluginId: string, grantToken: string): Promise<void>;
 }
 
+export interface QuickAddTaskPayload {
+  title: string;
+  taskData: any;
+  isAddToBacklog: boolean;
+  isAddToBottom: boolean;
+  remindOption?: any;
+  repeatQuickSetting?: string | null;
+  repeatCfg?: any;
+}
+
 export interface ElectronAPI {
   on(
     channel: string,
@@ -274,4 +284,9 @@ export interface ElectronAPI {
 
   onLocalRestApiRequest(listener: (payload: LocalRestApiRequestPayload) => void): void;
   sendLocalRestApiResponse(payload: LocalRestApiResponsePayload): void;
+
+  // QUICK ADD
+  closeQuickAddWindow(): void;
+  submitAddTaskViaIpc(payload: QuickAddTaskPayload): void;
+  onAddTaskViaIpc(listener: (payload: QuickAddTaskPayload) => void): void;
 }

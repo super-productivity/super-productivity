@@ -306,6 +306,15 @@ const ea: ElectronAPI = {
   },
   sendLocalRestApiResponse: (payload: LocalRestApiResponsePayload) =>
     _send(IPC.LOCAL_REST_API_RESPONSE, payload),
+
+  // QUICK ADD
+  closeQuickAddWindow: () => _send(IPC.QUICK_ADD_CLOSE),
+  submitAddTaskViaIpc: (payload) => _send(IPC.QUICK_ADD_SUBMIT, payload),
+  onAddTaskViaIpc: (listener) => {
+    ipcRenderer.on(IPC.QUICK_ADD_SUBMIT_FORWARD, (_event: any, data: any) => {
+      listener(data as any);
+    });
+  },
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

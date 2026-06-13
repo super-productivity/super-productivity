@@ -143,6 +143,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   isHideTagTitles = input<boolean>(false);
   tagsToRemove = input<string[]>([]);
   planForDay = input<string>();
+  isSubmitViaIpc = input<boolean>(false);
 
   // Outputs
   afterTaskAdd = output<{ taskId: string; isAddToBottom: boolean }>();
@@ -500,6 +501,47 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       }
 
       Log.x(taskData);
+
+      if (this.isSubmitViaIpc()) {
+        const resolvedRemindOption =
+          state.remindOption ??
+          this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+          DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
+
+        let repeatCfg: any = null;
+        if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
+          const startDate = state.date || this._dateService.todayStr();
+          const referenceDate = dateStrToUtcDate(startDate);
+          const quickSettingUpdates =
+            getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
+          repeatCfg = {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            startDate,
+            ...quickSettingUpdates,
+            title,
+            quickSetting: state.repeatQuickSetting,
+            tagIds: taskData.tagIds ?? [],
+            defaultEstimate: state.estimate || 0,
+            startTime: state.time || undefined,
+            remindAt: state.time ? resolvedRemindOption : undefined,
+          };
+        }
+
+        if (window.ea) {
+          window.ea.submitAddTaskViaIpc({
+            title,
+            taskData,
+            isAddToBacklog: this.isAddToBacklog(),
+            isAddToBottom: this.isAddToBottom(),
+            remindOption: resolvedRemindOption,
+            repeatQuickSetting: state.repeatQuickSetting,
+            repeatCfg,
+          });
+        }
+        this.afterTaskAdd.emit({ taskId: '', isAddToBottom: this.isAddToBottom() });
+        this._resetAfterAdd();
+        return;
+      }
 
       const taskId = this._taskService.add(
         title,
