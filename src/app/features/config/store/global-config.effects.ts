@@ -76,7 +76,6 @@ export class GlobalConfigEffects {
         tap(({ sectionKey, sectionCfg }) => {
           let keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
           if (IS_MAC) {
-            // macOS globalShortcut maps by physical US-QWERTY position; see #8378
             keyboardCfg = mapKeyboardConfigToQwerty(
               keyboardCfg,
               this._keyboardLayoutService.layout,
@@ -100,7 +99,6 @@ export class GlobalConfigEffects {
           ).keyboard;
           let layout: KeyboardLayout = new Map();
           if (IS_MAC) {
-            // macOS globalShortcut maps by physical US-QWERTY position; see #8378
             layout = await this._keyboardLayoutService.layoutReady;
           }
           return { keyboardCfg, layout };
@@ -108,7 +106,6 @@ export class GlobalConfigEffects {
         tap(({ keyboardCfg, layout }) => {
           let cfg = keyboardCfg;
           if (IS_MAC) {
-            // macOS globalShortcut maps by physical US-QWERTY position; see #8378
             cfg = mapKeyboardConfigToQwerty(keyboardCfg, layout);
           }
           window.ea.registerGlobalShortcuts(cfg);
@@ -287,6 +284,18 @@ export class GlobalConfigEffects {
   );
 }
 
+/**
+ * Maps a single shortcut character to its physical US-QWERTY representation.
+ * On macOS, Electron's globalShortcut API registers shortcuts by physical keyboard position
+ * (US-QWERTY), regardless of the user's localized keyboard layout.
+ * We resolve this by finding the layout key code that produces the user's localized keyName,
+ * and mapping that key code back to its physical US-QWERTY character.
+ *
+ * Note: If multiple key codes map to the same character, the first matching code in the layout
+ * map's iteration order will be selected.
+ *
+ * @see https://github.com/johannesjo/super-productivity/issues/8378
+ */
 export const mapShortcutToQwerty = (
   shortcut: string | null | undefined,
   layout: KeyboardLayout,
@@ -349,6 +358,13 @@ export const mapShortcutToQwerty = (
   return modifiersPart + qwertyKey;
 };
 
+/**
+ * Maps macOS-specific global shortcuts in KeyboardConfig to their US-QWERTY layout equivalents.
+ * Only translates properties defined in GLOBAL_KEY_CFG_KEYS (system-wide global shortcuts).
+ * On macOS, Electron's globalShortcut API registers shortcuts by physical keyboard position.
+ *
+ * @see https://github.com/johannesjo/super-productivity/issues/8378
+ */
 export const mapKeyboardConfigToQwerty = (
   keyboardCfg: KeyboardConfig,
   layout: KeyboardLayout,
