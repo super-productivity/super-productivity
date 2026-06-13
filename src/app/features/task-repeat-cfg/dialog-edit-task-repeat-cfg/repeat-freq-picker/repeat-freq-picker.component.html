@@ -1,0 +1,17 @@
+<div class="rfp">
+  @if (label()) {
+    <span class="rfp-lbl">{{ label() }}</span>
+  }
+  <div class="rfp-chips">
+    @for (o of options(); track o.value) {
+      <button
+        type="button"
+        class="rfp-chip"
+        [class.active]="o.value === value()"
+        (click)="selected.emit(o.value)"
+      >
+        {{ o.label }}
+      </button>
+    }
+  </div>
+</div>

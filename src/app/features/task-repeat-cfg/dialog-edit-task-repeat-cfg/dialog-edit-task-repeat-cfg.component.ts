@@ -19,6 +19,7 @@ import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import {
   DEFAULT_TASK_REPEAT_CFG,
   QUICK_SETTING_PRESETS,
+  RepeatQuickSetting,
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
   toSyncSafeQuickSetting,
@@ -51,6 +52,7 @@ import {
   rruleToLegacyTaskRepeatCfg,
 } from '../util/legacy-cfg-to-rrule.util';
 import { RruleBuilderComponent } from './rrule-builder/rrule-builder.component';
+import { RepeatFreqPickerComponent } from './repeat-freq-picker/repeat-freq-picker.component';
 import { buildRRuleHumanizeOpts, getRRulePreview } from '../util/rrule-preview.util';
 import { DatePipe } from '@angular/common';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
@@ -102,6 +104,7 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     RepeatTaskHeatmapComponent,
     CollapsibleComponent,
     RruleBuilderComponent,
+    RepeatFreqPickerComponent,
     DatePipe,
   ],
 })
@@ -155,12 +158,20 @@ export class DialogEditTaskRepeatCfgComponent {
 
   // The RRULE builder (shown when quickSetting === 'RRULE') is a child component
   // with its own live preview; the dialog only needs to know when to render it.
-  private _formValue = toSignal(this.formGroup1().valueChanges, {
-    initialValue: null as { quickSetting?: string } | null,
-  });
-  isRRuleMode = computed(
-    () => (this._formValue()?.quickSetting ?? this.repeatCfg().quickSetting) === 'RRULE',
-  );
+  // quickSetting now lives on the working cfg (driven by the chip picker), not
+  // a formly control, so read it directly.
+  isRRuleMode = computed(() => this.repeatCfg().quickSetting === 'RRULE');
+
+  // Offer the advanced 'RRULE' (custom) option only when the engine flag is on —
+  // but keep it for a cfg already in RRULE mode so an existing rule stays
+  // editable (the builder is its only editor) even on a flag-off device.
+  private _includeRRule = (): boolean =>
+    this._rruleFlag.isEnabled() || this.repeatCfg().quickSetting === 'RRULE';
+
+  // Options for the TickTick-style chip picker (replaces the dropdown). The
+  // date-aware labels (e.g. "Monthly on the 13th") rebuild when the start date
+  // changes.
+  quickSettingOptions = computed(() => this._buildQuickSettingOptions());
   // Live result/preview shown at the dialog bottom in RRULE mode. The builder
   // keeps `repeatCfg().rrule` up to date via onRRuleChange, so this stays live.
   private _humanize = buildRRuleHumanizeOpts(
@@ -277,6 +288,22 @@ export class DialogEditTaskRepeatCfgComponent {
     }
   }
 
+  /**
+   * Chip-picker selection. Mirrors the old formly select `change` handler: set
+   * the chosen quickSetting and apply that preset's schedule updates (a preset
+   * carries its own canonical rrule; 'RRULE'/Custom keeps the current rule so
+   * the builder opens from it). All sync-safe persistence stays in save().
+   */
+  onQuickSettingSelect(value: string): void {
+    this.repeatCfg.update((cfg) => {
+      const sd = cfg.startDate as string | Date | undefined;
+      const referenceDate =
+        sd instanceof Date ? sd : sd ? dateStrToUtcDate(sd) : undefined;
+      const updates = getQuickSettingUpdates(value as RepeatQuickSetting, referenceDate);
+      return { ...cfg, quickSetting: value as RepeatQuickSetting, ...(updates ?? {}) };
+    });
+  }
+
   /** The RRULE builder emits a new rule string; store it + keep repeatCycle in sync. */
   onRRuleChange(rrule: string): void {
     this.repeatCfg.update((cfg) => ({
@@ -300,21 +327,6 @@ export class DialogEditTaskRepeatCfgComponent {
   }
 
   private _initializeFormConfig(): void {
-    const _locale = this._dateTimeFormatService.currentLocale();
-    const translateService = this._translateService;
-
-    // Offer the advanced 'RRULE' option only when the engine flag is on — but
-    // keep it for a config already in RRULE mode so an existing rule stays
-    // editable (the builder is its only editor) even on a flag-off device.
-    // Read LIVE (not captured once): on the async edit path the cfg arrives —
-    // and is migrated to quickSetting 'RRULE' — only after this method ran, so
-    // a snapshot taken here would leave the select with a value that has no
-    // matching option on a flag-off device.
-    const includeRRule = (): boolean =>
-      this._rruleFlag.isEnabled() || this.repeatCfg().quickSetting === 'RRULE';
-    const buildOptions = (refDate: Date): { value: string; label: string }[] =>
-      buildRepeatQuickSettingOptions(refDate, _locale, translateService, includeRRule());
-
     const formConfig = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.map((field) => ({
       ...field,
     }));
@@ -344,43 +356,9 @@ export class DialogEditTaskRepeatCfgComponent {
       formConfig[startDateIdx] = startDateField;
     }
 
-    // Deep-clone the quickSetting field to avoid mutating the shared constant
-    const quickSettingIdx = formConfig.findIndex((f) => f.key === 'quickSetting');
-    if (quickSettingIdx === -1) {
-      throw new Error(
-        'quickSetting field not found in TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG',
-      );
-    }
-    const quickSettingField: FormlyFieldConfig = {
-      ...formConfig[quickSettingIdx],
-      templateOptions: { ...formConfig[quickSettingIdx].templateOptions },
-    };
-    formConfig[quickSettingIdx] = quickSettingField;
-
-    // Set initial options
-    quickSettingField.templateOptions!.options = buildOptions(this._getReferenceDate());
-
-    // Memoize to avoid rebuilding options on every formly change cycle
-    let lastStartDate: string | undefined;
-    let lastIncludeRRule: boolean | undefined;
-    let cachedOptions: { value: string; label: string }[];
-
-    // Update options reactively when startDate changes — or when the async cfg
-    // load flips a flag-off device into RRULE mode (see includeRRule above).
-    quickSettingField.expressionProperties = {
-      ...quickSettingField.expressionProperties,
-      ['templateOptions.options']: (model: Record<string, unknown>) => {
-        const sd = model['startDate'] as string | undefined;
-        const inc = includeRRule();
-        if (sd !== lastStartDate || inc !== lastIncludeRRule || !cachedOptions) {
-          lastStartDate = sd;
-          lastIncludeRRule = inc;
-          const refDate = sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
-          cachedOptions = buildOptions(refDate);
-        }
-        return cachedOptions;
-      },
-    };
+    // quickSetting is no longer a formly field — the chip picker
+    // (repeat-freq-picker) drives it via onQuickSettingSelect, with options
+    // from quickSettingOptions(). formly here only renders title + startDate.
 
     this.essentialFormFields.set(formConfig);
   }
@@ -668,6 +646,18 @@ export class DialogEditTaskRepeatCfgComponent {
     this.repeatCfg.set(processedCfg);
     // Processed, not stored — see _initializeRepeatCfg for why.
     this.repeatCfgInitial.set({ ...processedCfg });
+  }
+
+  private _buildQuickSettingOptions(): { value: RepeatQuickSetting; label: string }[] {
+    const sd = this.repeatCfg().startDate as string | Date | undefined;
+    const refDate =
+      sd instanceof Date ? sd : sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
+    return buildRepeatQuickSettingOptions(
+      refDate,
+      this._dateTimeFormatService.currentLocale(),
+      this._translateService,
+      this._includeRRule(),
+    );
   }
 
   private _getReferenceDate(): Date {
