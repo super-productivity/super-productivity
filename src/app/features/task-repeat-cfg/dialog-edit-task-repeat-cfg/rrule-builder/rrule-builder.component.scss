@@ -8,7 +8,7 @@
   gap: var(--s2);
 }
 
-// A sentence-style row: label + inline controls.
+// A sentence-style row: label + inline controls ("Every 2 weeks").
 .rb-row {
   display: flex;
   align-items: center;
@@ -16,33 +16,33 @@
   gap: var(--s);
 }
 
-.rb-lbl {
-  font-weight: bold;
-  opacity: 0.85;
+// Quiet section label, TickTick-style (small, upper, low-contrast).
+.rb-lbl,
+.rb-field > label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.55;
 }
 
 .rb-field {
   display: flex;
   flex-direction: column;
-  gap: var(--s-quarter, 4px);
-
-  > label {
-    font-weight: bold;
-    opacity: 0.85;
-  }
+  gap: var(--s-half);
 }
 
-// Shared control styling (native select / input themed to the app).
+// Minimal rounded inputs / native selects themed to the app.
 .rb-sel,
 .rb-num,
 .rb-text,
 .rb-date {
-  height: 40px; // touch-friendly
+  height: 38px;
   padding: 0 var(--s);
   color: var(--text-color);
   background: var(--bg, transparent);
   border: 1px solid var(--extra-border-color);
-  border-radius: var(--card-border-radius);
+  border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
 
@@ -53,12 +53,13 @@
 }
 
 .rb-num {
-  width: 64px;
+  width: 56px;
   text-align: center;
+  font-weight: 600;
 }
 
 .rb-sel--wide {
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .rb-text {
@@ -74,11 +75,11 @@
   }
 }
 
-// Toggle buttons for weekdays / months.
+// Toggle chips for weekdays / months / day-of-month / segmented options.
 .rb-toggles {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-quarter, 4px);
+  gap: var(--s-half);
 
   &--months {
     max-width: 320px;
@@ -87,17 +88,13 @@
   // Calendar-style day-of-month grid (~7 per row).
   &--days {
     max-width: 300px;
+    gap: var(--s-quarter, 4px);
   }
 }
 
-.rb-tgl--wide {
-  min-width: auto;
-  padding: 0 var(--s2);
-}
-
 .rb-tgl {
-  min-width: 40px;
-  height: 40px; // touch-friendly tap target
+  min-width: 38px;
+  height: 38px;
   padding: 0 var(--s);
   touch-action: manipulation;
   display: inline-flex;
@@ -106,13 +103,13 @@
   color: var(--text-color);
   background: transparent;
   border: 1px solid var(--extra-border-color);
-  border-radius: var(--card-border-radius);
+  border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
   transition:
-    background 0.1s ease,
-    color 0.1s ease,
-    border-color 0.1s ease;
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
 
   &:hover {
     border-color: var(--c-primary);
@@ -122,14 +119,41 @@
     background: var(--c-primary);
     border-color: var(--c-primary);
     color: #fff;
-    font-weight: bold;
+    font-weight: 600;
   }
+}
+
+// Wide pills read as a segmented control (Ends, repeat-from, occurrence-which).
+.rb-tgl--wide {
+  min-width: auto;
+  padding: 0 var(--s2);
+  border-radius: 19px;
+}
+
+// Weekday letter chips render as circles (TickTick). Targets the single-letter
+// chips in weekday groups only — not the day-of-month grid, month grid, or the
+// wide segmented pills.
+.rb-toggles:not(.rb-toggles--days):not(.rb-toggles--months) .rb-tgl:not(.rb-tgl--wide) {
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+// Day-of-month grid: compact uniform squares.
+.rb-toggles--days .rb-tgl {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 12px;
 }
 
 .rb-hint {
   font-size: 12px;
   line-height: 1.4;
-  opacity: 0.65;
+  opacity: 0.6;
 }
 
 .rb-adv {

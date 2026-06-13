@@ -58,22 +58,24 @@ mat-dialog-actions {
   max-width: 620px;
 }
 
-// Live RRULE result/preview, pinned above the dialog action buttons.
+// Live recurrence summary card, shown in-sheet under the builder.
 .rrule-result {
-  margin: var(--s) 0;
+  margin: var(--s) 0 var(--s2);
   padding: var(--s) var(--s2);
-  border-radius: var(--card-border-radius);
-  background: var(--extra-border-color);
+  border-radius: 10px;
+  background: var(--bg-lightest, var(--extra-border-color));
+  border-left: 3px solid var(--c-primary);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
 
   &__human {
-    font-weight: bold;
+    font-weight: 600;
+    font-size: 14px;
   }
 
   &__next {
     margin-top: var(--s-quarter, 2px);
-    opacity: 0.85;
+    opacity: 0.8;
   }
 
   &__legacy-warning {
@@ -88,9 +90,10 @@ mat-dialog-actions {
   }
 
   &__expr {
-    margin-top: var(--s-quarter, 2px);
+    margin-top: var(--s-half);
     font-family: monospace;
-    opacity: 0.7;
+    font-size: 11px;
+    opacity: 0.55;
     word-break: break-all;
   }
 }
