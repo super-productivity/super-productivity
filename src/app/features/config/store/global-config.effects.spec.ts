@@ -3,7 +3,12 @@ import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Subject } from 'rxjs';
 import { Action } from '@ngrx/store';
-import { GlobalConfigEffects } from './global-config.effects';
+import {
+  GlobalConfigEffects,
+  mapKeyboardConfigToQwerty,
+  mapShortcutToQwerty,
+} from './global-config.effects';
+import { KeyboardLayout } from '../../../core/keyboard-layout/keyboard-layout.service';
 import { DateService } from 'src/app/core/date/date.service';
 import { LanguageService } from '../../../core/language/language.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -290,6 +295,78 @@ describe('GlobalConfigEffects', () => {
       );
 
       expect(dateServiceSpy.setStartOfNextDayDiff).toHaveBeenCalledWith('04:00', 4);
+    });
+  });
+
+  describe('shortcut mapping logic', () => {
+    let mockLayout: KeyboardLayout;
+
+    beforeEach(() => {
+      // Create a mock keyboard layout representing QWERTZ
+      mockLayout = new Map([
+        ['KeyA', 'a'],
+        ['KeyB', 'b'],
+        ['KeyY', 'z'],
+        ['KeyZ', 'y'],
+        ['Digit1', '1'],
+        ['Digit2', '2'],
+        ['BracketRight', '+'],
+      ]);
+    });
+
+    describe('mapShortcutToQwerty', () => {
+      it('should handle QWERTZ Y -> Z mapping', () => {
+        expect(mapShortcutToQwerty('Ctrl+Y', mockLayout)).toBe('Ctrl+Z');
+        expect(mapShortcutToQwerty('Ctrl+y', mockLayout)).toBe('Ctrl+Z');
+      });
+
+      it('should handle QWERTZ Z -> Y mapping', () => {
+        expect(mapShortcutToQwerty('Ctrl+Z', mockLayout)).toBe('Ctrl+Y');
+        expect(mapShortcutToQwerty('Ctrl+z', mockLayout)).toBe('Ctrl+Y');
+      });
+
+      it('should handle digit keys', () => {
+        expect(mapShortcutToQwerty('Ctrl+1', mockLayout)).toBe('Ctrl+1');
+        expect(mapShortcutToQwerty('Ctrl+Alt+2', mockLayout)).toBe('Ctrl+Alt+2');
+      });
+
+      it('should map punctuation key according to qwertyCodeMap (BracketRight -> + key on German layout)', () => {
+        expect(mapShortcutToQwerty('Ctrl++', mockLayout)).toBe('Ctrl+]');
+        expect(mapShortcutToQwerty('+', mockLayout)).toBe(']');
+      });
+
+      it('should return unchanged if character is not found in layout', () => {
+        expect(mapShortcutToQwerty('Ctrl+F2', mockLayout)).toBe('Ctrl+F2');
+        expect(mapShortcutToQwerty('Ctrl+Y', new Map())).toBe('Ctrl+Y');
+      });
+
+      it('should return null/undefined/empty inputs unchanged', () => {
+        expect(mapShortcutToQwerty(null, mockLayout)).toBeNull();
+        expect(mapShortcutToQwerty(undefined, mockLayout)).toBeUndefined();
+        expect(mapShortcutToQwerty('', mockLayout)).toBe('');
+      });
+    });
+
+    describe('mapKeyboardConfigToQwerty', () => {
+      it('should map keyboard config shortcuts', () => {
+        const keyboardCfg = {
+          globalShowHide: 'Ctrl+Y',
+          globalToggleTaskStart: 'Ctrl++',
+          globalAddNote: 'Ctrl+F2',
+          globalAddTask: null,
+          globalToggleTaskWidget: undefined,
+          toggleBacklog: 'Ctrl+Y',
+        } as any;
+
+        const result = mapKeyboardConfigToQwerty(keyboardCfg, mockLayout);
+
+        expect(result.globalShowHide).toBe('Ctrl+Z');
+        expect(result.globalToggleTaskStart).toBe('Ctrl+]');
+        expect(result.globalAddNote).toBe('Ctrl+F2');
+        expect(result.globalAddTask).toBeNull();
+        expect(result.globalToggleTaskWidget).toBeUndefined();
+        expect(result.toggleBacklog).toBe('Ctrl+Y');
+      });
     });
   });
 });
