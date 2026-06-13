@@ -13,6 +13,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { T } from '../../t.const';
+import { HEATMAP_TOOLTIP_SHOW_DELAY } from './heatmap.const';
 
 export interface DayData {
   date: Date;
@@ -62,6 +63,7 @@ export interface HeatmapViewData extends HeatmapData {
 })
 export class HeatmapComponent {
   readonly T = T;
+  readonly TOOLTIP_SHOW_DELAY = HEATMAP_TOOLTIP_SHOW_DELAY;
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
 

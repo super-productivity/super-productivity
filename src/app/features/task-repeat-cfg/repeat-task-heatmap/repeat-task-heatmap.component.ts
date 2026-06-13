@@ -28,6 +28,7 @@ import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getRRuleOccurrencesInRange, isRRuleValid } from '../store/rrule-occurrence.util';
+import { getNextRepeatOccurrence } from '../store/get-next-repeat-occurrence.util';
 import { getEffectiveRepeatStartDate } from '../store/get-effective-repeat-start-date.util';
 import { isRRuleEngineEnabled } from '../../config/rrule-engine-flag';
 import { nextYearOf, prevYearOf } from '../../../ui/heatmap/year-nav.util';
@@ -99,14 +100,33 @@ export class RepeatTaskHeatmapComponent {
       }
     }
     const cfg = this._loadedCfg();
-    if (
-      years.size === 0 ||
-      (!!cfg && isRRuleEngineEnabled() && !!cfg.rrule && isRRuleValid(cfg.rrule))
-    ) {
+    // The current year joins the navigable set when the schedule overlay is
+    // active for this cfg — i.e. it can put (at least structurally) marks on the
+    // current year. That now holds for ANY recurring cfg, not only flag-on RRULE
+    // ones: the streak/projection overlay renders for legacy `repeatCycle` cfgs
+    // too (see `_buildHeatmapData`). A cfg that can't enumerate a schedule (no
+    // rrule, no usable repeatEvery) adds nothing, so a history-only series still
+    // opens on its newest data year.
+    if (years.size === 0 || (!!cfg && this._hasProjectionSchedule(cfg))) {
       years.add(new Date().getFullYear());
     }
     return [...years].sort((a, b) => b - a);
   });
+
+  /**
+   * True when the schedule overlay is active for this cfg: a flag-on valid
+   * RRULE, or a legacy cfg with a usable `repeatEvery` (the legacy engine then
+   * drives the streak/projection). Mirrors the routing in
+   * `_scheduledDaysInYear`; kept structural (not "fires this year") so an
+   * exhausted rule still contributes a navigable — if empty — current year,
+   * which the no-stranding guards in `heatmapData()` keep rendered.
+   */
+  private _hasProjectionSchedule(cfg: TaskRepeatCfg): boolean {
+    if (isRRuleEngineEnabled() && cfg.rrule && isRRuleValid(cfg.rrule)) {
+      return true;
+    }
+    return Number.isInteger(cfg.repeatEvery) && cfg.repeatEvery >= 1;
+  }
   readonly canPrevYear = computed(
     () => prevYearOf(this.availableYears(), this.selectedYear()) !== null,
   );
@@ -232,17 +252,6 @@ export class RepeatTaskHeatmapComponent {
     const yearStart = new Date(year, 0, 1);
     const horizon = new Date(year, 11, 31);
 
-    // Overlay upcoming occurrences on the selected year's remaining days, only
-    // when the RRULE engine is enabled AND the cfg has a valid rrule — i.e. only
-    // when the engine actually drives task creation (mirrors the routing utils'
-    // `rrule && isRRuleValid` gate). Legacy cfgs are NOT projected via the
-    // rrule converter: it diverges from the legacy engine for WEEKLY interval≥2
-    // (rolling 7-day blocks vs WKST weeks) and zero-weekday cfgs, and a wrong
-    // overlay is worse than none. With the flag off the heatmap is the
-    // unchanged history-only view.
-    const isProjecting =
-      !!cfg && isRRuleEngineEnabled() && !!cfg.rrule && isRRuleValid(cfg.rrule);
-
     // Initialize all days of the selected year.
     const currentDate = new Date(yearStart);
     while (currentDate <= horizon) {
@@ -310,47 +319,47 @@ export class RepeatTaskHeatmapComponent {
       }
     }
 
-    // Overlay the schedule (Phase 2). Per-instance overrides (moves/RDATE) are
-    // Phase 8 — here only EXDATE skips apply. Occurrences are computed over the
-    // WHOLE selected year: days after today render as projected upcoming
-    // occurrences; past occurrence days stay as they are (filled when tracked,
-    // level-0 when genuinely missed).
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    if (isProjecting && cfg && cfg.rrule) {
-      const occurrences = getRRuleOccurrencesInRange(
-        {
-          rrule: cfg.rrule,
-          // For a from-completion schedule this anchors past occurrences at the
-          // CURRENT effective start — a best-effort reading of history, since
-          // every completion re-anchored the series along the way.
-          startDate: getEffectiveRepeatStartDate(cfg),
-          exdates: cfg.deletedInstanceDates ?? [],
-        },
-        yearStart,
-        horizon,
-      );
-      const scheduledDays = new Set<string>();
-      for (const occ of occurrences) {
-        const dateStr = getDbDateStr(occ);
-        scheduledDays.add(dateStr);
-        const dayData = dayMap.get(dateStr);
-        // Future occurrences become the projected overlay — but never override
-        // a day that already has real tracked activity.
-        if (dayData && dayData.timeSpent === 0 && occ >= tomorrow) {
-          dayData.isProjected = true;
-          dayData.level = 1;
-          hasData = true;
-        }
-      }
-      // Days the task is NOT scheduled on (and that carry no tracked time)
-      // disappear from the map entirely: the grid renders them as transparent
-      // placeholder cells in the SAME position, so the visible cells read as
-      // the actual streak — a weekly task no longer shows six grey "missed"
-      // cells per week. Genuinely missed occurrence days stay grey.
-      for (const [dateStr, day] of dayMap) {
-        if (day.timeSpent === 0 && !day.isProjected && !scheduledDays.has(dateStr)) {
-          dayMap.delete(dateStr);
+    // Overlay the schedule (Phase 2). The streak renders for EVERY recurring
+    // cfg, not only flag-on RRULE ones: `_scheduledDaysInYear` routes to
+    // whichever engine is authoritative for this cfg — the RRULE engine when the
+    // per-device flag is on and the rule is valid, else the legacy `repeatCycle`
+    // engine. The legacy path uses that engine ITSELF (not the rrule converter),
+    // so the overlay reproduces task creation exactly — no WEEKLY-interval≥2 /
+    // zero-weekday divergence, where a wrong overlay would be worse than none.
+    // Per-instance overrides (moves/RDATE) are Phase 8; here only EXDATE
+    // (deletedInstanceDates) skips apply.
+    if (cfg) {
+      const scheduledDays = this._scheduledDaysInYear(cfg, yearStart, horizon);
+      // No occurrence lands in this year (e.g. a year before the schedule
+      // started, or an exhausted rule) → leave the history-only grid untouched
+      // rather than deleting every untracked day.
+      if (scheduledDays.size > 0) {
+        // A future occurrence is any scheduled day on/after tomorrow. Anchor on
+        // the START of tomorrow (local midnight), NOT `now + 24h`: occurrences
+        // sit at local noon, so a `now + 24h` cutoff dropped tomorrow's cell
+        // once the clock passed noon today (its dashed outline vanished).
+        const startOfTomorrow = new Date(now);
+        startOfTomorrow.setHours(0, 0, 0, 0);
+        startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+        for (const [dateStr, day] of dayMap) {
+          if (scheduledDays.has(dateStr)) {
+            // Future scheduled day with no tracked time → projected overlay, but
+            // never override a day that already has real tracked activity.
+            if (day.timeSpent === 0 && day.date >= startOfTomorrow) {
+              day.isProjected = true;
+              day.level = 1;
+              hasData = true;
+            }
+          } else if (day.timeSpent === 0) {
+            // Off-schedule day with no tracked time disappears from the map: the
+            // grid renders it as a transparent placeholder cell in the SAME
+            // position, so the visible cells read as the actual streak — a
+            // weekly task no longer shows six grey "missed" cells per week.
+            // Genuinely missed occurrence days (scheduled, past, untracked) stay
+            // grey; off-schedule days that carry tracked time stay visible.
+            dayMap.delete(dateStr);
+          }
         }
       }
     }
@@ -361,5 +370,70 @@ export class RepeatTaskHeatmapComponent {
       endDate: horizon,
       hasData,
     };
+  }
+
+  /**
+   * The set of `YYYY-MM-DD` day strings the cfg is scheduled on within
+   * `[yearStart, horizon]`, using whichever engine is authoritative for this
+   * cfg:
+   *
+   *  - RRULE engine when the per-device flag is on AND the rule is valid — a
+   *    single range query that already honors EXDATEs.
+   *  - else the legacy `repeatCycle` engine, iterated via
+   *    `getNextRepeatOccurrence` in INCLUSIVE mode (which neutralizes the
+   *    last-creation gate) so the WHOLE year's pattern is enumerated — past and
+   *    future — exactly as the engine would create tasks. Skipped instances
+   *    (`deletedInstanceDates`) are subtracted afterwards, since the legacy
+   *    engine doesn't apply EXDATEs itself.
+   *
+   * Empty when the cfg can't enumerate a schedule (no rrule, no usable
+   * `repeatEvery`, or no occurrence in range).
+   */
+  private _scheduledDaysInYear(
+    cfg: TaskRepeatCfg,
+    yearStart: Date,
+    horizon: Date,
+  ): Set<string> {
+    if (isRRuleEngineEnabled() && cfg.rrule && isRRuleValid(cfg.rrule)) {
+      return new Set(
+        getRRuleOccurrencesInRange(
+          {
+            rrule: cfg.rrule,
+            // For a from-completion schedule this anchors past occurrences at
+            // the CURRENT effective start — a best-effort reading of history,
+            // since every completion re-anchored the series along the way.
+            startDate: getEffectiveRepeatStartDate(cfg),
+            exdates: cfg.deletedInstanceDates ?? [],
+          },
+          yearStart,
+          horizon,
+        ).map((occ) => getDbDateStr(occ)),
+      );
+    }
+
+    // Legacy engine. A malformed/absent repeatEvery can't enumerate anything —
+    // bail without invoking the engine (which would only warn and return null).
+    if (!Number.isInteger(cfg.repeatEvery) || cfg.repeatEvery < 1) {
+      return new Set();
+    }
+
+    const days = new Set<string>();
+    const horizonStr = getDbDateStr(horizon);
+    let cursor = new Date(yearStart);
+    // Hard cap well above one-occurrence-per-day in a leap year — a safety net
+    // against a non-advancing engine result, never reached in practice.
+    for (let guard = 0; guard < 400; guard++) {
+      const next = getNextRepeatOccurrence(cfg, cursor, { inclusive: true });
+      if (!next || getDbDateStr(next) > horizonStr) {
+        break;
+      }
+      days.add(getDbDateStr(next));
+      cursor = new Date(next);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    for (const ex of cfg.deletedInstanceDates ?? []) {
+      days.delete(ex);
+    }
+    return days;
   }
 }

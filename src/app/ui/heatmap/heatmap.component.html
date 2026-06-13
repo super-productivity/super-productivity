@@ -48,6 +48,7 @@
                         [class]="getDayClass(day)"
                         [matTooltip]="getDayTitle(day)"
                         matTooltipPosition="above"
+                        [matTooltipShowDelay]="TOOLTIP_SHOW_DELAY"
                         [attr.role]="interactive() && day ? 'button' : null"
                         [attr.tabindex]="interactive() && day ? 0 : null"
                         [attr.aria-label]="interactive() && day ? getDayTitle(day) : null"

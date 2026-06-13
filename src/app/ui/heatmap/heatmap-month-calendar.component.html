@@ -35,6 +35,7 @@
           [class]="getCellClass(cell)"
           [matTooltip]="getCellTitle(cell)"
           matTooltipPosition="above"
+          [matTooltipShowDelay]="TOOLTIP_SHOW_DELAY"
           [attr.role]="isCellInteractive(cell) ? 'button' : null"
           [attr.tabindex]="isCellInteractive(cell) ? 0 : null"
           [attr.aria-label]="isCellInteractive(cell) ? getCellTitle(cell) : null"

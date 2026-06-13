@@ -16,6 +16,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { HEATMAP_TOOLTIP_SHOW_DELAY } from './heatmap.const';
 
 interface CalCell {
   dateStr: string;
@@ -40,6 +41,7 @@ interface CalCell {
 })
 export class HeatmapMonthCalendarComponent {
   readonly T = T;
+  readonly TOOLTIP_SHOW_DELAY = HEATMAP_TOOLTIP_SHOW_DELAY;
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
 

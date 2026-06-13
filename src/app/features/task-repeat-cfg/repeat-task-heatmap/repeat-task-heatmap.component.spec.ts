@@ -163,6 +163,81 @@ describe('RepeatTaskHeatmapComponent year selection', () => {
     }
   });
 
+  it('hides off-schedule days for a legacy cfg WITHOUT the rrule engine (flag off)', async () => {
+    // Regression (curator round 2): the streak hide used to be gated behind the
+    // experimental engine, so legacy `repeatCycle` tasks — every normal user —
+    // saw a full grey grid. The overlay now runs off the legacy engine itself.
+    const fixture = await setup([task([['2024-03-04', 3_600_000]])], {
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 1,
+      monday: true,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+      startDate: '2024-01-01',
+    } as Partial<TaskRepeatCfg>);
+    const c = fixture.componentInstance;
+    // Defaults to the current (projection-capable) year; only Mondays survive,
+    // so off-schedule days render as transparent placeholders.
+    const dayMap = c.heatmapData()!.dayMap;
+    expect(dayMap.size).toBeGreaterThan(40);
+    let projectedCount = 0;
+    for (const d of dayMap.values()) {
+      expect(d.date.getDay()).withContext(d.dateStr).toBe(1);
+      if (d.isProjected) {
+        projectedCount++;
+      }
+    }
+    // Upcoming Mondays this year are projected (outlined) cells.
+    expect(projectedCount).toBeGreaterThan(0);
+  });
+
+  it('adds the current year to the nav for a legacy recurring cfg (flag off)', async () => {
+    // History only in 2024, but the legacy weekly schedule projects into the
+    // current year — which must therefore be reachable.
+    const fixture = await setup([task([['2024-03-04', 3_600_000]])], {
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 1,
+      monday: true,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+      startDate: '2024-01-01',
+    } as Partial<TaskRepeatCfg>);
+    const c = fixture.componentInstance;
+    expect(c.availableYears()).toContain(new Date().getFullYear());
+  });
+
+  it('keeps a legacy off-schedule day that carries tracked time (flag off)', async () => {
+    // 2024-03-05 is a Tuesday — the weekly-Monday rule never fires there, but
+    // real tracked time must stay visible (instance moved / done off-schedule).
+    const fixture = await setup([task([['2024-03-05', 3_600_000]])], {
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 1,
+      monday: true,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+      startDate: '2024-01-01',
+    } as Partial<TaskRepeatCfg>);
+    const c = fixture.componentInstance;
+    c.prevYear(); // current year is the default — navigate to the data year
+    expect(c.selectedYear()).toBe(2024);
+    const dayMap = c.heatmapData()!.dayMap;
+    expect(dayMap.has('2024-03-05')).toBe(true); // tracked Tuesday stays
+    expect(dayMap.has('2024-03-12')).toBe(false); // bare Tuesday is hidden
+    expect(dayMap.has('2024-03-04')).toBe(true); // scheduled Monday stays
+  });
+
   it('keeps an empty navigated year rendered while other years exist (no stranding)', async () => {
     setRRuleEngineEnabled(true);
     try {

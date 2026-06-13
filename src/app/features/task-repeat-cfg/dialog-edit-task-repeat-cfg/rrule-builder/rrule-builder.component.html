@@ -17,12 +17,14 @@
       type="number"
       min="1"
       max="1000"
+      [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate"
       [value]="model().interval"
       (input)="setInterval(intervalIn.value)"
     />
     <select
       #freqSel
       class="rb-sel"
+      [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_FREQ | translate"
       (change)="setFreq(freqSel.value)"
     >
       @for (o of freqOpts; track o.value) {
@@ -46,6 +48,7 @@
             type="button"
             class="rb-tgl"
             [class.active]="model().byDay.includes(w.value)"
+            [attr.aria-pressed]="model().byDay.includes(w.value)"
             [title]="w.full"
             (click)="toggleDay(w.value)"
           >
@@ -63,6 +66,7 @@
       <select
         #mMode
         class="rb-sel rb-sel--wide"
+        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate"
         (change)="setMonthlyMode(mMode.value)"
       >
         @for (o of monthlyModeOpts; track o.value) {
@@ -85,6 +89,7 @@
               type="button"
               class="rb-tgl"
               [class.active]="model().monthDays.includes(d)"
+              [attr.aria-pressed]="model().monthDays.includes(d)"
               (click)="toggleMonthDay(d)"
             >
               {{ d }}
@@ -95,6 +100,7 @@
               type="button"
               class="rb-tgl rb-tgl--wide"
               [class.active]="model().monthDays.includes(nd.value)"
+              [attr.aria-pressed]="model().monthDays.includes(nd.value)"
               (click)="toggleMonthDay(nd.value)"
             >
               {{ nd.label | translate }}
@@ -104,6 +110,7 @@
         <input
           class="rb-text"
           type="text"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
           [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
           [value]="model().monthDays.join(',')"
           (change)="setMonthDays($any($event.target).value)"
@@ -126,6 +133,7 @@
       <select
         #yMode
         class="rb-sel rb-sel--wide"
+        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate"
         (change)="setYearlyMode(yMode.value)"
       >
         @for (o of yearlyModeOpts; track o.value) {
@@ -150,6 +158,7 @@
               type="button"
               class="rb-tgl"
               [class.active]="model().monthDays.includes(d)"
+              [attr.aria-pressed]="model().monthDays.includes(d)"
               (click)="toggleMonthDay(d)"
             >
               {{ d }}
@@ -160,6 +169,7 @@
               type="button"
               class="rb-tgl rb-tgl--wide"
               [class.active]="model().monthDays.includes(nd.value)"
+              [attr.aria-pressed]="model().monthDays.includes(nd.value)"
               (click)="toggleMonthDay(nd.value)"
             >
               {{ nd.label | translate }}
@@ -169,6 +179,7 @@
         <input
           class="rb-text"
           type="text"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
           [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
           [value]="model().monthDays.join(',')"
           (change)="setMonthDays($any($event.target).value)"
@@ -189,6 +200,7 @@
           type="button"
           class="rb-tgl rb-tgl--wide"
           [class.active]="isSetPosEvery()"
+          [attr.aria-pressed]="isSetPosEvery()"
           (click)="clearSetPos()"
         >
           {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
@@ -198,6 +210,7 @@
             type="button"
             class="rb-tgl rb-tgl--wide"
             [class.active]="isSetPosActive(o.value)"
+            [attr.aria-pressed]="isSetPosActive(o.value)"
             (click)="toggleSetPos(o.value)"
           >
             {{ o.label | translate }}
@@ -207,6 +220,7 @@
           type="button"
           class="rb-tgl rb-tgl--wide"
           [class.active]="isSetPosCustom()"
+          [attr.aria-pressed]="isSetPosCustom()"
           (click)="toggleSetPosCustomMode()"
         >
           {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
@@ -217,6 +231,7 @@
           #customWhich
           class="rb-text rb-text--inline"
           type="text"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS | translate"
           [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS_PLACEHOLDER | translate"
           [value]="model().bySetPos"
           (change)="setCustomBySetPos(customWhich.value)"
@@ -228,6 +243,7 @@
             type="button"
             class="rb-tgl"
             [class.active]="model().byDay.includes(w.value)"
+            [attr.aria-pressed]="model().byDay.includes(w.value)"
             [title]="w.full"
             (click)="toggleDay(w.value)"
           >
@@ -251,6 +267,7 @@
           <select
             #pos
             class="rb-sel"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate"
             (change)="setNthDayPos(rowIdx, pos.value)"
           >
             @for (o of availableOrdinalOpts(rowIdx); track o.value) {
@@ -286,6 +303,7 @@
                 type="button"
                 class="rb-tgl"
                 [class.active]="nd.days.includes(w.value)"
+                [attr.aria-pressed]="nd.days.includes(w.value)"
                 [title]="w.full"
                 (click)="toggleNthDayWeekday(rowIdx, w.value)"
               >
@@ -329,6 +347,7 @@
           type="button"
           class="rb-tgl"
           [class.active]="model().byMonth.includes(m.value)"
+          [attr.aria-pressed]="model().byMonth.includes(m.value)"
           [title]="m.full"
           (click)="toggleMonth(m.value)"
         >
@@ -347,6 +366,7 @@
     <select
       #endSel
       class="rb-sel rb-sel--wide"
+      [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END | translate"
       (change)="setEndType(endSel.value)"
     >
       @for (o of endOpts; track o.value) {
@@ -365,6 +385,7 @@
         type="number"
         min="1"
         max="1000"
+        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_COUNT | translate"
         [value]="model().count"
         (input)="setCount(countIn.value)"
       />
@@ -374,6 +395,7 @@
         #untilIn
         class="rb-date"
         type="date"
+        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_UNTIL | translate"
         [value]="model().until"
         (input)="setUntil(untilIn.value)"
       />
@@ -393,6 +415,7 @@
         type="button"
         class="rb-tgl rb-tgl--wide"
         [class.active]="!fromCompletion()"
+        [attr.aria-pressed]="!fromCompletion()"
         (click)="setRepeatFromCompletion(false)"
       >
         {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START | translate }}
@@ -401,6 +424,7 @@
         type="button"
         class="rb-tgl rb-tgl--wide"
         [class.active]="fromCompletion()"
+        [attr.aria-pressed]="fromCompletion()"
         (click)="setRepeatFromCompletion(true)"
       >
         {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION | translate }}
@@ -431,6 +455,7 @@
         <select
           #wkstSel
           class="rb-sel rb-sel--wide"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_WKST | translate"
           (change)="setWkst(wkstSel.value)"
         >
           <option
@@ -461,6 +486,7 @@
             #bwn
             class="rb-text"
             type="text"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO | translate"
             [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_PLACEHOLDER | translate"
             [value]="model().byWeekNo"
             (input)="setByWeekNo(bwn.value)"
@@ -476,6 +502,7 @@
             #byd
             class="rb-text"
             type="text"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY | translate"
             [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_PLACEHOLDER | translate"
             [value]="model().byYearDay"
             (input)="setByYearDay(byd.value)"
@@ -492,6 +519,7 @@
           #raw
           class="rb-text rb-text--mono"
           type="text"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_RAW | translate"
           [placeholder]="T.F.TASK_REPEAT.F.RRULE_RAW_PLACEHOLDER | translate"
           [value]="model().rawOverride"
           (input)="setRawOverride(raw.value)"
