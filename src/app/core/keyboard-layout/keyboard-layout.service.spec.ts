@@ -234,5 +234,20 @@ describe('KeyboardLayoutService', () => {
       expect(layout.size).toBe(1);
       expect(layout.get('KeyB')).toBe('b');
     });
+
+    it('should resolve with a copy of the layout map', async () => {
+      const promise = service.layoutReady;
+      service.setLayout(new Map([['KeyB', 'b']]));
+      const layout = await promise;
+
+      expect(layout.size).toBe(1);
+      expect(layout.get('KeyB')).toBe('b');
+
+      // Modifying service layout shouldn't affect the resolved copy
+      service.setLayout(new Map([['KeyC', 'c']]));
+      expect(layout.size).toBe(1);
+      expect(layout.get('KeyB')).toBe('b');
+      expect(layout.get('KeyC')).toBeUndefined();
+    });
   });
 });
