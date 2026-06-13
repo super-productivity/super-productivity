@@ -14,6 +14,8 @@ describe('PluginAPI', () => {
   let showIndexHtmlAsViewSpy: jasmine.Spy;
   let reInitDataSpy: jasmine.Spy;
   let dispatchActionSpy: jasmine.Spy;
+  let getSelectedTaskSpy: jasmine.Spy;
+  let getFocusedTaskSpy: jasmine.Spy;
   let mockBridge: jasmine.SpyObj<{
     createBoundMethods: () => Record<string, unknown>;
     getAppState: () => Promise<unknown>;
@@ -34,6 +36,12 @@ describe('PluginAPI', () => {
     showIndexHtmlAsViewSpy = jasmine.createSpy('showIndexHtmlAsView');
     reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
     dispatchActionSpy = jasmine.createSpy('dispatchAction');
+    getSelectedTaskSpy = jasmine
+      .createSpy('getSelectedTask')
+      .and.resolveTo({ id: 'selected-task', title: 'Selected Task' });
+    getFocusedTaskSpy = jasmine
+      .createSpy('getFocusedTask')
+      .and.resolveTo({ id: 'focused-task', title: 'Focused Task' });
 
     mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
@@ -47,6 +55,8 @@ describe('PluginAPI', () => {
     mockBridge.createBoundMethods.and.returnValue({
       showIndexHtmlAsView: showIndexHtmlAsViewSpy,
       dispatchAction: dispatchActionSpy,
+      getSelectedTask: getSelectedTaskSpy,
+      getFocusedTask: getFocusedTaskSpy,
       persistDataSynced: jasmine.createSpy('persistDataSynced'),
       log: {
         critical: jasmine.createSpy(),
@@ -214,6 +224,24 @@ describe('PluginAPI', () => {
         globalConfig: { theme: 'light' },
       });
       expect(mockBridge.getAppState).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('task selection readers', () => {
+    it('should delegate selected task lookup to the bound bridge method', async () => {
+      const selectedTask = await pluginAPI.getSelectedTask();
+
+      expect(selectedTask?.id).toBe('selected-task');
+      expect(selectedTask?.title).toBe('Selected Task');
+      expect(getSelectedTaskSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should delegate focused task lookup to the bound bridge method', async () => {
+      const focusedTask = await pluginAPI.getFocusedTask();
+
+      expect(focusedTask?.id).toBe('focused-task');
+      expect(focusedTask?.title).toBe('Focused Task');
+      expect(getFocusedTaskSpy).toHaveBeenCalledTimes(1);
     });
   });
 

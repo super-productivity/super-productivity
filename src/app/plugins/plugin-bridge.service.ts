@@ -43,6 +43,7 @@ import {
 import { snackCfgToSnackParams } from './plugin-api-mapper';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
+import { TaskFocusService } from '../features/tasks/task-focus.service';
 import { addSubTask } from '../features/tasks/store/task.actions';
 import { selectTaskFeatureState } from '../features/tasks/store/task.selectors';
 import { parseTimeSpentChanges } from '../features/tasks/short-syntax';
@@ -87,6 +88,18 @@ import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
+
+const toPluginTaskCopy = (
+  task: (TaskCopy & { subTasks?: unknown }) | null | undefined,
+): TaskCopy | null => {
+  if (!task) {
+    return null;
+  }
+
+  const taskCopy = { ...task };
+  delete taskCopy.subTasks;
+  return taskCopy;
+};
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
@@ -135,6 +148,7 @@ export class PluginBridgeService implements OnDestroy {
   private _store = inject(Store);
   private _pluginHooksService = inject(PluginHooksService);
   private _taskService = inject(TaskService);
+  private _taskFocusService = inject(TaskFocusService);
   private _workContextService = inject(WorkContextService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
@@ -238,6 +252,8 @@ export class PluginBridgeService implements OnDestroy {
     showInWorkContext: () => void;
     closeWorkContextView: () => void;
     getActiveWorkContext: () => Promise<ActiveWorkContext | null>;
+    getSelectedTask: () => Promise<TaskCopy | null>;
+    getFocusedTask: () => Promise<TaskCopy | null>;
     triggerSync: () => Promise<void>;
     dispatchAction: (action: { type: string; [key: string]: unknown }) => void;
     executeNodeScript: (
@@ -296,6 +312,8 @@ export class PluginBridgeService implements OnDestroy {
       showInWorkContext: () => this._showInWorkContext(pluginId),
       closeWorkContextView: () => this._closeWorkContextView(pluginId),
       getActiveWorkContext: () => this.getActiveWorkContext(),
+      getSelectedTask: () => this.getSelectedTask(),
+      getFocusedTask: () => this.getFocusedTask(),
 
       // Sync
       triggerSync: () => this._triggerSync(pluginId),
@@ -1085,6 +1103,21 @@ export class PluginBridgeService implements OnDestroy {
 
     this._taskService.setSelectedId(taskId);
     PluginLog.log('PluginBridge: Task selected', { taskId });
+  }
+
+  async getSelectedTask(): Promise<TaskCopy | null> {
+    return toPluginTaskCopy(await firstValueFrom(this._taskService.selectedTask$));
+  }
+
+  async getFocusedTask(): Promise<TaskCopy | null> {
+    const focusedTaskId = this._taskFocusService.focusedTaskId();
+    if (!focusedTaskId) {
+      return null;
+    }
+
+    return toPluginTaskCopy(
+      await firstValueFrom(this._taskService.getByIdOnce$(focusedTaskId)),
+    );
   }
 
   /**

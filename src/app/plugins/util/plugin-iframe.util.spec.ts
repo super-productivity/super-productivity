@@ -291,6 +291,86 @@ describe('handlePluginMessage()', () => {
     );
   });
 
+  it('routes getFocusedTask iframe API calls through plugin-bound methods', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const focusedTask = { id: 'focused-task', title: 'Focused Task' };
+    const getFocusedTask = jasmine.createSpy('getFocusedTask').and.resolveTo(focusedTask);
+    const pluginBridge = {
+      createBoundMethods: () => ({
+        getFocusedTask,
+      }),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'getFocusedTask',
+          callId: 15,
+          args: [],
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(getFocusedTask).toHaveBeenCalledTimes(1);
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 15,
+        result: focusedTask,
+      },
+      '*',
+    );
+  });
+
+  it('routes getSelectedTask iframe API calls through plugin-bound methods', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const selectedTask = { id: 'selected-task', title: 'Selected Task' };
+    const getSelectedTask = jasmine
+      .createSpy('getSelectedTask')
+      .and.resolveTo(selectedTask);
+    const pluginBridge = {
+      createBoundMethods: () => ({
+        getSelectedTask,
+      }),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'getSelectedTask',
+          callId: 16,
+          args: [],
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(getSelectedTask).toHaveBeenCalledTimes(1);
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 16,
+        result: selectedTask,
+      },
+      '*',
+    );
+  });
+
   it('generates iframe code that waits for async dialog button handlers', () => {
     const script = createPluginApiScript(
       createConfig({ createBoundMethods: () => ({}) } as unknown as PluginBridgeService),
@@ -301,6 +381,8 @@ describe('handlePluginMessage()', () => {
     expect(script).toContain('Unknown dialog button error');
     expect(script).toContain('const bridgeToken = "test-bridge-token"');
     expect(script).toContain('const bridgeGeneration = 4');
+    expect(script).toContain("getSelectedTask: () => callApi('getSelectedTask')");
+    expect(script).toContain("getFocusedTask: () => callApi('getFocusedTask')");
     expect(script).toContain(
       "registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton')",
     );

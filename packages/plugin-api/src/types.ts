@@ -572,6 +572,21 @@ export interface PluginAPI {
   getCurrentContextTasks(): Promise<Task[]>;
 
   /**
+   * Returns the task currently selected in the task detail panel, or null if
+   * no task is selected. This is the stable task reader for side-panel plugins
+   * that need to keep working after their iframe receives focus.
+   */
+  getSelectedTask(): Promise<Task | null>;
+
+  /**
+   * Returns the task row currently focused by the user, or null if no task row
+   * has focus. Task-row focus is transient and is cleared when focus moves
+   * elsewhere, including into an iframe side panel. Use `getSelectedTask()` when
+   * the plugin needs persistent task context.
+   */
+  getFocusedTask(): Promise<Task | null>;
+
+  /**
    * Returns a complete read-only snapshot of the application state including
    * tasks, projects, tags, notes, task repeat configurations, simple counters
    * and global config. The snapshot is taken at the moment of the call and
