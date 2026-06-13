@@ -76,6 +76,30 @@
     flex-shrink: 0;
   }
 
+  .today-btn {
+    color: var(--text-color);
+    background: transparent;
+    border-style: solid;
+    border-color: var(--extra-border-color);
+    border-radius: var(--card-border-radius);
+    padding: 5%;
+    margin-left: 5%;
+    margin-right: 5%;
+    font-weight: 500;
+    font-size: 14px;
+
+    &:disabled {
+      opacity: 50%;
+      background: transparent;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--c-primary);
+      cursor: pointer;
+      color: white;
+    }
+  }
+
   mat-icon {
     flex-shrink: 0;
   }
