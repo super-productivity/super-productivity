@@ -48,9 +48,7 @@ import { DateService } from '../../core/date/date.service';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
-import { isFileEml, parseEml } from 'src/app/util/eml-parser';
-import { TaskAttachmentService } from 'src/app/features/tasks/task-attachment/task-attachment.service';
-import { Log } from 'src/app/core/log';
+import { EmlDropDirective } from 'src/app/core/drop-paste-input/eml-drop.directive';
 
 @Component({
   selector: 'main-header',
@@ -65,6 +63,7 @@ import { Log } from 'src/app/core/log';
     TranslatePipe,
     SimpleCounterButtonComponent,
     LongPressDirective,
+    EmlDropDirective,
     PluginHeaderBtnsComponent,
     PluginWorkContextHeaderBtnsComponent,
     PluginSidePanelBtnsComponent,
@@ -83,7 +82,6 @@ export class MainHeaderComponent implements OnDestroy {
   readonly matDialog = inject(MatDialog);
   readonly workContextService = inject(WorkContextService);
   readonly taskService = inject(TaskService);
-  readonly taskAttachmentService = inject(TaskAttachmentService);
   readonly layoutService = inject(LayoutService);
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly syncWrapperService = inject(SyncWrapperService);
@@ -317,32 +315,6 @@ export class MainHeaderComponent implements OnDestroy {
       this.sync();
     } else {
       this.setupSync();
-    }
-  }
-  async onDrop(ev: DragEvent): Promise<void> {
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    const file = ev.dataTransfer?.files[0];
-
-    // EML File Addition on button hover
-    // Adds a task with the information inside the eml
-    if (file !== undefined && isFileEml(file)) {
-      try {
-        const data = await parseEml(file);
-
-        const from = Array.isArray(data.from) ? data.from[0] : data.from;
-        const sender = from?.name || from?.email || '';
-
-        const message = `${sender}: ${data.subject}`;
-        this.taskService.add(message);
-        // TODO: add attachment to task
-        // this.taskAttachmentService.addAttachment(taskId, file);
-      } catch (e) {
-        Log.err(e);
-        this._snackService.open("Couldn't create eml file");
-        return;
-      }
     }
   }
 
