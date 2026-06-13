@@ -16,6 +16,7 @@ import { quitApp, showOrFocus } from './various-shared';
 import { closeWinAndQuit, createWindow } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
 import { destroyTaskWidget } from './task-widget/task-widget';
+import { initQuickAddWindow } from './quick-add-window';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
@@ -506,6 +507,7 @@ export const startApp = (): void => {
     });
 
     initPluginOAuth(mainWin);
+    initQuickAddWindow(IS_DEV, customUrl);
 
     // Process any pending protocol URLs after window is created
     setTimeout(() => {

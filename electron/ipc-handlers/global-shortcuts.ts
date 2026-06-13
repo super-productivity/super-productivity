@@ -3,6 +3,7 @@ import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { KeyboardConfig } from '../../src/app/features/config/keyboard-config.model';
 import { getWin, setWasMaximizedBeforeHide } from '../main-window';
 import { toggleTaskWidgetVisibility } from '../task-widget/task-widget';
+import { showQuickAddWindow } from '../quick-add-window';
 import { showOrFocus } from '../various-shared';
 import { ensureIndicator } from '../indicator';
 import { getIsMinimizeToTray } from '../shared-state';
@@ -78,9 +79,7 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
 
           case 'globalAddTask':
             actionFn = () => {
-              showOrFocus(mainWin);
-              // NOTE: delay slightly to make sure app is ready
-              mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
+              showQuickAddWindow();
             };
             break;
 
