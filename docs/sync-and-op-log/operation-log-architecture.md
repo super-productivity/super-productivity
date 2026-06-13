@@ -2086,19 +2086,21 @@ Meta-reducers intercept actions before they reach feature reducers and can modif
 | `plannerSharedMetaReducer`        | Planner day management                                   |
 | `taskRepeatCfgSharedMetaReducer`  | Repeat config deletion with task cleanup                 |
 | `issueProviderSharedMetaReducer`  | Issue provider updates                                   |
-| `operationCaptureMetaReducer`     | Captures before/after state, enqueues entity changes     |
+| `operationCaptureMetaReducer`     | Marks the action as pending capture (increments counter) |
 
 ## F.3 Multi-Entity Operation Capture
 
-The `OperationCaptureService` and `operation-capture.meta-reducer` work together using a **simple FIFO queue** to capture actions:
+The `OperationCaptureService` and `operation-capture.meta-reducer` work together using a **pending counter** to track captures (no positional queue — see the note below):
 
-1. **After action**: Meta-reducer calls `OperationCaptureService.enqueue()` with the action
-2. **Effect processes**: Effect calls `OperationCaptureService.dequeue()` to get entity changes
+1. **After action**: Meta-reducer calls `OperationCaptureService.incrementPending()` with the action
+2. **Effect processes**: Effect computes `entityChanges` via `OperationCaptureService.extractEntityChanges()`, writes the operation, then decrements the counter in a `finally`
 3. **Result**: Single operation with action payload and optional `entityChanges[]` array
 
-The FIFO queue works because NgRx reducers process actions sequentially, and effects use `concatMap` for sequential processing. Order is preserved between enqueue and dequeue.
+`flushPendingWrites()` polls `getPendingCount()` to know when every dispatched action has been written. NgRx reducers process actions sequentially and the effect uses `concatMap`, so writes stay ordered.
 
-**Note**: Most actions return empty `entityChanges[]` - the action payload is sufficient for replay. Only TIME_TRACKING and TASK time sync actions have special handling to extract entity changes from the action payload.
+**Why a counter, not a positional FIFO queue (#8306 / #8318)**: the old design queued an `EntityChange[]` per action and correlated meta-reducer `push` with effect `shift` purely by position. If a write threw before its `dequeue` ran (e.g. a `LockAcquisitionTimeoutError`), the entry leaked and `flushPendingWrites()` could never reach 0 — every later sync then failed after its 30s timeout. A counter decremented in a `finally` cannot leak. `entityChanges` is now computed in the write path from the action (a pure function), so there is nothing to keep positionally aligned.
+
+**Note**: Most actions return empty `entityChanges[]` - the action payload is sufficient for replay. Only TIME_TRACKING and TASK time sync actions have special handling to extract entity changes from the action payload. The field is still emitted (even as `[]`) because the Android background provider reads it and the `isMultiEntityPayload` guard requires it.
 
 ```
 User Action (e.g., Delete Tag)
@@ -2112,14 +2114,14 @@ Feature Reducers
     │
     ▼
 operation-capture.meta-reducer
-    ├──► Call OperationCaptureService.enqueue(action)
-    │         └──► Extracts entity changes from action payload (for special cases)
-    │         └──► Pushes to FIFO queue
+    ├──► Call OperationCaptureService.incrementPending(action)
+    │         └──► Increments the pending counter
     │
     ▼
-OperationLogEffects
-    ├──► Call OperationCaptureService.dequeue() to get entity changes
-    └──► Create single Operation with action payload
+OperationLogEffects (per-action wrapper: writeOperationFromEffect)
+    ├──► Call OperationCaptureService.extractEntityChanges(action)
+    ├──► Create + persist single Operation with action payload
+    └──► finally: OperationCaptureService.decrementPending()
 ```
 
 ## F.4 When to Use Meta-Reducers vs Effects
@@ -2293,7 +2295,7 @@ When adding new entities or relationships:
 > - **End-to-End Encryption**: AES-256-GCM payload encryption with Argon2id key derivation via `OperationEncryptionService`
 > - **Server Security Hardening**: Audit logging, structured error codes, request deduplication, transaction isolation, input validation, rate limiting
 > - **Unified Archive Handling**: `ArchiveOperationHandler` is now the single source of truth for all archive operations, used by both local effects and remote operation application
-> - **Simplified OperationCaptureService**: Refactored to FIFO queue with reference equality optimization for detecting changed feature states
+> - **Simplified OperationCaptureService**: Tracks pending captures with a counter (no positional FIFO queue); `entityChanges` is computed in the write path from the action
 > - **Simplified OperationApplierService**: Refactored to fail-fast approach - throws `SyncStateCorruptedError` on missing hard deps (no retry queues)
 > - **Tag sanitization**: Remove subtask IDs from tags when parent deleted, filter non-existent taskIds on sync
 > - **Anchor-based move operations**: All task drag-drop moves now use `afterTaskId` instead of full list replacement (including subtask moves)
@@ -2346,7 +2348,7 @@ src/app/op-log/
 │   └── operation-sync.util.ts                # Sync helper utilities
 ├── processing/
 │   ├── operation-applier.service.ts          # Apply ops with fail-fast dependency handling
-│   ├── operation-capture.service.ts          # FIFO queue for capturing entity changes
+│   ├── operation-capture.service.ts          # Pending-capture counter + entityChanges extractor
 │   ├── operation-capture.meta-reducer.ts     # Meta-reducer for before/after state capture
 │   ├── hydration-state.service.ts            # Track hydration/remote ops application state
 │   ├── archive-operation-handler.service.ts  # Unified handler for archive side effects

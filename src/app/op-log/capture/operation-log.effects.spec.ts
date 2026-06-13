@@ -76,7 +76,8 @@ describe('OperationLogEffects', () => {
       'getOrGenerateClientId',
     ]);
     mockOperationCaptureService = jasmine.createSpyObj('OperationCaptureService', [
-      'dequeue',
+      'extractEntityChanges',
+      'decrementPending',
     ]);
 
     // Default mock implementations
@@ -95,7 +96,7 @@ describe('OperationLogEffects', () => {
     mockClientIdService.getOrGenerateClientId.and.returnValue(
       Promise.resolve('testClient'),
     );
-    mockOperationCaptureService.dequeue.and.returnValue([]);
+    mockOperationCaptureService.extractEntityChanges.and.returnValue([]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -340,7 +341,7 @@ describe('OperationLogEffects', () => {
 
       effects.persistOperation$.subscribe({
         complete: () => {
-          expect(mockOperationCaptureService.dequeue).toHaveBeenCalled();
+          expect(mockOperationCaptureService.extractEntityChanges).toHaveBeenCalled();
           expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
             jasmine.objectContaining({
               actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,

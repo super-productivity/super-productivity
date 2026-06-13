@@ -109,9 +109,10 @@ describe('regression #7700: operation-log lock reentry', () => {
     clientIdSpy.getOrGenerateClientId.and.resolveTo('testClient');
 
     const operationCaptureSpy = jasmine.createSpyObj('OperationCaptureService', [
-      'dequeue',
+      'extractEntityChanges',
+      'decrementPending',
     ]);
-    operationCaptureSpy.dequeue.and.returnValue([]);
+    operationCaptureSpy.extractEntityChanges.and.returnValue([]);
 
     const superSyncStatusSpy = jasmine.createSpyObj('SuperSyncStatusService', [
       'updatePendingOpsStatus',
