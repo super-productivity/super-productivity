@@ -28,21 +28,6 @@ export interface DataRepairResult {
 }
 
 /**
- * Deeply-immutable view of a type. `dataRepair`'s input is typed with this to
- * force the deep clone below and block in-place mutation of `data` inside this
- * function: a shallow `{ ...data }` keeps the nested `readonly` types and won't
- * assign to the mutable `dataOut`, so `structuredClone` is the only way to get
- * a writable working copy (#8333). Note this guards the function body, not the
- * call sites — callers still pass live store references (a mutable type widens
- * to readonly), which is exactly why the unconditional clone is what matters.
- */
-type DeepReadonly<T> = T extends (infer R)[]
-  ? readonly DeepReadonly<R>[]
-  : T extends object
-    ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
-    : T;
-
-/**
  * Entity state keys that have ids/entities structure.
  * Used for fixing entity state consistency during repair.
  */
@@ -59,11 +44,10 @@ const ENTITY_STATE_KEYS: (keyof AppDataCompleteLegacy)[] = [
 ];
 
 export const dataRepair = (
-  data: DeepReadonly<AppDataComplete>,
+  data: AppDataComplete,
   errors: IValidation.IError[] = [],
 ): DataRepairResult => {
-  // cast only to satisfy the signature — isDataRepairPossible is a read-only check
-  if (!isDataRepairPossible(data as AppDataComplete)) {
+  if (!isDataRepairPossible(data)) {
     throw new Error('Data repair attempted but not possible');
   }
 
@@ -76,16 +60,13 @@ export const dataRepair = (
     typeErrorsFixed: 0,
   };
 
-  // Deep clone before any repair runs. The fixers below mutate nested entities
-  // in place (e.g. `t.tagIds = []`, `cfg[day] = false`, `Object.assign` onto
-  // feature states), and production builds disable NgRx runtime freezing (see
-  // `src/main.ts`) — so the input here is a live, writable store reference. A
-  // shallow `{ ...data }` shares every nested object, letting repair corrupt
-  // store-owned state before `loadAllData` is dispatched (#8333). Repair only
-  // runs after a (rare) validation failure, so the unconditional clone is cheap.
-  // The cast launders DeepReadonly -> mutable: structuredClone returns a fresh,
-  // fully-detached object, so writing to it can never reach the caller's state.
-  let dataOut: AppDataComplete = structuredClone(data) as AppDataComplete;
+  // Deep clone before any repair runs: the fixers below mutate nested entities
+  // in place, and prod builds disable NgRx runtime freezing (src/main.ts) so
+  // `data` is a live, writable store reference. A shallow `{ ...data }` shares
+  // every nested object, letting repair corrupt store-owned state before
+  // `loadAllData` is dispatched (#8333). Only runs after a rare validation
+  // failure, so the unconditional clone is cheap.
+  let dataOut: AppDataComplete = structuredClone(data);
 
   // Ensure archive structures exist
   if (!dataOut.archiveYoung) {
