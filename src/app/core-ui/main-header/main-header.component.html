@@ -35,6 +35,7 @@
       <!-- Desktop: Secondary action group -->
       @if (showDesktopButtons()) {
         <button
+          emlDrop
           (click)="layoutService.showAddTaskBar()"
           matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
             kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
