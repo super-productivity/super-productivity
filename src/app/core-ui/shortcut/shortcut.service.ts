@@ -72,7 +72,7 @@ export class ShortcutService {
     });
 
     // GLOBAL SHORTCUTS
-    if (IS_ELECTRON) {
+    if (window.ea) {
       window.ea.on(IPC.TASK_TOGGLE_START, () => {
         this._taskService.toggleStartTask();
       });

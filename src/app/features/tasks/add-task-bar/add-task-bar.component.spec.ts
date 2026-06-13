@@ -346,6 +346,29 @@ describe('AddTaskBarComponent', () => {
       expect(taskData.dueDay).toBe('2024-05-19');
     });
 
+    it('should submit task via IPC when isSubmitViaIpc is true', async () => {
+      fixture.componentRef.setInput('isSubmitViaIpc', true);
+      (window as any).ea = {
+        submitAddTaskViaIpc: jasmine.createSpy('submitAddTaskViaIpc'),
+      };
+
+      component.stateService.updateInputTxt('IPC Task');
+      component.stateService.updateCleanText('IPC Task');
+      component.stateService.updateProjectId('project-1');
+
+      await component.addTask();
+
+      expect((window as any).ea.submitAddTaskViaIpc).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          title: 'IPC Task',
+          taskData: jasmine.objectContaining({
+            projectId: 'project-1',
+          }),
+        }),
+      );
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+
     it('should use logical today for the repeat-config startDate when no date is set', async () => {
       mockDateService.todayStr.and.returnValue('2024-05-19');
       mockTaskService.add.and.returnValue('task-1');
