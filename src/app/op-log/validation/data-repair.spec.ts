@@ -47,6 +47,54 @@ describe('dataRepair()', () => {
     mock = dirtyDeepCopy(mock);
   });
 
+  // Regression for #8333: production builds disable NgRx runtime freezing, so
+  // the input passed to dataRepair() is a live, writable store reference. The
+  // fixers mutate nested entities in place (projectId, quickSetting, weekday
+  // flags, …), so dataRepair() must deep-clone its input — the caller's object
+  // graph must come back untouched even when repair changes the returned copy.
+  it('should not mutate its (non-frozen) input data', () => {
+    const taskBadProject = {
+      ...DEFAULT_TASK,
+      id: 'TASK_BAD_PROJECT',
+      title: 'TASK_BAD_PROJECT',
+      projectId: 'NON_EXISTENT_PROJECT',
+    };
+    const cfgNoStartDate = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'CFG_NO_START',
+      title: 'CFG_NO_START',
+      projectId: INBOX_PROJECT.id,
+      // date-dependent quickSetting with no startDate -> repair rewrites to CUSTOM
+      quickSetting: 'MONTHLY_CURRENT_DATE' as const,
+      startDate: undefined,
+    };
+    const input: AppDataComplete = {
+      ...mock,
+      task: {
+        ...mock.task,
+        ...fakeEntityStateFromArray<Task>([taskBadProject]),
+      } as any,
+      taskRepeatCfg: {
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([cfgNoStartDate]),
+      } as any,
+    };
+    // structuredClone (not dirtyDeepCopy) so undefined-valued keys are preserved
+    // and don't produce false mismatches against the post-repair input.
+    const inputSnapshot = structuredClone(input);
+
+    const result = dataRepair(input);
+
+    // Repair really did fix things on the returned copy...
+    expect(result.data.task.entities['TASK_BAD_PROJECT']!.projectId).toBe(
+      INBOX_PROJECT.id,
+    );
+    expect(result.data.taskRepeatCfg.entities['CFG_NO_START']!.quickSetting).toBe(
+      'CUSTOM',
+    );
+    // ...while the caller's input object graph is left byte-for-byte unchanged.
+    expect(input).toEqual(inputSnapshot);
+  });
+
   it('should delete tasks with same id in "task" and "taskArchive" from taskArchive', () => {
     const taskState = {
       ...mock.task,
@@ -79,7 +127,9 @@ describe('dataRepair()', () => {
 
     expect(result.data.task).toEqual(taskState);
     expect(result.data.archiveYoung.lastTimeTrackingFlush).toBe(0);
-    expect(result.data.archiveYoung.timeTracking).toBe(mock.archiveYoung.timeTracking);
+    // dataRepair() deep-clones its input (#8333), so this is an equal clone,
+    // no longer the same reference.
+    expect(result.data.archiveYoung.timeTracking).toEqual(mock.archiveYoung.timeTracking);
     expect(result.data.archiveYoung.task.ids).toEqual([]);
     expect(Object.keys(result.data.archiveYoung.task.entities)).toEqual([]);
   });
@@ -115,7 +165,25 @@ describe('dataRepair()', () => {
       }).data,
     ).toEqual({
       ...mock,
-      task: taskState as any,
+      // repair back-references the tag onto the task (tagIds) and adds the
+      // orphaned task to its project's list
+      task: {
+        ...taskState,
+        entities: {
+          ...taskState.entities,
+          TEST: { ...taskState.entities.TEST, tagIds: ['TEST_ID_TAG'] },
+        },
+      } as any,
+      project: {
+        ...mock.project,
+        entities: {
+          ...mock.project.entities,
+          [FAKE_PROJECT_ID]: {
+            ...(mock.project.entities[FAKE_PROJECT_ID] as any),
+            taskIds: ['TEST'],
+          },
+        },
+      } as any,
       tag: {
         ...tagState,
         entities: {
@@ -362,7 +430,14 @@ describe('dataRepair()', () => {
       archiveYoung: {
         lastTimeTrackingFlush: 0,
         timeTracking: mock.archiveYoung.timeTracking,
-        task: taskArchiveState,
+        // repair re-attaches the orphaned archived sub task to its parent
+        task: {
+          ...taskArchiveState,
+          entities: {
+            ...taskArchiveState.entities,
+            PAR_ID: { ...taskArchiveState.entities.PAR_ID, subTaskIds: ['SUB_ID'] },
+          },
+        },
       },
       project: {
         ...projectState,
@@ -413,7 +488,14 @@ describe('dataRepair()', () => {
       }).data,
     ).toEqual({
       ...mock,
-      task: taskState as any,
+      // repair assigns the backlog task's projectId from the project that lists it
+      task: {
+        ...taskState,
+        entities: {
+          ...taskState.entities,
+          TEST: { ...taskState.entities.TEST, projectId: 'TEST_ID_PROJECT' },
+        },
+      } as any,
       project: {
         ...projectState,
         entities: {
@@ -477,6 +559,17 @@ describe('dataRepair()', () => {
               projectId: FAKE_PROJECT_ID,
             },
           ]),
+        } as any,
+        // repair adds the de-duplicated tasks to their project's list
+        project: {
+          ...mock.project,
+          entities: {
+            ...mock.project.entities,
+            [FAKE_PROJECT_ID]: {
+              ...(mock.project.entities[FAKE_PROJECT_ID] as any),
+              taskIds: ['DUPE', 'NO_DUPE'],
+            },
+          },
         } as any,
       });
     });
@@ -561,6 +654,17 @@ describe('dataRepair()', () => {
           entities: {
             AAA: { ...DEFAULT_TASK, id: 'AAA', projectId: FAKE_PROJECT_ID },
             CCC: { ...DEFAULT_TASK, id: 'CCC', projectId: FAKE_PROJECT_ID },
+          },
+        } as any,
+        // repair adds the surviving tasks to their project's list
+        project: {
+          ...mock.project,
+          entities: {
+            ...mock.project.entities,
+            [FAKE_PROJECT_ID]: {
+              ...(mock.project.entities[FAKE_PROJECT_ID] as any),
+              taskIds: ['AAA', 'CCC'],
+            },
           },
         } as any,
       });
@@ -926,6 +1030,17 @@ describe('dataRepair()', () => {
           ...fakeEntityStateFromArray<Task>([]),
         } as any,
       },
+      // repair adds the top-level parent task to its project's list
+      project: {
+        ...mock.project,
+        entities: {
+          ...mock.project.entities,
+          [FAKE_PROJECT_ID]: {
+            ...(mock.project.entities[FAKE_PROJECT_ID] as any),
+            taskIds: ['parent'],
+          },
+        },
+      } as any,
     });
   });
 
@@ -1060,7 +1175,14 @@ describe('dataRepair()', () => {
       }).data,
     ).toEqual({
       ...mock,
-      project,
+      // repair adds the top-level parent task to its project's list
+      project: {
+        ...project,
+        entities: {
+          ...project.entities,
+          p1: { ...project.entities.p1, taskIds: ['parent'] },
+        },
+      } as any,
       task: {
         ...mock.task,
         ...fakeEntityStateFromArray<Task>([
@@ -1116,6 +1238,8 @@ describe('dataRepair()', () => {
         entities: {
           TEST: {
             ...taskState.entities.TEST,
+            // dangling projectId is reassigned to the inbox project
+            projectId: INBOX_PROJECT.id,
           },
         },
       },
@@ -1215,6 +1339,8 @@ describe('dataRepair()', () => {
         entities: {
           TEST: {
             ...taskRepeatCfgState.entities.TEST,
+            // dangling projectId is cleared to null on repeat configs
+            projectId: null,
           },
         },
       },
@@ -1580,6 +1706,17 @@ describe('dataRepair()', () => {
           },
         ]),
       } as any,
+      // both tasks got the inbox projectId, so repair adds them to its list
+      project: {
+        ...mock.project,
+        entities: {
+          ...mock.project.entities,
+          [INBOX_PROJECT.id]: {
+            ...(mock.project.entities[INBOX_PROJECT.id] as any),
+            taskIds: ['task1', 'task2'],
+          },
+        },
+      } as any,
     });
   });
 
@@ -1671,6 +1808,17 @@ describe('dataRepair()', () => {
           ]),
         } as any,
       },
+      // repair adds the top-level task1 to its project's list
+      project: {
+        ...mock.project,
+        entities: {
+          ...mock.project.entities,
+          [FAKE_PROJECT_ID]: {
+            ...(mock.project.entities[FAKE_PROJECT_ID] as any),
+            taskIds: ['task1'],
+          },
+        },
+      } as any,
     });
   });
 
@@ -1737,6 +1885,17 @@ describe('dataRepair()', () => {
           ]),
         } as any,
       },
+      // repair adds the top-level task1 to its project's list
+      project: {
+        ...mock.project,
+        entities: {
+          ...mock.project.entities,
+          [FAKE_PROJECT_ID]: {
+            ...(mock.project.entities[FAKE_PROJECT_ID] as any),
+            taskIds: ['task1'],
+          },
+        },
+      } as any,
     });
   });
 
@@ -1820,6 +1979,21 @@ describe('dataRepair()', () => {
           ]),
         } as any,
       },
+      // repair fills each project's list from the (re)assigned task projectIds
+      project: {
+        ...mock.project,
+        entities: {
+          ...mock.project.entities,
+          [INBOX_PROJECT.id]: {
+            ...(mock.project.entities[INBOX_PROJECT.id] as any),
+            taskIds: ['task1', 'sub_task'],
+          },
+          [FAKE_PROJECT_ID]: {
+            ...(mock.project.entities[FAKE_PROJECT_ID] as any),
+            taskIds: ['task2'],
+          },
+        },
+      } as any,
     });
   });
 
