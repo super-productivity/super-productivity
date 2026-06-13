@@ -39,4 +39,20 @@
     // Accent buttons in this app pair with a light-on-accent text token.
     color: var(--palette-accent-contrast, #fff);
   }
+
+  // "More options / Fewer options" — quiet, no fill.
+  &--more {
+    border-style: dashed;
+    opacity: 0.8;
+  }
+
+  // "Custom" — outlined in accent so it reads as the escape hatch, last.
+  &--custom {
+    border-color: var(--c-accent);
+    color: var(--c-accent);
+
+    &.active {
+      color: var(--palette-accent-contrast, #fff);
+    }
+  }
 }

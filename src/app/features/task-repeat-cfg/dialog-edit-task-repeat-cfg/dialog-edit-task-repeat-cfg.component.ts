@@ -172,6 +172,17 @@ export class DialogEditTaskRepeatCfgComponent {
   // date-aware labels (e.g. "Monthly on the 13th") rebuild when the start date
   // changes.
   quickSettingOptions = computed(() => this._buildQuickSettingOptions());
+
+  // Common presets shown by default in the chip picker; the rest hide behind
+  // "More options". Keeps the picker TickTick-clean without dropping any preset.
+  readonly quickSettingCommon: readonly string[] = [
+    'DAILY',
+    'MONDAY_TO_FRIDAY',
+    'WEEKENDS',
+    'WEEKLY_CURRENT_WEEKDAY',
+    'MONTHLY_CURRENT_DATE',
+    'YEARLY_CURRENT_DATE',
+  ];
   // Live result/preview shown at the dialog bottom in RRULE mode. The builder
   // keeps `repeatCfg().rrule` up to date via onRRuleChange, so this stays live.
   private _humanize = buildRRuleHumanizeOpts(

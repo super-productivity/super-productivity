@@ -7,13 +7,6 @@ import { TaskReminderOptionId } from '../../tasks/task.model';
 
 export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
   {
-    key: 'title',
-    type: 'input',
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.TITLE,
-    },
-  },
-  {
     key: 'startDate',
     type: 'date',
     // Default to a 'YYYY-MM-DD' string (not a Date): Formly skips `parsers` on
@@ -35,6 +28,13 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
 ];
 
 export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
+  {
+    key: 'title',
+    type: 'input',
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.TITLE,
+    },
+  },
   {
     key: 'defaultEstimate',
     type: 'duration',

@@ -58,6 +58,15 @@ mat-dialog-actions {
   max-width: 620px;
 }
 
+// Divider under the Repeat chip picker so the recurrence flow reads as its own
+// clean section above the builder.
+repeat-freq-picker {
+  display: block;
+  padding-bottom: var(--s);
+  margin-bottom: var(--s);
+  border-bottom: 1px solid var(--separator-color, var(--extra-border-color));
+}
+
 // Live recurrence summary card, shown in-sheet under the builder.
 .rrule-result {
   margin: var(--s) 0 var(--s2);

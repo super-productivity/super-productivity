@@ -3,7 +3,7 @@
     <span class="rfp-lbl">{{ label() }}</span>
   }
   <div class="rfp-chips">
-    @for (o of options(); track o.value) {
+    @for (o of visiblePresets(); track o.value) {
       <button
         type="button"
         class="rfp-chip"
@@ -11,6 +11,32 @@
         (click)="selected.emit(o.value)"
       >
         {{ o.label }}
+      </button>
+    }
+
+    @if (canToggle()) {
+      <button
+        type="button"
+        class="rfp-chip rfp-chip--more"
+        (click)="toggleExpanded()"
+      >
+        {{
+          (isExpanded()
+            ? T.F.TASK_REPEAT.F.QUICK_SETTING_FEWER
+            : T.F.TASK_REPEAT.F.QUICK_SETTING_MORE
+          ) | translate
+        }}
+      </button>
+    }
+
+    @if (customOption(); as c) {
+      <button
+        type="button"
+        class="rfp-chip rfp-chip--custom"
+        [class.active]="c.value === value()"
+        (click)="selected.emit(c.value)"
+      >
+        {{ c.label }}
       </button>
     }
   </div>
