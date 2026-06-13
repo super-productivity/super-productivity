@@ -95,7 +95,7 @@ const createQuickAddWindow = (): void => {
     e.preventDefault();
   });
 
-  // Handle window focus loss - close/hide it
+  // Handle window focus loss - hide it
   quickAddWin.on('blur', () => {
     if (!isHidingProgrammatically) {
       hideQuickAddWindow(false);
@@ -112,28 +112,23 @@ export const showQuickAddWindow = (): void => {
   // On macOS, getFocusedWindow() returns null if a non-Electron app had focus.
   const activeWin = BrowserWindow.getFocusedWindow();
   wasMainWinFocused = !!activeWin && activeWin !== quickAddWin;
-  console.log(
-    '[QuickAdd HUD] showQuickAddWindow called. wasMainWinFocused:',
-    wasMainWinFocused,
-    'focusedWin:',
-    activeWin ? activeWin.id : 'none (external app)',
-  );
 
-  // On macOS, ALWAYS hide the main window BEFORE showing the HUD.
-  // Key insight: mainWin.hide() hides at the WINDOW level (orderOut:),
-  // while app.hide() hides at the APP level. When quickAddWin.show()
-  // re-activates the app, macOS restores app-level hidden windows but NOT
-  // window-level hidden ones. So we must always call mainWin.hide() here,
-  // even if isVisible() returns false (which happens after app.hide()).
+  // On macOS, hide the main window when an EXTERNAL app was focused.
+  // When SP is already the focused app, the HUD's alwaysOnTop is enough —
+  // the main window stays visible behind the overlay. No hiding needed.
+  //
+  // When an external app was focused, we MUST call mainWin.hide() to prevent
+  // macOS from restoring the main window when show() re-activates the app.
+  // We call hide() even if isVisible() is false, because after app.hide()
+  // the window is only app-level hidden — re-activation would restore it.
+  // Window-level hide (mainWin.hide → orderOut:) survives re-activation.
   if (process.platform === 'darwin') {
     const mainWin = getWin();
     if (mainWin && !mainWin.isDestroyed()) {
       mainWinWasVisible = mainWin.isVisible() && !mainWin.isMinimized();
-      console.log(
-        '[QuickAdd HUD] Hiding main window before showing HUD. wasVisible:',
-        mainWinWasVisible,
-      );
-      mainWin.hide();
+      if (!wasMainWinFocused) {
+        mainWin.hide();
+      }
     } else {
       mainWinWasVisible = false;
     }
@@ -145,21 +140,14 @@ export const showQuickAddWindow = (): void => {
     quickAddWin.setBounds({ width, height, x, y });
 
     // show() + focus() activates the app and gives keyboard input.
-    // Since the main window is hidden above, it won't appear behind the HUD.
+    // Since the main window is hidden above (when external app was focused),
+    // it won't appear behind the HUD.
     quickAddWin.show();
     quickAddWin.focus();
   }
 };
 
 export const hideQuickAddWindow = (isProgrammatic = false): void => {
-  console.log(
-    '[QuickAdd HUD] hideQuickAddWindow called. isProgrammatic:',
-    isProgrammatic,
-    'wasMainWinFocused:',
-    wasMainWinFocused,
-    'mainWinWasVisible:',
-    mainWinWasVisible,
-  );
   if (quickAddWin && !quickAddWin.isDestroyed() && quickAddWin.isVisible()) {
     if (isProgrammatic) {
       isHidingProgrammatically = true;
@@ -174,19 +162,16 @@ export const hideQuickAddWindow = (isProgrammatic = false): void => {
       if (mainWinWasVisible && mainWin && !mainWin.isDestroyed()) {
         if (wasMainWinFocused) {
           // User had SP focused before — restore and focus it
-          console.log('[QuickAdd HUD] Restoring main window with focus');
           mainWin.show();
         } else {
           // User was in an external app — restore main window in background
-          // so macOS remembers it as visible, then app.hide() hides everything
-          console.log('[QuickAdd HUD] Restoring main window inactive');
+          // so macOS remembers it as visible, then app.hide() returns focus
           mainWin.showInactive();
         }
       }
 
       if (!wasMainWinFocused) {
         // Return focus to the previously active external app
-        console.log('[QuickAdd HUD] Calling app.hide() to return focus to external app');
         app.hide();
       }
     }
