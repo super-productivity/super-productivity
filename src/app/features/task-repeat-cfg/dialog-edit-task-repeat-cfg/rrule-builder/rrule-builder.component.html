@@ -1,37 +1,55 @@
 <div class="rb">
-  <!-- Frequency + interval, read as a sentence -->
-  <div class="rb-row">
+  <!-- Repeat every: stepper + frequency unit segmented control -->
+  <div class="rb-row rb-row--between">
     <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate }}</span>
-    <input
-      #intervalIn
-      class="rb-num"
-      type="number"
-      min="1"
-      max="1000"
-      [value]="model().interval"
-      (input)="setInterval(intervalIn.value)"
-    />
-    <select
-      #freqSel
-      class="rb-sel"
-      (change)="setFreq(freqSel.value)"
-    >
-      @for (o of freqOpts; track o.value) {
-        <option
-          [value]="o.value"
-          [selected]="o.value === model().freq"
-        >
-          {{ o.label | translate }}
-        </option>
-      }
-    </select>
+    <div class="rb-stepper">
+      <button
+        type="button"
+        class="rb-step"
+        [disabled]="model().interval <= 1"
+        (click)="setInterval(model().interval - 1 + '')"
+        aria-label="−"
+      >
+        −
+      </button>
+      <input
+        #intervalIn
+        class="rb-step-num"
+        type="number"
+        min="1"
+        max="1000"
+        [value]="model().interval"
+        (input)="setInterval(intervalIn.value)"
+      />
+      <button
+        type="button"
+        class="rb-step"
+        (click)="setInterval(model().interval + 1 + '')"
+        aria-label="+"
+      >
+        +
+      </button>
+    </div>
   </div>
 
-  <!-- WEEKLY: weekday toggle buttons -->
+  <div class="rb-seg rb-seg--freq">
+    @for (o of freqOpts; track o.value) {
+      <button
+        type="button"
+        class="rb-seg-btn"
+        [class.active]="o.value === model().freq"
+        (click)="setFreq(o.value)"
+      >
+        {{ o.label | translate }}
+      </button>
+    }
+  </div>
+
+  <!-- WEEKLY: weekday circles -->
   @if (model().freq === 'WEEKLY') {
     <div class="rb-field">
       <label>{{ T.F.TASK_REPEAT.F.RRULE_BYDAY | translate }}</label>
-      <div class="rb-toggles">
+      <div class="rb-toggles rb-weekrow">
         @for (w of weekdays; track w.value) {
           <button
             type="button"
@@ -49,7 +67,7 @@
 
   <!-- MONTHLY -->
   @if (model().freq === 'MONTHLY') {
-    <div class="rb-row">
+    <div class="rb-row rb-row--between">
       <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate }}</span>
       <select
         #mMode
@@ -69,7 +87,6 @@
 
     @if (model().monthlyMode === 'DAY_OF_MONTH') {
       <div class="rb-field">
-        <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate }}</label>
         <div class="rb-toggles rb-toggles--days">
           @for (d of dayGrid; track d) {
             <button
@@ -104,7 +121,6 @@
         </div>
       </div>
     }
-    <!-- nth-weekday rows render in the shared block below (monthly + yearly). -->
     @if (model().monthlyMode === 'WEEKDAYS') {
       <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
     }
@@ -112,7 +128,7 @@
 
   <!-- YEARLY -->
   @if (model().freq === 'YEARLY') {
-    <div class="rb-row">
+    <div class="rb-row rb-row--between">
       <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate }}</span>
       <select
         #yMode
@@ -129,12 +145,8 @@
         }
       </select>
     </div>
-    <div class="rb-hint">
-      {{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE_DESCRIPTION | translate }}
-    </div>
     @if (model().yearlyMode === 'DAY_OF_MONTH') {
       <div class="rb-field">
-        <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate }}</label>
         <div class="rb-toggles rb-toggles--days">
           @for (d of dayGrid; track d) {
             <button
@@ -174,7 +186,7 @@
   <!-- Weekday set + "which occurrence" (BYSETPOS) toggles — shared by the
        monthly and yearly WEEKDAYS modes (all bindings are frequency-agnostic). -->
   <ng-template #weekdaySetBlock>
-    <div class="rb-row">
+    <div class="rb-field">
       <div class="rb-toggles">
         <button
           type="button"
@@ -213,7 +225,7 @@
           (change)="setCustomBySetPos(customWhich.value)"
         />
       }
-      <div class="rb-toggles">
+      <div class="rb-toggles rb-weekrow">
         @for (w of weekdays; track w.value) {
           <button
             type="button"
@@ -226,14 +238,14 @@
           </button>
         }
       </div>
-    </div>
-    <div class="rb-hint">
-      {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
+      <div class="rb-hint">
+        {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
+      </div>
     </div>
   </ng-template>
 
   <!-- nth-weekday rows (monthly + yearly): per-weekday ordinals, e.g. the 3rd
-       Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line, + adds more. -->
+       Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line. -->
   @if (isNthMode()) {
     <div class="rb-field">
       <label>{{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate }}</label>
@@ -271,7 +283,7 @@
               (change)="setNthDayCustomPos(rowIdx, customPos.value)"
             />
           }
-          <div class="rb-toggles">
+          <div class="rb-toggles rb-weekrow">
             @for (w of weekdays; track w.value) {
               <button
                 type="button"
@@ -311,52 +323,52 @@
     </div>
   }
 
-  <!-- Ends -->
-  <div class="rb-row">
-    <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_END | translate }}</span>
-    <select
-      #endSel
-      class="rb-sel rb-sel--wide"
-      (change)="setEndType(endSel.value)"
-    >
-      @for (o of endOpts; track o.value) {
-        <option
-          [value]="o.value"
-          [selected]="o.value === model().endType"
-        >
-          {{ o.label | translate }}
-        </option>
+  <!-- Ends (segmented) -->
+  <div class="rb-field">
+    <label>{{ T.F.TASK_REPEAT.F.RRULE_END | translate }}</label>
+    <div class="rb-ends">
+      <div class="rb-seg">
+        @for (o of endOpts; track o.value) {
+          <button
+            type="button"
+            class="rb-seg-btn"
+            [class.active]="o.value === model().endType"
+            (click)="setEndType(o.value)"
+          >
+            {{ o.label | translate }}
+          </button>
+        }
+      </div>
+      @if (model().endType === 'COUNT') {
+        <input
+          #countIn
+          class="rb-num"
+          type="number"
+          min="1"
+          max="1000"
+          [value]="model().count"
+          (input)="setCount(countIn.value)"
+        />
       }
-    </select>
-    @if (model().endType === 'COUNT') {
-      <input
-        #countIn
-        class="rb-num"
-        type="number"
-        min="1"
-        max="1000"
-        [value]="model().count"
-        (input)="setCount(countIn.value)"
-      />
-    }
-    @if (model().endType === 'UNTIL') {
-      <input
-        #untilIn
-        class="rb-date"
-        type="date"
-        [value]="model().until"
-        (input)="setUntil(untilIn.value)"
-      />
-    }
+      @if (model().endType === 'UNTIL') {
+        <input
+          #untilIn
+          class="rb-date"
+          type="date"
+          [value]="model().until"
+          (input)="setUntil(untilIn.value)"
+        />
+      }
+    </div>
   </div>
 
   <!-- Schedule type: fixed calendar dates vs. count the interval from completion -->
   <div class="rb-field">
     <label>{{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate }}</label>
-    <div class="rb-toggles">
+    <div class="rb-seg">
       <button
         type="button"
-        class="rb-tgl rb-tgl--wide"
+        class="rb-seg-btn"
         [class.active]="!fromCompletion()"
         (click)="setRepeatFromCompletion(false)"
       >
@@ -364,7 +376,7 @@
       </button>
       <button
         type="button"
-        class="rb-tgl rb-tgl--wide"
+        class="rb-seg-btn"
         [class.active]="fromCompletion()"
         (click)="setRepeatFromCompletion(true)"
       >
@@ -375,9 +387,6 @@
       {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESCRIPTION | translate }}
     </div>
   </div>
-
-  <!-- NOTE: the live result/preview lives at the dialog bottom (just above the
-       action buttons), not here — see DialogEditTaskRepeatCfgComponent. -->
 
   <!-- Advanced -->
   <collapsible

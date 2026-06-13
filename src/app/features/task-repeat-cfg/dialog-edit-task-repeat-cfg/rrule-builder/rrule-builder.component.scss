@@ -8,7 +8,6 @@
   gap: var(--s2);
 }
 
-// A sentence-style row: label + inline controls ("Every 2 weeks").
 .rb-row {
   display: flex;
   align-items: center;
@@ -16,23 +15,120 @@
   gap: var(--s);
 }
 
-// Quiet section label, TickTick-style (small, upper, low-contrast).
+.rb-row--between {
+  justify-content: space-between;
+}
+
+// Row labels: sentence-case, medium weight, slightly muted (TickTick rows).
 .rb-lbl,
 .rb-field > label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.55;
+  opacity: 0.75;
 }
 
 .rb-field {
   display: flex;
   flex-direction: column;
-  gap: var(--s-half);
+  gap: var(--s);
 }
 
-// Minimal rounded inputs / native selects themed to the app.
+// --- Interval stepper (− N +) ---
+.rb-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--extra-border-color);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.rb-step {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not([disabled]) {
+    background: var(--bg-lightest);
+  }
+
+  &[disabled] {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.rb-step-num {
+  width: 46px;
+  height: 38px;
+  border: none;
+  border-left: 1px solid var(--extra-border-color);
+  border-right: 1px solid var(--extra-border-color);
+  background: transparent;
+  color: var(--text-color);
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  -moz-appearance: textfield;
+  appearance: textfield;
+
+  &:focus {
+    outline: none;
+  }
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+// --- Segmented control (iOS/TickTick style: pill on a track) ---
+.rb-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 3px;
+  gap: 2px;
+  background: var(--bg-lightest, var(--extra-border-color));
+  border-radius: 11px;
+}
+
+.rb-seg-btn {
+  flex: 1 1 auto;
+  min-width: 56px;
+  padding: var(--s-half) var(--s);
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  font: inherit;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+
+  &:hover:not(.active) {
+    background: rgba(127, 127, 127, 0.12);
+  }
+
+  &.active {
+    background: var(--card-bg, #fff);
+    color: var(--c-primary);
+    font-weight: 600;
+    box-shadow: var(--whiteframe-shadow-2dp, 0 1px 3px rgba(0, 0, 0, 0.2));
+  }
+}
+
+// --- Inputs / native selects ---
 .rb-sel,
 .rb-num,
 .rb-text,
@@ -42,7 +138,7 @@
   color: var(--text-color);
   background: var(--bg, transparent);
   border: 1px solid var(--extra-border-color);
-  border-radius: 8px;
+  border-radius: 9px;
   font-size: 14px;
   font-family: inherit;
 
@@ -52,6 +148,18 @@
   }
 }
 
+// Native select themed with a custom chevron so it doesn't look raw.
+.rb-sel {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23888' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+
 .rb-num {
   width: 56px;
   text-align: center;
@@ -59,7 +167,7 @@
 }
 
 .rb-sel--wide {
-  min-width: 160px;
+  min-width: 200px;
 }
 
 .rb-text {
@@ -69,13 +177,12 @@
     font-family: monospace;
   }
 
-  // Sits inline next to a select within a row (e.g. the custom BYSETPOS input).
   &--inline {
     width: 110px;
   }
 }
 
-// Toggle chips for weekdays / months / day-of-month / segmented options.
+// --- Toggle chips (weekdays / months / day-of-month / segmented pills) ---
 .rb-toggles {
   display: flex;
   flex-wrap: wrap;
@@ -85,11 +192,14 @@
     max-width: 320px;
   }
 
-  // Calendar-style day-of-month grid (~7 per row).
   &--days {
-    max-width: 300px;
+    max-width: 320px;
     gap: var(--s-quarter, 4px);
   }
+}
+
+.rb-weekrow {
+  gap: var(--s-half);
 }
 
 .rb-tgl {
@@ -103,7 +213,7 @@
   color: var(--text-color);
   background: transparent;
   border: 1px solid var(--extra-border-color);
-  border-radius: 8px;
+  border-radius: 9px;
   font-size: 13px;
   cursor: pointer;
   transition:
@@ -123,20 +233,19 @@
   }
 }
 
-// Wide pills read as a segmented control (Ends, repeat-from, occurrence-which).
+// Wide pills read as a segmented option (occurrence-which, add row, etc).
 .rb-tgl--wide {
   min-width: auto;
   padding: 0 var(--s2);
   border-radius: 19px;
 }
 
-// Weekday letter chips render as circles (TickTick). Targets the single-letter
-// chips in weekday groups only — not the day-of-month grid, month grid, or the
-// wide segmented pills.
+// Weekday letter chips → circles (TickTick). Single-letter chips in weekday
+// groups only — not the day-of-month grid, month grid, or wide pills.
 .rb-toggles:not(.rb-toggles--days):not(.rb-toggles--months) .rb-tgl:not(.rb-tgl--wide) {
-  min-width: 36px;
-  width: 36px;
-  height: 36px;
+  min-width: 38px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border-radius: 50%;
 }
@@ -148,6 +257,13 @@
   height: 34px;
   padding: 0;
   font-size: 12px;
+}
+
+.rb-ends {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s);
 }
 
 .rb-hint {
