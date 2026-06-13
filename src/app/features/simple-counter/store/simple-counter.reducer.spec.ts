@@ -264,6 +264,45 @@ describe('SimpleCounterReducer', () => {
         expect(result.entities['counter1']!.countOnDay['2024-01-14']).toBe(5);
         expect(result.entities['counter1']!.countOnDay['2024-01-15']).toBe(10);
       });
+
+      it('should clamp negative values to 0', () => {
+        const counter = createCounter('counter1', { countOnDay: {} });
+        const existingState = createStateWithCounters([counter]);
+
+        const action = SimpleCounterActions.setSimpleCounterCounterToday({
+          id: 'counter1',
+          newVal: -5,
+          today: '2024-01-15',
+        });
+        const result = simpleCounterReducer(existingState, action);
+
+        expect(result.entities['counter1']!.countOnDay['2024-01-15']).toBe(0);
+      });
+
+      it('should leave 0 and positive values unchanged', () => {
+        const counter = createCounter('counter1', { countOnDay: {} });
+        const existingState = createStateWithCounters([counter]);
+
+        const zeroResult = simpleCounterReducer(
+          existingState,
+          SimpleCounterActions.setSimpleCounterCounterToday({
+            id: 'counter1',
+            newVal: 0,
+            today: '2024-01-15',
+          }),
+        );
+        expect(zeroResult.entities['counter1']!.countOnDay['2024-01-15']).toBe(0);
+
+        const posResult = simpleCounterReducer(
+          existingState,
+          SimpleCounterActions.setSimpleCounterCounterToday({
+            id: 'counter1',
+            newVal: 42,
+            today: '2024-01-15',
+          }),
+        );
+        expect(posResult.entities['counter1']!.countOnDay['2024-01-15']).toBe(42);
+      });
     });
 
     describe('setSimpleCounterCounterForDate', () => {
@@ -279,6 +318,20 @@ describe('SimpleCounterReducer', () => {
         const result = simpleCounterReducer(existingState, action);
 
         expect(result.entities['counter1']!.countOnDay['2024-01-10']).toBe(7);
+      });
+
+      it('should clamp negative values to 0', () => {
+        const counter = createCounter('counter1', { countOnDay: {} });
+        const existingState = createStateWithCounters([counter]);
+
+        const action = SimpleCounterActions.setSimpleCounterCounterForDate({
+          id: 'counter1',
+          date: '2024-01-10',
+          newVal: -7,
+        });
+        const result = simpleCounterReducer(existingState, action);
+
+        expect(result.entities['counter1']!.countOnDay['2024-01-10']).toBe(0);
       });
     });
   });
