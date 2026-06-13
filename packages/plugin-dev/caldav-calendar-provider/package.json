@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
-    "esbuild": "^0.25.11",
+    "esbuild": "^0.28.1",
     "jsdom": "^29.0.1",
     "typescript": "^5.8.3",
     "vitest": "^4.1.0"
