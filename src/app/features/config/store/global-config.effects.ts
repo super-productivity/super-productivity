@@ -75,25 +75,12 @@ export class GlobalConfigEffects {
         filter(({ sectionKey, sectionCfg }) => IS_ELECTRON && sectionKey === 'keyboard'),
         tap(({ sectionKey, sectionCfg }) => {
           let keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
-          // eslint-disable-next-line no-console
-          console.log('[Shortcut Debug] Original config:', keyboardCfg);
           if (IS_MAC) {
-            // eslint-disable-next-line no-console
-            console.log(
-              '[Shortcut Debug] Layout size:',
-              this._keyboardLayoutService.layout.size,
-            );
-            // eslint-disable-next-line no-console
-            console.log(
-              '[Shortcut Debug] Layout map:',
-              Array.from(this._keyboardLayoutService.layout.entries()),
-            );
+            // macOS globalShortcut maps by physical US-QWERTY position; see #8378
             keyboardCfg = mapKeyboardConfigToQwerty(
               keyboardCfg,
               this._keyboardLayoutService.layout,
             );
-            // eslint-disable-next-line no-console
-            console.log('[Shortcut Debug] Mapped config:', keyboardCfg);
           }
           window.ea.registerGlobalShortcuts(keyboardCfg);
         }),
@@ -113,6 +100,7 @@ export class GlobalConfigEffects {
           ).keyboard;
           let layout: KeyboardLayout = new Map();
           if (IS_MAC) {
+            // macOS globalShortcut maps by physical US-QWERTY position; see #8378
             layout = await this._keyboardLayoutService.layoutReady;
           }
           return { keyboardCfg, layout };
@@ -120,6 +108,7 @@ export class GlobalConfigEffects {
         tap(({ keyboardCfg, layout }) => {
           let cfg = keyboardCfg;
           if (IS_MAC) {
+            // macOS globalShortcut maps by physical US-QWERTY position; see #8378
             cfg = mapKeyboardConfigToQwerty(keyboardCfg, layout);
           }
           window.ea.registerGlobalShortcuts(cfg);
