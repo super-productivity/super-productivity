@@ -1,7 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardPanelComponent } from './board-panel.component';
-import { BoardPanelCfg, BoardPanelCfgTaskTypeFilter } from '../boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgTaskTypeFilter,
+  BoardPanelCfgDeadlineState,
+} from '../boards.model';
 import { TaskCopy } from '../../tasks/task.model';
+import { DateService } from '../../../core/date/date.service';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../../tasks/task.service';
 import { MatDialog } from '@angular/material/dialog';
@@ -697,6 +704,223 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
       fixture.detectChanges();
 
       expect(component.tagsToRemoveForInlineCreate()).toEqual([]);
+    });
+  });
+
+  describe('scheduledTimeframe and deadlineState filters', () => {
+    const mockTodayStr = '2026-06-14';
+    const mockStartOfNextDayDiffMs = 0;
+
+    let mockDateService: any;
+
+    const setupWithMockDateService = async (tasks: TaskCopy[]): Promise<void> => {
+      actions$ = new ReplaySubject(1);
+      mockDateService = {
+        getStartOfNextDayDiffMs: () => mockStartOfNextDayDiffMs,
+        todayStr: (d?: Date | number) => (d ? getDbDateStr(d) : mockTodayStr),
+        getLogicalTomorrowMs: () => new Date('2026-06-15T12:00:00Z').getTime(),
+      };
+
+      const storeMock = {
+        select: (selectorFn: any) => {
+          if (selectorFn === selectUnarchivedProjects)
+            return of([{ id: 'p1', backlogTaskIds: [] }]);
+          if (selectorFn === selectAllTasksInActiveProjects) return of(tasks);
+          return of([]);
+        },
+        dispatch: jasmine.createSpy('dispatch'),
+      };
+
+      await TestBed.configureTestingModule({
+        imports: [
+          BoardPanelComponent,
+          TranslateModule.forRoot({
+            loader: { provide: TranslateLoader, useClass: TranslateNoOpLoader },
+          }),
+        ],
+        providers: [
+          provideMockStore({}),
+          provideMockActions(() => actions$),
+          { provide: Store, useValue: storeMock },
+          { provide: TaskService, useValue: { currentTaskId: signal(null) } },
+          { provide: MatDialog, useValue: {} },
+          { provide: WorkContextService, useValue: {} },
+          { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+          { provide: DateService, useValue: mockDateService },
+          { provide: DateTimeFormatService, useValue: { currentLocale: () => 'de' } },
+        ],
+      })
+        .overrideComponent(PlannerTaskComponent, {
+          set: { template: '<div>Mock Task</div>', inputs: ['task'] },
+        })
+        .overrideComponent(AddTaskInlineComponent, {
+          set: { template: '<div>Mock Add Task</div>' },
+        })
+        .compileComponents();
+
+      fixture = TestBed.createComponent(BoardPanelComponent);
+      component = fixture.componentInstance;
+    };
+
+    it('filters scheduled tasks by TODAY timeframe', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-today', dueDay: '2026-06-14' }),
+        mkTask({ id: 't-tomorrow', dueDay: '2026-06-15' }),
+        mkTask({ id: 't-unscheduled' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2, // Scheduled
+        scheduledTimeframe: 'TODAY',
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['t-today']);
+    });
+
+    it('filters scheduled tasks by TOMORROW timeframe', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-today', dueDay: '2026-06-14' }),
+        mkTask({ id: 't-tomorrow', dueDay: '2026-06-15' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2,
+        scheduledTimeframe: 'TOMORROW',
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['t-tomorrow']);
+    });
+
+    it('filters scheduled tasks by NEXT_WEEK timeframe', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-today', dueDay: '2026-06-14' }),
+        mkTask({ id: 't-in-week', dueDay: '2026-06-20' }),
+        mkTask({ id: 't-out-of-week', dueDay: '2026-06-22' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2,
+        scheduledTimeframe: 'NEXT_WEEK',
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      const ids = component.tasks().map((t) => t.id);
+      expect(ids).toContain('t-today');
+      expect(ids).toContain('t-in-week');
+      expect(ids).not.toContain('t-out-of-week');
+    });
+
+    it('filters scheduled tasks by NEXT_DAYS timeframe', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-today', dueDay: '2026-06-14' }),
+        mkTask({ id: 't-in-range', dueDay: '2026-06-17' }),
+        mkTask({ id: 't-out-of-range', dueDay: '2026-06-19' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2,
+        scheduledTimeframe: 'NEXT_DAYS',
+        scheduledDaysVal: 4,
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      const ids = component.tasks().map((t) => t.id);
+      expect(ids).toContain('t-today');
+      expect(ids).toContain('t-in-range');
+      expect(ids).not.toContain('t-out-of-range');
+    });
+
+    it('filters scheduled tasks by CUSTOM_RANGE timeframe', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-before', dueDay: '2026-06-10' }),
+        mkTask({ id: 't-in-range', dueDay: '2026-06-15' }),
+        mkTask({ id: 't-after', dueDay: '2026-06-20' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2,
+        scheduledTimeframe: 'CUSTOM_RANGE',
+        scheduledCustomStart: '2026-06-12',
+        scheduledCustomEnd: '2026-06-17',
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      expect(component.tasks().map((t) => t.id)).toEqual(['t-in-range']);
+    });
+
+    it('filters by HasDeadline and NoDeadline states', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-deadline', deadlineDay: '2026-06-14' }),
+        mkTask({ id: 't-no-deadline' }),
+      ]);
+
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+        deadlineTimeframe: 'ALL',
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+      expect(component.tasks().map((t) => t.id)).toEqual(['t-deadline']);
+
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 1,
+        deadlineState: BoardPanelCfgDeadlineState.NoDeadline,
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+      expect(component.tasks().map((t) => t.id)).toEqual(['t-no-deadline']);
     });
   });
 });

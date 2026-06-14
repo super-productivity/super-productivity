@@ -10,6 +10,7 @@ import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import {
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
@@ -20,6 +21,8 @@ import {
   isAllProjects,
   rewriteTagIdsForPanel,
 } from '../boards.util';
+import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { select, Store } from '@ngrx/store';
 import {
   selectAllTasksInActiveProjects,
@@ -52,6 +55,88 @@ import {
   moveProjectTaskToRegularListAuto,
 } from '../../project/store/project.actions';
 
+const getTaskScheduledDateStr = (
+  task: TaskCopy,
+  startOfNextDayDiffMs: number,
+): string | null => {
+  if (task.dueWithTime) {
+    return getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs));
+  }
+  if (task.dueDay) {
+    return task.dueDay;
+  }
+  return null;
+};
+
+const getTaskDeadlineDateStr = (
+  task: TaskCopy,
+  startOfNextDayDiffMs: number,
+): string | null => {
+  if (task.deadlineWithTime) {
+    return getDbDateStr(new Date(task.deadlineWithTime - startOfNextDayDiffMs));
+  }
+  if (task.deadlineDay) {
+    return task.deadlineDay;
+  }
+  return null;
+};
+
+const getFutureLogicalDateStr = (days: number, startOfNextDayDiffMs: number): string => {
+  const d = new Date(Date.now() - startOfNextDayDiffMs);
+  d.setDate(d.getDate() + days);
+  return getDbDateStr(d);
+};
+
+const isDateInTimeframe = (
+  dateStr: string,
+  timeframe: string | undefined,
+  daysVal: number | undefined,
+  customStart: string | undefined,
+  customEnd: string | undefined,
+  todayStr: string,
+  tomorrowStr: string,
+  startOfNextDayDiffMs: number,
+): boolean => {
+  if (!timeframe || timeframe === 'ALL') {
+    return true;
+  }
+  if (timeframe === 'TODAY') {
+    return dateStr === todayStr;
+  }
+  if (timeframe === 'TOMORROW') {
+    return dateStr === tomorrowStr;
+  }
+  if (timeframe === 'NEXT_WEEK') {
+    const start = todayStr;
+    const end = getFutureLogicalDateStr(7, startOfNextDayDiffMs);
+    return dateStr >= start && dateStr <= end;
+  }
+  if (timeframe === 'NEXT_MONTH') {
+    const start = todayStr;
+    const end = getFutureLogicalDateStr(30, startOfNextDayDiffMs);
+    return dateStr >= start && dateStr <= end;
+  }
+  if (timeframe === 'NEXT_DAYS') {
+    const start = todayStr;
+    const limit = daysVal ?? 7;
+    const end = getFutureLogicalDateStr(limit, startOfNextDayDiffMs);
+    return dateStr >= start && dateStr <= end;
+  }
+  if (timeframe === 'CUSTOM_RANGE') {
+    if (customStart && customEnd) {
+      return dateStr >= customStart && dateStr <= customEnd;
+    }
+    if (customStart) {
+      return dateStr >= customStart;
+    }
+    if (customEnd) {
+      return dateStr <= customEnd;
+    }
+    return true;
+  }
+  return true;
+};
+
 @Component({
   selector: 'board-panel',
   standalone: true,
@@ -81,6 +166,7 @@ export class BoardPanelComponent {
   store = inject(Store);
   taskService = inject(TaskService);
   _matDialog = inject(MatDialog);
+  _dateService = inject(DateService);
 
   allTasks$ = this.store.select(selectAllTasksInActiveProjects);
   allTasks = toSignal(this.allTasks$, {
@@ -157,6 +243,9 @@ export class BoardPanelComponent {
     const panelCfg = this.panelCfg();
     const orderedTasks: TaskCopy[] = [];
     const nonOrderedTasks: TaskCopy[] = [];
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+    const todayStr = this._dateService.todayStr();
+    const tomorrowStr = getDbDateStr(new Date(this._dateService.getLogicalTomorrowMs()));
 
     const allFilteredTasks = this.allTasks().filter((task) => {
       let isTaskIncluded = true;
@@ -197,11 +286,50 @@ export class BoardPanelComponent {
       }
 
       if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
-        isTaskIncluded = isTaskIncluded && !!(task.dueWithTime || task.dueDay);
+        const schedDateStr = getTaskScheduledDateStr(task, startOfNextDayDiffMs);
+        if (!schedDateStr) {
+          isTaskIncluded = false;
+        } else {
+          isTaskIncluded =
+            isTaskIncluded &&
+            isDateInTimeframe(
+              schedDateStr,
+              panelCfg.scheduledTimeframe,
+              panelCfg.scheduledDaysVal,
+              panelCfg.scheduledCustomStart,
+              panelCfg.scheduledCustomEnd,
+              todayStr,
+              tomorrowStr,
+              startOfNextDayDiffMs,
+            );
+        }
       }
 
       if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
         isTaskIncluded = isTaskIncluded && !task.dueWithTime && !task.dueDay;
+      }
+
+      const hasDeadline = !!(task.deadlineDay || task.deadlineWithTime);
+      if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
+        const dlDateStr = getTaskDeadlineDateStr(task, startOfNextDayDiffMs);
+        if (!dlDateStr) {
+          isTaskIncluded = false;
+        } else {
+          isTaskIncluded =
+            isTaskIncluded &&
+            isDateInTimeframe(
+              dlDateStr,
+              panelCfg.deadlineTimeframe,
+              panelCfg.deadlineDaysVal,
+              panelCfg.deadlineCustomStart,
+              panelCfg.deadlineCustomEnd,
+              todayStr,
+              tomorrowStr,
+              startOfNextDayDiffMs,
+            );
+        }
+      } else if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
+        isTaskIncluded = isTaskIncluded && !hasDeadline;
       }
 
       if (panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog) {
