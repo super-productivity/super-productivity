@@ -53,6 +53,23 @@ const failOnceDb = (db: SqliteDb, pattern: RegExp): SqliteDb => {
   };
 };
 
+/** Add a real promise-chain serializer to a SqliteDb (what CapacitorSqliteDb does). */
+const withMutex = (db: SqliteDb): SqliteDb => {
+  let chain: Promise<unknown> = Promise.resolve();
+  return {
+    run: (sql, params) => db.run(sql, params),
+    query: (sql, params) => db.query(sql, params),
+    runExclusive: <T>(fn: () => Promise<T>): Promise<T> => {
+      const result = chain.then(fn, fn);
+      chain = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
+    },
+  };
+};
+
 describe('native-sqlite-backend', () => {
   describe('shouldUseNativeSqliteOpLogBackend', () => {
     afterEach(() => localStorage.removeItem(NATIVE_SQLITE_OP_LOG_FLAG_KEY));
@@ -209,6 +226,20 @@ describe('native-sqlite-backend', () => {
         lastSeq: jasmine.any(Number),
         copiedOps: 1,
       });
+    });
+
+    it('runs the full bootstrap through a serialized (runExclusive) connection', async () => {
+      // Exercises the meta-table + adapter paths under the real serializer, the
+      // way CapacitorSqliteDb drives them on device.
+      await src.add(STORE_NAMES.OPS, makeOpEntry('a'));
+      const db = withMutex(await createSqlJsDb());
+
+      await bootstrapNativeOpLogBackend(db);
+      expect(await new SqliteOpLogAdapter(db).count(STORE_NAMES.OPS)).toBe(1);
+
+      // A second pass short-circuits (marker read serialized too).
+      await bootstrapNativeOpLogBackend(db);
+      expect(await new SqliteOpLogAdapter(db).count(STORE_NAMES.OPS)).toBe(1);
     });
   });
 

@@ -68,23 +68,39 @@ export const shouldUseNativeSqliteOpLogBackend = (
 const META_TABLE = 'sup_op_log_meta';
 const MIGRATION_DONE_KEY = 'idb_to_sqlite_migrated_at';
 
+/**
+ * Run a raw meta-table statement through the connection serializer when present.
+ * The meta statements are bookkeeping outside the op-log schema, so they don't go
+ * through the adapter (which is what normally routes ops through `runExclusive`).
+ * Wrapping them here keeps the invariant "every statement on the shared
+ * connection is serialized" true by construction — not merely by the bootstrap's
+ * sequential awaiting — so it stays safe if concurrency is ever added around it.
+ */
+const metaExclusive = <T>(db: SqliteDb, fn: () => Promise<T>): Promise<T> =>
+  db.runExclusive ? db.runExclusive(fn) : fn();
+
 const ensureMetaTable = (db: SqliteDb): Promise<unknown> =>
-  db.run(
-    `CREATE TABLE IF NOT EXISTS ${META_TABLE} (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+  metaExclusive(db, () =>
+    db.run(
+      `CREATE TABLE IF NOT EXISTS ${META_TABLE} (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+    ),
   );
 
-const isMigrationComplete = async (db: SqliteDb): Promise<boolean> => {
-  const rows = await db.query(`SELECT value FROM ${META_TABLE} WHERE key = ?`, [
-    MIGRATION_DONE_KEY,
-  ]);
-  return rows.length > 0;
-};
+const isMigrationComplete = (db: SqliteDb): Promise<boolean> =>
+  metaExclusive(db, async () => {
+    const rows = await db.query(`SELECT value FROM ${META_TABLE} WHERE key = ?`, [
+      MIGRATION_DONE_KEY,
+    ]);
+    return rows.length > 0;
+  });
 
 const markMigrationComplete = (db: SqliteDb): Promise<unknown> =>
-  db.run(`INSERT OR REPLACE INTO ${META_TABLE} (key, value) VALUES (?, ?)`, [
-    MIGRATION_DONE_KEY,
-    new Date().toISOString(),
-  ]);
+  metaExclusive(db, () =>
+    db.run(`INSERT OR REPLACE INTO ${META_TABLE} (key, value) VALUES (?, ?)`, [
+      MIGRATION_DONE_KEY,
+      new Date().toISOString(),
+    ]),
+  );
 
 /**
  * Best-effort check for a legacy `SUP_OPS` IndexedDB so we don't materialise an
