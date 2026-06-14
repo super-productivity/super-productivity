@@ -4,6 +4,7 @@ import {
   BoardPanelCfg,
   BoardPanelCfgTaskTypeFilter,
   BoardPanelCfgDeadlineState,
+  BoardPanelCfgScheduledState,
 } from '../boards.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { DateService } from '../../../core/date/date.service';
@@ -23,8 +24,12 @@ import { provideMockActions } from '@ngrx/effects/testing';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
 import { selectUnarchivedProjects } from '../../project/store/project.selectors';
-import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
+import {
+  selectAllTasksInActiveProjects,
+  selectTaskById,
+} from '../../tasks/store/task.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
+import { PlannerActions } from '../../planner/store/planner.actions';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
 
@@ -931,6 +936,10 @@ describe('BoardPanelComponent - drop()', () => {
   let actions$: ReplaySubject<any>;
   let dispatchSpy: jasmine.Spy;
   let updateTagsSpy: jasmine.Spy;
+  let dialogOpenSpy: jasmine.Spy;
+  let mockDateService: any;
+  const mockTodayStr = '2026-06-14';
+  const mockStartOfNextDayDiffMs = 0;
 
   const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
     ({
@@ -973,12 +982,23 @@ describe('BoardPanelComponent - drop()', () => {
     actions$ = new ReplaySubject(1);
     dispatchSpy = jasmine.createSpy('dispatch');
     updateTagsSpy = jasmine.createSpy('updateTags');
+    dialogOpenSpy = jasmine.createSpy('open');
+
+    mockDateService = {
+      getStartOfNextDayDiffMs: () => mockStartOfNextDayDiffMs,
+      todayStr: (d?: Date | number) => (d ? getDbDateStr(d) : mockTodayStr),
+      getLogicalTomorrowMs: () => new Date('2026-06-15T12:00:00Z').getTime(),
+    };
 
     const storeMock = {
-      select: (selectorFn: any) => {
+      select: (selectorFn: any, props?: any) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
         if (selectorFn === selectAllTasksInActiveProjects) return of(tasks);
+        if (selectorFn === selectTaskById && props) {
+          const t = tasks.find((x) => x.id === props.id);
+          return of(t);
+        }
         return of([]);
       },
       pipe: () => ({ toPromise: () => Promise.resolve(undefined) }),
@@ -1003,9 +1023,11 @@ describe('BoardPanelComponent - drop()', () => {
             updateTags: updateTagsSpy,
           },
         },
-        { provide: MatDialog, useValue: {} },
+        { provide: MatDialog, useValue: { open: dialogOpenSpy } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+        { provide: DateService, useValue: mockDateService },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'de' } },
       ],
     })
       .overrideComponent(PlannerTaskComponent, {
@@ -1112,5 +1134,203 @@ describe('BoardPanelComponent - drop()', () => {
     const [taskArg, tagsArg] = updateTagsSpy.calls.mostRecent().args;
     expect(taskArg).toBe(task);
     expect(tagsArg).toEqual(['other', 'need']);
+  });
+
+  it('cross-panel drop on scheduled TODAY panel replans task for today', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'TODAY',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-14',
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled TOMORROW panel replans task for tomorrow', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'TOMORROW',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-15',
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled NEXT_WEEK panel plans for today if not scheduled', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'NEXT_WEEK',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-14',
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled NEXT_WEEK panel plans for closest bound if scheduled outside', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], dueDay: '2026-06-30' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'NEXT_WEEK',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-21', // today + 7 days
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled CUSTOM_RANGE panel plans for closest date (before custom start)', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], dueDay: '2026-06-10' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'CUSTOM_RANGE',
+      scheduledCustomStart: '2026-06-20',
+      scheduledCustomEnd: '2026-06-25',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-20',
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled CUSTOM_RANGE panel plans for closest date (after custom end)', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], dueDay: '2026-06-30' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'CUSTOM_RANGE',
+      scheduledCustomStart: '2026-06-20',
+      scheduledCustomEnd: '2026-06-25',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-25',
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled ALL panel opens scheduling dialog if not scheduled', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'ALL',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dialogOpenSpy).toHaveBeenCalled();
+    expect(dispatchSpy).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: PlannerActions.planTaskForDay.type }),
+    );
   });
 });

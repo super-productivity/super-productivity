@@ -44,6 +44,7 @@ import { MatIconButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
+import { PlannerActions } from '../../planner/store/planner.actions';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { first, take } from 'rxjs/operators';
 import { dragDelayForTouch } from '../../../util/input-intent';
@@ -476,8 +477,87 @@ export class BoardPanelComponent {
         .select(selectTaskById, { id: taskId })
         .pipe(first())
         .toPromise();
-      if (!task.dueDay && !task.dueWithTime) {
-        this.scheduleTask(task);
+      if (!task) {
+        return;
+      }
+
+      const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+      const currentVal = getTaskScheduledDateStr(task, startOfNextDayDiffMs);
+      const todayStr = this._dateService.todayStr();
+      const tomorrowStr = getDbDateStr(
+        new Date(this._dateService.getLogicalTomorrowMs()),
+      );
+
+      const isAlreadyInTimeframe =
+        currentVal !== null &&
+        isDateInTimeframe(
+          currentVal,
+          panelCfg.scheduledTimeframe,
+          panelCfg.scheduledDaysVal,
+          panelCfg.scheduledCustomStart,
+          panelCfg.scheduledCustomEnd,
+          todayStr,
+          tomorrowStr,
+          startOfNextDayDiffMs,
+        );
+
+      if (!isAlreadyInTimeframe) {
+        const timeframe = panelCfg.scheduledTimeframe;
+        if (!timeframe || timeframe === 'ALL') {
+          if (!currentVal) {
+            this.scheduleTask(task);
+          }
+        } else {
+          let start: string | undefined;
+          let end: string | undefined;
+
+          if (timeframe === 'TODAY') {
+            start = todayStr;
+            end = todayStr;
+          } else if (timeframe === 'TOMORROW') {
+            start = tomorrowStr;
+            end = tomorrowStr;
+          } else if (timeframe === 'NEXT_WEEK') {
+            start = todayStr;
+            end = getFutureLogicalDateStr(7, startOfNextDayDiffMs);
+          } else if (timeframe === 'NEXT_MONTH') {
+            start = todayStr;
+            end = getFutureLogicalDateStr(30, startOfNextDayDiffMs);
+          } else if (timeframe === 'NEXT_DAYS') {
+            start = todayStr;
+            const limit = panelCfg.scheduledDaysVal ?? 7;
+            end = getFutureLogicalDateStr(limit, startOfNextDayDiffMs);
+          } else if (timeframe === 'CUSTOM_RANGE') {
+            start = panelCfg.scheduledCustomStart;
+            end = panelCfg.scheduledCustomEnd;
+          }
+
+          const refDate = currentVal ?? todayStr;
+          let closestDate = refDate;
+
+          if (start && end) {
+            if (refDate < start) {
+              closestDate = start;
+            } else if (refDate > end) {
+              closestDate = end;
+            }
+          } else if (start) {
+            if (refDate < start) {
+              closestDate = start;
+            }
+          } else if (end) {
+            if (refDate > end) {
+              closestDate = end;
+            }
+          }
+
+          this.store.dispatch(
+            PlannerActions.planTaskForDay({
+              task,
+              day: closestDate,
+            }),
+          );
+        }
       }
     }
     if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
