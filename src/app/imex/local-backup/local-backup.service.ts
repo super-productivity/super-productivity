@@ -16,6 +16,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
 import {
+  backupStrHasSyncEnabled,
   countAllTasks,
   countAllTasksInBackupStr,
   isUsableBackupStr,
@@ -168,23 +169,24 @@ export class LocalBackupService {
       return;
     }
 
-    // MOBILE (Android / iOS) — recovery path. The only realistic way to reach
-    // this branch is "no state cache, but a durable on-device backup survived":
-    // in practice WebView IndexedDB eviction (#7901/#7892). A deliberate in-app
-    // "delete all data" leaves a valid (empty) state cache so it never lands here;
-    // uninstall / "clear storage" drops the SQLite backup too. The only
-    // alternative to restoring is a blank app, so auto-restore a backup that holds
-    // real user data instead of gating recovery behind a confirm dialog users
-    // routinely dismiss — thereby losing their only copy. Stay conservative:
-    // selectBestBackupStr can still hand back a non-empty corrupt/empty blob as a
-    // last resort, so only auto-restore a *usable* backup and fall back to the
-    // informed prompt for anything that isn't clearly restorable.
+    // MOBILE (Android / iOS) — recovery path. StartupService only calls this when
+    // there is no state cache AND the op-log is empty (see _initBackups), i.e. a
+    // genuinely blank store — in practice WebView IndexedDB eviction (#7901/#7892)
+    // or a fresh install. Because the op-log is empty, the concurrently-running
+    // hydrator has nothing to replay, so a destructive import cannot race it.
+    //
+    // Auto-restore WITHOUT a prompt only for a *usable* backup that had *no sync
+    // configured*. Restoring a synced backup resets `lastServerSeq` and writes a
+    // clean-slate BACKUP_IMPORT, which can silently drop other devices' concurrent
+    // work — so a synced backup must go through the informed prompt and let the
+    // user decide (they may prefer to re-pull from the server). Corrupt /
+    // data-less / synced backups all fall through to the prompt below.
     const backupData = await this._loadBestMobileBackupStr();
     if (!backupData) {
       // Nothing usable to restore — stay silent rather than prompt for nothing.
       return;
     }
-    if (isUsableBackupStr(backupData)) {
+    if (isUsableBackupStr(backupData) && !backupStrHasSyncEnabled(backupData)) {
       Log.log('mobile backupData auto-restored, length: ' + backupData.length);
       const didImport = await this._importBackup(backupData);
       if (didImport) {
@@ -200,8 +202,8 @@ export class LocalBackupService {
       }
       return;
     }
-    // Non-empty but not clearly usable (corrupt / data-less): don't silently act
-    // — surface the informed prompt so the user decides.
+    // Corrupt, data-less, or sync-configured backup: don't silently act — surface
+    // the informed prompt so the user decides.
     if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
       Log.log('mobile backupData loaded, length: ' + backupData.length);
       await this._importBackup(backupData);

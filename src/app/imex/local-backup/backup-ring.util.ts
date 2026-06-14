@@ -108,6 +108,37 @@ export const isUsableBackupStr = (str: string | null | undefined): boolean => {
 };
 
 /**
+ * True if the backup blob shows the user had sync configured (sync enabled or a
+ * provider set). Used to decide whether a startup restore may proceed *silently*:
+ * restoring a synced backup re-baselines the sync account (it resets
+ * `lastServerSeq` and writes a clean-slate `BACKUP_IMPORT`), which can drop other
+ * devices' concurrent work — so a synced backup must go through the informed
+ * confirm prompt rather than auto-restore. Conservative: any hint of sync counts.
+ * Corrupt/unparseable blobs return false (they never auto-restore anyway —
+ * `isUsableBackupStr` gates that). See issue #7901.
+ */
+export const backupStrHasSyncEnabled = (str: string | null | undefined): boolean => {
+  if (!str) {
+    return false;
+  }
+  try {
+    const s = JSON.parse(str) as {
+      globalConfig?: { sync?: { isEnabled?: unknown; syncProvider?: unknown } };
+    };
+    const sync = s.globalConfig?.sync;
+    if (!sync) {
+      return false;
+    }
+    return (
+      sync.isEnabled === true ||
+      (sync.syncProvider !== null && sync.syncProvider !== undefined)
+    );
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Picks the newest usable backup from the two-generation ring: the primary
  * (current) slot first, then the promoted previous generation. If neither slot
  * is usable, falls back to whichever raw blob exists so the caller can still

@@ -838,6 +838,66 @@ describe('LocalBackupService', () => {
       expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
     });
 
+    it('does NOT auto-restore a data-less (valid JSON) backup — falls back to prompt', async () => {
+      setAndroidMode();
+      spyOn(service, 'loadBackupAndroid').and.resolveTo(
+        JSON.stringify({
+          task: { ids: [], entities: {} },
+          project: { ids: [], entities: {} },
+          tag: { ids: [], entities: {} },
+          note: { ids: [], entities: {} },
+        }),
+      );
+      (window.confirm as jasmine.Spy).and.returnValue(false);
+
+      await service.askForFileStoreBackupIfAvailable();
+
+      // isUsableBackupStr is false → never silently imported.
+      expect(window.confirm).toHaveBeenCalled();
+      expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.GCF.AUTO_BACKUPS.S_AUTO_RESTORED }),
+      );
+    });
+
+    it('does NOT auto-restore a SYNC-configured backup — falls back to prompt (#7901)', async () => {
+      setAndroidMode();
+      // Usable data, but the backup shows sync was enabled: auto-restoring would
+      // re-baseline the sync account and could drop other devices' work, so it
+      // must require explicit confirmation.
+      spyOn(service, 'loadBackupAndroid').and.resolveTo(
+        JSON.stringify({
+          task: { ids: ['task1'], entities: {} },
+          project: { ids: ['project1'], entities: {} },
+          globalConfig: { sync: { isEnabled: true, syncProvider: 'WebDAV' } },
+        }),
+      );
+      (window.confirm as jasmine.Spy).and.returnValue(false);
+
+      await service.askForFileStoreBackupIfAvailable();
+
+      expect(window.confirm).toHaveBeenCalled();
+      expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.GCF.AUTO_BACKUPS.S_AUTO_RESTORED }),
+      );
+    });
+
+    it('auto-restores a usable backup whose sync is explicitly disabled', async () => {
+      setAndroidMode();
+      spyOn(service, 'loadBackupAndroid').and.resolveTo(
+        JSON.stringify({
+          task: { ids: ['task1'], entities: {} },
+          globalConfig: { sync: { isEnabled: false, syncProvider: null } },
+        }),
+      );
+
+      await service.askForFileStoreBackupIfAvailable();
+
+      expect(window.confirm).not.toHaveBeenCalled();
+      expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalled();
+    });
+
     it('does nothing (no prompt, no import) when no backup exists', async () => {
       setAndroidMode();
       spyOn(service, 'loadBackupAndroid').and.resolveTo('');
