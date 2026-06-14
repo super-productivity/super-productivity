@@ -240,6 +240,29 @@
     </ng-container>
   </task-detail-item>
 
+  <task-detail-item
+    (collapseParent)="collapseParent()"
+    (keyPress)="onItemKeyPress($event)"
+    [expanded]="isExpandedCommentsPanel() && !isDialogMode()"
+    [type]="'panel'"
+  >
+    <ng-container panel-header>
+      @if (commentCount() > 0) {
+        <mat-icon>comment</mat-icon>
+      } @else {
+        <mat-icon>add_comment</mat-icon>
+      }
+      <span>{{
+        T.F.TASK.ADDITIONAL_INFO.COMMENTS | translate: { nr: commentCount() }
+      }}</span>
+    </ng-container>
+    <ng-container panel-content>
+      <div class="panel-content-wrapper">
+        <task-comments [task]="task()"></task-comments>
+      </div>
+    </ng-container>
+  </task-detail-item>
+
   @if (hasAttachments()) {
     <task-detail-item
       #attachmentPanelElRef

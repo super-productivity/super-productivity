@@ -3,6 +3,11 @@ import legacyData from '../../fixtures/legacy-full-migration-backup.json';
 import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
 import { skipOnboardingForE2E } from '../../utils/waits';
 
+const MIGRATED_PROJECT_ID = 'TEST_PROJECT';
+const MIGRATED_PROJECT_TITLE = 'Migration Test Project';
+const MIGRATED_PARENT_TASK_ID = 'parent-task-1';
+const MIGRATED_PARENT_TASK_TITLE = 'Legacy Migration - Parent Task With Subtasks';
+
 /**
  * Legacy Data Migration E2E Tests
  *
@@ -127,6 +132,22 @@ const readMigratedArchive = async (
       request.onerror = () => reject(request.error);
     });
   }, archiveType);
+};
+
+/**
+ * Wait until a migrated task is rendered anywhere inside <main>.
+ * Scopes to main (not the first task-list) so overdue/section/group lists are included.
+ */
+const waitForMigratedTaskInMain = async (
+  page: Page,
+  taskId: string,
+  timeout = 30000,
+): Promise<void> => {
+  await page.waitForFunction(
+    (id) => !!document.querySelector(`main task[data-task-id="${id}"]`),
+    taskId,
+    { timeout },
+  );
 };
 
 test.describe('@migration Legacy Data Migration', () => {
@@ -328,37 +349,26 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // STEP 8: Verify UI shows migrated data
       // ========================================================================
-      // Navigate to the test project
-      await page.goto('/#/project/TEST_PROJECT');
-      await page.waitForLoadState('networkidle').catch(() => {});
-
-      // page.goto only changes the URL hash, so the SPA switches work-context
-      // client-side (load the project's tasks, recompute selectors, re-render)
-      // while the previous view's task-list lingers in the DOM. Gate on the
-      // switch actually landing — the active project's title rendering in <main>
-      // (the main-header page-title), as projectPage.navigateToProjectByName does
-      // — so the assertions below test THIS project's render instead of racing a
-      // stale one. Without this gate the task-title check alone carries the wait
-      // for the context switch, which under heavy parallel load can outlast its
-      // budget (the original flake).
-      await expect(page.locator('main')).toContainText('Migration Test Project', {
+      // Must include /tasks — project/:id alone does not mount the task work-view.
+      await page.goto(`/#/project/${MIGRATED_PROJECT_ID}/tasks`);
+      await page.waitForURL(new RegExp(`/#/project/${MIGRATED_PROJECT_ID}/tasks`), {
         timeout: 20000,
       });
+      await page.waitForLoadState('networkidle').catch(() => {});
 
-      // Wait for task list to appear
-      await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
-
-      // Verify tasks are visible in UI
-      const taskElements = page.locator('task');
-      const taskCount = await taskElements.count();
-      expect(taskCount).toBeGreaterThan(0);
-
-      // Verify parent task title is visible
-      await expect(
-        page.locator('task-title').filter({ hasText: 'Parent Task' }),
-      ).toBeVisible({
-        timeout: 10000,
+      await expect(page.locator('main')).toContainText(MIGRATED_PROJECT_TITLE, {
+        timeout: 20000,
       });
+      await page.waitForSelector('main task-list', {
+        state: 'visible',
+        timeout: 15000,
+      });
+
+      await waitForMigratedTaskInMain(page, MIGRATED_PARENT_TASK_ID);
+
+      await expect(
+        page.locator(`main task[data-task-id="${MIGRATED_PARENT_TASK_ID}"] task-title`),
+      ).toContainText(MIGRATED_PARENT_TASK_TITLE);
 
       // Verify tag exists in sidebar
       const sideNav = page.locator('magic-side-nav');
@@ -367,7 +377,7 @@ test.describe('@migration Legacy Data Migration', () => {
       });
 
       // Verify project exists in sidebar
-      await expect(sideNav.getByText('Migration Test Project')).toBeVisible({
+      await expect(sideNav.getByText(MIGRATED_PROJECT_TITLE)).toBeVisible({
         timeout: 10000,
       });
     } finally {

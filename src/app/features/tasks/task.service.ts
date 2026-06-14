@@ -104,6 +104,11 @@ import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
+import {
+  appendTaskComment,
+  removeTaskCommentFromList,
+  updateTaskCommentInList,
+} from './task-comments/task-comment.util';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 
@@ -489,6 +494,30 @@ export class TaskService {
         task: { id, changes: changedFields },
       }),
     );
+  }
+
+  /** Appends a timestamped comment and persists via updateTask (sync/op-log). */
+  addComment(task: Task, body: string): void {
+    const comments = appendTaskComment(task.comments, body);
+    if (!comments) {
+      return;
+    }
+    this.update(task.id, { comments });
+  }
+
+  /** Updates comment body and sets updated timestamp; dispatches updateTask. */
+  updateComment(task: Task, commentId: string, body: string): void {
+    const comments = updateTaskCommentInList(task.comments || [], commentId, body);
+    if (!comments) {
+      return;
+    }
+    this.update(task.id, { comments });
+  }
+
+  /** Removes a comment; clears the field when the last comment is deleted. */
+  deleteComment(task: Task, commentId: string): void {
+    const comments = removeTaskCommentFromList(task.comments || [], commentId);
+    this.update(task.id, { comments });
   }
 
   updateTags(task: Task, newTagIds: string[]): void {

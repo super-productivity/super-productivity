@@ -70,6 +70,7 @@ import { MatProgressBar } from '@angular/material/progress-bar';
 import { IssueContentComponent } from '../../issue/issue-content/issue-content.component';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-list/task-attachment-list.component';
+import { TaskCommentsComponent } from '../task-comments/task-comments.component';
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
 import { DialogSelectDateTimeComponent } from '../dialog-select-date-time/dialog-select-date-time.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -108,6 +109,7 @@ import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model'
     IssueContentComponent,
     InlineMarkdownComponent,
     TaskAttachmentListComponent,
+    TaskCommentsComponent,
     TagEditComponent,
     LocaleDatePipe,
     LocalDateStrPipe,
@@ -157,6 +159,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     isFocusNotes: signal(false),
     isDragOver: signal(false),
     isExpandedAttachmentPanel: signal(!IS_MOBILE),
+    isExpandedCommentsPanel: signal(!IS_MOBILE),
   };
 
   // Observable conversions
@@ -314,6 +317,15 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     return IS_MOBILE
       ? this.isMarkdownChecklist()
       : !!task.notes || (!task.issueId && !task.attachments?.length);
+  });
+
+  commentCount = computed(() => this.task().comments?.length || 0);
+
+  isExpandedCommentsPanel = computed(() => {
+    if (this.commentCount() > 0) {
+      return true;
+    }
+    return IS_MOBILE ? false : this.panelState.isExpandedCommentsPanel();
   });
 
   // Task-based computed signals

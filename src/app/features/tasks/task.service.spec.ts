@@ -867,6 +867,74 @@ describe('TaskService', () => {
     });
   });
 
+  describe('task comments', () => {
+    beforeEach(() => {
+      (store.dispatch as jasmine.Spy).calls.reset();
+    });
+
+    it('should add a comment via updateTask with nanoid id and created timestamp', () => {
+      const task = createMockTask('task-1');
+      service.addComment(task, '  Called provider  ');
+
+      expect(store.dispatch).toHaveBeenCalled();
+      const action = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
+      expect(action.type).toBe(TaskSharedActions.updateTask.type);
+      expect(action.task.id).toBe('task-1');
+      const comments = action.task.changes.comments;
+      expect(comments.length).toBe(1);
+      expect(comments[0].body).toBe('Called provider');
+      expect(comments[0].id).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(comments[0].created).toEqual(jasmine.any(Number));
+    });
+
+    it('should not add a comment when body is empty', () => {
+      service.addComment(createMockTask('task-1'), '   ');
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should update a comment immutably', () => {
+      const task = createMockTask('task-1', {
+        comments: [{ id: 'cmt-1', body: 'Old', created: 1000 }],
+      });
+      service.updateComment(task, 'cmt-1', 'New body');
+
+      const action = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
+      const updated = action.task.changes.comments[0];
+      expect(updated.id).toBe('cmt-1');
+      expect(updated.body).toBe('New body');
+      expect(updated.created).toBe(1000);
+      expect(updated.updated).toEqual(jasmine.any(Number));
+    });
+
+    it('should delete a comment and clear comments when last is removed', () => {
+      const task = createMockTask('task-1', {
+        comments: [{ id: 'cmt-1', body: 'Only', created: 1000 }],
+      });
+      service.deleteComment(task, 'cmt-1');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { comments: undefined } },
+        }),
+      );
+    });
+
+    it('should keep remaining comments after delete', () => {
+      const task = createMockTask('task-1', {
+        comments: [
+          { id: 'cmt-1', body: 'One', created: 1000 },
+          { id: 'cmt-2', body: 'Two', created: 2000 },
+        ],
+      });
+      service.deleteComment(task, 'cmt-1');
+
+      const action = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0];
+      expect(action.task.changes.comments).toEqual([
+        { id: 'cmt-2', body: 'Two', created: 2000 },
+      ]);
+    });
+  });
+
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
 

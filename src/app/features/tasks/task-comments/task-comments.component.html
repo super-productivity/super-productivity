@@ -1,0 +1,88 @@
+<div class="task-comments">
+  @if (!hasComments() && !isDraftMode()) {
+    <p class="comment-empty-hint">
+      {{ T.F.TASK.ADDITIONAL_INFO.COMMENT_EMPTY_HINT | translate }}
+    </p>
+  }
+
+  <ul class="comment-list">
+    @for (comment of sortedComments(); track comment.id) {
+      <li class="comment-item">
+        @if (isEditing(comment.id)) {
+          <ng-container *ngTemplateOutlet="commentDraftEditor"></ng-container>
+        } @else {
+          <div class="comment-meta">
+            <span class="comment-date">{{ comment.created | localeDate: 'short' }}</span>
+            @if (wasEdited(comment)) {
+              <span class="comment-edited">{{
+                T.F.TASK.ADDITIONAL_INFO.COMMENT_EDITED | translate
+              }}</span>
+            }
+          </div>
+          <p class="comment-body">{{ comment.body }}</p>
+          <div class="comment-actions">
+            <button
+              type="button"
+              mat-icon-button
+              (click)="startEdit(comment)"
+              [attr.aria-label]="T.G.EDIT | translate"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button
+              type="button"
+              mat-icon-button
+              (click)="deleteComment(comment.id)"
+              [attr.aria-label]="T.G.DELETE | translate"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+
+  @if (isAdding()) {
+    <ng-container *ngTemplateOutlet="commentDraftEditor"></ng-container>
+  } @else if (showAddButton()) {
+    <button
+      type="button"
+      class="add-comment-btn"
+      (click)="startAdd()"
+    >
+      <mat-icon>add</mat-icon>
+      <span>{{ T.F.TASK.ADDITIONAL_INFO.ADD_COMMENT | translate }}</span>
+    </button>
+  }
+</div>
+
+<ng-template #commentDraftEditor>
+  <textarea
+    class="comment-input"
+    [value]="draftText()"
+    (input)="onDraftInput($any($event.target).value)"
+    (keydown)="onDraftKeydown($event)"
+    [placeholder]="T.F.TASK.ADDITIONAL_INFO.COMMENT_PLACEHOLDER | translate"
+    rows="3"
+  ></textarea>
+  <div class="comment-actions comment-actions--visible">
+    <button
+      type="button"
+      mat-icon-button
+      (click)="saveDraft()"
+      [disabled]="!canSaveDraft()"
+      [attr.aria-label]="T.G.SAVE | translate"
+    >
+      <mat-icon>check</mat-icon>
+    </button>
+    <button
+      type="button"
+      mat-icon-button
+      (click)="cancelEdit()"
+      [attr.aria-label]="T.G.CANCEL | translate"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+</ng-template>
