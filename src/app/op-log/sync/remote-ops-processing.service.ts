@@ -464,7 +464,6 @@ export class RemoteOpsProcessingService {
           msg: T.F.SYNC.S.PARTIAL_APPLY_FAILURE,
         });
 
-        // Re-throw if it's a SyncStateCorruptedError, otherwise wrap it.
         // The deferred-actions flush in the finally below runs before the
         // throw propagates.
         throw result.failedOp.error;

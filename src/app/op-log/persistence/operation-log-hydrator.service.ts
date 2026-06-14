@@ -576,7 +576,6 @@ export class OperationLogHydratorService {
     for (const entry of failedOps) {
       const result = await this.operationApplierService.applyOperations([entry.op]);
       if (result.failedOp) {
-        // SyncStateCorruptedError or any other error means the op still can't be applied
         OpLog.warn(
           `OperationLogHydratorService: Failed to retry op ${entry.op.id}`,
           result.failedOp.error,
