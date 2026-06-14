@@ -10,6 +10,21 @@ export enum BoardPanelCfgScheduledState {
   NotScheduled = 3,
 }
 
+export enum BoardPanelCfgDeadlineState {
+  All = 1,
+  HasDeadline = 2,
+  NoDeadline = 3,
+}
+
+export type BoardPanelTimeframePreset =
+  | 'ALL'
+  | 'TODAY'
+  | 'TOMORROW'
+  | 'NEXT_WEEK'
+  | 'NEXT_MONTH'
+  | 'NEXT_DAYS'
+  | 'CUSTOM_RANGE';
+
 export enum BoardPanelCfgTaskTypeFilter {
   All = 1,
   NoBacklog = 2,
@@ -34,6 +49,15 @@ export interface BoardSrcCfg {
   projectIds?: string[];
   taskDoneState: BoardPanelCfgTaskDoneState;
   scheduledState: BoardPanelCfgScheduledState;
+  scheduledTimeframe?: BoardPanelTimeframePreset;
+  scheduledDaysVal?: number;
+  scheduledCustomStart?: string;
+  scheduledCustomEnd?: string;
+  deadlineState?: BoardPanelCfgDeadlineState;
+  deadlineTimeframe?: BoardPanelTimeframePreset;
+  deadlineDaysVal?: number;
+  deadlineCustomStart?: string;
+  deadlineCustomEnd?: string;
   isParentTasksOnly: boolean;
   // Absent = manual order (user-controlled taskIds).
   sortBy?: BoardSortField;
