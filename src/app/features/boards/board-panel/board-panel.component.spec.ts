@@ -30,6 +30,9 @@ import {
 } from '../../tasks/store/task.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
+import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
 
@@ -1331,6 +1334,177 @@ describe('BoardPanelComponent - drop()', () => {
     expect(dialogOpenSpy).toHaveBeenCalled();
     expect(dispatchSpy).not.toHaveBeenCalledWith(
       jasmine.objectContaining({ type: PlannerActions.planTaskForDay.type }),
+    );
+  });
+
+  it('cross-panel drop on HasDeadline TODAY panel replans task deadline for today', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: 'TODAY',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      TaskSharedActions.setDeadline({
+        taskId: task.id,
+        deadlineDay: '2026-06-14',
+        ...getDeadlineAutoPlanFields(mockDateService, '2026-06-14'),
+      }),
+    );
+  });
+
+  it('cross-panel drop on HasDeadline TOMORROW panel replans task deadline for tomorrow', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: 'TOMORROW',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      TaskSharedActions.setDeadline({
+        taskId: task.id,
+        deadlineDay: '2026-06-15',
+        ...getDeadlineAutoPlanFields(mockDateService, '2026-06-15'),
+      }),
+    );
+  });
+
+  it('cross-panel drop on HasDeadline NEXT_WEEK panel plans deadline for today if no deadline', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: 'NEXT_WEEK',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      TaskSharedActions.setDeadline({
+        taskId: task.id,
+        deadlineDay: '2026-06-14',
+        ...getDeadlineAutoPlanFields(mockDateService, '2026-06-14'),
+      }),
+    );
+  });
+
+  it('cross-panel drop on HasDeadline NEXT_WEEK panel plans deadline for closest bound if deadline outside', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], deadlineDay: '2026-06-30' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: 'NEXT_WEEK',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      TaskSharedActions.setDeadline({
+        taskId: task.id,
+        deadlineDay: '2026-06-21', // today + 7 days
+        ...getDeadlineAutoPlanFields(mockDateService, '2026-06-21'),
+      }),
+    );
+  });
+
+  it('cross-panel drop on HasDeadline ALL panel opens deadline dialog if no deadline', async () => {
+    const task = mkTask({ id: 't1', tagIds: [] });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: 'ALL',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dialogOpenSpy).toHaveBeenCalledWith(
+      DialogDeadlineComponent,
+      jasmine.any(Object),
+    );
+    expect(dispatchSpy).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: TaskSharedActions.setDeadline.type }),
+    );
+  });
+
+  it('cross-panel drop on NoDeadline panel removes deadline', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], deadlineDay: '2026-06-14' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      deadlineState: BoardPanelCfgDeadlineState.NoDeadline,
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      TaskSharedActions.removeDeadline({
+        taskId: task.id,
+      }),
     );
   });
 });

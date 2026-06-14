@@ -45,6 +45,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
+import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { first, take } from 'rxjs/operators';
 import { dragDelayForTouch } from '../../../util/input-intent';
@@ -435,6 +437,7 @@ export class BoardPanelComponent {
     );
 
     this._checkToScheduledTask(panelCfg, task.id);
+    this._checkDeadlineState(panelCfg, task.id);
     this._checkBacklogState(panelCfg, task.id);
   }
 
@@ -456,6 +459,7 @@ export class BoardPanelComponent {
     );
 
     this._checkToScheduledTask(panelCfg, taskId);
+    this._checkDeadlineState(panelCfg, taskId);
     this._checkBacklogState(panelCfg, taskId);
   }
 
@@ -617,5 +621,116 @@ export class BoardPanelComponent {
 
   _isTaskInBacklog(task: Readonly<TaskCopy>): boolean {
     return this.allBacklogTaskIds().has(task.parentId || task.id);
+  }
+
+  editDeadline(task: TaskCopy, ev?: MouseEvent): void {
+    ev?.preventDefault();
+    ev?.stopPropagation();
+    this._matDialog.open(DialogDeadlineComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
+  }
+
+  private async _checkDeadlineState(
+    panelCfg: BoardPanelCfg,
+    taskId: string,
+  ): Promise<void> {
+    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
+      const task = await this.store
+        .select(selectTaskById, { id: taskId })
+        .pipe(first())
+        .toPromise();
+      if (!task) {
+        return;
+      }
+
+      const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+      const currentVal = getTaskDeadlineDateStr(task, startOfNextDayDiffMs);
+      const todayStr = this._dateService.todayStr();
+      const tomorrowStr = getDbDateStr(
+        new Date(this._dateService.getLogicalTomorrowMs()),
+      );
+
+      const isAlreadyInTimeframe =
+        currentVal !== null &&
+        isDateInTimeframe(
+          currentVal,
+          panelCfg.deadlineTimeframe,
+          panelCfg.deadlineDaysVal,
+          panelCfg.deadlineCustomStart,
+          panelCfg.deadlineCustomEnd,
+          todayStr,
+          tomorrowStr,
+          startOfNextDayDiffMs,
+        );
+
+      if (!isAlreadyInTimeframe) {
+        const timeframe = panelCfg.deadlineTimeframe;
+        if (!timeframe || timeframe === 'ALL') {
+          if (!currentVal) {
+            this.editDeadline(task);
+          }
+        } else {
+          let start: string | undefined;
+          let end: string | undefined;
+
+          if (timeframe === 'TODAY') {
+            start = todayStr;
+            end = todayStr;
+          } else if (timeframe === 'TOMORROW') {
+            start = tomorrowStr;
+            end = tomorrowStr;
+          } else if (timeframe === 'NEXT_WEEK') {
+            start = todayStr;
+            end = getFutureLogicalDateStr(7, startOfNextDayDiffMs);
+          } else if (timeframe === 'NEXT_MONTH') {
+            start = todayStr;
+            end = getFutureLogicalDateStr(30, startOfNextDayDiffMs);
+          } else if (timeframe === 'NEXT_DAYS') {
+            start = todayStr;
+            const limit = panelCfg.deadlineDaysVal ?? 7;
+            end = getFutureLogicalDateStr(limit, startOfNextDayDiffMs);
+          } else if (timeframe === 'CUSTOM_RANGE') {
+            start = panelCfg.deadlineCustomStart;
+            end = panelCfg.deadlineCustomEnd;
+          }
+
+          const refDate = currentVal ?? todayStr;
+          let closestDate = refDate;
+
+          if (start && end) {
+            if (refDate < start) {
+              closestDate = start;
+            } else if (refDate > end) {
+              closestDate = end;
+            }
+          } else if (start) {
+            if (refDate < start) {
+              closestDate = start;
+            }
+          } else if (end) {
+            if (refDate > end) {
+              closestDate = end;
+            }
+          }
+
+          this.store.dispatch(
+            TaskSharedActions.setDeadline({
+              taskId: task.id,
+              deadlineDay: closestDate,
+              ...getDeadlineAutoPlanFields(this._dateService, closestDate),
+            }),
+          );
+        }
+      }
+    }
+    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
+      this.store.dispatch(
+        TaskSharedActions.removeDeadline({
+          taskId,
+        }),
+      );
+    }
   }
 }
