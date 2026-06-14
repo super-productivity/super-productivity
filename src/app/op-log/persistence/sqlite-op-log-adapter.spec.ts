@@ -698,3 +698,69 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
     expect((adapter as OpLogDbAdapter).adoptConnection).toBeUndefined();
   });
 });
+
+/**
+ * Connection-level serialization (runExclusive). A single SQLite connection has
+ * ONE transaction context, so when two adapters share one connection (the native
+ * backend) their transactions must not interleave. These run against REAL sql.js
+ * so the nested-BEGIN failure is genuine, not modelled.
+ */
+describe('SqliteOpLogAdapter — shared-connection serialization (sql.js)', () => {
+  /** Add a real promise-chain mutex to a SqliteDb (what CapacitorSqliteDb does). */
+  const withMutex = (db: SqliteDb): SqliteDb => {
+    let chain: Promise<unknown> = Promise.resolve();
+    return {
+      run: (sql, params) => db.run(sql, params),
+      query: (sql, params) => db.query(sql, params),
+      runExclusive: <T>(fn: () => Promise<T>): Promise<T> => {
+        const result = chain.then(fn, fn);
+        chain = result.then(
+          () => undefined,
+          () => undefined,
+        );
+        return result;
+      },
+    };
+  };
+
+  const makeOp = (id: string): Record<string, unknown> => ({
+    op: { id },
+    appliedAt: 1,
+    source: 'local',
+    syncedAt: undefined,
+    applicationStatus: undefined,
+  });
+
+  it('without a serializer, two concurrent transactions collide (nested BEGIN)', async () => {
+    // Proves the hazard the serializer exists to prevent.
+    const adapter = new SqliteOpLogAdapter(await createSqlJsDb());
+    await adapter.init();
+    await expectAsync(
+      Promise.all([
+        adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOp('a')),
+        ),
+        adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOp('b')),
+        ),
+      ]),
+    ).toBeRejected();
+  });
+
+  it('with the serializer, concurrent transactions + standalone ops all succeed', async () => {
+    const adapter = new SqliteOpLogAdapter(withMutex(await createSqlJsDb()));
+    await adapter.init();
+
+    await Promise.all([
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+        tx.add(STORE_NAMES.OPS, makeOp('a')),
+      ),
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+        tx.add(STORE_NAMES.OPS, makeOp('b')),
+      ),
+      adapter.add(STORE_NAMES.OPS, makeOp('c')),
+    ]);
+
+    expect(await adapter.count(STORE_NAMES.OPS)).toBe(3);
+  });
+});

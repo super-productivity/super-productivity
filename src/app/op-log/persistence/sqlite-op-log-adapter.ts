@@ -96,6 +96,19 @@ export interface SqliteDb {
   run(sql: string, params?: unknown[]): Promise<{ changes: number; lastId?: number }>;
   /** Run a query, returning rows as plain objects. */
   query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
+  /**
+   * Optional connection-level serializer. A single SQLite connection has exactly
+   * ONE transaction context, so when two services share one connection (the
+   * native backend: OperationLogStoreService + ArchiveStoreService over one
+   * `SUP_OPS` file) their `transaction()`s — and any stray standalone statement —
+   * MUST NOT interleave, or a second `BEGIN` throws "transaction within a
+   * transaction" and stray statements get swept into (and rolled back with) the
+   * wrong transaction. When present, {@link SqliteOpLogAdapter} routes every
+   * top-level op (and each transaction as one unit) through this so the shared
+   * connection only ever runs one at a time. Single-threaded/in-process backends
+   * (the sql.js test stand-in) may omit it — the adapter then runs inline.
+   */
+  runExclusive?<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 /**
@@ -550,14 +563,28 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     return plan;
   }
 
-  async init(): Promise<void> {
+  /**
+   * Serialize a top-level operation on the connection when the backend exposes a
+   * serializer ({@link SqliteDb.runExclusive}) — needed when two services share
+   * one connection. A transaction is wrapped as ONE unit so its inner statements
+   * (issued directly on `_db` by {@link SqliteOpLogTx}, NOT re-serialized) can
+   * never interleave with another op. No public method calls another, so this
+   * never re-enters / deadlocks. Backends without a serializer run inline.
+   */
+  private _exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    return this._db.runExclusive ? this._db.runExclusive(fn) : fn();
+  }
+
+  init(): Promise<void> {
     // Apply DDL for every store. Idempotent via `IF NOT EXISTS`. Phase C adds
     // the one-time IDB→SQLite data copy ahead of first use.
-    for (const plan of this._plans.values()) {
-      for (const stmt of buildDdl(plan)) {
-        await this._db.run(stmt);
+    return this._exclusive(async () => {
+      for (const plan of this._plans.values()) {
+        for (const stmt of buildDdl(plan)) {
+          await this._db.run(stmt);
+        }
       }
-    }
+    });
   }
 
   close(): void {
@@ -565,31 +592,31 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
   }
 
   add(store: string, value: unknown): Promise<number> {
-    return sqlAdd(this._db, this._plan(store), value);
+    return this._exclusive(() => sqlAdd(this._db, this._plan(store), value));
   }
 
   put(store: string, value: unknown, key?: DbKey): Promise<void> {
-    return sqlPut(this._db, this._plan(store), value, key);
+    return this._exclusive(() => sqlPut(this._db, this._plan(store), value, key));
   }
 
   get<T>(store: string, key: DbKey): Promise<T | undefined> {
-    return sqlGet<T>(this._db, this._plan(store), key);
+    return this._exclusive(() => sqlGet<T>(this._db, this._plan(store), key));
   }
 
   getAll<T>(store: string, range?: DbKeyRange): Promise<T[]> {
-    return sqlGetAll<T>(this._db, this._plan(store), range);
+    return this._exclusive(() => sqlGetAll<T>(this._db, this._plan(store), range));
   }
 
   delete(store: string, key: DbKey): Promise<void> {
-    return sqlDelete(this._db, this._plan(store), key);
+    return this._exclusive(() => sqlDelete(this._db, this._plan(store), key));
   }
 
   clear(store: string): Promise<void> {
-    return sqlClear(this._db, this._plan(store));
+    return this._exclusive(() => sqlClear(this._db, this._plan(store)));
   }
 
   count(store: string, range?: DbKeyRange): Promise<number> {
-    return sqlCount(this._db, this._plan(store), range);
+    return this._exclusive(() => sqlCount(this._db, this._plan(store), range));
   }
 
   getFromIndex<T>(
@@ -597,7 +624,9 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     index: string,
     key: DbKey | DbKey[],
   ): Promise<T | undefined> {
-    return sqlGetFromIndex<T>(this._db, this._plan(store), index, key);
+    return this._exclusive(() =>
+      sqlGetFromIndex<T>(this._db, this._plan(store), index, key),
+    );
   }
 
   getKeyFromIndex(
@@ -605,48 +634,57 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     index: string,
     key: DbKey | DbKey[],
   ): Promise<DbKey | undefined> {
-    return sqlGetKeyFromIndex(this._db, this._plan(store), index, key);
+    return this._exclusive(() =>
+      sqlGetKeyFromIndex(this._db, this._plan(store), index, key),
+    );
   }
 
   getAllFromIndex<T>(store: string, index: string, range?: DbKeyRange): Promise<T[]> {
-    return sqlGetAllFromIndex<T>(this._db, this._plan(store), index, range);
+    return this._exclusive(() =>
+      sqlGetAllFromIndex<T>(this._db, this._plan(store), index, range),
+    );
   }
 
   countFromIndex(store: string, index: string, range?: DbKeyRange): Promise<number> {
-    const plan = this._plan(store);
-    const idx = indexPlan(plan, index);
-    const { clause, params } = whereRange(
-      idx.columns.map((c) => c.column),
-      range,
-    );
-    return this._db
-      .query(`SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(clause)}`, params)
-      .then((rows) => Number(rows[0]?.['n'] ?? 0));
+    return this._exclusive(() => {
+      const plan = this._plan(store);
+      const idx = indexPlan(plan, index);
+      const { clause, params } = whereRange(
+        idx.columns.map((c) => c.column),
+        range,
+      );
+      return this._db
+        .query(`SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(clause)}`, params)
+        .then((rows) => Number(rows[0]?.['n'] ?? 0));
+    });
   }
 
-  async iterate<T>(
+  iterate<T>(
     store: string,
     options: DbIterateOptions,
     visit: DbCursorVisitor<T>,
   ): Promise<void> {
     const plan = this._plan(store);
-    // A delete-capable scan must be atomic; a pure read scan needs no lock.
+    // A delete-capable scan must be atomic; a pure read scan needs no lock — but
+    // both still serialize on the shared connection so they can't interleave
+    // with another op's open transaction.
     if (options.mode === 'readonly') {
-      await sqlIterate(this._db, plan, options, visit);
-      return;
+      return this._exclusive(() => sqlIterate(this._db, plan, options, visit));
     }
-    await this._inTransaction('IMMEDIATE', async () => {
-      await sqlIterate(this._db, plan, options, visit);
-    });
+    return this._exclusive(() =>
+      this._inTransaction('IMMEDIATE', () => sqlIterate(this._db, plan, options, visit)),
+    );
   }
 
-  async transaction<T>(
+  transaction<T>(
     stores: string[],
     mode: DbTxMode,
     fn: (tx: OpLogTx) => Promise<T>,
   ): Promise<T> {
-    return this._inTransaction(mode === 'readonly' ? 'DEFERRED' : 'IMMEDIATE', () =>
-      fn(new SqliteOpLogTx(this._db, this._plans, new Set(stores), mode)),
+    return this._exclusive(() =>
+      this._inTransaction(mode === 'readonly' ? 'DEFERRED' : 'IMMEDIATE', () =>
+        fn(new SqliteOpLogTx(this._db, this._plans, new Set(stores), mode)),
+      ),
     );
   }
 

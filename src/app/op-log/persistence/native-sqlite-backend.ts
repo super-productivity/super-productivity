@@ -37,9 +37,15 @@ export const NATIVE_SQLITE_OP_LOG_FLAG_KEY = 'SUP_USE_NATIVE_SQLITE_OP_LOG';
  * Whether to bind the op-log persistence backend to SQLite. ONLY true on native
  * (the plugin's web build is WASM-on-IndexedDB and would reintroduce the
  * eviction risk) AND only when the opt-in flag is set.
+ *
+ * @param isNative test seam — defaults to the real platform constant. Karma runs
+ * in a browser (`IS_NATIVE_PLATFORM === false`), so the native branch is only
+ * reachable in tests by passing `true`.
  */
-export const shouldUseNativeSqliteOpLogBackend = (): boolean => {
-  if (!IS_NATIVE_PLATFORM) {
+export const shouldUseNativeSqliteOpLogBackend = (
+  isNative: boolean = IS_NATIVE_PLATFORM,
+): boolean => {
+  if (!isNative) {
     return false;
   }
   try {
@@ -52,7 +58,13 @@ export const shouldUseNativeSqliteOpLogBackend = (): boolean => {
 
 // ── C1: one-time IDB → SQLite migration bootstrap ────────────────────────────
 
-/** Tiny key/value table for migration bookkeeping (outside the op-log schema). */
+/**
+ * Tiny key/value table for migration bookkeeping. Deliberately created
+ * imperatively here and kept OUT of `OP_LOG_DB_SCHEMA`: it is SQLite-only
+ * bookkeeping with no IndexedDB counterpart, so it must never be a store the
+ * schema-drift guard expects on IDB nor a table `migrateOpLogBackend` tries to
+ * copy (that iterates `STORE_NAMES` only).
+ */
 const META_TABLE = 'sup_op_log_meta';
 const MIGRATION_DONE_KEY = 'idb_to_sqlite_migrated_at';
 
@@ -110,8 +122,11 @@ export const bootstrapNativeOpLogBackend = async (db: SqliteDb): Promise<void> =
   if (await isMigrationComplete(db)) {
     return;
   }
-  // A non-empty destination means a prior (unmarked) run already populated it —
-  // never merge on top (would risk seq/clock corruption); just mark done.
+  // A non-empty destination means a prior copy committed but the process died
+  // BEFORE `markMigrationComplete` (the copy + verify is one atomic transaction;
+  // the marker write is the separate step right after). The data is already
+  // here and verified — never merge on top (would risk seq/clock corruption);
+  // just finish marking it done.
   if ((await dest.count(STORE_NAMES.OPS)) > 0) {
     await markMigrationComplete(db);
     return;
@@ -129,6 +144,16 @@ export const bootstrapNativeOpLogBackend = async (db: SqliteDb): Promise<void> =
       lastSeq: result.lastSeq,
       copiedOps: result.copiedCounts[STORE_NAMES.OPS] ?? 0,
     });
+  } catch (e) {
+    // Privacy-safe breadcrumb only (log history is exportable): the error NAME,
+    // never its message (a raw SQLite/DOMException message could echo a value).
+    // verify-before-commit already rolled `dest` back, so the caller's retry
+    // (ensureBootstrap resets on reject) re-runs cleanly next launch.
+    Log.err({
+      id: 'opLogSqliteMigrationFailed',
+      name: e instanceof Error ? e.name : 'unknown',
+    });
+    throw e;
   } finally {
     source.close();
   }

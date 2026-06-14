@@ -117,10 +117,28 @@ captured on the next tick.
   the insert response — no separate `SELECT last_insert_rowid()`. `run` is issued
   with `transaction = false` so the adapter's explicit `BEGIN/COMMIT/ROLLBACK` is
   the single transaction in force.
-- ⏳ **Remains (device-gated):** run `npx cap sync` so the Android/iOS projects
-  pick up the native plugin, then build + run on a real device. Perf mitigation 2
-  (the `executeSet` bulk-write path) is still deferred — see the note below; it
-  only matters on the bridge and can't be measured with in-process sql.js.
+- ✅ **Android `includePlugins` allowlist updated.** `capacitor.config.ts` uses an
+  explicit `android.includePlugins` allowlist — without adding
+  `@capacitor-community/sqlite` to it the plugin is **not registered on Android**
+  (iOS has no allowlist and is unaffected), so every native call would reject on
+  the exact platform this targets. Now listed.
+- ✅ **WebView-reload-safe open.** `_open()` calls
+  `checkConnectionsConsistency()` and falls back from `createConnection` to
+  `retrieveConnection` on "already exists", so a reload (fresh JS runtime, stale
+  native connection) can't wedge on a dangling `SUP_OPS` handle.
+- ✅ **Shared-connection serializer.** One SQLite connection has ONE transaction
+  context, so both stores sharing the connection would otherwise nest `BEGIN`s /
+  leak statements across transactions. `CapacitorSqliteDb` implements the new
+  `SqliteDb.runExclusive`, and `SqliteOpLogAdapter` routes every top-level op
+  (each transaction as one unit) through it. Covered by a real-sql.js concurrency
+  test (`sqlite-op-log-adapter.spec.ts`) that asserts the collision without the
+  serializer and success with it.
+- ⏳ **Remains (device-gated):** run `npx cap sync` (+ `pod install`) so the
+  Android/iOS projects pick up the now-allowlisted native plugin, then build + run
+  on a real device, including a WebView force-reload to exercise the reuse path.
+  Perf mitigation 2 (the `executeSet` bulk-write path) is still deferred — see the
+  note below; it only matters on the bridge and can't be measured with in-process
+  sql.js.
 - **⚡ Perf — bake two mitigations into the wrapper from the start.** On native
   the dominant cost is the Capacitor JS↔native bridge round-trip, not SQLite
   itself. Reads (`getAll`/`count`) are already one query = one crossing.
