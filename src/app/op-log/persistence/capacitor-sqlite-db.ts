@@ -22,7 +22,7 @@
  *   force; otherwise the plugin would wrap each statement in its own
  *   transaction and the adapter's `BEGIN` would fail.
  */
-import type { SQLiteDBConnection } from '@capacitor-community/sqlite';
+import type { SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { SqliteDb } from './sqlite-op-log-adapter';
 
 /** No-encryption mode string the plugin expects for `createConnection`. */
@@ -31,8 +31,24 @@ const NO_ENCRYPTION = 'no-encryption';
 export class CapacitorSqliteDb implements SqliteDb {
   private _conn?: SQLiteDBConnection;
   private _openPromise?: Promise<SQLiteDBConnection>;
+  // Connection-level serializer (see SqliteDb.runExclusive). One SQLite
+  // connection has one transaction context, so every adapter op over the shared
+  // connection is chained onto this tail — never interleaved.
+  private _opChain: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly _dbName: string) {}
+
+  runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    // Run `fn` after whatever is queued (regardless of its outcome), and advance
+    // the tail to a never-rejecting settle so one failed op can't wedge the
+    // queue or leak its rejection to the next caller.
+    const result = this._opChain.then(fn, fn);
+    this._opChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
 
   private _ensureOpen(): Promise<SQLiteDBConnection> {
     if (this._conn) {
@@ -60,16 +76,46 @@ export class CapacitorSqliteDb implements SqliteDb {
       await import('@capacitor-community/sqlite');
     const sqlite = new SQLiteConnection(CapacitorSQLite);
     const readonly = false;
-    // Reuse a connection left open by a previous WebView lifecycle instead of
-    // failing with "connection already exists".
-    const existing = await sqlite.isConnection(this._dbName, readonly);
-    const conn = existing.result
-      ? await sqlite.retrieveConnection(this._dbName, readonly)
-      : await sqlite.createConnection(this._dbName, false, NO_ENCRYPTION, 1, readonly);
+    // A fresh `SQLiteConnection` starts with an EMPTY JS connection map, but on a
+    // WebView reload the NATIVE side may still hold an open `SUP_OPS` connection
+    // from the previous JS runtime. Reconcile first, otherwise the create path
+    // below rejects with "connection already exists". Best-effort — a failure
+    // here is non-fatal (the create/retrieve fallback still covers it).
+    await sqlite.checkConnectionsConsistency().catch(() => undefined);
+    const conn = await this._createOrRetrieveConnection(sqlite, readonly);
     if (!(await conn.isDBOpen()).result) {
       await conn.open();
     }
     return conn;
+  }
+
+  /**
+   * Get a `SUP_OPS` connection, reusing the existing one when the plugin already
+   * tracks it. Falls back to `retrieveConnection` if `createConnection` still
+   * reports the connection exists (a stale entry the consistency check above
+   * didn't clear), so a reload can never wedge on "connection already exists".
+   */
+  private async _createOrRetrieveConnection(
+    sqlite: SQLiteConnection,
+    readonly: boolean,
+  ): Promise<SQLiteDBConnection> {
+    if ((await sqlite.isConnection(this._dbName, readonly)).result) {
+      return sqlite.retrieveConnection(this._dbName, readonly);
+    }
+    try {
+      return await sqlite.createConnection(
+        this._dbName,
+        false,
+        NO_ENCRYPTION,
+        1,
+        readonly,
+      );
+    } catch (e) {
+      if (/already exists/i.test(e instanceof Error ? e.message : String(e))) {
+        return sqlite.retrieveConnection(this._dbName, readonly);
+      }
+      throw e;
+    }
   }
 
   async run(
@@ -78,7 +124,7 @@ export class CapacitorSqliteDb implements SqliteDb {
   ): Promise<{ changes: number; lastId?: number }> {
     const conn = await this._ensureOpen();
     // transaction:false — the SqliteOpLogAdapter drives BEGIN/COMMIT/ROLLBACK.
-    const res = await conn.run(sql, params as never[], false);
+    const res = await conn.run(sql, params, false);
     return {
       changes: res.changes?.changes ?? 0,
       lastId: res.changes?.lastId,
@@ -87,7 +133,7 @@ export class CapacitorSqliteDb implements SqliteDb {
 
   async query(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
     const conn = await this._ensureOpen();
-    const res = await conn.query(sql, params as never[]);
+    const res = await conn.query(sql, params);
     return (res.values ?? []) as Record<string, unknown>[];
   }
 }

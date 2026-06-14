@@ -96,6 +96,13 @@ export interface SqliteDb {
   run(sql: string, params?: unknown[]): Promise<{ changes: number; lastId?: number }>;
   /** Run a query, returning rows as plain objects. */
   query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
+  /**
+   * Optional connection-level serializer for native bootstrap statements that
+   * run directly on the connection. Adapter operations use their own queue keyed
+   * by this `SqliteDb` instance; callers bypassing the adapter must serialize
+   * their work separately.
+   */
+  runExclusive?<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 /**
