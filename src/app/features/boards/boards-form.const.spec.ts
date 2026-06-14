@@ -79,6 +79,9 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
   it('uses translation keys for board modal labels (#8070)', () => {
     const fields = panelFieldGroup();
     const scheduledState = fieldByKey(fields, 'scheduledState');
+    const scheduledTimeframe = fieldByKey(fields, 'scheduledTimeframe');
+    const deadlineState = fieldByKey(fields, 'deadlineState');
+    const deadlineTimeframe = fieldByKey(fields, 'deadlineTimeframe');
     const project = fieldByKey(fields, 'projectIds');
     const isParentTasksOnly = fieldByKey(fields, 'isParentTasksOnly');
 
@@ -92,6 +95,17 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
       'F.BOARDS.FORM.SCHEDULED_STATE_SCHEDULED',
       'F.BOARDS.FORM.SCHEDULED_STATE_NOT_SCHEDULED',
     ]);
+    expect(scheduledTimeframe.props?.label).toBe('F.BOARDS.FORM.SCHEDULED_TIMEFRAME');
+    expect(deadlineState.props?.label).toBe('F.BOARDS.FORM.DEADLINE_STATE');
+    expect(
+      (deadlineState.props?.options as { label: string }[]).map((option) => option.label),
+    ).toEqual([
+      'F.BOARDS.FORM.DEADLINE_STATE_ALL',
+      'F.BOARDS.FORM.DEADLINE_STATE_HAS_DEADLINE',
+      'F.BOARDS.FORM.DEADLINE_STATE_NO_DEADLINE',
+    ]);
+    expect(deadlineTimeframe.props?.label).toBe('F.BOARDS.FORM.DEADLINE_TIMEFRAME');
+
     expect(project.props?.label).toBe('F.BOARDS.FORM.PROJECT');
     expect(project.props?.defaultLabel).toBe('F.BOARDS.FORM.PROJECT_ALL');
     expect(isParentTasksOnly.props?.label).toBe('F.BOARDS.FORM.ONLY_PARENT_TASKS');
