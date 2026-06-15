@@ -1,6 +1,7 @@
 import { BoardPanelCfg, BoardSortField } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
+import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -183,4 +184,152 @@ export const buildComparator = (
     default:
       return NO_OP_COMPARATOR;
   }
+};
+
+export interface TimeframeBounds {
+  start?: string;
+  end?: string;
+}
+
+export interface TimeframeConfig {
+  timeframe: string | undefined;
+  daysVal?: number;
+  customStart?: string | Date | null;
+  customEnd?: string | Date | null;
+}
+
+export interface AdjustDateOptions {
+  currentVal: string | null;
+  bounds: TimeframeBounds;
+  todayStr: string;
+  onNoDateInAllTimeframe: () => void;
+  onUpdateDate: (closestDate: string) => void;
+}
+
+export const getFutureLogicalDateStr = (days: number, todayStr: string): string => {
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return getDbDateStr(date);
+};
+
+export const getFutureLogicalMonthDateStr = (todayStr: string): string => {
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const date = new Date(y, m - 1 + 1, d);
+  const targetMonth = (m - 1 + 1) % 12;
+  if (date.getMonth() !== targetMonth) {
+    date.setDate(0);
+  }
+  return getDbDateStr(date);
+};
+
+export const normalizeDateStr = (
+  val: Date | number | string | null | undefined,
+): string | undefined => {
+  if (val === null || val === undefined || val === '') {
+    return undefined;
+  }
+  if (typeof val === 'string' && isDBDateStr(val)) {
+    return val;
+  }
+  return getDbDateStr(val);
+};
+
+export const resolveTimeframeBounds = (
+  config: TimeframeConfig,
+  todayStr: string,
+): TimeframeBounds => {
+  const { timeframe, daysVal, customStart, customEnd } = config;
+  if (!timeframe || timeframe === 'ALL') {
+    return {};
+  }
+  if (timeframe === 'TODAY') {
+    return { start: todayStr, end: todayStr };
+  }
+  if (timeframe === 'TOMORROW') {
+    const tomorrowStr = getFutureLogicalDateStr(1, todayStr);
+    return { start: tomorrowStr, end: tomorrowStr };
+  }
+  if (timeframe === 'NEXT_WEEK') {
+    return { start: todayStr, end: getFutureLogicalDateStr(7, todayStr) };
+  }
+  if (timeframe === 'NEXT_MONTH') {
+    return { start: todayStr, end: getFutureLogicalMonthDateStr(todayStr) };
+  }
+  if (timeframe === 'NEXT_DAYS') {
+    const limit = daysVal ?? 7;
+    return { start: todayStr, end: getFutureLogicalDateStr(limit, todayStr) };
+  }
+  if (timeframe === 'AT_LEAST_DAYS_FUTURE') {
+    const limit = daysVal ?? 7;
+    return { start: getFutureLogicalDateStr(limit, todayStr) };
+  }
+  if (timeframe === 'CUSTOM_RANGE') {
+    return {
+      start: normalizeDateStr(customStart),
+      end: normalizeDateStr(customEnd),
+    };
+  }
+  return {};
+};
+
+export const isDateInTimeframe = (dateStr: string, bounds: TimeframeBounds): boolean => {
+  const { start, end } = bounds;
+  if (start && end) {
+    return dateStr >= start && dateStr <= end;
+  }
+  if (start) {
+    return dateStr >= start;
+  }
+  if (end) {
+    return dateStr <= end;
+  }
+  return true;
+};
+
+export const getClosestDateInTimeframe = (
+  currentVal: string | null,
+  bounds: TimeframeBounds,
+  todayStr: string,
+): string => {
+  const { start, end } = bounds;
+  const refDate = currentVal ?? todayStr;
+  let closestDate = refDate;
+
+  if (start && end) {
+    if (refDate < start) {
+      closestDate = start;
+    } else if (refDate > end) {
+      closestDate = end;
+    }
+  } else if (start) {
+    if (refDate < start) {
+      closestDate = start;
+    }
+  } else if (end) {
+    if (refDate > end) {
+      closestDate = end;
+    }
+  }
+  return closestDate;
+};
+
+export const adjustDateToTimeframe = (options: AdjustDateOptions): void => {
+  const { currentVal, bounds, todayStr, onNoDateInAllTimeframe, onUpdateDate } = options;
+  const hasBounds = bounds.start !== undefined || bounds.end !== undefined;
+  const isInTimeframe = currentVal !== null && isDateInTimeframe(currentVal, bounds);
+
+  if (isInTimeframe) {
+    return;
+  }
+
+  if (!hasBounds) {
+    if (!currentVal) {
+      onNoDateInAllTimeframe();
+    }
+    return;
+  }
+
+  const closestDate = getClosestDateInTimeframe(currentVal, bounds, todayStr);
+  onUpdateDate(closestDate);
 };

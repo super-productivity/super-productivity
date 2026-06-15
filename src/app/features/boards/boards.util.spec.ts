@@ -1,4 +1,14 @@
-import { buildComparator, rewriteTagIdsForPanel, sanitizePanelCfg } from './boards.util';
+import {
+  buildComparator,
+  rewriteTagIdsForPanel,
+  sanitizePanelCfg,
+  getFutureLogicalDateStr,
+  getFutureLogicalMonthDateStr,
+  resolveTimeframeBounds,
+  isDateInTimeframe,
+  getClosestDateInTimeframe,
+  adjustDateToTimeframe,
+} from './boards.util';
 import { BoardPanelCfg } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 
@@ -322,5 +332,121 @@ describe('rewriteTagIdsForPanel', () => {
     // Act + Assert — would throw if mutated
     expect(() => rewriteTagIdsForPanel(tags, panel)).not.toThrow();
     expect(tags).toEqual(['x', 'y']);
+  });
+});
+
+describe('Timeframe helpers', () => {
+  describe('getFutureLogicalDateStr', () => {
+    it('adds days correctly', () => {
+      expect(getFutureLogicalDateStr(5, '2026-06-15')).toBe('2026-06-20');
+      expect(getFutureLogicalDateStr(-1, '2026-06-15')).toBe('2026-06-14');
+    });
+  });
+
+  describe('getFutureLogicalMonthDateStr', () => {
+    it('adds exactly one month and clamps rollover target days', () => {
+      expect(getFutureLogicalMonthDateStr('2026-06-15')).toBe('2026-07-15');
+      expect(getFutureLogicalMonthDateStr('2026-01-31')).toBe('2026-02-28'); // clamped
+      expect(getFutureLogicalMonthDateStr('2026-12-31')).toBe('2027-01-31');
+    });
+  });
+
+  describe('resolveTimeframeBounds', () => {
+    it('resolves TODAY', () => {
+      const bounds = resolveTimeframeBounds({ timeframe: 'TODAY' }, '2026-06-15');
+      expect(bounds).toEqual({ start: '2026-06-15', end: '2026-06-15' });
+    });
+
+    it('resolves NEXT_WEEK', () => {
+      const bounds = resolveTimeframeBounds({ timeframe: 'NEXT_WEEK' }, '2026-06-15');
+      expect(bounds).toEqual({ start: '2026-06-15', end: '2026-06-22' });
+    });
+
+    it('resolves NEXT_MONTH', () => {
+      const bounds = resolveTimeframeBounds({ timeframe: 'NEXT_MONTH' }, '2026-06-15');
+      expect(bounds).toEqual({ start: '2026-06-15', end: '2026-07-15' });
+    });
+
+    it('resolves NEXT_DAYS with custom limit', () => {
+      const bounds = resolveTimeframeBounds(
+        { timeframe: 'NEXT_DAYS', daysVal: 10 },
+        '2026-06-15',
+      );
+      expect(bounds).toEqual({ start: '2026-06-15', end: '2026-06-25' });
+    });
+
+    it('resolves AT_LEAST_DAYS_FUTURE', () => {
+      const bounds = resolveTimeframeBounds(
+        { timeframe: 'AT_LEAST_DAYS_FUTURE', daysVal: 5 },
+        '2026-06-15',
+      );
+      expect(bounds).toEqual({ start: '2026-06-20' });
+    });
+
+    it('resolves CUSTOM_RANGE', () => {
+      const bounds = resolveTimeframeBounds(
+        {
+          timeframe: 'CUSTOM_RANGE',
+          customStart: '2026-06-10',
+          customEnd: '2026-06-20',
+        },
+        '2026-06-15',
+      );
+      expect(bounds).toEqual({ start: '2026-06-10', end: '2026-06-20' });
+    });
+  });
+
+  describe('isDateInTimeframe', () => {
+    it('checks if a date is within start and end bounds', () => {
+      const bounds = { start: '2026-06-10', end: '2026-06-20' };
+      expect(isDateInTimeframe('2026-06-15', bounds)).toBe(true);
+      expect(isDateInTimeframe('2026-06-09', bounds)).toBe(false);
+      expect(isDateInTimeframe('2026-06-21', bounds)).toBe(false);
+    });
+  });
+
+  describe('getClosestDateInTimeframe', () => {
+    it('returns the closest valid date when outside bounds', () => {
+      const bounds = { start: '2026-06-10', end: '2026-06-20' };
+      expect(getClosestDateInTimeframe('2026-06-05', bounds, '2026-06-15')).toBe(
+        '2026-06-10',
+      );
+      expect(getClosestDateInTimeframe('2026-06-25', bounds, '2026-06-15')).toBe(
+        '2026-06-20',
+      );
+      expect(getClosestDateInTimeframe('2026-06-15', bounds, '2026-06-15')).toBe(
+        '2026-06-15',
+      );
+    });
+  });
+
+  describe('adjustDateToTimeframe', () => {
+    it('does not trigger update if date is already in timeframe', () => {
+      const onNoDateInAllTimeframe = jasmine.createSpy('onNoDateInAllTimeframe');
+      const onUpdateDate = jasmine.createSpy('onUpdateDate');
+      adjustDateToTimeframe({
+        currentVal: '2026-06-15',
+        bounds: { start: '2026-06-10', end: '2026-06-20' },
+        todayStr: '2026-06-15',
+        onNoDateInAllTimeframe,
+        onUpdateDate,
+      });
+      expect(onNoDateInAllTimeframe).not.toHaveBeenCalled();
+      expect(onUpdateDate).not.toHaveBeenCalled();
+    });
+
+    it('triggers update with closest date if date is outside timeframe', () => {
+      const onNoDateInAllTimeframe = jasmine.createSpy('onNoDateInAllTimeframe');
+      const onUpdateDate = jasmine.createSpy('onUpdateDate');
+      adjustDateToTimeframe({
+        currentVal: '2026-06-05',
+        bounds: { start: '2026-06-10', end: '2026-06-20' },
+        todayStr: '2026-06-15',
+        onNoDateInAllTimeframe,
+        onUpdateDate,
+      });
+      expect(onNoDateInAllTimeframe).not.toHaveBeenCalled();
+      expect(onUpdateDate).toHaveBeenCalledWith('2026-06-10');
+    });
   });
 });

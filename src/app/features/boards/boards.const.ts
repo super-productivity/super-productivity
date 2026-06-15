@@ -134,3 +134,17 @@ export const DEFAULT_PANEL_CFG: BoardPanelCfg = {
   isParentTasksOnly: false,
   projectIds: [''],
 };
+
+export const TIMEFRAME_OPTIONS = [
+  { value: 'ALL', label: T.F.BOARDS.FORM.TIMEFRAME_ALL },
+  { value: 'TODAY', label: T.F.BOARDS.FORM.TIMEFRAME_TODAY },
+  { value: 'TOMORROW', label: T.F.BOARDS.FORM.TIMEFRAME_TOMORROW },
+  { value: 'NEXT_WEEK', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
+  { value: 'NEXT_MONTH', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
+  { value: 'NEXT_DAYS', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_DAYS },
+  {
+    value: 'AT_LEAST_DAYS_FUTURE',
+    label: T.F.BOARDS.FORM.TIMEFRAME_AT_LEAST_DAYS_FUTURE,
+  },
+  { value: 'CUSTOM_RANGE', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
+];
