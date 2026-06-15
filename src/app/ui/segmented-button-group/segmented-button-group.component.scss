@@ -95,6 +95,35 @@
   outline-offset: 2px;
 }
 
-:host([data-size='md']) .segment {
-  padding: var(--s-half) var(--s);
+// Compact variant (data-size='md') for dense form rows. The default (lg) "card"
+// treatment — a 3px border plus a scale-up + elevation on the active segment —
+// reads as the selection "bouncing" and far too heavy in a small control, so md
+// drops the zoom/lift and uses a 1px border with a tinted active fill, matching
+// the other compact controls it sits beside.
+:host([data-size='md']) {
+  .segment {
+    border-width: 1px;
+    border-radius: var(--card-border-radius);
+    padding: var(--s-half) var(--s);
+  }
+
+  .segment-label {
+    font-size: 13px;
+    white-space: nowrap; // keep multi-word labels (e.g. "On date") on one line
+  }
+
+  @include mousePrimaryDevice {
+    .segment:not(.is-active):hover {
+      transform: none;
+      box-shadow: none;
+      background: var(--bg-lightest);
+    }
+  }
+
+  .segment.is-active {
+    border-width: 1px;
+    transform: none;
+    box-shadow: none;
+    background: color-mix(in srgb, var(--c-primary) 16%, transparent);
+  }
 }

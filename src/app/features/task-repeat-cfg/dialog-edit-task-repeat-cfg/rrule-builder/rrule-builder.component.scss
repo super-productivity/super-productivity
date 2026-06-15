@@ -275,9 +275,12 @@
 
 .rb-ends {
   display: flex;
+  // Stack the segmented control above its conditional COUNT/UNTIL input so the
+  // control keeps a stable full width — a row layout let it (and its label
+  // wrapping) resize as the input appeared/disappeared, so the control
+  // "bounced" with each selection.
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
   gap: var(--s);
 }
 
