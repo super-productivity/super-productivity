@@ -923,16 +923,33 @@ describe('LocalBackupService', () => {
     it('records the time after a meaningful backup and reads it back', async () => {
       (service as unknown as LocalBackupServiceWithPlatformFlags)._isAndroidWebView =
         true;
+      // Resolves true = a real write happened, which is what advances the time.
       spyOn(
-        service as unknown as { _backupAndroid: () => Promise<void> },
+        service as unknown as { _backupAndroid: () => Promise<boolean> },
         '_backupAndroid',
-      ).and.resolveTo();
+      ).and.resolveTo(true);
 
       await (service as unknown as LocalBackupServiceWithPrivate)._backup();
 
       const ts = service.getLastBackupTime();
       expect(ts).not.toBeNull();
       expect(Math.abs((ts as number) - Date.now())).toBeLessThan(5000);
+    });
+
+    it('does NOT record the time when the A3 guard skips the write (#7925)', async () => {
+      localStorage.removeItem(LS.LAST_LOCAL_BACKUP);
+      (service as unknown as LocalBackupServiceWithPlatformFlags)._isAndroidWebView =
+        true;
+      // Resolves false = the near-empty-over-substantial guard skipped the write,
+      // so the "last backup" time must stay put (the older backup is still current).
+      spyOn(
+        service as unknown as { _backupAndroid: () => Promise<boolean> },
+        '_backupAndroid',
+      ).and.resolveTo(false);
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(service.getLastBackupTime()).toBeNull();
     });
   });
 });

@@ -17,10 +17,11 @@ export enum LS {
   // prompt to hold off for a cooldown after a bad experience. Time only.
   LAST_CRITICAL_ERROR_TIME = 'SUP_LAST_CRITICAL_ERROR_TIME',
   LAST_LOCAL_SYNC_MODEL_CHANGE = 'SUP_LAST_LOCAL_SYNC_MODEL_CHANGE',
-  // Epoch ms of the last successful local (auto-)backup write. Set only after the
-  // meaningful-data guard in LocalBackupService._backup(), so it never advances on
-  // an empty/degraded write. Surfaced in Settings so users can see they're
-  // protected (#7901), and rides along in exported logs for eviction diagnosis.
+  // Epoch ms of the last successful local (auto-)backup write. Recorded by
+  // LocalBackupService._backup() only when a platform writer actually wrote (past
+  // the meaningful-data and A3 near-empty guards), so it never advances on a
+  // skipped/empty/degraded write. Surfaced in Settings so users can see they're
+  // protected (#7901).
   LAST_LOCAL_BACKUP = 'SUP_LAST_LOCAL_BACKUP',
   LOCAL_UI_HELPER = 'SUP_UI_HELPER',
 

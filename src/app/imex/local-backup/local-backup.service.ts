@@ -144,6 +144,15 @@ export class LocalBackupService {
     return primary || prev;
   }
 
+  /**
+   * Startup recovery entry point. PRECONDITION (enforced by the only caller,
+   * StartupService._initBackups): invoke only when the live store is genuinely
+   * blank — no state cache AND an empty op-log. The mobile branch may restore a
+   * backup *without a prompt*, which is a destructive op-log replacement; that is
+   * only safe because the empty op-log means the concurrent hydrator has nothing
+   * to replay and cannot be raced. Do NOT call this from a path where real ops
+   * may exist. See #7901.
+   */
   async askForFileStoreBackupIfAvailable(): Promise<void> {
     if (!IS_ELECTRON && !this._isAndroidWebView && !this._platformService.isIOS()) {
       return;
@@ -284,23 +293,28 @@ export class LocalBackupService {
       return;
     }
 
+    let didWrite = false;
     if (IS_ELECTRON) {
       // Electron has its own rotated, timestamped chain — no ring or A3 guard
       // needed (the bug class A3 protects against doesn't apply).
       await this._backupElectron(data);
+      didWrite = true;
     }
-    if (this._isAndroidWebView) {
-      await this._backupAndroid(data);
+    if (this._isAndroidWebView && (await this._backupAndroid(data))) {
+      didWrite = true;
     }
-    if (this._platformService.isIOS()) {
-      await this._backupIOS(data);
+    if (this._platformService.isIOS() && (await this._backupIOS(data))) {
+      didWrite = true;
     }
 
-    // #7901: record when a good backup was last written so Settings can show the
-    // user they're protected, and so the timestamp rides along in exported logs
-    // for the next eviction report. Reached only after the meaningful-data guard
-    // above, so it never advances on an empty/degraded write.
-    this._recordLastBackupTime();
+    // #7901: record when a good backup was actually written so Settings can show
+    // the user they're protected. Only on a real write: the per-platform A3
+    // near-empty guard (#7925) can skip the write to preserve an older, larger
+    // backup, and the timestamp must not advance then — it would falsely claim
+    // "just backed up" on exactly the post-eviction boot the guard protects.
+    if (didWrite) {
+      this._recordLastBackupTime();
+    }
   }
 
   private _recordLastBackupTime(): void {
@@ -362,26 +376,37 @@ export class LocalBackupService {
     return true;
   }
 
-  private async _backupAndroid(data: AppDataComplete): Promise<void> {
+  // Returns true when a backup was actually written, false when the A3 guard
+  // skipped it (so the caller knows whether to advance the last-backup time).
+  private async _backupAndroid(data: AppDataComplete): Promise<boolean> {
     const existing = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY);
-    if (this._guardNearEmptyOverwrite(data, existing, 'Android')) return;
+    if (this._guardNearEmptyOverwrite(data, existing, 'Android')) {
+      return false;
+    }
     if (existing) {
       await androidInterface.saveToDbWrapped(ANDROID_DB_KEY_PREV, existing);
     }
     await androidInterface.saveToDbWrapped(ANDROID_DB_KEY, JSON.stringify(data));
+    return true;
   }
 
-  private async _backupIOS(data: AppDataComplete): Promise<void> {
+  // Returns true when a backup was actually written, false when the A3 guard
+  // skipped it or the write failed.
+  private async _backupIOS(data: AppDataComplete): Promise<boolean> {
     try {
       const existing = await this._readIOSFileOrNull(IOS_BACKUP_FILENAME);
-      if (this._guardNearEmptyOverwrite(data, existing, 'iOS')) return;
+      if (this._guardNearEmptyOverwrite(data, existing, 'iOS')) {
+        return false;
+      }
       if (existing) {
         await this._writeIOSFile(IOS_BACKUP_PREV_FILENAME, existing);
       }
       await this._writeIOSFile(IOS_BACKUP_FILENAME, JSON.stringify(data));
       Log.log('iOS backup saved successfully');
+      return true;
     } catch (error) {
       Log.err('Failed to save iOS backup', error);
+      return false;
     }
   }
 
