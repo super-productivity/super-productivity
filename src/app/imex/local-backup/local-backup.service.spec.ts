@@ -298,6 +298,8 @@ describe('LocalBackupService', () => {
     type LocalBackupServiceWithIosRing = {
       _readIOSExistingSlotOrThrow: (path: string) => Promise<string | null>;
       _readIOSFileOrNull: (path: string) => Promise<string | null>;
+      _readIOSFileRaw: (path: string) => Promise<string>;
+      _iosFileExists: (path: string) => Promise<boolean>;
       _writeIOSFile: (path: string, data: string) => Promise<void>;
     };
 
@@ -360,6 +362,32 @@ describe('LocalBackupService', () => {
       await (service as unknown as LocalBackupServiceWithPrivate)._backup();
 
       expect(writeSpy).not.toHaveBeenCalled();
+    });
+
+    it('still writes the primary on the first-ever backup when the raw read throws (#8414)', async () => {
+      // Capacitor signals a missing file by THROWING (same as a transient
+      // failure), so the absent re-probe must let the write proceed end-to-end —
+      // the overwrite guard must not over-correct and block a legitimate first
+      // backup. Exercises _readIOSExistingSlotOrThrow's raw-throw + confirmed-absent
+      // branch through _backup().
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileRaw',
+      ).and.rejectWith(new Error('File does not exist'));
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_iosFileExists',
+      ).and.resolveTo(false);
+      const writeSpy = spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_writeIOSFile',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      // No prev promotion (nothing to promote) — just the single primary write.
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+      expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
     });
 
     it('loadBackupIOS resolves to "" (never throws) when no usable backup exists', async () => {
