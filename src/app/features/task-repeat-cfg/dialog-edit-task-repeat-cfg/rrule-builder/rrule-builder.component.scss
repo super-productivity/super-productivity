@@ -49,7 +49,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--extra-border-color);
-  border-radius: 9px;
+  border-radius: var(--card-border-radius);
   overflow: hidden;
 }
 
@@ -112,7 +112,7 @@
   color: var(--text-color);
   background: var(--bg, transparent);
   border: 1px solid var(--extra-border-color);
-  border-radius: 9px;
+  border-radius: var(--card-border-radius);
   font-size: 14px;
   font-family: inherit;
 
@@ -122,16 +122,23 @@
   }
 }
 
-// Native select themed with a custom chevron so it doesn't look raw.
+// Native select themed with a custom chevron so it doesn't look raw. A native
+// <select> can't host a pseudo-element or inherit `currentColor` into a
+// background data-URI, so the arrow color is baked into the SVG and swapped per
+// theme (same approach as the native datepicker indicator).
 .rb-sel {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
   padding-right: 30px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23888' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23666' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   cursor: pointer;
+
+  :host-context(.isDarkTheme) & {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23bbb' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  }
 }
 
 .rb-num {
@@ -212,7 +219,7 @@
   color: var(--text-color);
   background: transparent;
   border: 1px solid var(--extra-border-color);
-  border-radius: 9px;
+  border-radius: var(--card-border-radius);
   font-size: 13px;
   cursor: pointer;
   transition:

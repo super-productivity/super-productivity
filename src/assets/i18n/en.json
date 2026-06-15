@@ -2086,7 +2086,6 @@
         "RRULE_ADD_NTH": "Add line",
         "RRULE_NTH_WEEKDAY_DESCRIPTION": "Each line is an occurrence + one or more weekdays, e.g. 3rd + Monday = the 3rd Monday, or 1st + Mon,Tue = the 1st Monday and the 1st Tuesday. Add lines (+) to combine occurrences — a '3rd Monday' line and a '4th Sunday' line = BYDAY=3MO,4SU. Each line uses a different occurrence and is independent (not 'the 3rd of all of them'; that's the 'On selected weekdays' set instead).",
         "RRULE_YEARLY_MODE": "On",
-        "RRULE_YEARLY_MODE_DESCRIPTION": "How the yearly repeat is anchored. 'On a specific date' = a month and day (e.g. March 15). 'On weekdays within the months' = e.g. every Saturday in March–November (choose the months and the weekdays).",
         "RRULE_MONTH_1": "January",
         "RRULE_MONTH_2": "February",
         "RRULE_MONTH_3": "March",

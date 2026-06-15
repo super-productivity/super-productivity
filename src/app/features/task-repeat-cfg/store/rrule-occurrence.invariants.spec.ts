@@ -170,6 +170,27 @@ describe('rrule-occurrence invariants', () => {
     });
   });
 
+  describe('"fires within a decade" probe boundary (deliberate product rule)', () => {
+    // isRRuleValid probes a fixed 10-year window (anchored near MAXYEAR to bound
+    // the never-fire walk — see rrule-occurrence.util). A rule whose FIRST
+    // occurrence is >10y past that anchor is therefore classified invalid, by
+    // design: a real recurrence that first fires more than a decade out does not
+    // exist in practice, and accepting it would reintroduce the unbounded probe.
+    // These specs pin the boundary so a future window/anchor edit can't silently
+    // flip a real rule (reachable only via raw override).
+    it('rejects a rule whose first occurrence is >10y past the probe anchor', () => {
+      // "Feb 29 that is also a Monday" recurs only every ~28y, so the first hit
+      // lands well beyond the 10-year window (9644-02-29 from the 9620 anchor).
+      expect(isRRuleValid('FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO')).toBe(false);
+    });
+
+    it('accepts the analogous rule that DOES fire within the decade', () => {
+      // Plain "Feb 29" fires on the very first leap year in-window — control
+      // ensuring the rejection above is the >10y boundary, not the BY-parts.
+      expect(isRRuleValid('FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29')).toBe(true);
+    });
+  });
+
   it('getNextRRuleOccurrence is deterministic', () => {
     const a = getNextRRuleOccurrence(inp('FREQ=WEEKLY;BYDAY=MO'), BASE);
     const b = getNextRRuleOccurrence(inp('FREQ=WEEKLY;BYDAY=MO'), BASE);
