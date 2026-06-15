@@ -204,8 +204,8 @@ export interface TimeframeBounds {
 export interface TimeframeConfig {
   timeframe: string | undefined;
   daysVal?: number;
-  customStart?: string | null;
-  customEnd?: string | null;
+  customStart?: string | number | Date | null;
+  customEnd?: string | number | Date | null;
 }
 
 export interface AdjustDateOptions {

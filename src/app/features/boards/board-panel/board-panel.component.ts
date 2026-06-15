@@ -44,7 +44,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -61,6 +61,9 @@ import {
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
 } from '../../project/store/project.actions';
+import { SnackService } from '../../../core/snack/snack.service';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { truncate } from '../../../util/truncate';
 
 const getTaskScheduledDateStr = (
   task: TaskCopy,
@@ -106,6 +109,7 @@ const getTaskDeadlineDateStr = (
   templateUrl: './board-panel.component.html',
   styleUrl: './board-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [LocaleDatePipe],
 })
 export class BoardPanelComponent {
   T = T;
@@ -118,6 +122,9 @@ export class BoardPanelComponent {
   taskService = inject(TaskService);
   _matDialog = inject(MatDialog);
   _dateService = inject(DateService);
+  _snackService = inject(SnackService);
+  _localeDatePipe = inject(LocaleDatePipe);
+  _translateService = inject(TranslateService);
 
   allTasks$ = this.store.select(selectAllTasksInActiveProjects);
   allTasks = toSignal(this.allTasks$, {
@@ -451,6 +458,9 @@ export class BoardPanelComponent {
         todayStr,
         onNoDateInAllTimeframe: () => this.scheduleTask(task),
         onUpdateDate: (closestDate) => {
+          if (closestDate !== currentVal) {
+            this._showDateChangeSnack(task, closestDate);
+          }
           this.store.dispatch(
             PlannerActions.planTaskForDay({
               task,
@@ -469,6 +479,26 @@ export class BoardPanelComponent {
         );
       }
     }
+  }
+
+  private _showDateChangeSnack(
+    task: TaskCopy,
+    newDate: string,
+    isDeadline: boolean = false,
+  ): void {
+    const isForToday = newDate === this._dateService.todayStr();
+    const formattedDate = isForToday
+      ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
+      : (this._localeDatePipe.transform(newDate, 'shortDate') as string);
+
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: isDeadline ? T.F.TASK.S.DEADLINE_ADJUSTED : T.F.TASK.S.SCHEDULED_DATE_ADJUSTED,
+      translateParams: {
+        title: truncate(task.title, 20),
+        date: formattedDate,
+      },
+    });
   }
 
   private async _checkBacklogState(
@@ -561,11 +591,15 @@ export class BoardPanelComponent {
         todayStr,
         onNoDateInAllTimeframe: () => this.editDeadline(task),
         onUpdateDate: (closestDate) => {
+          if (closestDate !== currentVal) {
+            this._showDateChangeSnack(task, closestDate, true);
+          }
           this.store.dispatch(
             TaskSharedActions.setDeadline({
               taskId: task.id,
               deadlineDay: closestDate,
               ...getDeadlineAutoPlanFields(this._dateService, closestDate),
+              isSkipToast: true,
             }),
           );
         },

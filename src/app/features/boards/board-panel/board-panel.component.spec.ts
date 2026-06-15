@@ -35,6 +35,7 @@ import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-pl
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
+import { SnackService } from '../../../core/snack/snack.service';
 
 describe('BoardPanelComponent - Backlog Feature', () => {
   let component: BoardPanelComponent;
@@ -123,6 +124,8 @@ describe('BoardPanelComponent - Backlog Feature', () => {
         { provide: Store, useValue: storeMock },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },
+        { provide: SnackService, useValue: { open: () => {} } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en' } },
         { provide: WorkContextService, useValue: workContextServiceMock },
         { provide: ProjectService, useValue: projectServiceMock },
       ],
@@ -282,6 +285,8 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
         { provide: Store, useValue: storeMock },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },
+        { provide: SnackService, useValue: { open: () => {} } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en' } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],
@@ -374,6 +379,8 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         { provide: Store, useValue: storeMock },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },
+        { provide: SnackService, useValue: { open: () => {} } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en' } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],
@@ -752,6 +759,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
           { provide: Store, useValue: storeMock },
           { provide: TaskService, useValue: { currentTaskId: signal(null) } },
           { provide: MatDialog, useValue: {} },
+          { provide: SnackService, useValue: { open: () => {} } },
           { provide: WorkContextService, useValue: {} },
           { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
           { provide: DateService, useValue: mockDateService },
@@ -1112,6 +1120,7 @@ describe('BoardPanelComponent - drop()', () => {
           },
         },
         { provide: MatDialog, useValue: { open: dialogOpenSpy } },
+        { provide: SnackService, useValue: { open: () => {} } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
         { provide: DateService, useValue: mockDateService },
@@ -1536,6 +1545,7 @@ describe('BoardPanelComponent - drop()', () => {
         taskId: task.id,
         deadlineDay: '2026-06-14',
         ...getDeadlineAutoPlanFields(mockDateService, '2026-06-14'),
+        isSkipToast: true,
       }),
     );
   });
@@ -1565,6 +1575,7 @@ describe('BoardPanelComponent - drop()', () => {
         taskId: task.id,
         deadlineDay: '2026-06-15',
         ...getDeadlineAutoPlanFields(mockDateService, '2026-06-15'),
+        isSkipToast: true,
       }),
     );
   });
@@ -1594,6 +1605,7 @@ describe('BoardPanelComponent - drop()', () => {
         taskId: task.id,
         deadlineDay: '2026-06-14',
         ...getDeadlineAutoPlanFields(mockDateService, '2026-06-14'),
+        isSkipToast: true,
       }),
     );
   });
@@ -1623,6 +1635,7 @@ describe('BoardPanelComponent - drop()', () => {
         taskId: task.id,
         deadlineDay: '2026-06-21', // today + 7 days
         ...getDeadlineAutoPlanFields(mockDateService, '2026-06-21'),
+        isSkipToast: true,
       }),
     );
   });
@@ -1653,6 +1666,7 @@ describe('BoardPanelComponent - drop()', () => {
         taskId: task.id,
         deadlineDay: '2026-06-19', // today (14) + 5 days = 19
         ...getDeadlineAutoPlanFields(mockDateService, '2026-06-19'),
+        isSkipToast: true,
       }),
     );
   });

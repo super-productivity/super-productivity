@@ -1885,6 +1885,7 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign a project via short syntax for recurring tasks!",
         "CREATED_FOR_PROJECT": "Created task \"{{taskTitle}}\" for project \"{{projectTitle}}\"",
+        "DEADLINE_ADJUSTED": "Deadline for task \"{{title}}\" has been adjusted to {{date}}",
         "DEADLINE_REMOVED": "Deadline removed",
         "DEADLINE_SET": "Deadline set for {{date}}",
         "DELETED": "Deleted task \"{{title}}\"",
@@ -1897,6 +1898,7 @@
         "REMINDER_ADDED": "Scheduled <strong>\"{{title}}\"</strong> at <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
+        "SCHEDULED_DATE_ADJUSTED": "Scheduled date for task \"{{title}}\" has been adjusted to {{date}}",
         "TASK_ALREADY_EXISTS": "Task <strong>{{title}}</strong> already exists",
         "TASK_CREATED": "Created task \"{{taskTitle}}\""
       },
