@@ -84,10 +84,11 @@ const getTaskDeadlineDateStr = (
   return null;
 };
 
-const getFutureLogicalDateStr = (days: number, startOfNextDayDiffMs: number): string => {
-  const d = new Date(Date.now() - startOfNextDayDiffMs);
-  d.setDate(d.getDate() + days);
-  return getDbDateStr(d);
+const getFutureLogicalDateStr = (days: number, todayStr: string): string => {
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return getDbDateStr(date);
 };
 
 const isDateInTimeframe = (
@@ -111,18 +112,18 @@ const isDateInTimeframe = (
   }
   if (timeframe === 'NEXT_WEEK') {
     const start = todayStr;
-    const end = getFutureLogicalDateStr(7, startOfNextDayDiffMs);
+    const end = getFutureLogicalDateStr(7, todayStr);
     return dateStr >= start && dateStr <= end;
   }
   if (timeframe === 'NEXT_MONTH') {
     const start = todayStr;
-    const end = getFutureLogicalDateStr(30, startOfNextDayDiffMs);
+    const end = getFutureLogicalDateStr(30, todayStr);
     return dateStr >= start && dateStr <= end;
   }
   if (timeframe === 'NEXT_DAYS') {
     const start = todayStr;
     const limit = daysVal ?? 7;
-    const end = getFutureLogicalDateStr(limit, startOfNextDayDiffMs);
+    const end = getFutureLogicalDateStr(limit, todayStr);
     return dateStr >= start && dateStr <= end;
   }
   if (timeframe === 'CUSTOM_RANGE') {
@@ -138,6 +139,114 @@ const isDateInTimeframe = (
     return true;
   }
   return true;
+};
+
+const getClosestDateInTimeframe = (
+  currentVal: string | null,
+  timeframe: string | undefined,
+  daysVal: number | undefined,
+  customStart: string | undefined,
+  customEnd: string | undefined,
+  todayStr: string,
+  tomorrowStr: string,
+): string => {
+  if (!timeframe || timeframe === 'ALL') {
+    return currentVal ?? todayStr;
+  }
+
+  let start: string | undefined;
+  let end: string | undefined;
+
+  if (timeframe === 'TODAY') {
+    start = todayStr;
+    end = todayStr;
+  } else if (timeframe === 'TOMORROW') {
+    start = tomorrowStr;
+    end = tomorrowStr;
+  } else if (timeframe === 'NEXT_WEEK') {
+    start = todayStr;
+    end = getFutureLogicalDateStr(7, todayStr);
+  } else if (timeframe === 'NEXT_MONTH') {
+    start = todayStr;
+    end = getFutureLogicalDateStr(30, todayStr);
+  } else if (timeframe === 'NEXT_DAYS') {
+    start = todayStr;
+    const limit = daysVal ?? 7;
+    end = getFutureLogicalDateStr(limit, todayStr);
+  } else if (timeframe === 'CUSTOM_RANGE') {
+    start = customStart;
+    end = customEnd;
+  }
+
+  const refDate = currentVal ?? todayStr;
+  let closestDate = refDate;
+
+  if (start && end) {
+    if (refDate < start) {
+      closestDate = start;
+    } else if (refDate > end) {
+      closestDate = end;
+    }
+  } else if (start) {
+    if (refDate < start) {
+      closestDate = start;
+    }
+  } else if (end) {
+    if (refDate > end) {
+      closestDate = end;
+    }
+  }
+
+  return closestDate;
+};
+
+const adjustDateToTimeframe = (
+  currentVal: string | null,
+  timeframe: string | undefined,
+  daysVal: number | undefined,
+  customStart: string | undefined,
+  customEnd: string | undefined,
+  todayStr: string,
+  tomorrowStr: string,
+  startOfNextDayDiffMs: number,
+  onNoDateInAllTimeframe: () => void,
+  onUpdateDate: (closestDate: string) => void,
+): void => {
+  const isInTimeframe =
+    currentVal !== null &&
+    isDateInTimeframe(
+      currentVal,
+      timeframe,
+      daysVal,
+      customStart,
+      customEnd,
+      todayStr,
+      tomorrowStr,
+      startOfNextDayDiffMs,
+    );
+
+  if (isInTimeframe) {
+    return;
+  }
+
+  if (!timeframe || timeframe === 'ALL') {
+    if (!currentVal) {
+      onNoDateInAllTimeframe();
+    }
+    return;
+  }
+
+  const closestDate = getClosestDateInTimeframe(
+    currentVal,
+    timeframe,
+    daysVal,
+    customStart,
+    customEnd,
+    todayStr,
+    tomorrowStr,
+  );
+
+  onUpdateDate(closestDate);
 };
 
 @Component({
@@ -492,77 +601,25 @@ export class BoardPanelComponent {
         new Date(this._dateService.getLogicalTomorrowMs()),
       );
 
-      const isAlreadyInTimeframe =
-        currentVal !== null &&
-        isDateInTimeframe(
-          currentVal,
-          panelCfg.scheduledTimeframe,
-          panelCfg.scheduledDaysVal,
-          panelCfg.scheduledCustomStart,
-          panelCfg.scheduledCustomEnd,
-          todayStr,
-          tomorrowStr,
-          startOfNextDayDiffMs,
-        );
-
-      if (!isAlreadyInTimeframe) {
-        const timeframe = panelCfg.scheduledTimeframe;
-        if (!timeframe || timeframe === 'ALL') {
-          if (!currentVal) {
-            this.scheduleTask(task);
-          }
-        } else {
-          let start: string | undefined;
-          let end: string | undefined;
-
-          if (timeframe === 'TODAY') {
-            start = todayStr;
-            end = todayStr;
-          } else if (timeframe === 'TOMORROW') {
-            start = tomorrowStr;
-            end = tomorrowStr;
-          } else if (timeframe === 'NEXT_WEEK') {
-            start = todayStr;
-            end = getFutureLogicalDateStr(7, startOfNextDayDiffMs);
-          } else if (timeframe === 'NEXT_MONTH') {
-            start = todayStr;
-            end = getFutureLogicalDateStr(30, startOfNextDayDiffMs);
-          } else if (timeframe === 'NEXT_DAYS') {
-            start = todayStr;
-            const limit = panelCfg.scheduledDaysVal ?? 7;
-            end = getFutureLogicalDateStr(limit, startOfNextDayDiffMs);
-          } else if (timeframe === 'CUSTOM_RANGE') {
-            start = panelCfg.scheduledCustomStart;
-            end = panelCfg.scheduledCustomEnd;
-          }
-
-          const refDate = currentVal ?? todayStr;
-          let closestDate = refDate;
-
-          if (start && end) {
-            if (refDate < start) {
-              closestDate = start;
-            } else if (refDate > end) {
-              closestDate = end;
-            }
-          } else if (start) {
-            if (refDate < start) {
-              closestDate = start;
-            }
-          } else if (end) {
-            if (refDate > end) {
-              closestDate = end;
-            }
-          }
-
+      adjustDateToTimeframe(
+        currentVal,
+        panelCfg.scheduledTimeframe,
+        panelCfg.scheduledDaysVal,
+        panelCfg.scheduledCustomStart,
+        panelCfg.scheduledCustomEnd,
+        todayStr,
+        tomorrowStr,
+        startOfNextDayDiffMs,
+        () => this.scheduleTask(task),
+        (closestDate) => {
           this.store.dispatch(
             PlannerActions.planTaskForDay({
               task,
               day: closestDate,
             }),
           );
-        }
-      }
+        },
+      );
     }
     if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
       this.store.dispatch(
@@ -652,69 +709,17 @@ export class BoardPanelComponent {
         new Date(this._dateService.getLogicalTomorrowMs()),
       );
 
-      const isAlreadyInTimeframe =
-        currentVal !== null &&
-        isDateInTimeframe(
-          currentVal,
-          panelCfg.deadlineTimeframe,
-          panelCfg.deadlineDaysVal,
-          panelCfg.deadlineCustomStart,
-          panelCfg.deadlineCustomEnd,
-          todayStr,
-          tomorrowStr,
-          startOfNextDayDiffMs,
-        );
-
-      if (!isAlreadyInTimeframe) {
-        const timeframe = panelCfg.deadlineTimeframe;
-        if (!timeframe || timeframe === 'ALL') {
-          if (!currentVal) {
-            this.editDeadline(task);
-          }
-        } else {
-          let start: string | undefined;
-          let end: string | undefined;
-
-          if (timeframe === 'TODAY') {
-            start = todayStr;
-            end = todayStr;
-          } else if (timeframe === 'TOMORROW') {
-            start = tomorrowStr;
-            end = tomorrowStr;
-          } else if (timeframe === 'NEXT_WEEK') {
-            start = todayStr;
-            end = getFutureLogicalDateStr(7, startOfNextDayDiffMs);
-          } else if (timeframe === 'NEXT_MONTH') {
-            start = todayStr;
-            end = getFutureLogicalDateStr(30, startOfNextDayDiffMs);
-          } else if (timeframe === 'NEXT_DAYS') {
-            start = todayStr;
-            const limit = panelCfg.deadlineDaysVal ?? 7;
-            end = getFutureLogicalDateStr(limit, startOfNextDayDiffMs);
-          } else if (timeframe === 'CUSTOM_RANGE') {
-            start = panelCfg.deadlineCustomStart;
-            end = panelCfg.deadlineCustomEnd;
-          }
-
-          const refDate = currentVal ?? todayStr;
-          let closestDate = refDate;
-
-          if (start && end) {
-            if (refDate < start) {
-              closestDate = start;
-            } else if (refDate > end) {
-              closestDate = end;
-            }
-          } else if (start) {
-            if (refDate < start) {
-              closestDate = start;
-            }
-          } else if (end) {
-            if (refDate > end) {
-              closestDate = end;
-            }
-          }
-
+      adjustDateToTimeframe(
+        currentVal,
+        panelCfg.deadlineTimeframe,
+        panelCfg.deadlineDaysVal,
+        panelCfg.deadlineCustomStart,
+        panelCfg.deadlineCustomEnd,
+        todayStr,
+        tomorrowStr,
+        startOfNextDayDiffMs,
+        () => this.editDeadline(task),
+        (closestDate) => {
           this.store.dispatch(
             TaskSharedActions.setDeadline({
               taskId: task.id,
@@ -722,8 +727,8 @@ export class BoardPanelComponent {
               ...getDeadlineAutoPlanFields(this._dateService, closestDate),
             }),
           );
-        }
-      }
+        },
+      );
     }
     if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
       this.store.dispatch(
