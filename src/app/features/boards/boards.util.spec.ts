@@ -405,9 +405,9 @@ describe('Timeframe helpers', () => {
       expect(boundsSun).toEqual({ start: '2026-06-15', end: '2026-06-21' });
     });
 
-    it('resolves NEXT_MONTH', () => {
-      const bounds = resolveTimeframeBounds({ timeframe: 'NEXT_MONTH' }, '2026-06-15');
-      expect(bounds).toEqual({ start: '2026-06-15', end: '2026-07-15' });
+    it('resolves THIS_MONTH (entire current month)', () => {
+      const bounds = resolveTimeframeBounds({ timeframe: 'THIS_MONTH' }, '2026-06-15');
+      expect(bounds).toEqual({ start: '2026-06-01', end: '2026-06-30' });
     });
 
     it('resolves NEXT_DAYS with custom limit', () => {
