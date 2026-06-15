@@ -114,18 +114,28 @@ export class RepeatTaskHeatmapComponent {
   });
 
   /**
+   * Which engine is authoritative for this cfg's schedule overlay — the single
+   * routing predicate shared by `_hasProjectionSchedule` and
+   * `_scheduledDaysInYear` so the two can never drift:
+   *  - RRULE engine: the per-device flag is on AND the rule parses + fires.
+   *  - else the legacy `repeatCycle` engine, which needs a usable `repeatEvery`.
+   */
+  private _usesRRuleEngine(cfg: TaskRepeatCfg): boolean {
+    return isRRuleEngineEnabled() && !!cfg.rrule && isRRuleValid(cfg.rrule);
+  }
+  private _hasUsableRepeatEvery(cfg: TaskRepeatCfg): boolean {
+    return Number.isInteger(cfg.repeatEvery) && cfg.repeatEvery >= 1;
+  }
+
+  /**
    * True when the schedule overlay is active for this cfg: a flag-on valid
    * RRULE, or a legacy cfg with a usable `repeatEvery` (the legacy engine then
-   * drives the streak/projection). Mirrors the routing in
-   * `_scheduledDaysInYear`; kept structural (not "fires this year") so an
+   * drives the streak/projection). Kept structural (not "fires this year") so an
    * exhausted rule still contributes a navigable — if empty — current year,
    * which the no-stranding guards in `heatmapData()` keep rendered.
    */
   private _hasProjectionSchedule(cfg: TaskRepeatCfg): boolean {
-    if (isRRuleEngineEnabled() && cfg.rrule && isRRuleValid(cfg.rrule)) {
-      return true;
-    }
-    return Number.isInteger(cfg.repeatEvery) && cfg.repeatEvery >= 1;
+    return this._usesRRuleEngine(cfg) || this._hasUsableRepeatEvery(cfg);
   }
   readonly canPrevYear = computed(
     () => prevYearOf(this.availableYears(), this.selectedYear()) !== null,
@@ -394,11 +404,13 @@ export class RepeatTaskHeatmapComponent {
     yearStart: Date,
     horizon: Date,
   ): Set<string> {
-    if (isRRuleEngineEnabled() && cfg.rrule && isRRuleValid(cfg.rrule)) {
+    if (this._usesRRuleEngine(cfg)) {
       return new Set(
         getRRuleOccurrencesInRange(
           {
-            rrule: cfg.rrule,
+            // `_usesRRuleEngine` already established `cfg.rrule` is a present,
+            // valid rule (the extracted predicate breaks TS's inline narrowing).
+            rrule: cfg.rrule as string,
             // For a from-completion schedule this anchors past occurrences at
             // the CURRENT effective start — a best-effort reading of history,
             // since every completion re-anchored the series along the way.
@@ -413,7 +425,7 @@ export class RepeatTaskHeatmapComponent {
 
     // Legacy engine. A malformed/absent repeatEvery can't enumerate anything —
     // bail without invoking the engine (which would only warn and return null).
-    if (!Number.isInteger(cfg.repeatEvery) || cfg.repeatEvery < 1) {
+    if (!this._hasUsableRepeatEvery(cfg)) {
       return new Set();
     }
 

@@ -13,6 +13,7 @@ import {
 } from './rrule-parse.util';
 import { getFirstRRuleOccurrence } from '../store/rrule-occurrence.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { assertNever } from '../../../util/assert-never';
 
 /**
  * Converts a legacy (pre-RRULE) TaskRepeatCfg — `repeatCycle` + `repeatEvery` +
@@ -334,8 +335,14 @@ const _legacyEquivalent = (
       if (_isClampIdiom(monthDays, setPos)) return out;
       return null;
     }
+    default:
+      // Exhaustiveness guard: a new RepeatCycleOption must get an explicit
+      // branch here. Without it the value would fall through to the sentinel
+      // (null → LEGACY_NEVER_FIRES_FALLBACK), silently making old/flag-off
+      // clients create nothing for a real schedule — a compile error is far
+      // safer than that silent data divergence.
+      return assertNever(cycle);
   }
-  return null;
 };
 
 /** BYMONTHDAY=<d>,-1;BYSETPOS=1 — the RFC clamp idiom emitted by the forward

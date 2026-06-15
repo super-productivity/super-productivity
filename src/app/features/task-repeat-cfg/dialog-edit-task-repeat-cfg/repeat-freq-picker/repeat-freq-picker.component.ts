@@ -27,6 +27,23 @@ const CUSTOM_VALUE = 'RRULE';
  * (clicking it does not close the dropdown). All recurrence logic — presets,
  * RRULE engine, sync-safe persistence — stays in the dialog/service; this
  * component only presents the choice.
+ *
+ * DEVIATION (deliberate, not an accidental reinvention of mat-select/mat-menu):
+ * the defining interaction is "More options expands the long tail IN-PANEL
+ * without closing", which fights both Material primitives —
+ *  - `mat-select` is a value form-control with fixed option rows; it has no
+ *    notion of an in-panel expandable section plus a separate "Custom" entry
+ *    that switches the dialog into builder mode.
+ *  - `mat-menu` closes on every `mat-menu-item` activation, does NOT match its
+ *    panel width to the trigger (this picker does, via `triggerWidth`), and
+ *    keeping it open for the toggle would mean mixing plain buttons with
+ *    `mat-menu-item`s (breaking its arrow-key roving focus) plus width-matching
+ *    CSS overrides of Material internals — exactly what the styling guide
+ *    forbids.
+ * A raw `cdkConnectedOverlay` (the only one in `src/app`) is therefore the
+ * lighter, rule-consistent option: it owns the panel without overriding any
+ * shared/Material component. Keep the recurrence/presentation split above so
+ * this stays a thin, swappable view if Material ever grows a matching control.
  */
 @Component({
   selector: 'repeat-freq-picker',

@@ -3,7 +3,6 @@
     <div
       class="heatmap-container"
       [class.is-interactive]="interactive()"
-      [class.is-animate-reveal]="animateReveal()"
     >
       @if (tip(); as t) {
         <div
@@ -56,7 +55,6 @@
                     @for (day of week.days; track $index) {
                       <div
                         [class]="getDayClass(day)"
-                        [style.--reveal-index]="day?.revealIndex"
                         [attr.role]="interactive() && day ? 'button' : null"
                         [attr.tabindex]="interactive() && day ? 0 : null"
                         [attr.aria-label]="day ? getDayTitle(day) : null"

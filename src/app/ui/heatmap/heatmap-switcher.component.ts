@@ -60,8 +60,7 @@ export class HeatmapSwitcherComponent {
    *  listens to `monthViewChange` and moves its data window along. */
   readonly monthBoundless = input<boolean>(false);
   readonly monthViewChange = output<{ y: number; m: number }>();
-  /** Passed through to both views — preview-only flourishes (default off). */
-  readonly animateReveal = input<boolean>(false);
+  /** Passed through to both views — preview-only flourish (default off). */
   readonly showWeekends = input<boolean>(false);
 
   readonly view = signal<HeatmapView>('year');

@@ -99,46 +99,8 @@
   }
 }
 
-// --- Segmented control (iOS/TickTick style: pill on a track) ---
-// Stretches to the column width so every segmented bar has the same size.
-.rb-seg {
-  display: flex;
-  flex-wrap: wrap;
-  align-self: stretch;
-  max-width: 100%;
-  padding: 3px;
-  gap: 2px;
-  background: var(--bg-lightest, var(--extra-border-color));
-  border-radius: 11px;
-}
-
-.rb-seg-btn {
-  flex: 1 1 auto;
-  min-width: 56px;
-  padding: var(--s-half) var(--s);
-  border: none;
-  background: transparent;
-  color: var(--text-color);
-  font: inherit;
-  font-size: 13px;
-  border-radius: 8px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-
-  &:hover:not(.active) {
-    background: rgba(127, 127, 127, 0.12);
-  }
-
-  &.active {
-    background: var(--card-bg, #fff);
-    color: var(--c-primary);
-    font-weight: 600;
-    box-shadow: var(--whiteframe-shadow-2dp, 0 1px 3px rgba(0, 0, 0, 0.2));
-  }
-}
+// Segmented controls (end condition, schedule type) now use the shared
+// `segmented-button-group` component — no local segmented styles needed.
 
 // --- Inputs / native selects ---
 .rb-sel,

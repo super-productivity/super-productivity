@@ -81,9 +81,8 @@ export class HeatmapMonthCalendarComponent {
    *  act on `dayClick`, e.g. click-to-simulate). Display-only calendars keep
    *  plain, non-focusable cells. */
   readonly interactive = input<boolean>(false);
-  /** Preview-only flourishes, default OFF so the Activity heatmap is untouched:
-   *  stagger-reveal occurrence cells, and tint weekend columns. */
-  readonly animateReveal = input<boolean>(false);
+  /** Preview-only flourish, default OFF so the Activity heatmap is untouched:
+   *  tint weekend columns. */
   readonly showWeekends = input<boolean>(false);
   /** When true, month navigation is unlimited in both directions instead of
    *  bounded to `[rangeStart, rangeEnd]`. The consumer is expected to listen to
@@ -232,10 +231,10 @@ export class HeatmapMonthCalendarComponent {
     }
     if (d.isProjected) {
       const parts = [this._translateService.instant(T.G.HEATMAP_PROJECTED) as string];
-      if (d.revealIndex != null) {
+      if (d.occurrenceIndex != null) {
         parts.push(
           this._translateService.instant(T.G.HEATMAP_OCCURRENCE_NR, {
-            nr: d.revealIndex + 1,
+            nr: d.occurrenceIndex + 1,
           }) as string,
         );
       }

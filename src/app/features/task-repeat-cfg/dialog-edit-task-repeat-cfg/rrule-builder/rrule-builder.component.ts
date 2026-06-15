@@ -14,6 +14,10 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { CollapsibleComponent } from '../../../../ui/collapsible/collapsible.component';
+import {
+  SegmentedButtonGroupComponent,
+  SegmentedButtonOption,
+} from '../../../../ui/segmented-button-group/segmented-button-group.component';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { RRuleFeatureFlagService } from '../../../config/rrule-feature-flag.service';
 import { T } from '../../../../t.const';
@@ -87,6 +91,7 @@ const MONTH_T_KEYS = [
     NgTemplateOutlet,
     MatIcon,
     MatIconButton,
+    SegmentedButtonGroupComponent,
   ],
 })
 export class RruleBuilderComponent implements OnInit {
@@ -185,10 +190,17 @@ export class RruleBuilderComponent implements OnInit {
   ];
   /** Sentinel select value for the per-row custom ordinal input. */
   readonly ORD_CUSTOM = 'CUSTOM';
-  endOpts: SelectOpt<RRuleFormModel['endType']>[] = [
-    { value: 'NEVER', label: T.F.TASK_REPEAT.F.RRULE_END_NEVER },
-    { value: 'UNTIL', label: T.F.TASK_REPEAT.F.RRULE_END_UNTIL },
-    { value: 'COUNT', label: T.F.TASK_REPEAT.F.RRULE_END_COUNT },
+  // Single-select segmented controls rendered via the shared
+  // segmented-button-group (id = the model value; labelKey is translated by the
+  // component). The schedule-type ids map to the boolean repeatFromCompletion.
+  readonly endOptions: readonly SegmentedButtonOption[] = [
+    { id: 'NEVER', labelKey: T.F.TASK_REPEAT.F.RRULE_END_NEVER },
+    { id: 'UNTIL', labelKey: T.F.TASK_REPEAT.F.RRULE_END_UNTIL },
+    { id: 'COUNT', labelKey: T.F.TASK_REPEAT.F.RRULE_END_COUNT },
+  ];
+  readonly scheduleTypeOptions: readonly SegmentedButtonOption[] = [
+    { id: 'START', labelKey: T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START },
+    { id: 'COMPLETION', labelKey: T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION },
   ];
   weekdaySelectOpts: SelectOpt<RRuleWeekday>[] = this.weekdays.map((w) => ({
     value: w.value,
@@ -414,6 +426,10 @@ export class RruleBuilderComponent implements OnInit {
   setEndType(v: string): void {
     this._patch({ endType: v as RRuleFormModel['endType'] });
   }
+  /** segmented-button-group emits `string | number`; the end ids are strings. */
+  onEndTypeChange(id: string | number): void {
+    this.setEndType(String(id));
+  }
   setCount(v: string): void {
     this._patch({ count: Math.max(1, Math.floor(+v) || 1) });
   }
@@ -493,5 +509,9 @@ export class RruleBuilderComponent implements OnInit {
   setRepeatFromCompletion(v: boolean): void {
     this._fromCompletion.set(v);
     this.repeatFromCompletionChange.emit(v);
+  }
+  /** Schedule-type segmented control: id 'COMPLETION' → repeat-from-completion. */
+  onScheduleTypeChange(id: string | number): void {
+    this.setRepeatFromCompletion(id === 'COMPLETION');
   }
 }

@@ -27,7 +27,7 @@ export interface DayData {
   // heatmap never sets them, so its rendering is unchanged):
   isNext?: boolean; // the next upcoming occurrence — spotlit with a pulse ring
   isToday?: boolean; // today's cell — marked with a ring
-  revealIndex?: number; // occurrence order in the window — staggers the reveal anim
+  occurrenceIndex?: number; // 0-based order in the window — drives the tooltip's "occurrence #N"
 }
 
 export interface WeekData {
@@ -119,9 +119,8 @@ export class HeatmapComponent {
    *  act on `dayClick`, e.g. click-to-simulate). Display-only heatmaps keep
    *  plain, non-focusable cells. */
   readonly interactive = input<boolean>(false);
-  /** Preview-only flourishes, default OFF so the Activity heatmap is untouched:
-   *  stagger-reveal occurrence cells, and tint weekend rows. */
-  readonly animateReveal = input<boolean>(false);
+  /** Preview-only flourish, default OFF so the Activity heatmap is untouched:
+   *  tint weekend rows. */
   readonly showWeekends = input<boolean>(false);
 
   onDayKeydown(event: Event, day: DayData | null): void {
@@ -177,10 +176,10 @@ export class HeatmapComponent {
     }
     if (day.isProjected) {
       const parts = [this._translateService.instant(T.G.HEATMAP_PROJECTED) as string];
-      if (day.revealIndex != null) {
+      if (day.occurrenceIndex != null) {
         parts.push(
           this._translateService.instant(T.G.HEATMAP_OCCURRENCE_NR, {
-            nr: day.revealIndex + 1,
+            nr: day.occurrenceIndex + 1,
           }) as string,
         );
       }

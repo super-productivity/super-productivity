@@ -6,6 +6,7 @@ import {
   ElementRef,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { Task, TaskReminderOptionId } from '../../tasks/task.model';
@@ -181,10 +182,31 @@ export class DialogEditTaskRepeatCfgComponent {
   // a formly control, so read it directly.
   isRRuleMode = computed(() => this.repeatCfg().quickSetting === 'RRULE');
 
-  // Options for the TickTick-style chip picker (replaces the dropdown). The
-  // date-aware labels (e.g. "Monthly on the 13th") rebuild when the start date
-  // changes.
-  quickSettingOptions = computed(() => this._buildQuickSettingOptions());
+  // Value-equal key for the chip-picker options: only the reference DAY and the
+  // locale change the date-aware labels (e.g. "Monthly on the 13th"). formly
+  // emits a CLONED model — and thus a new `repeatCfg()` — on every keystroke in
+  // ANY field, so reading `repeatCfg()` directly rebuilt the whole option list
+  // (16 `translate.instant` + 4 `toLocaleDateString`) per character. Mirrors
+  // `_previewScheduleCfg`'s custom `equal` for the same reason.
+  private readonly _quickSettingOptionsKey = computed(
+    () => {
+      const sd = this.repeatCfg().startDate as string | Date | undefined;
+      const refDate =
+        sd instanceof Date ? sd : sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
+      return {
+        refDateStr: getDbDateStr(refDate),
+        locale: this._dateTimeFormatService.currentLocale(),
+      };
+    },
+    { equal: (a, b) => a.refDateStr === b.refDateStr && a.locale === b.locale },
+  );
+  // Options for the TickTick-style chip picker (replaces the dropdown). Tracks
+  // only the value-equal key above; the build itself reads `repeatCfg()` for the
+  // start date `untracked`, so an unrelated-field keystroke never rebuilds it.
+  quickSettingOptions = computed(() => {
+    this._quickSettingOptionsKey();
+    return untracked(() => this._buildQuickSettingOptions());
+  });
 
   // Common presets shown by default in the dropdown (in this order); the rest
   // hide behind "More options". Order: every day, weekly, monthly, yearly, every
@@ -464,12 +486,11 @@ export class DialogEditTaskRepeatCfgComponent {
       }
     }
     // --- preview-only flourishes (the Activity heatmap never sets these) ---
-    // Occurrence order → stagger index for the reveal animation (capped so the
-    // longest delay stays snappy even for a daily rule).
+    // Occurrence order within the window → the tooltip's "occurrence #N" label.
     occ.forEach((d, i) => {
       const day = dayMap.get(getDbDateStr(d));
       if (day) {
-        day.revealIndex = Math.min(i, 18);
+        day.occurrenceIndex = i;
       }
     });
     // Today's ring — only when today falls inside the rendered window.
@@ -851,36 +872,48 @@ export class DialogEditTaskRepeatCfgComponent {
         !initialForAlign ||
         initialForAlign.rrule !== working.rrule ||
         initialForAlign.startDate !== working.startDate;
-      if (scheduleTouched && working.startDate) {
-        const aligned = getAlignedStartDate(working.rrule as string, working.startDate);
-        const finalStartDate = aligned ?? working.startDate;
-        // A rule can parse fine yet match no real date (e.g. raw override
-        // FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30) — persisting it would create a
-        // recurrence that silently never fires, with the legacy fallback
-        // bypassed because the rule IS valid. Probe the first occurrence
-        // against the startDate actually being persisted.
-        if (
-          !getFirstRRuleOccurrence({
-            rrule: working.rrule as string,
-            startDate: finalStartDate,
-          })
-        ) {
-          this._snackService.open({
-            type: 'ERROR',
-            msg: T.F.TASK_REPEAT.F.RRULE_NO_OCCURRENCE,
-          });
-          formGroup1.markAllAsTouched();
-          return;
+      if (scheduleTouched) {
+        // Alignment and the no-occurrence probe both need a concrete startDate.
+        // The form always sets one, so the absent case is latent — but if it
+        // ever happens we still fall through to the legacy re-derivation below
+        // (unconditional within `scheduleTouched`), so a non-representable rule
+        // can never persist with STALE legacy fields instead of the never-fires
+        // sentinel (old/flag-off clients would otherwise fire it on wrong days,
+        // contradicting the authoring warning).
+        let finalStartDate = working.startDate;
+        if (working.startDate) {
+          const aligned = getAlignedStartDate(working.rrule as string, working.startDate);
+          finalStartDate = aligned ?? working.startDate;
+          // A rule can parse fine yet match no real date (e.g. raw override
+          // FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30) — persisting it would create a
+          // recurrence that silently never fires, with the legacy fallback
+          // bypassed because the rule IS valid. Probe the first occurrence
+          // against the startDate actually being persisted.
+          if (
+            !getFirstRRuleOccurrence({
+              rrule: working.rrule as string,
+              startDate: finalStartDate,
+            })
+          ) {
+            this._snackService.open({
+              type: 'ERROR',
+              msg: T.F.TASK_REPEAT.F.RRULE_NO_OCCURRENCE,
+            });
+            formGroup1.markAllAsTouched();
+            return;
+          }
         }
         // ALWAYS re-derive the legacy fallback fields against the final
         // startDate — not only when alignment moved it. The builder emits on
         // rule edits only, so a startDate change made after the last builder
         // emit (e.g. a BYDAY-less weekly rule, where no alignment applies)
         // would otherwise persist a new dtstart alongside legacy weekday
-        // booleans still derived from the old start date.
+        // booleans still derived from the old start date. With no startDate the
+        // derivation still runs — `rruleToLegacyTaskRepeatCfg` writes the
+        // sentinel for non-representable rules regardless of start.
         this.repeatCfg.update((cfg) => ({
           ...cfg,
-          startDate: finalStartDate,
+          ...(finalStartDate ? { startDate: finalStartDate } : {}),
           ...rruleToLegacyTaskRepeatCfg(cfg.rrule as string, finalStartDate),
         }));
       }

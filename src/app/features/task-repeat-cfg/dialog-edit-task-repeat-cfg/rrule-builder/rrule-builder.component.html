@@ -383,19 +383,14 @@
   <div class="rb-field">
     <label>{{ T.F.TASK_REPEAT.F.RRULE_END | translate }}</label>
     <div class="rb-ends">
-      <div class="rb-seg">
-        @for (o of endOpts; track o.value) {
-          <button
-            type="button"
-            class="rb-seg-btn"
-            [class.active]="o.value === model().endType"
-            [attr.aria-pressed]="o.value === model().endType"
-            (click)="setEndType(o.value)"
-          >
-            {{ o.label | translate }}
-          </button>
-        }
-      </div>
+      <segmented-button-group
+        class="rb-segmented"
+        [options]="endOptions"
+        [selectedId]="model().endType"
+        [ariaLabel]="T.F.TASK_REPEAT.F.RRULE_END | translate"
+        size="md"
+        (selectionChange)="onEndTypeChange($event)"
+      ></segmented-button-group>
       @if (model().endType === 'COUNT') {
         <input
           #countIn
@@ -428,26 +423,14 @@
     <!-- Schedule type: fixed calendar dates vs. count the interval from completion -->
     <div class="rb-field">
       <label>{{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate }}</label>
-      <div class="rb-seg">
-        <button
-          type="button"
-          class="rb-seg-btn"
-          [class.active]="!fromCompletion()"
-          [attr.aria-pressed]="!fromCompletion()"
-          (click)="setRepeatFromCompletion(false)"
-        >
-          {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START | translate }}
-        </button>
-        <button
-          type="button"
-          class="rb-seg-btn"
-          [class.active]="fromCompletion()"
-          [attr.aria-pressed]="fromCompletion()"
-          (click)="setRepeatFromCompletion(true)"
-        >
-          {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION | translate }}
-        </button>
-      </div>
+      <segmented-button-group
+        class="rb-segmented"
+        [options]="scheduleTypeOptions"
+        [selectedId]="fromCompletion() ? 'COMPLETION' : 'START'"
+        [ariaLabel]="T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate"
+        size="md"
+        (selectionChange)="onScheduleTypeChange($event)"
+      ></segmented-button-group>
       <div class="rb-hint">
         {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESCRIPTION | translate }}
       </div>
