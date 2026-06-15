@@ -52,7 +52,7 @@ export class SyncEffects {
 
   syncBeforeQuit$ = createEffect(
     () =>
-      !IS_ELECTRON
+      !IS_ELECTRON || IS_QUICK_ADD_HUD
         ? EMPTY
         : this._dataInitStateService.isAllDataLoadedInitially$.pipe(
             concatMap(() => this._syncWrapperService.isEnabledAndReady$),
