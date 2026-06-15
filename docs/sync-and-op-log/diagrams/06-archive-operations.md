@@ -113,14 +113,12 @@ flowchart TD
 
 ## ArchiveOperationHandler Integration
 
-The `OperationApplierService` uses a **fail-fast** approach: if hard dependencies are missing, it throws `SyncStateCorruptedError` rather than attempting complex retry logic. This triggers a full re-sync, which is safer than partial recovery.
+The `OperationApplierService` applies operations in the order they arrive from the sync server, which preserves causal ordering (each client uploads its ops in causal order, and the server assigns sequence numbers in upload order). It converts each op to an action, applies the batch via a single bulk dispatch, then runs archive side effects. If an operation fails to apply, the applier returns it as a `failedOp`; the caller surfaces a partial-apply failure and re-validates state, and the op is retried on the next hydration.
 
 ```mermaid
 flowchart TD
-    subgraph OperationApplierService["OperationApplierService (Fail-Fast)"]
-        OA1[Receive operation] --> OA2{Check hard<br/>dependencies}
-        OA2 -->|Missing| OA_ERR["throw SyncStateCorruptedError<br/>(triggers full re-sync)"]
-        OA2 -->|OK| OA3[convertOpToAction]
+    subgraph OperationApplierService["OperationApplierService (Bulk Dispatch)"]
+        OA1[Receive operations] --> OA3[convertOpToAction]
         OA3 --> OA4["store.dispatch(action)<br/>with meta.isRemote=true"]
         OA4 --> OA5["archiveOperationHandler<br/>.handleOperation(action)"]
     end
@@ -142,12 +140,11 @@ flowchart TD
 
     style OperationApplierService fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
     style Handler fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    style OA_ERR fill:#ffcdd2,stroke:#c62828,stroke-width:2px
 ```
 
-**Why Fail-Fast?**
+**Why Arrival-Order Apply (No Dependency Pre-Check)?**
 
-The server guarantees operations arrive in sequence order, and delete operations are atomic via meta-reducers. If dependencies are missing, something is fundamentally wrong with sync state. A full re-sync is safer than attempting partial recovery with potential inconsistencies.
+The server guarantees operations arrive in sequence order, and each client uploads its ops in causal order (a child is never created before its parent). Delete operations are atomic via meta-reducers. Because correct ordering is already guaranteed upstream, the applier doesn't pre-check dependencies — it applies ops in arrival order. If an op still fails to apply, it is returned to the caller, which re-validates state and retries on the next hydration rather than living with a partial inconsistency.
 
 ## Archive Operations Summary
 
