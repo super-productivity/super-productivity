@@ -58,3 +58,11 @@ export type KeyboardConfig = Readonly<{
   // Dynamic plugin shortcuts - added at runtime
   [key: `plugin_${string}`]: string | null;
 }>;
+
+export const GLOBAL_KEY_CFG_KEYS: (keyof KeyboardConfig)[] = [
+  'globalShowHide',
+  'globalToggleTaskStart',
+  'globalAddNote',
+  'globalAddTask',
+  'globalToggleTaskWidget',
+];

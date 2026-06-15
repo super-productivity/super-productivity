@@ -3,11 +3,11 @@ import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Subject } from 'rxjs';
 import { Action } from '@ngrx/store';
+import { GlobalConfigEffects } from './global-config.effects';
 import {
-  GlobalConfigEffects,
   mapKeyboardConfigToQwerty,
   mapShortcutToQwerty,
-} from './global-config.effects';
+} from '../keyboard-shortcut.util';
 import { KeyboardLayout } from '../../../core/keyboard-layout/keyboard-layout.service';
 import { DateService } from 'src/app/core/date/date.service';
 import { LanguageService } from '../../../core/language/language.service';
