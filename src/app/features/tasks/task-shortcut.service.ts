@@ -124,6 +124,17 @@ export class TaskShortcutService {
     // Check if the focused task's context menu is open - if so, skip arrow navigation shortcuts
     const isContextMenuOpen = this._isTaskContextMenuOpen(focusedTaskId);
 
+    if (!isContextMenuOpen && ev.key === 'Escape') {
+      const didDeleteEmptySubTask = this._handleTaskShortcut(
+        focusedTaskId,
+        'deleteIfEmptySubTask',
+      );
+      if (didDeleteEmptySubTask) {
+        ev.preventDefault();
+        return true;
+      }
+    }
+
     // Ctrl/Cmd+Enter on a focused (but not editing) task: same as the `a`
     // shortcut — create a new subtask. Must run before the plain-Enter
     // "edit title" handler below. A user-bound `togglePlay` is checked
@@ -386,8 +397,8 @@ export class TaskShortcutService {
       // Close context menu if open before executing the shortcut
       this._closeContextMenuIfOpen(taskComponent);
 
-      (taskComponent[method] as (...args: unknown[]) => void)(...args);
-      return true;
+      const result = (taskComponent[method] as (...args: unknown[]) => unknown)(...args);
+      return typeof result === 'boolean' ? result : true;
     } else {
       Log.warn(`Method ${method} not found on task component`, taskComponent);
       return false;

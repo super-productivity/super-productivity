@@ -227,6 +227,33 @@ describe('TaskComponent shortcut handling', () => {
     expect(taskServiceSpy.remove).not.toHaveBeenCalled();
   });
 
+  it('deletes a focused empty subtask when Escape is handled outside title editing', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    const result = component.deleteIfEmptySubTask();
+
+    expect(result).toBe(true);
+    expect(taskServiceSpy.remove).toHaveBeenCalledWith(component.task());
+  });
+
+  it('does not delete a focused non-empty subtask when Escape is handled outside title editing', () => {
+    fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
+
+    const result = component.deleteIfEmptySubTask();
+
+    expect(result).toBe(false);
+    expect(taskServiceSpy.remove).not.toHaveBeenCalled();
+  });
+
+  it('does not delete a focused empty top-level task when Escape is handled outside title editing', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask(''));
+
+    const result = component.deleteIfEmptySubTask();
+
+    expect(result).toBe(false);
+    expect(taskServiceSpy.remove).not.toHaveBeenCalled();
+  });
+
   it('adds a sibling subtask on Mod+Enter when editing a subtask', () => {
     fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
 
@@ -264,6 +291,51 @@ describe('TaskComponent shortcut handling', () => {
       title: 'New subtask',
     });
     expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+  });
+
+  it('keeps subtask creation open after pressing Enter on a freshly created subtask', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'New subtask',
+      wasChanged: true,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', {
+      title: 'New subtask',
+    });
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+  });
+
+  it('does not spawn a sibling on plain Enter when editing an existing subtask', () => {
+    fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Renamed subtask',
+      wasChanged: true,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', {
+      title: 'Renamed subtask',
+    });
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+
+  it('does not spawn a child on plain Enter when editing a top-level task', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'New top-level task title',
+      wasChanged: true,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.update).toHaveBeenCalledWith('top-1', {
+      title: 'New top-level task title',
+    });
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
   it('expands hidden subtasks before adding when the parent has HideAll set', () => {

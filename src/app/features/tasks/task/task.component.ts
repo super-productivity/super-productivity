@@ -801,25 +801,30 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     blurEvent?: FocusEvent;
     submitTrigger: SubmitTrigger;
   }): void {
+    const task = this.task();
+    const isFreshSubTaskSubmit =
+      submitTrigger === 'enter' &&
+      !!task.parentId &&
+      !task.title.trim() &&
+      !!newVal.trim();
+
     if (wasChanged) {
-      this._taskService.update(this.task().id, { title: newVal });
+      this._taskService.update(task.id, { title: newVal });
     }
 
-    if (submitTrigger === 'modEnter') {
+    if (submitTrigger === 'modEnter' || isFreshSubTaskSubmit) {
       this._addSubTaskOrFocusEmpty(newVal);
       return;
     }
 
     // Escape in subtask editor should return focus to previous sibling;
     // for empty titles we remove the subtask entirely.
-    if (submitTrigger === 'escape' && this.task().parentId) {
-      const previousTaskEl = this._getPreviousTaskEl();
+    if (submitTrigger === 'escape' && task.parentId) {
       // Only auto-delete for freshly spawned empty subtasks.
       // If user cleared an existing title, Escape should save and keep the task.
       if (!wasChanged && !newVal) {
-        this._taskService.remove(this.task());
+        this._deleteEmptySubTask(task);
       }
-      this._focusTaskHost(previousTaskEl);
       return;
     }
 
@@ -889,6 +894,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   addSubTask(): void {
     this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
+  }
+
+  deleteIfEmptySubTask(): boolean {
+    const task = this.task();
+    if (!task.parentId || task.title.trim()) {
+      return false;
+    }
+    this._deleteEmptySubTask(task);
+    return true;
   }
 
   /**
@@ -1339,6 +1353,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     ) as HTMLElement[];
     const currentIndex = taskEls.findIndex((el) => el === currentTaskEl);
     return currentIndex > 0 ? taskEls[currentIndex - 1] : undefined;
+  }
+
+  private _deleteEmptySubTask(task: TaskWithSubTasks): void {
+    const previousTaskEl = this._getPreviousTaskEl();
+    this._taskService.remove(task);
+    this._focusTaskHost(previousTaskEl);
   }
 
   private _focusTaskHost(taskEl?: HTMLElement): void {
