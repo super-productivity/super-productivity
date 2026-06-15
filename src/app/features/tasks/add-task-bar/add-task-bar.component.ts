@@ -909,7 +909,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     this._tempPlaceholderTimeout = window.setTimeout(() => {
       this.tempPlaceholder.set(null);
-    }, 500);
+    }, 750);
   }
 
   private _getDefaultTagIdsForWorkContext(

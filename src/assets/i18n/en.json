@@ -1664,6 +1664,7 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
+        "ADD_TASK_SUCCESS": "Task \"{{title}}\" added!",
         "CREATE_NEW_TAGS": "Create new tags",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
@@ -2640,7 +2641,6 @@
     }
   },
   "GLOBAL_SNACK": {
-    "ADD_TASK_SUCCESS": "Task \"{{title}}\" added!",
     "COPY_TO_CLIPPBOARD": "Copied to clipboard",
     "DUPLICATE_PROJECT_ERROR": "The project could not be duplicated",
     "DUPLICATE_PROJECT_SUCCESS": "Project duplicated successfully",
