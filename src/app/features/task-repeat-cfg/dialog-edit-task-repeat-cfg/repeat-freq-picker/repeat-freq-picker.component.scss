@@ -69,6 +69,13 @@
   box-shadow: var(--whiteframe-shadow-4dp, 0 2px 10px rgba(0, 0, 0, 0.3));
 }
 
+// The listbox rows; the More toggle is a sibling so the listbox holds only
+// role="option" children.
+.rfp-options {
+  display: flex;
+  flex-direction: column;
+}
+
 .rfp-opt {
   display: block;
   width: 100%;
@@ -84,6 +91,12 @@
 
   &:hover {
     background: var(--bg-lightest, rgba(127, 127, 127, 0.12));
+  }
+
+  // Keyboard focus ring — roving focus moves between rows with no pointer.
+  &:focus-visible {
+    outline: 2px solid var(--c-primary);
+    outline-offset: -2px;
   }
 
   &.active {

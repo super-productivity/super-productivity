@@ -2,13 +2,16 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   input,
   output,
   signal,
+  viewChildren,
 } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
 import { T } from '../../../../t.const';
+import { RRULE_QUICK_SETTING } from '../../task-repeat-cfg.model';
 
 export interface RepeatFreqOption {
   value: string;
@@ -16,7 +19,9 @@ export interface RepeatFreqOption {
   label: string;
 }
 
-const CUSTOM_VALUE = 'RRULE';
+const CUSTOM_VALUE = RRULE_QUICK_SETTING;
+/** Roving-focus key for the "More/Fewer options" toggle — not a selectable value. */
+const MORE_KEY = '__more__';
 
 /**
  * Presentational frequency picker for the repeat-config dialog, rendered as a
@@ -55,6 +60,7 @@ const CUSTOM_VALUE = 'RRULE';
 export class RepeatFreqPickerComponent {
   readonly T = T;
   readonly CUSTOM_VALUE = CUSTOM_VALUE;
+  readonly MORE_KEY = MORE_KEY;
 
   readonly label = input<string>('');
   readonly options = input.required<RepeatFreqOption[]>();
@@ -140,9 +146,34 @@ export class RepeatFreqPickerComponent {
     );
   });
 
+  // --- keyboard navigation (listbox pattern; restores what the old <select> had) ---
+  private readonly _optButtons = viewChildren<ElementRef<HTMLButtonElement>>('optBtn');
+
+  /** Focusable rows in DOM/visual order: value options, then the More toggle.
+   *  Drives roving tabindex + arrow-key navigation while the panel is open. */
+  readonly focusableKeys = computed<string[]>(() => {
+    const keys = this.presets().map((p) => p.value);
+    if (this.customOption()) keys.push(CUSTOM_VALUE);
+    if (this.canToggle()) keys.push(MORE_KEY);
+    return keys;
+  });
+
+  /** The single tabindex=0 row (roving focus); all others are -1. */
+  private readonly _focusedKey = signal<string>('');
+  isFocusable(key: string): boolean {
+    return key === this._focusedKey();
+  }
+
   open(trigger: HTMLElement): void {
     this.triggerWidth.set(trigger.offsetWidth);
+    const keys = this.focusableKeys();
+    const val = this.value();
+    // Land roving focus on the current selection (or the first row).
+    this._focusedKey.set(val && keys.includes(val) ? val : (keys[0] ?? ''));
     this.isOpen.set(true);
+    // Move focus into the panel once the overlay has rendered — the old native
+    // <select> received focus on open; the hand-rolled panel previously did not.
+    setTimeout(() => this._focusCurrent());
   }
 
   close(): void {
@@ -154,8 +185,44 @@ export class RepeatFreqPickerComponent {
     this.close();
   }
 
-  /** Toggle the long tail without closing the panel (the user's key ask). */
+  /** Toggle the long tail without closing the panel (the user's key ask). Keep
+   *  focus on the toggle so a keyboard user stays put as rows appear/collapse. */
   toggleExpanded(): void {
     this.isExpanded.update((v) => !v);
+    this._focusedKey.set(MORE_KEY);
+    setTimeout(() => this._focusCurrent());
+  }
+
+  /** Arrow / Home / End move roving focus between the panel rows. Enter/Space
+   *  activate natively (each row is a <button>); Escape is handled by the overlay. */
+  onPanelKeydown(event: KeyboardEvent): void {
+    const keys = this.focusableKeys();
+    if (!keys.length) return;
+    const cur = Math.max(0, keys.indexOf(this._focusedKey()));
+    let next = cur;
+    switch (event.key) {
+      case 'ArrowDown':
+        next = (cur + 1) % keys.length;
+        break;
+      case 'ArrowUp':
+        next = (cur - 1 + keys.length) % keys.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = keys.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    this._focusedKey.set(keys[next]);
+    this._focusCurrent();
+  }
+
+  private _focusCurrent(): void {
+    const idx = this.focusableKeys().indexOf(this._focusedKey());
+    this._optButtons()[idx >= 0 ? idx : 0]?.nativeElement.focus();
   }
 }

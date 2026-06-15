@@ -35,6 +35,10 @@ export type RepeatQuickSetting =
   // because existing stored data and data-repair still produce it.
   | 'CUSTOM';
 
+/** The "Custom" / RRULE-builder quickSetting value. A single named constant so
+ *  the options builder and the freq picker can't drift on the magic string. */
+export const RRULE_QUICK_SETTING = 'RRULE';
+
 // Every concrete preset, in menu order — excludes the 'RRULE' builder mode and
 // the legacy 'CUSTOM' persistence value. Single source for preset-driven logic
 // (dialog preset detection + preset inference); a preset missing here would

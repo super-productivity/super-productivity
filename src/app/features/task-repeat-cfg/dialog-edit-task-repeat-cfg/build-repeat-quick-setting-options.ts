@@ -1,6 +1,6 @@
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
-import { RepeatQuickSetting } from '../task-repeat-cfg.model';
+import { RepeatQuickSetting, RRULE_QUICK_SETTING } from '../task-repeat-cfg.model';
 
 const ORDINAL_KEYS = [
   T.F.TASK_REPEAT.F.ORD_FIRST_NTH,
@@ -116,7 +116,7 @@ export const buildRepeatQuickSettingOptions = (
   // schedule from the legacy mirror fields the dialog persists alongside the
   // rule (rruleToLegacyTaskRepeatCfg), the same fallback old sync clients use.
   options.push({
-    value: 'RRULE',
+    value: RRULE_QUICK_SETTING,
     label: translateService.instant(T.F.TASK_REPEAT.F.Q_RRULE),
   });
 

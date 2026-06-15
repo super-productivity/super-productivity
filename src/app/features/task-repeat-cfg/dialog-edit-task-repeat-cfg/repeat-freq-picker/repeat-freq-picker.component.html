@@ -36,34 +36,51 @@
   >
     <div
       class="rfp-panel"
-      role="listbox"
+      (keydown)="onPanelKeydown($event)"
     >
-      @for (o of presets(); track o.value) {
-        <button
-          type="button"
-          class="rfp-opt"
-          [class.active]="o.value === value()"
-          (click)="select(o.value)"
-        >
-          {{ o.label }}
-        </button>
-      }
+      <div
+        class="rfp-options"
+        role="listbox"
+        [attr.aria-label]="label() || null"
+      >
+        @for (o of presets(); track o.value) {
+          <button
+            #optBtn
+            type="button"
+            class="rfp-opt"
+            role="option"
+            [class.active]="o.value === value()"
+            [attr.aria-selected]="o.value === value()"
+            [tabindex]="isFocusable(o.value) ? 0 : -1"
+            (click)="select(o.value)"
+          >
+            {{ o.label }}
+          </button>
+        }
 
-      @if (customOption(); as c) {
-        <button
-          type="button"
-          class="rfp-opt rfp-opt--custom"
-          [class.active]="c.value === value()"
-          (click)="select(c.value)"
-        >
-          {{ c.label }}
-        </button>
-      }
+        @if (customOption(); as c) {
+          <button
+            #optBtn
+            type="button"
+            class="rfp-opt rfp-opt--custom"
+            role="option"
+            [class.active]="c.value === value()"
+            [attr.aria-selected]="c.value === value()"
+            [tabindex]="isFocusable(c.value) ? 0 : -1"
+            (click)="select(c.value)"
+          >
+            {{ c.label }}
+          </button>
+        }
+      </div>
 
       @if (canToggle()) {
         <button
+          #optBtn
           type="button"
           class="rfp-opt rfp-opt--more"
+          [attr.aria-expanded]="isExpanded()"
+          [tabindex]="isFocusable(MORE_KEY) ? 0 : -1"
           (click)="toggleExpanded()"
         >
           {{
