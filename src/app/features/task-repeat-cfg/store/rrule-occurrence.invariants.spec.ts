@@ -105,6 +105,71 @@ describe('rrule-occurrence invariants', () => {
     });
   });
 
+  describe('never-firing rules stay bounded (no multi-second freeze)', () => {
+    // rrule.js cannot stop a never-firing walk early: no day passes the
+    // BY-filters, so its iterator callback never fires and it spins one period
+    // at a time up to MAXYEAR=9999. A 2020-anchored probe walked ~8000 years of
+    // periods → a 7–11s main-thread freeze (measured) on these inputs. These
+    // rules are NOT caught by the O(1) `_canNeverFire` heuristic (BYYEARDAY ×
+    // BYWEEKNO, BYSETPOS past its set) — they reach the probe — so they exercise
+    // exactly the anchor-near-9999 bound that replaced the freeze.
+    const NEVER_FIRE_UNCAUGHT = [
+      'FREQ=DAILY;BYYEARDAY=60;BYWEEKNO=53',
+      'FREQ=WEEKLY;BYDAY=MO;BYSETPOS=2',
+      'FREQ=MONTHLY;BYMONTHDAY=15;BYSETPOS=3',
+    ];
+    NEVER_FIRE_UNCAUGHT.forEach((rrule) => {
+      it(`"${rrule}" → invalid, resolved well below the old freeze`, () => {
+        // Cold cache (unique strings) → this measures the actual probe walk, not
+        // a memo hit.
+        const t0 = performance.now();
+        const valid = isRRuleValid(rrule);
+        const elapsedMs = performance.now() - t0;
+        // A never-firing rule must be rejected so the engine uses the legacy
+        // fallback instead of a rule that silently never creates a task.
+        expect(valid).toBe(false);
+        // The bounded walk is sub-second locally (~0.5s worst). 4s leaves wide
+        // CI headroom while still flagging a regression to the ~8000-year walk
+        // (7–11s) a 2020 anchor produced. NB: only isRRuleValid is timed here —
+        // getNext/getFirst use the cfg's real start (not the bounded anchor) and
+        // would walk to 9999 for a never-firing DAILY rule; in production they
+        // are always gated behind isRRuleValid, which now rejects these.
+        expect(elapsedMs).toBeLessThan(4000);
+      });
+    });
+
+    it('INTERVAL phase that never fires from the real start → empty, bounded', () => {
+      // Passes isRRuleValid: the PATTERN fires (Wednesdays) at the canonical
+      // anchor (itself a Wednesday). But FREQ=DAILY;INTERVAL=7 from a MONDAY
+      // start locks every 7th day to a Monday → never a Wednesday. The queries
+      // anchor at the real start, so without the `_firesFromStart` guard rrule
+      // would walk start→9999. 2024-06-03 is a Monday.
+      const RULE = 'FREQ=DAILY;INTERVAL=7;BYDAY=WE';
+      expect(isRRuleValid(RULE)).toBe(true);
+      const cfg = inp(RULE, { startDate: '2024-06-03' });
+      const t0 = performance.now();
+      const next = getNextRRuleOccurrence(cfg, new Date(2024, 5, 3, 12));
+      const ms = performance.now() - t0;
+      expect(next).toBeNull();
+      expect(getFirstRRuleOccurrence(cfg)).toBeNull();
+      expect(
+        getRRuleOccurrencesInRange(
+          cfg,
+          new Date(2024, 0, 1, 12),
+          new Date(2025, 0, 1, 12),
+        ),
+      ).toEqual([]);
+      expect(ms).toBeLessThan(4000);
+    });
+
+    it('the same INTERVAL-phase rule DOES fire from an aligned (Wednesday) start', () => {
+      // Positive control for the guard above: 2024-06-05 is a Wednesday, so the
+      // interval-7 phase lands on Wednesdays and the start day itself fires.
+      const cfg = inp('FREQ=DAILY;INTERVAL=7;BYDAY=WE', { startDate: '2024-06-05' });
+      expect(getDbDateStr(getFirstRRuleOccurrence(cfg)!)).toBe('2024-06-05');
+    });
+  });
+
   it('getNextRRuleOccurrence is deterministic', () => {
     const a = getNextRRuleOccurrence(inp('FREQ=WEEKLY;BYDAY=MO'), BASE);
     const b = getNextRRuleOccurrence(inp('FREQ=WEEKLY;BYDAY=MO'), BASE);
