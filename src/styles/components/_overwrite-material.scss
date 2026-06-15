@@ -208,6 +208,11 @@ body.isNativeMobile .project-complete-fullscreen-dialog {
   // Targets default filled text boxes to transform them into flat, token-driven containers
   .mdc-text-field--filled:not(.mdc-text-field--disabled) {
     border: 1px solid var(--input-border-color) !important;
+    // Material hardcodes the filled field's bottom corner radii to 0 (the
+    // container-shape token above only rounds the top two corners), so a full
+    // border would render rounded-top/square-bottom. Round all four corners to
+    // read as a card, matching the task-detail panel this style is copied from.
+    border-radius: var(--input-border-radius) !important;
     transition:
       background var(--transition-duration-s) ease-out,
       border-color var(--transition-duration-s) ease-out,

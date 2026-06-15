@@ -183,7 +183,6 @@ body.isDarkTheme {
   --input-bg: var(--velvet-fill-2);
   --input-bg-hover: color-mix(in srgb, var(--c-primary) 6%, transparent);
   --input-border-color: transparent;
-  --input-border-color-focus: var(--c-primary);
   --input-border-radius: 8px;
 
   /* Schedule events read as cards, not list rows — they have borders, a

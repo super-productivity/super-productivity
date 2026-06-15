@@ -214,7 +214,7 @@ body {
 }
 
 body.isDarkTheme {
-  --input-bg: transparent;
+  /* --input-bg stays transparent (inherited from the body rule above) */
   --input-bg-hover: rgba(255, 255, 255, 0.04);
   --input-border-color: rgba(255, 255, 255, 0.2);
 }
