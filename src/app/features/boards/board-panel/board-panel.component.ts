@@ -22,7 +22,7 @@ import {
   rewriteTagIdsForPanel,
 } from '../boards.util';
 import { DateService } from '../../../core/date/date.service';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { select, Store } from '@ngrx/store';
 import {
   selectAllTasksInActiveProjects,
@@ -96,6 +96,9 @@ const normalizeDateStr = (
 ): string | undefined => {
   if (val === null || val === undefined || val === '') {
     return undefined;
+  }
+  if (typeof val === 'string' && isDBDateStr(val)) {
+    return val;
   }
   return getDbDateStr(val);
 };
