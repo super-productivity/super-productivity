@@ -126,6 +126,40 @@ describe('sanitizePanelCfg', () => {
     const twice = sanitizePanelCfg(once);
     expect(twice).toEqual(once);
   });
+
+  describe('day clamping', () => {
+    it('clamps daysVal to 1-365 and defaults to 7', () => {
+      const out = sanitizePanelCfg({
+        ...basePanel,
+        scheduledDaysVal: 500,
+        deadlineDaysVal: 0,
+      } as any);
+      expect(out.scheduledDaysVal).toBe(365);
+      expect(out.deadlineDaysVal).toBe(1);
+
+      const out2 = sanitizePanelCfg({
+        ...basePanel,
+        scheduledDaysVal: NaN as any,
+      } as any);
+      expect(out2.scheduledDaysVal).toBe(7);
+    });
+  });
+
+  describe('custom-date normalization', () => {
+    it('normalizes custom-date fields to canonical strings or null', () => {
+      const out = sanitizePanelCfg({
+        ...basePanel,
+        scheduledCustomStart: new Date('2026-06-15T12:00:00'),
+        scheduledCustomEnd: '2026-06-20',
+        deadlineCustomStart: null,
+        deadlineCustomEnd: '',
+      } as any);
+      expect(out.scheduledCustomStart).toBe('2026-06-15');
+      expect(out.scheduledCustomEnd).toBe('2026-06-20');
+      expect(out.deadlineCustomStart).toBe(null);
+      expect(out.deadlineCustomEnd).toBe(null);
+    });
+  });
 });
 
 describe('buildComparator', () => {
