@@ -8,7 +8,10 @@ import {
   mapKeyboardConfigToQwerty,
   mapShortcutToQwerty,
 } from '../keyboard-shortcut.util';
-import { KeyboardLayout } from '../../../core/keyboard-layout/keyboard-layout.service';
+import {
+  KeyboardLayout,
+  KeyboardLayoutService,
+} from '../../../core/keyboard-layout/keyboard-layout.service';
 import { DateService } from 'src/app/core/date/date.service';
 import { LanguageService } from '../../../core/language/language.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -21,6 +24,8 @@ import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { KeyboardConfig } from '../keyboard-config.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
+import { setIsElectronForTesting } from '../../../app.constants';
+import { setIsMacForTesting } from '../../../util/is-mac';
 
 describe('GlobalConfigEffects', () => {
   let effects: GlobalConfigEffects;
@@ -57,6 +62,7 @@ describe('GlobalConfigEffects', () => {
           provide: UserProfileService,
           useValue: { updateDayIdFromRemote: jasmine.createSpy('updateDayIdFromRemote') },
         },
+        KeyboardLayoutService,
       ],
     });
 
@@ -68,6 +74,8 @@ describe('GlobalConfigEffects', () => {
 
   afterEach(() => {
     store.resetSelectors();
+    setIsElectronForTesting(false);
+    setIsMacForTesting(false);
   });
 
   describe('setStartOfNextDayDiffOnChange', () => {
@@ -367,6 +375,152 @@ describe('GlobalConfigEffects', () => {
         expect(result.globalAddTask).toBeNull();
         expect(result.globalToggleTaskWidget).toBeUndefined();
         expect(result.toggleBacklog).toBe('Ctrl+Y');
+      });
+    });
+  });
+
+  describe('global shortcut effects', () => {
+    let keyboardLayoutService: KeyboardLayoutService;
+    let registerGlobalShortcutsSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      keyboardLayoutService = TestBed.inject(KeyboardLayoutService);
+      registerGlobalShortcutsSpy = jasmine.createSpy('registerGlobalShortcuts');
+      (window as any).ea = {
+        registerGlobalShortcuts: registerGlobalShortcutsSpy,
+      };
+    });
+
+    afterEach(() => {
+      delete (window as any).ea;
+    });
+
+    describe('updateGlobalShortcut$', () => {
+      it('should register shortcuts in Electron', () => {
+        setIsElectronForTesting(true);
+        setIsMacForTesting(false);
+        effects.updateGlobalShortcut$.subscribe();
+
+        const keyboardCfg = {
+          ...DEFAULT_GLOBAL_CONFIG.keyboard,
+          globalShowHide: 'Ctrl+X',
+        };
+        actions$.next(
+          updateGlobalConfigSection({
+            sectionKey: 'keyboard',
+            sectionCfg: keyboardCfg,
+          }),
+        );
+
+        expect(registerGlobalShortcutsSpy).toHaveBeenCalledWith(keyboardCfg);
+      });
+
+      it('should translate shortcuts to QWERTY on macOS Electron', () => {
+        setIsElectronForTesting(true);
+        setIsMacForTesting(true);
+        keyboardLayoutService.setLayout(
+          new Map([
+            ['KeyY', 'z'],
+            ['KeyZ', 'y'],
+          ]),
+        );
+        effects.updateGlobalShortcut$.subscribe();
+
+        const keyboardCfg = {
+          ...DEFAULT_GLOBAL_CONFIG.keyboard,
+          globalShowHide: 'Ctrl+Y',
+        };
+        actions$.next(
+          updateGlobalConfigSection({
+            sectionKey: 'keyboard',
+            sectionCfg: keyboardCfg,
+          }),
+        );
+
+        // Ctrl+Y on QWERTZ is KeyY, which is Ctrl+Z on QWERTY
+        expect(registerGlobalShortcutsSpy).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            globalShowHide: 'Ctrl+Z',
+          }),
+        );
+      });
+
+      it('should NOT register shortcuts if NOT in Electron', () => {
+        setIsElectronForTesting(false);
+        effects.updateGlobalShortcut$.subscribe();
+        actions$.next(
+          updateGlobalConfigSection({
+            sectionKey: 'keyboard',
+            sectionCfg: DEFAULT_GLOBAL_CONFIG.keyboard,
+          }),
+        );
+        expect(registerGlobalShortcutsSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('registerGlobalShortcutInitially$', () => {
+      it('should register shortcuts initially in Electron', (done) => {
+        setIsElectronForTesting(true);
+        setIsMacForTesting(false);
+
+        const keyboardCfg = {
+          ...DEFAULT_GLOBAL_CONFIG.keyboard,
+          globalShowHide: 'Ctrl+X',
+        };
+        effects.registerGlobalShortcutInitially$.subscribe(() => {
+          expect(registerGlobalShortcutsSpy).toHaveBeenCalledWith(keyboardCfg);
+          done();
+        });
+
+        actions$.next(
+          loadAllData({
+            appDataComplete: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                keyboard: keyboardCfg,
+              },
+            } as any,
+          }),
+        );
+      });
+
+      it('should wait for layout and translate to QWERTY initially on macOS Electron', (done) => {
+        setIsElectronForTesting(true);
+        setIsMacForTesting(true);
+
+        // We don't call setLayout yet, so layoutReady is still pending
+        const keyboardCfg = {
+          ...DEFAULT_GLOBAL_CONFIG.keyboard,
+          globalShowHide: 'Ctrl+Y',
+        };
+
+        effects.registerGlobalShortcutInitially$.subscribe(() => {
+          expect(registerGlobalShortcutsSpy).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              globalShowHide: 'Ctrl+Z',
+            }),
+          );
+          done();
+        });
+
+        actions$.next(
+          loadAllData({
+            appDataComplete: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                keyboard: keyboardCfg,
+              },
+            } as any,
+          }),
+        );
+
+        // Now resolve the layout
+        keyboardLayoutService.setLayout(
+          new Map([
+            ['KeyY', 'z'],
+            ['KeyZ', 'y'],
+          ]),
+        );
       });
     });
   });
