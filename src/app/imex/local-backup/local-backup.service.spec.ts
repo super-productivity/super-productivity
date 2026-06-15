@@ -952,4 +952,80 @@ describe('LocalBackupService', () => {
       expect(service.getLastBackupTime()).toBeNull();
     });
   });
+
+  // PR #8402: Android native-KV read/write resilience. These spy the `_nativeDb*`
+  // seams (thin wrappers over the window.SUPAndroid singleton, which is undefined
+  // off-device) so the read-degradation + write-path bail logic runs in CI without
+  // an emulator. The real CursorWindow limit is covered by KeyValStoreInstrumentedTest.
+  describe('Android native KV read/write resilience (#8402)', () => {
+    type NativeSeams = {
+      _backupAndroid: (data: AppDataComplete) => Promise<boolean>;
+      _loadAndroidDbValueSafe: (key: string) => Promise<string | null>;
+      _nativeDbLoad: (key: string) => Promise<string | null>;
+      _nativeDbSave: (key: string, value: string) => Promise<void>;
+    };
+    // Ring-slot keys — module-private constants in the service under test.
+    const PRIMARY = 'backup';
+    const PREV = 'backup_prev';
+    // >= 3 tasks so the A3 near-empty guard (#7925) never fires here.
+    const dataWith3Tasks = {
+      task: {
+        ids: ['t1', 't2', 't3'],
+        entities: {
+          t1: { id: 't1', title: 'a' },
+          t2: { id: 't2', title: 'b' },
+          t3: { id: 't3', title: 'c' },
+        },
+      },
+      archiveYoung: DEFAULT_ARCHIVE,
+      archiveOld: DEFAULT_ARCHIVE,
+      project: { ids: [], entities: {} },
+      tag: { ids: [], entities: {} },
+    } as unknown as AppDataComplete;
+    const seams = (): NativeSeams => service as unknown as NativeSeams;
+
+    it('read degrades to null (never throws) when the native read fails', async () => {
+      spyOn(seams(), '_nativeDbLoad').and.rejectWith(new Error('Java exception'));
+
+      expect(await seams()._loadAndroidDbValueSafe(PRIMARY)).toBeNull();
+    });
+
+    it('read passes the value through on success', async () => {
+      spyOn(seams(), '_nativeDbLoad').and.resolveTo('the-backup-blob');
+
+      expect(await seams()._loadAndroidDbValueSafe(PRIMARY)).toBe('the-backup-blob');
+    });
+
+    it('write BAILS (no overwrite) when the existing-slot read fails — preserves both ring slots (#7901)', async () => {
+      spyOn(seams(), '_nativeDbLoad').and.rejectWith(new Error('read failed'));
+      const saveSpy = spyOn(seams(), '_nativeDbSave').and.resolveTo();
+
+      const didWrite = await seams()._backupAndroid(dataWith3Tasks);
+
+      expect(didWrite).toBe(false);
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it('write rotates prev then writes primary when an existing backup is present', async () => {
+      spyOn(seams(), '_nativeDbLoad').and.resolveTo('EXISTING_BLOB');
+      const saveSpy = spyOn(seams(), '_nativeDbSave').and.resolveTo();
+
+      const didWrite = await seams()._backupAndroid(dataWith3Tasks);
+
+      expect(didWrite).toBe(true);
+      expect(saveSpy).toHaveBeenCalledWith(PREV, 'EXISTING_BLOB');
+      expect(saveSpy).toHaveBeenCalledWith(PRIMARY, JSON.stringify(dataWith3Tasks));
+    });
+
+    it('write skips rotation and writes primary when there is no existing backup', async () => {
+      spyOn(seams(), '_nativeDbLoad').and.resolveTo(null);
+      const saveSpy = spyOn(seams(), '_nativeDbSave').and.resolveTo();
+
+      const didWrite = await seams()._backupAndroid(dataWith3Tasks);
+
+      expect(didWrite).toBe(true);
+      expect(saveSpy).toHaveBeenCalledOnceWith(PRIMARY, JSON.stringify(dataWith3Tasks));
+      expect(saveSpy).not.toHaveBeenCalledWith(PREV, jasmine.anything());
+    });
+  });
 });

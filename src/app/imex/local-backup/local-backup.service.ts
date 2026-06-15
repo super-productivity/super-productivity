@@ -129,7 +129,7 @@ export class LocalBackupService {
    */
   private async _loadAndroidDbValueSafe(key: string): Promise<string | null> {
     try {
-      const val = await androidInterface.loadFromDbWrapped(key);
+      const val = await this._nativeDbLoad(key);
       Log.log(
         `LocalBackupService: read Android backup '${key}' (${val ? val.length : 0} chars)`,
       );
@@ -138,6 +138,17 @@ export class LocalBackupService {
       Log.err(`LocalBackupService: failed to read Android backup '${key}'`, e);
       return null;
     }
+  }
+
+  // Thin seams over the `androidInterface` (window.SUPAndroid) singleton — which
+  // is undefined off-device and has no DI seam — so the read/write logic above is
+  // unit-testable (spec spies these instead of the global).
+  private _nativeDbLoad(key: string): Promise<string | null> {
+    return androidInterface.loadFromDbWrapped(key);
+  }
+
+  private _nativeDbSave(key: string, value: string): Promise<void> {
+    return androidInterface.saveToDbWrapped(key, value);
   }
 
   async loadBackupIOS(): Promise<string> {
@@ -407,7 +418,7 @@ export class LocalBackupService {
     // preserving both ring slots; the next cycle retries (#7901).
     let existing: string | null;
     try {
-      existing = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY);
+      existing = await this._nativeDbLoad(ANDROID_DB_KEY);
     } catch (e) {
       Log.err(
         'LocalBackupService: skipping Android backup — could not read existing slot',
@@ -419,12 +430,12 @@ export class LocalBackupService {
       return false;
     }
     if (existing) {
-      await androidInterface.saveToDbWrapped(ANDROID_DB_KEY_PREV, existing);
+      await this._nativeDbSave(ANDROID_DB_KEY_PREV, existing);
     }
     const json = JSON.stringify(data);
     // Size only, never content (core/log rule 9) — lands in shared log exports.
     Log.log(`LocalBackupService: writing Android backup (${json.length} chars)`);
-    await androidInterface.saveToDbWrapped(ANDROID_DB_KEY, json);
+    await this._nativeDbSave(ANDROID_DB_KEY, json);
     return true;
   }
 
