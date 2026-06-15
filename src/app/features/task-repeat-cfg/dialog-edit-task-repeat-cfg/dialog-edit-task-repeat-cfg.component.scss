@@ -53,9 +53,13 @@ mat-dialog-actions {
   }
 }
 
+// Narrow, centered content column (like the deadline modal) so every control
+// shares one consistent width instead of sizing all over the place.
 .form-wrapper {
-  min-width: 280px;
-  max-width: 620px;
+  width: 100%;
+  min-width: 0;
+  max-width: 420px;
+  margin: 0 auto;
 }
 
 // Divider under the Repeat chip picker so the recurrence flow reads as its own
@@ -67,9 +71,13 @@ repeat-freq-picker {
   border-bottom: 1px solid var(--separator-color, var(--extra-border-color));
 }
 
-// Live recurrence summary card, shown in-sheet under the builder.
+// Live recurrence summary card, pinned above the action buttons (outside the
+// scroll area), so the evaluated rule stays in view while the form scrolls.
 .rrule-result {
-  margin: var(--s) 0 var(--s2);
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 420px;
+  margin: var(--s) auto 0;
   padding: var(--s) var(--s2);
   border-radius: 10px;
   background: var(--bg-lightest, var(--extra-border-color));

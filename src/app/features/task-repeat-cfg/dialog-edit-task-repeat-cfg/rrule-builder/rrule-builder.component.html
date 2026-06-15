@@ -1,48 +1,51 @@
 <div class="rb">
-  <!-- Repeat every: stepper + frequency unit segmented control -->
-  <div class="rb-row rb-row--between">
+  <!-- Repeat every: label + stepper + frequency unit dropdown, all on one line -->
+  <div class="rb-row rb-row--repeat">
     <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate }}</span>
-    <div class="rb-stepper">
-      <button
-        type="button"
-        class="rb-step"
-        [disabled]="model().interval <= 1"
-        (click)="setInterval(model().interval - 1 + '')"
-        aria-label="−"
+    <div class="rb-repeat-controls">
+      <div class="rb-stepper">
+        <button
+          type="button"
+          class="rb-step"
+          [disabled]="model().interval <= 1"
+          (click)="setInterval(model().interval - 1 + '')"
+          aria-label="−"
+        >
+          −
+        </button>
+        <input
+          #intervalIn
+          class="rb-step-num"
+          type="number"
+          min="1"
+          max="1000"
+          [value]="model().interval"
+          (input)="setInterval(intervalIn.value)"
+        />
+        <button
+          type="button"
+          class="rb-step"
+          (click)="setInterval(model().interval + 1 + '')"
+          aria-label="+"
+        >
+          +
+        </button>
+      </div>
+      <select
+        #freqSel
+        class="rb-sel rb-sel--freq"
+        (change)="setFreq(freqSel.value)"
       >
-        −
-      </button>
-      <input
-        #intervalIn
-        class="rb-step-num"
-        type="number"
-        min="1"
-        max="1000"
-        [value]="model().interval"
-        (input)="setInterval(intervalIn.value)"
-      />
-      <button
-        type="button"
-        class="rb-step"
-        (click)="setInterval(model().interval + 1 + '')"
-        aria-label="+"
-      >
-        +
-      </button>
+        @for (o of freqOpts(); track o.value) {
+          <option
+            [value]="o.value"
+            [selected]="o.value === model().freq"
+          >
+            {{ o.label | translate }}
+          </option>
+        }
+      </select>
     </div>
-  </div>
-
-  <div class="rb-seg rb-seg--freq">
-    @for (o of freqOpts; track o.value) {
-      <button
-        type="button"
-        class="rb-seg-btn"
-        [class.active]="o.value === model().freq"
-        (click)="setFreq(o.value)"
-      >
-        {{ o.label | translate }}
-      </button>
-    }
   </div>
 
   <!-- WEEKLY: weekday circles -->
@@ -67,11 +70,11 @@
 
   <!-- MONTHLY -->
   @if (model().freq === 'MONTHLY') {
-    <div class="rb-row rb-row--between">
+    <div class="rb-row">
       <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate }}</span>
       <select
         #mMode
-        class="rb-sel rb-sel--wide"
+        class="rb-sel"
         (change)="setMonthlyMode(mMode.value)"
       >
         @for (o of monthlyModeOpts; track o.value) {
@@ -98,6 +101,8 @@
               {{ d }}
             </button>
           }
+        </div>
+        <div class="rb-toggles rb-day-extras">
           @for (nd of negativeDays; track nd.value) {
             <button
               type="button"
@@ -128,11 +133,11 @@
 
   <!-- YEARLY -->
   @if (model().freq === 'YEARLY') {
-    <div class="rb-row rb-row--between">
+    <div class="rb-row">
       <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate }}</span>
       <select
         #yMode
-        class="rb-sel rb-sel--wide"
+        class="rb-sel"
         (change)="setYearlyMode(yMode.value)"
       >
         @for (o of yearlyModeOpts; track o.value) {
@@ -158,6 +163,8 @@
               {{ d }}
             </button>
           }
+        </div>
+        <div class="rb-toggles rb-day-extras">
           @for (nd of negativeDays; track nd.value) {
             <button
               type="button"

@@ -48,38 +48,6 @@
           (rruleChange)="onRRuleChange($event)"
           (repeatFromCompletionChange)="onRepeatFromCompletionChange($event)"
         ></rrule-builder>
-
-        <!-- Live summary, shown in-sheet next to the recurrence controls. -->
-        @if (rrulePreview(); as p) {
-          <div class="rrule-result">
-            <div class="rrule-result__human">{{ p.human }}</div>
-            @if (rruleLegacyIncompat()) {
-              <div class="rrule-result__legacy-warning">
-                {{ T.F.TASK_REPEAT.F.RRULE_LEGACY_INCOMPAT | translate }}
-              </div>
-            }
-            @if (repeatCfg().repeatFromCompletionDate) {
-              @if (p.completionExample; as ex) {
-                <div class="rrule-result__next">
-                  {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
-                  {{ ex.done | date: 'mediumDate' }} &rarr;
-                  {{ ex.next | date: 'mediumDate' }}
-                </div>
-              }
-            } @else if (p.upcoming.length) {
-              <div class="rrule-result__next">
-                {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
-                @for (d of p.upcoming; track d.getTime(); let last = $last) {
-                  <span>{{ d | date: 'mediumDate' }}</span>
-                  @if (!last) {
-                    <span class="rrule-result__sep">&middot;</span>
-                  }
-                }
-              </div>
-            }
-            <div class="rrule-result__expr">{{ p.rrule }}</div>
-          </div>
-        }
       }
 
       <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
@@ -101,6 +69,40 @@
       </collapsible>
     </div>
   </mat-dialog-content>
+
+  <!-- Live recurrence summary, pinned directly above the action buttons. -->
+  @if (isRRuleMode()) {
+    @if (rrulePreview(); as p) {
+      <div class="rrule-result">
+        <div class="rrule-result__human">{{ p.human }}</div>
+        @if (rruleLegacyIncompat()) {
+          <div class="rrule-result__legacy-warning">
+            {{ T.F.TASK_REPEAT.F.RRULE_LEGACY_INCOMPAT | translate }}
+          </div>
+        }
+        @if (repeatCfg().repeatFromCompletionDate) {
+          @if (p.completionExample; as ex) {
+            <div class="rrule-result__next">
+              {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
+              {{ ex.done | date: 'mediumDate' }} &rarr;
+              {{ ex.next | date: 'mediumDate' }}
+            </div>
+          }
+        } @else if (p.upcoming.length) {
+          <div class="rrule-result__next">
+            {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
+            @for (d of p.upcoming; track d.getTime(); let last = $last) {
+              <span>{{ d | date: 'mediumDate' }}</span>
+              @if (!last) {
+                <span class="rrule-result__sep">&middot;</span>
+              }
+            }
+          </div>
+        }
+        <div class="rrule-result__expr">{{ p.rrule }}</div>
+      </div>
+    }
+  }
 
   <mat-dialog-actions align="end">
     <button

@@ -173,15 +173,15 @@ export class DialogEditTaskRepeatCfgComponent {
   // changes.
   quickSettingOptions = computed(() => this._buildQuickSettingOptions());
 
-  // Common presets shown by default in the chip picker; the rest hide behind
-  // "More options". Keeps the picker TickTick-clean without dropping any preset.
+  // Common presets shown by default in the dropdown (in this order); the rest
+  // hide behind "More options". Order: every day, weekly, monthly, yearly, every
+  // weekday — then "Custom" and "More options" are appended by the picker.
   readonly quickSettingCommon: readonly string[] = [
     'DAILY',
-    'MONDAY_TO_FRIDAY',
-    'WEEKENDS',
     'WEEKLY_CURRENT_WEEKDAY',
     'MONTHLY_CURRENT_DATE',
     'YEARLY_CURRENT_DATE',
+    'MONDAY_TO_FRIDAY',
   ];
   // Live result/preview shown at the dialog bottom in RRULE mode. The builder
   // keeps `repeatCfg().rrule` up to date via onRRuleChange, so this stays live.

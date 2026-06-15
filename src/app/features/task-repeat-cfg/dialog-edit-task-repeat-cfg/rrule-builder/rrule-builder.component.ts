@@ -106,12 +106,30 @@ export class RruleBuilderComponent implements OnInit {
     return { value: i + 1, full, short: full.slice(0, 3) };
   });
 
-  freqOpts: SelectOpt<RRuleFormModel['freq']>[] = [
-    { value: 'DAILY', label: T.F.TASK_REPEAT.F.C_DAY },
-    { value: 'WEEKLY', label: T.F.TASK_REPEAT.F.C_WEEK },
-    { value: 'MONTHLY', label: T.F.TASK_REPEAT.F.C_MONTH },
-    { value: 'YEARLY', label: T.F.TASK_REPEAT.F.C_YEAR },
-  ];
+  // Unit dropdown labels pluralize with the interval ("Day" vs "Days") — an
+  // interval > 1 reads "Repeat every 2 Weeks". Computed so it tracks the
+  // stepper live.
+  freqOpts = computed<SelectOpt<RRuleFormModel['freq']>[]>(() => {
+    const plural = this._model().interval > 1;
+    return [
+      {
+        value: 'DAILY',
+        label: plural ? T.F.TASK_REPEAT.F.C_DAYS : T.F.TASK_REPEAT.F.C_DAY,
+      },
+      {
+        value: 'WEEKLY',
+        label: plural ? T.F.TASK_REPEAT.F.C_WEEKS : T.F.TASK_REPEAT.F.C_WEEK,
+      },
+      {
+        value: 'MONTHLY',
+        label: plural ? T.F.TASK_REPEAT.F.C_MONTHS : T.F.TASK_REPEAT.F.C_MONTH,
+      },
+      {
+        value: 'YEARLY',
+        label: plural ? T.F.TASK_REPEAT.F.C_YEARS : T.F.TASK_REPEAT.F.C_YEAR,
+      },
+    ];
+  });
   monthlyModeOpts: SelectOpt<RRuleFormModel['monthlyMode']>[] = [
     { value: 'DAY_OF_MONTH', label: T.F.TASK_REPEAT.F.RRULE_MODE_DAY_OF_MONTH },
     { value: 'NTH_WEEKDAY', label: T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY },
