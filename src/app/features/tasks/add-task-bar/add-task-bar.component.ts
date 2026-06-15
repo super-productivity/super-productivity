@@ -77,7 +77,7 @@ import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { Log } from '../../../core/log';
 import { TODAY_TAG } from '../../tag/tag.const';
-import { BodyClass } from '../../../app.constants';
+import { BodyClass, IS_ELECTRON } from '../../../app.constants';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -132,6 +132,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
+  readonly IS_ELECTRON = IS_ELECTRON;
 
   // Inputs
   tabindex = input<number>(0);
@@ -538,7 +539,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           };
         }
 
-        if (window.ea) {
+        if (this.IS_ELECTRON) {
           window.ea.submitAddTaskViaIpc({
             title,
             taskData,

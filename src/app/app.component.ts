@@ -20,7 +20,7 @@ import { GlobalConfigService } from './features/config/global-config.service';
 import { TaskWidgetSettingsService } from './features/config/task-widget-settings.service';
 import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
-import { IS_ELECTRON } from './app.constants';
+import { BodyClass, IS_ELECTRON } from './app.constants';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -237,25 +237,29 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   constructor() {
     const router = inject(Router);
 
-    const checkAndToggleClass = (url: string): void => {
-      const isQuickAdd = url.includes('/quick-add') && !url.includes('index.html');
+    const checkAndToggleClass = (): void => {
+      let route = router.routerState.snapshot.root;
+      while (route.firstChild) {
+        route = route.firstChild;
+      }
+      const isQuickAdd = route.data.page === 'quick-add';
       this.isQuickAddRoute.set(isQuickAdd);
       if (isQuickAdd) {
-        document.body.classList.add('isQuickAddRoute');
-        document.documentElement.classList.add('isQuickAddRoute');
+        document.body.classList.add(BodyClass.isQuickAddRoute);
+        document.documentElement.classList.add(BodyClass.isQuickAddRoute);
       } else {
-        document.body.classList.remove('isQuickAddRoute');
-        document.documentElement.classList.remove('isQuickAddRoute');
+        document.body.classList.remove(BodyClass.isQuickAddRoute);
+        document.documentElement.classList.remove(BodyClass.isQuickAddRoute);
       }
     };
 
-    checkAndToggleClass(window.location.hash);
+    checkAndToggleClass();
 
     this._subs.add(
       router.events
-        .pipe(filter((event) => event instanceof NavigationEnd))
-        .subscribe((event: any) => {
-          checkAndToggleClass(event.urlAfterRedirects);
+        .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+        .subscribe(() => {
+          checkAndToggleClass();
         }),
     );
 

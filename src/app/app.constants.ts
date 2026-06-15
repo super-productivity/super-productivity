@@ -68,6 +68,7 @@ export enum BodyClass {
   isFullScreen = 'isFullScreen',
   isAddTaskBarOpen = 'isAddTaskBarOpen',
   isMaterialSymbolsLoaded = 'isMaterialSymbolsLoaded',
+  isQuickAddRoute = 'isQuickAddRoute',
 
   // iOS-specific classes
   isIOS = 'isIOS',

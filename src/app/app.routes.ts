@@ -133,6 +133,7 @@ export const APP_ROUTES: Routes = [
       import('./pages/quick-add-page/quick-add-page.component').then(
         (m) => m.QuickAddTaskPageComponent,
       ),
+    data: { page: 'quick-add' },
   },
   // Wildcard — redirects to default start page
   {

@@ -348,6 +348,7 @@ describe('AddTaskBarComponent', () => {
 
     it('should submit task via IPC when isSubmitViaIpc is true', async () => {
       fixture.componentRef.setInput('isSubmitViaIpc', true);
+      (component as any).IS_ELECTRON = true;
       (window as any).ea = {
         submitAddTaskViaIpc: jasmine.createSpy('submitAddTaskViaIpc'),
       };
