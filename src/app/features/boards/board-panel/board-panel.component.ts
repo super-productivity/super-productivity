@@ -91,12 +91,21 @@ const getFutureLogicalDateStr = (days: number, todayStr: string): string => {
   return getDbDateStr(date);
 };
 
+const normalizeDateStr = (
+  val: Date | number | string | null | undefined,
+): string | undefined => {
+  if (val === null || val === undefined || val === '') {
+    return undefined;
+  }
+  return getDbDateStr(val);
+};
+
 const isDateInTimeframe = (
   dateStr: string,
   timeframe: string | undefined,
   daysVal: number | undefined,
-  customStart: string | undefined,
-  customEnd: string | undefined,
+  customStart: string | Date | null | undefined,
+  customEnd: string | Date | null | undefined,
   todayStr: string,
   tomorrowStr: string,
   startOfNextDayDiffMs: number,
@@ -132,14 +141,16 @@ const isDateInTimeframe = (
     return dateStr >= start;
   }
   if (timeframe === 'CUSTOM_RANGE') {
-    if (customStart && customEnd) {
-      return dateStr >= customStart && dateStr <= customEnd;
+    const start = normalizeDateStr(customStart);
+    const end = normalizeDateStr(customEnd);
+    if (start && end) {
+      return dateStr >= start && dateStr <= end;
     }
-    if (customStart) {
-      return dateStr >= customStart;
+    if (start) {
+      return dateStr >= start;
     }
-    if (customEnd) {
-      return dateStr <= customEnd;
+    if (end) {
+      return dateStr <= end;
     }
     return true;
   }
@@ -150,8 +161,8 @@ const getClosestDateInTimeframe = (
   currentVal: string | null,
   timeframe: string | undefined,
   daysVal: number | undefined,
-  customStart: string | undefined,
-  customEnd: string | undefined,
+  customStart: string | Date | null | undefined,
+  customEnd: string | Date | null | undefined,
   todayStr: string,
   tomorrowStr: string,
 ): string => {
@@ -182,8 +193,8 @@ const getClosestDateInTimeframe = (
     const limit = daysVal ?? 7;
     start = getFutureLogicalDateStr(limit, todayStr);
   } else if (timeframe === 'CUSTOM_RANGE') {
-    start = customStart;
-    end = customEnd;
+    start = normalizeDateStr(customStart);
+    end = normalizeDateStr(customEnd);
   }
 
   const refDate = currentVal ?? todayStr;
@@ -212,8 +223,8 @@ const adjustDateToTimeframe = (
   currentVal: string | null,
   timeframe: string | undefined,
   daysVal: number | undefined,
-  customStart: string | undefined,
-  customEnd: string | undefined,
+  customStart: string | Date | null | undefined,
+  customEnd: string | Date | null | undefined,
   todayStr: string,
   tomorrowStr: string,
   startOfNextDayDiffMs: number,

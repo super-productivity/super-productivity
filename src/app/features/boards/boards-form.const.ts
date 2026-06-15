@@ -206,24 +206,22 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
         },
         {
           key: 'scheduledCustomStart',
-          type: 'input',
+          type: 'date',
           expressions: {
             hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled} || model.scheduledTimeframe !== 'CUSTOM_RANGE'`,
           },
           props: {
             label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_START,
-            type: 'date',
           },
         },
         {
           key: 'scheduledCustomEnd',
-          type: 'input',
+          type: 'date',
           expressions: {
             hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled} || model.scheduledTimeframe !== 'CUSTOM_RANGE'`,
           },
           props: {
             label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_END,
-            type: 'date',
           },
         },
         {
@@ -291,24 +289,22 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
         },
         {
           key: 'deadlineCustomStart',
-          type: 'input',
+          type: 'date',
           expressions: {
             hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline} || model.deadlineTimeframe !== 'CUSTOM_RANGE'`,
           },
           props: {
             label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_START,
-            type: 'date',
           },
         },
         {
           key: 'deadlineCustomEnd',
-          type: 'input',
+          type: 'date',
           expressions: {
             hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline} || model.deadlineTimeframe !== 'CUSTOM_RANGE'`,
           },
           props: {
             label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_END,
-            type: 'date',
           },
         },
         {

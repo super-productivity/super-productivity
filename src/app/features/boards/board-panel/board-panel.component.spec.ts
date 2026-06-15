@@ -922,6 +922,62 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
       expect(component.tasks().map((t) => t.id)).toEqual(['t-in-range']);
     });
 
+    it('filters scheduled tasks by CUSTOM_RANGE timeframe (only start date set)', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-before', dueDay: '2026-06-10' }),
+        mkTask({ id: 't-in-range', dueDay: '2026-06-15' }),
+        mkTask({ id: 't-after', dueDay: '2026-06-20' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2,
+        scheduledTimeframe: 'CUSTOM_RANGE',
+        scheduledCustomStart: '2026-06-12',
+        scheduledCustomEnd: null,
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      const ids = component.tasks().map((t) => t.id);
+      expect(ids).not.toContain('t-before');
+      expect(ids).toContain('t-in-range');
+      expect(ids).toContain('t-after');
+    });
+
+    it('filters scheduled tasks by CUSTOM_RANGE timeframe (only end date set)', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-before', dueDay: '2026-06-10' }),
+        mkTask({ id: 't-in-range', dueDay: '2026-06-15' }),
+        mkTask({ id: 't-after', dueDay: '2026-06-20' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2,
+        scheduledTimeframe: 'CUSTOM_RANGE',
+        scheduledCustomStart: null,
+        scheduledCustomEnd: '2026-06-17',
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      const ids = component.tasks().map((t) => t.id);
+      expect(ids).toContain('t-before');
+      expect(ids).toContain('t-in-range');
+      expect(ids).not.toContain('t-after');
+    });
+
     it('filters by HasDeadline and NoDeadline states', async () => {
       await setupWithMockDateService([
         mkTask({ id: 't-deadline', deadlineDay: '2026-06-14' }),
@@ -1352,6 +1408,66 @@ describe('BoardPanelComponent - drop()', () => {
       scheduledState: BoardPanelCfgScheduledState.Scheduled,
       scheduledTimeframe: 'CUSTOM_RANGE',
       scheduledCustomStart: '2026-06-20',
+      scheduledCustomEnd: '2026-06-25',
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-25',
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled CUSTOM_RANGE panel plans for closest date (only start set, task is before start)', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], dueDay: '2026-06-10' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'CUSTOM_RANGE',
+      scheduledCustomStart: '2026-06-20',
+      scheduledCustomEnd: null,
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-20',
+      }),
+    );
+  });
+
+  it('cross-panel drop on scheduled CUSTOM_RANGE panel plans for closest date (only end set, task is after end)', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], dueDay: '2026-06-30' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'CUSTOM_RANGE',
+      scheduledCustomStart: null,
       scheduledCustomEnd: '2026-06-25',
       isParentTasksOnly: false,
       projectIds: [''],
