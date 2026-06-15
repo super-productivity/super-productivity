@@ -27,8 +27,21 @@
     encode gzip zstd
 
     # Logging
+    #
+    # Redact the WebSocket auth token from the logged URI. The WS endpoint
+    # authenticates via `?token=<JWT>` (browsers can't set headers on a
+    # WebSocket), and that JWT is valid for 365 days with no rotation. Without
+    # this filter every WS upgrade writes a year-valid, full-sync credential to
+    # stdout / `docker logs`. `token` is only ever a query param on the WS URL
+    # (the HTTP API authenticates via the Authorization header), so redacting it
+    # here is targeted and safe. See #8343.
     log {
         output stdout
-        format console
+        format filter {
+            wrap console
+            request>uri query {
+                replace token REDACTED
+            }
+        }
     }
 }
