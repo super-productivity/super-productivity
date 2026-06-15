@@ -98,6 +98,11 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
     out.deadlineDaysVal = clampDaysVal(out.deadlineDaysVal);
   }
 
+  out.scheduledCustomStart = normalizeDateStr(out.scheduledCustomStart) || null;
+  out.scheduledCustomEnd = normalizeDateStr(out.scheduledCustomEnd) || null;
+  out.deadlineCustomStart = normalizeDateStr(out.deadlineCustomStart) || null;
+  out.deadlineCustomEnd = normalizeDateStr(out.deadlineCustomEnd) || null;
+
   return out;
 };
 

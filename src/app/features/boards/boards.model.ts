@@ -52,13 +52,13 @@ export interface BoardSrcCfg {
   scheduledState: BoardPanelCfgScheduledState;
   scheduledTimeframe?: BoardPanelTimeframePreset;
   scheduledDaysVal?: number;
-  scheduledCustomStart?: string | number | Date | null;
-  scheduledCustomEnd?: string | number | Date | null;
+  scheduledCustomStart?: string | null;
+  scheduledCustomEnd?: string | null;
   deadlineState?: BoardPanelCfgDeadlineState;
   deadlineTimeframe?: BoardPanelTimeframePreset;
   deadlineDaysVal?: number;
-  deadlineCustomStart?: string | number | Date | null;
-  deadlineCustomEnd?: string | number | Date | null;
+  deadlineCustomStart?: string | null;
+  deadlineCustomEnd?: string | null;
   isParentTasksOnly: boolean;
   // Absent = manual order (user-controlled taskIds).
   sortBy?: BoardSortField;
