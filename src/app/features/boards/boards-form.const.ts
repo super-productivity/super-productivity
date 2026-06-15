@@ -71,7 +71,7 @@ const buildTimeframeFields = (
     },
     {
       key: `${prefix}CustomStart` as keyof BoardPanelCfg,
-      type: 'date-btn',
+      type: 'date',
       expressions: {
         hide: `model.${stateKey} !== ${stateActiveVal} || model.${prefix}Timeframe !== 'CUSTOM_RANGE'`,
       },
@@ -82,7 +82,7 @@ const buildTimeframeFields = (
     },
     {
       key: `${prefix}CustomEnd` as keyof BoardPanelCfg,
-      type: 'date-btn',
+      type: 'date',
       expressions: {
         hide: `model.${stateKey} !== ${stateActiveVal} || model.${prefix}Timeframe !== 'CUSTOM_RANGE'`,
       },
