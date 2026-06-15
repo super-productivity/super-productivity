@@ -10,6 +10,7 @@ import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import {
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
@@ -51,6 +52,11 @@ import {
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
 } from '../../project/store/project.actions';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
+import { matchesBoardDateTimeframe } from '../board-date-filter.util';
 
 @Component({
   selector: 'board-panel',
@@ -92,6 +98,14 @@ export class BoardPanelComponent {
   allProjects$ = this.store.select(selectUnarchivedProjects);
   allProjects = toSignal(this.allProjects$, {
     initialValue: [],
+  });
+
+  todayStr = toSignal(this.store.select(selectTodayStr), {
+    initialValue: '',
+  });
+
+  startOfNextDayDiffMs = toSignal(this.store.select(selectStartOfNextDayDiffMs), {
+    initialValue: 0,
   });
 
   // Create a Set of all backlog task IDs for fast lookup
@@ -155,6 +169,8 @@ export class BoardPanelComponent {
 
   tasks = computed(() => {
     const panelCfg = this.panelCfg();
+    const todayStr = this.todayStr();
+    const startOfNextDayDiffMs = this.startOfNextDayDiffMs();
     const orderedTasks: TaskCopy[] = [];
     const nonOrderedTasks: TaskCopy[] = [];
 
@@ -198,10 +214,36 @@ export class BoardPanelComponent {
 
       if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
         isTaskIncluded = isTaskIncluded && !!(task.dueWithTime || task.dueDay);
+        if (isTaskIncluded && panelCfg.scheduledTimeframe) {
+          isTaskIncluded = matchesBoardDateTimeframe({
+            timeframe: panelCfg.scheduledTimeframe,
+            dateOnly: task.dueDay,
+            timestamp: task.dueWithTime,
+            todayStr,
+            startOfNextDayDiffMs,
+          });
+        }
       }
 
       if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
         isTaskIncluded = isTaskIncluded && !task.dueWithTime && !task.dueDay;
+      }
+
+      if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
+        isTaskIncluded = isTaskIncluded && !!(task.deadlineWithTime || task.deadlineDay);
+        if (isTaskIncluded && panelCfg.deadlineTimeframe) {
+          isTaskIncluded = matchesBoardDateTimeframe({
+            timeframe: panelCfg.deadlineTimeframe,
+            dateOnly: task.deadlineDay,
+            timestamp: task.deadlineWithTime,
+            todayStr,
+            startOfNextDayDiffMs,
+          });
+        }
+      }
+
+      if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
+        isTaskIncluded = isTaskIncluded && !task.deadlineWithTime && !task.deadlineDay;
       }
 
       if (panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog) {

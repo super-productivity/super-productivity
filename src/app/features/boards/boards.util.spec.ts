@@ -1,5 +1,9 @@
 import { buildComparator, rewriteTagIdsForPanel, sanitizePanelCfg } from './boards.util';
-import { BoardPanelCfg } from './boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
+  BoardPanelCfgScheduledState,
+} from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 
 const basePanel: any = {
@@ -84,6 +88,60 @@ describe('sanitizePanelCfg', () => {
     expect('sortDir' in out).toBe(false);
     expect('includedTagsMatch' in out).toBe(false);
     expect('excludedTagsMatch' in out).toBe(false);
+  });
+
+  it('drops invalid timeframe fields', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'customDate', customDate: 'not-a-date' },
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: { type: 'customRange', customStart: '2026-04-03' },
+    } as any);
+
+    expect('scheduledTimeframe' in out).toBe(false);
+    expect('deadlineTimeframe' in out).toBe(false);
+  });
+
+  it('drops scheduled timeframe unless scheduledState is Scheduled', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.All,
+      scheduledTimeframe: { type: 'today' },
+    } as any);
+
+    expect('scheduledTimeframe' in out).toBe(false);
+  });
+
+  it('drops deadline timeframe unless deadlineState is HasDeadline', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      deadlineState: BoardPanelCfgDeadlineState.NoDeadline,
+      deadlineTimeframe: { type: 'today' },
+    } as any);
+
+    expect('deadlineTimeframe' in out).toBe(false);
+  });
+
+  it('preserves valid scheduled and deadline timeframe fields', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'today' },
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: {
+        type: 'customRange',
+        customStart: '2026-04-01',
+        customEnd: '2026-04-30',
+      },
+    } as any);
+
+    expect(out.scheduledTimeframe).toEqual({ type: 'today' });
+    expect(out.deadlineTimeframe).toEqual({
+      type: 'customRange',
+      customStart: '2026-04-01',
+      customEnd: '2026-04-30',
+    });
   });
 
   it('drops unknown sortBy values (e.g. from a newer client)', () => {

@@ -1,7 +1,9 @@
 import { LimitedFormlyFieldConfig } from '../config/global-config.model';
 import {
   BoardCfg,
+  BoardDateTimeframeType,
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
@@ -14,6 +16,19 @@ const getNewPanel = (): BoardPanelCfg => ({
   ...DEFAULT_PANEL_CFG,
   id: nanoid(),
 });
+
+const TIMEFRAME_OPTIONS: {
+  value: BoardDateTimeframeType;
+  label: string;
+}[] = [
+  { value: 'today', label: T.F.BOARDS.FORM.TIMEFRAME_TODAY },
+  { value: 'tomorrow', label: T.F.BOARDS.FORM.TIMEFRAME_TOMORROW },
+  { value: 'next7Days', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_7_DAYS },
+  { value: 'nextWeek', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
+  { value: 'nextMonth', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
+  { value: 'customDate', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE },
+  { value: 'customRange', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
+];
 
 export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
   {
@@ -162,6 +177,133 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
               },
             ],
           },
+        },
+        {
+          key: 'scheduledTimeframe',
+          expressions: {
+            hide: `model?.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled}`,
+          },
+          resetOnHide: true,
+          defaultValue: { type: 'today' },
+          fieldGroup: [
+            {
+              key: 'type',
+              type: 'select',
+              props: {
+                label: T.F.BOARDS.FORM.SCHEDULED_TIMEFRAME,
+                required: true,
+                options: TIMEFRAME_OPTIONS,
+              },
+            },
+            {
+              key: 'customDate',
+              type: 'input',
+              expressions: {
+                hide: 'model?.type !== "customDate"',
+              },
+              props: {
+                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE_VALUE,
+                type: 'date',
+              },
+            },
+            {
+              key: 'customStart',
+              type: 'input',
+              expressions: {
+                hide: 'model?.type !== "customRange"',
+              },
+              props: {
+                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_START,
+                type: 'date',
+              },
+            },
+            {
+              key: 'customEnd',
+              type: 'input',
+              expressions: {
+                hide: 'model?.type !== "customRange"',
+              },
+              props: {
+                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_END,
+                type: 'date',
+              },
+            },
+          ],
+        },
+        {
+          key: 'deadlineState',
+          type: 'radio',
+          props: {
+            label: T.F.BOARDS.FORM.DEADLINE_STATE,
+            required: true,
+            defaultValue: BoardPanelCfgDeadlineState.All,
+            options: [
+              {
+                value: BoardPanelCfgDeadlineState.All,
+                label: T.F.BOARDS.FORM.DEADLINE_STATE_ALL,
+              },
+              {
+                value: BoardPanelCfgDeadlineState.HasDeadline,
+                label: T.F.BOARDS.FORM.DEADLINE_STATE_HAS_DEADLINE,
+              },
+              {
+                value: BoardPanelCfgDeadlineState.NoDeadline,
+                label: T.F.BOARDS.FORM.DEADLINE_STATE_NO_DEADLINE,
+              },
+            ],
+          },
+        },
+        {
+          key: 'deadlineTimeframe',
+          expressions: {
+            hide: `model?.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline}`,
+          },
+          resetOnHide: true,
+          defaultValue: { type: 'today' },
+          fieldGroup: [
+            {
+              key: 'type',
+              type: 'select',
+              props: {
+                label: T.F.BOARDS.FORM.DEADLINE_TIMEFRAME,
+                required: true,
+                options: TIMEFRAME_OPTIONS,
+              },
+            },
+            {
+              key: 'customDate',
+              type: 'input',
+              expressions: {
+                hide: 'model?.type !== "customDate"',
+              },
+              props: {
+                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE_VALUE,
+                type: 'date',
+              },
+            },
+            {
+              key: 'customStart',
+              type: 'input',
+              expressions: {
+                hide: 'model?.type !== "customRange"',
+              },
+              props: {
+                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_START,
+                type: 'date',
+              },
+            },
+            {
+              key: 'customEnd',
+              type: 'input',
+              expressions: {
+                hide: 'model?.type !== "customRange"',
+              },
+              props: {
+                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_END,
+                type: 'date',
+              },
+            },
+          ],
         },
         {
           key: 'sortBy',

@@ -16,8 +16,29 @@ export enum BoardPanelCfgTaskTypeFilter {
   OnlyBacklog = 3,
 }
 
+export enum BoardPanelCfgDeadlineState {
+  All = 1,
+  HasDeadline = 2,
+  NoDeadline = 3,
+}
+
 export type BoardSortField = 'dueDate' | 'created' | 'title' | 'timeEstimate';
 export type BoardMatchMode = 'all' | 'any';
+export type BoardDateTimeframeType =
+  | 'today'
+  | 'tomorrow'
+  | 'next7Days'
+  | 'nextWeek'
+  | 'nextMonth'
+  | 'customDate'
+  | 'customRange';
+
+export interface BoardDateTimeframeCfg {
+  type: BoardDateTimeframeType;
+  customDate?: string;
+  customStart?: string;
+  customEnd?: string;
+}
 
 export interface BoardSrcCfg {
   includedTagIds: string[];
@@ -34,6 +55,9 @@ export interface BoardSrcCfg {
   projectIds?: string[];
   taskDoneState: BoardPanelCfgTaskDoneState;
   scheduledState: BoardPanelCfgScheduledState;
+  scheduledTimeframe?: BoardDateTimeframeCfg;
+  deadlineState?: BoardPanelCfgDeadlineState;
+  deadlineTimeframe?: BoardDateTimeframeCfg;
   isParentTasksOnly: boolean;
   // Absent = manual order (user-controlled taskIds).
   sortBy?: BoardSortField;

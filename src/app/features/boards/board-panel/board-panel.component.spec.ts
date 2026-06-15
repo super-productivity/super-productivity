@@ -1,6 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardPanelComponent } from './board-panel.component';
-import { BoardPanelCfg, BoardPanelCfgTaskTypeFilter } from '../boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
+  BoardPanelCfgScheduledState,
+  BoardPanelCfgTaskTypeFilter,
+} from '../boards.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../../tasks/task.service';
@@ -20,6 +25,11 @@ import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 describe('BoardPanelComponent - Backlog Feature', () => {
   let component: BoardPanelComponent;
@@ -83,6 +93,10 @@ describe('BoardPanelComponent - Backlog Feature', () => {
           return of(mockProjects);
         } else if (selectorFn === selectAllTasksInActiveProjects) {
           return of(mockTasks);
+        } else if (selectorFn === selectTodayStr) {
+          return of('2026-03-18');
+        } else if (selectorFn === selectStartOfNextDayDiffMs) {
+          return of(0);
         }
         return of([]);
       },
@@ -248,6 +262,10 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
           return of(mockProjects);
         } else if (selectorFn === selectAllTasksInActiveProjects) {
           return of(mockTasks);
+        } else if (selectorFn === selectTodayStr) {
+          return of('2026-03-18');
+        } else if (selectorFn === selectStartOfNextDayDiffMs) {
+          return of(0);
         }
         return of([]);
       },
@@ -341,6 +359,8 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
         if (selectorFn === selectAllTasksInActiveProjects) return of(tasks);
+        if (selectorFn === selectTodayStr) return of('2026-03-18');
+        if (selectorFn === selectStartOfNextDayDiffMs) return of(0);
         return of([]);
       },
       dispatch: jasmine.createSpy('dispatch'),
@@ -701,6 +721,185 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
   });
 });
 
+describe('BoardPanelComponent - date and deadline filters', () => {
+  let component: BoardPanelComponent;
+  let fixture: ComponentFixture<BoardPanelComponent>;
+  let storeMock: { select: jasmine.Spy; pipe: jasmine.Spy; dispatch: jasmine.Spy };
+  let actions$: ReplaySubject<unknown>;
+
+  const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
+    ({
+      id: overrides.id || 't',
+      title: 'Task',
+      projectId: 'p1',
+      timeSpentOnDay: {},
+      attachments: [],
+      timeEstimate: 0,
+      timeSpent: 0,
+      isDone: false,
+      tagIds: [],
+      created: new Date(2026, 2, 1).getTime(),
+      subTaskIds: [],
+      ...overrides,
+    }) as TaskCopy;
+
+  const basePanel = (): BoardPanelCfg =>
+    ({
+      id: 'p',
+      title: 'P',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.All,
+      backlogState: BoardPanelCfgTaskTypeFilter.All,
+      isParentTasksOnly: false,
+      projectIds: [''],
+    }) as BoardPanelCfg;
+
+  const setup = async (
+    tasks: TaskCopy[],
+    todayStr = '2026-03-18',
+    startOfNextDayDiffMs = 0,
+  ): Promise<void> => {
+    actions$ = new ReplaySubject(1);
+    storeMock = {
+      select: jasmine.createSpy('select').and.callFake((selectorFn: unknown) => {
+        if (selectorFn === selectUnarchivedProjects) {
+          return of([{ id: 'p1', backlogTaskIds: [] }]);
+        }
+        if (selectorFn === selectAllTasksInActiveProjects) {
+          return of(tasks);
+        }
+        if (selectorFn === selectTodayStr) {
+          return of(todayStr);
+        }
+        if (selectorFn === selectStartOfNextDayDiffMs) {
+          return of(startOfNextDayDiffMs);
+        }
+        return of([]);
+      }),
+      pipe: jasmine.createSpy('pipe').and.returnValue(of({})),
+      dispatch: jasmine.createSpy('dispatch'),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        BoardPanelComponent,
+        TranslateModule.forRoot({
+          loader: { provide: TranslateLoader, useClass: TranslateNoOpLoader },
+        }),
+      ],
+      providers: [
+        provideMockStore({}),
+        provideMockActions(() => actions$),
+        { provide: Store, useValue: storeMock },
+        {
+          provide: TaskService,
+          useValue: {
+            currentTaskId: signal(null),
+            updateTags: jasmine.createSpy('updateTags'),
+          },
+        },
+        { provide: MatDialog, useValue: { open: jasmine.createSpy('open') } },
+        { provide: WorkContextService, useValue: {} },
+        { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+      ],
+    })
+      .overrideComponent(PlannerTaskComponent, {
+        set: { template: '<div>Mock Task</div>', inputs: ['task'] },
+      })
+      .overrideComponent(AddTaskInlineComponent, {
+        set: { template: '<div>Mock Add Task</div>' },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(BoardPanelComponent);
+    component = fixture.componentInstance;
+  };
+
+  it('shows only tasks planned for today when scheduled timeframe is Today', async () => {
+    await setup([
+      mkTask({ id: 'today', dueDay: '2026-03-18' }),
+      mkTask({ id: 'tomorrow', dueDay: '2026-03-19' }),
+      mkTask({ id: 'none' }),
+    ]);
+
+    fixture.componentRef.setInput('panelCfg', {
+      ...basePanel(),
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'today' },
+    });
+    fixture.detectChanges();
+
+    expect(component.tasks().map((task) => task.id)).toEqual(['today']);
+  });
+
+  it('shows only deadline tasks in the next 7 days', async () => {
+    await setup([
+      mkTask({ id: 'today-deadline', deadlineDay: '2026-03-18' }),
+      mkTask({ id: 'last-in-window', deadlineDay: '2026-03-24' }),
+      mkTask({ id: 'outside-window', deadlineDay: '2026-03-25' }),
+      mkTask({ id: 'no-deadline' }),
+    ]);
+
+    fixture.componentRef.setInput('panelCfg', {
+      ...basePanel(),
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: { type: 'next7Days' },
+    });
+    fixture.detectChanges();
+
+    expect(component.tasks().map((task) => task.id)).toEqual([
+      'today-deadline',
+      'last-in-window',
+    ]);
+  });
+
+  it('shows only tasks without deadline fields for NoDeadline', async () => {
+    await setup([
+      mkTask({ id: 'with-day', deadlineDay: '2026-03-18' }),
+      mkTask({ id: 'with-time', deadlineWithTime: new Date(2026, 2, 18).getTime() }),
+      mkTask({ id: 'without-deadline' }),
+    ]);
+
+    fixture.componentRef.setInput('panelCfg', {
+      ...basePanel(),
+      deadlineState: BoardPanelCfgDeadlineState.NoDeadline,
+    });
+    fixture.detectChanges();
+
+    expect(component.tasks().map((task) => task.id)).toEqual(['without-deadline']);
+  });
+
+  it('does not set or remove deadlines when dropping onto a deadline-filtered panel', async () => {
+    const task = mkTask({ id: 'dropped' });
+    const panelCfg = {
+      ...basePanel(),
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: { type: 'today' },
+    };
+    await setup([task]);
+
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop({
+      previousContainer: { id: 'source' },
+      container: { id: 'target', data: panelCfg },
+      item: { data: task },
+      previousIndex: 0,
+      currentIndex: 0,
+    } as any);
+
+    const dispatchedTypes = storeMock.dispatch.calls
+      .allArgs()
+      .map(([action]) => action.type);
+    expect(dispatchedTypes).not.toContain(TaskSharedActions.setDeadline.type);
+    expect(dispatchedTypes).not.toContain(TaskSharedActions.removeDeadline.type);
+  });
+});
+
 describe('BoardPanelComponent - drop()', () => {
   let component: BoardPanelComponent;
   let fixture: ComponentFixture<BoardPanelComponent>;
@@ -755,6 +954,8 @@ describe('BoardPanelComponent - drop()', () => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
         if (selectorFn === selectAllTasksInActiveProjects) return of(tasks);
+        if (selectorFn === selectTodayStr) return of('2026-03-18');
+        if (selectorFn === selectStartOfNextDayDiffMs) return of(0);
         return of([]);
       },
       pipe: () => ({ toPromise: () => Promise.resolve(undefined) }),
