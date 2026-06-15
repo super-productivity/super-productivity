@@ -8,6 +8,8 @@ export const IS_GNOME_DESKTOP = IS_ELECTRON && window.ea.isGnomeDesktop();
 // Web builds can't reliably distinguish Apple Silicon from Intel and stay false.
 export const IS_APPLE_SILICON = IS_ELECTRON && window.ea.isAppleSilicon();
 
+export const IS_QUICK_ADD_HUD = IS_ELECTRON && window.location.hash.includes('quick-add');
+
 export const TRACKING_INTERVAL = 1000;
 
 export const DRAG_DELAY_FOR_TOUCH = 500;

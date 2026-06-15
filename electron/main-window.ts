@@ -30,6 +30,7 @@ import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
+import { destroyQuickAddWindow } from './quick-add-window';
 
 let mainWin: BrowserWindow;
 
@@ -68,6 +69,10 @@ export const getWin = (): BrowserWindow => {
   if (!mainWinModule.win) {
     throw new Error('No main window');
   }
+  return mainWinModule.win;
+};
+
+export const getWinSafe = (): BrowserWindow | undefined => {
   return mainWinModule.win;
 };
 
@@ -596,6 +601,7 @@ const appCloseHandler = (app: App): void => {
     setIsQuiting(true);
     // Destroy task widget before closing main window to ensure window-all-closed fires
     destroyTaskWidget();
+    destroyQuickAddWindow();
     mainWin.close();
   };
 
@@ -611,6 +617,7 @@ const appCloseHandler = (app: App): void => {
     if (ids.length === 0) {
       // Destroy task widget before closing main window
       destroyTaskWidget();
+      destroyQuickAddWindow();
       mainWin.close();
     }
   });
@@ -647,8 +654,8 @@ const appCloseHandler = (app: App): void => {
     setIsQuitRequested(false);
 
     // Dereference the window object
-    mainWin = null;
-    mainWinModule.win = null;
+    mainWin = undefined as any;
+    mainWinModule.win = undefined;
   });
 
   mainWin.webContents.on('render-process-gone', (event, detailed) => {

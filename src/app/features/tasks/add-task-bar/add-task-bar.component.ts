@@ -169,6 +169,17 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   suggestions$!: Observable<AddTaskSuggestion[]>;
   activatedIssueTask = toSignal(this.activatedSuggestion$, { initialValue: null });
 
+  tempPlaceholder = signal<string | null>(null);
+  placeholderText = computed(() => {
+    if (this.tempPlaceholder()) {
+      return this.tempPlaceholder()!;
+    }
+    return this.isSearchMode()
+      ? this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH)
+      : this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE);
+  });
+  private _tempPlaceholderTimeout?: number;
+
   // Computed values
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
@@ -538,8 +549,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             repeatCfg,
           });
         }
+
         this.afterTaskAdd.emit({ taskId: '', isAddToBottom: this.isAddToBottom() });
-        this._resetAfterAdd();
+        this._resetAfterAdd(title);
         return;
       }
 
@@ -601,7 +613,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       }
 
       this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });
-      this._resetAfterAdd();
+      this._resetAfterAdd(title);
     } finally {
       this._isAddingTask = false;
     }
@@ -704,6 +716,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const target = event.target as HTMLInputElement;
     const value = target.value;
     this.stateService.updateInputTxt(value);
+
+    // Clear the temporary success placeholder if the user types
+    if (this.tempPlaceholder()) {
+      this.tempPlaceholder.set(null);
+    }
   }
 
   onPaste(event: ClipboardEvent): void {
@@ -878,13 +895,27 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       });
   }
 
-  private _resetAfterAdd(): void {
+  private _resetAfterAdd(title?: string): void {
     this.stateService.resetAfterAdd();
     if (this._defaultTagIds.length > 0) {
       this.stateService.updateTagIds(this._defaultTagIds);
     }
     // Reset parser state but don't reset project/date/estimate
     this._parserService.resetPreviousResult();
+
+    // Trigger temporary placeholder text "Task added successfully" in faint gray
+    const truncatedTitle = title ? truncate(title, 20) : '';
+    this.tempPlaceholder.set(
+      this._translateService.instant(T.GLOBAL_SNACK.ADD_TASK_SUCCESS, {
+        title: truncatedTitle,
+      }),
+    );
+    if (this._tempPlaceholderTimeout) {
+      window.clearTimeout(this._tempPlaceholderTimeout);
+    }
+    this._tempPlaceholderTimeout = window.setTimeout(() => {
+      this.tempPlaceholder.set(null);
+    }, 500);
   }
 
   private _getDefaultTagIdsForWorkContext(

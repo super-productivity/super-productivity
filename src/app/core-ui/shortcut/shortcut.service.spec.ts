@@ -14,6 +14,7 @@ import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
 import { TaskRepeatCfgService } from '../../features/task-repeat-cfg/task-repeat-cfg.service';
 import { OverlayContainer } from '@angular/cdk/overlay';
+import { SnackService } from '../../core/snack/snack.service';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { TaskReminderOptionId } from '../../features/tasks/task.model';
@@ -86,6 +87,7 @@ describe('ShortcutService', () => {
         { provide: Store, useValue: { dispatch: jasmine.createSpy('dispatch') } },
         { provide: PluginBridgeService, useValue: { shortcuts: signal([]) } },
         { provide: TaskRepeatCfgService, useValue: mockTaskRepeatCfgService },
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
         {
           provide: OverlayContainer,
           useValue: {

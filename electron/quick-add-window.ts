@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
-import { join } from 'path';
+import { join, normalize } from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
-import { getWin } from './main-window';
+import { getWinSafe } from './main-window';
+import { isAppOriginUrl } from './navigation-guard';
 
 let quickAddWin: BrowserWindow | null = null;
 let loadUrl: string | undefined;
@@ -14,7 +15,7 @@ export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): 
     appUrl ||
     (isDev
       ? 'http://localhost:4200'
-      : `file://${join(__dirname, '../.tmp/angular-dist/browser/index.html')}`);
+      : `file://${normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html'))}`);
 
   // Pre-create the window on startup
   createQuickAddWindow();
@@ -27,7 +28,7 @@ export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): 
   ipcMain.on(IPC.QUICK_ADD_SUBMIT, (event, payload) => {
     // Forward the submit event to the main window
     try {
-      const mainWin = getWin();
+      const mainWin = getWinSafe();
       if (mainWin && !mainWin.isDestroyed()) {
         mainWin.webContents.send(IPC.QUICK_ADD_SUBMIT_FORWARD, payload);
       }
@@ -35,6 +36,20 @@ export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): 
       console.error('Error forwarding quick-add task submission to main window:', e);
     }
   });
+};
+
+export const destroyQuickAddWindow = (): void => {
+  ipcMain.removeAllListeners(IPC.QUICK_ADD_CLOSE);
+  ipcMain.removeAllListeners(IPC.QUICK_ADD_SUBMIT);
+
+  if (quickAddWin && !quickAddWin.isDestroyed()) {
+    try {
+      quickAddWin.destroy();
+    } catch (e) {
+      console.error('Error destroying quick-add window:', e);
+    }
+  }
+  quickAddWin = null;
 };
 
 const getActiveDisplayBounds = (): {
@@ -80,11 +95,31 @@ const createQuickAddWindow = (): void => {
       preload: join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
+      disableDialogs: true,
     },
   });
 
   const url = `${loadUrl}#/quick-add`;
   quickAddWin.loadURL(url);
+
+  // Security: Navigation Guards
+  quickAddWin.webContents.on('will-navigate', (ev, navUrl) => {
+    if (loadUrl && isAppOriginUrl(navUrl, loadUrl)) return;
+    ev.preventDefault();
+  });
+  quickAddWin.webContents.on('will-redirect', (ev, navUrl) => {
+    if (loadUrl && isAppOriginUrl(navUrl, loadUrl)) return;
+    ev.preventDefault();
+  });
+  quickAddWin.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
+  });
+  quickAddWin.webContents.on('did-create-window', (childWin) => {
+    try {
+      childWin.destroy();
+    } catch {}
+  });
 
   quickAddWin.on('closed', () => {
     quickAddWin = null;
@@ -123,7 +158,7 @@ export const showQuickAddWindow = (): void => {
   // the window is only app-level hidden — re-activation would restore it.
   // Window-level hide (mainWin.hide → orderOut:) survives re-activation.
   if (process.platform === 'darwin') {
-    const mainWin = getWin();
+    const mainWin = getWinSafe();
     if (mainWin && !mainWin.isDestroyed()) {
       mainWinWasVisible = mainWin.isVisible() && !mainWin.isMinimized();
       if (!wasMainWinFocused) {
@@ -156,7 +191,7 @@ export const hideQuickAddWindow = (isProgrammatic = false): void => {
     quickAddWin.hide();
 
     if (process.platform === 'darwin') {
-      const mainWin = getWin();
+      const mainWin = getWinSafe();
 
       // Restore the main window that we hid in showQuickAddWindow
       if (mainWinWasVisible && mainWin && !mainWin.isDestroyed()) {

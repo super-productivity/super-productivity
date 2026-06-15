@@ -2640,6 +2640,7 @@
     }
   },
   "GLOBAL_SNACK": {
+    "ADD_TASK_SUCCESS": "Task \"{{title}}\" added!",
     "COPY_TO_CLIPPBOARD": "Copied to clipboard",
     "DUPLICATE_PROJECT_ERROR": "The project could not be duplicated",
     "DUPLICATE_PROJECT_SUCCESS": "Project duplicated successfully",

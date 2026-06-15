@@ -10,7 +10,6 @@ import { LayoutService } from '../../core-ui/layout/layout.service';
     <div class="quick-add-container">
       <add-task-bar
         (closed)="closeWindow()"
-        (done)="closeWindow()"
         [isGlobalBarVariant]="true"
         [isSubmitViaIpc]="true"
       ></add-task-bar>

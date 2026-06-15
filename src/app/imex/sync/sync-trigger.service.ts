@@ -25,7 +25,7 @@ import {
   SYNC_MIN_INTERVAL,
 } from './sync.const';
 import { IdleService } from '../../features/idle/idle.service';
-import { IS_ELECTRON } from '../../app.constants';
+import { IS_ELECTRON, IS_QUICK_ADD_HUD } from '../../app.constants';
 import { GlobalConfigState } from '../../features/config/global-config.model';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
@@ -52,6 +52,11 @@ export class SyncTriggerService {
   private readonly _hydrationState = inject(HydrationStateService);
 
   constructor() {
+    if (IS_QUICK_ADD_HUD) {
+      this.setInitialSyncDone(true);
+      return;
+    }
+
     // When sync is disabled, set initialSyncDone immediately so UI shows
     // and day-change effects can run without waiting for a sync that will never happen.
     this._isInitialSyncEnabled$.pipe(first()).subscribe((isActive) => {
@@ -238,6 +243,9 @@ export class SyncTriggerService {
     syncInterval: number = SYNC_DEFAULT_AUDIT_TIME,
     useIntervalTimer = false,
   ): Observable<unknown> {
+    if (IS_QUICK_ADD_HUD) {
+      return EMPTY;
+    }
     const _immediateSyncTrigger$: Observable<string> = IS_ANDROID_WEB_VIEW
       ? // ANDROID ONLY
         merge(
