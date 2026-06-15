@@ -1,0 +1,27 @@
+<div class="date-btn-wrapper">
+  <button
+    mat-stroked-button
+    type="button"
+    (click)="openDialog()"
+    class="date-btn"
+  >
+    <mat-icon>today</mat-icon>
+    <span class="label">{{ props.label | translate }}:</span>
+    @if (dateValStr) {
+      <span class="value">{{ dateValStr }}</span>
+    } @else {
+      <span class="value value--empty">({{ T.G.NONE | translate }})</span>
+    }
+  </button>
+  @if (formControl.value) {
+    <button
+      mat-icon-button
+      type="button"
+      (click)="clear()"
+      [matTooltip]="T.G.CLEAR | translate"
+      class="clear-btn"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  }
+</div>

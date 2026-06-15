@@ -1,0 +1,42 @@
+:host {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.date-btn-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.date-btn {
+  flex-grow: 1;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+
+  .mat-icon {
+    margin-right: 4px;
+  }
+
+  .label {
+    font-weight: 500;
+  }
+
+  .value {
+    font-weight: normal;
+    margin-left: 4px;
+
+    &--empty {
+      opacity: 0.6;
+      font-style: italic;
+    }
+  }
+}
+
+.clear-btn {
+  flex-shrink: 0;
+}
