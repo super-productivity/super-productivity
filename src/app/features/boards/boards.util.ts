@@ -2,6 +2,7 @@ import { BoardPanelCfg, BoardSortField } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -79,6 +80,15 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   }
   if (out.excludedTagsMatch == null) {
     delete (out as Partial<BoardPanelCfg>).excludedTagsMatch;
+  }
+
+  const sanitizeDaysVal = (v: number | undefined): number =>
+    Number.isFinite(v) ? Math.max(1, Math.min(365, Math.floor(v as number))) : 7;
+  if (out.scheduledDaysVal !== undefined) {
+    out.scheduledDaysVal = sanitizeDaysVal(out.scheduledDaysVal);
+  }
+  if (out.deadlineDaysVal !== undefined) {
+    out.deadlineDaysVal = sanitizeDaysVal(out.deadlineDaysVal);
   }
 
   return out;
@@ -194,8 +204,8 @@ export interface TimeframeBounds {
 export interface TimeframeConfig {
   timeframe: string | undefined;
   daysVal?: number;
-  customStart?: string | Date | null;
-  customEnd?: string | Date | null;
+  customStart?: string | null;
+  customEnd?: string | null;
 }
 
 export interface AdjustDateOptions {
@@ -207,16 +217,15 @@ export interface AdjustDateOptions {
 }
 
 export const getFutureLogicalDateStr = (days: number, todayStr: string): string => {
-  const [y, m, d] = todayStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
+  const date = parseDbDateStr(todayStr);
   date.setDate(date.getDate() + days);
   return getDbDateStr(date);
 };
 
 export const getFutureLogicalMonthDateStr = (todayStr: string): string => {
-  const [y, m, d] = todayStr.split('-').map(Number);
-  const date = new Date(y, m - 1 + 1, d);
-  const targetMonth = (m - 1 + 1) % 12;
+  const date = parseDbDateStr(todayStr);
+  const targetMonth = (date.getMonth() + 1) % 12;
+  date.setMonth(date.getMonth() + 1);
   if (date.getMonth() !== targetMonth) {
     date.setDate(0);
   }
@@ -256,12 +265,16 @@ export const resolveTimeframeBounds = (
   if (timeframe === 'NEXT_MONTH') {
     return { start: todayStr, end: getFutureLogicalMonthDateStr(todayStr) };
   }
+
+  const sanitizeDaysVal = (v: number | undefined): number =>
+    Number.isFinite(v) ? Math.max(1, Math.min(365, Math.floor(v as number))) : 7;
+
   if (timeframe === 'NEXT_DAYS') {
-    const limit = daysVal ?? 7;
+    const limit = sanitizeDaysVal(daysVal);
     return { start: todayStr, end: getFutureLogicalDateStr(limit, todayStr) };
   }
   if (timeframe === 'AT_LEAST_DAYS_FUTURE') {
-    const limit = daysVal ?? 7;
+    const limit = sanitizeDaysVal(daysVal);
     return { start: getFutureLogicalDateStr(limit, todayStr) };
   }
   if (timeframe === 'CUSTOM_RANGE') {
@@ -292,26 +305,10 @@ export const getClosestDateInTimeframe = (
   bounds: TimeframeBounds,
   todayStr: string,
 ): string => {
-  const { start, end } = bounds;
-  const refDate = currentVal ?? todayStr;
-  let closestDate = refDate;
-
-  if (start && end) {
-    if (refDate < start) {
-      closestDate = start;
-    } else if (refDate > end) {
-      closestDate = end;
-    }
-  } else if (start) {
-    if (refDate < start) {
-      closestDate = start;
-    }
-  } else if (end) {
-    if (refDate > end) {
-      closestDate = end;
-    }
-  }
-  return closestDate;
+  const d = currentVal ?? todayStr;
+  if (bounds.start && d < bounds.start) return bounds.start;
+  if (bounds.end && d > bounds.end) return bounds.end;
+  return d;
 };
 
 export const adjustDateToTimeframe = (options: AdjustDateOptions): void => {

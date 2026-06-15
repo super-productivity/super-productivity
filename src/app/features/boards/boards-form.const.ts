@@ -21,7 +21,7 @@ interface TimeframeFieldFactoryOptions {
   stateKey: keyof BoardPanelCfg;
   stateActiveVal: number;
   stateLabel: string;
-  stateOptions: { value: any; label: string }[];
+  stateOptions: { value: number; label: string }[];
   timeframeLabel: string;
 }
 

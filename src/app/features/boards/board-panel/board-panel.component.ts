@@ -52,6 +52,7 @@ import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-dead
 import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { first, take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
@@ -353,12 +354,12 @@ export class BoardPanelComponent {
       !isAllProjects(panelCfg.projectIds) &&
       !panelCfg.projectIds.includes(task.projectId)
     ) {
-      const taskWithSubTasks = await this.store
-        .pipe(
+      const taskWithSubTasks = await firstValueFrom(
+        this.store.pipe(
           select(selectTaskByIdWithSubTaskData, { id: task.parentId || task.id }),
           take(1),
-        )
-        .toPromise();
+        ),
+      );
 
       this.store.dispatch(
         TaskSharedActions.moveToOtherProject({
@@ -381,9 +382,9 @@ export class BoardPanelComponent {
       }),
     );
 
-    this._checkToScheduledTask(panelCfg, task.id);
-    this._checkDeadlineState(panelCfg, task.id);
-    this._checkBacklogState(panelCfg, task.id);
+    await this._checkToScheduledTask(panelCfg, task.id);
+    await this._checkDeadlineState(panelCfg, task.id);
+    await this._checkBacklogState(panelCfg, task.id);
   }
 
   async afterTaskAdd({
@@ -403,9 +404,9 @@ export class BoardPanelComponent {
       }),
     );
 
-    this._checkToScheduledTask(panelCfg, taskId);
-    this._checkDeadlineState(panelCfg, taskId);
-    this._checkBacklogState(panelCfg, taskId);
+    await this._checkToScheduledTask(panelCfg, taskId);
+    await this._checkDeadlineState(panelCfg, taskId);
+    await this._checkBacklogState(panelCfg, taskId);
   }
 
   scheduleTask(task: TaskCopy, ev?: MouseEvent): void {
@@ -421,10 +422,12 @@ export class BoardPanelComponent {
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
-    const task = await this.store
-      .select(selectTaskById, { id: taskId })
-      .pipe(first())
-      .toPromise();
+    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.All) {
+      return;
+    }
+    const task = await firstValueFrom(
+      this.store.select(selectTaskById, { id: taskId }).pipe(first()),
+    );
     if (!task) {
       return;
     }
@@ -479,10 +482,9 @@ export class BoardPanelComponent {
       return;
     }
 
-    const task = await this.store
-      .select(selectTaskById, { id: taskId })
-      .pipe(first())
-      .toPromise();
+    const task = await firstValueFrom(
+      this.store.select(selectTaskById, { id: taskId }).pipe(first()),
+    );
 
     if (!task || !task.projectId) {
       return;
@@ -530,10 +532,12 @@ export class BoardPanelComponent {
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
-    const task = await this.store
-      .select(selectTaskById, { id: taskId })
-      .pipe(first())
-      .toPromise();
+    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.All) {
+      return;
+    }
+    const task = await firstValueFrom(
+      this.store.select(selectTaskById, { id: taskId }).pipe(first()),
+    );
     if (!task) {
       return;
     }
