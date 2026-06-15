@@ -54,7 +54,9 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
     _allExistingIssueIds: string[],
   ): Promise<IssueDataReduced[]> {
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
-    return await firstValueFrom(this._plainspaceApiService.getMyAndUnassignedTasks$(cfg));
+    // Only tasks assigned to me become SP tasks; unclaimed tasks are claimed
+    // explicitly via the claim pool, never auto-imported.
+    return await firstValueFrom(this._plainspaceApiService.getMyTasks$(cfg));
   }
 
   protected _apiGetById$(

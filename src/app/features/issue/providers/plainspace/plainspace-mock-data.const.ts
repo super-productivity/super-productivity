@@ -3,11 +3,11 @@ import { PLAINSPACE_MOCK_CURRENT_USER_ID } from '../../../plainspace/plainspace-
 
 /**
  * In-memory mock space tasks for the prototype (see PLAINSPACE_USE_MOCK). A mix
- * of tasks assigned to "me", unassigned, and assigned to others, so the issue
- * pipeline (mine/unassigned → backlog) and the "assigned to others" panel can
- * both be exercised without a live backend.
+ * of: assigned to me (auto-imported as SP tasks), unclaimed (the read-only claim
+ * pool), and assigned to others (not represented in SP). Mutated in place by the
+ * mock `claimTask$` — use `resetPlainspaceMockData()` to restore it (tests).
  */
-export const PLAINSPACE_MOCK_ISSUES: PlainspaceIssue[] = [
+const buildMockIssues = (): PlainspaceIssue[] => [
   {
     id: 'ps-101',
     title: 'Finalize the shared-space invite flow',
@@ -25,6 +25,24 @@ export const PLAINSPACE_MOCK_ISSUES: PlainspaceIssue[] = [
     assignee: null,
     updatedAt: '2026-06-15T09:30:00.000Z',
     url: 'https://plainspace.org/demo/ps-102',
+  },
+  {
+    id: 'ps-105',
+    title: 'Draft the v2 pricing page copy',
+    isDone: false,
+    assigneeId: null,
+    assignee: null,
+    updatedAt: '2026-06-15T10:10:00.000Z',
+    url: 'https://plainspace.org/demo/ps-105',
+  },
+  {
+    id: 'ps-106',
+    title: 'Investigate flaky sync e2e test',
+    isDone: false,
+    assigneeId: null,
+    assignee: null,
+    updatedAt: '2026-06-15T10:45:00.000Z',
+    url: 'https://plainspace.org/demo/ps-106',
   },
   {
     id: 'ps-103',
@@ -45,3 +63,10 @@ export const PLAINSPACE_MOCK_ISSUES: PlainspaceIssue[] = [
     url: 'https://plainspace.org/demo/ps-104',
   },
 ];
+
+export const PLAINSPACE_MOCK_ISSUES: PlainspaceIssue[] = buildMockIssues();
+
+/** Restores the mock space to its initial state (test helper). */
+export const resetPlainspaceMockData = (): void => {
+  PLAINSPACE_MOCK_ISSUES.splice(0, PLAINSPACE_MOCK_ISSUES.length, ...buildMockIssues());
+};

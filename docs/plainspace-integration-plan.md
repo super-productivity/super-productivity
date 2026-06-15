@@ -5,11 +5,19 @@ Productivity (SP) so that:
 
 1. A project can be made **shared on Plainspace** directly from the project
    create/edit dialog.
-2. For such shared projects the work view shows **two task lists**:
-   - **My list** — unassigned tasks + tasks assigned to the current user, rendered
-     by the regular SP task list (these are real, editable SP tasks).
-   - **Assigned to others** — a new, mostly read‑only component showing tasks
-     other members own.
+2. For such shared projects, SP shows — by **task ownership** (see the model in
+   §1):
+   - **My list** — tasks assigned to me, as regular, editable SP tasks.
+   - **A read‑only claim pool** — unclaimed (unassigned) tasks you can **claim**;
+     claiming assigns the task to you in Plainspace and imports it as an SP task.
+   - Tasks **assigned to others are not represented in SP** at all.
+
+> **Conceptual note (revised):** an earlier draft mirrored "assigned to others"
+> into SP as a standing read-only list. We dropped that — SP is a personal focus
+> tool, and a permanent wall of others' non-actionable tasks works against it and
+> creates a stale second copy of the Plainspace board. The model is now: **only
+> _mine_ + _unclaimed_ appear in SP; claiming is the bridge** that turns shared
+> work into your work. See the conversation rationale captured in §7.
 
 > Status: planning + prototype. The Plainspace HTTP API contract is not yet
 > pinned down in this document (see [Open questions](#10-open-questions--blocking-decisions));
@@ -22,22 +30,24 @@ Productivity (SP) so that:
 >   `PlainspaceApiService` (mock mode via `PLAINSPACE_USE_MOCK`),
 >   `PlainspaceCommonInterfacesService` implementing `IssueServiceInterface`,
 >   registered in `issue.model.ts` / `issue.const.ts` / `issue.service.ts` +
->   icon. Mine/unassigned tasks import via the normal issue→backlog pipeline.
+>   icon. **Only tasks assigned to me** import via the issue→backlog pipeline.
 > - §5 — account / identity: `PlainspaceAccountService` (signals: `account`,
 >   `isLoggedIn`, `currentUserId`; localStorage-persisted, never synced) with a
->   mock `login`/`logout`. "Mine" in the import filter now comes from the
->   signed-in identity, and the share toggle prompts sign-in if needed.
+>   mock `login`/`logout`. "Mine" comes from the signed-in identity, and the
+>   share toggle prompts sign-in if needed.
 > - §6 — the "Share on Plainspace" toggle in the create-project dialog, which
 >   (after sign-in) provisions a (mock) space and a bound provider via
 >   `PlainspaceShareService`.
-> - §7.2 / §9 — the "Assigned to others" panel is now fed live (mock) data via
->   `PlainspaceSharedTasksService` (others = `assigneeId !== me`), wired through
->   `project-task-page` → `work-view`. It only appears for projects that have a
->   bound, enabled `PLAINSPACE` provider (i.e. shared projects).
+> - §7 — the read-only **claim pool**: `PlainspaceClaimPoolService` feeds
+>   unclaimed tasks (mock) through `project-task-page` → `work-view` into a
+>   collapsed-by-default panel (`PlainspaceClaimPoolComponent`). A **Claim**
+>   action assigns the task to me and imports it as an SP task. Shows only for
+>   shared projects.
 >
 > **Still design-only:** §8 write-back, and the real HTTP API + real auth (all
-> `PlainspaceApiService` calls and the login are mocked — see §10). The panel
-> data does not yet auto-poll (loads on project open / provider change).
+> `PlainspaceApiService` calls, the login, and claim are mocked — see §10). The
+> claim pool does not yet auto-poll (loads on project open / provider change /
+> after a claim).
 
 ---
 
@@ -47,7 +57,7 @@ Productivity (SP) so that:
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | **Source of truth** for shared data | **Plainspace backend.** SP reads/writes shared tasks via Plainspace's API as a separate channel from SP's own op‑log sync. |
 | **Integration shape**               | Model Plainspace as a **regular issue provider** (like Jira/Redmine) "for the most part".                                  |
-| **Identity**                        | **Plainspace account login** (token-based). The authenticated account defines "me" for the assigned/unassigned split.      |
+| **Identity**                        | **Plainspace account login** (token-based). The authenticated account defines "me" — which tasks are mine vs unclaimed.    |
 | **v1 scope**                        | Plan the full feature; build a working **prototype** (UI + provider scaffold against an assumed/mock API).                 |
 
 ### Why "issue provider" is the right host
@@ -63,23 +73,20 @@ for free:
   fresh data** (`getFreshDataForIssueTask`) with a configurable `pollInterval`.
 - A clean single interface to implement: `IssueServiceInterface`.
 
-This means "Plainspace issues assigned to me" can flow through the **existing**
+This means "Plainspace issues assigned to me" flow through the **existing**
 issue→task pipeline with almost no new core code. The only genuinely new surface
-is the **"assigned to others"** read-only list, because that data is _not_
-imported as SP tasks.
+is the read-only **claim pool**, because that data is _not_ imported as SP tasks
+until claimed.
 
 ### The one important nuance
 
-The standard issue-provider flow turns issues **into** SP tasks. We only want to
-do that for **my / unassigned** items. Tasks **assigned to others** must be
-_shown_ but **not** imported as editable SP tasks (they are not my work, and
-importing them would pollute counts, scheduling, time tracking, and sync). So the
-design is a **hybrid**:
-
-- **Mine / unassigned** → imported as real SP tasks via the issue-provider
-  pipeline → appear in the normal list.
-- **Assigned to others** → fetched directly from Plainspace and rendered
-  read-only by a new component → never enter the SP task store.
+The standard issue-provider flow turns issues **into** SP tasks. We only do that
+for tasks **assigned to me**. Unclaimed tasks are _shown_ (a read-only pool) but
+**not** auto-imported — claiming is a deliberate act that assigns the task to me
+and then imports it. Tasks assigned to others are not represented in SP at all.
+(Auto-importing _unclaimed_ work as if it were yours has the same problem as the
+old others-list, just subtler: two members connecting the same space would both
+"own" the same unclaimed task locally.) See §7 for the full ownership model.
 
 ---
 
@@ -95,24 +102,24 @@ design is a **hybrid**:
                                     │               │
    ┌────────────────────────────────▼──┐   ┌────────▼───────────────────────────┐
    │ PlainspaceApiService (HTTP)        │   │ PlainspaceAccountService (auth/me) │
-   │ PlainspaceCommonInterfacesService  │   │ PlainspaceSharedTasksService/Store │
-   │  implements IssueServiceInterface  │   │  (others' tasks, members)          │
+   │ PlainspaceCommonInterfacesService  │   │ PlainspaceClaimPoolService         │
+   │  implements IssueServiceInterface  │   │  (unclaimed tasks + claim action)  │
    └───────────────┬────────────────────┘   └───────────────┬────────────────────┘
                    │                                          │
    ┌───────────────▼────────────────┐        ┌────────────────▼───────────────────┐
-   │ Existing issue→task pipeline    │        │ NEW "Assigned to others" panel      │
-   │ → real SP tasks (mine/unassigned)│       │ in work-view (read-only task cards) │
-   └─────────────────────────────────┘        └─────────────────────────────────────┘
+   │ Existing issue→task pipeline    │        │ Read-only claim-pool panel          │
+   │ → real SP tasks (assigned to me)│  claim │ in work-view (unclaimed tasks)      │
+   └─────────────────────────────────┘◄───────┴─────────────────────────────────────┘
                    │                                          │
                    └──────────────► Project work view ◄───────┘
-                         (My list)            (Assigned-to-others list)
+                         (My list)               (Claim pool)
 ```
 
 - **Issue-provider channel** = the Jira-like path. Registers a `PLAINSPACE`
   provider, bound per project via `defaultProjectId` (= the SP project the space
-  maps to). Imports my/unassigned issues, polls them for freshness.
-- **Shared-project channel** = the new bits: account login, fetching members and
-  others' tasks, and creating a space when a project is shared.
+  maps to). Imports **assigned-to-me** issues, polls them for freshness.
+- **Shared-project channel** = the new bits: account login, the unclaimed claim
+  pool (+ claim → import), and creating a space when a project is shared.
 
 SP's own op-log/vector-clock sync is **untouched**: shared data does not flow
 through it. (Doing so would mean teaching the single-user op-log to carry
@@ -300,59 +307,51 @@ isAutoAddToBacklog: true }` via the issue-provider store.
 
 ---
 
-## 7. Phase 4 — Dual-list work view ("Assigned to others")
+## 7. Ownership model & the claim pool (revised)
 
-Goal: for shared projects, render a second list below the normal one.
+**The conceptual question that reshaped this feature:** _which tasks from a
+shared space should appear in a personal focus app at all?_ Answer — by
+ownership state:
 
-Reference pattern: the **backlog** split pane
-(`work-view.component.html` `@if (isShowBacklog())` → `split` + `backlog` →
-`task-list`) and the `collapsible` panels (overdue/done).
+| Plainspace state     | In SP?              | Treatment                                                     |
+| -------------------- | ------------------- | ------------------------------------------------------------- |
+| Assigned to me       | Yes — the point     | First-class SP tasks: schedule, time-track, complete.         |
+| Unclaimed            | As a pool, not list | Read-only "claim pool"; **Claim** → assign-to-self → SP task. |
+| Assigned to others   | No                  | Not represented in SP (Plainspace board is the team view).    |
+| Done (others/unass.) | No                  | Irrelevant to the individual.                                 |
 
-### 7.1 New read-only component
+**Claiming is the bridge** between the collective space and the personal app:
+the only way unclaimed work becomes yours. This avoids mirroring a stale,
+non-actionable copy of other people's tasks into a focus tool. (We also skip
+per-task assignee badges: with only _mine_ + _unclaimed_ shown, ownership is
+implicit, and SP already shows a provider icon on issue-linked tasks.)
 
-`src/app/features/plainspace/assigned-to-others/assigned-to-others.component.ts`
+### 7.1 Read-only claim-pool component
 
-- Input: `tasks: PlainspaceIssue[]` (others' tasks) — **not** SP `TaskWithSubTasks`.
-- Renders simple read-only rows: title, assignee (name + avatar), done state, link
-  to open in Plainspace. **No** drag/drop, scheduling, time tracking, or task
-  store interaction.
-- Grouped/sorted by assignee. Reuses `collapsible` for the section wrapper.
+`src/app/features/plainspace/claim-pool/claim-pool.component.ts`
 
-> Deliberately a **new lightweight component**, not the hot-path
-> `task.component`. Reusing `task-list`/`task` here would drag in editing,
-> selection, DnD, and sync semantics we explicitly don't want for foreign tasks,
-> and would risk the documented task-component performance constraints.
+- Input: `tasks: PlainspaceSharedTask[]` (unclaimed) + `projectId`.
+- Flat read-only rows: title, "open in Plainspace" link, **Claim** button. No
+  drag/drop, scheduling, time tracking, or task-store interaction.
+
+> Deliberately a **lightweight standalone component**, not the hot-path
+> `task.component` — these are foreign tasks until claimed.
 
 ### 7.2 Data flow
 
-- `PlainspaceSharedTasksService` exposes `othersTasksForProject$(projectId)`
-  (polls `getTasksForSpace$` filtered to `assigneeId !== me && assigneeId != null`).
-- `project-task-page.component.ts` already computes `currentProject`; add
-  `assignedToOthersTasks = toSignal(...)`, gated on "project is shared on
-  Plainspace" (a bound enabled `PLAINSPACE` provider exists).
-- Pass into `work-view` as a new optional input
-  `assignedToOthersTasks = input<PlainspaceIssue[]>([])` and
-  `isShowAssignedToOthers = input(false)`.
+- `PlainspaceClaimPoolService.unclaimedTasksForProject$(projectId)` finds the
+  bound enabled `PLAINSPACE` provider and returns its unclaimed tasks
+  (`assigneeId === null && !isDone`), refreshing after a claim.
+- `claim(projectId, taskId)` → `PlainspaceApiService.claimTask$` (assign-to-me)
+  → `IssueService.addTaskFromIssue(... isAddToBacklog)` → pool refreshes.
+- `project-task-page` derives `unclaimedTasks` and passes it (+ `projectId`)
+  into `work-view`.
 
 ### 7.3 Layout
 
-Add, after the done/later-today panels and before/after the backlog split, a
-conditional `collapsible` section (mirrors overdue/done panels):
-
-```html
-@if (isShowAssignedToOthers()) {
-<collapsible
-  [title]="...assignedToOthers (n)"
-  [isGroup]="true"
-  ...
->
-  <plainspace-assigned-to-others [tasks]="assignedToOthersTasks()" />
-</collapsible>
-}
-```
-
-Collapsed state persisted in `localStorage` like the existing `isDoneHidden` /
-`isLaterTodayHidden` signals.
+A `collapsible` section (mirrors overdue/done panels), **collapsed by default**
+(it's a pool you reach for, not your active work); state persisted in
+`localStorage` (`LS.PLAINSPACE_CLAIM_POOL_HIDDEN`).
 
 ---
 

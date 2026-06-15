@@ -90,7 +90,7 @@ import { dragDelayForTouch } from '../../util/input-intent';
 import { DateService } from '../../core/date/date.service';
 import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
-import { AssignedToOthersComponent } from '../plainspace/assigned-to-others/assigned-to-others.component';
+import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
 import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
 
 // Stable reference used as the toSignal initial value below so the deselect
@@ -131,7 +131,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
     PluginIndexComponent,
-    AssignedToOthersComponent,
+    PlainspaceClaimPoolComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -223,14 +223,17 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
-  isAssignedToOthersHidden = signal(!!localStorage.getItem(LS.ASSIGNED_TO_OTHERS_HIDDEN));
+  // Claim pool is tucked away (collapsed) by default.
+  isClaimPoolHidden = signal(
+    localStorage.getItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN) !== 'false',
+  );
 
-  // Plainspace tasks assigned to other members of a shared project, fed from
-  // project-task-page (PlainspaceSharedTasksService). Read-only; never enters
-  // the SP task store / op-log sync. Empty for non-shared projects and tags.
-  readonly assignedToOthersTasks = input<PlainspaceSharedTask[]>([]);
-  isShowAssignedToOthers = computed(
-    () => this.isProjectContext() && this.assignedToOthersTasks().length > 0,
+  // Unclaimed Plainspace tasks for a shared project, fed from project-task-page
+  // (PlainspaceClaimPoolService). Read-only until claimed; never enters the SP
+  // task store / op-log sync. Empty for non-shared projects and tags.
+  readonly unclaimedTasks = input<PlainspaceSharedTask[]>([]);
+  isShowClaimPool = computed(
+    () => this.isProjectContext() && this.unclaimedTasks().length > 0,
   );
 
   repeatCfgsForContext = toSignal(
@@ -410,11 +413,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     });
 
     effect(() => {
-      const isHidden = this.isAssignedToOthersHidden();
-      if (isHidden) {
-        localStorage.setItem(LS.ASSIGNED_TO_OTHERS_HIDDEN, 'true');
+      // Persist 'false' when expanded; default (absent) means collapsed.
+      if (this.isClaimPoolHidden()) {
+        localStorage.removeItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN);
       } else {
-        localStorage.removeItem(LS.ASSIGNED_TO_OTHERS_HIDDEN);
+        localStorage.setItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN, 'false');
       }
     });
 

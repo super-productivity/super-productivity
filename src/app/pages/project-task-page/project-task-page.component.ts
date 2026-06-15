@@ -7,7 +7,7 @@ import { map, switchMap } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { WorkViewComponent } from '../../features/work-view/work-view.component';
 import { ProjectService } from '../../features/project/project.service';
-import { PlainspaceSharedTasksService } from '../../features/plainspace/plainspace-shared-tasks.service';
+import { PlainspaceClaimPoolService } from '../../features/plainspace/plainspace-claim-pool.service';
 import { PlainspaceSharedTask } from '../../features/plainspace/plainspace-shared-task.model';
 import { T } from '../../t.const';
 
@@ -21,17 +21,17 @@ import { T } from '../../t.const';
 export class ProjectTaskPageComponent {
   workContextService = inject(WorkContextService);
   private readonly _projectService = inject(ProjectService);
-  private readonly _plainspaceSharedTasksService = inject(PlainspaceSharedTasksService);
+  private readonly _plainspaceClaimPoolService = inject(PlainspaceClaimPoolService);
 
   readonly T = T;
 
-  // Read-only Plainspace tasks assigned to other members (only for projects
-  // shared on Plainspace); fed into the work view's "Assigned to others" panel.
-  readonly assignedToOthersTasks = toSignal(
+  // Unclaimed Plainspace tasks (only for projects shared on Plainspace); fed
+  // into the work view's read-only "claim pool" panel.
+  readonly unclaimedTasks = toSignal(
     this._projectService.currentProject$.pipe(
       switchMap((project) =>
         project
-          ? this._plainspaceSharedTasksService.othersTasksForProject$(project.id)
+          ? this._plainspaceClaimPoolService.unclaimedTasksForProject$(project.id)
           : of([] as PlainspaceSharedTask[]),
       ),
     ),

@@ -2825,7 +2825,8 @@
     "WEEK": "Week"
   },
   "PLAINSPACE": {
-    "ASSIGNED_TO_OTHERS": "Assigned to others",
+    "CLAIM": "Claim",
+    "CLAIM_POOL_TITLE": "Available to claim",
     "FORM": {
       "HOST": "Plainspace host",
       "SPACE_ID": "Space ID",
@@ -2837,12 +2838,11 @@
     },
     "LOGIN_PROMPT": "Enter your Plainspace display name to sign in",
     "LOGIN_REQUIRED": "Sign in to Plainspace to share a project.",
-    "NO_ASSIGNED_TO_OTHERS": "No tasks are assigned to other members right now.",
+    "NO_UNCLAIMED": "No unclaimed tasks right now.",
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",
     "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",
     "SHARE_FAILED": "Could not share this project on Plainspace.",
-    "SHARE_LABEL": "Share this project on Plainspace",
-    "UNASSIGNED": "Unassigned"
+    "SHARE_LABEL": "Share this project on Plainspace"
   },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",

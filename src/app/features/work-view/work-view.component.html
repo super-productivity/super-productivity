@@ -380,26 +380,27 @@
             </div>
           }
 
-          @if (isShowAssignedToOthers()) {
+          @if (isShowClaimPool()) {
             <div
               @expand
               class="collapsible-section"
             >
               <collapsible
                 [title]="
-                  (T.PLAINSPACE.ASSIGNED_TO_OTHERS | translate) +
+                  (T.PLAINSPACE.CLAIM_POOL_TITLE | translate) +
                   ' (' +
-                  assignedToOthersTasks().length +
+                  unclaimedTasks().length +
                   ')'
                 "
-                [isExpanded]="!isAssignedToOthersHidden()"
-                (isExpandedChange)="isAssignedToOthersHidden.set(!$event)"
+                [isExpanded]="!isClaimPoolHidden()"
+                (isExpandedChange)="isClaimPoolHidden.set(!$event)"
                 [isIconBefore]="true"
                 [isGroup]="true"
               >
-                <plainspace-assigned-to-others
-                  [tasks]="assignedToOthersTasks()"
-                ></plainspace-assigned-to-others>
+                <plainspace-claim-pool
+                  [tasks]="unclaimedTasks()"
+                  [projectId]="workContextService.activeWorkContextId || ''"
+                ></plainspace-claim-pool>
               </collapsible>
             </div>
           }
