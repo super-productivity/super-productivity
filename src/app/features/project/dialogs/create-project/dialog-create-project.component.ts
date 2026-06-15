@@ -36,6 +36,7 @@ import { removeDebounceFromFormItems } from '../../../../util/remove-debounce-fr
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Log } from '../../../../core/log';
+import { PlainspaceShareService } from '../../../issue/providers/plainspace/plainspace-share.service';
 
 @Component({
   selector: 'dialog-create-project',
@@ -56,6 +57,7 @@ import { Log } from '../../../../core/log';
 export class DialogCreateProjectComponent implements OnInit, OnDestroy {
   private _project = inject<Project>(MAT_DIALOG_DATA);
   private _projectService = inject(ProjectService);
+  private _plainspaceShareService = inject(PlainspaceShareService);
   private _matDialogRef =
     inject<MatDialogRef<DialogCreateProjectComponent>>(MatDialogRef);
 
@@ -145,12 +147,25 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
     const projectDataToSave: Project | Partial<Project> = {
       ...this.projectData,
     };
+    // `isShareOnPlainspace` is a transient form-only flag — read it, then strip
+    // it so it is never persisted onto the Project entity.
+    const isShareOnPlainspace = !!(
+      projectDataToSave as Partial<Project> & { isShareOnPlainspace?: boolean }
+    ).isShareOnPlainspace;
+    delete (projectDataToSave as { isShareOnPlainspace?: boolean }).isShareOnPlainspace;
 
     let newProjectId: string | undefined;
     if (projectDataToSave.id) {
       this._projectService.update(projectDataToSave.id, projectDataToSave);
     } else {
       newProjectId = this._projectService.add(projectDataToSave);
+      if (isShareOnPlainspace && newProjectId) {
+        // Fire-and-forget: provision a Plainspace space + bound issue provider.
+        this._plainspaceShareService.shareProjectOnPlainspace(
+          newProjectId,
+          projectDataToSave.title || '',
+        );
+      }
     }
     this._isSaveTmpProject = false;
     sessionStorage.removeItem(SS.PROJECT_TMP);

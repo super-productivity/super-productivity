@@ -2826,8 +2826,19 @@
   },
   "PLAINSPACE": {
     "ASSIGNED_TO_OTHERS": "Assigned to others",
+    "FORM": {
+      "HOST": "Plainspace host",
+      "SPACE_ID": "Space ID",
+      "SPACE_ID_DESCRIPTION": "The Plainspace space this provider syncs with. Leave empty to set later."
+    },
+    "FORM_SECTION": {
+      "HELP": "Connect a Plainspace space to import tasks assigned to you and to see tasks assigned to others.",
+      "TITLE": "Plainspace"
+    },
     "NO_ASSIGNED_TO_OTHERS": "No tasks are assigned to other members right now.",
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",
+    "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",
+    "SHARE_LABEL": "Share this project on Plainspace",
     "UNASSIGNED": "Unassigned"
   },
   "PLUGINS": {

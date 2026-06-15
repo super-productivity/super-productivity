@@ -16,10 +16,20 @@ Productivity (SP) so that:
 > the prototype is built against an **assumed contract** isolated behind a single
 > API service so it can be corrected in one place once the real API is known.
 >
-> **Implemented today:** only the §9 "Assigned to others" UI panel, fed by
-> hard-coded sample data inside `WorkViewComponent`. Everything in §4–§8 (the
-> issue provider, account login, the create-dialog toggle, and
-> `PlainspaceSharedTasksService`) is **design-only** — not yet built.
+> **Implemented today (mock-backed):**
+>
+> - §4 — the `PLAINSPACE` issue provider (`providers/plainspace/`): config form,
+>   `PlainspaceApiService` (mock mode via `PLAINSPACE_USE_MOCK`),
+>   `PlainspaceCommonInterfacesService` implementing `IssueServiceInterface`,
+>   registered in `issue.model.ts` / `issue.const.ts` / `issue.service.ts` +
+>   icon. Mine/unassigned tasks import via the normal issue→backlog pipeline.
+> - §6 — the "Share on Plainspace" toggle in the create-project dialog, which
+>   provisions a (mock) space and a bound provider via `PlainspaceShareService`.
+> - §9 — the "Assigned to others" UI panel (hard-coded sample data).
+>
+> **Still design-only:** §5 account login / real identity, §7.2 live
+> `PlainspaceSharedTasksService` wiring for the panel, §8 write-back, and the
+> real HTTP API (all `PlainspaceApiService` calls are mocked — see §10).
 
 ---
 

@@ -15,6 +15,7 @@ import { TRELLO_ISSUE_CONTENT_CONFIG } from '../providers/trello/trello-issue-co
 // Linear is now a plugin — content config lives in the plugin's issueDisplay
 import { AZURE_DEVOPS_ISSUE_CONTENT_CONFIG } from '../providers/azure-devops/azure-devops-issue/azure-devops-issue-content.const';
 import { NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG } from '../providers/nextcloud-deck/nextcloud-deck-issue-content.const';
+import { PLAINSPACE_ISSUE_CONTENT_CONFIG } from '../providers/plainspace/plainspace-issue-content.const';
 
 // Re-export types for backwards compatibility
 export { IssueFieldType, IssueFieldConfig, IssueCommentConfig, IssueContentConfig };
@@ -31,6 +32,7 @@ export const ISSUE_CONTENT_CONFIGS: Record<
   TRELLO: TRELLO_ISSUE_CONTENT_CONFIG,
   AZURE_DEVOPS: AZURE_DEVOPS_ISSUE_CONTENT_CONFIG,
   NEXTCLOUD_DECK: NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG,
+  PLAINSPACE: PLAINSPACE_ISSUE_CONTENT_CONFIG,
   ICAL: {
     issueType: 'ICAL',
     fields: [],

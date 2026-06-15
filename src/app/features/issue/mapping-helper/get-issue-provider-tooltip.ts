@@ -145,5 +145,7 @@ export const getIssueProviderInitials = (
       return issueProvider.selectedBoardTitle?.substring(0, 2)?.toUpperCase();
     case 'AZURE_DEVOPS':
       return issueProvider.project?.substring(0, 2)?.toUpperCase() || 'AD';
+    case 'PLAINSPACE':
+      return issueProvider.spaceId?.substring(0, 2)?.toUpperCase() || 'PS';
   }
 };

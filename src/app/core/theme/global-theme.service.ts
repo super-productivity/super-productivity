@@ -205,6 +205,7 @@ export class GlobalThemeService {
       ['trello', 'assets/icons/trello.svg'],
       ['azure_devops', 'assets/icons/azure_devops.svg'],
       ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
+      ['plainspace', 'assets/icons/plainspace.svg'],
     ];
 
     // todo test if can be removed with airplane mode and wifi without internet

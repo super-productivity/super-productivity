@@ -41,5 +41,17 @@ export const CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG: ConfigFormSection<Project>
         label: T.F.PROJECT.FORM_BASIC.L_ENABLE_BACKLOG,
       },
     },
+    {
+      // Transient form-only field (not persisted on the Project). When checked
+      // on create, the dialog provisions a Plainspace space + bound issue
+      // provider. See docs/plainspace-integration-plan.md §6.
+      key: 'isShareOnPlainspace' as any,
+      type: 'checkbox',
+      defaultValue: false,
+      templateOptions: {
+        label: T.PLAINSPACE.SHARE_LABEL,
+        description: T.PLAINSPACE.SHARE_DESCRIPTION,
+      },
+    },
   ],
 };
