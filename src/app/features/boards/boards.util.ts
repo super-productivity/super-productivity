@@ -11,6 +11,15 @@ const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'timeEstimate',
 ]);
 
+const MIN_DAYS = 1;
+const MAX_DAYS = 365;
+const DEFAULT_DAYS = 7;
+
+const clampDaysVal = (v: number | undefined): number =>
+  Number.isFinite(v)
+    ? Math.max(MIN_DAYS, Math.min(MAX_DAYS, Math.floor(v as number)))
+    : DEFAULT_DAYS;
+
 // Absent `projectIds` (legacy data that hasn't been sanitized yet) means
 // "All Projects", same as an array containing the "" sentinel.
 export const isAllProjects = (projectIds: string[] | undefined): boolean =>
@@ -82,13 +91,11 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
     delete (out as Partial<BoardPanelCfg>).excludedTagsMatch;
   }
 
-  const sanitizeDaysVal = (v: number | undefined): number =>
-    Number.isFinite(v) ? Math.max(1, Math.min(365, Math.floor(v as number))) : 7;
   if (out.scheduledDaysVal !== undefined) {
-    out.scheduledDaysVal = sanitizeDaysVal(out.scheduledDaysVal);
+    out.scheduledDaysVal = clampDaysVal(out.scheduledDaysVal);
   }
   if (out.deadlineDaysVal !== undefined) {
-    out.deadlineDaysVal = sanitizeDaysVal(out.deadlineDaysVal);
+    out.deadlineDaysVal = clampDaysVal(out.deadlineDaysVal);
   }
 
   return out;
@@ -266,15 +273,12 @@ export const resolveTimeframeBounds = (
     return { start: todayStr, end: getFutureLogicalMonthDateStr(todayStr) };
   }
 
-  const sanitizeDaysVal = (v: number | undefined): number =>
-    Number.isFinite(v) ? Math.max(1, Math.min(365, Math.floor(v as number))) : 7;
-
   if (timeframe === 'NEXT_DAYS') {
-    const limit = sanitizeDaysVal(daysVal);
+    const limit = clampDaysVal(daysVal);
     return { start: todayStr, end: getFutureLogicalDateStr(limit, todayStr) };
   }
   if (timeframe === 'AT_LEAST_DAYS_FUTURE') {
-    const limit = sanitizeDaysVal(daysVal);
+    const limit = clampDaysVal(daysVal);
     return { start: getFutureLogicalDateStr(limit, todayStr) };
   }
   if (timeframe === 'CUSTOM_RANGE') {
