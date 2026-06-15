@@ -115,11 +115,6 @@ const createQuickAddWindow = (): void => {
   quickAddWin.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' };
   });
-  quickAddWin.webContents.on('did-create-window', (childWin) => {
-    try {
-      childWin.destroy();
-    } catch {}
-  });
 
   quickAddWin.on('closed', () => {
     quickAddWin = null;
