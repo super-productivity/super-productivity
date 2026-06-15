@@ -313,8 +313,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     // ! For keyboard shortcuts to work correctly with any layouts (QWERTZ/AZERTY/etc) - user's keyboard layout must be presaved
     // Connect the service to the utility functions
     setKeyboardLayoutService(this._keyboardLayoutService);
-    // Defer keyboard layout detection to idle time for better initial load performance
-    if (typeof requestIdleCallback === 'function') {
+    // Defer keyboard layout detection to idle time for better initial load performance,
+    // EXCEPT on Electron where it is needed eagerly for the initial global shortcut registration on macOS.
+    if (IS_ELECTRON) {
+      void this._keyboardLayoutService.saveUserLayout();
+    } else if (typeof requestIdleCallback === 'function') {
       requestIdleCallback(() => this._keyboardLayoutService.saveUserLayout());
     } else {
       setTimeout(() => this._keyboardLayoutService.saveUserLayout(), 0);
