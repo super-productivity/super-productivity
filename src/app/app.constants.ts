@@ -1,6 +1,9 @@
 import { IS_ANDROID_WEB_VIEW } from './util/is-android-web-view';
 
-export const IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
+export let IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
+export const setIsElectronForTesting = (v: boolean): void => {
+  IS_ELECTRON = v;
+};
 // effectively IS_BROWSER
 export const IS_WEB_BROWSER = !IS_ELECTRON && !IS_ANDROID_WEB_VIEW;
 export const IS_GNOME_DESKTOP = IS_ELECTRON && window.ea.isGnomeDesktop();
