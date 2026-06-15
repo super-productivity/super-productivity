@@ -274,6 +274,26 @@ mat-option.isDone {
   }
 }
 
+// Shared styled variant for action buttons inside forms to align with standard inputs
+.formly-btn-form-field {
+  width: 100%;
+  text-align: left;
+  min-height: var(--bar-height);
+  justify-content: flex-start;
+
+  .mdc-button__label {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+    width: 100%;
+  }
+
+  mat-icon,
+  .mat-icon {
+    margin-right: var(--s-half) !important;
+  }
+}
+
 // ICONS
 // -----
 

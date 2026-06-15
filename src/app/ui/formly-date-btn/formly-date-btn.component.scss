@@ -1,26 +1,17 @@
 :host {
   display: block;
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 }
 
 .date-btn-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s);
   width: 100%;
 }
 
 .date-btn {
   flex-grow: 1;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 48px;
-
-  .mat-icon {
-    margin-right: 4px;
-  }
 
   .label {
     font-weight: 500;
@@ -28,7 +19,7 @@
 
   .value {
     font-weight: normal;
-    margin-left: 4px;
+    margin-left: var(--s-half);
 
     &--empty {
       opacity: 0.6;
