@@ -98,6 +98,13 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
     out.deadlineDaysVal = clampDaysVal(out.deadlineDaysVal);
   }
 
+  if (out.scheduledTimeframe === ('NEXT_WEEK' as any)) {
+    out.scheduledTimeframe = 'THIS_WEEK';
+  }
+  if (out.deadlineTimeframe === ('NEXT_WEEK' as any)) {
+    out.deadlineTimeframe = 'THIS_WEEK';
+  }
+
   out.scheduledCustomStart = normalizeDateStr(out.scheduledCustomStart) || null;
   out.scheduledCustomEnd = normalizeDateStr(out.scheduledCustomEnd) || null;
   out.deadlineCustomStart = normalizeDateStr(out.deadlineCustomStart) || null;
@@ -271,8 +278,11 @@ export const resolveTimeframeBounds = (
     const tomorrowStr = getFutureLogicalDateStr(1, todayStr);
     return { start: tomorrowStr, end: tomorrowStr };
   }
-  if (timeframe === 'NEXT_WEEK') {
-    return { start: todayStr, end: getFutureLogicalDateStr(7, todayStr) };
+  if (timeframe === 'THIS_WEEK') {
+    const date = parseDbDateStr(todayStr);
+    const dayOfWeek = date.getDay();
+    const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    return { start: todayStr, end: getFutureLogicalDateStr(daysToSunday, todayStr) };
   }
   if (timeframe === 'NEXT_MONTH') {
     return { start: todayStr, end: getFutureLogicalMonthDateStr(todayStr) };

@@ -158,7 +158,7 @@
         "TIMEFRAME_ALL": "All",
         "TIMEFRAME_TODAY": "Today",
         "TIMEFRAME_TOMORROW": "Tomorrow",
-        "TIMEFRAME_NEXT_WEEK": "Within 7 days",
+        "TIMEFRAME_THIS_WEEK": "Within this week",
         "TIMEFRAME_NEXT_MONTH": "Within 1 month",
         "TIMEFRAME_NEXT_DAYS": "Within X days",
         "TIMEFRAME_AT_LEAST_DAYS_FUTURE": "At least X days in the future",

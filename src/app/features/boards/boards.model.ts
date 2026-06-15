@@ -20,7 +20,7 @@ export type BoardPanelTimeframePreset =
   | 'ALL'
   | 'TODAY'
   | 'TOMORROW'
-  | 'NEXT_WEEK'
+  | 'THIS_WEEK'
   | 'NEXT_MONTH'
   | 'NEXT_DAYS'
   | 'AT_LEAST_DAYS_FUTURE'

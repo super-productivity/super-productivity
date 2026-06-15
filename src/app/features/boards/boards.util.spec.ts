@@ -391,9 +391,18 @@ describe('Timeframe helpers', () => {
       expect(bounds).toEqual({ start: '2026-06-15', end: '2026-06-15' });
     });
 
-    it('resolves NEXT_WEEK', () => {
-      const bounds = resolveTimeframeBounds({ timeframe: 'NEXT_WEEK' }, '2026-06-15');
-      expect(bounds).toEqual({ start: '2026-06-15', end: '2026-06-22' });
+    it('resolves THIS_WEEK (within this week up to Sunday)', () => {
+      // 2026-06-15 is Monday. End should be Sunday (2026-06-21)
+      const boundsMon = resolveTimeframeBounds({ timeframe: 'THIS_WEEK' }, '2026-06-15');
+      expect(boundsMon).toEqual({ start: '2026-06-15', end: '2026-06-21' });
+
+      // 2026-06-20 is Saturday. End should be Sunday (2026-06-21)
+      const boundsSat = resolveTimeframeBounds({ timeframe: 'THIS_WEEK' }, '2026-06-20');
+      expect(boundsSat).toEqual({ start: '2026-06-20', end: '2026-06-21' });
+
+      // 2026-06-21 is Sunday. End should be Sunday (2026-06-21)
+      const boundsSun = resolveTimeframeBounds({ timeframe: 'THIS_WEEK' }, '2026-06-21');
+      expect(boundsSun).toEqual({ start: '2026-06-21', end: '2026-06-21' });
     });
 
     it('resolves NEXT_MONTH', () => {
