@@ -53,7 +53,7 @@
   !task().notes && (!task().issueId || task().issueType === ICAL_TYPE) && !isSelected()
 ) {
   <button
-    (click)="parent.toggleShowDetailPanel()"
+    (click)="parent.toggleShowDetailPanel($event)"
     title="{{ T.F.TASK.CMP.TOGGLE_DETAIL_PANEL | translate }} {{
       kb.taskToggleDetailPanelOpen ? '[' + kb.taskToggleDetailPanelOpen + ']' : ''
     }}"

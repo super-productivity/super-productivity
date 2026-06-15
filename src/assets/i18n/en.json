@@ -1730,6 +1730,7 @@
         "ESTIMATE_EXCEEDED": "Time estimate exceeded for \"{{title}}\""
       },
       "CMP": {
+        "ADD_SUB_TASK_PLACEHOLDER": "Add subtask...",
         "ADD_SUB_TASK": "Add subtask",
         "ADD_TO_MY_DAY": "Add to Today",
         "ADD_TO_PROJECT": "Add to a project",

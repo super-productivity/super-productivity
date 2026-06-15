@@ -775,7 +775,9 @@ export class TaskService {
       }),
     );
 
-    this.focusTaskById(task.id, !task.title?.trim().length);
+    if (!task.title?.trim().length) {
+      this.focusTaskById(task.id, true);
+    }
 
     return task.id;
   }

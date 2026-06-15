@@ -103,6 +103,8 @@ import { millisecondsDiffToRemindOption } from '../util/remind-option-to-millise
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { SnackService } from '../../../core/snack/snack.service';
+import { AddSubtaskInputComponent } from '../add-subtask-input/add-subtask-input.component';
+import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 
 @Component({
   selector: 'task',
@@ -147,6 +149,7 @@ import { SnackService } from '../../../core/snack/snack.service';
     DoneToggleComponent,
     SwipeBlockComponent,
     SelectOptionRowComponent,
+    AddSubtaskInputComponent,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
@@ -167,6 +170,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _translateService = inject(TranslateService);
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _plannerService = inject(PlannerService);
+  private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -328,6 +332,25 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   });
   readonly taskContextMenu = viewChild('taskContextMenu', {
     read: TaskContextMenuComponent,
+  });
+  readonly addSubtaskInput = viewChild(AddSubtaskInputComponent);
+  readonly isAddSubtaskInputVisible = signal(false);
+
+  private readonly _addSubtaskInputRequestEffect = effect(() => {
+    const request = this._addSubtaskInputService.openRequest();
+    const task = this.task();
+    if (!request || request.parentId !== task.id) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      const currentTask = this.task();
+      if (currentTask._hideSubTasksMode === HideSubTasksMode.HideAll) {
+        this._taskService.showSubTasks(currentTask.id);
+      }
+      this.isAddSubtaskInputVisible.set(true);
+      window.setTimeout(() => this.addSubtaskInput()?.focus());
+    });
   });
 
   // Lazy-loaded project list - only fetched when project menu opens
@@ -802,29 +825,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     submitTrigger: SubmitTrigger;
   }): void {
     const task = this.task();
-    const isFreshSubTaskSubmit =
-      submitTrigger === 'enter' &&
-      !!task.parentId &&
-      !task.title.trim() &&
-      !!newVal.trim();
 
     if (wasChanged) {
       this._taskService.update(task.id, { title: newVal });
     }
 
-    if (submitTrigger === 'modEnter' || isFreshSubTaskSubmit) {
-      this._addSubTaskOrFocusEmpty(newVal);
-      return;
-    }
-
-    // Escape in subtask editor should return focus to previous sibling;
-    // for empty titles we remove the subtask entirely.
-    if (submitTrigger === 'escape' && task.parentId) {
-      // Only auto-delete for freshly spawned empty subtasks.
-      // If user cleared an existing title, Escape should save and keep the task.
-      if (!wasChanged && !newVal) {
-        this._deleteEmptySubTask(task);
-      }
+    if (submitTrigger === 'modEnter') {
+      this.addSubTask();
       return;
     }
 
@@ -893,47 +900,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   addSubTask(): void {
-    this._taskService.addSubTaskTo(this.task().parentId || this.task().id);
-  }
-
-  deleteIfEmptySubTask(): boolean {
     const task = this.task();
-    if (!task.parentId || task.title.trim()) {
-      return false;
+    const parentId = task.parentId || task.id;
+    if (!task.parentId && task._hideSubTasksMode === HideSubTasksMode.HideAll) {
+      this._taskService.showSubTasks(task.id);
     }
-    this._deleteEmptySubTask(task);
-    return true;
-  }
-
-  /**
-   * Mod+Enter (in title editor): focus an existing empty sibling subtask if
-   * one exists, otherwise create a new one. For top-level tasks, "siblings"
-   * means children. `effectiveSelfTitle` is the just-submitted title — use it
-   * instead of `task().title`, which still reflects the pre-update value
-   * within this turn.
-   */
-  private _addSubTaskOrFocusEmpty(effectiveSelfTitle: string): void {
-    const t = this.task();
-    const targetParentId = t.parentId || t.id;
-    const isOnParent = !t.parentId;
-    const isEmpty = (title?: string): boolean => !title?.trim();
-
-    if (isOnParent && t._hideSubTasksMode === HideSubTasksMode.HideAll) {
-      this._taskService.showSubTasks(t.id);
-    }
-
-    this._taskService.getByIdWithSubTaskData$(targetParentId).subscribe((parent) => {
-      const emptyChild = parent.subTasks.find((s) => s.id !== t.id && isEmpty(s.title));
-      if (emptyChild) {
-        this._taskService.focusTaskById(emptyChild.id, true);
-        return;
-      }
-      // Already on the only empty subtask — leave focus where it is.
-      if (!isOnParent && isEmpty(effectiveSelfTitle)) {
-        return;
-      }
-      this._taskService.addSubTaskTo(targetParentId);
-    });
+    this._addSubtaskInputService.requestOpen(parentId);
   }
 
   @throttle(200, { leading: true, trailing: false })
@@ -1353,12 +1325,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     ) as HTMLElement[];
     const currentIndex = taskEls.findIndex((el) => el === currentTaskEl);
     return currentIndex > 0 ? taskEls[currentIndex - 1] : undefined;
-  }
-
-  private _deleteEmptySubTask(task: TaskWithSubTasks): void {
-    const previousTaskEl = this._getPreviousTaskEl();
-    this._taskService.remove(task);
-    this._focusTaskHost(previousTaskEl);
   }
 
   private _focusTaskHost(taskEl?: HTMLElement): void {

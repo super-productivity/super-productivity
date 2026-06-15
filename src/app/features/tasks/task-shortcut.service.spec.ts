@@ -369,33 +369,9 @@ describe('TaskShortcutService', () => {
       expect(mockTaskComponent.openContextMenu).not.toHaveBeenCalled();
     });
 
-    it('should delete a focused empty subtask on Escape when the title editor is not active', () => {
+    it('should not consume Escape for a focused task', () => {
       const mockTaskComponent = {
         task: () => ({ id: 'focused-task-1' }),
-        deleteIfEmptySubTask: jasmine
-          .createSpy('deleteIfEmptySubTask')
-          .and.returnValue(true),
-        taskContextMenu: () => undefined,
-      };
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
-      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
-
-      const event = createKeyboardEvent('Escape');
-      spyOn(event, 'preventDefault');
-
-      const result = service.handleTaskShortcuts(event);
-
-      expect(result).toBe(true);
-      expect(event.preventDefault).toHaveBeenCalled();
-      expect(mockTaskComponent.deleteIfEmptySubTask).toHaveBeenCalled();
-    });
-
-    it('should not consume Escape when the focused task is not an empty subtask', () => {
-      const mockTaskComponent = {
-        task: () => ({ id: 'focused-task-1' }),
-        deleteIfEmptySubTask: jasmine
-          .createSpy('deleteIfEmptySubTask')
-          .and.returnValue(false),
         taskContextMenu: () => undefined,
       };
       mockTaskFocusService.focusedTaskId.set('focused-task-1');
@@ -408,7 +384,6 @@ describe('TaskShortcutService', () => {
 
       expect(result).toBe(false);
       expect(event.preventDefault).not.toHaveBeenCalled();
-      expect(mockTaskComponent.deleteIfEmptySubTask).toHaveBeenCalled();
     });
 
     it('should return false for non-togglePlay shortcuts when no focused task', () => {

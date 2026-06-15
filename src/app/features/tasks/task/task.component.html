@@ -245,7 +245,7 @@
           <div>
             @if (isShowToggleButton()) {
               <button
-                (click)="toggleShowDetailPanel()"
+                (click)="toggleShowDetailPanel($event)"
                 title="{{ T.F.TASK.CMP.TOGGLE_DETAIL_PANEL | translate }}  {{
                   kb.taskToggleDetailPanelOpen
                     ? '[' + kb.taskToggleDetailPanelOpen + ']'
@@ -274,34 +274,44 @@
         [progress]="progress()"
       ></progress-bar>
     }
-    @if (t.subTasks?.length) {
+    @if (t.subTasks?.length || isAddSubtaskInputVisible()) {
       <div class="sub-tasks">
-        <button
-          (click)="toggleSubTaskMode()"
-          [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
-          class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
-          color=""
-          mat-mini-fab
-        >
-          @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
-            <mat-icon>add</mat-icon>
-          } @else {
-            <mat-icon
-              [class.isHideDoneTasks]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
-              >remove
-            </mat-icon>
-          }
-        </button>
-        <task-list
-          [@expandInOnly]
-          [isHideAll]="!!t._hideSubTasksMode"
-          [isHideDone]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
-          [isSubTaskList]="true"
-          [listModelId]="t.id"
-          [parentId]="t.id"
-          [tasks]="t.subTasks"
-          listId="SUB"
-        ></task-list>
+        @if (t.subTasks?.length) {
+          <button
+            (click)="toggleSubTaskMode()"
+            [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
+            class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
+            color=""
+            mat-mini-fab
+          >
+            @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
+              <mat-icon>add</mat-icon>
+            } @else {
+              <mat-icon
+                [class.isHideDoneTasks]="
+                  t._hideSubTasksMode === ShowSubTasksMode.HideDone
+                "
+                >remove
+              </mat-icon>
+            }
+          </button>
+          <task-list
+            [@expandInOnly]
+            [isHideAll]="!!t._hideSubTasksMode"
+            [isHideDone]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
+            [isSubTaskList]="true"
+            [listModelId]="t.id"
+            [parentId]="t.id"
+            [tasks]="t.subTasks"
+            listId="SUB"
+          ></task-list>
+        }
+        @if (isAddSubtaskInputVisible()) {
+          <add-subtask-input
+            [parentId]="t.id"
+            (closed)="isAddSubtaskInputVisible.set(false)"
+          ></add-subtask-input>
+        }
       </div>
     }
     @if (isDragOver) {

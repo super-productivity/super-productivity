@@ -87,6 +87,7 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
 import { IS_MAC } from '../../../util/is-mac';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
+import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 
 @Component({
   selector: 'task-detail-panel',
@@ -131,6 +132,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _addSubtaskInputService = inject(AddSubtaskInputService);
 
   // Inputs
   task = input.required<TaskWithSubTasks>();
@@ -613,10 +615,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   addSubTask(): void {
     const task = this.task();
-    // focusTaskById (called by addSubTaskTo) focuses the new sub-task's title
-    // for editing, falling back to the focusable copy when the in-panel one is
-    // inside the collapsed sub-task section.
-    this.taskService.addSubTaskTo(task.parentId || task.id);
+    this._addSubtaskInputService.requestOpen(task.parentId || task.id);
   }
 
   collapseParent(): void {

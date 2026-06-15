@@ -1,0 +1,164 @@
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
+import { AddSubtaskInputComponent } from './add-subtask-input.component';
+import { AddSubtaskInputService } from './add-subtask-input.service';
+import { TaskService } from '../task.service';
+
+describe('AddSubtaskInputService', () => {
+  it('publishes a new open request for a parent task', () => {
+    const service = new AddSubtaskInputService();
+
+    service.requestOpen('parent-1');
+    const firstRequest = service.openRequest();
+    service.requestOpen('parent-1');
+
+    expect(firstRequest?.parentId).toBe('parent-1');
+    expect(service.openRequest()?.parentId).toBe('parent-1');
+    expect(service.openRequest()?.requestId).toBeGreaterThan(
+      firstRequest?.requestId ?? 0,
+    );
+  });
+});
+
+describe('AddSubtaskInputComponent', () => {
+  let fixture: ComponentFixture<AddSubtaskInputComponent>;
+  let component: AddSubtaskInputComponent;
+  let taskServiceSpy: jasmine.SpyObj<TaskService>;
+
+  const getInput = (): HTMLInputElement =>
+    fixture.nativeElement.querySelector('input') as HTMLInputElement;
+
+  const setInputValue = (value: string): void => {
+    const input = getInput();
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  };
+
+  beforeEach(async () => {
+    taskServiceSpy = jasmine.createSpyObj<TaskService>('TaskService', ['addSubTaskTo']);
+
+    await TestBed.configureTestingModule({
+      imports: [AddSubtaskInputComponent],
+      providers: [
+        { provide: TaskService, useValue: taskServiceSpy },
+        {
+          provide: TranslateService,
+          useValue: jasmine.createSpyObj<TranslateService>('TranslateService', [
+            'instant',
+          ]),
+        },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(AddSubtaskInputComponent);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('parentId', 'parent-1');
+    fixture.detectChanges();
+  });
+
+  it('commits a non-empty title on Enter and keeps the input focused', fakeAsync(() => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    setInputValue('  New subtask  ');
+
+    getInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    fixture.detectChanges();
+    tick(100);
+
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledOnceWith('parent-1', {
+      title: 'New subtask',
+    });
+    expect(getInput().value).toBe('');
+    expect(document.activeElement).toBe(getInput());
+    expect(closeSpy).not.toHaveBeenCalled();
+  }));
+
+  it('does not create a subtask on empty Enter', () => {
+    setInputValue('   ');
+
+    getInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+
+  it('closes without creating a subtask on Escape', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    setInputValue('Draft');
+
+    getInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(getInput().value).toBe('');
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not commit when Escape is followed by blur', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    setInputValue('Draft');
+
+    getInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    getInput().dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures document Escape before blur can commit the draft', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    getInput().focus();
+    getInput().dispatchEvent(new FocusEvent('focus'));
+    setInputValue('Draft');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    getInput().dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes without creating a subtask on blur with content', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    setInputValue('Blurred subtask');
+
+    getInput().dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(getInput().value).toBe('');
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes without creating a subtask on blur when empty', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    setInputValue(' ');
+
+    getInput().dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores repeated and composing Enter events', () => {
+    setInputValue('New subtask');
+
+    getInput().dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', repeat: true }),
+    );
+
+    const composingEvent = new KeyboardEvent('keydown', { key: 'Enter' });
+    Object.defineProperty(composingEvent, 'isComposing', { value: true });
+    getInput().dispatchEvent(composingEvent);
+
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+});
