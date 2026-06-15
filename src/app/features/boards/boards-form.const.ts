@@ -9,12 +9,90 @@ import {
 } from './boards.model';
 import { nanoid } from 'nanoid';
 import { T } from '../../t.const';
-import { DEFAULT_PANEL_CFG } from './boards.const';
+import { DEFAULT_PANEL_CFG, TIMEFRAME_OPTIONS } from './boards.const';
 
 const getNewPanel = (): BoardPanelCfg => ({
   ...DEFAULT_PANEL_CFG,
   id: nanoid(),
 });
+
+interface TimeframeFieldFactoryOptions {
+  prefix: 'scheduled' | 'deadline';
+  stateKey: keyof BoardPanelCfg;
+  stateActiveVal: number;
+  stateLabel: string;
+  stateOptions: { value: any; label: string }[];
+  timeframeLabel: string;
+}
+
+const buildTimeframeFields = (
+  options: TimeframeFieldFactoryOptions,
+): LimitedFormlyFieldConfig<BoardPanelCfg>[] => {
+  const { prefix, stateKey, stateActiveVal, stateLabel, stateOptions, timeframeLabel } =
+    options;
+  return [
+    {
+      key: stateKey,
+      type: 'radio',
+      props: {
+        label: stateLabel,
+        required: true,
+        defaultValue: stateOptions[0].value,
+        options: stateOptions,
+      },
+    },
+    {
+      key: `${prefix}Timeframe` as keyof BoardPanelCfg,
+      type: 'select',
+      expressions: {
+        hide: `model.${stateKey} !== ${stateActiveVal}`,
+      },
+      defaultValue: 'ALL',
+      props: {
+        label: timeframeLabel,
+        options: TIMEFRAME_OPTIONS,
+      },
+    },
+    {
+      key: `${prefix}DaysVal` as keyof BoardPanelCfg,
+      type: 'input',
+      expressions: {
+        hide: `model.${stateKey} !== ${stateActiveVal} ||
+          (model.${prefix}Timeframe !== 'NEXT_DAYS' &&
+            model.${prefix}Timeframe !== 'AT_LEAST_DAYS_FUTURE')`,
+      },
+      defaultValue: 7,
+      props: {
+        label: T.F.BOARDS.FORM.TIMEFRAME_DAYS_VAL,
+        type: 'number',
+        min: 1,
+        required: true,
+      },
+    },
+    {
+      key: `${prefix}CustomStart` as keyof BoardPanelCfg,
+      type: 'date-btn',
+      expressions: {
+        hide: `model.${stateKey} !== ${stateActiveVal} || model.${prefix}Timeframe !== 'CUSTOM_RANGE'`,
+      },
+      props: {
+        label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_START,
+        maxDateKey: `${prefix}CustomEnd`,
+      },
+    },
+    {
+      key: `${prefix}CustomEnd` as keyof BoardPanelCfg,
+      type: 'date-btn',
+      expressions: {
+        hide: `model.${stateKey} !== ${stateActiveVal} || model.${prefix}Timeframe !== 'CUSTOM_RANGE'`,
+      },
+      props: {
+        label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_END,
+        minDateKey: `${prefix}CustomStart`,
+      },
+    },
+  ];
+};
 
 export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
   {
@@ -141,176 +219,48 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
             ],
           },
         },
-        {
-          key: 'scheduledState',
-          type: 'radio',
-          props: {
-            label: T.F.BOARDS.FORM.SCHEDULED_STATE,
-            required: true,
-            defaultValue: BoardPanelCfgScheduledState.All,
-            options: [
-              {
-                value: BoardPanelCfgScheduledState.All,
-                label: T.F.BOARDS.FORM.SCHEDULED_STATE_ALL,
-              },
-              {
-                value: BoardPanelCfgScheduledState.Scheduled,
-                label: T.F.BOARDS.FORM.SCHEDULED_STATE_SCHEDULED,
-              },
-              {
-                value: BoardPanelCfgScheduledState.NotScheduled,
-                label: T.F.BOARDS.FORM.SCHEDULED_STATE_NOT_SCHEDULED,
-              },
-            ],
-          },
-        },
-        {
-          key: 'scheduledTimeframe',
-          type: 'select',
-          expressions: {
-            hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled}`,
-          },
-          defaultValue: 'ALL',
-          props: {
-            label: T.F.BOARDS.FORM.SCHEDULED_TIMEFRAME,
-            options: [
-              { value: 'ALL', label: T.F.BOARDS.FORM.TIMEFRAME_ALL },
-              { value: 'TODAY', label: T.F.BOARDS.FORM.TIMEFRAME_TODAY },
-              { value: 'TOMORROW', label: T.F.BOARDS.FORM.TIMEFRAME_TOMORROW },
-              { value: 'NEXT_WEEK', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
-              { value: 'NEXT_MONTH', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
-              { value: 'NEXT_DAYS', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_DAYS },
-              {
-                value: 'AT_LEAST_DAYS_FUTURE',
-                label: T.F.BOARDS.FORM.TIMEFRAME_AT_LEAST_DAYS_FUTURE,
-              },
-              { value: 'CUSTOM_RANGE', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
-            ],
-          },
-        },
-        {
-          key: 'scheduledDaysVal',
-          type: 'input',
-          expressions: {
-            hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled} ||
-              (model.scheduledTimeframe !== 'NEXT_DAYS' &&
-                model.scheduledTimeframe !== 'AT_LEAST_DAYS_FUTURE')`,
-          },
-          defaultValue: 7,
-          props: {
-            label: T.F.BOARDS.FORM.TIMEFRAME_DAYS_VAL,
-            type: 'number',
-            min: 1,
-            required: true,
-          },
-        },
-        {
-          key: 'scheduledCustomStart',
-          type: 'date-btn',
-          expressions: {
-            hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled} || model.scheduledTimeframe !== 'CUSTOM_RANGE'`,
-          },
-          props: {
-            label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_START,
-            maxDateKey: 'scheduledCustomEnd',
-          },
-        },
-        {
-          key: 'scheduledCustomEnd',
-          type: 'date-btn',
-          expressions: {
-            hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled} || model.scheduledTimeframe !== 'CUSTOM_RANGE'`,
-          },
-          props: {
-            label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_END,
-            minDateKey: 'scheduledCustomStart',
-          },
-        },
-        {
-          key: 'deadlineState',
-          type: 'radio',
-          props: {
-            label: T.F.BOARDS.FORM.DEADLINE_STATE,
-            required: true,
-            defaultValue: BoardPanelCfgDeadlineState.All,
-            options: [
-              {
-                value: BoardPanelCfgDeadlineState.All,
-                label: T.F.BOARDS.FORM.DEADLINE_STATE_ALL,
-              },
-              {
-                value: BoardPanelCfgDeadlineState.HasDeadline,
-                label: T.F.BOARDS.FORM.DEADLINE_STATE_HAS_DEADLINE,
-              },
-              {
-                value: BoardPanelCfgDeadlineState.NoDeadline,
-                label: T.F.BOARDS.FORM.DEADLINE_STATE_NO_DEADLINE,
-              },
-            ],
-          },
-        },
-        {
-          key: 'deadlineTimeframe',
-          type: 'select',
-          expressions: {
-            hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline}`,
-          },
-          defaultValue: 'ALL',
-          props: {
-            label: T.F.BOARDS.FORM.DEADLINE_TIMEFRAME,
-            options: [
-              { value: 'ALL', label: T.F.BOARDS.FORM.TIMEFRAME_ALL },
-              { value: 'TODAY', label: T.F.BOARDS.FORM.TIMEFRAME_TODAY },
-              { value: 'TOMORROW', label: T.F.BOARDS.FORM.TIMEFRAME_TOMORROW },
-              { value: 'NEXT_WEEK', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
-              { value: 'NEXT_MONTH', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
-              { value: 'NEXT_DAYS', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_DAYS },
-              {
-                value: 'AT_LEAST_DAYS_FUTURE',
-                label: T.F.BOARDS.FORM.TIMEFRAME_AT_LEAST_DAYS_FUTURE,
-              },
-              { value: 'CUSTOM_RANGE', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
-            ],
-          },
-        },
-        {
-          key: 'deadlineDaysVal',
-          type: 'input',
-          expressions: {
-            hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline} ||
-              (model.deadlineTimeframe !== 'NEXT_DAYS' &&
-                model.deadlineTimeframe !== 'AT_LEAST_DAYS_FUTURE')`,
-          },
-          defaultValue: 7,
-          props: {
-            label: T.F.BOARDS.FORM.TIMEFRAME_DAYS_VAL,
-            type: 'number',
-            min: 1,
-            required: true,
-          },
-        },
-        {
-          key: 'deadlineCustomStart',
-          type: 'date-btn',
-          expressions: {
-            hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline} || model.deadlineTimeframe !== 'CUSTOM_RANGE'`,
-          },
-          props: {
-            label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_START,
-            maxDateKey: 'deadlineCustomEnd',
-          },
-        },
-        {
-          key: 'deadlineCustomEnd',
-          type: 'date-btn',
-          expressions: {
-            hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline} || model.deadlineTimeframe !== 'CUSTOM_RANGE'`,
-          },
-          props: {
-            label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_END,
-            minDateKey: 'deadlineCustomStart',
-          },
-        },
+        ...buildTimeframeFields({
+          prefix: 'scheduled',
+          stateKey: 'scheduledState',
+          stateActiveVal: BoardPanelCfgScheduledState.Scheduled,
+          stateLabel: T.F.BOARDS.FORM.SCHEDULED_STATE,
+          stateOptions: [
+            {
+              value: BoardPanelCfgScheduledState.All,
+              label: T.F.BOARDS.FORM.SCHEDULED_STATE_ALL,
+            },
+            {
+              value: BoardPanelCfgScheduledState.Scheduled,
+              label: T.F.BOARDS.FORM.SCHEDULED_STATE_SCHEDULED,
+            },
+            {
+              value: BoardPanelCfgScheduledState.NotScheduled,
+              label: T.F.BOARDS.FORM.SCHEDULED_STATE_NOT_SCHEDULED,
+            },
+          ],
+          timeframeLabel: T.F.BOARDS.FORM.SCHEDULED_TIMEFRAME,
+        }),
+        ...buildTimeframeFields({
+          prefix: 'deadline',
+          stateKey: 'deadlineState',
+          stateActiveVal: BoardPanelCfgDeadlineState.HasDeadline,
+          stateLabel: T.F.BOARDS.FORM.DEADLINE_STATE,
+          stateOptions: [
+            {
+              value: BoardPanelCfgDeadlineState.All,
+              label: T.F.BOARDS.FORM.DEADLINE_STATE_ALL,
+            },
+            {
+              value: BoardPanelCfgDeadlineState.HasDeadline,
+              label: T.F.BOARDS.FORM.DEADLINE_STATE_HAS_DEADLINE,
+            },
+            {
+              value: BoardPanelCfgDeadlineState.NoDeadline,
+              label: T.F.BOARDS.FORM.DEADLINE_STATE_NO_DEADLINE,
+            },
+          ],
+          timeframeLabel: T.F.BOARDS.FORM.DEADLINE_TIMEFRAME,
+        }),
         {
           key: 'sortBy',
           type: 'select',
