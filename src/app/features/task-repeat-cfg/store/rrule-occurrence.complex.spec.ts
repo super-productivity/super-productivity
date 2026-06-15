@@ -264,13 +264,13 @@ describe('rrule-occurrence engine — complex variants × settings', () => {
 
   describe('isRRuleValid never-firing rules', () => {
     // A parseable rule whose pattern matches no real date (BYMONTH=13, Feb-30)
-    // used to make rrule.js's .after() walk day-by-day to its year-275760 ceiling
-    // — a multi-second main-thread freeze that ALSO returned `true`, so the engine
-    // deferred to a rule that silently never fires (bypassing the legacy
-    // fallback). `_canNeverFire` now rejects these contradiction classes in O(1)
-    // before any probe; a never-firing rule it doesn't recognise still resolves
-    // to false via the (unbounded, memoised) `.after()` probe — after a one-time
-    // multi-second walk, which is why extending the pre-screen matters.
+    // walks period-by-period to rrule.js's MAXYEAR=9999 ceiling before yielding
+    // nothing, and used to ALSO return `true`, so the engine deferred to a rule
+    // that silently never fires (bypassing the legacy fallback). `_canNeverFire`
+    // rejects these contradiction classes in O(1) before any probe; a never-firing
+    // rule it doesn't recognise still resolves to false via the validity probe —
+    // which is anchored near 9999, so that walk is bounded (sub-second, memoised)
+    // rather than the multi-second freeze a 2020-anchored probe produced.
     it('rejects a never-firing rule instead of treating it as valid', () => {
       expect(isRRuleValid('FREQ=DAILY;BYMONTH=13')).toBe(false);
       expect(isRRuleValid('FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30')).toBe(false);
@@ -297,6 +297,45 @@ describe('rrule-occurrence engine — complex variants × settings', () => {
         'FREQ=DAILY;BYMONTH=1;BYWEEKNO=53', // week 53 can spill into January
         'FREQ=DAILY;BYMONTH=2;BYYEARDAY=-320', // negative year-days skip the check
         'FREQ=DAILY;BYMONTH=2;BYWEEKNO=-46', // negative week numbers skip the check
+      ].forEach((r) => expect(isRRuleValid(r)).withContext(r).toBe(true));
+    });
+
+    it('pre-screens BYSETPOS beyond the per-period set (DAILY/WEEKLY) in O(1)', () => {
+      // A day holds 1 occurrence and a week holds at most its BYDAY count, so a
+      // BYSETPOS past that matches nothing. These previously walked seconds to the
+      // ceiling on the probe; _canNeverFire now rejects them up front.
+      const start = performance.now();
+      expect(isRRuleValid('FREQ=DAILY;BYSETPOS=2')).toBe(false);
+      expect(isRRuleValid('FREQ=DAILY;BYDAY=MO;BYSETPOS=2')).toBe(false);
+      expect(isRRuleValid('FREQ=WEEKLY;BYDAY=MO;BYSETPOS=5')).toBe(false);
+      expect(isRRuleValid('FREQ=WEEKLY;BYDAY=MO,TU,WE;BYSETPOS=4')).toBe(false);
+      expect(performance.now() - start).toBeLessThan(500);
+    });
+
+    it('keeps in-range BYSETPOS valid (no false positives)', () => {
+      [
+        'FREQ=DAILY;BYSETPOS=1', // the single daily slot
+        'FREQ=DAILY;BYSETPOS=-1', // last == only
+        'FREQ=WEEKLY;BYDAY=MO,TU,WE;BYSETPOS=2', // 2nd of 3
+        'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1', // last weekday
+      ].forEach((r) => expect(isRRuleValid(r)).withContext(r).toBe(true));
+    });
+
+    it('pre-screens BYWEEKNO × BYYEARDAY contradictions (no BYMONTH) in O(1)', () => {
+      // A year-day and a week number that can never share a month can never
+      // coincide — week 10 is ~March, year-day 300 is ~October. The BYMONTH-based
+      // checks are skipped when bymonth is empty, so this needs its own pre-screen.
+      const start = performance.now();
+      expect(isRRuleValid('FREQ=DAILY;BYWEEKNO=10;BYYEARDAY=300')).toBe(false);
+      expect(isRRuleValid('FREQ=YEARLY;BYWEEKNO=2;BYYEARDAY=200')).toBe(false);
+      expect(performance.now() - start).toBeLessThan(500);
+    });
+
+    it('keeps satisfiable BYWEEKNO × BYYEARDAY valid (no false positives)', () => {
+      [
+        'FREQ=DAILY;BYWEEKNO=10;BYYEARDAY=66', // year-day 66 (~Mar 7) sits in week 10
+        'FREQ=YEARLY;BYWEEKNO=1;BYYEARDAY=1', // Jan 1 can be ISO week 1
+        'FREQ=DAILY;BYWEEKNO=10;BYYEARDAY=-300', // negative year-days skip the check
       ].forEach((r) => expect(isRRuleValid(r)).withContext(r).toBe(true));
     });
 
