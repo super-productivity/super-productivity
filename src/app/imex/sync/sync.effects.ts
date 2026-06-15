@@ -28,7 +28,7 @@ import { isOnline$ } from '../../util/is-online';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.service';
-import { IS_ELECTRON } from '../../app.constants';
+import { IS_ELECTRON, IS_QUICK_ADD_HUD } from '../../app.constants';
 import { TaskService } from '../../features/tasks/task.service';
 import { SimpleCounterService } from '../../features/simple-counter/simple-counter.service';
 import { SyncWrapperService } from './sync-wrapper.service';
@@ -129,6 +129,7 @@ export class SyncEffects {
   triggerSync$ = createEffect(
     () =>
       this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+        filter(() => !IS_QUICK_ADD_HUD),
         switchMap(() =>
           merge(
             // dynamic
