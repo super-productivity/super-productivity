@@ -123,8 +123,7 @@
           cdkTextareaAutosize
           cdkAutosizeMinRows="3"
           cdkAutosizeMaxRows="8"
-          [ngModel]="stateService.noteTxt()"
-          (ngModelChange)="stateService.noteTxt.set($event)"
+          [(ngModel)]="stateService.noteTxt"
           [placeholder]="T.F.TASK.ADD_TASK_BAR.NOTE_PLACEHOLDER | translate"
           (keydown)="onNoteKeydown($event)"
         ></textarea>

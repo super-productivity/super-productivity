@@ -471,6 +471,22 @@ describe('AddTaskBarComponent', () => {
       expect(component.stateService.isNoteExpanded()).toBe(false);
       expect(addTaskSpy).not.toHaveBeenCalled();
     });
+
+    it('typing in the note textarea writes back to noteTxt (two-way bind)', () => {
+      component.stateService.isNoteExpanded.set(true);
+      fixture.detectChanges();
+
+      const textarea = fixture.nativeElement.querySelector(
+        'textarea.note-input',
+      ) as HTMLTextAreaElement;
+      expect(textarea).toBeTruthy();
+
+      textarea.value = 'a multi\nline note';
+      textarea.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      expect(component.stateService.noteTxt()).toBe('a multi\nline note');
+    });
   });
 
   describe('defaultProject$ observable', () => {

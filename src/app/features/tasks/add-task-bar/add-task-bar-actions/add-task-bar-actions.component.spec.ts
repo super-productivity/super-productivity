@@ -128,10 +128,6 @@ describe('AddTaskBarActionsComponent', () => {
       value: signal(''),
       writable: false,
     });
-    Object.defineProperty(mockStateService, 'isNoteExpanded', {
-      value: signal(false),
-      writable: false,
-    });
 
     // Store references to update signals in tests
     (mockStateService as any)._mockStateSignal = mockStateSignal;
