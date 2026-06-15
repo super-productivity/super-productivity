@@ -22,6 +22,7 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { bulkApplyOperations } from '../apply/bulk-hydration.action';
+import { getFailedOpIdsFromBatch } from '../apply/failed-op-ids.util';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import { AppDataComplete } from '../model/model-config';
@@ -597,19 +598,15 @@ export class OperationLogHydratorService {
 
     // On a partial failure the batch applier stops at the first op whose archive
     // side effect throws and returns it; that op and every op after it in seq
-    // order stay unapplied. Mirror the primary path's slice-from-failure
-    // handling. markFailed bumps the retry count (rejecting ops past
+    // order stay unapplied (slice-from-failure, shared with the primary path).
+    // markFailed bumps the retry count (rejecting ops past
     // MAX_CONFLICT_RETRY_ATTEMPTS), so a permanently-failing op can't be retried
     // forever.
     if (result.failedOp) {
-      const failedOpId = result.failedOp.op.id;
-      const failedIndex = opsToApply.findIndex((op) => op.id === failedOpId);
-      const stillFailedOpIds = (
-        failedIndex === -1 ? [result.failedOp.op] : opsToApply.slice(failedIndex)
-      ).map((op) => op.id);
+      const stillFailedOpIds = getFailedOpIdsFromBatch(opsToApply, result.failedOp.op);
 
       OpLog.warn(
-        `OperationLogHydratorService: Failed to retry op ${failedOpId}`,
+        `OperationLogHydratorService: Failed to retry op ${result.failedOp.op.id}`,
         result.failedOp.error,
       );
       await this.opLogStore.markFailed(stillFailedOpIds, MAX_CONFLICT_RETRY_ATTEMPTS);
