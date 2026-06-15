@@ -1,0 +1,48 @@
+@if (groups().length) {
+  @for (group of groups(); track group.assignee?.id ?? '__unassigned__') {
+    <div class="assignee-group">
+      <div class="assignee-header">
+        <span
+          class="avatar"
+          [style.background-image]="
+            group.assignee?.avatarUrl ? 'url(' + group.assignee?.avatarUrl + ')' : null
+          "
+        >
+          @if (!group.assignee?.avatarUrl) {
+            {{ group.initial }}
+          }
+        </span>
+        <span class="name">
+          {{ group.label || (T.PLAINSPACE.UNASSIGNED | translate) }}
+        </span>
+        <span class="count">{{ group.tasks.length }}</span>
+      </div>
+
+      @for (task of group.tasks; track task.id) {
+        <div
+          class="shared-task"
+          [class.isDone]="task.isDone"
+        >
+          <mat-icon class="state-ico">
+            {{ task.isDone ? 'check_circle' : 'radio_button_unchecked' }}
+          </mat-icon>
+          <span class="title">{{ task.title }}</span>
+          @if (task.url) {
+            <a
+              class="open-link"
+              mat-icon-button
+              [href]="task.url"
+              target="_blank"
+              rel="noopener"
+              [matTooltip]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
+            >
+              <mat-icon>open_in_new</mat-icon>
+            </a>
+          }
+        </div>
+      }
+    </div>
+  }
+} @else {
+  <div class="no-tasks">{{ T.PLAINSPACE.NO_ASSIGNED_TO_OTHERS | translate }}</div>
+}

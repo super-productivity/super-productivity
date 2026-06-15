@@ -1,0 +1,87 @@
+:host {
+  display: block;
+  padding: 0 var(--s);
+}
+
+.assignee-group {
+  margin-bottom: var(--s2, 16px);
+}
+
+.assignee-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s, 8px);
+  padding: var(--s, 8px) 0 4px;
+  color: var(--text-color-secondary);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: var(--bg-lighter);
+  background-size: cover;
+  background-position: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-color);
+}
+
+.name {
+  font-weight: bold;
+}
+
+.count {
+  color: var(--text-color-muted);
+  font-size: 12px;
+}
+
+.shared-task {
+  display: flex;
+  align-items: center;
+  gap: var(--s, 8px);
+  padding: 4px var(--s, 8px);
+  border-bottom: 1px solid var(--extra-border-color);
+  color: var(--text-color);
+
+  &.isDone {
+    color: var(--text-color-muted);
+
+    .title {
+      text-decoration: line-through;
+    }
+  }
+}
+
+.state-ico {
+  flex-shrink: 0;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-color-muted);
+}
+
+.title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.open-link {
+  flex-shrink: 0;
+  opacity: 0.6;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.no-tasks {
+  padding: var(--s, 8px);
+  color: var(--text-color-muted);
+  font-style: italic;
+}

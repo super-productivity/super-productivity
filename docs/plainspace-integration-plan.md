@@ -20,12 +20,12 @@ Productivity (SP) so that:
 
 ## 1. Guiding decisions (agreed)
 
-| Decision | Choice |
-| --- | --- |
+| Decision                            | Choice                                                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | **Source of truth** for shared data | **Plainspace backend.** SP reads/writes shared tasks via Plainspace's API as a separate channel from SP's own op‑log sync. |
-| **Integration shape** | Model Plainspace as a **regular issue provider** (like Jira/Redmine) "for the most part". |
-| **Identity** | **Plainspace account login** (token-based). The authenticated account defines "me" for the assigned/unassigned split. |
-| **v1 scope** | Plan the full feature; build a working **prototype** (UI + provider scaffold against an assumed/mock API). |
+| **Integration shape**               | Model Plainspace as a **regular issue provider** (like Jira/Redmine) "for the most part".                                  |
+| **Identity**                        | **Plainspace account login** (token-based). The authenticated account defines "me" for the assigned/unassigned split.      |
+| **v1 scope**                        | Plan the full feature; build a working **prototype** (UI + provider scaffold against an assumed/mock API).                 |
 
 ### Why "issue provider" is the right host
 
@@ -42,14 +42,14 @@ for free:
 
 This means "Plainspace issues assigned to me" can flow through the **existing**
 issue→task pipeline with almost no new core code. The only genuinely new surface
-is the **"assigned to others"** read-only list, because that data is *not*
+is the **"assigned to others"** read-only list, because that data is _not_
 imported as SP tasks.
 
 ### The one important nuance
 
 The standard issue-provider flow turns issues **into** SP tasks. We only want to
 do that for **my / unassigned** items. Tasks **assigned to others** must be
-*shown* but **not** imported as editable SP tasks (they are not my work, and
+_shown_ but **not** imported as editable SP tasks (they are not my work, and
 importing them would pollute counts, scheduling, time tracking, and sync). So the
 design is a **hybrid**:
 
@@ -106,8 +106,8 @@ New folder `src/app/features/issue/providers/plainspace/`. Config interface (mir
 
 ```ts
 export interface PlainspaceCfg extends BaseIssueProviderCfg {
-  host: string | null;        // plainspace.org or self-hosted base URL
-  spaceId: string | null;     // the Plainspace "space" this provider is bound to
+  host: string | null; // plainspace.org or self-hosted base URL
+  spaceId: string | null; // the Plainspace "space" this provider is bound to
   // auth token is NOT stored here; it lives with the account (see 3.3) so a
   // single login covers all spaces. host+spaceId identify the remote project.
 }
@@ -127,9 +127,9 @@ export interface PlainspaceIssue {
   id: string;
   title: string;
   isDone: boolean;
-  assigneeId: string | null;     // null = unassigned
+  assigneeId: string | null; // null = unassigned
   assignee?: PlainspaceMember | null;
-  updatedAt: string;             // ISO
+  updatedAt: string; // ISO
   url?: string;
   // ...extend once the real API is known
 }
@@ -140,10 +140,10 @@ export interface PlainspaceIssue {
 ```ts
 // src/app/features/plainspace/plainspace-account.model.ts
 export interface PlainspaceAccount {
-  host: string;          // which plainspace instance
-  userId: string;        // "me"
+  host: string; // which plainspace instance
+  userId: string; // "me"
   displayName: string;
-  token: string;         // bearer token (stored like other provider creds)
+  token: string; // bearer token (stored like other provider creds)
 }
 ```
 
@@ -194,15 +194,15 @@ import as tasks and poll. Pattern reference: **Redmine** (simplest built-in).
 
 ### 4.2 New provider files (`providers/plainspace/`)
 
-| File | Responsibility |
-| --- | --- |
-| `plainspace.model.ts` | `PlainspaceCfg` |
-| `plainspace-issue.model.ts` | `PlainspaceIssue`, `PlainspaceMember` |
-| `plainspace.const.ts` | `DEFAULT_PLAINSPACE_CFG`, `PLAINSPACE_POLL_INTERVAL` |
-| `plainspace-cfg-form.const.ts` | Formly config form + `..._CONFIG_FORM_SECTION` (host, advanced common fields) |
-| `plainspace-api.service.ts` | All HTTP: `searchIssues$`, `getById$`, `getTasksForSpace$`, `getMembers$`, `createSpace$`, plus mock mode |
-| `plainspace-common-interfaces.service.ts` | implements `IssueServiceInterface` (extends `BaseIssueProviderService`) |
-| `plainspace-issue-map.util.ts` | `PlainspaceIssue → SearchResultItem` and `→ getAddTaskData` |
+| File                                      | Responsibility                                                                                            |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `plainspace.model.ts`                     | `PlainspaceCfg`                                                                                           |
+| `plainspace-issue.model.ts`               | `PlainspaceIssue`, `PlainspaceMember`                                                                     |
+| `plainspace.const.ts`                     | `DEFAULT_PLAINSPACE_CFG`, `PLAINSPACE_POLL_INTERVAL`                                                      |
+| `plainspace-cfg-form.const.ts`            | Formly config form + `..._CONFIG_FORM_SECTION` (host, advanced common fields)                             |
+| `plainspace-api.service.ts`               | All HTTP: `searchIssues$`, `getById$`, `getTasksForSpace$`, `getMembers$`, `createSpace$`, plus mock mode |
+| `plainspace-common-interfaces.service.ts` | implements `IssueServiceInterface` (extends `BaseIssueProviderService`)                                   |
+| `plainspace-issue-map.util.ts`            | `PlainspaceIssue → SearchResultItem` and `→ getAddTaskData`                                               |
 
 ### 4.3 `IssueServiceInterface` implementation notes
 
@@ -256,10 +256,10 @@ wires up the provider binding.
 - **On submit** (in `dialog-create-project.component.ts`), after the project is
   created via `projectService.add()`:
   1. If `isShareOnPlainspace` and logged in → `PlainspaceApiService.createSpace$(
-     { title })` → returns `spaceId`.
+{ title })` → returns `spaceId`.
   2. Create a `PLAINSPACE` issue-provider instance with
      `{ host, spaceId, isEnabled: true, defaultProjectId: <newProjectId>,
-     isAutoAddToBacklog: true }` via the issue-provider store.
+isAutoAddToBacklog: true }` via the issue-provider store.
 - **Edit mode**: same toggle reflects whether a bound Plainspace provider exists;
   turning it on later provisions the space + provider; turning it off should
   prompt (unlink vs delete remote) — keep v1 to **unlink only** (disable provider,
@@ -309,9 +309,13 @@ conditional `collapsible` section (mirrors overdue/done panels):
 
 ```html
 @if (isShowAssignedToOthers()) {
-  <collapsible [title]="...assignedToOthers (n)" [isGroup]="true" ...>
-    <plainspace-assigned-to-others [tasks]="assignedToOthersTasks()" />
-  </collapsible>
+<collapsible
+  [title]="...assignedToOthers (n)"
+  [isGroup]="true"
+  ...
+>
+  <plainspace-assigned-to-others [tasks]="assignedToOthersTasks()" />
+</collapsible>
 }
 ```
 
@@ -325,7 +329,7 @@ Collapsed state persisted in `localStorage` like the existing `isDoneHidden` /
 - **Reads**: reuse issue polling for my tasks; add a light timer in
   `PlainspaceSharedTasksService` for others' tasks (same interval), only while the
   shared project is open.
-- **Writes (mine)**: completing/editing a *my* imported task should optionally
+- **Writes (mine)**: completing/editing a _my_ imported task should optionally
   push back to Plainspace via `updateIssueFromTask` (the optional interface hook).
   Start **read-mostly**: import + status sync for done-state only; expand later.
 - **Writes (others')**: none — read-only.
@@ -389,4 +393,7 @@ the real backend:
   `plainspace-issue.model.ts` so the real contract changes one layer.
 - **Privacy**: tokens stored locally like other provider secrets; no analytics;
   log only ids (`Log.log({ id })`).
+
+```
+
 ```

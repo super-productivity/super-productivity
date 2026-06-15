@@ -2824,6 +2824,13 @@
     "TIME_SPENT_TODAY_BY_TAG": "Time Spent today by Tag",
     "WEEK": "Week"
   },
+  "PLAINSPACE": {
+    "ASSIGNED_TO_OTHERS": "Assigned to others",
+    "NO_ASSIGNED_TO_OTHERS": "No tasks are assigned to other members right now.",
+    "OPEN_IN_PLAINSPACE": "Open in Plainspace",
+    "DONE": "Done",
+    "UNASSIGNED": "Unassigned"
+  },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",
     "ALREADY_INITIALIZED": "Plugin is already initialized",

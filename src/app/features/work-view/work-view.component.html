@@ -380,6 +380,30 @@
             </div>
           }
 
+          @if (isShowAssignedToOthers()) {
+            <div
+              @expand
+              class="collapsible-section"
+            >
+              <collapsible
+                [title]="
+                  (T.PLAINSPACE.ASSIGNED_TO_OTHERS | translate) +
+                  ' (' +
+                  assignedToOthersTasks().length +
+                  ')'
+                "
+                [isExpanded]="!isAssignedToOthersHidden()"
+                (isExpandedChange)="isAssignedToOthersHidden.set(!$event)"
+                [isIconBefore]="true"
+                [isGroup]="true"
+              >
+                <plainspace-assigned-to-others
+                  [tasks]="assignedToOthersTasks()"
+                ></plainspace-assigned-to-others>
+              </collapsible>
+            </div>
+          }
+
           @if (isOnTodayList() && isFinishDayEnabled()) {
             <finish-day-btn [hasDoneTasks]="hasDoneTasks()"></finish-day-btn>
           }
