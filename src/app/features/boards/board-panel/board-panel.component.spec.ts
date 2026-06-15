@@ -828,14 +828,15 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
     });
 
     it('filters scheduled tasks by THIS_WEEK timeframe', async () => {
-      // 2026-06-15 is Monday. The week goes until Sunday (2026-06-21).
+      // 2026-06-17 is Wednesday. The week goes from Monday (2026-06-15) until Sunday (2026-06-21).
       await setupWithMockDateService(
         [
-          mkTask({ id: 't-today', dueDay: '2026-06-15' }),
+          mkTask({ id: 't-earlier-this-week', dueDay: '2026-06-15' }),
+          mkTask({ id: 't-today', dueDay: '2026-06-17' }),
           mkTask({ id: 't-in-week', dueDay: '2026-06-20' }),
           mkTask({ id: 't-out-of-week', dueDay: '2026-06-22' }),
         ],
-        '2026-06-15',
+        '2026-06-17',
       );
       fixture.componentRef.setInput('panelCfg', {
         id: 'p',
@@ -852,6 +853,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
       fixture.detectChanges();
 
       const ids = component.tasks().map((t) => t.id);
+      expect(ids).toContain('t-earlier-this-week');
       expect(ids).toContain('t-today');
       expect(ids).toContain('t-in-week');
       expect(ids).not.toContain('t-out-of-week');

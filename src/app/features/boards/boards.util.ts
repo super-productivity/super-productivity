@@ -282,7 +282,11 @@ export const resolveTimeframeBounds = (
     const date = parseDbDateStr(todayStr);
     const dayOfWeek = date.getDay();
     const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-    return { start: todayStr, end: getFutureLogicalDateStr(daysToSunday, todayStr) };
+    const daysFromMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    return {
+      start: getFutureLogicalDateStr(daysFromMonday, todayStr),
+      end: getFutureLogicalDateStr(daysToSunday, todayStr),
+    };
   }
   if (timeframe === 'NEXT_MONTH') {
     return { start: todayStr, end: getFutureLogicalMonthDateStr(todayStr) };
