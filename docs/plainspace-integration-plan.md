@@ -358,12 +358,14 @@ A `collapsible` section (mirrors overdue/done panels), **collapsed by default**
 ## 8. Phase 5 — Polling, refresh & write-back
 
 - **Reads**: reuse issue polling for my tasks; add a light timer in
-  `PlainspaceSharedTasksService` for others' tasks (same interval), only while the
-  shared project is open.
+  `PlainspaceClaimPoolService` to refresh the claim pool (same interval), only
+  while the shared project is open. Today it refreshes on project open / provider
+  change / after a claim — no timer yet.
 - **Writes (mine)**: completing/editing a _my_ imported task should optionally
   push back to Plainspace via `updateIssueFromTask` (the optional interface hook).
   Start **read-mostly**: import + status sync for done-state only; expand later.
-- **Writes (others')**: none — read-only.
+- **Claim**: the one write already implemented — assign an unclaimed task to me
+  (`claimTask$`), then import it. Real mode would POST the assignment.
 - **Offline**: all Plainspace calls must fail soft (empty lists, cached last
   values) and never block the SP UI; SP remains fully usable offline.
 
