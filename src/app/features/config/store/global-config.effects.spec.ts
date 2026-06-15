@@ -24,8 +24,8 @@ import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { KeyboardConfig } from '../keyboard-config.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
-import { setIsElectronForTesting } from '../../../app.constants';
-import { setIsMacForTesting } from '../../../util/is-mac';
+import { IS_ELECTRON_TOKEN } from '../../../app.constants';
+import { IS_MAC_TOKEN } from '../../../util/is-mac';
 
 describe('GlobalConfigEffects', () => {
   let effects: GlobalConfigEffects;
@@ -33,7 +33,11 @@ describe('GlobalConfigEffects', () => {
   let dateServiceSpy: jasmine.SpyObj<DateService>;
   let store: MockStore;
 
-  beforeEach(() => {
+  const setup = (
+    isElectron = false,
+    isMac = false,
+    keyboardLayoutService?: KeyboardLayoutService,
+  ): void => {
     actions$ = new Subject<Action>();
     dateServiceSpy = jasmine.createSpyObj('DateService', [
       'setStartOfNextDayDiff',
@@ -62,7 +66,12 @@ describe('GlobalConfigEffects', () => {
           provide: UserProfileService,
           useValue: { updateDayIdFromRemote: jasmine.createSpy('updateDayIdFromRemote') },
         },
-        KeyboardLayoutService,
+        { provide: IS_ELECTRON_TOKEN, useValue: isElectron },
+        { provide: IS_MAC_TOKEN, useValue: isMac },
+        {
+          provide: KeyboardLayoutService,
+          useValue: keyboardLayoutService || new KeyboardLayoutService(),
+        },
       ],
     });
 
@@ -70,15 +79,16 @@ describe('GlobalConfigEffects', () => {
     store.overrideSelector(selectAllTasks, []);
     effects = TestBed.inject(GlobalConfigEffects);
     effects.setStartOfNextDayDiffOnLoad.subscribe();
-  });
+  };
 
   afterEach(() => {
-    store.resetSelectors();
-    setIsElectronForTesting(false);
-    setIsMacForTesting(false);
+    if (store) {
+      store.resetSelectors();
+    }
   });
 
   describe('setStartOfNextDayDiffOnChange', () => {
+    beforeEach(() => setup());
     it('should call setStartOfNextDayDiff when startOfNextDay is set to a non-zero value', () => {
       const dispatched: Action[] = [];
       effects.setStartOfNextDayDiffOnChange.subscribe((a) => dispatched.push(a));
@@ -238,6 +248,7 @@ describe('GlobalConfigEffects', () => {
   });
 
   describe('setStartOfNextDayDiffOnLoad', () => {
+    beforeEach(() => setup());
     it('should call setStartOfNextDayDiff when loadAllData is dispatched', () => {
       actions$.next(
         loadAllData({
@@ -308,6 +319,7 @@ describe('GlobalConfigEffects', () => {
   });
 
   describe('shortcut mapping logic', () => {
+    beforeEach(() => setup());
     let mockLayout: KeyboardLayout;
 
     beforeEach(() => {
@@ -380,11 +392,9 @@ describe('GlobalConfigEffects', () => {
   });
 
   describe('global shortcut effects', () => {
-    let keyboardLayoutService: KeyboardLayoutService;
     let registerGlobalShortcutsSpy: jasmine.Spy;
 
     beforeEach(() => {
-      keyboardLayoutService = TestBed.inject(KeyboardLayoutService);
       registerGlobalShortcutsSpy = jasmine.createSpy('registerGlobalShortcuts');
       (window as any).ea = {
         registerGlobalShortcuts: registerGlobalShortcutsSpy,
@@ -397,8 +407,7 @@ describe('GlobalConfigEffects', () => {
 
     describe('updateGlobalShortcut$', () => {
       it('should register shortcuts in Electron', () => {
-        setIsElectronForTesting(true);
-        setIsMacForTesting(false);
+        setup(true, false);
         effects.updateGlobalShortcut$.subscribe();
 
         const keyboardCfg = {
@@ -416,8 +425,8 @@ describe('GlobalConfigEffects', () => {
       });
 
       it('should translate shortcuts to QWERTY on macOS Electron', () => {
-        setIsElectronForTesting(true);
-        setIsMacForTesting(true);
+        const keyboardLayoutService = new KeyboardLayoutService();
+        setup(true, true, keyboardLayoutService);
         keyboardLayoutService.setLayout(
           new Map([
             ['KeyY', 'z'],
@@ -446,7 +455,7 @@ describe('GlobalConfigEffects', () => {
       });
 
       it('should NOT register shortcuts if NOT in Electron', () => {
-        setIsElectronForTesting(false);
+        setup(false, false);
         effects.updateGlobalShortcut$.subscribe();
         actions$.next(
           updateGlobalConfigSection({
@@ -460,8 +469,7 @@ describe('GlobalConfigEffects', () => {
 
     describe('registerGlobalShortcutInitially$', () => {
       it('should register shortcuts initially in Electron', (done) => {
-        setIsElectronForTesting(true);
-        setIsMacForTesting(false);
+        setup(true, false);
 
         const keyboardCfg = {
           ...DEFAULT_GLOBAL_CONFIG.keyboard,
@@ -485,8 +493,8 @@ describe('GlobalConfigEffects', () => {
       });
 
       it('should wait for layout and translate to QWERTY initially on macOS Electron', (done) => {
-        setIsElectronForTesting(true);
-        setIsMacForTesting(true);
+        const keyboardLayoutService = new KeyboardLayoutService();
+        setup(true, true, keyboardLayoutService);
 
         // We don't call setLayout yet, so layoutReady is still pending
         const keyboardCfg = {
@@ -514,13 +522,15 @@ describe('GlobalConfigEffects', () => {
           }),
         );
 
-        // Now resolve the layout
-        keyboardLayoutService.setLayout(
-          new Map([
-            ['KeyY', 'z'],
-            ['KeyZ', 'y'],
-          ]),
-        );
+        // Now resolve the layout in a macrotask to ensure the await logic is exercised
+        setTimeout(() => {
+          keyboardLayoutService.setLayout(
+            new Map([
+              ['KeyY', 'z'],
+              ['KeyZ', 'y'],
+            ]),
+          );
+        });
       });
     });
   });

@@ -21,6 +21,7 @@ import { TaskWidgetSettingsService } from './features/config/task-widget-setting
 import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
+import { IS_MAC } from './util/is-mac';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -315,7 +316,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     setKeyboardLayoutService(this._keyboardLayoutService);
     // Defer keyboard layout detection to idle time for better initial load performance,
     // EXCEPT on Electron where it is needed eagerly for the initial global shortcut registration on macOS.
-    if (IS_ELECTRON) {
+    if (IS_ELECTRON && IS_MAC) {
       void this._keyboardLayoutService.saveUserLayout();
     } else if (typeof requestIdleCallback === 'function') {
       requestIdleCallback(() => this._keyboardLayoutService.saveUserLayout());

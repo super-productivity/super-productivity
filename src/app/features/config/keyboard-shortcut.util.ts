@@ -1,6 +1,20 @@
 import { KeyboardLayout } from '../../core/keyboard-layout/keyboard-layout.service';
 import { GLOBAL_KEY_CFG_KEYS, KeyboardConfig } from './keyboard-config.model';
 
+const QWERTY_CODE_MAP: Record<string, string> = {
+  Minus: '-',
+  Equal: '+',
+  Semicolon: ';',
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Backquote: '`',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Quote: "'",
+};
+
 /**
  * Maps a single shortcut character to its physical US-QWERTY representation.
  * On macOS, Electron's globalShortcut API registers shortcuts by physical keyboard position
@@ -53,23 +67,8 @@ export const mapShortcutToQwerty = (
     qwertyKey = qwertyKey.substring(3);
   } else if (qwertyKey.startsWith('Digit')) {
     qwertyKey = qwertyKey.substring(5);
-  } else {
-    const qwertyCodeMap: Record<string, string> = {
-      Minus: '-',
-      Equal: '+',
-      Semicolon: ';',
-      Comma: ',',
-      Period: '.',
-      Slash: '/',
-      Backquote: '`',
-      BracketLeft: '[',
-      BracketRight: ']',
-      Backslash: '\\',
-      Quote: "'",
-    };
-    if (qwertyCodeMap[qwertyKey]) {
-      qwertyKey = qwertyCodeMap[qwertyKey];
-    }
+  } else if (QWERTY_CODE_MAP[qwertyKey]) {
+    qwertyKey = QWERTY_CODE_MAP[qwertyKey];
   }
 
   return modifiersPart + qwertyKey;

@@ -11,12 +11,12 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { Action, Store } from '@ngrx/store';
-import { IS_MAC } from '../../../util/is-mac';
+import { IS_MAC_TOKEN } from '../../../util/is-mac';
 import {
   KeyboardLayout,
   KeyboardLayoutService,
 } from '../../../core/keyboard-layout/keyboard-layout.service';
-import { IS_ELECTRON } from '../../../app.constants';
+import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { LanguageService } from '../../../core/language/language.service';
 import { DateService } from '../../../core/date/date.service';
@@ -47,6 +47,8 @@ export class GlobalConfigEffects {
   private _store = inject(Store);
   private _userProfileService = inject(UserProfileService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
+  private _isMac = inject(IS_MAC_TOKEN);
 
   snackUpdate$ = createEffect(
     () =>
@@ -73,10 +75,12 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
-        filter(({ sectionKey, sectionCfg }) => IS_ELECTRON && sectionKey === 'keyboard'),
+        filter(
+          ({ sectionKey, sectionCfg }) => this._isElectron && sectionKey === 'keyboard',
+        ),
         tap(({ sectionKey, sectionCfg }) => {
           let keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
-          if (IS_MAC) {
+          if (this._isMac) {
             keyboardCfg = mapKeyboardConfigToQwerty(
               keyboardCfg,
               this._keyboardLayoutService.layout,
@@ -92,21 +96,26 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(loadAllData),
-        filter(() => IS_ELECTRON),
+        filter(() => this._isElectron),
         concatMap(async (action) => {
           const appDataComplete = action.appDataComplete;
           const keyboardCfg: KeyboardConfig = (
             appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG
           ).keyboard;
           let layout: KeyboardLayout = new Map();
-          if (IS_MAC) {
-            layout = await this._keyboardLayoutService.layoutReady;
+          if (this._isMac) {
+            layout = await Promise.race([
+              this._keyboardLayoutService.layoutReady,
+              new Promise<KeyboardLayout>((resolve) =>
+                setTimeout(() => resolve(new Map()), 1000),
+              ),
+            ]);
           }
           return { keyboardCfg, layout };
         }),
         tap(({ keyboardCfg, layout }) => {
           let cfg = keyboardCfg;
-          if (IS_MAC) {
+          if (this._isMac) {
             cfg = mapKeyboardConfigToQwerty(keyboardCfg, layout);
           }
           window.ea.registerGlobalShortcuts(cfg);
@@ -201,35 +210,33 @@ export class GlobalConfigEffects {
     ),
   );
 
-  notifyElectronAboutCfgChange =
-    IS_ELECTRON &&
-    createEffect(
-      () =>
-        this._actions$.pipe(
-          ofType(updateGlobalConfigSection),
-          withLatestFrom(this._store.select(selectConfigFeatureState)),
-          tap(([action, globalConfig]) => {
-            // Send the entire settings object to electron for overlay initialization
-            window.ea.sendSettingsUpdate(globalConfig);
-          }),
-        ),
-      { dispatch: false },
-    );
+  notifyElectronAboutCfgChange = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(updateGlobalConfigSection),
+        filter(() => this._isElectron),
+        withLatestFrom(this._store.select(selectConfigFeatureState)),
+        tap(([action, globalConfig]) => {
+          // Send the entire settings object to electron for overlay initialization
+          window.ea.sendSettingsUpdate(globalConfig);
+        }),
+      ),
+    { dispatch: false },
+  );
 
-  notifyElectronAboutCfgChangeInitially =
-    IS_ELECTRON &&
-    createEffect(
-      () =>
-        this._actions$.pipe(
-          ofType(loadAllData),
-          tap(({ appDataComplete }) => {
-            const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
-            // Send initial settings to electron for overlay initialization
-            window.ea.sendSettingsUpdate(cfg);
-          }),
-        ),
-      { dispatch: false },
-    );
+  notifyElectronAboutCfgChangeInitially = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(loadAllData),
+        filter(() => this._isElectron),
+        tap(({ appDataComplete }) => {
+          const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
+          // Send initial settings to electron for overlay initialization
+          window.ea.sendSettingsUpdate(cfg);
+        }),
+      ),
+    { dispatch: false },
+  );
 
   // Handle user profiles being enabled/disabled
   handleUserProfilesToggle = createEffect(

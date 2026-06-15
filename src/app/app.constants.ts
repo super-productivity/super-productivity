@@ -1,9 +1,17 @@
 import { IS_ANDROID_WEB_VIEW } from './util/is-android-web-view';
 
-export let IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
-export const setIsElectronForTesting = (v: boolean): void => {
-  IS_ELECTRON = v;
-};
+export const IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
+
+/**
+ * Injection token for IS_ELECTRON to enable testing.
+ * Use this in effects/services that need to be unit tested.
+ */
+import { InjectionToken } from '@angular/core';
+
+export const IS_ELECTRON_TOKEN = new InjectionToken<boolean>('IS_ELECTRON', {
+  providedIn: 'root',
+  factory: () => IS_ELECTRON,
+});
 // effectively IS_BROWSER
 export const IS_WEB_BROWSER = !IS_ELECTRON && !IS_ANDROID_WEB_VIEW;
 export const IS_GNOME_DESKTOP = IS_ELECTRON && window.ea.isGnomeDesktop();
