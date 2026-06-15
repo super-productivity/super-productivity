@@ -29,6 +29,12 @@ h1[mat-dialog-title] {
   max-height: none;
 }
 
+// In fullscreen the result band (calendar preview) fills the surface — that's
+// the width the expand was for. The form column above keeps its 600px cap.
+:host-context(.dialog-fullscreen) .rrule-result {
+  max-width: none;
+}
+
 mat-dialog-content {
   flex: 1 1 auto;
   // Let the flex parent govern height instead of Material's fixed 65vh so the
@@ -71,12 +77,14 @@ mat-dialog-actions {
   }
 }
 
-// Narrow, centered content column (like the deadline modal) so every control
-// shares one consistent width instead of sizing all over the place.
+// Centered content column. The dialog surface itself widens dynamically with the
+// viewport (`.dialog-recurring`, see _overwrite-material.scss); the form fills it
+// up to a cap so the controls stay readable even when fullscreen makes the
+// surface very wide (the calendar preview below is what uses that extra width).
 .form-wrapper {
   width: 100%;
   min-width: 0;
-  max-width: 420px;
+  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -102,7 +110,7 @@ repeat-freq-picker {
 .rrule-result {
   flex: 0 0 auto;
   width: 100%;
-  max-width: 420px;
+  max-width: 600px;
   margin: var(--s) auto 0;
   padding: var(--s) var(--s2);
   border-radius: 10px;

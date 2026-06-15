@@ -662,7 +662,9 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       c.toggleResultHeatmap(); // preview on
       tick(); // flush the measurement timeout
       expect(c.isFullScreen()).toBe(false);
-      expect(mockDialogRef.addPanelClass).not.toHaveBeenCalled();
+      // (the constructor adds 'dialog-recurring' for sizing; only the fullscreen
+      // class must stay off here)
+      expect(mockDialogRef.addPanelClass).not.toHaveBeenCalledWith('dialog-fullscreen');
     }));
 
     it('closing the calendar collapses a calendar-owned fullscreen', fakeAsync(async () => {

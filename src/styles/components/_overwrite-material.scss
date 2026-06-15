@@ -188,6 +188,15 @@ body.isNativeMobile .project-complete-fullscreen-dialog {
   height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
 }
 
+// Recurring-task dialog: a surface that widens dynamically with the viewport
+// (instead of sizing to its content) up to a tidy cap, and lifts Material's 80vw
+// default so a phone gets the full width. Declared BEFORE `.dialog-fullscreen`
+// so that, when both classes are present, the fullscreen rule wins.
+.dialog-recurring {
+  width: min(95vw, 600px) !important;
+  max-width: 95vw !important;
+}
+
 // Generic runtime-toggleable fullscreen state for any dialog — added/removed
 // via MatDialogRef.addPanelClass('dialog-fullscreen') (e.g. the recurring-task
 // dialog's expand button). Unlike the project-complete variant above, the

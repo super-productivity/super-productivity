@@ -503,6 +503,11 @@ export class DialogEditTaskRepeatCfgComponent {
   });
 
   constructor() {
+    // Size the dialog surface responsively (widens with the viewport up to a
+    // cap, lifts Material's 80vw default so mobile isn't clipped). Fullscreen's
+    // panel class overrides this. See `.dialog-recurring` in _overwrite-material.
+    this._matDialogRef.addPanelClass('dialog-recurring');
+
     // Initialize form config
     this._initializeFormConfig();
 
