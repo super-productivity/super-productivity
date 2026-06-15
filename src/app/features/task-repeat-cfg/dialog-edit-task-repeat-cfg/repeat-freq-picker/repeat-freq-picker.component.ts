@@ -1,0 +1,144 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  output,
+  signal,
+} from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
+import { ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
+import { T } from '../../../../t.const';
+
+export interface RepeatFreqOption {
+  value: string;
+  /** Already-translated, date-aware label (from buildRepeatQuickSettingOptions). */
+  label: string;
+}
+
+const CUSTOM_VALUE = 'RRULE';
+
+/**
+ * Presentational frequency picker for the repeat-config dialog, rendered as a
+ * custom dropdown (CDK overlay so the panel is never clipped by the dialog's
+ * scroll container). The curated common presets show first (in `commonValues`
+ * order — every day, weekly, monthly, yearly, every weekday), then "Custom",
+ * then a "More options" entry that reveals the long tail IN THE OPEN PANEL
+ * (clicking it does not close the dropdown). All recurrence logic — presets,
+ * RRULE engine, sync-safe persistence — stays in the dialog/service; this
+ * component only presents the choice.
+ */
+@Component({
+  selector: 'repeat-freq-picker',
+  templateUrl: './repeat-freq-picker.component.html',
+  styleUrls: ['./repeat-freq-picker.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslatePipe, OverlayModule],
+})
+export class RepeatFreqPickerComponent {
+  readonly T = T;
+  readonly CUSTOM_VALUE = CUSTOM_VALUE;
+
+  readonly label = input<string>('');
+  readonly options = input.required<RepeatFreqOption[]>();
+  /** Preset values shown while collapsed; the rest hide behind "More options". */
+  readonly commonValues = input<readonly string[]>([]);
+  readonly value = input<string | undefined>(undefined);
+  readonly selected = output<string>();
+
+  readonly isOpen = signal(false);
+  readonly isExpanded = signal(false);
+  /** Panel width is matched to the trigger, captured when the dropdown opens. */
+  readonly triggerWidth = signal(0);
+
+  readonly overlayPositions: ConnectedPosition[] = [
+    {
+      originX: 'start',
+      originY: 'bottom',
+      overlayX: 'start',
+      overlayY: 'top',
+      offsetY: 4,
+    },
+    {
+      originX: 'start',
+      originY: 'top',
+      overlayX: 'start',
+      overlayY: 'bottom',
+      offsetY: -4,
+    },
+  ];
+
+  private readonly _byValue = computed(() => {
+    const m = new Map<string, RepeatFreqOption>();
+    for (const o of this.options()) {
+      m.set(o.value, o);
+    }
+    return m;
+  });
+
+  readonly selectedLabel = computed<string>(() => {
+    const o = this._byValue().get(this.value() ?? '');
+    return o ? o.label : '';
+  });
+
+  // Presets in panel order: the curated common list first (kept in the order the
+  // caller gives), then — when expanded — the long tail in build order. Custom is
+  // rendered separately, last. While collapsed the active selection is appended if
+  // it's a hidden tail preset, so the current choice always shows.
+  readonly presets = computed<RepeatFreqOption[]>(() => {
+    const byVal = this._byValue();
+    const commonSet = new Set(this.commonValues());
+    const head: RepeatFreqOption[] = [];
+    for (const v of this.commonValues()) {
+      const o = byVal.get(v);
+      if (o) {
+        head.push(o);
+      }
+    }
+    if (this.isExpanded()) {
+      const tail = this.options().filter(
+        (o) => o.value !== CUSTOM_VALUE && !commonSet.has(o.value),
+      );
+      return [...head, ...tail];
+    }
+    const val = this.value();
+    if (val && val !== CUSTOM_VALUE && !commonSet.has(val)) {
+      const o = byVal.get(val);
+      if (o) {
+        head.push(o);
+      }
+    }
+    return head;
+  });
+
+  readonly customOption = computed<RepeatFreqOption | undefined>(() =>
+    this._byValue().get(CUSTOM_VALUE),
+  );
+
+  // Show the More/Fewer entry only when the long tail actually holds something.
+  readonly canToggle = computed<boolean>(() => {
+    const commonSet = new Set(this.commonValues());
+    return this.options().some(
+      (o) => o.value !== CUSTOM_VALUE && !commonSet.has(o.value),
+    );
+  });
+
+  open(trigger: HTMLElement): void {
+    this.triggerWidth.set(trigger.offsetWidth);
+    this.isOpen.set(true);
+  }
+
+  close(): void {
+    this.isOpen.set(false);
+  }
+
+  select(value: string): void {
+    this.selected.emit(value);
+    this.close();
+  }
+
+  /** Toggle the long tail without closing the panel (the user's key ask). */
+  toggleExpanded(): void {
+    this.isExpanded.update((v) => !v);
+  }
+}

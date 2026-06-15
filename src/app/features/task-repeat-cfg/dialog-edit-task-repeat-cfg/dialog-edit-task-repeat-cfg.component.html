@@ -43,6 +43,14 @@
         [model]="repeatCfg()"
       ></formly-form>
 
+      <repeat-freq-picker
+        [label]="T.F.TASK_REPEAT.F.QUICK_SETTING | translate"
+        [options]="quickSettingOptions()"
+        [commonValues]="quickSettingCommon"
+        [value]="repeatCfg().quickSetting"
+        (selected)="onQuickSettingSelect($event)"
+      ></repeat-freq-picker>
+
       @if (isRRuleMode()) {
         <rrule-builder
           [rrule]="repeatCfg().rrule ?? ''"

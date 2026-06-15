@@ -1,0 +1,79 @@
+<div class="rfp">
+  @if (label()) {
+    <label class="rfp-lbl">{{ label() }}</label>
+  }
+
+  <button
+    #trigger
+    type="button"
+    class="rfp-trigger"
+    [class.is-open]="isOpen()"
+    cdkOverlayOrigin
+    #origin="cdkOverlayOrigin"
+    [attr.aria-expanded]="isOpen()"
+    aria-haspopup="listbox"
+    (click)="isOpen() ? close() : open(trigger)"
+  >
+    <span class="rfp-trigger__label">{{ selectedLabel() }}</span>
+    <span
+      class="rfp-trigger__chevron"
+      aria-hidden="true"
+      >▾</span
+    >
+  </button>
+
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayOrigin]="origin"
+    [cdkConnectedOverlayOpen]="isOpen()"
+    [cdkConnectedOverlayPositions]="overlayPositions"
+    [cdkConnectedOverlayWidth]="triggerWidth()"
+    [cdkConnectedOverlayHasBackdrop]="true"
+    cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+    (backdropClick)="close()"
+    (overlayKeydown)="$event.key === 'Escape' && close()"
+    (detach)="close()"
+  >
+    <div
+      class="rfp-panel"
+      role="listbox"
+    >
+      @for (o of presets(); track o.value) {
+        <button
+          type="button"
+          class="rfp-opt"
+          [class.active]="o.value === value()"
+          (click)="select(o.value)"
+        >
+          {{ o.label }}
+        </button>
+      }
+
+      @if (customOption(); as c) {
+        <button
+          type="button"
+          class="rfp-opt rfp-opt--custom"
+          [class.active]="c.value === value()"
+          (click)="select(c.value)"
+        >
+          {{ c.label }}
+        </button>
+      }
+
+      @if (canToggle()) {
+        <button
+          type="button"
+          class="rfp-opt rfp-opt--more"
+          (click)="toggleExpanded()"
+        >
+          {{
+            (isExpanded()
+              ? T.F.TASK_REPEAT.F.QUICK_SETTING_FEWER
+              : T.F.TASK_REPEAT.F.QUICK_SETTING_MORE
+            ) | translate
+          }}
+        </button>
+      }
+    </div>
+  </ng-template>
+</div>

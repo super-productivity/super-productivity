@@ -3,30 +3,9 @@ import { T } from '../../../t.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
-import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { TaskReminderOptionId } from '../../tasks/task.model';
 
-const updateParent = (
-  field: FormlyFieldConfig,
-  changes: Partial<TaskRepeatCfg>,
-): void => {
-  // possibly better?
-  field.form?.patchValue({
-    // ...field.parent.model,
-    ...changes,
-  } as any);
-};
-
 export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
-  {
-    key: 'title',
-    type: 'input',
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.TITLE,
-    },
-  },
   {
     key: 'startDate',
     type: 'date',
@@ -40,43 +19,22 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
     },
     parsers: [(val: unknown) => (val instanceof Date ? getDbDateStr(val) : val)],
   },
-  {
-    key: 'quickSetting',
-    type: 'select',
-    defaultValue: 'DAILY',
-    templateOptions: {
-      required: true,
-      label: T.F.TASK_REPEAT.F.QUICK_SETTING,
-      // NOTE replaced in component to allow for dynamic translation
-      options: [],
-      change: (field, event) => {
-        // Pass the selected start date as the reference, else date-writing
-        // presets (MONTHLY_CURRENT_DATE etc.) stamp *today* into the model and
-        // silently overwrite a user-picked future anchor (save-time recompute
-        // then reads the overwritten value).
-        const sd = (field.model as { startDate?: string | Date } | undefined)?.startDate;
-        const referenceDate =
-          sd instanceof Date ? sd : sd ? dateStrToUtcDate(sd) : undefined;
-        const updatesForQuickSetting = getQuickSettingUpdates(
-          event.value as RepeatQuickSetting,
-          referenceDate,
-        );
-        if (updatesForQuickSetting) {
-          // NOTE: for some reason this doesn't update the model value, just the view value :(
-          updateParent(field, updatesForQuickSetting);
-        }
-      },
-    },
-  },
 
-  // REPEAT CFG END
-  // NOTE: the legacy "Custom" recurrence container (repeat-every / cycle /
-  // weekday / monthly-anchor controls) was removed — the RRULE builder replaces
-  // it. Existing legacy cfgs are migrated to RRULE on open
-  // (legacyTaskRepeatCfgToRRule + _processQuickSettingForDate).
+  // NOTE: `quickSetting` is no longer a formly field — it is driven by the
+  // TickTick-style chip picker (repeat-freq-picker) in the dialog component
+  // (onQuickSettingSelect / quickSettingOptions). The legacy "Custom" container
+  // was already replaced by the RRULE builder; legacy cfgs migrate to RRULE on
+  // open (legacyTaskRepeatCfgToRRule + _processQuickSettingForDate).
 ];
 
 export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
+  {
+    key: 'title',
+    type: 'input',
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.TITLE,
+    },
+  },
   {
     key: 'defaultEstimate',
     type: 'duration',

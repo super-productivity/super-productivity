@@ -8,41 +8,62 @@
     </div>
   }
 
-  <!-- Frequency + interval, read as a sentence -->
-  <div class="rb-row">
+  <!-- Repeat every: label + stepper + frequency unit dropdown, all on one line -->
+  <div class="rb-row rb-row--repeat">
     <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate }}</span>
-    <input
-      #intervalIn
-      class="rb-num"
-      type="number"
-      min="1"
-      max="1000"
-      [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate"
-      [value]="model().interval"
-      (input)="setInterval(intervalIn.value)"
-    />
-    <select
-      #freqSel
-      class="rb-sel"
-      [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_FREQ | translate"
-      (change)="setFreq(freqSel.value)"
-    >
-      @for (o of freqOpts; track o.value) {
-        <option
-          [value]="o.value"
-          [selected]="o.value === model().freq"
+    <div class="rb-repeat-controls">
+      <div class="rb-stepper">
+        <button
+          type="button"
+          class="rb-step"
+          [disabled]="model().interval <= 1"
+          (click)="setInterval(model().interval - 1 + '')"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_INTERVAL_DECREMENT | translate"
         >
-          {{ o.label | translate }}
-        </option>
-      }
-    </select>
+          −
+        </button>
+        <input
+          #intervalIn
+          class="rb-step-num"
+          type="number"
+          min="1"
+          max="1000"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_INTERVAL | translate"
+          [value]="model().interval"
+          (input)="setInterval(intervalIn.value)"
+        />
+        <button
+          type="button"
+          class="rb-step"
+          (click)="setInterval(model().interval + 1 + '')"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_INTERVAL_INCREMENT | translate"
+        >
+          +
+        </button>
+      </div>
+      <select
+        #freqSel
+        class="rb-sel rb-sel--freq"
+        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_FREQ | translate"
+        (change)="setFreq(freqSel.value)"
+      >
+        @for (o of freqOpts(); track o.value) {
+          <option
+            [value]="o.value"
+            [selected]="o.value === model().freq"
+          >
+            {{ o.label | translate }}
+          </option>
+        }
+      </select>
+    </div>
   </div>
 
-  <!-- WEEKLY: weekday toggle buttons -->
+  <!-- WEEKLY: weekday circles -->
   @if (model().freq === 'WEEKLY') {
     <div class="rb-field">
       <label>{{ T.F.TASK_REPEAT.F.RRULE_BYDAY | translate }}</label>
-      <div class="rb-toggles">
+      <div class="rb-toggles rb-weekrow">
         @for (w of weekdays; track w.value) {
           <button
             type="button"
@@ -65,7 +86,7 @@
       <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate }}</span>
       <select
         #mMode
-        class="rb-sel rb-sel--wide"
+        class="rb-sel"
         [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate"
         (change)="setMonthlyMode(mMode.value)"
       >
@@ -82,7 +103,6 @@
 
     @if (model().monthlyMode === 'DAY_OF_MONTH') {
       <div class="rb-field">
-        <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate }}</label>
         <div class="rb-toggles rb-toggles--days">
           @for (d of dayGrid; track d) {
             <button
@@ -95,6 +115,8 @@
               {{ d }}
             </button>
           }
+        </div>
+        <div class="rb-toggles rb-day-extras">
           @for (nd of negativeDays; track nd.value) {
             <button
               type="button"
@@ -120,7 +142,6 @@
         </div>
       </div>
     }
-    <!-- nth-weekday rows render in the shared block below (monthly + yearly). -->
     @if (model().monthlyMode === 'WEEKDAYS') {
       <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
     }
@@ -132,7 +153,7 @@
       <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate }}</span>
       <select
         #yMode
-        class="rb-sel rb-sel--wide"
+        class="rb-sel"
         [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate"
         (change)="setYearlyMode(yMode.value)"
       >
@@ -146,12 +167,8 @@
         }
       </select>
     </div>
-    <div class="rb-hint">
-      {{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE_DESCRIPTION | translate }}
-    </div>
     @if (model().yearlyMode === 'DAY_OF_MONTH') {
       <div class="rb-field">
-        <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate }}</label>
         <div class="rb-toggles rb-toggles--days">
           @for (d of dayGrid; track d) {
             <button
@@ -164,6 +181,8 @@
               {{ d }}
             </button>
           }
+        </div>
+        <div class="rb-toggles rb-day-extras">
           @for (nd of negativeDays; track nd.value) {
             <button
               type="button"
@@ -194,7 +213,7 @@
   <!-- Weekday set + "which occurrence" (BYSETPOS) toggles — shared by the
        monthly and yearly WEEKDAYS modes (all bindings are frequency-agnostic). -->
   <ng-template #weekdaySetBlock>
-    <div class="rb-row">
+    <div class="rb-field">
       <div class="rb-toggles">
         <button
           type="button"
@@ -237,7 +256,7 @@
           (change)="setCustomBySetPos(customWhich.value)"
         />
       }
-      <div class="rb-toggles">
+      <div class="rb-toggles rb-weekrow">
         @for (w of weekdays; track w.value) {
           <button
             type="button"
@@ -251,14 +270,14 @@
           </button>
         }
       </div>
-    </div>
-    <div class="rb-hint">
-      {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
+      <div class="rb-hint">
+        {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
+      </div>
     </div>
   </ng-template>
 
   <!-- nth-weekday rows (monthly + yearly): per-weekday ordinals, e.g. the 3rd
-       Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line, + adds more. -->
+       Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line. -->
   @if (isNthMode()) {
     <div class="rb-field">
       <label>{{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate }}</label>
@@ -297,7 +316,7 @@
               (change)="setNthDayCustomPos(rowIdx, customPos.value)"
             />
           }
-          <div class="rb-toggles">
+          <div class="rb-toggles rb-weekrow">
             @for (w of weekdays; track w.value) {
               <button
                 type="button"
@@ -338,211 +357,208 @@
     </div>
   }
 
-  <!-- In months (optional seasonal constraint, any frequency) -->
+  <!-- Ends (segmented) -->
   <div class="rb-field">
-    <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTH | translate }}</label>
-    <div class="rb-toggles rb-toggles--months">
-      @for (m of months; track m.value) {
+    <label>{{ T.F.TASK_REPEAT.F.RRULE_END | translate }}</label>
+    <div class="rb-ends">
+      <div class="rb-seg">
+        @for (o of endOpts; track o.value) {
+          <button
+            type="button"
+            class="rb-seg-btn"
+            [class.active]="o.value === model().endType"
+            [attr.aria-pressed]="o.value === model().endType"
+            (click)="setEndType(o.value)"
+          >
+            {{ o.label | translate }}
+          </button>
+        }
+      </div>
+      @if (model().endType === 'COUNT') {
+        <input
+          #countIn
+          class="rb-num"
+          type="number"
+          min="1"
+          max="1000"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_COUNT | translate"
+          [value]="model().count"
+          (input)="setCount(countIn.value)"
+        />
+      }
+      @if (model().endType === 'UNTIL') {
+        <input
+          #untilIn
+          class="rb-date"
+          type="date"
+          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_UNTIL | translate"
+          [value]="model().until"
+          (input)="setUntil(untilIn.value)"
+        />
+      }
+    </div>
+    @if (engineOff() && model().endType !== 'NEVER') {
+      <div class="rb-hint rb-hint--engine-off">
+        {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_END | translate }}
+      </div>
+    }
+
+    <!-- Schedule type: fixed calendar dates vs. count the interval from completion -->
+    <div class="rb-field">
+      <label>{{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate }}</label>
+      <div class="rb-seg">
         <button
           type="button"
-          class="rb-tgl"
-          [class.active]="model().byMonth.includes(m.value)"
-          [attr.aria-pressed]="model().byMonth.includes(m.value)"
-          [title]="m.full"
-          (click)="toggleMonth(m.value)"
+          class="rb-seg-btn"
+          [class.active]="!fromCompletion()"
+          [attr.aria-pressed]="!fromCompletion()"
+          (click)="setRepeatFromCompletion(false)"
         >
-          {{ m.short }}
+          {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START | translate }}
         </button>
-      }
-    </div>
-    <div class="rb-hint">
-      {{ T.F.TASK_REPEAT.F.RRULE_BYMONTH_DESCRIPTION | translate }}
-    </div>
-  </div>
-
-  <!-- Ends -->
-  <div class="rb-row">
-    <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_END | translate }}</span>
-    <select
-      #endSel
-      class="rb-sel rb-sel--wide"
-      [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END | translate"
-      (change)="setEndType(endSel.value)"
-    >
-      @for (o of endOpts; track o.value) {
-        <option
-          [value]="o.value"
-          [selected]="o.value === model().endType"
+        <button
+          type="button"
+          class="rb-seg-btn"
+          [class.active]="fromCompletion()"
+          [attr.aria-pressed]="fromCompletion()"
+          (click)="setRepeatFromCompletion(true)"
         >
-          {{ o.label | translate }}
-        </option>
-      }
-    </select>
-    @if (model().endType === 'COUNT') {
-      <input
-        #countIn
-        class="rb-num"
-        type="number"
-        min="1"
-        max="1000"
-        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_COUNT | translate"
-        [value]="model().count"
-        (input)="setCount(countIn.value)"
-      />
-    }
-    @if (model().endType === 'UNTIL') {
-      <input
-        #untilIn
-        class="rb-date"
-        type="date"
-        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_UNTIL | translate"
-        [value]="model().until"
-        (input)="setUntil(untilIn.value)"
-      />
-    }
-  </div>
-  @if (engineOff() && model().endType !== 'NEVER') {
-    <div class="rb-hint rb-hint--engine-off">
-      {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_END | translate }}
-    </div>
-  }
-
-  <!-- Schedule type: fixed calendar dates vs. count the interval from completion -->
-  <div class="rb-field">
-    <label>{{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate }}</label>
-    <div class="rb-toggles">
-      <button
-        type="button"
-        class="rb-tgl rb-tgl--wide"
-        [class.active]="!fromCompletion()"
-        [attr.aria-pressed]="!fromCompletion()"
-        (click)="setRepeatFromCompletion(false)"
-      >
-        {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START | translate }}
-      </button>
-      <button
-        type="button"
-        class="rb-tgl rb-tgl--wide"
-        [class.active]="fromCompletion()"
-        [attr.aria-pressed]="fromCompletion()"
-        (click)="setRepeatFromCompletion(true)"
-      >
-        {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION | translate }}
-      </button>
-    </div>
-    <div class="rb-hint">
-      {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESCRIPTION | translate }}
-    </div>
-  </div>
-
-  <!-- NOTE: the live result/preview lives at the dialog bottom (just above the
-       action buttons), not here — see DialogEditTaskRepeatCfgComponent. -->
-
-  <!-- Advanced -->
-  <collapsible
-    [title]="T.F.TASK_REPEAT.F.RRULE_ADVANCED | translate"
-    [isExpanded]="model().showAdvanced"
-    (isExpandedChange)="setShowAdvanced($event)"
-  >
-    <div class="rb-adv">
-      @if (engineOff()) {
-        <div class="rb-hint rb-hint--engine-off">
-          {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_ADVANCED | translate }}
-        </div>
-      }
-      <div class="rb-field">
-        <label>{{ T.F.TASK_REPEAT.F.RRULE_WKST | translate }}</label>
-        <select
-          #wkstSel
-          class="rb-sel rb-sel--wide"
-          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_WKST | translate"
-          (change)="setWkst(wkstSel.value)"
-        >
-          <option
-            value=""
-            [selected]="model().wkst === ''"
-          >
-            {{ T.F.TASK_REPEAT.F.RRULE_WKST_DEFAULT | translate }}
-          </option>
-          @for (o of weekdaySelectOpts; track o.value) {
-            <option
-              [value]="o.value"
-              [selected]="o.value === model().wkst"
-            >
-              {{ o.label }}
-            </option>
-          }
-        </select>
-        <div class="rb-hint">
-          {{ T.F.TASK_REPEAT.F.RRULE_WKST_DESCRIPTION | translate }}
-        </div>
+          {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION | translate }}
+        </button>
       </div>
+      <div class="rb-hint">
+        {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESCRIPTION | translate }}
+      </div>
+    </div>
 
-      <!-- Week numbers / days of year — only meaningful for YEARLY (RFC 5545 §3.3.10) -->
-      @if (model().freq === 'YEARLY') {
+    <!-- Advanced -->
+    <collapsible
+      [title]="T.F.TASK_REPEAT.F.RRULE_ADVANCED | translate"
+      [isExpanded]="model().showAdvanced"
+      (isExpandedChange)="setShowAdvanced($event)"
+    >
+      <div class="rb-adv">
+        @if (engineOff()) {
+          <div class="rb-hint rb-hint--engine-off">
+            {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_ADVANCED | translate }}
+          </div>
+        }
+        <!-- In months (optional seasonal constraint, any frequency) -->
         <div class="rb-field">
-          <label>{{ T.F.TASK_REPEAT.F.RRULE_BYWEEKNO | translate }}</label>
-          <input
-            #bwn
-            class="rb-text"
-            type="text"
-            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO | translate"
-            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_PLACEHOLDER | translate"
-            [value]="model().byWeekNo"
-            (input)="setByWeekNo(bwn.value)"
-          />
+          <label>{{ T.F.TASK_REPEAT.F.RRULE_BYMONTH | translate }}</label>
+          <div class="rb-toggles rb-toggles--months">
+            @for (m of months; track m.value) {
+              <button
+                type="button"
+                class="rb-tgl"
+                [class.active]="model().byMonth.includes(m.value)"
+                [attr.aria-pressed]="model().byMonth.includes(m.value)"
+                [title]="m.full"
+                (click)="toggleMonth(m.value)"
+              >
+                {{ m.short }}
+              </button>
+            }
+          </div>
           <div class="rb-hint">
-            {{ T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_DESCRIPTION | translate }}
+            {{ T.F.TASK_REPEAT.F.RRULE_BYMONTH_DESCRIPTION | translate }}
           </div>
         </div>
 
         <div class="rb-field">
-          <label>{{ T.F.TASK_REPEAT.F.RRULE_BYYEARDAY | translate }}</label>
-          <input
-            #byd
-            class="rb-text"
-            type="text"
-            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY | translate"
-            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_PLACEHOLDER | translate"
-            [value]="model().byYearDay"
-            (input)="setByYearDay(byd.value)"
-          />
+          <label>{{ T.F.TASK_REPEAT.F.RRULE_WKST | translate }}</label>
+          <select
+            #wkstSel
+            class="rb-sel rb-sel--wide"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_WKST | translate"
+            (change)="setWkst(wkstSel.value)"
+          >
+            <option
+              value=""
+              [selected]="model().wkst === ''"
+            >
+              {{ T.F.TASK_REPEAT.F.RRULE_WKST_DEFAULT | translate }}
+            </option>
+            @for (o of weekdaySelectOpts; track o.value) {
+              <option
+                [value]="o.value"
+                [selected]="o.value === model().wkst"
+              >
+                {{ o.label }}
+              </option>
+            }
+          </select>
           <div class="rb-hint">
-            {{ T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_DESCRIPTION | translate }}
+            {{ T.F.TASK_REPEAT.F.RRULE_WKST_DESCRIPTION | translate }}
           </div>
         </div>
-      }
 
-      <div class="rb-field">
-        <label>{{ T.F.TASK_REPEAT.F.RRULE_RAW | translate }}</label>
-        <input
-          #raw
-          class="rb-text rb-text--mono"
-          type="text"
-          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_RAW | translate"
-          [placeholder]="T.F.TASK_REPEAT.F.RRULE_RAW_PLACEHOLDER | translate"
-          [value]="model().rawOverride"
-          (input)="setRawOverride(raw.value)"
-        />
-        <div class="rb-hint">
-          {{ T.F.TASK_REPEAT.F.RRULE_RAW_DESCRIPTION | translate }}
-        </div>
-        <!-- The assembled rule the builder currently emits, with a copy
+        <!-- Week numbers / days of year — only meaningful for YEARLY (RFC 5545 §3.3.10) -->
+        @if (model().freq === 'YEARLY') {
+          <div class="rb-field">
+            <label>{{ T.F.TASK_REPEAT.F.RRULE_BYWEEKNO | translate }}</label>
+            <input
+              #bwn
+              class="rb-text"
+              type="text"
+              [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO | translate"
+              [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_PLACEHOLDER | translate"
+              [value]="model().byWeekNo"
+              (input)="setByWeekNo(bwn.value)"
+            />
+            <div class="rb-hint">
+              {{ T.F.TASK_REPEAT.F.RRULE_BYWEEKNO_DESCRIPTION | translate }}
+            </div>
+          </div>
+
+          <div class="rb-field">
+            <label>{{ T.F.TASK_REPEAT.F.RRULE_BYYEARDAY | translate }}</label>
+            <input
+              #byd
+              class="rb-text"
+              type="text"
+              [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY | translate"
+              [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_PLACEHOLDER | translate"
+              [value]="model().byYearDay"
+              (input)="setByYearDay(byd.value)"
+            />
+            <div class="rb-hint">
+              {{ T.F.TASK_REPEAT.F.RRULE_BYYEARDAY_DESCRIPTION | translate }}
+            </div>
+          </div>
+        }
+
+        <div class="rb-field">
+          <label>{{ T.F.TASK_REPEAT.F.RRULE_RAW | translate }}</label>
+          <input
+            #raw
+            class="rb-text rb-text--mono"
+            type="text"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_RAW | translate"
+            [placeholder]="T.F.TASK_REPEAT.F.RRULE_RAW_PLACEHOLDER | translate"
+            [value]="model().rawOverride"
+            (input)="setRawOverride(raw.value)"
+          />
+          <div class="rb-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_RAW_DESCRIPTION | translate }}
+          </div>
+          <!-- The assembled rule the builder currently emits, with a copy
              affordance — lives here next to the raw override so reading and
              overriding the string happen in one place. -->
-        <div class="rb-built">
-          <code class="rb-built__expr">{{ builtRRule() }}</code>
-          <button
-            mat-icon-button
-            type="button"
-            [title]="T.F.WORKLOG.EXPORT.COPY_TO_CLIPBOARD | translate"
-            [attr.aria-label]="T.F.WORKLOG.EXPORT.COPY_TO_CLIPBOARD | translate"
-            (click)="copyRRule()"
-          >
-            <mat-icon>content_copy</mat-icon>
-          </button>
+          <div class="rb-built">
+            <code class="rb-built__expr">{{ builtRRule() }}</code>
+            <button
+              mat-icon-button
+              type="button"
+              [title]="T.F.WORKLOG.EXPORT.COPY_TO_CLIPBOARD | translate"
+              [attr.aria-label]="T.F.WORKLOG.EXPORT.COPY_TO_CLIPBOARD | translate"
+              (click)="copyRRule()"
+            >
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </collapsible>
+    </collapsible>
+  </div>
 </div>

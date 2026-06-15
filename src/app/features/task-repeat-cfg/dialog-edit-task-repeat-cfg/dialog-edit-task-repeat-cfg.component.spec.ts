@@ -249,7 +249,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       });
 
       // Re-trigger form config initialization
-      (fixture.componentInstance as any)._initializeFormConfig();
+      (fixture.componentInstance as any)._buildQuickSettingOptions();
 
       const monthlyCall = instantCalls.find(
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
@@ -287,7 +287,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         return key;
       });
 
-      (fixture.componentInstance as any)._initializeFormConfig();
+      (fixture.componentInstance as any)._buildQuickSettingOptions();
 
       const monthlyCall = instantCalls.find(
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
@@ -318,7 +318,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         return key;
       });
 
-      (fixture.componentInstance as any)._initializeFormConfig();
+      (fixture.componentInstance as any)._buildQuickSettingOptions();
 
       const monthlyCall = instantCalls.find(
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
@@ -1225,15 +1225,13 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       fixture.detectChanges();
       tick();
 
-      const field = component
-        .essentialFormFields()
-        .find((f) => f.key === 'quickSetting')!;
-      const evalOptions = field.expressionProperties![
-        'templateOptions.options'
-      ] as unknown as (model: Record<string, unknown>) => { value: string }[];
+      // Option building now lives in the chip picker's source method (live
+      // `includeRRule`), not a formly field's expressionProperties.
+      const buildOptions = (): { value: string }[] =>
+        (component as any)._buildQuickSettingOptions();
 
-      // Flag off, nothing loaded yet — option already on offer.
-      expect(evalOptions({}).some((o) => o.value === 'RRULE')).toBe(true);
+      // Custom ('RRULE') is always on offer, even with the engine flag off.
+      expect(buildOptions().some((o) => o.value === 'RRULE')).toBe(true);
 
       // Async load delivers a completion cfg that migrates to builder mode.
       repeatCfgSubject.next({
@@ -1243,7 +1241,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       } as TaskRepeatCfg);
       tick();
       expect(component.repeatCfg().quickSetting).toBe('RRULE');
-      expect(evalOptions({}).some((o) => o.value === 'RRULE')).toBe(true);
+      expect(buildOptions().some((o) => o.value === 'RRULE')).toBe(true);
     }));
 
     it('opens a NO-rrule completion-relative cfg in builder mode (migrates to rrule)', async () => {
@@ -1447,6 +1445,39 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         .args[2] as any;
       expect(savedCfg.rrule).toBe('FREQ=DAILY');
       expect(savedCfg.repeatCycle).toBe('DAILY');
+    });
+  });
+
+  describe('onQuickSettingSelect (chip picker)', () => {
+    // Replaces the old formly-select `change` handler coverage (#5806): the
+    // chip picker now drives quickSetting via onQuickSettingSelect.
+    it('uses the selected start date for date-writing presets (not today)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2099-09-15' }));
+      component.onQuickSettingSelect('MONTHLY_CURRENT_DATE');
+      expect(component.repeatCfg().quickSetting).toBe('MONTHLY_CURRENT_DATE');
+      expect(component.repeatCfg().startDate).toBe('2099-09-15');
+    });
+
+    it('applies weekday flags from the selected start date for weekly presets', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      // 2099-09-14 is a Monday.
+      component.repeatCfg.update((c) => ({ ...c, startDate: '2099-09-14' }));
+      component.onQuickSettingSelect('WEEKLY_CURRENT_WEEKDAY');
+      expect(component.repeatCfg().monday).toBe(true);
+      expect(component.repeatCfg().tuesday).toBe(false);
+    });
+
+    it('switching to Custom (RRULE) keeps the current rrule for the builder', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+      component.onQuickSettingSelect('DAILY');
+      const dailyRule = component.repeatCfg().rrule;
+      component.onQuickSettingSelect('RRULE');
+      expect(component.repeatCfg().quickSetting).toBe('RRULE');
+      expect(component.repeatCfg().rrule).toBe(dailyRule);
     });
   });
 });

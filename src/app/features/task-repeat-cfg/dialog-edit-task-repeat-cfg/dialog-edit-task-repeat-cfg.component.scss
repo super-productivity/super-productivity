@@ -71,12 +71,25 @@ mat-dialog-actions {
   }
 }
 
+// Narrow, centered content column (like the deadline modal) so every control
+// shares one consistent width instead of sizing all over the place.
 .form-wrapper {
-  min-width: 280px;
-  max-width: 620px;
+  width: 100%;
+  min-width: 0;
+  max-width: 420px;
+  margin: 0 auto;
 }
 
-// Live RRULE result/preview, pinned above the dialog action buttons.
+// Divider under the Repeat picker so the recurrence flow reads as its own
+// clean section above the builder.
+repeat-freq-picker {
+  display: block;
+  padding-bottom: var(--s);
+  margin-bottom: var(--s);
+  border-bottom: 1px solid var(--separator-color, var(--extra-border-color));
+}
+
+// Empty-state hint inside the result band (shown when no rule is assembled yet).
 .rrule-result__empty-hint {
   font-size: 12px;
   opacity: 0.7;
@@ -84,21 +97,28 @@ mat-dialog-actions {
   margin-top: var(--s-half);
 }
 
+// Live recurrence summary card, pinned above the action buttons (outside the
+// scroll area), so the evaluated rule stays in view while the form scrolls.
 .rrule-result {
-  margin: var(--s) 0;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 420px;
+  margin: var(--s) auto 0;
   padding: var(--s) var(--s2);
-  border-radius: var(--card-border-radius);
-  background: var(--extra-border-color);
+  border-radius: 10px;
+  background: var(--bg-lightest, var(--extra-border-color));
+  border-left: 3px solid var(--c-primary);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
 
   &__human {
-    font-weight: bold;
+    font-weight: 600;
+    font-size: 14px;
   }
 
   &__next {
     margin-top: var(--s-quarter, 2px);
-    opacity: 0.85;
+    opacity: 0.8;
   }
 
   &__legacy-warning {
@@ -113,9 +133,10 @@ mat-dialog-actions {
   }
 
   &__expr {
-    margin-top: var(--s-quarter, 2px);
+    margin-top: var(--s-half);
     font-family: monospace;
-    opacity: 0.7;
+    font-size: 11px;
+    opacity: 0.55;
     word-break: break-all;
   }
 
