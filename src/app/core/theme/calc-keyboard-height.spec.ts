@@ -115,4 +115,32 @@ describe('calcKeyboardHeight', () => {
       ).toBe(300);
     });
   });
+
+  describe('defensive guards', () => {
+    it('clamps a negative obscured area to 0 (visual viewport taller than the layout viewport, e.g. pinch-zoom)', () => {
+      // visualViewportHeight > innerHeight → obscured is negative; must not
+      // report a negative keyboard height.
+      expect(
+        calcKeyboardHeight({
+          innerHeight: 800,
+          visualViewportHeight: 820,
+          nativeKeyboardHeight: 0,
+          baseInnerHeight: 800,
+        }),
+      ).toBe(0);
+    });
+
+    it('passes through a native height that exceeds the base inner height without flipping negative', () => {
+      // nativeKeyboardHeight > baseInnerHeight (e.g. native measurement carries
+      // an extra inset): nativeCovered must stay positive, not clamp to 0.
+      expect(
+        calcKeyboardHeight({
+          innerHeight: 800,
+          visualViewportHeight: 800,
+          nativeKeyboardHeight: 900,
+          baseInnerHeight: 800,
+        }),
+      ).toBe(900);
+    });
+  });
 });
