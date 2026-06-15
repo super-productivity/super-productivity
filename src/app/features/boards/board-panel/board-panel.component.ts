@@ -20,9 +20,12 @@ import {
   firstSpecificProjectId,
   isAllProjects,
   rewriteTagIdsForPanel,
+  isDateInTimeframe,
+  adjustDateToTimeframe,
+  resolveTimeframeBounds,
 } from '../boards.util';
 import { DateService } from '../../../core/date/date.service';
-import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { select, Store } from '@ngrx/store';
 import {
   selectAllTasksInActiveProjects,
@@ -82,193 +85,6 @@ const getTaskDeadlineDateStr = (
     return task.deadlineDay;
   }
   return null;
-};
-
-const getFutureLogicalDateStr = (days: number, todayStr: string): string => {
-  const [y, m, d] = todayStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + days);
-  return getDbDateStr(date);
-};
-
-const normalizeDateStr = (
-  val: Date | number | string | null | undefined,
-): string | undefined => {
-  if (val === null || val === undefined || val === '') {
-    return undefined;
-  }
-  if (typeof val === 'string' && isDBDateStr(val)) {
-    return val;
-  }
-  return getDbDateStr(val);
-};
-
-const isDateInTimeframe = (
-  dateStr: string,
-  timeframe: string | undefined,
-  daysVal: number | undefined,
-  customStart: string | Date | null | undefined,
-  customEnd: string | Date | null | undefined,
-  todayStr: string,
-  tomorrowStr: string,
-  startOfNextDayDiffMs: number,
-): boolean => {
-  if (!timeframe || timeframe === 'ALL') {
-    return true;
-  }
-  if (timeframe === 'TODAY') {
-    return dateStr === todayStr;
-  }
-  if (timeframe === 'TOMORROW') {
-    return dateStr === tomorrowStr;
-  }
-  if (timeframe === 'NEXT_WEEK') {
-    const start = todayStr;
-    const end = getFutureLogicalDateStr(7, todayStr);
-    return dateStr >= start && dateStr <= end;
-  }
-  if (timeframe === 'NEXT_MONTH') {
-    const start = todayStr;
-    const end = getFutureLogicalDateStr(30, todayStr);
-    return dateStr >= start && dateStr <= end;
-  }
-  if (timeframe === 'NEXT_DAYS') {
-    const start = todayStr;
-    const limit = daysVal ?? 7;
-    const end = getFutureLogicalDateStr(limit, todayStr);
-    return dateStr >= start && dateStr <= end;
-  }
-  if (timeframe === 'AT_LEAST_DAYS_FUTURE') {
-    const limit = daysVal ?? 7;
-    const start = getFutureLogicalDateStr(limit, todayStr);
-    return dateStr >= start;
-  }
-  if (timeframe === 'CUSTOM_RANGE') {
-    const start = normalizeDateStr(customStart);
-    const end = normalizeDateStr(customEnd);
-    if (start && end) {
-      return dateStr >= start && dateStr <= end;
-    }
-    if (start) {
-      return dateStr >= start;
-    }
-    if (end) {
-      return dateStr <= end;
-    }
-    return true;
-  }
-  return true;
-};
-
-const getClosestDateInTimeframe = (
-  currentVal: string | null,
-  timeframe: string | undefined,
-  daysVal: number | undefined,
-  customStart: string | Date | null | undefined,
-  customEnd: string | Date | null | undefined,
-  todayStr: string,
-  tomorrowStr: string,
-): string => {
-  if (!timeframe || timeframe === 'ALL') {
-    return currentVal ?? todayStr;
-  }
-
-  let start: string | undefined;
-  let end: string | undefined;
-
-  if (timeframe === 'TODAY') {
-    start = todayStr;
-    end = todayStr;
-  } else if (timeframe === 'TOMORROW') {
-    start = tomorrowStr;
-    end = tomorrowStr;
-  } else if (timeframe === 'NEXT_WEEK') {
-    start = todayStr;
-    end = getFutureLogicalDateStr(7, todayStr);
-  } else if (timeframe === 'NEXT_MONTH') {
-    start = todayStr;
-    end = getFutureLogicalDateStr(30, todayStr);
-  } else if (timeframe === 'NEXT_DAYS') {
-    start = todayStr;
-    const limit = daysVal ?? 7;
-    end = getFutureLogicalDateStr(limit, todayStr);
-  } else if (timeframe === 'AT_LEAST_DAYS_FUTURE') {
-    const limit = daysVal ?? 7;
-    start = getFutureLogicalDateStr(limit, todayStr);
-  } else if (timeframe === 'CUSTOM_RANGE') {
-    start = normalizeDateStr(customStart);
-    end = normalizeDateStr(customEnd);
-  }
-
-  const refDate = currentVal ?? todayStr;
-  let closestDate = refDate;
-
-  if (start && end) {
-    if (refDate < start) {
-      closestDate = start;
-    } else if (refDate > end) {
-      closestDate = end;
-    }
-  } else if (start) {
-    if (refDate < start) {
-      closestDate = start;
-    }
-  } else if (end) {
-    if (refDate > end) {
-      closestDate = end;
-    }
-  }
-
-  return closestDate;
-};
-
-const adjustDateToTimeframe = (
-  currentVal: string | null,
-  timeframe: string | undefined,
-  daysVal: number | undefined,
-  customStart: string | Date | null | undefined,
-  customEnd: string | Date | null | undefined,
-  todayStr: string,
-  tomorrowStr: string,
-  startOfNextDayDiffMs: number,
-  onNoDateInAllTimeframe: () => void,
-  onUpdateDate: (closestDate: string) => void,
-): void => {
-  const isInTimeframe =
-    currentVal !== null &&
-    isDateInTimeframe(
-      currentVal,
-      timeframe,
-      daysVal,
-      customStart,
-      customEnd,
-      todayStr,
-      tomorrowStr,
-      startOfNextDayDiffMs,
-    );
-
-  if (isInTimeframe) {
-    return;
-  }
-
-  if (!timeframe || timeframe === 'ALL') {
-    if (!currentVal) {
-      onNoDateInAllTimeframe();
-    }
-    return;
-  }
-
-  const closestDate = getClosestDateInTimeframe(
-    currentVal,
-    timeframe,
-    daysVal,
-    customStart,
-    customEnd,
-    todayStr,
-    tomorrowStr,
-  );
-
-  onUpdateDate(closestDate);
 };
 
 @Component({
@@ -379,7 +195,26 @@ export class BoardPanelComponent {
     const nonOrderedTasks: TaskCopy[] = [];
     const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
     const todayStr = this._dateService.todayStr();
-    const tomorrowStr = getDbDateStr(new Date(this._dateService.getLogicalTomorrowMs()));
+
+    const scheduledBounds = resolveTimeframeBounds(
+      {
+        timeframe: panelCfg.scheduledTimeframe,
+        daysVal: panelCfg.scheduledDaysVal,
+        customStart: panelCfg.scheduledCustomStart,
+        customEnd: panelCfg.scheduledCustomEnd,
+      },
+      todayStr,
+    );
+
+    const deadlineBounds = resolveTimeframeBounds(
+      {
+        timeframe: panelCfg.deadlineTimeframe,
+        daysVal: panelCfg.deadlineDaysVal,
+        customStart: panelCfg.deadlineCustomStart,
+        customEnd: panelCfg.deadlineCustomEnd,
+      },
+      todayStr,
+    );
 
     const allFilteredTasks = this.allTasks().filter((task) => {
       let isTaskIncluded = true;
@@ -425,17 +260,7 @@ export class BoardPanelComponent {
           isTaskIncluded = false;
         } else {
           isTaskIncluded =
-            isTaskIncluded &&
-            isDateInTimeframe(
-              schedDateStr,
-              panelCfg.scheduledTimeframe,
-              panelCfg.scheduledDaysVal,
-              panelCfg.scheduledCustomStart,
-              panelCfg.scheduledCustomEnd,
-              todayStr,
-              tomorrowStr,
-              startOfNextDayDiffMs,
-            );
+            isTaskIncluded && isDateInTimeframe(schedDateStr, scheduledBounds);
         }
       }
 
@@ -449,18 +274,7 @@ export class BoardPanelComponent {
         if (!dlDateStr) {
           isTaskIncluded = false;
         } else {
-          isTaskIncluded =
-            isTaskIncluded &&
-            isDateInTimeframe(
-              dlDateStr,
-              panelCfg.deadlineTimeframe,
-              panelCfg.deadlineDaysVal,
-              panelCfg.deadlineCustomStart,
-              panelCfg.deadlineCustomEnd,
-              todayStr,
-              tomorrowStr,
-              startOfNextDayDiffMs,
-            );
+          isTaskIncluded = isTaskIncluded && isDateInTimeframe(dlDateStr, deadlineBounds);
         }
       } else if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
         isTaskIncluded = isTaskIncluded && !hasDeadline;
@@ -607,33 +421,33 @@ export class BoardPanelComponent {
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task) {
-        return;
-      }
+    const task = await this.store
+      .select(selectTaskById, { id: taskId })
+      .pipe(first())
+      .toPromise();
+    if (!task) {
+      return;
+    }
 
+    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
       const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
       const currentVal = getTaskScheduledDateStr(task, startOfNextDayDiffMs);
       const todayStr = this._dateService.todayStr();
-      const tomorrowStr = getDbDateStr(
-        new Date(this._dateService.getLogicalTomorrowMs()),
-      );
 
-      adjustDateToTimeframe(
+      adjustDateToTimeframe({
         currentVal,
-        panelCfg.scheduledTimeframe,
-        panelCfg.scheduledDaysVal,
-        panelCfg.scheduledCustomStart,
-        panelCfg.scheduledCustomEnd,
+        bounds: resolveTimeframeBounds(
+          {
+            timeframe: panelCfg.scheduledTimeframe,
+            daysVal: panelCfg.scheduledDaysVal,
+            customStart: panelCfg.scheduledCustomStart,
+            customEnd: panelCfg.scheduledCustomEnd,
+          },
+          todayStr,
+        ),
         todayStr,
-        tomorrowStr,
-        startOfNextDayDiffMs,
-        () => this.scheduleTask(task),
-        (closestDate) => {
+        onNoDateInAllTimeframe: () => this.scheduleTask(task),
+        onUpdateDate: (closestDate) => {
           this.store.dispatch(
             PlannerActions.planTaskForDay({
               task,
@@ -641,15 +455,16 @@ export class BoardPanelComponent {
             }),
           );
         },
-      );
-    }
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
-      this.store.dispatch(
-        TaskSharedActions.unscheduleTask({
-          id: taskId,
-          isSkipToast: false,
-        }),
-      );
+      });
+    } else if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
+      if (task.dueWithTime || task.dueDay) {
+        this.store.dispatch(
+          TaskSharedActions.unscheduleTask({
+            id: taskId,
+            isSkipToast: false,
+          }),
+        );
+      }
     }
   }
 
@@ -715,33 +530,33 @@ export class BoardPanelComponent {
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
-    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task) {
-        return;
-      }
+    const task = await this.store
+      .select(selectTaskById, { id: taskId })
+      .pipe(first())
+      .toPromise();
+    if (!task) {
+      return;
+    }
 
+    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
       const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
       const currentVal = getTaskDeadlineDateStr(task, startOfNextDayDiffMs);
       const todayStr = this._dateService.todayStr();
-      const tomorrowStr = getDbDateStr(
-        new Date(this._dateService.getLogicalTomorrowMs()),
-      );
 
-      adjustDateToTimeframe(
+      adjustDateToTimeframe({
         currentVal,
-        panelCfg.deadlineTimeframe,
-        panelCfg.deadlineDaysVal,
-        panelCfg.deadlineCustomStart,
-        panelCfg.deadlineCustomEnd,
+        bounds: resolveTimeframeBounds(
+          {
+            timeframe: panelCfg.deadlineTimeframe,
+            daysVal: panelCfg.deadlineDaysVal,
+            customStart: panelCfg.deadlineCustomStart,
+            customEnd: panelCfg.deadlineCustomEnd,
+          },
+          todayStr,
+        ),
         todayStr,
-        tomorrowStr,
-        startOfNextDayDiffMs,
-        () => this.editDeadline(task),
-        (closestDate) => {
+        onNoDateInAllTimeframe: () => this.editDeadline(task),
+        onUpdateDate: (closestDate) => {
           this.store.dispatch(
             TaskSharedActions.setDeadline({
               taskId: task.id,
@@ -750,14 +565,15 @@ export class BoardPanelComponent {
             }),
           );
         },
-      );
-    }
-    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
-      this.store.dispatch(
-        TaskSharedActions.removeDeadline({
-          taskId,
-        }),
-      );
+      });
+    } else if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
+      if (task.deadlineDay || task.deadlineWithTime) {
+        this.store.dispatch(
+          TaskSharedActions.removeDeadline({
+            taskId,
+          }),
+        );
+      }
     }
   }
 }
