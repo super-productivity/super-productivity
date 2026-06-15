@@ -57,28 +57,12 @@ export interface ArchiveSideEffectPort<TAction extends SyncActionLike = SyncActi
   handleOperation(action: TAction): Promise<void> | void;
 }
 
-/**
- * Domain-free sync configuration snapshot.
- *
- * Provider IDs stay plain strings at the package boundary. Host applications can
- * narrow them in their adapter layer.
- */
-
 export interface ConflictUiDialogRequest {
   conflictType: string;
   scenario?: string;
   reason?: string;
   counts?: Record<string, number>;
   timestamps?: Record<string, number>;
-  meta?: SyncPortMeta;
-}
-
-export type ConflictUiNotificationSeverity = 'info' | 'warning' | 'error';
-
-export interface ConflictUiNotification {
-  severity: ConflictUiNotificationSeverity;
-  message: string;
-  reason?: string;
   meta?: SyncPortMeta;
 }
 
