@@ -868,6 +868,35 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
       expect(ids).not.toContain('t-out-of-range');
     });
 
+    it('filters scheduled tasks by AT_LEAST_DAYS_FUTURE timeframe', async () => {
+      await setupWithMockDateService([
+        mkTask({ id: 't-today', dueDay: '2026-06-14' }),
+        mkTask({ id: 't-before', dueDay: '2026-06-17' }),
+        mkTask({ id: 't-at-least', dueDay: '2026-06-19' }),
+        mkTask({ id: 't-future', dueDay: '2026-07-01' }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', {
+        id: 'p',
+        title: 'P',
+        taskIds: [],
+        includedTagIds: [],
+        excludedTagIds: [],
+        taskDoneState: 1,
+        scheduledState: 2,
+        scheduledTimeframe: 'AT_LEAST_DAYS_FUTURE',
+        scheduledDaysVal: 5,
+        isParentTasksOnly: false,
+        projectIds: [''],
+      } as BoardPanelCfg);
+      fixture.detectChanges();
+
+      const ids = component.tasks().map((t) => t.id);
+      expect(ids).not.toContain('t-today');
+      expect(ids).not.toContain('t-before');
+      expect(ids).toContain('t-at-least');
+      expect(ids).toContain('t-future');
+    });
+
     it('filters scheduled tasks by CUSTOM_RANGE timeframe', async () => {
       await setupWithMockDateService([
         mkTask({ id: 't-before', dueDay: '2026-06-10' }),
@@ -1251,6 +1280,35 @@ describe('BoardPanelComponent - drop()', () => {
     );
   });
 
+  it('cross-panel drop on scheduled AT_LEAST_DAYS_FUTURE panel plans for closest bound if scheduled outside', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], dueDay: '2026-06-17' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: 'AT_LEAST_DAYS_FUTURE',
+      scheduledDaysVal: 5,
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      PlannerActions.planTaskForDay({
+        task,
+        day: '2026-06-19', // today (14) + 5 days = 19
+      }),
+    );
+  });
+
   it('cross-panel drop on scheduled CUSTOM_RANGE panel plans for closest date (before custom start)', async () => {
     const task = mkTask({ id: 't1', tagIds: [], dueDay: '2026-06-10' });
     await setup([task]);
@@ -1449,6 +1507,36 @@ describe('BoardPanelComponent - drop()', () => {
         taskId: task.id,
         deadlineDay: '2026-06-21', // today + 7 days
         ...getDeadlineAutoPlanFields(mockDateService, '2026-06-21'),
+      }),
+    );
+  });
+
+  it('cross-panel drop on HasDeadline AT_LEAST_DAYS_FUTURE panel plans deadline for closest bound if deadline outside', async () => {
+    const task = mkTask({ id: 't1', tagIds: [], deadlineDay: '2026-06-17' });
+    await setup([task]);
+    const panelCfg = {
+      id: 'target',
+      title: 'Target',
+      taskIds: [],
+      includedTagIds: [],
+      excludedTagIds: [],
+      taskDoneState: 1,
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: 'AT_LEAST_DAYS_FUTURE',
+      deadlineDaysVal: 5,
+      isParentTasksOnly: false,
+      projectIds: [''],
+    } as any as BoardPanelCfg;
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop(mkDropEvent({ panelCfg, task }));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      TaskSharedActions.setDeadline({
+        taskId: task.id,
+        deadlineDay: '2026-06-19', // today (14) + 5 days = 19
+        ...getDeadlineAutoPlanFields(mockDateService, '2026-06-19'),
       }),
     );
   });

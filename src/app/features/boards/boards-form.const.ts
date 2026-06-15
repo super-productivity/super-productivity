@@ -180,6 +180,10 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
               { value: 'NEXT_WEEK', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
               { value: 'NEXT_MONTH', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
               { value: 'NEXT_DAYS', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_DAYS },
+              {
+                value: 'AT_LEAST_DAYS_FUTURE',
+                label: T.F.BOARDS.FORM.TIMEFRAME_AT_LEAST_DAYS_FUTURE,
+              },
               { value: 'CUSTOM_RANGE', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
             ],
           },
@@ -188,7 +192,9 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           key: 'scheduledDaysVal',
           type: 'input',
           expressions: {
-            hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled} || model.scheduledTimeframe !== 'NEXT_DAYS'`,
+            hide: `model.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled} ||
+              (model.scheduledTimeframe !== 'NEXT_DAYS' &&
+                model.scheduledTimeframe !== 'AT_LEAST_DAYS_FUTURE')`,
           },
           defaultValue: 7,
           props: {
@@ -259,6 +265,10 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
               { value: 'NEXT_WEEK', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
               { value: 'NEXT_MONTH', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
               { value: 'NEXT_DAYS', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_DAYS },
+              {
+                value: 'AT_LEAST_DAYS_FUTURE',
+                label: T.F.BOARDS.FORM.TIMEFRAME_AT_LEAST_DAYS_FUTURE,
+              },
               { value: 'CUSTOM_RANGE', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
             ],
           },
@@ -267,7 +277,9 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           key: 'deadlineDaysVal',
           type: 'input',
           expressions: {
-            hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline} || model.deadlineTimeframe !== 'NEXT_DAYS'`,
+            hide: `model.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline} ||
+              (model.deadlineTimeframe !== 'NEXT_DAYS' &&
+                model.deadlineTimeframe !== 'AT_LEAST_DAYS_FUTURE')`,
           },
           defaultValue: 7,
           props: {

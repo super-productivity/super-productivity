@@ -126,6 +126,11 @@ const isDateInTimeframe = (
     const end = getFutureLogicalDateStr(limit, todayStr);
     return dateStr >= start && dateStr <= end;
   }
+  if (timeframe === 'AT_LEAST_DAYS_FUTURE') {
+    const limit = daysVal ?? 7;
+    const start = getFutureLogicalDateStr(limit, todayStr);
+    return dateStr >= start;
+  }
   if (timeframe === 'CUSTOM_RANGE') {
     if (customStart && customEnd) {
       return dateStr >= customStart && dateStr <= customEnd;
@@ -173,6 +178,9 @@ const getClosestDateInTimeframe = (
     start = todayStr;
     const limit = daysVal ?? 7;
     end = getFutureLogicalDateStr(limit, todayStr);
+  } else if (timeframe === 'AT_LEAST_DAYS_FUTURE') {
+    const limit = daysVal ?? 7;
+    start = getFutureLogicalDateStr(limit, todayStr);
   } else if (timeframe === 'CUSTOM_RANGE') {
     start = customStart;
     end = customEnd;

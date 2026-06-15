@@ -23,6 +23,7 @@ export type BoardPanelTimeframePreset =
   | 'NEXT_WEEK'
   | 'NEXT_MONTH'
   | 'NEXT_DAYS'
+  | 'AT_LEAST_DAYS_FUTURE'
   | 'CUSTOM_RANGE';
 
 export enum BoardPanelCfgTaskTypeFilter {
