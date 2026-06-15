@@ -92,7 +92,6 @@ import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { AssignedToOthersComponent } from '../plainspace/assigned-to-others/assigned-to-others.component';
 import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
-import { PLAINSPACE_PROTOTYPE_ASSIGNED_TO_OTHERS } from '../plainspace/plainspace-prototype-data.const';
 
 // Stable reference used as the toSignal initial value below so the deselect
 // effect can tell "the customized list hasn't emitted yet" apart from a
@@ -226,13 +225,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
   isAssignedToOthersHidden = signal(!!localStorage.getItem(LS.ASSIGNED_TO_OTHERS_HIDDEN));
 
-  // PROTOTYPE: hard-coded sample data for the "Assigned to others" panel. In the
-  // real integration this is fed from a PlainspaceSharedTasksService (only for
-  // projects shared on Plainspace) via project-task-page, and never enters the
-  // SP task store / op-log sync. See docs/plainspace-integration-plan.md.
-  readonly assignedToOthersTasks = signal<PlainspaceSharedTask[]>(
-    PLAINSPACE_PROTOTYPE_ASSIGNED_TO_OTHERS,
-  );
+  // Plainspace tasks assigned to other members of a shared project, fed from
+  // project-task-page (PlainspaceSharedTasksService). Read-only; never enters
+  // the SP task store / op-log sync. Empty for non-shared projects and tags.
+  readonly assignedToOthersTasks = input<PlainspaceSharedTask[]>([]);
   isShowAssignedToOthers = computed(
     () => this.isProjectContext() && this.assignedToOthersTasks().length > 0,
   );

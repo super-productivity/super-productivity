@@ -30,11 +30,14 @@ Productivity (SP) so that:
 > - §6 — the "Share on Plainspace" toggle in the create-project dialog, which
 >   (after sign-in) provisions a (mock) space and a bound provider via
 >   `PlainspaceShareService`.
-> - §9 — the "Assigned to others" UI panel (hard-coded sample data).
+> - §7.2 / §9 — the "Assigned to others" panel is now fed live (mock) data via
+>   `PlainspaceSharedTasksService` (others = `assigneeId !== me`), wired through
+>   `project-task-page` → `work-view`. It only appears for projects that have a
+>   bound, enabled `PLAINSPACE` provider (i.e. shared projects).
 >
-> **Still design-only:** §7.2 live `PlainspaceSharedTasksService` wiring for the
-> panel, §8 write-back, and the real HTTP API + real auth (all
-> `PlainspaceApiService` calls and the login are mocked — see §10).
+> **Still design-only:** §8 write-back, and the real HTTP API + real auth (all
+> `PlainspaceApiService` calls and the login are mocked — see §10). The panel
+> data does not yet auto-poll (loads on project open / provider change).
 
 ---
 
