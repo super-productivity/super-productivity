@@ -32,7 +32,7 @@ import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { destroyQuickAddWindow } from './quick-add-window';
 
-let mainWin: BrowserWindow;
+let mainWin: BrowserWindow | undefined;
 
 // The URL passed to `mainWin.loadURL()` — the single source of truth for
 // "what is the app's own origin?". Read by the will-navigate / will-redirect
@@ -654,7 +654,7 @@ const appCloseHandler = (app: App): void => {
     setIsQuitRequested(false);
 
     // Dereference the window object
-    mainWin = undefined as any;
+    mainWin = undefined;
     mainWinModule.win = undefined;
   });
 

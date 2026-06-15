@@ -20,7 +20,7 @@ import { GlobalConfigService } from './features/config/global-config.service';
 import { TaskWidgetSettingsService } from './features/config/task-widget-settings.service';
 import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
-import { BodyClass, IS_ELECTRON } from './app.constants';
+import { BodyClass, IS_ELECTRON, IS_QUICK_ADD_HUD } from './app.constants';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
 import { firstValueFrom, Subscription } from 'rxjs';
