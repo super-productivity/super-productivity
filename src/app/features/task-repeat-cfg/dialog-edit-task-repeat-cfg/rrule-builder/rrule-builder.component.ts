@@ -212,6 +212,8 @@ export class RruleBuilderComponent implements OnInit {
     this._refMonth = ref.getMonth() + 1;
     this._model.set(rruleToFormModel(this.rrule(), ref));
     this._fromCompletion.set(this.repeatFromCompletion());
+    // Keep an existing custom day list visible (the grid can't represent it).
+    this.showCustomDays.set(this._hasOffGridDays(this._model().monthDays));
   }
 
   private _patch(patch: Partial<RRuleFormModel>): void {
@@ -395,6 +397,19 @@ export class RruleBuilderComponent implements OnInit {
   /** Custom override for the day list — accepts any valid day, e.g. "1,15,-5". */
   setMonthDays(v: string): void {
     this._patch({ monthDays: parseIntList(v, 31) });
+  }
+  // The free-text day list (e.g. "1,15,-5") is hidden behind a "custom…" button:
+  // the grid (1..31) + last-day chips cover the common cases. Revealed on demand,
+  // its input binds `monthDays`, so it opens pre-filled with the selected days.
+  showCustomDays = signal(false);
+  toggleCustomDays(): void {
+    this.showCustomDays.update((v) => !v);
+  }
+  /** Days neither the grid (1..31) nor the last-day chips can show — their
+   *  presence means an existing rule used the custom list, so reveal it. */
+  private _hasOffGridDays(days: number[]): boolean {
+    const chipVals = new Set(this.negativeDays.map((n) => n.value));
+    return days.some((d) => !((d >= 1 && d <= 31) || chipVals.has(d)));
   }
   setEndType(v: string): void {
     this._patch({ endType: v as RRuleFormModel['endType'] });

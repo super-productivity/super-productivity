@@ -129,17 +129,28 @@
             </button>
           }
         </div>
-        <input
-          class="rb-text"
-          type="text"
-          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
-          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
-          [value]="model().monthDays.join(',')"
-          (change)="setMonthDays($any($event.target).value)"
-        />
-        <div class="rb-hint">
-          {{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_DESCRIPTION | translate }}
-        </div>
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide rb-custom-toggle"
+          [class.active]="showCustomDays()"
+          [attr.aria-expanded]="showCustomDays()"
+          (click)="toggleCustomDays()"
+        >
+          {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+        </button>
+        @if (showCustomDays()) {
+          <input
+            class="rb-text"
+            type="text"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
+            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
+            [value]="model().monthDays.join(',')"
+            (change)="setMonthDays($any($event.target).value)"
+          />
+          <div class="rb-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_DESCRIPTION | translate }}
+          </div>
+        }
       </div>
     }
     @if (model().monthlyMode === 'WEEKDAYS') {
@@ -195,14 +206,25 @@
             </button>
           }
         </div>
-        <input
-          class="rb-text"
-          type="text"
-          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
-          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
-          [value]="model().monthDays.join(',')"
-          (change)="setMonthDays($any($event.target).value)"
-        />
+        <button
+          type="button"
+          class="rb-tgl rb-tgl--wide rb-custom-toggle"
+          [class.active]="showCustomDays()"
+          [attr.aria-expanded]="showCustomDays()"
+          (click)="toggleCustomDays()"
+        >
+          {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+        </button>
+        @if (showCustomDays()) {
+          <input
+            class="rb-text"
+            type="text"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
+            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
+            [value]="model().monthDays.join(',')"
+            (change)="setMonthDays($any($event.target).value)"
+          />
+        }
       </div>
     }
     @if (model().yearlyMode === 'WEEKDAYS') {

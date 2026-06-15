@@ -229,6 +229,12 @@
   margin-top: var(--s-half);
 }
 
+// "custom…" reveal for the free-text day list — quiet, set apart from the grid.
+.rb-custom-toggle {
+  margin-top: var(--s-half);
+  opacity: 0.85;
+}
+
 .rb-weekrow {
   gap: var(--s-half);
 }
