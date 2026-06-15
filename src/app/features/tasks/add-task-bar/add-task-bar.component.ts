@@ -171,14 +171,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   activatedIssueTask = toSignal(this.activatedSuggestion$, { initialValue: null });
 
   tempPlaceholder = signal<string | null>(null);
-  placeholderText = computed(() => {
-    if (this.tempPlaceholder()) {
-      return this.tempPlaceholder()!;
-    }
-    return this.isSearchMode()
-      ? this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH)
-      : this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE);
-  });
   private _tempPlaceholderTimeout?: number;
 
   // Computed values
@@ -310,6 +302,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   ngOnDestroy(): void {
     window.clearTimeout(this._focusTimeout);
     window.clearTimeout(this._autocompleteTimeout);
+    window.clearTimeout(this._tempPlaceholderTimeout);
     document.body.classList.remove(BodyClass.isAddTaskBarOpen);
   }
 
@@ -907,7 +900,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     // Trigger temporary placeholder text "Task added successfully" in faint gray
     const truncatedTitle = title ? truncate(title, 20) : '';
     this.tempPlaceholder.set(
-      this._translateService.instant(T.GLOBAL_SNACK.ADD_TASK_SUCCESS, {
+      this._translateService.instant(T.F.TASK.ADD_TASK_BAR.ADD_TASK_SUCCESS, {
         title: truncatedTitle,
       }),
     );
