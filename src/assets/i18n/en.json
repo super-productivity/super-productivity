@@ -1667,6 +1667,8 @@
         "CREATE_NEW_TAGS": "Create new tags",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
+        "NOTE_BUTTON": "Note",
+        "NOTE_PLACEHOLDER": "Add a note… (Ctrl+Enter to add task)",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m ",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "REPEAT_BUTTON": "Repeat",
@@ -1687,7 +1689,8 @@
         "TOOLTIP_CLEAR_REPEAT": "Clear repeat setting",
         "TOOLTIP_CLEAR_TAGS": "Clear tags",
         "TOOLTIP_DISABLE_SEARCH": "Disable issue search (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)",
+        "TOOLTIP_NOTE": "Add note (Ctrl+Enter)"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",

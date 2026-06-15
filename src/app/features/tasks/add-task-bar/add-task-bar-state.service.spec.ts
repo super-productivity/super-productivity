@@ -681,5 +681,23 @@ describe('AddTaskBarStateService', () => {
       expect(service.state().time).toBe(null);
       expect(service.state().isDateExplicitlyCleared).toBe(true);
     });
+
+    it('should clear the note text but keep the panel expanded', () => {
+      service.isNoteExpanded.set(true);
+      service.noteTxt.set('Some note');
+
+      service.resetAfterAdd();
+
+      expect(service.noteTxt()).toBe('');
+      // Expanded state is intentionally preserved for consecutive note-tasks
+      expect(service.isNoteExpanded()).toBe(true);
+    });
+  });
+
+  describe('note', () => {
+    it('should default to empty and collapsed', () => {
+      expect(service.noteTxt()).toBe('');
+      expect(service.isNoteExpanded()).toBe(false);
+    });
   });
 });
