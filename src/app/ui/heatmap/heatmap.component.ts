@@ -2,18 +2,18 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
-import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { T } from '../../t.const';
-import { HEATMAP_TOOLTIP_SHOW_DELAY } from './heatmap.const';
 
 export interface DayData {
   date: Date;
@@ -59,13 +59,42 @@ export interface HeatmapViewData extends HeatmapData {
   styleUrls: ['./heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [TranslatePipe, MatIcon, MatIconButton, MatTooltip],
+  imports: [TranslatePipe, MatIcon, MatIconButton],
 })
 export class HeatmapComponent {
   readonly T = T;
-  readonly TOOLTIP_SHOW_DELAY = HEATMAP_TOOLTIP_SHOW_DELAY;
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
+  private readonly _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  // Single shared tooltip: instead of a matTooltip overlay per cell (which
+  // stacked into a trail on a fast sweep across the dense grid), one readout
+  // follows the hovered/focused cell. Positioned relative to `.heatmap-container`
+  // (the non-scrolling root), so a horizontal scroll of the month strip never
+  // strands a stale overlay.
+  readonly tip = signal<{ x: number; y: number; text: string } | null>(null);
+
+  showTip(day: DayData | null, ev: Event): void {
+    const text = this.getDayTitle(day);
+    const cell = ev.currentTarget as HTMLElement | null;
+    const container = this._elRef.nativeElement.querySelector(
+      '.heatmap-container',
+    ) as HTMLElement | null;
+    if (!text || !cell || !container) {
+      this.tip.set(null);
+      return;
+    }
+    const cr = cell.getBoundingClientRect();
+    const hr = container.getBoundingClientRect();
+    const halfWidth = cr.width / 2;
+    const x = cr.left - hr.left + halfWidth;
+    const y = cr.top - hr.top;
+    this.tip.set({ x, y, text });
+  }
+
+  hideTip(): void {
+    this.tip.set(null);
+  }
 
   readonly data = input.required<HeatmapData | null>();
   readonly label = input<string>('');

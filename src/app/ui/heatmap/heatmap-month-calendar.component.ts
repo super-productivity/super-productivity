@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
   output,
@@ -10,13 +11,11 @@ import {
 import { DateAdapter } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
-import { MatTooltip } from '@angular/material/tooltip';
 import { DayData } from './heatmap.component';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
-import { HEATMAP_TOOLTIP_SHOW_DELAY } from './heatmap.const';
 
 interface CalCell {
   dateStr: string;
@@ -37,13 +36,40 @@ interface CalCell {
   styleUrls: ['./heatmap-month-calendar.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [MatIcon, MatIconButton, MatTooltip, TranslatePipe],
+  imports: [MatIcon, MatIconButton, TranslatePipe],
 })
 export class HeatmapMonthCalendarComponent {
   readonly T = T;
-  readonly TOOLTIP_SHOW_DELAY = HEATMAP_TOOLTIP_SHOW_DELAY;
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
+  private readonly _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  // Single shared tooltip (see HeatmapComponent): one readout follows the
+  // hovered/focused cell instead of a matTooltip overlay per cell, which trailed
+  // on a fast sweep across the grid.
+  readonly tip = signal<{ x: number; y: number; text: string } | null>(null);
+
+  showTip(cell: CalCell, ev: Event): void {
+    const text = this.getCellTitle(cell);
+    const el = ev.currentTarget as HTMLElement | null;
+    const container = this._elRef.nativeElement.querySelector(
+      '.month-cal',
+    ) as HTMLElement | null;
+    if (!text || !el || !container) {
+      this.tip.set(null);
+      return;
+    }
+    const cr = el.getBoundingClientRect();
+    const hr = container.getBoundingClientRect();
+    const halfWidth = cr.width / 2;
+    const x = cr.left - hr.left + halfWidth;
+    const y = cr.top - hr.top;
+    this.tip.set({ x, y, text });
+  }
+
+  hideTip(): void {
+    this.tip.set(null);
+  }
 
   readonly dayMap = input.required<Map<string, DayData>>();
   readonly rangeStart = input.required<Date>();

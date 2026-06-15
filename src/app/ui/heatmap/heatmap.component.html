@@ -4,6 +4,15 @@
       class="heatmap-container"
       [class.is-interactive]="interactive()"
     >
+      @if (tip(); as t) {
+        <div
+          class="heatmap-tip"
+          [style.left.px]="t.x"
+          [style.top.px]="t.y"
+        >
+          {{ t.text }}
+        </div>
+      }
       @if (navLabel()) {
         <div class="heatmap-nav">
           <!-- Arrows only when there is anywhere to go — a single navigable
@@ -46,12 +55,13 @@
                     @for (day of week.days; track $index) {
                       <div
                         [class]="getDayClass(day)"
-                        [matTooltip]="getDayTitle(day)"
-                        matTooltipPosition="above"
-                        [matTooltipShowDelay]="TOOLTIP_SHOW_DELAY"
                         [attr.role]="interactive() && day ? 'button' : null"
                         [attr.tabindex]="interactive() && day ? 0 : null"
-                        [attr.aria-label]="interactive() && day ? getDayTitle(day) : null"
+                        [attr.aria-label]="day ? getDayTitle(day) : null"
+                        (mouseenter)="showTip(day, $event)"
+                        (mouseleave)="hideTip()"
+                        (focus)="showTip(day, $event)"
+                        (blur)="hideTip()"
                         (click)="interactive() && day && dayClick.emit(day)"
                         (keydown.enter)="interactive() && onDayKeydown($event, day)"
                         (keydown.space)="interactive() && onDayKeydown($event, day)"

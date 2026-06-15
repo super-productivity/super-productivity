@@ -2,6 +2,15 @@
   class="month-cal"
   [class.is-interactive]="interactive()"
 >
+  @if (tip(); as t) {
+    <div
+      class="heatmap-tip"
+      [style.left.px]="t.x"
+      [style.top.px]="t.y"
+    >
+      {{ t.text }}
+    </div>
+  }
   <div class="month-cal__header">
     <button
       mat-icon-button
@@ -33,12 +42,13 @@
       @for (cell of week; track cell.dateStr) {
         <div
           [class]="getCellClass(cell)"
-          [matTooltip]="getCellTitle(cell)"
-          matTooltipPosition="above"
-          [matTooltipShowDelay]="TOOLTIP_SHOW_DELAY"
           [attr.role]="isCellInteractive(cell) ? 'button' : null"
           [attr.tabindex]="isCellInteractive(cell) ? 0 : null"
-          [attr.aria-label]="isCellInteractive(cell) ? getCellTitle(cell) : null"
+          [attr.aria-label]="!cell.isOtherMonth ? getCellTitle(cell) : null"
+          (mouseenter)="showTip(cell, $event)"
+          (mouseleave)="hideTip()"
+          (focus)="showTip(cell, $event)"
+          (blur)="hideTip()"
           (click)="onCellClick(cell)"
           (keydown.enter)="isCellInteractive(cell) && onCellKeydown($event, cell)"
           (keydown.space)="isCellInteractive(cell) && onCellKeydown($event, cell)"
