@@ -420,32 +420,55 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     const tDate = new Date();
     tDate.setMinutes(0, 0, 0);
 
+    let targetDate = tDate;
+
     switch (option) {
       case 'today':
-        this.selectedDate = tDate;
+        targetDate = tDate;
         break;
       case 'tomorrow':
-        const tomorrow = tDate;
+        const tomorrow = new Date(tDate);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        this.selectedDate = tomorrow;
+        targetDate = tomorrow;
         break;
       case 'nextWeek':
-        const nextFirstDayOfWeek = tDate;
+        const nextFirstDayOfWeek = new Date(tDate);
         const dayOffset =
           (this._dateAdapter.getFirstDayOfWeek() -
             this._dateAdapter.getDayOfWeek(nextFirstDayOfWeek) +
             7) %
             7 || 7;
         nextFirstDayOfWeek.setDate(nextFirstDayOfWeek.getDate() + dayOffset);
-        this.selectedDate = nextFirstDayOfWeek;
+        targetDate = nextFirstDayOfWeek;
         break;
       case 'nextMonth':
-        const nextMonth = tDate;
+        const nextMonth = new Date(tDate);
         nextMonth.setDate(1);
         nextMonth.setMonth(nextMonth.getMonth() + 1);
-        this.selectedDate = nextMonth;
+        targetDate = nextMonth;
         break;
     }
+
+    let clampedDate = new Date(targetDate);
+    if (this.minDate) {
+      const minD = new Date(this.minDate);
+      minD.setHours(0, 0, 0, 0);
+      const targetD = new Date(targetDate);
+      targetD.setHours(0, 0, 0, 0);
+      if (targetD < minD) {
+        clampedDate = new Date(this.minDate);
+      }
+    }
+    if (this.maxDate) {
+      const maxD = new Date(this.maxDate);
+      maxD.setHours(23, 59, 59, 999);
+      const targetD = new Date(targetDate);
+      targetD.setHours(23, 59, 59, 999);
+      if (targetD > maxD) {
+        clampedDate = new Date(this.maxDate);
+      }
+    }
+    this.selectedDate = clampedDate;
 
     if (this.data.isSubmitOnQuickAccess !== false) {
       this.submit();
