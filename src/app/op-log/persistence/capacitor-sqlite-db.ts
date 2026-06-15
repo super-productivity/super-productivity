@@ -24,30 +24,52 @@
  */
 import type { SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { SqliteDb } from './sqlite-op-log-adapter';
+import { createConnectionSerializer } from './connection-serializer';
 
-/** No-encryption mode string the plugin expects for `createConnection`. */
+/**
+ * No-encryption mode string the plugin expects for `createConnection`.
+ * Deliberately matches the existing IndexedDB `SUP_OPS` posture (also
+ * unencrypted-at-rest in the app-private store) — this migration moves the
+ * op-log off an evictable store, it does not change its encryption stance.
+ * Encryption-at-rest (SQLCipher) is a separate, future track.
+ */
 const NO_ENCRYPTION = 'no-encryption';
 
 export class CapacitorSqliteDb implements SqliteDb {
   private _conn?: SQLiteDBConnection;
   private _openPromise?: Promise<SQLiteDBConnection>;
+  private _sqlite?: SQLiteConnection;
   // Connection-level serializer (see SqliteDb.runExclusive). One SQLite
   // connection has one transaction context, so every adapter op over the shared
-  // connection is chained onto this tail — never interleaved.
-  private _opChain: Promise<unknown> = Promise.resolve();
+  // connection is chained — never interleaved.
+  private readonly _runExclusive = createConnectionSerializer();
 
   constructor(private readonly _dbName: string) {}
 
   runExclusive<T>(fn: () => Promise<T>): Promise<T> {
-    // Run `fn` after whatever is queued (regardless of its outcome), and advance
-    // the tail to a never-rejecting settle so one failed op can't wedge the
-    // queue or leak its rejection to the next caller.
-    const result = this._opChain.then(fn, fn);
-    this._opChain = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
+    return this._runExclusive(fn);
+  }
+
+  /**
+   * Drop the connection so the next op reopens a clean handle (see
+   * {@link SqliteDb.reset}). Best-effort: fully closes + removes the plugin's
+   * connection entry so any lingering open transaction is rolled back; a close
+   * failure is non-fatal because the next `_open()`'s consistency check + the
+   * create/retrieve fallback re-establish the connection anyway.
+   */
+  async reset(): Promise<void> {
+    const sqlite = this._sqlite;
+    this._conn = undefined;
+    this._openPromise = undefined;
+    this._sqlite = undefined;
+    if (!sqlite) {
+      return;
+    }
+    try {
+      await sqlite.closeConnection(this._dbName, false);
+    } catch {
+      // Non-fatal — the next _open() reconciles via checkConnectionsConsistency.
+    }
   }
 
   private _ensureOpen(): Promise<SQLiteDBConnection> {
@@ -75,6 +97,8 @@ export class CapacitorSqliteDb implements SqliteDb {
     const { CapacitorSQLite, SQLiteConnection } =
       await import('@capacitor-community/sqlite');
     const sqlite = new SQLiteConnection(CapacitorSQLite);
+    // Kept so reset() can closeConnection() to roll back a wedged transaction.
+    this._sqlite = sqlite;
     const readonly = false;
     // A fresh `SQLiteConnection` starts with an EMPTY JS connection map, but on a
     // WebView reload the NATIVE side may still hold an open `SUP_OPS` connection

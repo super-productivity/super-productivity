@@ -1,6 +1,7 @@
 import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
 import { SqliteOpLogAdapter, SqliteDb } from './sqlite-op-log-adapter';
 import { createSqlJsDb } from './sql-js-db.test-helper';
+import { createConnectionSerializer } from './connection-serializer';
 import { STORE_NAMES, SINGLETON_KEY } from './db-keys.const';
 import {
   bootstrapNativeOpLogBackend,
@@ -53,22 +54,12 @@ const failOnceDb = (db: SqliteDb, pattern: RegExp): SqliteDb => {
   };
 };
 
-/** Add a real promise-chain serializer to a SqliteDb (what CapacitorSqliteDb does). */
-const withMutex = (db: SqliteDb): SqliteDb => {
-  let chain: Promise<unknown> = Promise.resolve();
-  return {
-    run: (sql, params) => db.run(sql, params),
-    query: (sql, params) => db.query(sql, params),
-    runExclusive: <T>(fn: () => Promise<T>): Promise<T> => {
-      const result = chain.then(fn, fn);
-      chain = result.then(
-        () => undefined,
-        () => undefined,
-      );
-      return result;
-    },
-  };
-};
+/** Add the real production serializer to a SqliteDb (what CapacitorSqliteDb does). */
+const withMutex = (db: SqliteDb): SqliteDb => ({
+  run: (sql, params) => db.run(sql, params),
+  query: (sql, params) => db.query(sql, params),
+  runExclusive: createConnectionSerializer(),
+});
 
 describe('native-sqlite-backend', () => {
   describe('shouldUseNativeSqliteOpLogBackend', () => {

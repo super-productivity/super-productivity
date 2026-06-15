@@ -768,3 +768,61 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
     expect((adapter as OpLogDbAdapter).adoptConnection).toBeUndefined();
   });
 });
+/**
+ * Transaction-failure recovery. A `COMMIT` can fail (e.g. SQLITE_BUSY); the
+ * adapter rolls back. If `ROLLBACK` *also* fails the connection may still hold
+ * the open transaction, which would wedge every later `BEGIN` — so the adapter
+ * resets the connection (when the backend offers {@link SqliteDb.reset}).
+ */
+describe('SqliteOpLogAdapter — transaction failure recovery', () => {
+  /** A fake whose COMMIT (and optionally ROLLBACK) reject, tracking reset() calls. */
+  const makeFlakyDb = (
+    failing: { commit?: boolean; rollback?: boolean } = {},
+  ): { db: SqliteDb; calls: string[]; resetCount: () => number } => {
+    const calls: string[] = [];
+    let resetCalls = 0;
+    const db: SqliteDb = {
+      run: (sql: string) => {
+        calls.push(sql);
+        if (sql === 'COMMIT' && failing.commit) {
+          return Promise.reject(new Error('commit failed'));
+        }
+        if (sql === 'ROLLBACK' && failing.rollback) {
+          return Promise.reject(new Error('rollback failed'));
+        }
+        return Promise.resolve({ changes: 0 });
+      },
+      query: () => Promise.resolve([]),
+      reset: () => {
+        resetCalls++;
+        return Promise.resolve();
+      },
+    };
+    return { db, calls, resetCount: () => resetCalls };
+  };
+
+  it('resets the connection when COMMIT and ROLLBACK both fail', async () => {
+    const { db, calls, resetCount } = makeFlakyDb({ commit: true, rollback: true });
+    const adapter = new SqliteOpLogAdapter(db);
+
+    await expectAsync(
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', async () => undefined),
+    ).toBeRejected();
+
+    expect(calls).toContain('BEGIN IMMEDIATE');
+    expect(calls).toContain('COMMIT');
+    expect(calls).toContain('ROLLBACK');
+    expect(resetCount()).toBe(1);
+  });
+
+  it('does NOT reset when the fallback ROLLBACK succeeds', async () => {
+    const { db, resetCount } = makeFlakyDb({ commit: true });
+    const adapter = new SqliteOpLogAdapter(db);
+
+    await expectAsync(
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', async () => undefined),
+    ).toBeRejected();
+
+    expect(resetCount()).toBe(0);
+  });
+});

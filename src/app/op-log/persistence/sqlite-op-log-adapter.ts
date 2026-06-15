@@ -103,6 +103,15 @@ export interface SqliteDb {
    * their work separately.
    */
   runExclusive?<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Optional connection-recovery hook. If a transaction's `COMMIT` *and* its
+   * fallback `ROLLBACK` both fail, the connection may still hold an open
+   * transaction that would make every later `BEGIN` throw "transaction within a
+   * transaction" and wedge the backend. The adapter calls this to drop the
+   * connection so the next op reopens clean. In-process backends (the sql.js
+   * test stand-in) may omit it — there the failure mode does not arise.
+   */
+  reset?(): Promise<void>;
 }
 
 /**
@@ -749,14 +758,31 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
         await this._db.run('COMMIT');
         return result;
       } catch (e) {
-        try {
-          await this._db.run('ROLLBACK');
-        } catch {
-          // Already rolled back / no active transaction.
-        }
+        await this._rollback();
         return mapSqliteError(e);
       }
     });
+  }
+
+  /**
+   * Best-effort rollback of the open transaction. If `ROLLBACK` itself fails the
+   * connection may still hold the transaction, which would make the next `BEGIN`
+   * throw "transaction within a transaction" and wedge every later op — so we
+   * fall back to {@link SqliteDb.reset} (when the backend offers it) to drop the
+   * connection and force a clean reopen.
+   */
+  private async _rollback(): Promise<void> {
+    try {
+      await this._db.run('ROLLBACK');
+      return;
+    } catch {
+      // ROLLBACK failed — recover via a connection reset below.
+    }
+    try {
+      await this._db.reset?.();
+    } catch {
+      // Nothing more we can safely do here.
+    }
   }
 }
 
