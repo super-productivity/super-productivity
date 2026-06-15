@@ -4,6 +4,7 @@ import {
   KeyboardLayout,
   NavigatorWithKeyboard,
 } from './keyboard-layout.service';
+import { firstValueFrom } from 'rxjs';
 
 describe('KeyboardLayoutService', () => {
   let service: KeyboardLayoutService;
@@ -35,6 +36,22 @@ describe('KeyboardLayoutService', () => {
       expect(service.layout.size).toBe(2);
       expect(service.layout.get('KeyA')).toBe('a');
       expect(service.layout.get('KeyB')).toBe('b');
+    });
+  });
+
+  describe('layoutSnapshot', () => {
+    it('should return a serializable copy of the current layout', () => {
+      service.setLayout(
+        new Map([
+          ['KeyA', 'a'],
+          ['KeyZ', 'y'],
+        ]),
+      );
+
+      expect(service.layoutSnapshot).toEqual([
+        ['KeyA', 'a'],
+        ['KeyZ', 'y'],
+      ]);
     });
   });
 
@@ -192,6 +209,26 @@ describe('KeyboardLayoutService', () => {
       expect(service.layout.size).toBe(1);
       expect(service.layout.get('KeyZ')).toBe('z');
       expect(service.layout.has('KeyX')).toBe(false);
+    });
+
+    it('should emit the updated layout snapshot after saving', async () => {
+      const mockLayoutMap = new Map([['KeyZ', 'y']]);
+
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {
+          keyboard: {
+            getLayoutMap: () => Promise.resolve(mockLayoutMap),
+          },
+        } as NavigatorWithKeyboard,
+        writable: true,
+        configurable: true,
+      });
+
+      const emittedLayout = firstValueFrom(service.layoutChanges$);
+
+      await service.saveUserLayout();
+
+      expect(await emittedLayout).toEqual([['KeyZ', 'y']]);
     });
   });
 });

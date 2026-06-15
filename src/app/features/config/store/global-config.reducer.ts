@@ -96,6 +96,7 @@ export const selectPomodoroConfig = createConfigSectionSelector('pomodoro');
 export const selectFlowtimeConfig = createConfigSectionSelector('flowtime');
 export const selectReminderConfig = createConfigSectionSelector('reminder');
 export const selectAppFeaturesConfig = createConfigSectionSelector('appFeatures');
+export const selectKeyboardConfig = createConfigSectionSelector('keyboard');
 export const selectIsFocusModeEnabled = createSelector(
   selectConfigFeatureState,
   (cfg): boolean =>

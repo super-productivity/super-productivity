@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
 
 export interface NavigatorWithKeyboard {
   keyboard?: NavigatorKeyboard;
@@ -15,6 +16,7 @@ export interface NavigatorKeyboard {
  * See https://developer.mozilla.org/en-US/docs/Web/API/KeyboardLayoutMap#browser_compatibility
  */
 export type KeyboardLayout = Map<string, string>;
+export type KeyboardLayoutSnapshot = readonly (readonly [string, string])[];
 
 /**
  * Service that manages the user's keyboard layout mapping.
@@ -29,6 +31,7 @@ export type KeyboardLayout = Map<string, string>;
 })
 export class KeyboardLayoutService {
   private _layout: KeyboardLayout = new Map();
+  private _layoutChanges$ = new Subject<KeyboardLayoutSnapshot>();
 
   /**
    * Gets the current keyboard layout map.
@@ -36,6 +39,14 @@ export class KeyboardLayoutService {
    */
   get layout(): KeyboardLayout {
     return this._layout;
+  }
+
+  get layoutSnapshot(): KeyboardLayoutSnapshot {
+    return Array.from(this._layout.entries());
+  }
+
+  get layoutChanges$(): Observable<KeyboardLayoutSnapshot> {
+    return this._layoutChanges$.asObservable();
   }
 
   /**
@@ -54,6 +65,7 @@ export class KeyboardLayoutService {
     const kbLayout = await keyboard.getLayoutMap();
     this._layout.clear();
     kbLayout.forEach((value, key) => this._layout.set(key, value));
+    this._emitLayoutChange();
   }
 
   /**
@@ -71,5 +83,10 @@ export class KeyboardLayoutService {
   setLayout(layout: KeyboardLayout): void {
     this._layout.clear();
     layout.forEach((value, key) => this._layout.set(key, value));
+    this._emitLayoutChange();
+  }
+
+  private _emitLayoutChange(): void {
+    this._layoutChanges$.next(this.layoutSnapshot);
   }
 }

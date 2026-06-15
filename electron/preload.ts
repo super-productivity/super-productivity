@@ -218,8 +218,8 @@ const ea: ElectronAPI = {
   updateTaskWidgetSettings: (cfg) => _send('UPDATE_TASK_WIDGET_SETTINGS', cfg),
   updateTitleBarDarkMode: (isDarkMode: boolean) =>
     _send('UPDATE_TITLE_BAR_DARK_MODE', isDarkMode),
-  registerGlobalShortcuts: (keyboardCfg) =>
-    _send('REGISTER_GLOBAL_SHORTCUTS', keyboardCfg),
+  registerGlobalShortcuts: (keyboardCfg, keyboardLayout) =>
+    _send('REGISTER_GLOBAL_SHORTCUTS', keyboardCfg, keyboardLayout),
   showFullScreenBlocker: (args) => _send('FULL_SCREEN_BLOCKER', args),
 
   makeJiraRequest: (args) => _send('JIRA_MAKE_REQUEST_EVENT', args),

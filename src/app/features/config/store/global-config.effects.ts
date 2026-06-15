@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, InjectionToken } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
@@ -21,6 +21,7 @@ import { KeyboardConfig } from '../keyboard-config.model';
 import { updateGlobalConfigSection } from './global-config.actions';
 import {
   selectConfigFeatureState,
+  selectKeyboardConfig,
   selectLocalizationConfig,
 } from './global-config.reducer';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
@@ -30,6 +31,12 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { Log } from '../../../core/log';
+import { KeyboardLayoutService } from '../../../core/keyboard-layout/keyboard-layout.service';
+
+export const IS_ELECTRON_TOKEN = new InjectionToken<boolean>('IS_ELECTRON_TOKEN', {
+  providedIn: 'root',
+  factory: () => IS_ELECTRON,
+});
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -39,6 +46,8 @@ export class GlobalConfigEffects {
   private _snackService = inject(SnackService);
   private _store = inject(Store);
   private _userProfileService = inject(UserProfileService);
+  private _keyboardLayoutService = inject(KeyboardLayoutService);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
 
   snackUpdate$ = createEffect(
     () =>
@@ -65,11 +74,21 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
-        filter(({ sectionKey, sectionCfg }) => IS_ELECTRON && sectionKey === 'keyboard'),
-        tap(({ sectionKey, sectionCfg }) => {
+        filter(({ sectionKey }) => this._isElectron && sectionKey === 'keyboard'),
+        tap(({ sectionCfg }) => {
           const keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
-          window.ea.registerGlobalShortcuts(keyboardCfg);
+          this._registerGlobalShortcuts(keyboardCfg);
         }),
+      ),
+    { dispatch: false },
+  );
+
+  reregisterGlobalShortcutsOnKeyboardLayoutChange$ = createEffect(
+    () =>
+      this._keyboardLayoutService.layoutChanges$.pipe(
+        filter(() => this._isElectron),
+        withLatestFrom(this._store.select(selectKeyboardConfig)),
+        tap(([, keyboardCfg]) => this._registerGlobalShortcuts(keyboardCfg)),
       ),
     { dispatch: false },
   );
@@ -78,13 +97,13 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(loadAllData),
-        filter(() => IS_ELECTRON),
+        filter(() => this._isElectron),
         tap((action) => {
           const appDataComplete = action.appDataComplete;
           const keyboardCfg: KeyboardConfig = (
             appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG
           ).keyboard;
-          window.ea.registerGlobalShortcuts(keyboardCfg);
+          this._registerGlobalShortcuts(keyboardCfg);
         }),
       ),
     { dispatch: false },
@@ -258,4 +277,11 @@ export class GlobalConfigEffects {
       ),
     { dispatch: false },
   );
+
+  private _registerGlobalShortcuts(keyboardCfg: KeyboardConfig): void {
+    window.ea.registerGlobalShortcuts(
+      keyboardCfg,
+      this._keyboardLayoutService.layoutSnapshot,
+    );
+  }
 }

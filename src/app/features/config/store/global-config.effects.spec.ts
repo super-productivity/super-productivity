@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { Action } from '@ngrx/store';
 import { GlobalConfigEffects } from './global-config.effects';
+import { IS_ELECTRON_TOKEN } from './global-config.effects';
 import { DateService } from 'src/app/core/date/date.service';
 import { LanguageService } from '../../../core/language/language.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -15,12 +16,18 @@ import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
+import { KeyboardLayoutService } from '../../../core/keyboard-layout/keyboard-layout.service';
+import { selectKeyboardConfig } from './global-config.reducer';
 
 describe('GlobalConfigEffects', () => {
   let effects: GlobalConfigEffects;
   let actions$: Subject<Action>;
   let dateServiceSpy: jasmine.SpyObj<DateService>;
   let store: MockStore;
+  let keyboardLayoutService: KeyboardLayoutService;
+  let originalElectronApi: typeof window.ea | undefined;
+  let originalNavigator: Navigator;
+  let registerGlobalShortcutsSpy: jasmine.Spy;
 
   beforeEach(() => {
     actions$ = new Subject<Action>();
@@ -31,6 +38,13 @@ describe('GlobalConfigEffects', () => {
     ]);
     dateServiceSpy.todayStr.and.returnValue('2026-02-20');
     dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(0);
+    originalNavigator = globalThis.navigator;
+    originalElectronApi = window.ea;
+    registerGlobalShortcutsSpy = jasmine.createSpy('registerGlobalShortcuts');
+    window.ea = {
+      ...(window.ea ?? {}),
+      registerGlobalShortcuts: registerGlobalShortcutsSpy,
+    } as unknown as typeof window.ea;
 
     TestBed.configureTestingModule({
       providers: [
@@ -38,6 +52,7 @@ describe('GlobalConfigEffects', () => {
         provideMockActions(() => actions$),
         provideMockStore(),
         { provide: LOCAL_ACTIONS, useValue: actions$ },
+        { provide: IS_ELECTRON_TOKEN, useValue: true },
         { provide: DateService, useValue: dateServiceSpy },
         {
           provide: LanguageService,
@@ -56,12 +71,75 @@ describe('GlobalConfigEffects', () => {
 
     store = TestBed.inject(MockStore);
     store.overrideSelector(selectAllTasks, []);
+    store.overrideSelector(selectKeyboardConfig, DEFAULT_GLOBAL_CONFIG.keyboard);
+    keyboardLayoutService = TestBed.inject(KeyboardLayoutService);
     effects = TestBed.inject(GlobalConfigEffects);
     effects.setStartOfNextDayDiffOnLoad.subscribe();
   });
 
   afterEach(() => {
     store.resetSelectors();
+    window.ea = originalElectronApi as typeof window.ea;
+    Object.defineProperty(globalThis, 'navigator', {
+      value: originalNavigator,
+      writable: true,
+      configurable: true,
+    });
+    keyboardLayoutService.clear();
+  });
+
+  describe('global shortcut registration', () => {
+    it('should register global shortcuts with the current keyboard layout snapshot on load', () => {
+      keyboardLayoutService.setLayout(new Map([['KeyZ', 'y']]));
+      effects.registerGlobalShortcutInitially$.subscribe();
+
+      actions$.next(
+        loadAllData({
+          appDataComplete: {
+            globalConfig: {
+              ...DEFAULT_GLOBAL_CONFIG,
+              keyboard: {
+                ...DEFAULT_GLOBAL_CONFIG.keyboard,
+                globalShowHide: 'Meta+Y',
+              },
+            },
+          } as any,
+        }),
+      );
+
+      expect(registerGlobalShortcutsSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({ globalShowHide: 'Meta+Y' }),
+        [['KeyZ', 'y']],
+      );
+    });
+
+    it('should re-register global shortcuts when the keyboard layout is saved', async () => {
+      const keyboardCfg = {
+        ...DEFAULT_GLOBAL_CONFIG.keyboard,
+        globalShowHide: 'Meta+Y',
+      };
+      store.overrideSelector(selectKeyboardConfig, keyboardCfg);
+      store.refreshState();
+      const subscription: Subscription =
+        effects.reregisterGlobalShortcutsOnKeyboardLayoutChange$.subscribe();
+
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {
+          keyboard: {
+            getLayoutMap: () => Promise.resolve(new Map([['KeyZ', 'y']])),
+          },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      await keyboardLayoutService.saveUserLayout();
+
+      expect(registerGlobalShortcutsSpy).toHaveBeenCalledWith(keyboardCfg, [
+        ['KeyZ', 'y'],
+      ]);
+      subscription.unsubscribe();
+    });
   });
 
   describe('setStartOfNextDayDiffOnChange', () => {

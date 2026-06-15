@@ -1,6 +1,7 @@
 import { globalShortcut, ipcMain } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { KeyboardConfig } from '../../src/app/features/config/keyboard-config.model';
+import type { KeyboardLayoutSnapshot } from '../../src/app/core/keyboard-layout/keyboard-layout.service';
 import { getWin, setWasMaximizedBeforeHide } from '../main-window';
 import { toggleTaskWidgetVisibility } from '../task-widget/task-widget';
 import { showOrFocus } from '../various-shared';
@@ -8,14 +9,18 @@ import { ensureIndicator } from '../indicator';
 import { getIsMinimizeToTray } from '../shared-state';
 import { IS_MAC } from '../common.const';
 import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-inform';
+import { normalizeGlobalShortcutForKeyboardLayout } from './global-shortcut-layout';
 
 export const initGlobalShortcutsIpc = (): void => {
-  ipcMain.on(IPC.REGISTER_GLOBAL_SHORTCUTS_EVENT, (_ev, cfg) => {
-    registerShowAppShortCuts(cfg);
+  ipcMain.on(IPC.REGISTER_GLOBAL_SHORTCUTS_EVENT, (_ev, cfg, keyboardLayout) => {
+    registerShowAppShortCuts(cfg, keyboardLayout);
   });
 };
 
-const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
+const registerShowAppShortCuts = (
+  cfg: KeyboardConfig,
+  keyboardLayout?: KeyboardLayoutSnapshot,
+): void => {
   // unregister all previous
   globalShortcut.unregisterAll();
   const GLOBAL_KEY_CFG_KEYS: (keyof KeyboardConfig)[] = [
@@ -93,18 +98,23 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
         }
 
         if (shortcut && shortcut.length > 0) {
+          const registeredShortcut = normalizeGlobalShortcutForKeyboardLayout(
+            shortcut,
+            keyboardLayout,
+            IS_MAC,
+          );
           try {
-            const ret = globalShortcut.register(shortcut, actionFn) as unknown;
+            const ret = globalShortcut.register(registeredShortcut, actionFn) as unknown;
             if (!ret) {
               errorHandlerWithFrontendInform(
                 'Global Shortcut registration failed: ' + shortcut,
-                shortcut,
+                { shortcut, registeredShortcut },
               );
             }
           } catch (e) {
             errorHandlerWithFrontendInform(
               'Global Shortcut registration failed: ' + shortcut,
-              { e, shortcut },
+              { e, shortcut, registeredShortcut },
             );
           }
         }

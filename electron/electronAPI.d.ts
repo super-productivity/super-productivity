@@ -5,6 +5,7 @@ import {
   TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from '../src/app/features/config/keyboard-config.model';
+import type { KeyboardLayoutSnapshot } from '../src/app/core/keyboard-layout/keyboard-layout.service';
 import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import { Task } from '../src/app/features/tasks/task.model';
@@ -227,7 +228,10 @@ export interface ElectronAPI {
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
 
-  registerGlobalShortcuts(keyboardConfig: KeyboardConfig): void;
+  registerGlobalShortcuts(
+    keyboardConfig: KeyboardConfig,
+    keyboardLayout?: KeyboardLayoutSnapshot,
+  ): void;
 
   showFullScreenBlocker(args: { msg?: string; takeABreakCfg: TakeABreakConfig }): void;
 
