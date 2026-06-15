@@ -15,6 +15,11 @@ Productivity (SP) so that:
 > pinned down in this document (see [Open questions](#10-open-questions--blocking-decisions));
 > the prototype is built against an **assumed contract** isolated behind a single
 > API service so it can be corrected in one place once the real API is known.
+>
+> **Implemented today:** only the §9 "Assigned to others" UI panel, fed by
+> hard-coded sample data inside `WorkViewComponent`. Everything in §4–§8 (the
+> issue provider, account login, the create-dialog toggle, and
+> `PlainspaceSharedTasksService`) is **design-only** — not yet built.
 
 ---
 
@@ -190,7 +195,16 @@ import as tasks and poll. Pattern reference: **Redmine** (simplest built-in).
 - `src/app/features/issue/issue.service.ts`
   - import + inject `PlainspaceCommonInterfacesService`, add to
     `ISSUE_SERVICE_MAP`.
-- Provider icon asset (SVG) registered where the other provider icons are.
+- Provider icon: add `src/assets/icons/plainspace.svg` **and** register it in
+  `GlobalThemeService` (`_initIcons()`, the `addSvgIcon(...)` block) — the
+  `ISSUE_PROVIDER_ICON_MAP` value only names the icon, it does not register it.
+  Note `ISSUE_PROVIDER_HUMANIZED` is a plain string ('Plainspace'), not a `T`
+  key, so no translation entry is needed for the provider name itself.
+
+> Not strictly 4 files: adding `'PLAINSPACE'` to `BuiltInIssueProviderKey` also
+> widens `IssueProviderKey`, so the existing `Task.issueType` field gains
+> `'PLAINSPACE'` as a valid value. No new `Task` field, but it is a (safe,
+> additive) type-surface change to be aware of.
 
 ### 4.2 New provider files (`providers/plainspace/`)
 

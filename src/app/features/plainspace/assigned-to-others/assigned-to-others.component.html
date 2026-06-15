@@ -2,6 +2,9 @@
   @for (group of groups(); track group.assignee?.id ?? '__unassigned__') {
     <div class="assignee-group">
       <div class="assignee-header">
+        <!-- TODO(plainspace-live-api): avatarUrl is trusted prototype data. Before
+             feeding live Plainspace data, validate/encodeURI the URL — an
+             untrusted value could break out of the url(...) CSS context. -->
         <span
           class="avatar"
           [style.background-image]="

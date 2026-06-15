@@ -4,15 +4,15 @@
 }
 
 .assignee-group {
-  margin-bottom: var(--s2, 16px);
+  margin-bottom: var(--s2);
 }
 
 .assignee-header {
   display: flex;
   align-items: center;
-  gap: var(--s, 8px);
-  padding: var(--s, 8px) 0 4px;
-  color: var(--text-color-secondary);
+  gap: var(--s);
+  padding: var(--s) 0 var(--s-half);
+  color: var(--text-color-muted);
 }
 
 .avatar {
@@ -42,8 +42,8 @@
 .shared-task {
   display: flex;
   align-items: center;
-  gap: var(--s, 8px);
-  padding: 4px var(--s, 8px);
+  gap: var(--s);
+  padding: var(--s-half) var(--s);
   border-bottom: 1px solid var(--extra-border-color);
   color: var(--text-color);
 
@@ -81,7 +81,7 @@
 }
 
 .no-tasks {
-  padding: var(--s, 8px);
+  padding: var(--s);
   color: var(--text-color-muted);
   font-style: italic;
 }
