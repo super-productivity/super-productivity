@@ -1,6 +1,9 @@
 import { Action } from '@ngrx/store';
 import { bulkHydrationMetaReducer } from './bulk-hydration.meta-reducer';
-import { bulkApplyHydrationOperations } from './bulk-hydration.action';
+import {
+  bulkApplyHydrationOperations,
+  bulkApplyOperations,
+} from './bulk-hydration.action';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { RootState } from '../../root-store/root-state';
 import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
@@ -300,6 +303,56 @@ describe('bulkHydrationMetaReducer', () => {
 
       const calledAction = reducerCalls[0].action as { meta?: { isRemote?: boolean } };
       expect(calledAction.meta?.isRemote).toBe(true);
+    });
+
+    it('should tag isApplyingFromOtherClient when op.clientId differs from localClientId', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+      const operation = createMockOperation({ clientId: 'otherClient' });
+      const action = bulkApplyOperations({
+        operations: [operation],
+        localClientId: 'thisClient',
+      });
+
+      reducer(state, action);
+
+      const calledAction = reducerCalls[0].action as {
+        meta?: { isApplyingFromOtherClient?: boolean };
+      };
+      expect(calledAction.meta?.isApplyingFromOtherClient).toBe(true);
+    });
+
+    it('should NOT tag isApplyingFromOtherClient for own-op replay (clientId === localClientId)', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+      const operation = createMockOperation({ clientId: 'thisClient' });
+      const action = bulkApplyOperations({
+        operations: [operation],
+        localClientId: 'thisClient',
+      });
+
+      reducer(state, action);
+
+      const calledAction = reducerCalls[0].action as {
+        meta?: { isApplyingFromOtherClient?: boolean };
+      };
+      expect(calledAction.meta?.isApplyingFromOtherClient).toBeUndefined();
+    });
+
+    it('should NOT tag isApplyingFromOtherClient when localClientId is unknown', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+      const operation = createMockOperation({ clientId: 'otherClient' });
+      // No localClientId on the action → cannot tell own from foreign; default to
+      // own-op semantics so we never clobber the device's own settings.
+      const action = bulkApplyOperations({ operations: [operation] });
+
+      reducer(state, action);
+
+      const calledAction = reducerCalls[0].action as {
+        meta?: { isApplyingFromOtherClient?: boolean };
+      };
+      expect(calledAction.meta?.isApplyingFromOtherClient).toBeUndefined();
     });
 
     it('should handle Create operations', () => {

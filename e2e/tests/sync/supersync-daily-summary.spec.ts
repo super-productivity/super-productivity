@@ -67,27 +67,28 @@ test.describe('@supersync Daily Summary Sync', () => {
       const panel = clientA.page.locator('task-detail-panel');
       await expect(panel).toBeVisible();
 
-      // 2. Click time item to open dialog
-      // Look for the item with the time-estimate icon
+      // 2. Open the time-estimate dialog, set "Time Spent", and submit.
+      // Retry the whole open→fill→submit cycle: a fill() on a freshly-opened
+      // dialog can fire its `input` event before the duration input's
+      // value-accessor (an `input` HostListener) is wired, so the typed value
+      // never reaches the model and an empty time is saved (panel stays "-/-").
+      // Reopening on retry re-fills once the control is bound.
       const timeItem = panel.locator(
         'task-detail-item:has(mat-icon:text("hourglass_empty"))',
       );
-      await timeItem.click();
-
-      // 3. Wait for dialog
-      const dialog = clientA.page.locator('dialog-time-estimate');
-      await expect(dialog).toBeVisible();
-
-      // 4. Fill time spent (assuming first input is time spent or allow flexible input)
-      // Usually the dialog focuses the relevant input or has labeled inputs.
-      // We'll try filling the first input found in the dialog.
-      const timeInput = dialog.locator('input').first();
-      await timeInput.fill('10m');
-      await clientA.page.keyboard.press('Enter');
-
-      // 5. Verify update in panel
-      // The time item should now show 10m
-      await expect(timeItem).toContainText('10m');
+      const pageA = clientA.page;
+      const dialog = pageA.locator('dialog-time-estimate');
+      await expect(async () => {
+        if (!(await dialog.isVisible())) {
+          await timeItem.click();
+          await expect(dialog).toBeVisible();
+        }
+        // First input is "Time Spent"; the panel item shows timeSpent / estimate.
+        await dialog.locator('input').first().fill('10m');
+        await pageA.keyboard.press('Enter');
+        await expect(dialog).toBeHidden({ timeout: 2000 });
+        await expect(timeItem).toContainText('10m', { timeout: 2000 });
+      }).toPass({ timeout: 30000 });
       console.log('Client A manually set time to: 10m');
 
       // Create Task B (no time)

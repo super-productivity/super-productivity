@@ -19,20 +19,18 @@ import {
 } from '../../tasks/store/task.selectors';
 import {
   cancelFocusSession,
-  hideFocusOverlay,
   selectFocusTask,
   selectFocusDuration,
 } from '../store/focus-mode.actions';
 import { selectFocusModeConfig } from '../../config/store/global-config.reducer';
 import { MatIcon } from '@angular/material/icon';
-import { TaskTrackingInfoComponent } from '../task-tracking-info/task-tracking-info.component';
 
 @Component({
   selector: 'focus-mode-session-done',
   templateUrl: './focus-mode-session-done.component.html',
   styleUrls: ['./focus-mode-session-done.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButton, MsToStringPipe, TranslatePipe, MatIcon, TaskTrackingInfoComponent],
+  imports: [MatButton, MsToStringPipe, TranslatePipe, MatIcon],
 })
 export class FocusModeSessionDoneComponent implements AfterViewInit {
   private _store = inject(Store);
@@ -75,7 +73,8 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
   }
 
   cancelAndCloseFocusOverlay(): void {
-    this._store.dispatch(hideFocusOverlay());
+    // Cancelling the session clears tracking and hides the overlay, returning
+    // the user to wherever they were before focus mode (no forced navigation).
     this._store.dispatch(cancelFocusSession());
   }
 

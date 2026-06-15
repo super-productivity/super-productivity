@@ -25,6 +25,7 @@ export class PluginRunner {
   private _loadedPlugins = new Map<string, PluginInstance>();
   private _pluginApis = new Map<string, PluginAPI>();
   private _readyCallbacks = new Map<string, () => void | Promise<void>>();
+  private _unloadCallbacks = new Map<string, () => void | Promise<void>>();
 
   /**
    * Load and execute a plugin
@@ -43,7 +44,22 @@ export class PluginRunner {
         this._pluginBridge,
         this._pluginI18nService,
         manifest,
-        (fn) => this._readyCallbacks.set(manifest.id, fn),
+        {
+          // both registers ignore calls from a stale API instance — leaked
+          // plugin code can run after its own unload (the failure class the
+          // onUnload hook fixes) and must not clobber a reloaded instance's
+          // callbacks
+          onReady: (fn) => {
+            if (this._pluginApis.get(manifest.id) === pluginAPI) {
+              this._readyCallbacks.set(manifest.id, fn);
+            }
+          },
+          onUnload: (fn) => {
+            if (this._pluginApis.get(manifest.id) === pluginAPI) {
+              this._unloadCallbacks.set(manifest.id, fn);
+            }
+          },
+        },
       );
 
       // executeNodeScript is now automatically bound if permitted via createBoundMethods
@@ -84,9 +100,14 @@ export class PluginRunner {
 
         // Register UI components for iframe plugins
         // Skip menu entry if this is a side panel plugin
+        const pluginDisplayName = this._translatePluginText(
+          manifest,
+          'PLUGIN.NAME',
+          manifest.name,
+        );
         if (manifest.iFrame && !manifest.isSkipMenuEntry && !manifest.sidePanel) {
           pluginAPI.registerMenuEntry({
-            label: manifest.name,
+            label: pluginDisplayName,
             icon: manifest.icon || 'extension',
             onClick: () => pluginAPI.showIndexHtmlAsView(),
           });
@@ -95,7 +116,7 @@ export class PluginRunner {
         // Auto-register side panel if configured
         if (manifest.sidePanel) {
           pluginAPI.registerSidePanelButton({
-            label: manifest.name,
+            label: pluginDisplayName,
             icon: manifest.icon || 'extension',
             onClick: () => {
               // No-op: the side panel toggle is handled by PluginSidePanelBtnsComponent
@@ -115,6 +136,18 @@ export class PluginRunner {
       PluginLog.err(`Failed to load plugin ${manifest.id}:`, error);
       throw error;
     }
+  }
+
+  private _translatePluginText(
+    manifest: PluginManifest,
+    key: string,
+    fallback: string,
+  ): string {
+    if (!manifest.i18n?.languages?.length) {
+      return fallback;
+    }
+    const translated = this._pluginI18nService.translate(manifest.id, key);
+    return translated === key ? fallback : translated;
   }
 
   /**
@@ -165,10 +198,14 @@ export class PluginRunner {
    * Unload a plugin and clean up resources
    */
   unloadPlugin(pluginId: string): boolean {
+    // Fallback for teardown routes that bypass PluginService's
+    // _teardownPluginRuntime (activation-error cleanup) — no-op when the
+    // service already fired it. Outside the loaded-check so a plugin whose
+    // loadPlugin threw after API creation still gets cleaned up.
+    this.triggerUnload(pluginId);
+
     const plugin = this._loadedPlugins.get(pluginId);
     if (plugin) {
-      // Clean up API reference
-      this._pluginApis.delete(pluginId);
       this._readyCallbacks.delete(pluginId);
 
       // Clean up all resources
@@ -191,6 +228,33 @@ export class PluginRunner {
    */
   getLoadedPlugin(pluginId: string): PluginInstance | undefined {
     return this._loadedPlugins.get(pluginId);
+  }
+
+  /**
+   * Fire the plugin's registered onUnload callback so it can clear timers and
+   * listeners it created in the renderer — code-based plugins outlive their
+   * unload otherwise (see #8281). Idempotent: the callback fires at most once.
+   * Fire-and-forget: teardown is sync and a buggy callback must not block it;
+   * the returned promise of an async callback is not awaited (unlike
+   * triggerReady, which is awaited and may throw).
+   *
+   * Side effect: also drops the plugin's API reference, which disables
+   * sendMessageToPlugin and further lifecycle registrations for this instance.
+   * Callers must follow up with unloadPlugin() — it is only called separately
+   * by plugin.service.ts at the start of teardown, while hooks and
+   * translations are still registered.
+   */
+  triggerUnload(pluginId: string): void {
+    const unloadFn = this._unloadCallbacks.get(pluginId);
+    this._unloadCallbacks.delete(pluginId);
+    // drop the API reference first so re-registration from inside the callback
+    // (or any later stale call) is ignored by the registration guard
+    this._pluginApis.delete(pluginId);
+    if (unloadFn) {
+      void (async () => unloadFn())().catch((e) =>
+        PluginLog.err(`Plugin ${pluginId} onUnload callback failed:`, e),
+      );
+    }
   }
 
   /**

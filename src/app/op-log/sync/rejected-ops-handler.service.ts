@@ -416,13 +416,35 @@ export class RejectedOpsHandlerService {
         'RejectedOpsHandlerService: Failed to download after concurrent modification detection',
         e,
       );
-      // Mark ops as failed so they can be retried on next sync, and re-throw
-      // so caller knows resolution failed
-      for (const { opId } of opsToResolve) {
-        const entry = await this.opLogStore.getOpById(opId);
-        // Only reject if still pending (not synced or already rejected)
-        if (entry && !entry.syncedAt && !entry.rejectedAt) {
-          await this.opLogStore.markRejected([opId]);
+      // Do NOT markRejected here: a transient download failure (network blip,
+      // partial download) would otherwise permanently drop the user's pending
+      // edit, since rejectedAt is terminal and a rejected op never re-enters
+      // getUnsynced(). Leave the ops pending and re-throw — they re-resolve on
+      // the next sync. (#8331)
+      //
+      // Roll back this cycle's resolution-attempt increment too: a thrown
+      // download yielded no progress information, so it must not consume the
+      // per-entity cap (which would eventually markRejected via the exceeded
+      // branch above — re-introducing the same data loss). The cap still bounds
+      // GENUINE non-progress loops, where the download SUCCEEDS but resolution
+      // can't dominate — that path never reaches this catch.
+      //
+      // shortcut: a *persistently* failing download (vs. a blip) therefore
+      // retries every sync indefinitely instead of giving up — correct for data
+      // safety (never silently drop the edit), but a permanently broken endpoint
+      // keeps re-downloading. Upgrade path if that becomes a problem: a separate
+      // transient-failure budget via markFailed() (retryable, NOT terminal) with
+      // backoff — never markRejected().
+      const rolledBack = new Set<string>();
+      for (const { op } of opsToResolve) {
+        const entityKey = this._getEntityKey(op);
+        if (rolledBack.has(entityKey)) {
+          continue;
+        }
+        rolledBack.add(entityKey);
+        const attempts = this._resolutionAttemptsByEntity.get(entityKey) ?? 0;
+        if (attempts > 0) {
+          this._resolutionAttemptsByEntity.set(entityKey, attempts - 1);
         }
       }
       throw e;

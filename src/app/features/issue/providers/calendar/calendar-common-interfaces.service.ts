@@ -16,6 +16,7 @@ import { ICAL_TYPE } from '../../issue.const';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { CALENDAR_POLL_INTERVAL } from './calendar.const';
 import { passesCalendarEventRegexFilter } from '../../../calendar-integration/calendar-event-regex-filter';
+import { isCalendarProviderDisabledOnCurrentPlatform } from './is-calendar-provider-disabled-on-current-platform.util';
 
 @Injectable({
   providedIn: 'root',
@@ -27,7 +28,11 @@ export class CalendarCommonInterfacesService extends BaseIssueProviderService<Is
   readonly pollInterval: number = CALENDAR_POLL_INTERVAL;
 
   isEnabled(cfg: IssueProviderCalendar): boolean {
-    return cfg.isEnabled && cfg.icalUrl?.length > 0;
+    return (
+      cfg.isEnabled &&
+      cfg.icalUrl?.length > 0 &&
+      !isCalendarProviderDisabledOnCurrentPlatform(cfg)
+    );
   }
 
   // Uses CalendarIntegrationService for connection testing

@@ -247,3 +247,25 @@ export class EmptyRemoteBodySPError extends InvalidDataSPError {
 export class RemoteFileChangedUnexpectedly extends AdditionalLogErrorBase {
   override name = 'RemoteFileChangedUnexpectedly';
 }
+
+/**
+ * Raised when a WebDAV PUT keeps returning 409 Conflict even after we
+ * created the parent collection — i.e. the configured sync folder cannot
+ * be resolved/written relative to the server root (a misconfigured Base
+ * URL or Sync Folder Path, the classic Synology/raw-WebDAV setup mistake).
+ *
+ * Without this, the raw `HTTP 409 Conflict` (or a bare "Unknown error")
+ * reaches the user, which gives no hint at the actual cause. The message
+ * here is privacy-safe (no path, no response body) and actionable, so UI
+ * surfaces can show it verbatim. Mirrors `NetworkUnavailableSPError`: a
+ * fixed user-facing message matched by `instanceof`, not a string round-trip.
+ */
+export class WebDavSyncFolderUnusableSPError extends Error {
+  override name = 'WebDavSyncFolderUnusableSPError';
+  constructor() {
+    super(
+      'WebDAV server returned 409 (Conflict) and the sync folder could not be created. ' +
+        'Check that the Base URL points to your WebDAV root and that the Sync Folder Path is correct and writable.',
+    );
+  }
+}

@@ -62,6 +62,7 @@ import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { passesCalendarEventRegexFilter } from './calendar-event-regex-filter';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
+import { isCalendarProviderDisabledOnCurrentPlatform } from '../issue/providers/calendar/is-calendar-provider-disabled-on-current-platform.util';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
 const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
@@ -416,8 +417,9 @@ export class CalendarIntegrationService {
     end = getEndOfDayTimestamp(),
     isForwardError = false,
   ): Observable<CalendarIntegrationEvent[]> {
-    // allow calendars to be disabled for web apps if CORS will fail to prevent errors
-    if (calProvider.isDisabledForWebApp && IS_WEB_BROWSER) {
+    // Allow calendars to be disabled where the app uses browser/WebView requests
+    // that often fail due to remote calendar CORS or redirect behavior.
+    if (isCalendarProviderDisabledOnCurrentPlatform(calProvider, IS_WEB_BROWSER)) {
       return of([]);
     }
     return this._http

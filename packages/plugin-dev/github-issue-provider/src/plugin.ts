@@ -11,11 +11,12 @@ declare const PluginAPI: {
   translate(key: string, params?: Record<string, string | number>): string;
 };
 
-const API_BASE = 'https://api.github.com';
+const DEFAULT_API_BASE = 'https://api.github.com';
 
 interface GithubConfig {
   repo: string;
   token?: string;
+  apiBaseUrl?: string;
   filterUsername?: string;
   backlogQuery?: string;
   includePullRequests?: boolean;
@@ -81,6 +82,9 @@ const parseRepo = (config: GithubConfig): { owner: string; repo: string } => {
   return { owner: parts[0], repo: parts[1] };
 };
 
+const getApiBaseUrl = (config: GithubConfig): string =>
+  (config.apiBaseUrl || '').trim().replace(/\/+$/, '') || DEFAULT_API_BASE;
+
 const mapSearchResult = (issue: GithubIssueResponse): PluginSearchResult => ({
   id: String(issue.number),
   title: `#${issue.number} ${issue.title}`,
@@ -133,6 +137,13 @@ PluginAPI.registerIssueProvider({
       url: 'https://github.com/super-productivity/super-productivity/blob/master/docs/github-access-token-instructions.md',
     },
     {
+      key: 'apiBaseUrl',
+      type: 'input',
+      label: t('CFG.API_BASE_URL'),
+      required: false,
+      advanced: true,
+    },
+    {
       key: 'filterUsername',
       type: 'input',
       label: t('CFG.FILTER_USERNAME'),
@@ -178,7 +189,7 @@ PluginAPI.registerIssueProvider({
       searchTerm.includes('is:issue') || searchTerm.includes('is:pull-request');
     const typeFilter = hasTypeFilter || cfg.includePullRequests ? '' : ' is:issue';
     const q = encodeGithubQuery(`repo:${owner}/${repo}${typeFilter} ${searchTerm}`);
-    const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
+    const url = `${getApiBaseUrl(cfg)}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
     return (response.items || []).map(mapSearchResult);
   },
@@ -190,7 +201,7 @@ PluginAPI.registerIssueProvider({
   ): Promise<PluginIssue> {
     const cfg = config as unknown as GithubConfig;
     const { owner, repo } = parseRepo(cfg);
-    const issueUrl = `${API_BASE}/repos/${owner}/${repo}/issues/${issueId}`;
+    const issueUrl = `${getApiBaseUrl(cfg)}/repos/${owner}/${repo}/issues/${issueId}`;
     const issue = await http.get<GithubIssueResponse>(issueUrl);
 
     const labels = (issue.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
@@ -261,9 +272,10 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<boolean> {
-    const { owner, repo } = parseRepo(config as unknown as GithubConfig);
+    const cfg = config as unknown as GithubConfig;
+    const { owner, repo } = parseRepo(cfg);
     try {
-      await http.get(`${API_BASE}/repos/${owner}/${repo}`);
+      await http.get(`${getApiBaseUrl(cfg)}/repos/${owner}/${repo}`);
       return true;
     } catch {
       return false;
@@ -284,7 +296,7 @@ PluginAPI.registerIssueProvider({
       (cfg.token ? 'sort:updated state:open assignee:@me' : 'sort:updated state:open');
     const typeFilter = cfg.includePullRequests ? '' : ' is:issue';
     const q = encodeGithubQuery(`repo:${owner}/${repo}${typeFilter} ${query}`);
-    const url = `${API_BASE}/search/issues?q=${q}&per_page=50&advanced_search=true`;
+    const url = `${getApiBaseUrl(cfg)}/search/issues?q=${q}&per_page=50&advanced_search=true`;
     const response = await http.get<GithubSearchResponse>(url);
     return (response.items || []).map(mapSearchResult);
   },
@@ -358,7 +370,10 @@ PluginAPI.registerIssueProvider({
     }
     const { owner, repo } = parseRepo(cfg);
     try {
-      await http.patch(`${API_BASE}/repos/${owner}/${repo}/issues/${id}`, changes);
+      await http.patch(
+        `${getApiBaseUrl(cfg)}/repos/${owner}/${repo}/issues/${id}`,
+        changes,
+      );
     } catch (e) {
       throw isAuthOrNotFoundError(e)
         ? new Error(t('ERRORS.INSUFFICIENT_PERMISSIONS'))
@@ -379,7 +394,7 @@ PluginAPI.registerIssueProvider({
     let response: GithubIssueResponse;
     try {
       response = await http.post<GithubIssueResponse>(
-        `${API_BASE}/repos/${owner}/${repo}/issues`,
+        `${getApiBaseUrl(cfg)}/repos/${owner}/${repo}/issues`,
         { title },
       );
     } catch (e) {

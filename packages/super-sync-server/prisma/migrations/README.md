@@ -6,8 +6,8 @@ block, so a CONCURRENTLY migration always fails the normal
 `prisma migrate deploy` path (P3018 / SQLSTATE 25001).
 
 `scripts/migrate-deploy.sh` recovers from this generically: on that specific
-failure it reads the failing migration's name from Prisma's output, runs *that
-migration's own `migration.sql`* out-of-band (no transaction,
+failure it reads the failing migration's name from Prisma's output, runs _that
+migration's own `migration.sql`_ out-of-band (no transaction,
 statement-by-statement), marks it applied, and retries. It hardcodes no
 migration names. Recovery is exercised by `tests/migrate-deploy-script.spec.ts`
 (behavioral, end-to-end) and `tests/migration-sql.spec.ts` (the migration SQL
@@ -19,7 +19,7 @@ Recovery is a safety net, not the happy path. Prefer, in order:
 
 1. **No CONCURRENTLY** if the table is small enough that a brief lock is fine.
 2. **A single CONCURRENTLY statement per migration file.** Prisma issues a
-   single-statement migration as one query, which Postgres does *not* wrap in
+   single-statement migration as one query, which Postgres does _not_ wrap in
    an implicit transaction, so `prisma migrate deploy` applies it natively with
    no recovery needed. (Do not retro-split already-applied migrations — that
    changes their checksum and breaks `migrate deploy`.)
@@ -57,7 +57,7 @@ copy-pasteable manual steps and is **never** auto-marked-applied.
 
 4. **No `;` inside string literals.** The splitter treats any end-of-line `;`
    as a statement terminator. (True for all index DDL; the `WHERE op_type IN
-   ('A', 'B')` form is fine — no semicolons.)
+('A', 'B')` form is fine — no semicolons.)
 
 5. **No `BEGIN` / `COMMIT` / `DROP TABLE`.**
 

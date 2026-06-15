@@ -128,23 +128,23 @@ that satisfies one hard, non-negotiable constraint:
 Independent prior analyses (three separate model reviews) evaluated every
 simpler approach against that constraint and rejected each:
 
-| Alternative | What it is | Why rejected |
-| --- | --- | --- |
-| **Last-Write-Wins (global timestamp)** | Drop logical clocks; newest wall-clock write wins | User devices have unreliable clocks; concurrent independent field edits silently overwrite each other. Unacceptable for a personal productivity app. (Survives only as a *field-level* tie-break inside conflict resolution.) |
-| **Delta / state-diff sync** | Keep a shadow copy, upload changed fields, server shallow-merges | Shadow state has no atomic coupling with the watermark → a crash mid-sync corrupts permanently; LWW shallow-merge loses concurrent independent edits; O(N) `JSON.stringify` diffing freezes the UI at 10k+ tasks; requires server-side merge, incompatible with opaque E2EE payloads. |
-| **Full-state / snapshot sync** | Sync whole model files (the old PFAPI model) | Re-transfers everything on every change; no per-entity conflict granularity; cannot reconstruct intent after an offline edit. Retained only as a *bootstrapping* mechanism (snapshot + tail replay), not the sync mechanism. |
-| **CRDTs (Yjs/Automerge/etc.)** | Math-guaranteed convergence | High conceptual complexity; most implementations assume a trusted server or relay, clashing with the dumb-file + E2EE constraint. The op-log deliberately *borrows* op-based-CRDT properties (UUID idempotency, causal ordering) without the full machinery. |
-| **Server-assigned sequence numbers** | Let the server impose a total order | Requires server connectivity for ordering — incompatible with offline-first and file-based providers that have no server. Used only as a *complement* (SuperSync seq for global order; vector clocks still required for the file-based/offline case). |
+| Alternative                            | What it is                                                       | Why rejected                                                                                                                                                                                                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Last-Write-Wins (global timestamp)** | Drop logical clocks; newest wall-clock write wins                | User devices have unreliable clocks; concurrent independent field edits silently overwrite each other. Unacceptable for a personal productivity app. (Survives only as a _field-level_ tie-break inside conflict resolution.)                                                         |
+| **Delta / state-diff sync**            | Keep a shadow copy, upload changed fields, server shallow-merges | Shadow state has no atomic coupling with the watermark → a crash mid-sync corrupts permanently; LWW shallow-merge loses concurrent independent edits; O(N) `JSON.stringify` diffing freezes the UI at 10k+ tasks; requires server-side merge, incompatible with opaque E2EE payloads. |
+| **Full-state / snapshot sync**         | Sync whole model files (the old PFAPI model)                     | Re-transfers everything on every change; no per-entity conflict granularity; cannot reconstruct intent after an offline edit. Retained only as a _bootstrapping_ mechanism (snapshot + tail replay), not the sync mechanism.                                                          |
+| **CRDTs (Yjs/Automerge/etc.)**         | Math-guaranteed convergence                                      | High conceptual complexity; most implementations assume a trusted server or relay, clashing with the dumb-file + E2EE constraint. The op-log deliberately _borrows_ op-based-CRDT properties (UUID idempotency, causal ordering) without the full machinery.                          |
+| **Server-assigned sequence numbers**   | Let the server impose a total order                              | Requires server connectivity for ordering — incompatible with offline-first and file-based providers that have no server. Used only as a _complement_ (SuperSync seq for global order; vector clocks still required for the file-based/offline case).                                 |
 
 **Consequences any future redesign must preserve:** no silent loss from
 concurrent independent edits; works without a trusted/merging server and with
 opaque E2EE payloads; offline edits rebase cleanly on reconnect; tombstones
 with retention; bounded growth via snapshot + compaction; conflict metadata
-prefers false-concurrency over false-ordering (compare clocks *before* pruning);
+prefers false-concurrency over false-ordering (compare clocks _before_ pruning);
 scales to 10k+ active / 20k+ archived tasks without main-thread O(N) work.
 
 The only self-identified over-engineering historically was the vector-clock
-pruning *defense layers*, which were since removed (see
+pruning _defense layers_, which were since removed (see
 [`vector-clocks.md`](./vector-clocks.md)).
 
 ---
@@ -2018,12 +2018,12 @@ active state. So the operation must be self-sufficient.
 
 Smaller-payload alternatives were explored and rejected:
 
-| Option                              | Idea                                       | Why rejected                                                                                                                                                              |
-| ----------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A — private `_tasks` field          | strip before storage                       | remote ops still need the full data for sync                                                                                                                              |
-| B — meta-reducer enrichment         | capture tasks from state before deletion   | meta-reducers must be pure; awkward async from the sync reducer                                                                                                            |
-| C — two-phase (write + delete)      | split into two ops                         | same total payload, just more complexity                                                                                                                                  |
-| D — operation-derived archive store | archive populated entirely by ID-only ops  | migration of years of existing archive data; initial sync must replay 20K+ archive ops; unbounded op-log growth; compaction must preserve archive state; PFAPI transition |
+| Option                              | Idea                                      | Why rejected                                                                                                                                                              |
+| ----------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A — private `_tasks` field          | strip before storage                      | remote ops still need the full data for sync                                                                                                                              |
+| B — meta-reducer enrichment         | capture tasks from state before deletion  | meta-reducers must be pure; awkward async from the sync reducer                                                                                                           |
+| C — two-phase (write + delete)      | split into two ops                        | same total payload, just more complexity                                                                                                                                  |
+| D — operation-derived archive store | archive populated entirely by ID-only ops | migration of years of existing archive data; initial sync must replay 20K+ archive ops; unbounded op-log growth; compaction must preserve archive state; PFAPI transition |
 
 **Decision: keep the full-payload approach** — it works, has no timing edge
 cases, is simple, and archiving is infrequent (end-of-day, not constant). The
@@ -2086,19 +2086,21 @@ Meta-reducers intercept actions before they reach feature reducers and can modif
 | `plannerSharedMetaReducer`        | Planner day management                                   |
 | `taskRepeatCfgSharedMetaReducer`  | Repeat config deletion with task cleanup                 |
 | `issueProviderSharedMetaReducer`  | Issue provider updates                                   |
-| `operationCaptureMetaReducer`     | Captures before/after state, enqueues entity changes     |
+| `operationCaptureMetaReducer`     | Marks the action as pending capture (increments counter) |
 
 ## F.3 Multi-Entity Operation Capture
 
-The `OperationCaptureService` and `operation-capture.meta-reducer` work together using a **simple FIFO queue** to capture actions:
+The `OperationCaptureService` and `operation-capture.meta-reducer` work together using a **pending counter** to track captures (no positional queue — see the note below):
 
-1. **After action**: Meta-reducer calls `OperationCaptureService.enqueue()` with the action
-2. **Effect processes**: Effect calls `OperationCaptureService.dequeue()` to get entity changes
+1. **After action**: Meta-reducer calls `OperationCaptureService.incrementPending()` with the action
+2. **Effect processes**: Effect computes `entityChanges` via `OperationCaptureService.extractEntityChanges()`, writes the operation, then decrements the counter in a `finally`
 3. **Result**: Single operation with action payload and optional `entityChanges[]` array
 
-The FIFO queue works because NgRx reducers process actions sequentially, and effects use `concatMap` for sequential processing. Order is preserved between enqueue and dequeue.
+`flushPendingWrites()` polls `getPendingCount()` to know when every dispatched action has been written. NgRx reducers process actions sequentially and the effect uses `concatMap`, so writes stay ordered.
 
-**Note**: Most actions return empty `entityChanges[]` - the action payload is sufficient for replay. Only TIME_TRACKING and TASK time sync actions have special handling to extract entity changes from the action payload.
+**Why a counter, not a positional FIFO queue (#8306 / #8318)**: the old design queued an `EntityChange[]` per action and correlated meta-reducer `push` with effect `shift` purely by position. If a write threw before its `dequeue` ran (e.g. a `LockAcquisitionTimeoutError`), the entry leaked and `flushPendingWrites()` could never reach 0 — every later sync then failed after its 30s timeout. A counter decremented in a `finally` cannot leak. `entityChanges` is now computed in the write path from the action (a pure function), so there is nothing to keep positionally aligned.
+
+**Note**: Most actions return empty `entityChanges[]` - the action payload is sufficient for replay. Only TIME_TRACKING and TASK time sync actions have special handling to extract entity changes from the action payload. The field is still emitted (even as `[]`) because the Android background provider reads it and the `isMultiEntityPayload` guard requires it.
 
 ```
 User Action (e.g., Delete Tag)
@@ -2112,14 +2114,14 @@ Feature Reducers
     │
     ▼
 operation-capture.meta-reducer
-    ├──► Call OperationCaptureService.enqueue(action)
-    │         └──► Extracts entity changes from action payload (for special cases)
-    │         └──► Pushes to FIFO queue
+    ├──► Call OperationCaptureService.incrementPending(action)
+    │         └──► Increments the pending counter
     │
     ▼
-OperationLogEffects
-    ├──► Call OperationCaptureService.dequeue() to get entity changes
-    └──► Create single Operation with action payload
+OperationLogEffects (per-action wrapper: writeOperationFromEffect)
+    ├──► Call OperationCaptureService.extractEntityChanges(action)
+    ├──► Create + persist single Operation with action payload
+    └──► finally: OperationCaptureService.decrementPending()
 ```
 
 ## F.4 When to Use Meta-Reducers vs Effects
@@ -2293,7 +2295,7 @@ When adding new entities or relationships:
 > - **End-to-End Encryption**: AES-256-GCM payload encryption with Argon2id key derivation via `OperationEncryptionService`
 > - **Server Security Hardening**: Audit logging, structured error codes, request deduplication, transaction isolation, input validation, rate limiting
 > - **Unified Archive Handling**: `ArchiveOperationHandler` is now the single source of truth for all archive operations, used by both local effects and remote operation application
-> - **Simplified OperationCaptureService**: Refactored to FIFO queue with reference equality optimization for detecting changed feature states
+> - **Simplified OperationCaptureService**: Tracks pending captures with a counter (no positional FIFO queue); `entityChanges` is computed in the write path from the action
 > - **Simplified OperationApplierService**: Refactored to fail-fast approach - throws `SyncStateCorruptedError` on missing hard deps (no retry queues)
 > - **Tag sanitization**: Remove subtask IDs from tags when parent deleted, filter non-existent taskIds on sync
 > - **Anchor-based move operations**: All task drag-drop moves now use `afterTaskId` instead of full list replacement (including subtask moves)
@@ -2346,7 +2348,7 @@ src/app/op-log/
 │   └── operation-sync.util.ts                # Sync helper utilities
 ├── processing/
 │   ├── operation-applier.service.ts          # Apply ops with fail-fast dependency handling
-│   ├── operation-capture.service.ts          # FIFO queue for capturing entity changes
+│   ├── operation-capture.service.ts          # Pending-capture counter + entityChanges extractor
 │   ├── operation-capture.meta-reducer.ts     # Meta-reducer for before/after state capture
 │   ├── hydration-state.service.ts            # Track hydration/remote ops application state
 │   ├── archive-operation-handler.service.ts  # Unified handler for archive side effects

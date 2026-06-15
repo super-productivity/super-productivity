@@ -1,52 +1,79 @@
 @use '../../../../styles/_globals.scss' as *;
 
-.focus-mode-break {
+// The 4-row skeleton lives in <focus-mode-layout>; this host is just its
+// positioning context, mirroring focus-mode-main.
+:host {
+  position: absolute;
+  inset: 0;
+}
+
+// ========== ROW 2: TASK NAME ==========
+.task-section {
   display: flex;
+  align-items: center;
+  justify-content: center;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  gap: 2rem;
+  width: calc(100% - var(--s2));
+  max-width: var(--component-max-width);
 }
 
-.timer-container {
-  position: relative;
+// ========== ROW 3: CLOCK ==========
+// The labels below are positioned against focus-clock-face (position: relative),
+// not this wrapper, so it needs no layout of its own.
+
+// "Short break" / "Long break" / "Take a break" label inside the circle,
+// positioned above the digits. Two steps up the spacing scale from the
+// cycle counter so it reads as the dominant secondary text.
+.break-label {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text-color-muted);
+  font-size: var(--s3);
+  font-weight: bold;
+  line-height: 1;
+}
+
+// Pomodoro cycle counter inside the circle, below the digits.
+.cycle-counter {
+  position: absolute;
+  top: 65%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--s-half);
+  color: var(--text-color-muted);
+  font-size: var(--s3);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 
-  .timer-text {
-    position: absolute;
-    font-size: 1.8rem;
-    font-weight: 500;
-  }
-
-  // Pause/Resume button inside the circle (top center)
-  .pause-resume-btn {
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
+  mat-icon {
+    font-size: var(--s3);
+    width: var(--s3);
+    height: var(--s3);
   }
 }
 
-.break-message {
-  font-size: 1.1rem;
-  opacity: 0.8;
-  margin: 0;
-}
-
-.button-row {
+// ========== ROW 4: primary actions ==========
+// Single icon-button row, mirroring focus-mode-main's bottom controls (the
+// 56px / 32px icon size + --s2 gap) so the break's actions read as one row,
+// identical to the focus session.
+.bottom-controls {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: var(--s2);
-  align-items: center;
-}
 
-.reset-cycles-btn {
-  @include mq(xs, max) {
-    display: none;
+  button {
+    width: 56px !important;
+    height: 56px !important;
+
+    mat-icon {
+      font-size: 32px !important;
+      width: 32px !important;
+      height: 32px !important;
+    }
   }
 }

@@ -11,11 +11,44 @@ import {
   share,
   shareReplay,
   startWith,
+  switchMap,
   tap,
 } from 'rxjs/operators';
 import { Tick } from './tick.model';
 import { DateService } from 'src/app/core/date/date.service';
 import { Log } from '../log';
+import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { androidInterface } from '../../features/android/android-interface';
+
+/**
+ * Builds the shared 1s tick source. When a background-state stream is given
+ * (Android WebView), the interval is unsubscribed while the app is
+ * backgrounded: the tracking/focus foreground services keep the process alive
+ * there, so a free-running interval would run store dispatches + change
+ * detection once per second around the clock — the web-layer half of the
+ * #8243 battery drain. Consumers lose no time: ticks are wall-clock deltas,
+ * and on resume AndroidForegroundTrackingEffects emits one capped wake-up
+ * tick covering the gap (mirroring the iOS resume path), while current-task
+ * time is reconciled from the native counter anyway.
+ *
+ * Desktop/Electron intentionally keeps the free-running interval — tracking
+ * while the window is hidden/minimized is a feature there.
+ *
+ * Exported so unit tests can drive the background gating without the
+ * IS_ANDROID_WEB_VIEW const.
+ */
+export const createGlobalInterval$ = (
+  isInBackground$?: Observable<boolean>,
+): Observable<number> =>
+  isInBackground$
+    ? isInBackground$.pipe(
+        startWith(false),
+        distinctUntilChanged(),
+        switchMap((isInBackground) =>
+          isInBackground ? EMPTY : interval(TRACKING_INTERVAL),
+        ),
+      )
+    : interval(TRACKING_INTERVAL);
 
 @Injectable({
   providedIn: 'root',
@@ -23,7 +56,9 @@ import { Log } from '../log';
 export class GlobalTrackingIntervalService {
   private _dateService = inject(DateService);
 
-  globalInterval$: Observable<number> = interval(TRACKING_INTERVAL).pipe(share());
+  globalInterval$: Observable<number> = createGlobalInterval$(
+    IS_ANDROID_WEB_VIEW ? androidInterface.isInBackground$ : undefined,
+  ).pipe(share());
   private _currentTrackingStart: number;
   private _wakeUpTick$ = new Subject<Tick>();
 

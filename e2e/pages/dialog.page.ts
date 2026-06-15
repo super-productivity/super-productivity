@@ -173,7 +173,7 @@ export class DialogPage extends BasePage {
    * Open calendar picker
    */
   async openCalendarPicker(): Promise<void> {
-    const openCalendarBtn = this.page.getByRole('button', { name: 'Open calendar' });
+    const openCalendarBtn = this.page.locator('mat-datepicker-toggle button').first();
     await openCalendarBtn.waitFor({ state: 'visible', timeout: 3000 });
     await openCalendarBtn.click();
     await this.page.waitForTimeout(300);

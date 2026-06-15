@@ -231,3 +231,92 @@ label {
   text-align: center;
   backface-visibility: hidden;
 }
+
+// ---------------------------------------------------------------------------
+// Opt-in variants (consumers set [bareRing] / [hideHandle]) — previously these
+// lived as ::ng-deep overrides in focus-mode-main; owning them here keeps the
+// shared component self-contained.
+// ---------------------------------------------------------------------------
+
+// Strip the slider's own circular chrome so a ring rendered behind it (e.g.
+// focus-clock-face) provides the visual — only the handle dot and the editable
+// value remain.
+:host(.bare-ring) {
+  // Let the dot sit on the ring at every rotation instead of being clipped.
+  overflow: visible;
+
+  .circle {
+    background: transparent !important;
+    box-shadow: none !important;
+    cursor: grab;
+  }
+
+  .inner-circle,
+  .dots {
+    display: none;
+  }
+
+  // Round handle on the ring centerline, larger than the ring stroke; drop the
+  // vertical bar so only the dot shows.
+  .handle {
+    background: transparent;
+    height: 0;
+
+    &::after {
+      width: 30px;
+      height: 30px;
+      margin-left: -15px;
+      top: -15px;
+      background: var(--c-accent);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  // Widen the value to the full ring so large (clock-time) digits fit centered.
+  .value-wrapper {
+    width: 100%;
+  }
+
+  .value {
+    font-family: inherit;
+    font-weight: bold;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: inherit;
+    // Base cursor is already `text`; make the click-to-edit affordance explicit
+    // on hover with a subtle accent underline so the digits read as editable.
+    text-decoration: underline transparent;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.12em;
+    transition: text-decoration-color var(--transition-duration-m)
+      var(--ani-standard-timing);
+
+    &:hover {
+      text-decoration-color: var(--c-accent);
+    }
+
+    // Suppress the focus scale-up — at clock-time sizes it would push digits
+    // past the ring.
+    &:focus {
+      transform: none;
+    }
+  }
+}
+
+// Type-only: no dragging. The host swallows pointer events so dragging the ring
+// can't shift the value; only the editable input stays interactive.
+:host(.hide-handle) {
+  pointer-events: none;
+
+  .handle {
+    display: none;
+  }
+
+  .circle {
+    cursor: default;
+  }
+
+  .value {
+    pointer-events: auto;
+  }
+}

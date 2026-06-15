@@ -46,6 +46,7 @@ import { firstValueFrom, Observable, of } from 'rxjs';
 import { AsyncPipe } from '@angular/common';
 import { DateService } from '../../core/date/date.service';
 import { openWorkContextSettingsDialog } from '../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
+import { Log } from '../../core/log';
 
 @Component({
   selector: 'work-context-menu',
@@ -241,7 +242,7 @@ export class WorkContextMenuComponent implements OnInit {
     try {
       return await this._projectService.getCompletionInfo(this.contextId);
     } catch (err) {
-      console.error(err);
+      Log.err(err);
       this._snackService.open({ type: 'ERROR', msg: T.F.PROJECT.COMPLETE.ERROR });
       return null;
     }
@@ -301,7 +302,7 @@ export class WorkContextMenuComponent implements OnInit {
         msg: T.GLOBAL_SNACK.DUPLICATE_PROJECT_ERROR,
         type: 'ERROR',
       });
-      console.error(err);
+      Log.err(err);
     }
   }
 
@@ -447,7 +448,7 @@ export class WorkContextMenuComponent implements OnInit {
         msg: T.GLOBAL_SNACK.OPEN_SETTINGS_ERROR,
         type: 'ERROR',
       });
-      console.error(err);
+      Log.err(err);
     }
   }
 

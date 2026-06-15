@@ -1,95 +1,22 @@
-<div class="quick-access">
-  <button
-    mat-icon-button
-    (click)="quickAccessBtnClick($event, 1)"
-    [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
-  >
-    <mat-icon>wb_sunny</mat-icon>
-  </button>
-
-  <button
-    mat-icon-button
-    (click)="quickAccessBtnClick($event, 2)"
-    [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
-  >
-    <mat-icon>wb_twilight</mat-icon>
-  </button>
-  <button
-    mat-icon-button
-    (click)="quickAccessBtnClick($event, 3)"
-    [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
-  >
-    <mat-icon>next_week</mat-icon>
-  </button>
-  <button
-    mat-icon-button
-    (click)="quickAccessBtnClick($event, 4)"
-    [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_MONTH | translate"
-  >
-    <mat-icon>bedtime</mat-icon>
-  </button>
-</div>
-
 <mat-dialog-content>
   @if (isConfigReady()) {
-    <mat-calendar
-      (keydown)="onKeyDownOnCalendar($event)"
-      [selected]="selectedDate"
+    <datetime-picker
+      [selectedDate]="selectedDate"
+      [selectedTime]="selectedTime"
+      [selectedReminderCfgId]="selectedReminderCfgId"
+      [reminderOptions]="remindAvailableOptions"
       [minDate]="minDate"
-      (selectedChange)="dateSelected($event)"
-    ></mat-calendar>
+      [showQuickAccess]="data.showQuickAccess !== false"
+      [timeLabel]="T.F.TASK.D_SELECT_DATE_AND_TIME.TIME | translate"
+      (dateSelected)="dateSelected($event)"
+      (timeChanged)="selectedTime = $event"
+      (reminderChanged)="selectedReminderCfgId = $event"
+      (quickAccessClick)="onQuickAccessClick($event)"
+      (enterSubmit)="submit()"
+    ></datetime-picker>
   }
 
-  @if (isShowEnterMsg) {
-    <div
-      class="press-enter-msg"
-      @fade
-    >
-      {{ T.DATETIME_SCHEDULE.PRESS_ENTER_AGAIN | translate }}
-    </div>
-  }
-
-  <div class="form-ctrl-wrapper">
-    <mat-form-field class="example-full-width">
-      <mat-label>Time</mat-label>
-      <mat-icon matPrefix>schedule</mat-icon>
-      <input
-        type="time"
-        spTimeStep
-        (focus)="onTimeFocus()"
-        [(ngModel)]="selectedTime"
-        step="60"
-        matInput
-        (keydown)="onTimeKeyDown($event)"
-      />
-      @if (selectedTime) {
-        <mat-icon
-          class="time-clear-btn"
-          matSuffix
-          (click)="onTimeClear($event)"
-          >close
-        </mat-icon>
-      }
-    </mat-form-field>
-
-    @if (selectedTime) {
-      <mat-form-field [@expandFade]>
-        <mat-icon matPrefix>alarm</mat-icon>
-        <mat-label>{{ T.F.TASK.D_SCHEDULE_TASK.REMIND_AT | translate }}</mat-label>
-        <mat-select
-          [(ngModel)]="selectedReminderCfgId"
-          name="type"
-          required="true"
-        >
-          @for (remindOption of remindAvailableOptions; track remindOption.value) {
-            <mat-option [value]="remindOption.value">
-              {{ remindOption.label | translate }}
-            </mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-    }
-
+  <div class="dialog-actions-and-warnings">
     @if (
       selectedTime &&
       (scheduleWarnings().hasOverlap || scheduleWarnings().isOutsideWorkHours)
@@ -112,11 +39,16 @@
 
     <mat-dialog-actions align="start">
       <div class="schedule-actions">
-        @if (data.task && (data.task.dueWithTime || plannedDayForTask)) {
+        @if (
+          !data.isSelectDueOnly &&
+          data.task &&
+          (data.task.dueWithTime || plannedDayForTask)
+        ) {
           <button
             (click)="remove()"
             color="warn"
             mat-stroked-button
+            type="button"
           >
             @if (selectedTime) {
               <mat-icon>alarm_off</mat-icon>
@@ -129,7 +61,10 @@
         <button
           color="primary"
           mat-stroked-button
+          [disabled]="!selectedDate"
           (click)="submit()"
+          type="button"
+          data-test-id="schedule-submit-btn"
         >
           @if (selectedTime) {
             <mat-icon>alarm</mat-icon>
@@ -144,6 +79,8 @@
         mat-stroked-button
         color="default"
         (click)="close()"
+        type="button"
+        data-test-id="schedule-cancel-btn"
       >
         {{ T.G.CANCEL | translate }}
       </button>

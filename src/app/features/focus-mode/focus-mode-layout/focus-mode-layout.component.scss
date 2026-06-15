@@ -1,0 +1,68 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  // Center the task · clock · bottom group as one unit, both axes. The top
+  // controls are pulled out of this flow (see .top), so the clock lands at the
+  // true viewport center instead of being pushed down by the top row.
+  justify-content: center;
+
+  // The task and bottom rows reserve the SAME height so the clock sits exactly
+  // between them — and stays put across main's prep ↔ in-progress states and
+  // the focus ↔ break swap, regardless of what each row holds. --s2 is the gap
+  // to the clock; --s8 is the content slot (one fab / control button tall).
+  --focus-mode-edge-row-height: calc(var(--s2) + var(--s8));
+}
+
+// ========== TOP CONTROLS (out of flow, pinned to the top) ==========
+// Mode selector (preparation) / simple counters (in progress) on the focus
+// session; empty on breaks. Absolutely positioned with an --s2 inset so it
+// floats above the centered group without shifting the clock when it
+// appears/disappears.
+.top {
+  position: absolute;
+  top: var(--s2);
+  left: 0;
+  right: 0;
+  // Lift the whole top row above the centered timer content. On short windows
+  // the centered task/clock group rides up into the selector's band; giving the
+  // already-positioned slot a z-index makes it (and everything it holds) a
+  // stacking context that paints over the z-auto content rows — including the
+  // task-row CTA, a Material FAB whose host is position:relative.
+  z-index: var(--z-focus-mode-main-selector);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// ========== ROW: TASK (reserved height, bottom-aligned toward the clock) ====
+.task {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: var(--focus-mode-edge-row-height);
+  padding-bottom: var(--s2);
+}
+
+// ========== ROW: CLOCK (natural height, centered within the group) =========
+.clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+// ========== ROW: BOTTOM (reserved height, top-aligned toward the clock) =====
+.bottom {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: var(--focus-mode-edge-row-height);
+  padding-top: var(--s2);
+}

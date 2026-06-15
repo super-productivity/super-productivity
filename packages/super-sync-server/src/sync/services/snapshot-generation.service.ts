@@ -40,6 +40,9 @@ const REPLAY_OPERATION_SELECT = {
   opType: true,
   entityType: true,
   entityId: true,
+  // Multi-entity batch deletes must replay against the full set, not just the
+  // scalar entityId, or entities 2..n survive in restore snapshots (#8340).
+  entityIds: true,
   payload: true,
   schemaVersion: true,
   isPayloadEncrypted: true,

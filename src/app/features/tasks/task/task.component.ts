@@ -57,18 +57,24 @@ import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.serv
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { Update } from '@ngrx/entity';
+import { DateAdapter } from '@angular/material/core';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
+import { combineDateAndTime } from '../../../util/combine-date-and-time';
+import { getNextWeekDayOffset } from '../../../util/get-next-week-day-offset';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DateService } from '../../../core/date/date.service';
 import { isTouchActive } from '../../../util/input-intent';
 import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { KeyboardConfig } from '../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { PlannerActions } from '../../planner/store/planner.actions';
+import { PlannerService } from '../../planner/planner.service';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
@@ -79,7 +85,8 @@ import { TaskListComponent } from '../task-list/task-list.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
-import { TranslatePipe } from '@ngx-translate/core';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SubTaskTotalTimeSpentPipe } from '../pipes/sub-task-total-time-spent.pipe';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { TagToggleMenuListComponent } from '../../tag/tag-toggle-menu-list/tag-toggle-menu-list.component';
@@ -91,10 +98,11 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
-import { selectTimeConflictTaskIds } from '../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
+import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
+import { SnackService } from '../../../core/snack/snack.service';
 
 @Component({
   selector: 'task',
@@ -148,20 +156,21 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _configService = inject(GlobalConfigService);
   private readonly _attachmentService = inject(TaskAttachmentService);
   private readonly _elementRef = inject(ElementRef);
+  private readonly _dateAdapter = inject(DateAdapter);
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _snackService = inject(SnackService);
+  private readonly _translateService = inject(TranslateService);
+  private readonly _datePipe = inject(LocaleDatePipe);
+  private readonly _plannerService = inject(PlannerService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
-  private readonly _timeConflictTaskIds = toSignal(
-    this._store.select(selectTimeConflictTaskIds),
-    { initialValue: new Set<string>() },
-  );
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -237,7 +246,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   hasTimeConflict = computed(() => {
     const task = this.task();
     return (
-      typeof task.dueWithTime === 'number' && this._timeConflictTaskIds().has(task.id)
+      typeof task.dueWithTime === 'number' &&
+      this._taskService.timeConflictTaskIds().has(task.id)
     );
   });
 
@@ -504,6 +514,60 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       .subscribe(() => {
         this.focusSelfOrNextIfNotPossible();
       });
+  }
+
+  async scheduleTaskTomorrow(): Promise<void> {
+    const tDate = this._dateService.getLogicalTodayDate();
+    tDate.setDate(tDate.getDate() + 1);
+    await this._scheduleForDay(tDate);
+  }
+
+  async scheduleTaskNextWeek(): Promise<void> {
+    const tDate = this._dateService.getLogicalTodayDate();
+    const dayOffset = getNextWeekDayOffset(this._dateAdapter, tDate);
+    tDate.setDate(tDate.getDate() + dayOffset);
+    await this._scheduleForDay(tDate);
+  }
+
+  async scheduleTaskNextMonth(): Promise<void> {
+    const tDate = this._dateService.getLogicalTodayDate();
+    tDate.setDate(1);
+    tDate.setMonth(tDate.getMonth() + 1);
+    await this._scheduleForDay(tDate);
+  }
+
+  private async _scheduleForDay(dayDate: Date): Promise<void> {
+    const day = getDbDateStr(dayDate);
+    const task = this.task();
+    if (task.dueWithTime) {
+      const newDate = combineDateAndTime(dayDate, new Date(task.dueWithTime));
+      const remindCfg = task.reminderId
+        ? millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt)
+        : (this._configService.cfg()?.reminder.defaultTaskRemindOption ??
+          DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!);
+
+      this._taskService.scheduleTask(task, newDate.getTime(), remindCfg, false);
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.F.PLANNER.S.TASK_PLANNED_FOR,
+        ico: 'today',
+        translateParams: {
+          date: this._dateService.isToday(newDate)
+            ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
+            : (this._datePipe.transform(day, 'shortDate') as string),
+          extra: await this._plannerService.getSnackExtraStr(day),
+        },
+      });
+    } else {
+      this._store.dispatch(
+        PlannerActions.planTaskForDay({
+          task: task as TaskCopy,
+          day,
+          isShowSnack: true,
+        }),
+      );
+    }
+    this.focusSelfOrNextIfNotPossible();
   }
 
   async editTaskRepeatCfg(): Promise<void> {

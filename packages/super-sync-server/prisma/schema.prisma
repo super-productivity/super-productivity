@@ -69,6 +69,14 @@ model Operation {
   opType             String  @map("op_type")
   entityType         String  @map("entity_type")
   entityId           String? @map("entity_id")
+  // Entity set for multi-entity (batch) ops only — single-entity ops store [] and
+  // are matched via the scalar `entityId` (the client sets `entityId` to entityIds[0]
+  // but the server does not enforce that). Conflict detection consults this array so
+  // writes to a non-first entity are not invisible across uploads (#8334).
+  // Pre-migration rows have an empty array and fall back to `entityId` in the
+  // conflict lookups, so the backfill is forward-only (older entities 2..n are
+  // unrecoverable — they were never persisted).
+  entityIds          String[] @default([]) @map("entity_ids")
   payload            Json
   payloadBytes       BigInt  @default(0) @map("payload_bytes")
   vectorClock        Json    @map("vector_clock")
@@ -85,6 +93,8 @@ model Operation {
   @@index([userId, clientId])
   @@index([userId, receivedAt])
   // Restore-point opType lookups use a raw partial index in the 20260512000000 migration.
+  // Multi-entity conflict lookups (#8334) use a raw GIN index on entity_ids in the
+  // 20260613000001 migration (Prisma does not model GIN array indexes here).
   @@map("operations")
 }
 

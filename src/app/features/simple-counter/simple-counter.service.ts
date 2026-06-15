@@ -37,6 +37,7 @@ import { DateService } from 'src/app/core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
+import { Log } from '../../core/log';
 
 @Injectable({
   providedIn: 'root',
@@ -224,7 +225,7 @@ export class SimpleCounterService implements OnDestroy {
         }
       })
       .catch((error) => {
-        console.error('[SimpleCounterService] Error syncing stopwatch value:', error);
+        Log.err('[SimpleCounterService] Error syncing stopwatch value:', error);
       });
   }
 

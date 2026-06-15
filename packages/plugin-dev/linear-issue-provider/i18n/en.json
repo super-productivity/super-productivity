@@ -1,0 +1,17 @@
+{
+  "CFG": {
+    "API_KEY": "API Key",
+    "TEAM_ID": "Team ID (optional, filter to a specific team)",
+    "PROJECT_ID": "Project ID (optional, filter to a specific project)",
+    "HOW_TO_GET_TOKEN": "Get your API key"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATE": "Status",
+    "PRIORITY": "Priority",
+    "ASSIGNEE": "Assignee",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Configure Super Productivity to list and import your assigned Linear issues in the task creation panel. They will be listed as suggestions with a link to the issue and more information about it.</p>"
+}

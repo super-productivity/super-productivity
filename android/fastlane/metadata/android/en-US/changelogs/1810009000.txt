@@ -1,0 +1,5 @@
+Redesigned Focus Mode and idle dialog.
+Search now includes note content and completed-task filtering.
+Calendar and schedule fixes, including overlapping same-time tasks and writable plugin event rescheduling.
+Android fixes for splash theme, resume white screens, timer notifications, popup back button handling, and Vanadium WebView.
+Security, sync, reminder, backup, and performance fixes.

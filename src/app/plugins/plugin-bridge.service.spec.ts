@@ -37,6 +37,7 @@ import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
+import { T } from '../t.const';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -420,6 +421,121 @@ describe('PluginBridgeService - openDialog', () => {
     });
 
     expect(result).toBeUndefined();
+  });
+});
+
+describe('PluginBridgeService - nodeExecution grant tokens', () => {
+  let service: PluginBridgeService;
+  let originalElectronApi: typeof window.ea | undefined;
+  let pluginExecNodeScriptSpy: jasmine.Spy;
+  let consumePluginNodeExecutionApiSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    originalElectronApi = window.ea;
+    pluginExecNodeScriptSpy = jasmine.createSpy('pluginExecNodeScript');
+    consumePluginNodeExecutionApiSpy = jasmine
+      .createSpy('consumePluginNodeExecutionApi')
+      .and.returnValue({
+        requestGrant: jasmine.createSpy('requestGrant'),
+        executeScript: pluginExecNodeScriptSpy,
+        revokeGrant: jasmine.createSpy('revokeGrant'),
+      });
+    window.ea = {
+      ...(window.ea ?? {}),
+      consumePluginNodeExecutionApi: consumePluginNodeExecutionApiSpy,
+    } as typeof window.ea;
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string): string => key },
+        },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  afterEach(() => {
+    window.ea = originalElectronApi as typeof window.ea;
+  });
+
+  it('stores and revokes nodeExecution grant tokens internally', () => {
+    expect(consumePluginNodeExecutionApiSpy).toHaveBeenCalledTimes(1);
+
+    service.setNodeExecutionGrantToken('node-plugin', 'token-1');
+
+    expect(service.hasNodeExecutionGrantToken('node-plugin')).toBeTrue();
+    expect(service.getNodeExecutionGrantToken('node-plugin')).toBe('token-1');
+    expect(service.revokeNodeExecutionGrantToken('node-plugin')).toBe('token-1');
+    expect(service.hasNodeExecutionGrantToken('node-plugin')).toBeFalse();
+  });
+
+  it('does not call Electron node execution in a web runtime', async () => {
+    service.setNodeExecutionGrantToken('node-plugin', 'token-1');
+    const bound = service.createBoundMethods('node-plugin', {
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      manifestVersion: 1,
+      version: '1.0.0',
+      minSupVersion: '1.0.0',
+      permissions: ['nodeExecution'],
+      hooks: [],
+    });
+
+    const result = await bound.executeNodeScript({ script: 'return true' });
+
+    expect(result).toEqual({
+      success: false,
+      error: T.PLUGINS.NODE_ONLY_DESKTOP,
+    });
+    expect(pluginExecNodeScriptSpy).not.toHaveBeenCalled();
+  });
+
+  it('passes the stored grant token to Electron node execution', async () => {
+    const runtime = service as unknown as { _isElectronRuntime: () => boolean };
+    spyOn(runtime, '_isElectronRuntime').and.returnValue(true);
+    const request = { script: 'return 42' };
+    const electronResult = { success: true, result: 42 };
+    pluginExecNodeScriptSpy.and.resolveTo(electronResult);
+    service.setNodeExecutionGrantToken('node-plugin', 'token-1');
+    const bound = service.createBoundMethods('node-plugin', {
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      manifestVersion: 1,
+      version: '1.0.0',
+      minSupVersion: '1.0.0',
+      permissions: ['nodeExecution'],
+      hooks: [],
+    });
+
+    await expectAsync(bound.executeNodeScript(request)).toBeResolvedTo(electronResult);
+    expect(pluginExecNodeScriptSpy).toHaveBeenCalledOnceWith(
+      'node-plugin',
+      'token-1',
+      request,
+    );
   });
 });
 

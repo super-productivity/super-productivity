@@ -298,6 +298,15 @@ export class OperationLogSyncService {
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
       // Validation failure (if any) is on the session-validation latch.
+
+      // #8304: Persist lastServerSeq ONLY now that the piggybacked ops have been applied
+      // above. The upload service deferred this (see UploadResult.lastServerSeqToPersist)
+      // so that a crash — or a cancelled/USE_REMOTE/USE_LOCAL SYNC_IMPORT dialog, all of
+      // which return early ABOVE without reaching here — cannot advance the seq past ops
+      // that were never stored. Mirrors the download path's invariant.
+      if (result.lastServerSeqToPersist !== undefined) {
+        await syncProvider.setLastServerSeq(result.lastServerSeqToPersist);
+      }
     }
 
     // STEP 2: Handle server-rejected operations

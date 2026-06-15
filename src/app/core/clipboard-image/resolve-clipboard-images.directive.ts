@@ -9,6 +9,7 @@ import {
   SimpleChanges,
 } from '@angular/core';
 import { ClipboardImageService } from './clipboard-image.service';
+import { Log } from '../log';
 
 /**
  * Directive that resolves indexeddb:// URLs in img elements within the host element.
@@ -98,7 +99,7 @@ export class ResolveClipboardImagesDirective implements OnInit, OnDestroy, OnCha
             img.classList.add('indexeddb-image-error');
           }
         } catch (error) {
-          console.error('Error resolving clipboard image:', error);
+          Log.err('Error resolving clipboard image:', error);
           img.alt = 'Error loading image';
           img.classList.add('indexeddb-image-error');
         }

@@ -11,12 +11,14 @@ import {
   FocusModeConfig,
   GlobalConfigState,
   MiscConfig,
+  SyncConfig,
 } from '../global-config.model';
 import type { KeyboardConfig } from '../keyboard-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
+import { LOCAL_ONLY_SYNC_KEYS } from '../local-only-sync-settings.util';
 
 /**
  * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
@@ -106,14 +108,24 @@ export const initialGlobalConfigState: GlobalConfigState = {
 };
 
 const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {
-  const keyboard: KeyboardConfig = {
+  const { moveToTodaysTasks, ...rest } =
+    (cfg as (KeyboardConfig & { moveToTodaysTasks?: string | null }) | undefined) ?? {};
+
+  let keyboard: KeyboardConfig = {
     ...DEFAULT_GLOBAL_CONFIG.keyboard,
-    ...cfg,
+    ...rest,
   };
 
+  if (moveToTodaysTasks != null && rest.taskScheduleToday == null) {
+    keyboard = {
+      ...keyboard,
+      taskScheduleToday: moveToTodaysTasks,
+    };
+  }
+
   if (
-    cfg?.addNewNote === 'N' &&
-    (cfg.taskOpenNotesPanel === undefined || cfg.taskOpenNotesPanel === null)
+    rest.addNewNote === 'N' &&
+    (rest.taskOpenNotesPanel === undefined || rest.taskOpenNotesPanel === null)
   ) {
     return {
       ...keyboard,
@@ -125,6 +137,20 @@ const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig 
   return keyboard;
 };
 
+// Overwrite every local-only key on the incoming config with the local value.
+// Keys are sourced from LOCAL_ONLY_SYNC_KEYS so adding a new local-only key in
+// local-only-sync-settings.util.ts automatically preserves it here too.
+const withLocalOnlySyncSettings = (
+  incomingSyncConfig: SyncConfig,
+  localSyncConfig: SyncConfig,
+): SyncConfig => {
+  const merged = { ...incomingSyncConfig } as Record<string, unknown>;
+  for (const key of LOCAL_ONLY_SYNC_KEYS) {
+    merged[key] = localSyncConfig[key];
+  }
+  return merged as SyncConfig;
+};
+
 export const globalConfigReducer = createReducer<GlobalConfigState>(
   initialGlobalConfigState,
 
@@ -133,29 +159,26 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       return oldState;
     }
 
-    const incomingSyncConfig = appDataComplete.globalConfig.sync;
+    const incomingSyncConfig = {
+      ...DEFAULT_GLOBAL_CONFIG.sync,
+      ...appDataComplete.globalConfig.sync,
+    };
 
     // Preserve local-only sync settings if they're already set.
     // These settings should remain local to each client:
     // - syncProvider: Each client can use different providers (Dropbox, WebDAV, etc.)
     // - isEnabled: Each client independently controls whether sync is enabled
     // - isEncryptionEnabled: Encryption state must not be overwritten by imports
+    // - syncInterval: Each client chooses its own automatic sync frequency
+    // - isManualSyncOnly: Each client chooses automatic vs manual sync
     //
     // If oldState.sync.syncProvider is null, we're on first load (using initialGlobalConfigState)
     // and should use the incoming values (from snapshot). Otherwise, preserve local values.
     const hasLocalSettings = oldState.sync.syncProvider !== null;
 
-    const syncProvider = hasLocalSettings
-      ? oldState.sync.syncProvider
-      : incomingSyncConfig.syncProvider;
-
-    const isEnabled = hasLocalSettings
-      ? oldState.sync.isEnabled
-      : incomingSyncConfig.isEnabled;
-
-    const isEncryptionEnabled = hasLocalSettings
-      ? oldState.sync.isEncryptionEnabled
-      : incomingSyncConfig.isEncryptionEnabled;
+    const syncConfig = hasLocalSettings
+      ? withLocalOnlySyncSettings(incomingSyncConfig, oldState.sync)
+      : incomingSyncConfig;
 
     const incomingGlobalConfig = {
       ...DEFAULT_GLOBAL_CONFIG,
@@ -200,27 +223,38 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...migrateFocusModeConfig(appDataComplete.globalConfig.focusMode),
       },
       keyboard: migrateKeyboardConfig(appDataComplete.globalConfig.keyboard),
-      sync: {
-        ...incomingSyncConfig,
-        syncProvider,
-        isEnabled,
-        isEncryptionEnabled,
-      },
+      sync: syncConfig,
     };
   }),
 
-  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => {
+  on(updateGlobalConfigSection, (state, action) => {
+    const { sectionKey, sectionCfg } = action;
     const normalizedSectionCfg =
       sectionKey === 'misc'
         ? normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>)
         : sectionCfg;
+    const updatedSection = {
+      ...state[sectionKey],
+      ...normalizedSectionCfg,
+    };
+
+    // Preserve this device's local-only sync settings ONLY when the update came
+    // from ANOTHER client. `isRemote` is also true while replaying the device's
+    // OWN ops during hydration — keying off it there would overwrite the op's
+    // real (own) sync settings with whatever local state happens to be mid-replay
+    // (e.g. a null syncProvider when the crash snapshot predates the setup op),
+    // silently disabling sync. See bulkOperationsMetaReducer.
+    const isFromOtherClient =
+      (action as { meta?: { isApplyingFromOtherClient?: boolean } }).meta
+        ?.isApplyingFromOtherClient === true;
+    const nextSection =
+      sectionKey === 'sync' && isFromOtherClient
+        ? withLocalOnlySyncSettings(updatedSection as SyncConfig, state.sync)
+        : updatedSection;
 
     return {
       ...state,
-      [sectionKey]: {
-        ...state[sectionKey],
-        ...normalizedSectionCfg,
-      },
+      [sectionKey]: nextSection,
     };
   }),
 );

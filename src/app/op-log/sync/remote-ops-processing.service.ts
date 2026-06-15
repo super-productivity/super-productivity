@@ -1,9 +1,13 @@
 import { inject, Injectable, Injector } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { firstValueFrom } from 'rxjs';
 import { applyRemoteOperations } from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ConflictResult,
   EntityConflict,
+  extractFullStateFromPayload,
+  isWrappedFullStatePayload,
   Operation,
   OpType,
   VectorClock,
@@ -27,6 +31,11 @@ import { OperationLogCompactionService } from '../persistence/operation-log-comp
 import { SyncImportFilterService } from './sync-import-filter.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
+import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
+import {
+  applyLocalOnlySyncSettingsToAppData,
+  LocalOnlySyncSettings,
+} from '../../features/config/local-only-sync-settings.util';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -45,6 +54,7 @@ import { processDeferredActionsAfterRemoteApply } from './process-deferred-actio
   providedIn: 'root',
 })
 export class RemoteOpsProcessingService {
+  private store = inject(Store);
   private opLogStore = inject(OperationLogStoreService);
   private operationApplier = inject(OperationApplierService);
   private conflictResolutionService = inject(ConflictResolutionService);
@@ -389,7 +399,10 @@ export class RemoteOpsProcessingService {
     ops: Operation[],
     callerHoldsLock: boolean = false,
   ): Promise<void> {
-    await this._logFullStateApplyDiagnostics(ops);
+    const locallyReplayableOps =
+      await this._withLocalOnlySyncSettingsForFullStateOps(ops);
+
+    await this._logFullStateApplyDiagnostics(locallyReplayableOps);
 
     // Mirror autoResolveConflictsLWW: wrap apply in try/finally so deferred
     // local actions are flushed whether the apply succeeded or threw.
@@ -401,7 +414,7 @@ export class RemoteOpsProcessingService {
       // Core owns the generic crash-safety ordering. Angular diagnostics,
       // validation, and user notifications stay in this service.
       const result = await applyRemoteOperations({
-        ops,
+        ops: locallyReplayableOps,
         store: this.opLogStore,
         applier: {
           applyOperations: (opsToApply) =>
@@ -461,6 +474,46 @@ export class RemoteOpsProcessingService {
         await processDeferredActionsAfterRemoteApply(this.injector, callerHoldsLock);
       }
     }
+  }
+
+  private async _withLocalOnlySyncSettingsForFullStateOps(
+    ops: Operation[],
+  ): Promise<Operation[]> {
+    const hasFullStateOp = ops.some((op) => this._isFullStateOperation(op));
+    if (!hasFullStateOp) {
+      return ops;
+    }
+
+    const currentSyncConfig = await firstValueFrom(this.store.select(selectSyncConfig));
+    const localOnlySettings: LocalOnlySyncSettings = {
+      isEnabled: currentSyncConfig.isEnabled,
+      isEncryptionEnabled: currentSyncConfig.isEncryptionEnabled,
+      syncProvider: currentSyncConfig.syncProvider,
+      syncInterval: currentSyncConfig.syncInterval,
+      isManualSyncOnly: currentSyncConfig.isManualSyncOnly,
+    };
+
+    return ops.map((op) => {
+      if (!this._isFullStateOperation(op)) {
+        return op;
+      }
+
+      const fullState = extractFullStateFromPayload(op.payload);
+      const localReplayPayload = applyLocalOnlySyncSettingsToAppData(
+        fullState,
+        localOnlySettings,
+      );
+      if (localReplayPayload === fullState) {
+        return op;
+      }
+
+      return {
+        ...op,
+        payload: isWrappedFullStatePayload(op.payload)
+          ? { ...op.payload, appDataComplete: localReplayPayload }
+          : localReplayPayload,
+      };
+    });
   }
 
   private _isFullStateOperation(op: Operation): boolean {

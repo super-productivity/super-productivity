@@ -751,13 +751,41 @@ export class GlobalThemeService {
     // system-bar insets regardless, so applying them as CSS padding on top of
     // the native margin double-counts the inset (visible as excessive padding
     // above the top bar). The WebView interior is fully safe there, so keep the
-    // safe-area CSS vars at 0; only iOS (contentInset: 'never') needs the
-    // WebView to pad itself. A few styles read env(safe-area-inset-bottom)
-    // directly (e.g. mobile-bottom-nav) rather than these vars; inside the
-    // natively-inset WebView that env value is expected to be ~0, keeping them
-    // consistent with the pinned vars here.
+    // bottom/side safe-area CSS vars at 0; only iOS (contentInset: 'never')
+    // needs the WebView to pad itself. A few styles read env(safe-area-inset-
+    // bottom) directly (e.g. mobile-bottom-nav) rather than these vars; inside
+    // the natively-inset WebView that env value is expected to be ~0, keeping
+    // them consistent with the pinned vars here.
+    //
+    // The TOP is the exception. On Android < 15 the WebView is forced
+    // edge-to-edge by @capacitor/status-bar's legacy `overlaysWebView`
+    // fullscreen flag (a no-op on Android 15+), and the plugin's native top
+    // margin is not reliably applied on every OS/ROM — the header then draws
+    // behind the status bar (#8283, seen on Android 14). Pinning the top var to
+    // 0 leaves no fallback. Instead defer the top to the WebView's own
+    // env(safe-area-inset-top): with viewport-fit=cover it equals the status-bar
+    // height exactly when the WebView extends under it, and resolves to 0 once
+    // the WebView is already inset (Android 15+ / native margin applied) — so it
+    // self-corrects across OS versions without ever double-counting.
     if (this._platformService.isAndroid()) {
       applyInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+      // Override only the top with the env() fallback (see above). NOTE: this
+      // self-corrects only for *CSS* consumers — `padding-top: var(--safe-area-top)`
+      // resolves the nested env() at use-time, so the header padding is right. JS
+      // readers that parse this custom property via getComputedStyle (e.g.
+      // _patchCdkViewportForSafeArea, the context menus) get the *unresolved*
+      // "env(...)" token string back — env()/var() are only substituted when the
+      // property is actually used, not when a custom property's own value is read —
+      // so parseInt() yields 0, the same top inset those readers already used on
+      // Android before this change. Connected overlays are therefore not pushed
+      // below the status bar; only the header padding is. That is the scope of
+      // #8283 (the header was the reported regression). If overlay top-insets ever
+      // matter on Android, register the var via @property or read a probe element's
+      // resolved padding-top instead of the raw custom property.
+      this.document.documentElement.style.setProperty(
+        CSS_VAR_SAFE_AREA_TOP,
+        'env(safe-area-inset-top, 0px)',
+      );
     } else {
       SafeArea.getSafeAreaInsets().then(({ insets }) => applyInsets(insets));
       SafeArea.addListener('safeAreaChanged', ({ insets }) => applyInsets(insets));

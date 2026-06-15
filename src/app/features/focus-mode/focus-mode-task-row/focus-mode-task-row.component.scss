@@ -1,0 +1,105 @@
+@use '../../../../styles/_globals.scss' as *;
+
+// Transparent to layout — the parent's .task-section flex column owns the
+// positioning; this component just supplies the row content.
+:host {
+  display: contents;
+}
+
+// Three-track grid so the title stays centered in the viewport regardless of
+// the flanking controls' widths: switch in the left 1fr track (hugging the
+// title), title in the auto center track, tracking + finish in the right 1fr
+// track (hugging the title). Equal 1fr side tracks => the center never shifts
+// when the time numbers change width.
+.task-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+}
+
+// Muted side controls: follow the host's --revealed-opacity hover-reveal where
+// one exists (focus session); where it doesn't (break) the unset var leaves
+// opacity/pointer-events at their initial (visible/clickable) values.
+.task-side-btn {
+  flex: 0 0 auto;
+  opacity: var(--revealed-opacity);
+  transition: var(--transition-standard);
+  pointer-events: var(--revealed-pointer-events);
+}
+
+// Switch hugs the title's left edge; the end controls hug its right edge.
+.task-side-btn--switch {
+  justify-self: end;
+}
+
+.task-end-controls {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+}
+
+.task-title {
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.5;
+  border-radius: var(--card-border-radius);
+  border: 1px solid transparent;
+  margin: 0;
+  padding: var(--s-half);
+  width: 100%;
+  max-width: 100%;
+  max-height: min(24vh, 8em);
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  @include mq(xs, max) {
+    font-size: 24px;
+  }
+
+  @include mq(xxxs, max) {
+    font-size: 18px;
+  }
+
+  ::ng-deep textarea {
+    text-align: center;
+  }
+
+  &.is-focused {
+    outline: 1px solid var(--c-accent);
+  }
+}
+
+// Gentle reminder shown during a break in place of the (hidden) task title.
+// Reuses .task-title's sizing so it reads like the task name; only the default
+// <p> margin needs resetting.
+.break-message {
+  margin: 0;
+}
+
+.parent-title {
+  text-align: center;
+  margin-bottom: 0;
+  opacity: 0.8;
+  font-size: 15px;
+  line-height: 1.2;
+  max-width: 90%;
+  overflow-wrap: break-word;
+
+  @include mq(xs, max) {
+    font-size: 12px;
+  }
+
+  @include mq(xxxs, max) {
+    font-size: 10px;
+  }
+}
+
+// Extended FAB CTA shown when no task is selected — the gating action that
+// unlocks the rest of focus mode. Echoes the play FAB style so the prep flow
+// reads as one beat: "select task" -> "start session".
+.select-task-cta {
+  margin: var(--s);
+}

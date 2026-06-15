@@ -81,6 +81,24 @@ vi.mock('../src/db', async () => {
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
           );
         }
+        // Single-entity conflict lookup: where { userId, entityType,
+        // OR: [{ entityId: X }, { entityIds: { has: X } }] } (#8334).
+        if (Array.isArray(args.where?.OR) && args.where?.entityType) {
+          const targetId =
+            args.where.OR.find((c: any) => 'entityId' in c)?.entityId ??
+            args.where.OR.find((c: any) => c.entityIds?.has !== undefined)?.entityIds
+              ?.has;
+          const ops = Array.from(state.operations.values())
+            .filter(
+              (op: any) =>
+                op.userId === args.where.userId &&
+                op.entityType === args.where.entityType &&
+                (op.entityId === targetId ||
+                  (Array.isArray(op.entityIds) && op.entityIds.includes(targetId))),
+            )
+            .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+          return applyOperationSelect(ops[0], args.select) || null;
+        }
         if (args.where?.entityId && args.where?.entityType) {
           const ops = Array.from(state.operations.values())
             .filter(

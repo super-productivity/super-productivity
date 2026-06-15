@@ -462,6 +462,22 @@ const DAV_NS = 'DAV:';
 const CALDAV_NS = 'urn:ietf:params:xml:ns:caldav';
 const CS_NS = 'http://calendarserver.org/ns/';
 
+/**
+ * Parse an XML string into a Document, throwing on parser errors.
+ * The error message intentionally omits the parser output / response body —
+ * it is untrusted server content and the log is exportable (never log it).
+ * DOMParser (browser + jsdom) does not resolve external entities, so this is
+ * safe against XXE; do not swap it for a server-side XML lib without disabling
+ * entity resolution.
+ */
+const parseXmlDoc = (xml: string): Document => {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.querySelector('parsererror')) {
+    throw new Error('[CalDAV] Failed to parse XML response');
+  }
+  return doc;
+};
+
 /** Build PROPFIND body for calendar discovery */
 const buildPropfindBody = (): string =>
   `<?xml version="1.0" encoding="UTF-8"?>
@@ -525,12 +541,7 @@ interface CalendarInfo {
 
 /** Parse PROPFIND multistatus response for calendar discovery */
 const parseCalendarList = (xml: string): CalendarInfo[] => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xml, 'application/xml');
-  const parseErr = doc.querySelector('parsererror');
-  if (parseErr) {
-    throw new Error('[CalDAV] Failed to parse XML response: ' + parseErr.textContent);
-  }
+  const doc = parseXmlDoc(xml);
   const responses = doc.getElementsByTagNameNS(DAV_NS, 'response');
   const calendars: CalendarInfo[] = [];
 
@@ -581,12 +592,7 @@ interface CalendarEventResponse {
 
 /** Parse REPORT multistatus response for calendar events */
 const parseEventResponses = (xml: string): CalendarEventResponse[] => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xml, 'application/xml');
-  const parseErr = doc.querySelector('parsererror');
-  if (parseErr) {
-    throw new Error('[CalDAV] Failed to parse XML response: ' + parseErr.textContent);
-  }
+  const doc = parseXmlDoc(xml);
   const responses = doc.getElementsByTagNameNS(DAV_NS, 'response');
   const events: CalendarEventResponse[] = [];
 
@@ -619,34 +625,124 @@ const caldavHeaders = (extra?: Record<string, string>): Record<string, string> =
   ...extra,
 });
 
-/** Resolve a relative href to a full URL using the server origin */
+/**
+ * Resolve a server-supplied href against the configured server origin and
+ * refuse anything that escapes it. Discovery follows hrefs that the (untrusted)
+ * server controls — principal, calendar-home-set — so this is the SSRF
+ * boundary: credentials are attached to every request and must never be sent
+ * off-origin. Resolving via the URL constructor handles relative, absolute, and
+ * protocol-relative (`//host`) forms uniformly; a prefix sniff + string concat
+ * would mis-handle `//host` and uppercase schemes. The href is omitted from the
+ * error (untrusted content; the log is exportable).
+ */
 const resolveHref = (cfg: CaldavCalendarConfig, href: string): string => {
   const serverOrigin = new URL(getServerUrl(cfg)).origin;
-  if (href.startsWith('http://') || href.startsWith('https://')) {
-    if (new URL(href).origin !== serverOrigin) {
-      throw new Error(`[CalDAV] Refusing cross-origin href: ${href}`);
-    }
-    return href;
+  const resolved = new URL(href, serverOrigin + '/');
+  if (resolved.origin !== serverOrigin) {
+    throw new Error('[CalDAV] Refusing cross-origin href');
   }
-  return serverOrigin + href;
+  return resolved.toString();
 };
 
-/** Discover calendars supporting VEVENT via PROPFIND */
+/** Build PROPFIND body to bootstrap discovery: principal + calendar-home-set */
+const buildDiscoveryPropfindBody = (): string =>
+  `<?xml version="1.0" encoding="UTF-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:c="${CALDAV_NS}">
+  <d:prop>
+    <d:current-user-principal/>
+    <c:calendar-home-set/>
+  </d:prop>
+</d:propfind>`;
+
+/**
+ * Extract the first `<d:href>` nested inside the named property element
+ * (e.g. DAV `current-user-principal` or CalDAV `calendar-home-set`).
+ */
+const getHrefInProp = (doc: Document, ns: string, localName: string): string => {
+  const els = doc.getElementsByTagNameNS(ns, localName);
+  for (let i = 0; i < els.length; i++) {
+    const href = els[i].getElementsByTagNameNS(DAV_NS, 'href')[0];
+    const text = href?.textContent?.trim();
+    if (text) return text;
+  }
+  return '';
+};
+
+const propfind = (
+  http: PluginHttp,
+  url: string,
+  body: string,
+  depth: '0' | '1',
+): Promise<string> =>
+  http.request<string>('PROPFIND', url, body, {
+    headers: { ...caldavHeaders(), Depth: depth },
+    responseType: 'text',
+  });
+
+/** PROPFIND Depth:1 a collection and return its VEVENT-capable calendars */
+const enumerateCalendars = async (
+  http: PluginHttp,
+  url: string,
+): Promise<{ label: string; value: string }[]> => {
+  const xml = await propfind(http, url, buildPropfindBody(), '1');
+  return parseCalendarList(xml)
+    .filter((c) => c.supportsVevent)
+    .map((c) => ({ label: c.displayName, value: c.href }));
+};
+
+/**
+ * Resolve the calendar-home-set collection that actually holds the user's
+ * calendars. CalDAV servers advertise a root or principal URL — e.g. Nextcloud's
+ * `https://host/remote.php/dav`, Fastmail's `https://caldav.fastmail.com/dav/` —
+ * not the calendar-home itself, so a plain Depth:1 PROPFIND there lists no
+ * `<calendar>` resources (they sit one or two levels deeper). Follow the RFC 4791
+ * bootstrap: read `calendar-home-set` directly, else find the
+ * `current-user-principal` and read `calendar-home-set` from it. Returns '' when
+ * neither can be resolved.
+ */
+const resolveCalendarHome = async (
+  http: PluginHttp,
+  cfg: CaldavCalendarConfig,
+  enteredUrl: string,
+): Promise<string> => {
+  const doc = parseXmlDoc(
+    await propfind(http, enteredUrl, buildDiscoveryPropfindBody(), '0'),
+  );
+  const directHome = getHrefInProp(doc, CALDAV_NS, 'calendar-home-set');
+  if (directHome) return ensureTrailingSlash(resolveHref(cfg, directHome));
+
+  const principal = getHrefInProp(doc, DAV_NS, 'current-user-principal');
+  if (!principal) return '';
+  const principalDoc = parseXmlDoc(
+    await propfind(http, resolveHref(cfg, principal), buildDiscoveryPropfindBody(), '0'),
+  );
+  const home = getHrefInProp(principalDoc, CALDAV_NS, 'calendar-home-set');
+  return home ? ensureTrailingSlash(resolveHref(cfg, home)) : '';
+};
+
+/**
+ * Discover calendars supporting VEVENT.
+ * First try the entered URL directly (handles users who pasted the calendar-home
+ * collection). If that lists no calendars, fall back to RFC 4791 service
+ * discovery via the principal / calendar-home-set. See issue #8259.
+ */
 const discoverCalendars = async (
   http: PluginHttp,
   cfg: CaldavCalendarConfig,
 ): Promise<{ label: string; value: string }[]> => {
-  const url = ensureTrailingSlash(getServerUrl(cfg));
-  const xml = await http.request<string>('PROPFIND', url, buildPropfindBody(), {
-    headers: { ...caldavHeaders(), Depth: '1' },
-    responseType: 'text',
-  });
-  return parseCalendarList(xml)
-    .filter((c) => c.supportsVevent)
-    .map((c) => ({
-      label: c.displayName,
-      value: c.href,
-    }));
+  const enteredUrl = ensureTrailingSlash(getServerUrl(cfg));
+
+  try {
+    const direct = await enumerateCalendars(http, enteredUrl);
+    if (direct.length) return direct;
+  } catch {
+    // The entered URL may be a principal/root collection that rejects Depth:1.
+    // Fall through to the discovery bootstrap below.
+  }
+
+  const home = await resolveCalendarHome(http, cfg, enteredUrl);
+  if (!home) return [];
+  return enumerateCalendars(http, home);
 };
 
 // --- ical.js-based RRULE expansion ---
@@ -1044,7 +1140,7 @@ PluginAPI.registerIssueProvider({
       type: 'input' as const,
       label: 'CalDAV server URL',
       description:
-        'The CalDAV endpoint URL (e.g. https://cloud.example.com/remote.php/dav/calendars/username/)',
+        'The CalDAV server URL — the root works (e.g. https://cloud.example.com/remote.php/dav for Nextcloud, https://caldav.fastmail.com/dav/ for Fastmail). A specific calendar-home URL also works.',
       required: true,
     },
     {

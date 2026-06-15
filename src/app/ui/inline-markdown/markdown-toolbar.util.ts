@@ -210,6 +210,15 @@ const toggleLinePrefix = (
 
   // Adjust selection
   const lengthDiff = newContent.length - (lineEnd - lineStart);
+  if (selectionStart === selectionEnd) {
+    const newPos = Math.max(0, selectionStart + lengthDiff);
+    return {
+      text: newText,
+      selectionStart: newPos,
+      selectionEnd: newPos,
+    };
+  }
+
   return {
     text: newText,
     selectionStart: lineStart,
@@ -344,6 +353,15 @@ export const applyNumberedList = (
   const newText = text.substring(0, lineStart) + newContent + text.substring(lineEnd);
 
   const lengthDiff = newContent.length - (lineEnd - lineStart);
+
+  if (selectionStart === selectionEnd) {
+    const newPos = Math.max(0, selectionStart + lengthDiff);
+    return {
+      text: newText,
+      selectionStart: newPos,
+      selectionEnd: newPos,
+    };
+  }
   return {
     text: newText,
     selectionStart: lineStart,
@@ -391,6 +409,14 @@ export const applyTaskList = (
   const newText = text.substring(0, lineStart) + newContent + text.substring(lineEnd);
 
   const lengthDiff = newContent.length - (lineEnd - lineStart);
+  if (selectionStart === selectionEnd) {
+    const newPos = Math.max(0, selectionStart + lengthDiff);
+    return {
+      text: newText,
+      selectionStart: newPos,
+      selectionEnd: newPos,
+    };
+  }
   return {
     text: newText,
     selectionStart: lineStart,

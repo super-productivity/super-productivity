@@ -2,7 +2,7 @@ import { buildComparator, rewriteTagIdsForPanel, sanitizePanelCfg } from './boar
 import { BoardPanelCfg } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 
-const basePanel: BoardPanelCfg = {
+const basePanel: any = {
   id: 'p1',
   title: 'Panel',
   taskIds: [],
@@ -11,25 +11,62 @@ const basePanel: BoardPanelCfg = {
   taskDoneState: 1,
   scheduledState: 1,
   isParentTasksOnly: false,
-} as BoardPanelCfg;
+  projectIds: [''],
+};
 
 describe('sanitizePanelCfg', () => {
+  it('migrates legacy projectId to projectIds array', () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { projectIds, ...inputWithoutProjectIds } = basePanel;
+    const out = sanitizePanelCfg({ ...inputWithoutProjectIds, projectId: 'p1' } as any);
+    expect(out.projectIds).toEqual(['p1']);
+    expect('projectId' in out).toBe(false);
+  });
+
+  it('migrates legacy empty projectId to projectIds [""]', () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { projectIds, ...inputWithoutProjectIds } = basePanel;
+    const out = sanitizePanelCfg({ ...inputWithoutProjectIds, projectId: '' } as any);
+    expect(out.projectIds).toEqual(['']);
+    expect('projectId' in out).toBe(false);
+  });
+
+  it('ensures projectIds is always an array', () => {
+    const out = sanitizePanelCfg({ ...basePanel, projectIds: null as any } as any);
+    expect(out.projectIds).toEqual(['']);
+  });
+
+  it('migrates legacy projectId even if projectIds is already defaulted to [""]', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      projectIds: [''],
+      projectId: 'p1',
+    } as any);
+    expect(out.projectIds).toEqual(['p1']);
+    expect('projectId' in out).toBe(false);
+  });
+
+  it('deliberately drops specific IDs when "" co-occurs (lossy canonicalization)', () => {
+    const out = sanitizePanelCfg({ ...basePanel, projectIds: ['', 'p1', 'p2'] } as any);
+    expect(out.projectIds).toEqual(['']);
+  });
+
   it('migrates sortByDue=asc to sortBy=dueDate/asc and drops sortByDue', () => {
-    const out = sanitizePanelCfg({ ...basePanel, sortByDue: 'asc' });
+    const out = sanitizePanelCfg({ ...basePanel, sortByDue: 'asc' } as any);
     expect(out.sortBy).toBe('dueDate');
     expect(out.sortDir).toBe('asc');
     expect('sortByDue' in out).toBe(false);
   });
 
   it('migrates sortByDue=desc to sortBy=dueDate/desc', () => {
-    const out = sanitizePanelCfg({ ...basePanel, sortByDue: 'desc' });
+    const out = sanitizePanelCfg({ ...basePanel, sortByDue: 'desc' } as any);
     expect(out.sortBy).toBe('dueDate');
     expect(out.sortDir).toBe('desc');
     expect('sortByDue' in out).toBe(false);
   });
 
   it('drops sortByDue=off without adding sortBy', () => {
-    const out = sanitizePanelCfg({ ...basePanel, sortByDue: 'off' });
+    const out = sanitizePanelCfg({ ...basePanel, sortByDue: 'off' } as any);
     expect(out.sortBy).toBeUndefined();
     expect(out.sortDir).toBeUndefined();
     expect('sortByDue' in out).toBe(false);
@@ -42,7 +79,7 @@ describe('sanitizePanelCfg', () => {
       sortDir: null as any,
       includedTagsMatch: null as any,
       excludedTagsMatch: null as any,
-    });
+    } as any);
     expect('sortBy' in out).toBe(false);
     expect('sortDir' in out).toBe(false);
     expect('includedTagsMatch' in out).toBe(false);
@@ -54,7 +91,7 @@ describe('sanitizePanelCfg', () => {
       ...basePanel,
       sortBy: 'priority' as any,
       sortDir: 'asc',
-    });
+    } as any);
     expect('sortBy' in out).toBe(false);
     // sortDir stays — it's valid on its own; it'll just go unused.
     expect(out.sortDir).toBe('asc');
@@ -67,7 +104,7 @@ describe('sanitizePanelCfg', () => {
       sortDir: 'desc',
       includedTagsMatch: 'any',
       excludedTagsMatch: 'all',
-    });
+    } as any);
     expect(out.sortBy).toBe('title');
     expect(out.sortDir).toBe('desc');
     expect(out.includedTagsMatch).toBe('any');
@@ -75,7 +112,7 @@ describe('sanitizePanelCfg', () => {
   });
 
   it('is idempotent', () => {
-    const once = sanitizePanelCfg({ ...basePanel, sortByDue: 'asc' });
+    const once = sanitizePanelCfg({ ...basePanel, sortByDue: 'asc' } as any);
     const twice = sanitizePanelCfg(once);
     expect(twice).toEqual(once);
   });

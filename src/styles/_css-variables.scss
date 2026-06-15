@@ -124,6 +124,12 @@
 
   // Component dimensions
   --component-max-width: 800px;
+  // Fluid focus-mode clock diameter — single source of truth for the clock
+  // face and the focus-mode-main duration-slider overlay. vmin tracks the
+  // smaller viewport dimension (clock is square), capped by vh so squat
+  // windows don't push the task title / controls off-screen; floor keeps it
+  // legible on tiny windows, ceiling stops it dominating 4K.
+  --clock-face-size-default: clamp(180px, min(64vmin, 40vh), 640px);
   --side-nav-width-switch-mobile: 500px;
   --side-nav-width-switch-l: 1500px;
   --side-nav-width-mobile: calc(100vw - var(--s9));

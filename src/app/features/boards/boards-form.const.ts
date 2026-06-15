@@ -219,12 +219,14 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
         },
         {
-          key: 'projectId',
+          key: 'projectIds',
           type: 'project-select',
           props: {
             label: T.F.BOARDS.FORM.PROJECT,
-            defaultValue: '',
-            nullLabel: T.F.BOARDS.FORM.PROJECT_ALL,
+            multiple: true,
+            required: true,
+            defaultValue: [''],
+            defaultLabel: T.F.BOARDS.FORM.PROJECT_ALL,
           },
         },
         {

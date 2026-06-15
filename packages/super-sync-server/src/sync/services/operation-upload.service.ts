@@ -11,6 +11,7 @@ import {
   isFullStateOpType,
   limitVectorClockSize,
   Operation,
+  ProcessOperationResult,
   SyncConfig,
   SYNC_ERROR_CODES,
   UploadResult,
@@ -20,6 +21,7 @@ import {
   detectConflict,
   getBatchConflictEntityPairs,
   getConflictEntityIds,
+  getStoredEntityIds,
   getEntityConflictKey,
   isSameDuplicateOperation,
   prefetchLatestEntityOpsForBatch,
@@ -308,6 +310,7 @@ export class OperationUploadService {
         fullStateVectorClock: isFullStateOpType(op.opType)
           ? { ...op.vectorClock }
           : undefined,
+        payloadBytes: validation.payloadBytes,
       });
     }
     return validatedCandidates;
@@ -475,7 +478,9 @@ export class OperationUploadService {
       }
 
       pruneVectorClockForStorage(op);
-      const sized = computeOpStorageBytes(op);
+      // Reuse the payload byte size measured during validation; the clock is
+      // (re)measured inside computeOpStorageBytes because it was just pruned.
+      const sized = computeOpStorageBytes(op, candidate.payloadBytes);
       acceptedDeltaBytes += sized.bytes;
       if (sized.fallback) unserializableAccepted++;
 
@@ -540,6 +545,10 @@ export class OperationUploadService {
         opType: candidate.op.opType,
         entityType: candidate.op.entityType,
         entityId: candidate.op.entityId ?? null,
+        // Persist the full entity set for multi-entity ops so conflict detection
+        // can match a write to any touched entity across uploads, not just
+        // entityIds[0]; single-entity ops store [] and use the scalar (#8334).
+        entityIds: getStoredEntityIds(candidate.op),
         payload: candidate.op.payload as Prisma.InputJsonValue,
         payloadBytes: BigInt(candidate.storageBytes),
         vectorClock: candidate.op.vectorClock as Prisma.InputJsonValue,
@@ -593,7 +602,15 @@ export class OperationUploadService {
     op: Operation,
     now: number,
     tx: Prisma.TransactionClient,
-  ): Promise<UploadResult> {
+  ): Promise<ProcessOperationResult> {
+    // Rejected ops have no storage cost; the caller only reads storageBytes when
+    // result.accepted is true.
+    const reject = (result: UploadResult): ProcessOperationResult => ({
+      result,
+      storageBytes: 0,
+      fallback: false,
+    });
+
     // Clamp future timestamps instead of rejecting them (prevents silent data
     // loss). Shares the exact clamp + audit with the batch path.
     const originalTimestamp = this.clampFutureTimestamp(userId, clientId, op, now);
@@ -612,12 +629,12 @@ export class OperationUploadService {
         reason: validation.error,
         opType: op.opType,
       });
-      return {
+      return reject({
         opId: op.id,
         accepted: false,
         error: validation.error,
         errorCode: validation.errorCode,
-      };
+      });
     }
     // Capture the *unpruned* vector clock for full-state ops. The op row stores
     // the pruned clock (see `limitVectorClockSize` call below); persisting the
@@ -657,12 +674,12 @@ export class OperationUploadService {
           reason: 'Operation ID already belongs to a different operation',
           opType: op.opType,
         });
-        return {
+        return reject({
           opId: op.id,
           accepted: false,
           error: 'Operation ID already belongs to a different operation',
           errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
-        };
+        });
       }
 
       Logger.audit({
@@ -676,12 +693,12 @@ export class OperationUploadService {
         reason: 'Duplicate operation ID (pre-check)',
         opType: op.opType,
       });
-      return {
+      return reject({
         opId: op.id,
         accepted: false,
         error: 'Duplicate operation ID',
         errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
-      };
+      });
     }
 
     // Check for conflicts with existing operations
@@ -703,13 +720,13 @@ export class OperationUploadService {
         reason: conflict.reason,
         opType: op.opType,
       });
-      return {
+      return reject({
         opId: op.id,
         accepted: false,
         error: conflict.reason,
         errorCode,
         existingClock: conflict.existingClock,
-      };
+      });
     }
 
     // Get next sequence number
@@ -746,13 +763,13 @@ export class OperationUploadService {
         reason: `[RACE] ${finalConflict.reason}`,
         opType: op.opType,
       });
-      return {
+      return reject({
         opId: op.id,
         accepted: false,
         error: finalConflict.reason,
         errorCode,
         existingClock: finalConflict.existingClock,
-      };
+      });
     }
 
     // Prune vector clock AFTER conflict detection but BEFORE storage.
@@ -771,6 +788,12 @@ export class OperationUploadService {
       );
     }
 
+    // Size the op once, here, after the clock prune above (so the stored clock is
+    // measured) and reusing the payload byte size from validation (so the
+    // payload isn't re-stringified). Reused for the payloadBytes column and the
+    // caller's acceptedDeltaBytes accumulation.
+    const sized = computeOpStorageBytes(op, validation.payloadBytes);
+
     const createResult = await tx.operation.createMany({
       data: [
         {
@@ -782,8 +805,12 @@ export class OperationUploadService {
           opType: op.opType,
           entityType: op.entityType,
           entityId: op.entityId ?? null,
+          // Persist the full entity set for multi-entity ops so conflict detection
+          // can match a write to any touched entity across uploads, not just
+          // entityIds[0]; single-entity ops store [] and use the scalar (#8334).
+          entityIds: getStoredEntityIds(op),
           payload: op.payload as Prisma.InputJsonValue,
-          payloadBytes: BigInt(computeOpStorageBytes(op).bytes),
+          payloadBytes: BigInt(sized.bytes),
           vectorClock: op.vectorClock as Prisma.InputJsonValue,
           schemaVersion: op.schemaVersion,
           clientTimestamp: BigInt(op.timestamp),
@@ -835,12 +862,12 @@ export class OperationUploadService {
           reason: 'Operation ID already belongs to a different operation',
           opType: op.opType,
         });
-        return {
+        return reject({
           opId: op.id,
           accepted: false,
           error: 'Operation ID already belongs to a different operation',
           errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
-        };
+        });
       }
 
       Logger.audit({
@@ -854,12 +881,12 @@ export class OperationUploadService {
         reason: 'Duplicate operation ID (insert race)',
         opType: op.opType,
       });
-      return {
+      return reject({
         opId: op.id,
         accepted: false,
         error: 'Duplicate operation ID',
         errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
-      };
+      });
     }
 
     if (fullStateVectorClock) {
@@ -877,9 +904,9 @@ export class OperationUploadService {
     }
 
     return {
-      opId: op.id,
-      accepted: true,
-      serverSeq,
+      result: { opId: op.id, accepted: true, serverSeq },
+      storageBytes: sized.bytes,
+      fallback: sized.fallback,
     };
   }
 }

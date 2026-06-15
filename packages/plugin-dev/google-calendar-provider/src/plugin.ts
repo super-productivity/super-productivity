@@ -104,6 +104,10 @@ interface GoogleCalendarEvent {
   end?: { dateTime?: string; date?: string; timeZone?: string };
   htmlLink?: string;
   attendees?: { self?: boolean; responseStatus?: string }[];
+  extendedProperties?: {
+    private?: Record<string, string>;
+    shared?: Record<string, string>;
+  };
   [key: string]: unknown;
 }
 
@@ -236,6 +240,18 @@ const withRateLimitRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
 const isDeclined = (event: GoogleCalendarEvent): boolean =>
   event.attendees?.some((a) => a.self && a.responseStatus === 'declined') ?? false;
 
+/**
+ * True for events SuperProductivity itself wrote as auto-time-block mirrors of a
+ * local task (tagged with `extendedProperties.private.spTaskId` in
+ * `timeBlock.upsertEvent`). When a read calendar overlaps the time-block
+ * calendar, these mirror events get fetched back and would render in the
+ * schedule/agenda right next to the very task that created them — a duplicate
+ * (#8171). The local task is the source of truth, so the mirror is excluded from
+ * all read paths (schedule/agenda and search-to-add).
+ */
+const isSpManagedEvent = (event: GoogleCalendarEvent): boolean =>
+  typeof event.extendedProperties?.private?.spTaskId === 'string';
+
 /** Fetch events from a single calendar. */
 const fetchEventsForCalendar = async (
   http: PluginHttp,
@@ -263,6 +279,7 @@ const fetchEventsForCalendar = async (
 
   return (response.items || [])
     .filter((e) => e.status !== 'cancelled')
+    .filter((e) => !isSpManagedEvent(e))
     .filter((e) => cfg.showDeclinedEvents || !isDeclined(e))
     .map((e) => mapEventToSearchResult(e, calendarId));
 };

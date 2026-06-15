@@ -37,6 +37,7 @@ import { Project } from '../../../features/project/project.model';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
 import { Router } from '@angular/router';
+import { Log } from '../../../core/log';
 
 const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
 
@@ -179,10 +180,7 @@ export class NavListTreeComponent implements OnDestroy {
     node: TreeNode<MenuTreeViewNode>,
   ): void {
     // TODO: Implement folder context menu
-    console.log(
-      'Folder context menu for:',
-      node.data?.k === MenuTreeKind.FOLDER ? node.data.name : 'unknown',
-    );
+    Log.log('Folder context menu for:', { id: node.id, kind: node.data?.k });
   }
 
   private _toggleFolder(treeNodeId: string): void {

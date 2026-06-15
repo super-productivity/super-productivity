@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (p. ej.: https://try.gitea.io)",
+    "TOKEN": "Token de acceso",
+    "REPO_FULL_NAME": "Nombre de usuario o nombre de la organización/proyecto",
+    "SCOPE": "Alcance",
+    "SCOPE_ALL": "Todos",
+    "SCOPE_CREATED": "Creado por mí",
+    "SCOPE_ASSIGNED": "Asignado a mí",
+    "FILTER_LABELS": "Filtrar por etiquetas (opcional)",
+    "EXCLUDE_LABELS": "Excluir etiquetas (opcional)",
+    "HOW_TO_GET_TOKEN": "¿Cómo obtener un token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumen",
+    "STATE": "Estado",
+    "ASSIGNEE": "Asignado",
+    "LABELS": "Etiquetas",
+    "DESCRIPTION": "Descripción"
+  },
+  "FORM_HELP": "<p>Aquí puedes configurar SuperProductivity para listar las incidencias de Gitea abiertas para un repositorio específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la incidencia así como más información sobre ella.</p> <p>Además, puedes añadir e importar automáticamente todas las incidencias abiertas.</p><p>Para superar los límites de uso y acceder puedes proporcionar un token de acceso."
+}

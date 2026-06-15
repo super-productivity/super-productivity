@@ -1142,4 +1142,263 @@ END:VCALENDAR</cal:calendar-data>
       expect(mockHttp.delete).toHaveBeenCalledTimes(1);
     });
   });
+
+  // Regression coverage for issue #8259 — CalDAV servers advertise a root or
+  // principal URL, not the calendar-home, so a plain Depth:1 PROPFIND there
+  // lists no <calendar> resources and the config dropdowns stayed empty.
+  describe('calendar discovery / loadOptions (issue #8259)', () => {
+    const getLoadOptions = (): NonNullable<
+      (typeof definition.configFields)[number]['loadOptions']
+    > => {
+      const field = definition.configFields.find((f) => f.key === 'readCalendarIds');
+      if (!field?.loadOptions) throw new Error('readCalendarIds.loadOptions missing');
+      return field.loadOptions;
+    };
+
+    /** Multistatus listing the user's calendars (one VEVENT, one VTODO-only). */
+    const CALENDAR_LIST_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/</d:href>
+    <d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Personal</d:displayname>
+      <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+      <cal:supported-calendar-component-set><cal:comp name="VEVENT"/></cal:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/tasks/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Tasks</d:displayname>
+      <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+      <cal:supported-calendar-component-set><cal:comp name="VTODO"/></cal:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    /** Depth:1 on a root/principal collection — no <calendar> resources. */
+    const NON_CALENDAR_COLLECTION_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/</d:href>
+    <d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    const PRINCIPAL_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop>
+      <d:current-user-principal><d:href>/remote.php/dav/principals/users/admin/</d:href></d:current-user-principal>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    const HOME_SET_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/principals/users/admin/</d:href>
+    <d:propstat><d:prop>
+      <cal:calendar-home-set><d:href>/remote.php/dav/calendars/admin/</d:href></cal:calendar-home-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    /** Route PROPFIND responses by URL + Depth; 404 anything unmapped. */
+    const makeHttp = (
+      routes: Record<string, string>,
+    ): { request: any } & Record<string, any> => ({
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+      request: vi.fn(
+        async (
+          _method: string,
+          url: string,
+          _body: unknown,
+          opts: any,
+        ): Promise<string> => {
+          const depth = opts?.headers?.Depth;
+          const res = routes[`${url}|${depth}`];
+          if (res === undefined) {
+            throw Object.assign(new Error(`no route for ${url} depth=${depth}`), {
+              status: 404,
+            });
+          }
+          return res;
+        },
+      ),
+    });
+
+    it('returns [] without any request when credentials are incomplete', async () => {
+      const http = makeHttp({});
+      const result = await getLoadOptions()(
+        { serverUrl: 'https://nc.example.com/remote.php/dav' } as any,
+        http as any,
+      );
+      expect(result).toEqual([]);
+      expect(http.request).not.toHaveBeenCalled();
+    });
+
+    it('uses the entered URL directly when it is already a calendar-home (back-compat)', async () => {
+      const http = makeHttp({
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav/calendars/admin/',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+      // No discovery bootstrap needed — a single Depth:1 PROPFIND.
+      expect(http.request).toHaveBeenCalledTimes(1);
+    });
+
+    it('discovers calendars from a Nextcloud root URL via principal + calendar-home-set', async () => {
+      const http = makeHttp({
+        // Step 1: Depth:1 on the root lists only non-calendar collections.
+        'https://nc.example.com/remote.php/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        // Step 2: Depth:0 on the root yields the current-user-principal.
+        'https://nc.example.com/remote.php/dav/|0': PRINCIPAL_XML,
+        // Step 3: Depth:0 on the principal yields the calendar-home-set.
+        'https://nc.example.com/remote.php/dav/principals/users/admin/|0': HOME_SET_XML,
+        // Step 4: Depth:1 on the calendar-home enumerates the calendars.
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+    });
+
+    it('discovers calendars when calendar-home-set is advertised at the entered URL', async () => {
+      const HOME_AT_ROOT_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/dav/</d:href>
+    <d:propstat><d:prop>
+      <cal:calendar-home-set><d:href>/remote.php/dav/calendars/admin/</d:href></cal:calendar-home-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+      const http = makeHttp({
+        'https://nc.example.com/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        'https://nc.example.com/dav/|0': HOME_AT_ROOT_XML,
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+    });
+
+    it('returns [] when neither calendars nor a principal can be resolved', async () => {
+      const EMPTY_PROPS_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop/></d:propstat>
+  </d:response>
+</d:multistatus>`;
+      const http = makeHttp({
+        'https://nc.example.com/remote.php/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        'https://nc.example.com/remote.php/dav/|0': EMPTY_PROPS_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('falls back to discovery when the entered URL rejects a Depth:1 PROPFIND', async () => {
+      const http = makeHttp({
+        // No '|1' route for the root → Depth:1 throws (e.g. 403/405); bootstrap runs.
+        'https://nc.example.com/remote.php/dav/|0': PRINCIPAL_XML,
+        'https://nc.example.com/remote.php/dav/principals/users/admin/|0': HOME_SET_XML,
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+    });
+
+    it('refuses a cross-origin calendar-home-set href without sending a credentialed request to it (SSRF guard)', async () => {
+      const CROSS_ORIGIN_HOME_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop>
+      <cal:calendar-home-set><d:href>https://evil.example.com/dav/calendars/admin/</d:href></cal:calendar-home-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+      const http = makeHttp({
+        'https://nc.example.com/remote.php/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        'https://nc.example.com/remote.php/dav/|0': CROSS_ORIGIN_HOME_XML,
+      });
+      // resolveHref rejects the off-origin href → discovery throws rather than
+      // issuing a credentialed PROPFIND to the attacker-controlled host.
+      await expect(
+        getLoadOptions()(
+          {
+            serverUrl: 'https://nc.example.com/remote.php/dav',
+            username: 'admin',
+            password: 'pass',
+          } as any,
+          http as any,
+        ),
+      ).rejects.toThrow();
+      // Every request must have stayed on the entered server origin — no
+      // credentialed PROPFIND escaped to the attacker-named host.
+      const calledOrigins = http.request.mock.calls.map(
+        (c: unknown[]) => new URL(c[1] as string).origin,
+      );
+      expect(calledOrigins.every((o: string) => o === 'https://nc.example.com')).toBe(
+        true,
+      );
+    });
+  });
 });

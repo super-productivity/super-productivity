@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
   <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
     <!-- Customize your theme here. -->
@@ -26,6 +26,14 @@
     <item name="windowNoTitle">true</item>
     <item name="android:background">@null</item>
     <item name="android:navigationBarColor">@color/navigationBar</item>
+    <!--
+      Android 12+ system splash. Without this the OS draws the launcher icon on
+      the theme's colorBackground, which is white here (AppTheme is the static
+      Theme.AppCompat.Light.* family, not DayNight) — so the loading icon shows a
+      white background even in dark mode. @color/windowBackground has a
+      values-night variant (#131314), so the splash tracks system day/night.
+    -->
+    <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/windowBackground</item>
   </style>
 
 </resources>

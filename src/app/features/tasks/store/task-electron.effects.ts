@@ -31,6 +31,7 @@ import { ipcAddTaskFromAppUri$ } from '../../../core/ipc-events';
 import { TaskService } from '../task.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { TaskLog } from '../../../core/log';
 
 // TODO send message to electron when current task changes here
 
@@ -205,7 +206,10 @@ export class TaskElectronEffects {
         tap((data) => {
           // Double-check data validity as defensive programming
           if (!data || !data.title || typeof data.title !== 'string') {
-            console.error('handleAddTaskFromProtocol$ received invalid data:', data);
+            TaskLog.err('handleAddTaskFromProtocol$ received invalid data', {
+              hasData: !!data,
+              titleType: typeof data?.title,
+            });
             return;
           }
           this._taskService.add(data.title);

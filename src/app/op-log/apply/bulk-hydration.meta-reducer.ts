@@ -46,7 +46,9 @@ export const bulkOperationsMetaReducer = <T>(
 ): ActionReducer<T> => {
   return (state: T | undefined, action: Action): T => {
     if (action.type === bulkApplyOperations.type) {
-      const { operations } = action as ReturnType<typeof bulkApplyOperations>;
+      const { operations, localClientId } = action as ReturnType<
+        typeof bulkApplyOperations
+      >;
 
       // Pre-scan: collect entity IDs being archived or deleted in this batch.
       // LWW Update ops for these entities must be skipped to prevent
@@ -82,7 +84,29 @@ export const bulkOperationsMetaReducer = <T>(
               )
             : op;
           const opAction = convertOpToAction(opForApply);
-          currentState = reducer(currentState, opAction);
+          // Mark ops authored by a DIFFERENT client so reducers can preserve
+          // per-device "local-only" settings against remote overwrites — while
+          // replaying the device's OWN ops faithfully.
+          //
+          // When localClientId is unknown we leave the flag unset (own-op
+          // semantics: apply faithfully, don't preserve). In practice this only
+          // happens before the clientId cache is warm — i.e. a never-synced or
+          // cold-booting device. A device that actually has foreign ops to apply
+          // has already resolved its clientId (download/upload/vector-clock all
+          // require it), so genuine remote applies always carry it and stay
+          // protected. The unset fallback deliberately favours own-op fidelity:
+          // the alternative (blanket-preserve, the old `isRemote` gate) is what
+          // silently nulled the device's own syncProvider on replay. The
+          // residual risk — a foreign op adopting another device's provider/
+          // isEnabled/isEncryptionEnabled — needs a transient IndexedDB failure
+          // on a cold boot and is user-recoverable, strictly narrower than the
+          // own-settings data-loss this replaces.
+          const isApplyingFromOtherClient =
+            !!localClientId && op.clientId !== localClientId;
+          const finalAction = isApplyingFromOtherClient
+            ? { ...opAction, meta: { ...opAction.meta, isApplyingFromOtherClient: true } }
+            : opAction;
+          currentState = reducer(currentState, finalAction);
         }
         return currentState;
       });

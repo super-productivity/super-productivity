@@ -410,6 +410,12 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     return !!(evt.data as ScheduleFromCalendarEvent).isReferenceCalendar;
   });
 
+  readonly canRescheduleCalendarEvent = computed(() => {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    return this._calEventActions.canMoveEvent(evt.data as ScheduleFromCalendarEvent);
+  });
+
   async openCalendarEventLink(): Promise<void> {
     const evt = this.se();
     if (evt.type !== SVEType.CalendarEvent) return;

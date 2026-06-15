@@ -1,6 +1,10 @@
 import { resolveBgImageToDataUrl } from './resolve-bg-image-to-data-url.util';
 
 describe('resolveBgImageToDataUrl', () => {
+  afterEach(() => {
+    delete (window as { ea?: unknown }).ea;
+  });
+
   it('returns null for empty input', async () => {
     expect(await resolveBgImageToDataUrl(null)).toBeNull();
     expect(await resolveBgImageToDataUrl(undefined)).toBeNull();
@@ -15,10 +19,30 @@ describe('resolveBgImageToDataUrl', () => {
     );
   });
 
-  // Outside Electron (the unit-test environment) file:// URLs are not inlined
-  // and pass through unchanged; the on-disk read path only runs under Electron.
-  it('does not inline file:// URLs outside Electron', async () => {
-    const url = 'file:///home/user/bg.png';
-    expect(await resolveBgImageToDataUrl(url)).toBe(url);
+  it('drops legacy file:// values (no IPC reads renderer-supplied paths anymore)', async () => {
+    // Phase 4 of #8228: the IPC that resolved renderer-supplied file://
+    // paths was removed. Existing pre-#8228 configs with file:// values
+    // render no background until the user re-picks via the cache-backed
+    // image picker.
+    expect(await resolveBgImageToDataUrl('file:///home/user/bg.png')).toBeNull();
+  });
+
+  it('resolves image:<id> via the main-owned image cache IPC', async () => {
+    const imageCacheGetDataUrl = jasmine
+      .createSpy('imageCacheGetDataUrl')
+      .and.resolveTo('data:image/png;base64,abc');
+    (window as { ea?: unknown }).ea = { imageCacheGetDataUrl };
+
+    const result = await resolveBgImageToDataUrl(`image:${'a'.repeat(32)}`);
+
+    expect(imageCacheGetDataUrl).toHaveBeenCalledWith('a'.repeat(32));
+    expect(result).toBe('data:image/png;base64,abc');
+  });
+
+  it('returns null when image:<id> is unknown', async () => {
+    (window as { ea?: unknown }).ea = {
+      imageCacheGetDataUrl: jasmine.createSpy('imageCacheGetDataUrl').and.resolveTo(null),
+    };
+    expect(await resolveBgImageToDataUrl(`image:${'a'.repeat(32)}`)).toBeNull();
   });
 });

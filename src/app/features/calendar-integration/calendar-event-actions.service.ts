@@ -9,7 +9,7 @@ import {
   isPluginIssueProvider,
 } from '../issue/issue.model';
 import { selectIssueProviderById } from '../issue/store/issue-provider.selectors';
-import { IssueSyncAdapterRegistryService } from '../issue/two-way-sync/issue-sync-adapter-registry.service';
+import { IssueSyncAdapterResolverService } from '../issue/two-way-sync/issue-sync-adapter-resolver.service';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { CalendarIntegrationService } from './calendar-integration.service';
 import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
@@ -21,7 +21,13 @@ import { IS_ELECTRON } from '../../app.constants';
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
-import { getErrorTxt } from '../../util/get-error-text';
+import { getDbDateStr } from '../../util/get-db-date-str';
+
+interface CalendarEventPushOptions {
+  logMessage: string;
+  undoChanges?: Record<string, unknown>;
+  successMsg?: string;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -31,13 +37,21 @@ export class CalendarEventActionsService {
   private _issueService = inject(IssueService);
   private _matDialog = inject(MatDialog);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
-  private _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
+  private _syncAdapterResolver = inject(IssueSyncAdapterResolverService);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
   private _snackService = inject(SnackService);
 
   isPluginEvent(calEv: ScheduleFromCalendarEvent): boolean {
     return isPluginIssueProvider(calEv.issueProviderKey as IssueProviderKey);
+  }
+
+  canMoveEvent(calEv: ScheduleFromCalendarEvent): boolean {
+    if (calEv.isReferenceCalendar || !this.isPluginEvent(calEv)) {
+      return false;
+    }
+    const provider = this._pluginRegistry.getProvider(calEv.issueProviderKey);
+    return !!provider?.definition.updateIssue;
   }
 
   hasEventUrl(calEv: ScheduleFromCalendarEvent): boolean {
@@ -98,7 +112,7 @@ export class CalendarEventActionsService {
     if (!isConfirm) {
       return;
     }
-    const adapter = this._syncAdapterRegistry.get(
+    const adapter = this._syncAdapterResolver.getAdapter(
       calEv.issueProviderKey as IssueProviderKey,
     );
     if (!adapter?.deleteIssue) {
@@ -113,25 +127,24 @@ export class CalendarEventActionsService {
         msg: T.F.CALENDARS.S.EVENT_DELETED,
       });
     } catch (e) {
-      Log.err('Failed to delete calendar event', e);
+      Log.err('Failed to delete calendar event', this._sanitizeLogError(e));
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
-        translateParams: { errTxt: getErrorTxt(e) },
+        translateParams: { errTxt: this._getSafeErrorTxt(e) },
       });
     }
   }
 
   async reschedule(calEv: ScheduleFromCalendarEvent): Promise<void> {
-    if (!this.isPluginEvent(calEv)) {
+    if (!this.canMoveEvent(calEv)) {
       return;
     }
     const eventDate = new Date(calEv.start);
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    const targetDay = `${eventDate.getFullYear()}-${pad(eventDate.getMonth() + 1)}-${pad(eventDate.getDate())}`;
+    const targetDay = getDbDateStr(eventDate);
     const targetTime = calEv.isAllDay
       ? undefined
-      : `${pad(eventDate.getHours())}:${pad(eventDate.getMinutes())}`;
+      : `${String(eventDate.getHours()).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')}`;
 
     const dialogRef = this._matDialog.open(DialogScheduleTaskComponent, {
       restoreFocus: true,
@@ -158,36 +171,116 @@ export class CalendarEventActionsService {
         duration_ms: durationMs,
       };
     } else {
-      // Parse as local midnight to avoid UTC date shift in western timezones
-      const d = new Date(result.date + 'T00:00:00');
       changes = {
-        start_date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        start_date: getDbDateStr(result.date),
       };
     }
     /* eslint-enable @typescript-eslint/naming-convention */
 
-    const adapter = this._syncAdapterRegistry.get(
+    await this._pushChanges(calEv, changes, {
+      logMessage: 'Failed to reschedule calendar event',
+      undoChanges: this._getCurrentScheduleChanges(calEv),
+    });
+  }
+
+  async moveToStartTime(
+    calEv: ScheduleFromCalendarEvent,
+    newStartMs: number,
+  ): Promise<boolean> {
+    if (!this.canMoveEvent(calEv)) {
+      return false;
+    }
+
+    /* eslint-disable @typescript-eslint/naming-convention */
+    const changes = {
+      start_dateTime: new Date(newStartMs).toISOString(),
+      duration_ms: calEv.duration,
+    };
+    /* eslint-enable @typescript-eslint/naming-convention */
+
+    return this._pushChanges(calEv, changes, {
+      logMessage: 'Failed to move calendar event',
+      undoChanges: this._getCurrentScheduleChanges(calEv),
+      successMsg: T.F.CALENDARS.S.EVENT_MOVED,
+    });
+  }
+
+  private async _pushChanges(
+    calEv: ScheduleFromCalendarEvent,
+    changes: Record<string, unknown>,
+    options: CalendarEventPushOptions,
+  ): Promise<boolean> {
+    const adapter = this._syncAdapterResolver.getAdapter(
       calEv.issueProviderKey as IssueProviderKey,
     );
     if (!adapter) {
-      return;
+      return false;
     }
+
     try {
       const cfg = await this._getPluginConfig(calEv);
       await adapter.pushChanges(calEv.id, changes, cfg);
       this._calendarIntegrationService.triggerRefresh();
       this._snackService.open({
         type: 'SUCCESS',
-        msg: T.F.CALENDARS.S.EVENT_RESCHEDULED,
+        msg: options.successMsg ?? T.F.CALENDARS.S.EVENT_RESCHEDULED,
+        ...(options.undoChanges
+          ? {
+              actionStr: T.G.UNDO,
+              actionFn: () =>
+                this._pushChanges(calEv, options.undoChanges!, {
+                  logMessage: 'Failed to undo calendar event reschedule',
+                }),
+            }
+          : {}),
       });
+      return true;
     } catch (e) {
-      Log.err('Failed to reschedule calendar event', e);
+      Log.err(options.logMessage, this._sanitizeLogError(e));
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
-        translateParams: { errTxt: getErrorTxt(e) },
+        translateParams: { errTxt: this._getSafeErrorTxt(e) },
       });
+      return false;
     }
+  }
+
+  private _getCurrentScheduleChanges(
+    calEv: ScheduleFromCalendarEvent,
+  ): Record<string, unknown> {
+    /* eslint-disable @typescript-eslint/naming-convention */
+    return calEv.isAllDay
+      ? { start_date: getDbDateStr(calEv.start) }
+      : {
+          start_dateTime: new Date(calEv.start).toISOString(),
+          duration_ms: calEv.duration,
+        };
+    /* eslint-enable @typescript-eslint/naming-convention */
+  }
+
+  private _sanitizeLogError(e: unknown): Record<string, unknown> {
+    const err = e as {
+      name?: unknown;
+      status?: unknown;
+      statusText?: unknown;
+    };
+    return {
+      ...(typeof err?.name === 'string' ? { name: err.name } : {}),
+      ...(typeof err?.status === 'number' ? { status: err.status } : {}),
+      ...(typeof err?.statusText === 'string' ? { statusText: err.statusText } : {}),
+    };
+  }
+
+  private _getSafeErrorTxt(e: unknown): string {
+    const err = this._sanitizeLogError(e);
+    if (typeof err.status === 'number' && typeof err.statusText === 'string') {
+      return `${err.status} ${err.statusText}`;
+    }
+    if (typeof err.status === 'number') {
+      return String(err.status);
+    }
+    return typeof err.name === 'string' ? err.name : T.F.CALENDARS.S.CAL_PROVIDER_ERROR;
   }
 
   private async _getPluginConfig(

@@ -174,6 +174,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
   private _browserTitleService = inject(BrowserTitleService);
+  private _hasShownLegacyFileBgSnack = false;
   readonly T = T;
   readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
@@ -283,6 +284,18 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     effect(() => {
       const bgImage = this._globalThemeService.backgroundImg();
       const currentRequestId = ++bgResolveRequestId;
+      if (
+        typeof bgImage === 'string' &&
+        bgImage.startsWith('file://') &&
+        !this._hasShownLegacyFileBgSnack
+      ) {
+        this._hasShownLegacyFileBgSnack = true;
+        this._snackService.open({
+          msg: T.F.PROJECT.FORM_THEME.S_BACKGROUND_IMAGE_RESELECT_REQUIRED,
+          type: 'WARNING',
+          config: { duration: 0 },
+        });
+      }
       void resolveBgImageToDataUrl(bgImage).then((resolved) => {
         // Ignore stale resolutions when the source changed mid-read.
         if (currentRequestId === bgResolveRequestId) {

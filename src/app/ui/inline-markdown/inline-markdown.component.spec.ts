@@ -137,6 +137,43 @@ describe('InlineMarkdownComponent', () => {
     }));
   });
 
+  describe('XSS sanitization (GHSA-4rrp-xhp8-hf4p)', () => {
+    it('should not render an executable event handler from a malicious note', fakeAsync(() => {
+      component.model = '<img src=x onerror="alert(document.domain)">';
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      tick();
+
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      expect(preview).toBeTruthy();
+      expect(preview.innerHTML).not.toContain('onerror');
+      // The sanitizer keeps the (now inert) <img>, just without the handler.
+      const img = preview.querySelector('img');
+      if (img) {
+        expect(img.getAttribute('onerror')).toBeNull();
+      }
+    }));
+
+    it('should still render a normal note (sanitizer does not break rendering)', fakeAsync(() => {
+      component.model = '**bold** and [link](https://example.com)';
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      tick();
+
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      expect(preview.querySelector('strong')?.textContent).toBe('bold');
+      expect(preview.querySelector('a')?.getAttribute('href')).toBe(
+        'https://example.com',
+      );
+    }));
+  });
+
   describe('ngOnDestroy', () => {
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange
@@ -1547,6 +1584,28 @@ describe('InlineMarkdownComponent', () => {
       // Assert - blank lines should be preserved
       expect(component.changed.emit).toHaveBeenCalledWith(
         '- [ ] Task 1\n\n- [x] Task 2\n\n- [ ] Task 3',
+      );
+    });
+
+    it('should ignore regular text containing task-like brackets', () => {
+      // Arrange
+      component.model = '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [ ] Task 2';
+      fixture.detectChanges();
+
+      const wrapper1 = document.createElement('li');
+      wrapper1.className = 'checkbox-wrapper';
+      const wrapper2 = document.createElement('li');
+      wrapper2.className = 'checkbox-wrapper';
+
+      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
+      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
+
+      // Act - toggle Task 2
+      component['_handleCheckboxClick'](wrapper2);
+
+      // Assert - regular text with "- [" should not offset the checkbox mapping
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [x] Task 2',
       );
     });
 

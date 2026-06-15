@@ -206,7 +206,7 @@ export class DialogEditIssueProviderComponent {
 
   constructor() {
     this._initOAuthAndOptions().catch((err) => {
-      console.error(
+      IssueLog.err(
         '[DialogEditIssueProvider] OAuth init failed',
         getSafeErrorLogMeta(err),
       );
@@ -453,7 +453,7 @@ export class DialogEditIssueProviderComponent {
         }
       } catch (e) {
         anyFailed = true;
-        console.error('[DialogEditIssueProvider] loadOptions failed', {
+        IssueLog.err('[DialogEditIssueProvider] loadOptions failed', {
           issueProviderKey: this.issueProviderKey,
           hasFieldKey: !!field.key,
           ...getSafeErrorLogMeta(e),

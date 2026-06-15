@@ -26,6 +26,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
+        projectIds: [''],
       },
       {
         id: 'NOT_URGENT_AND_IMPORTANT',
@@ -37,6 +38,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
+        projectIds: [''],
       },
       {
         id: 'URGENT_AND_NOT_IMPORTANT',
@@ -48,6 +50,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
+        projectIds: [''],
       },
       {
         id: 'NOT_URGENT_AND_NOT_IMPORTANT',
@@ -59,6 +62,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.All,
         isParentTasksOnly: true,
+        projectIds: [''],
       },
     ],
   },
@@ -77,6 +81,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,
         isParentTasksOnly: false,
+        projectIds: [''],
       },
       {
         id: 'IN_PROGRESS',
@@ -88,6 +93,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,
         isParentTasksOnly: false,
+        projectIds: [''],
       },
       {
         id: 'DONE',
@@ -101,6 +107,7 @@ export const DEFAULT_BOARDS: BoardCfg[] = [
         scheduledState: BoardPanelCfgScheduledState.All,
         backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,
         isParentTasksOnly: false,
+        projectIds: [''],
       },
     ],
   },
@@ -123,5 +130,5 @@ export const DEFAULT_PANEL_CFG: BoardPanelCfg = {
   scheduledState: BoardPanelCfgScheduledState.All,
   backlogState: BoardPanelCfgTaskTypeFilter.All,
   isParentTasksOnly: false,
-  projectId: '',
+  projectIds: [''],
 };

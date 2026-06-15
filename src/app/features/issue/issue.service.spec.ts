@@ -23,9 +23,7 @@ import { TrelloCommonInterfacesService } from './providers/trello/trello-common-
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
-import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
-import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
 import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
@@ -163,9 +161,7 @@ describe('IssueService', () => {
           provide: OpenProjectCommonInterfacesService,
           useValue: mockCommonInterfaceService,
         },
-        { provide: GiteaCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: RedmineCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: LinearCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: CalendarCommonInterfacesService,
           useValue: mockCommonInterfaceService,

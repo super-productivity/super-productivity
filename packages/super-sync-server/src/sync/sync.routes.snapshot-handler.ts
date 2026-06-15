@@ -332,7 +332,14 @@ export const uploadSnapshotHandler = async (
     // Skip caching when the result is a residual DUPLICATE_OPERATION (the
     // existing-op lookup just above failed) so a concurrent retry that
     // lost the insert race cannot overwrite the winner's success entry.
-    if (requestId && finalResult.errorCode !== SYNC_ERROR_CODES.DUPLICATE_OPERATION) {
+    // Also skip transaction rollbacks (INTERNAL_ERROR): nothing was committed,
+    // so the deterministic-requestId retry must re-process instead of being
+    // served the cached transient failure for the dedup TTL (5 min). #8332
+    if (
+      requestId &&
+      finalResult.errorCode !== SYNC_ERROR_CODES.DUPLICATE_OPERATION &&
+      finalResult.errorCode !== SYNC_ERROR_CODES.INTERNAL_ERROR
+    ) {
       syncService.cacheSnapshotRequestResult(userId, requestId, responseBody);
     }
 

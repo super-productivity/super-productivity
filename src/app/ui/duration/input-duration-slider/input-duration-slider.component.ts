@@ -25,6 +25,10 @@ import { TranslatePipe } from '@ngx-translate/core';
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [dotAnimation],
   imports: [InputDurationDirective, FormsModule, TranslatePipe],
+  host: {
+    ['[class.bare-ring]']: 'bareRing()',
+    ['[class.hide-handle]']: 'hideHandle()',
+  },
 })
 export class InputDurationSliderComponent implements OnInit, OnDestroy {
   private _el = inject(ElementRef);
@@ -40,12 +44,40 @@ export class InputDurationSliderComponent implements OnInit, OnDestroy {
   // Input signals
   readonly label = input('');
   readonly model = input(0);
+  // When true, the dial dynamically rescales above 1 hour: 5-min snap with
+  // full-circle = 60 min while value < 1h, then 15-min snap with full-circle
+  // = 6h once the value crosses the 60-min boundary. Default off; current
+  // consumers keep the original linear-hours behavior.
+  readonly useFlexibleIncrement = input(false);
+
+  // Bare-ring variant: strip the slider's own circular chrome (filled circle,
+  // dots, inner circle, drop shadow) so a ring rendered behind it shows through
+  // — only the draggable dot and the editable value remain. Opt-in so the other
+  // consumers (time-estimate dialogs etc.) keep the default chrome.
+  readonly bareRing = input(false);
+
+  // Type-only: hide the drag handle and swallow pointer events so the value
+  // can't be dragged; the editable input stays interactive. Pairs with bareRing
+  // for Pomodoro preparation, where the duration is typed rather than dragged.
+  readonly hideHandle = input(false);
+
+  // On Enter, commit the typed value and drop focus. Opt-in (focus-mode) only:
+  // blurring on Enter cancels the browser's implicit form submission, so the
+  // default must stay off or the time-estimate dialogs (slider inside a <form>
+  // with a submit button) can no longer be saved by pressing Enter.
+  readonly blurOnEnter = input(false);
 
   // Output remains the same
   readonly modelChange = output<number>();
 
   // Internal model signal
   readonly _model = signal(0);
+
+  // Unsnapped accumulator for flex-mode drags. The snapped model value alone
+  // can't accumulate sub-step motion (e.g., dragging 2° of a 5-min snap), so
+  // we keep this in sync with the model externally and add raw deltas to it
+  // during drag.
+  private _flexAccumulatedMin = 0;
 
   startHandler?: (ev: MouseEvent | TouchEvent) => void;
   endHandler?: () => void;
@@ -201,6 +233,11 @@ export class InputDurationSliderComponent implements OnInit, OnDestroy {
   }
 
   setValueFromRotation(degrees: number): void {
+    if (this.useFlexibleIncrement()) {
+      this._setValueFromRotationFlex(degrees);
+      return;
+    }
+
     const THRESHOLD = 40;
 
     let minutesFromDegrees;
@@ -244,10 +281,78 @@ export class InputDurationSliderComponent implements OnInit, OnDestroy {
     this.modelChange.emit(newValue);
   }
 
+  // Hybrid drag math used when useFlexibleIncrement is enabled.
+  // Below 60 min ("Mode A"): 5-min snap, 1° = 1/6 min, full circle = 60 min.
+  // At/above 60 min ("Mode B"): 15-min snap, 1° = 1 min, full circle = 360 min
+  // (top of dial pinned to the 60-min boundary).
+  //
+  // We accumulate value via the user's *raw* pointer-angle delta — not the
+  // snap-quantized delta — because snapping near the 60-min boundary can
+  // turn a real 15° ccw move into an apparent +345° "wrap" and bounce the
+  // value back. Raw delta gives natural hysteresis: the user must drag far
+  // enough that the rounded value actually crosses the boundary.
+  // `minutesBefore` is repurposed in flex mode to store the previous raw
+  // pointer angle (0–359, unsnapped).
+  private _setValueFromRotationFlex(degrees: number): void {
+    const absDeg = degrees >= 0 ? degrees : degrees + 360;
+    const previousRawDeg = this.minutesBefore();
+
+    // Shortest signed angular delta in (-180, 180]
+    let rawDelta = absDeg - previousRawDeg;
+    if (rawDelta > 180) rawDelta -= 360;
+    if (rawDelta <= -180) rawDelta += 360;
+
+    const wasInModeB = this._flexAccumulatedMin >= 60;
+
+    // Mode-aware sensitivity: Mode A's full circle is 60 min (1° = 1/6 min);
+    // Mode B's full circle is 360 min (1° = 1 min).
+    const minPerDeg = wasInModeB ? 1 : 1 / 6;
+    this._flexAccumulatedMin += rawDelta * minPerDeg;
+    if (this._flexAccumulatedMin < 0) this._flexAccumulatedMin = 0;
+
+    // Snap based on which mode we're heading into after the move
+    const heading = this._flexAccumulatedMin >= 60;
+    const snap = heading ? 15 : 5;
+    let newMin = Math.round(this._flexAccumulatedMin / snap) * snap;
+
+    // Clean mode-boundary crossings — anchor the accumulator to the
+    // boundary so the next drag tick measures from a real value.
+    if (!wasInModeB && newMin >= 60) {
+      // A → B at the seam
+      newMin = 60;
+      this._flexAccumulatedMin = 60;
+    } else if (wasInModeB && newMin < 60) {
+      // B → A: last 5-min tick under an hour
+      newMin = 55;
+      this._flexAccumulatedMin = 55;
+    }
+
+    // Display degrees derived from the value
+    const displayDeg = newMin >= 60 ? (newMin - 60) % 360 : (newMin * 6) % 360;
+
+    // Store the raw pointer angle so subsequent deltas measure real motion
+    this.minutesBefore.set(absDeg);
+    this.setCircleRotation(displayDeg);
+    this.setDots(0);
+
+    const newValue = newMin * 60 * 1000;
+    this._model.set(newValue);
+    this.modelChange.emit(newValue);
+  }
+
   onInputChange($event: number): void {
     this._model.set($event);
     this.modelChange.emit($event);
     this.setRotationFromValue();
+  }
+
+  onEnterKey(ev: KeyboardEvent, inputEl: HTMLInputElement): void {
+    // Only the focus-mode consumer opts into blur-on-Enter; doing it for form
+    // consumers would cancel the implicit submit (see blurOnEnter docs above).
+    if (this.blurOnEnter()) {
+      ev.preventDefault();
+      inputEl.blur();
+    }
   }
 
   setRotationFromValue(val?: number): void {
@@ -259,12 +364,28 @@ export class InputDurationSliderComponent implements OnInit, OnDestroy {
         : valueToUse;
 
     const totalMinutes = Math.floor(validVal / (1000 * 60));
+
+    if (this.useFlexibleIncrement() && totalMinutes >= 60) {
+      // Mode B mapping: 0° (top) = 60 min, 1° = 1 min, full lap = 6h.
+      const degrees = (totalMinutes - 60) % 360;
+      this.setDots(0);
+      // Repurpose minutesBefore as previous-degrees in flex mode.
+      this.minutesBefore.set(degrees);
+      this._flexAccumulatedMin = totalMinutes;
+      this.setCircleRotation(degrees);
+      return;
+    }
+
     const minutes = totalMinutes % 60;
     const hours = Math.floor(validVal / (1000 * 60 * 60));
 
-    this.setDots(hours);
+    this.setDots(this.useFlexibleIncrement() ? 0 : hours);
     const degrees = (minutes * 360) / 60;
-    this.minutesBefore.set(minutes);
+    // In flex mode (still Mode A), minutesBefore tracks degrees too.
+    this.minutesBefore.set(this.useFlexibleIncrement() ? degrees : minutes);
+    if (this.useFlexibleIncrement()) {
+      this._flexAccumulatedMin = totalMinutes;
+    }
     this.setCircleRotation(degrees);
   }
 }

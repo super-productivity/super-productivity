@@ -4,6 +4,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { FORMLY_CONFIG, FormlyModule } from '@ngx-formly/core';
 import { InputDurationFormlyComponent } from './duration/input-duration-formly/input-duration-formly.component';
+import { InputTimeFormlyComponent } from './input-time/input-time-formly/input-time-formly.component';
 import { ValidationModule } from './validation/validation.module';
 import { TranslateService } from '@ngx-translate/core';
 import { FormlyMaterialModule } from '@ngx-formly/material';
@@ -53,6 +54,12 @@ import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-pick
         {
           name: 'duration',
           component: InputDurationFormlyComponent,
+          extends: 'input',
+          wrappers: ['form-field'],
+        },
+        {
+          name: 'time',
+          component: InputTimeFormlyComponent,
           extends: 'input',
           wrappers: ['form-field'],
         },

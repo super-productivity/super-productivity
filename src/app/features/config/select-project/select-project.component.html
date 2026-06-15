@@ -16,14 +16,29 @@
   [formControl]="formControl"
   [formlyAttributes]="field"
   [id]="id"
+  [multiple]="to.multiple"
+  (selectionChange)="onSelectionChange($event)"
 >
+  @if (to.multiple && triggerLabel()) {
+    <mat-select-trigger>
+      {{ triggerLabel() }}
+    </mat-select-trigger>
+  }
   @if (!field.props?.hideNoneOption) {
     <mat-option [value]="''">{{
-      field.props?.nullLabel || T.G.NONE | translate
+      field.props?.defaultLabel || T.G.NONE | translate
     }}</mat-option>
   }
   @for (opt of projectService.list$ | async; track trackById($index, opt)) {
-    <mat-option [value]="opt.id">{{ opt.title }}</mat-option>
+    <mat-option [value]="opt.id">
+      <select-option-row
+        [title]="opt.title"
+        [icon]="opt.icon"
+        [defaultIcon]="DEFAULT_PROJECT_ICON"
+        [color]="opt.theme?.primary"
+        [folderPath]="projectFolderMap().get(opt.id)"
+      ></select-option-row>
+    </mat-option>
   }
 </mat-select>
 <!---->

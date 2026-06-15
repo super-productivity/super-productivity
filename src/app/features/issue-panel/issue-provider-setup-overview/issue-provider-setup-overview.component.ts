@@ -10,6 +10,7 @@ import { CalendarContextInfoTarget } from '../../issue/providers/calendar/calend
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginService } from '../../../plugins/plugin.service';
+import { IssueLog } from '../../../core/log';
 
 @Component({
   selector: 'issue-provider-setup-overview',
@@ -69,7 +70,7 @@ export class IssueProviderSetupOverviewComponent {
     this.pluginProviders = allProviders.filter((p) => !p.useAgendaView);
     this.pluginCalendarProviders = allProviders.filter((p) => p.useAgendaView);
     if (!isValidIssueProviderKey(issueProviderKey)) {
-      console.error(`Invalid issue provider key from plugin: "${issueProviderKey}"`);
+      IssueLog.err(`Invalid issue provider key from plugin: "${issueProviderKey}"`);
       return;
     }
     this.openSetupDialog(issueProviderKey);

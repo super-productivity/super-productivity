@@ -339,6 +339,71 @@ describe('Google Calendar Plugin', () => {
     });
   });
 
+  describe('getNewIssuesForBacklog', () => {
+    const makeEvent = (over: Record<string, unknown>): Record<string, unknown> => ({
+      id: 'real-1',
+      summary: 'Real meeting',
+      status: 'confirmed',
+      start: { dateTime: '2026-05-14T15:00:00Z' },
+      end: { dateTime: '2026-05-14T16:00:00Z' },
+      ...over,
+    });
+
+    // #8171: with auto-time-block on, scheduling a task writes a mirror event to
+    // Google Calendar. When the read calendar overlaps the time-block calendar,
+    // that mirror is fetched back and must NOT surface as a separate agenda event
+    // (it would duplicate the local task that created it).
+    it('excludes SP auto-time-block mirror events tagged with spTaskId', async () => {
+      const mockHttp = {
+        get: vi.fn().mockResolvedValue({
+          items: [
+            makeEvent({}),
+            makeEvent({
+              id: 'spdeadbeef',
+              summary: 'My Scheduled Task',
+              extendedProperties: { private: { spTaskId: 'task-1' } },
+            }),
+          ],
+        }),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+
+      const results = await definition.getNewIssuesForBacklog!(
+        { readCalendarIds: ['primary'] } as any,
+        mockHttp as any,
+      );
+
+      expect(results.map((r) => r.title)).toEqual(['Real meeting']);
+      expect(results.some((r) => r.id.includes('spdeadbeef'))).toBe(false);
+    });
+
+    it('keeps regular events that have unrelated extendedProperties', async () => {
+      const mockHttp = {
+        get: vi.fn().mockResolvedValue({
+          items: [
+            makeEvent({
+              extendedProperties: { private: { someOtherApp: 'x' } },
+            }),
+          ],
+        }),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+
+      const results = await definition.getNewIssuesForBacklog!(
+        { readCalendarIds: ['primary'] } as any,
+        mockHttp as any,
+      );
+
+      expect(results).toHaveLength(1);
+    });
+  });
+
   describe('timeBlock.upsertEvent', () => {
     const cfg = { timeBlockCalendarId: 'cal-1' };
     const eventData = {

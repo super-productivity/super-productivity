@@ -1,15 +1,26 @@
-import { IS_ELECTRON } from '../../app.constants';
+import { Log } from '../log';
+
+const IMAGE_CACHE_PREFIX = 'image:';
+
+// Warn at most once per session: a stale legacy `file://` config would
+// otherwise spam the log on every theme/background re-resolution.
+let _hasWarnedAboutLegacyFileUrl = false;
 
 /**
  * Resolve a background-image URL to something a CSS `background` can render.
  *
- * On Electron a `file://` URL has to be read off disk and inlined as a data
- * URL (the renderer can't load arbitrary `file://` paths); every other URL
- * passes through unchanged. Returns null when there is no image or the read
- * fails, so callers fall back to no background.
+ * The shape is `image:<opaque-id>` for files the user picked through the
+ * Electron picker (the file lives in a main-owned cache;
+ * `electron/image-cache.ts`), or a plain http(s) URL for Unsplash and
+ * direct-URL backgrounds.
  *
- * Note: callers that react to a changing source should guard against stale
- * results themselves (e.g. a request-id), since this resolves asynchronously.
+ * Legacy `file://` values produced by pre-issue-#8228 builds are
+ * intentionally not resolved here — the IPC that read them has been
+ * removed, since the renderer-supplied-absolute-path shape was the issue.
+ * Users with a `file://` background see no image until they re-pick.
+ *
+ * Returns null when there is no image or the read fails, so callers fall
+ * back to no background.
  */
 export const resolveBgImageToDataUrl = async (
   bgImage: string | null | undefined,
@@ -17,17 +28,33 @@ export const resolveBgImageToDataUrl = async (
   if (!bgImage) {
     return null;
   }
-  if (!IS_ELECTRON || !bgImage.startsWith('file://')) {
-    return bgImage;
+  if (bgImage.startsWith(IMAGE_CACHE_PREFIX)) {
+    const id = bgImage.substring(IMAGE_CACHE_PREFIX.length);
+    if (!id) return null; // `image:` with empty id — nothing to look up
+    // window.ea is only defined under Electron; on web the absence of the
+    // bridge naturally short-circuits to null.
+    const imageCacheGetDataUrl = window.ea?.imageCacheGetDataUrl;
+    if (!imageCacheGetDataUrl) {
+      return null;
+    }
+    try {
+      return (await imageCacheGetDataUrl(id)) || null;
+    } catch {
+      return null;
+    }
   }
-  const readLocalImageAsDataUrl = window.ea?.readLocalImageAsDataUrl;
-  if (!readLocalImageAsDataUrl) {
+  if (bgImage.startsWith('file://')) {
+    // Legacy shape — picker now produces `image:<id>`. No safe IPC to read
+    // an arbitrary renderer-supplied path remains; user must re-pick.
+    // Static message only — never log the URL (it's user content). AppComponent
+    // shows the user-facing re-pick snack once per session.
+    if (!_hasWarnedAboutLegacyFileUrl) {
+      _hasWarnedAboutLegacyFileUrl = true;
+      Log.warn(
+        'Background image with legacy file:// URL is no longer resolvable; please re-pick',
+      );
+    }
     return null;
   }
-  try {
-    return (await readLocalImageAsDataUrl(bgImage)) || null;
-  } catch {
-    // A missing/unreadable file just means "no background" — fall back quietly.
-    return null;
-  }
+  return bgImage;
 };

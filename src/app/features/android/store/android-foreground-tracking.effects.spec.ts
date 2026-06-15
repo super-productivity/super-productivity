@@ -4,7 +4,15 @@ import { BehaviorSubject } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
-import { parseNativeTrackingData } from './android-foreground-tracking.effects';
+import {
+  creditBackgroundTickGap,
+  handleAndroidResume,
+  isTimeSpentJumpForNotification,
+  parseNativeTrackingData,
+  TIME_SPENT_JUMP_THRESHOLD_MS,
+} from './android-foreground-tracking.effects';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 
 // We need to test the effect logic by reimplementing it in tests since
 // the actual effects are conditionally created based on IS_ANDROID_WEB_VIEW
@@ -47,7 +55,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeTrue();
 
@@ -67,7 +75,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -80,7 +88,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -93,7 +101,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -106,7 +114,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeFalse();
     }));
@@ -119,7 +127,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
         prevState.taskId === currState.taskId &&
         currState.taskId !== null &&
         !currState.isFocusModeActive &&
-        prevState.timeSpent !== currState.timeSpent;
+        isTimeSpentJumpForNotification(prevState.timeSpent, currState.timeSpent);
 
       expect(shouldUpdate).toBeTrue();
 
@@ -129,6 +137,26 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpentChanges logic', () => 
 
       expect(updateTrackingServiceSpy).toHaveBeenCalledWith(120000);
     }));
+  });
+
+  describe('isTimeSpentJumpForNotification', () => {
+    it('should suppress increments at or below the threshold', () => {
+      expect(isTimeSpentJumpForNotification(0, TIME_SPENT_JUMP_THRESHOLD_MS)).toBeFalse();
+      expect(isTimeSpentJumpForNotification(60000, 61000)).toBeFalse();
+      expect(isTimeSpentJumpForNotification(60000, 60000)).toBeFalse();
+    });
+
+    it('should pass increments above the threshold (manual edit, sync merge)', () => {
+      expect(
+        isTimeSpentJumpForNotification(0, TIME_SPENT_JUMP_THRESHOLD_MS + 1),
+      ).toBeTrue();
+      expect(isTimeSpentJumpForNotification(60000, 600000)).toBeTrue();
+    });
+
+    it('should pass any decrease (manual correction, idle time removed)', () => {
+      expect(isTimeSpentJumpForNotification(60000, 59999)).toBeTrue();
+      expect(isTimeSpentJumpForNotification(60000, 0)).toBeTrue();
+    });
   });
 
   describe('distinctUntilChanged behavior', () => {
@@ -1749,5 +1777,152 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
     expect(addTimeSpentSpy).not.toHaveBeenCalled();
     expect(resetTrackingStartSpy).toHaveBeenCalled();
     expect(snackOpenSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('creditBackgroundTickGap - background tick gap (#8243)', () => {
+  let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
+  let taskService: jasmine.SpyObj<TaskService>;
+
+  beforeEach(() => {
+    globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
+      'GlobalTrackingIntervalService',
+      ['triggerWakeUpTick', 'resetTrackingStart'],
+    );
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', [
+      'flushAccumulatedTimeSpent',
+    ]);
+  });
+
+  it('should credit a capped wake-up tick, reset the anchor and flush', () => {
+    creditBackgroundTickGap(globalTracking, taskService);
+
+    expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledWith(
+      ANDROID_BACKGROUND_TICK_CAP_MS,
+    );
+    expect(globalTracking.resetTrackingStart).toHaveBeenCalledTimes(1);
+    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(1);
+  });
+
+  it('should credit the gap before flushing it into a syncTimeSpent op', () => {
+    const callOrder: string[] = [];
+    globalTracking.triggerWakeUpTick.and.callFake(() => {
+      callOrder.push('wakeUpTick');
+      return { duration: 0, date: '2026-06-11', timestamp: 0 };
+    });
+    globalTracking.resetTrackingStart.and.callFake(() => callOrder.push('reset'));
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => callOrder.push('flush'));
+
+    creditBackgroundTickGap(globalTracking, taskService);
+
+    expect(callOrder).toEqual(['wakeUpTick', 'reset', 'flush']);
+  });
+});
+
+describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () => {
+  const GAP_MS = 10 * 60 * 1000;
+  const PRE_GAP_TIME_SPENT = 60000;
+  const NATIVE_ELAPSED = PRE_GAP_TIME_SPENT + GAP_MS;
+
+  let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
+  let taskService: jasmine.SpyObj<TaskService>;
+
+  beforeEach(() => {
+    globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
+      'GlobalTrackingIntervalService',
+      ['triggerWakeUpTick', 'resetTrackingStart'],
+    );
+    globalTracking.triggerWakeUpTick.and.returnValue({
+      duration: GAP_MS,
+      date: '2026-06-11',
+      timestamp: 0,
+    });
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', [
+      'flushAccumulatedTimeSpent',
+    ]);
+  });
+
+  it('should credit the gap BEFORE the native reconcile samples the task', async () => {
+    const order: string[] = [];
+    globalTracking.triggerWakeUpTick.and.callFake(() => {
+      order.push('credit');
+      return { duration: GAP_MS, date: '2026-06-11', timestamp: 0 };
+    });
+
+    await handleAndroidResume(
+      {
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: (taskId) => {
+          order.push('reconcile:' + taskId);
+          return Promise.resolve(true);
+        },
+        getNativeTrackingData: () => null,
+        requestRecovery: () => order.push('recovery'),
+      },
+      { id: 'task-1' } as Task,
+    );
+
+    expect(order).toEqual(['credit', 'reconcile:task-1']);
+  });
+
+  it('should produce exactly ONE syncTimeSpent op for the gap (reconcile sees post-credit state)', async () => {
+    // Models the real wiring: the wake tick credits the gap into the task's
+    // timeSpent synchronously (tick$ subscriber + reducer), the flush emits
+    // one op, and the native reconcile then computes its delta from the
+    // POST-credit timeSpent. With the original two-effect race the reconcile
+    // sampled the pre-credit value and ops would be [GAP_MS, GAP_MS] - the
+    // cross-device double-count this guards against.
+    let timeSpent = PRE_GAP_TIME_SPENT;
+    const emittedOps: number[] = [];
+
+    globalTracking.triggerWakeUpTick.and.callFake(() => {
+      timeSpent += GAP_MS;
+      return { duration: GAP_MS, date: '2026-06-11', timestamp: 0 };
+    });
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => {
+      emittedOps.push(GAP_MS);
+    });
+
+    await handleAndroidResume(
+      {
+        globalTracking,
+        taskService,
+        // mirrors _syncElapsedTimeForTask's delta logic against live state
+        syncElapsedTimeForTask: () => {
+          const duration = NATIVE_ELAPSED - timeSpent;
+          if (duration > 0) {
+            emittedOps.push(duration);
+          }
+          return Promise.resolve(true);
+        },
+        getNativeTrackingData: () => null,
+        requestRecovery: () => {},
+      },
+      { id: 'task-1' } as Task,
+    );
+
+    expect(emittedOps).toEqual([GAP_MS]);
+  });
+
+  it('should route a no-current-task resume to recovery without a reconcile call', async () => {
+    const nativeData = { taskId: 'task-native', elapsedMs: NATIVE_ELAPSED };
+    const recovered: unknown[] = [];
+    const reconcileSpy = jasmine.createSpy('syncElapsedTimeForTask').and.resolveTo(true);
+
+    await handleAndroidResume(
+      {
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: reconcileSpy,
+        getNativeTrackingData: () => nativeData,
+        requestRecovery: (data) => recovered.push(data),
+      },
+      null,
+    );
+
+    expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(1);
+    expect(reconcileSpy).not.toHaveBeenCalled();
+    expect(recovered).toEqual([nativeData]);
   });
 });

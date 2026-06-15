@@ -88,7 +88,7 @@ export const logAdvancedStacktrace = (
 
       // NOTE: there is an issue with this sometimes -> https://github.com/stacktracejs/stacktrace.js/issues/202
     })
-    .catch(console.error);
+    .catch((err) => Log.err(err));
 
 const _cleanHtml = (str: string): string => {
   const div = document.createElement('div');

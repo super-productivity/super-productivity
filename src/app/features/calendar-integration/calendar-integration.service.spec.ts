@@ -944,7 +944,7 @@ END:VCALENDAR`;
 
   describe('testConnection', () => {
     it('should return true when connection succeeds', async () => {
-      const cfg = { icalUrl: 'https://example.com/calendar.ics' } as any;
+      const cfg = createMockProvider();
 
       const promise = service.testConnection(cfg);
 
@@ -956,7 +956,7 @@ END:VCALENDAR`;
     });
 
     it('should return false when connection fails', async () => {
-      const cfg = { icalUrl: 'https://example.com/calendar.ics' } as any;
+      const cfg = createMockProvider();
 
       const promise = service.testConnection(cfg);
 
@@ -968,7 +968,7 @@ END:VCALENDAR`;
     });
 
     it('should return false for empty response', async () => {
-      const cfg = { icalUrl: 'https://example.com/calendar.ics' } as any;
+      const cfg = createMockProvider();
 
       const promise = service.testConnection(cfg);
 
@@ -1094,15 +1094,16 @@ END:VCALENDAR`;
         isDisabledForWebApp: true,
       });
 
-      // Note: IS_WEB_BROWSER might be false in tests, so this test might not fully work
-      const sub = service.requestEvents$(mockProvider).subscribe(() => {
-        // Subscribe to trigger the request
+      let result: CalendarIntegrationEvent[] | undefined;
+      const sub = service.requestEvents$(mockProvider).subscribe((events) => {
+        result = events;
       });
       subscriptions.push(sub);
 
       flush();
 
-      // May or may not make request depending on IS_WEB_BROWSER
+      expect(result).toEqual([]);
+      httpMock.expectNone(mockProvider.icalUrl);
     }));
 
     it('should handle parse errors gracefully', fakeAsync(() => {

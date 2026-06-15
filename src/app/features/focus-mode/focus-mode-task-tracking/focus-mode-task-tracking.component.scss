@@ -1,0 +1,44 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-half);
+  flex: 0 0 auto;
+}
+
+// Mirrors the task-list row's time-wrapper: a vertical spent / estimate stack,
+// italic and muted.
+.time-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.time {
+  font-style: italic;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  font-weight: 300;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.time-val,
+.separator {
+  display: block;
+  white-space: nowrap;
+}
+
+// Match the inbox task-list separator (timeWrapperMinimalStyles in
+// src/app/features/tasks/task/_task-controls.scss): a faint full-width hairline
+// between the stacked spent / estimate values, NOT a slash glyph — so the
+// focus-mode time stack reads identically to the task row.
+.separator {
+  border-top: 1px solid;
+  height: 1px;
+  width: 100%;
+  opacity: 0.1;
+}

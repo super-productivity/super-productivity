@@ -8,9 +8,17 @@
   .search-header {
     margin-bottom: 1rem;
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--s-half);
     justify-content: center;
 
     .search-field {
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .include-completed-toggle {
       width: 100%;
       max-width: 600px;
     }

@@ -224,6 +224,21 @@ module.exports = tseslint.config(
       'local-rules/no-multi-entity-effect': 'warn',
     },
   },
+  // App code must route logging through Log/SyncLog/OpLog/... helpers.
+  // Direct console.* calls bypass the exportable log history users attach
+  // to bug reports. The Log implementation itself, tests, and benchmarks
+  // (which intentionally dump timing numbers to stdout) are exempt.
+  {
+    files: ['src/app/**/*.ts'],
+    ignores: [
+      'src/app/**/*.spec.ts',
+      'src/app/**/*.benchmark.ts',
+      'src/app/core/log.ts',
+    ],
+    rules: {
+      'no-console': 'error',
+    },
+  },
   // HTML files
   {
     files: ['**/*.html'],
