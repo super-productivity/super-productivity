@@ -1,5 +1,5 @@
 import { PlainspaceIssue } from './plainspace-issue.model';
-import { PLAINSPACE_MOCK_CURRENT_USER_ID } from './plainspace.const';
+import { PLAINSPACE_MOCK_CURRENT_USER_ID } from '../../../plainspace/plainspace-identity.const';
 
 /**
  * In-memory mock space tasks for the prototype (see PLAINSPACE_USE_MOCK). A mix

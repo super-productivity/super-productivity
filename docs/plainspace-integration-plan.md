@@ -23,13 +23,18 @@ Productivity (SP) so that:
 >   `PlainspaceCommonInterfacesService` implementing `IssueServiceInterface`,
 >   registered in `issue.model.ts` / `issue.const.ts` / `issue.service.ts` +
 >   icon. Mine/unassigned tasks import via the normal issue→backlog pipeline.
+> - §5 — account / identity: `PlainspaceAccountService` (signals: `account`,
+>   `isLoggedIn`, `currentUserId`; localStorage-persisted, never synced) with a
+>   mock `login`/`logout`. "Mine" in the import filter now comes from the
+>   signed-in identity, and the share toggle prompts sign-in if needed.
 > - §6 — the "Share on Plainspace" toggle in the create-project dialog, which
->   provisions a (mock) space and a bound provider via `PlainspaceShareService`.
+>   (after sign-in) provisions a (mock) space and a bound provider via
+>   `PlainspaceShareService`.
 > - §9 — the "Assigned to others" UI panel (hard-coded sample data).
 >
-> **Still design-only:** §5 account login / real identity, §7.2 live
-> `PlainspaceSharedTasksService` wiring for the panel, §8 write-back, and the
-> real HTTP API (all `PlainspaceApiService` calls are mocked — see §10).
+> **Still design-only:** §7.2 live `PlainspaceSharedTasksService` wiring for the
+> panel, §8 write-back, and the real HTTP API + real auth (all
+> `PlainspaceApiService` calls and the login are mocked — see §10).
 
 ---
 

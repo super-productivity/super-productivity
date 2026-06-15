@@ -15,6 +15,3 @@ export const PLAINSPACE_INITIAL_POLL_DELAY = 8 * 1000;
  * become "unreachable code".
  */
 export const PLAINSPACE_USE_MOCK: boolean = true;
-
-/** Mock identity of "me" for the prototype's assigned/unassigned split. */
-export const PLAINSPACE_MOCK_CURRENT_USER_ID = 'ps-me';

@@ -72,6 +72,8 @@ export enum LS {
   OVERDUE_TASKS_HIDDEN = 'OVERDUE_TASKS_HIDDEN',
   REPEAT_CFGS_HIDDEN = 'REPEAT_CFGS_HIDDEN',
   ASSIGNED_TO_OTHERS_HIDDEN = 'ASSIGNED_TO_OTHERS_HIDDEN',
+  // Plainspace account/identity — local-only, never synced (device identity).
+  PLAINSPACE_ACCOUNT = 'SUP_PLAINSPACE_ACCOUNT',
 
   // Magic side nav
   NAV_SIDEBAR_EXPANDED = 'SUP_NAV_SIDEBAR_EXPANDED',

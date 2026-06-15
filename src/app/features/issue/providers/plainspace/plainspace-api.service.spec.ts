@@ -3,14 +3,18 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { PlainspaceApiService } from './plainspace-api.service';
 import { PlainspaceCfg } from './plainspace.model';
-import { PLAINSPACE_MOCK_CURRENT_USER_ID, PLAINSPACE_USE_MOCK } from './plainspace.const';
+import { PLAINSPACE_USE_MOCK } from './plainspace.const';
+import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
+import { PLAINSPACE_MOCK_CURRENT_USER_ID } from '../../../plainspace/plainspace-identity.const';
 
 // These cover the prototype's mock-mode behaviour (PLAINSPACE_USE_MOCK === true):
 // the mine/unassigned filter that feeds the issue→task pipeline, search scoping,
 // lookup by id, and space creation. Once the real API is wired up (mock flag
 // off) these should be re-pointed at HttpTestingController like the Redmine spec.
+// "Mine" depends on the signed-in identity, so each test logs in first.
 describe('PlainspaceApiService (mock mode)', () => {
   let service: PlainspaceApiService;
+  let accountService: PlainspaceAccountService;
 
   const mockCfg: PlainspaceCfg = {
     isEnabled: true,
@@ -21,9 +25,15 @@ describe('PlainspaceApiService (mock mode)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
-      providers: [PlainspaceApiService],
+      providers: [PlainspaceApiService, PlainspaceAccountService],
     });
     service = TestBed.inject(PlainspaceApiService);
+    accountService = TestBed.inject(PlainspaceAccountService);
+    accountService.login('Tester');
+  });
+
+  afterEach(() => {
+    accountService.logout();
   });
 
   it('runs in mock mode for the prototype', () => {

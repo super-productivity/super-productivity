@@ -7,8 +7,9 @@ import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceIssue } from './plainspace-issue.model';
 import { mapPlainspaceIssueToSearchResult } from './plainspace-issue-map.util';
-import { PLAINSPACE_MOCK_CURRENT_USER_ID, PLAINSPACE_USE_MOCK } from './plainspace.const';
+import { PLAINSPACE_USE_MOCK } from './plainspace.const';
 import { PLAINSPACE_MOCK_ISSUES } from './plainspace-mock-data.const';
+import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
 
 /**
  * HTTP access to the Plainspace API. While `PLAINSPACE_USE_MOCK` is true every
@@ -21,6 +22,7 @@ import { PLAINSPACE_MOCK_ISSUES } from './plainspace-mock-data.const';
 @Injectable({ providedIn: 'root' })
 export class PlainspaceApiService {
   private _http = inject(HttpClient);
+  private _accountService = inject(PlainspaceAccountService);
 
   /** Creates a remote space and returns its id (used by the share flow). */
   createSpace$(title: string, cfg: PlainspaceCfg): Observable<{ id: string }> {
@@ -46,13 +48,10 @@ export class PlainspaceApiService {
    * read-only by the "assigned to others" panel and never imported.
    */
   getMyAndUnassignedTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
+    const meId = this._accountService.currentUserId();
     return this.getTasksForSpace$(cfg).pipe(
       map((issues) =>
-        issues.filter(
-          (issue) =>
-            issue.assigneeId === null ||
-            issue.assigneeId === PLAINSPACE_MOCK_CURRENT_USER_ID,
-        ),
+        issues.filter((issue) => issue.assigneeId === null || issue.assigneeId === meId),
       ),
     );
   }

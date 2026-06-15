@@ -2835,6 +2835,8 @@
       "HELP": "Connect a Plainspace space to import tasks assigned to you and to see tasks assigned to others.",
       "TITLE": "Plainspace"
     },
+    "LOGIN_PROMPT": "Enter your Plainspace display name to sign in",
+    "LOGIN_REQUIRED": "Sign in to Plainspace to share a project.",
     "NO_ASSIGNED_TO_OTHERS": "No tasks are assigned to other members right now.",
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",
     "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",
