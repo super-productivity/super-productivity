@@ -281,10 +281,30 @@ export const resolveTimeframeBounds = (
       end: getFutureLogicalDateStr(daysToSunday, todayStr),
     };
   }
+  if (timeframe === 'NEXT_WEEK') {
+    const date = parseDbDateStr(todayStr);
+    const dayOfWeek = date.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const daysToNextMonday = daysToMonday + 7;
+    const daysToNextSunday = daysToNextMonday + 6;
+    return {
+      start: getFutureLogicalDateStr(daysToNextMonday, todayStr),
+      end: getFutureLogicalDateStr(daysToNextSunday, todayStr),
+    };
+  }
   if (timeframe === 'THIS_MONTH') {
     const date = parseDbDateStr(todayStr);
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
     const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    return {
+      start: getDbDateStr(start),
+      end: getDbDateStr(end),
+    };
+  }
+  if (timeframe === 'NEXT_MONTH') {
+    const date = parseDbDateStr(todayStr);
+    const start = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    const end = new Date(date.getFullYear(), date.getMonth() + 2, 0);
     return {
       start: getDbDateStr(start),
       end: getDbDateStr(end),

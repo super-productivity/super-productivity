@@ -405,9 +405,28 @@ describe('Timeframe helpers', () => {
       expect(boundsSun).toEqual({ start: '2026-06-15', end: '2026-06-21' });
     });
 
+    it('resolves NEXT_WEEK (within next week from next Monday to next Sunday)', () => {
+      // 2026-06-15 is Monday. Range: next Monday (2026-06-22) to next Sunday (2026-06-28)
+      const boundsMon = resolveTimeframeBounds({ timeframe: 'NEXT_WEEK' }, '2026-06-15');
+      expect(boundsMon).toEqual({ start: '2026-06-22', end: '2026-06-28' });
+
+      // 2026-06-20 is Saturday. Range: next Monday (2026-06-22) to next Sunday (2026-06-28)
+      const boundsSat = resolveTimeframeBounds({ timeframe: 'NEXT_WEEK' }, '2026-06-20');
+      expect(boundsSat).toEqual({ start: '2026-06-22', end: '2026-06-28' });
+
+      // 2026-06-21 is Sunday. Range: next Monday (2026-06-22) to next Sunday (2026-06-28)
+      const boundsSun = resolveTimeframeBounds({ timeframe: 'NEXT_WEEK' }, '2026-06-21');
+      expect(boundsSun).toEqual({ start: '2026-06-22', end: '2026-06-28' });
+    });
+
     it('resolves THIS_MONTH (entire current month)', () => {
       const bounds = resolveTimeframeBounds({ timeframe: 'THIS_MONTH' }, '2026-06-15');
       expect(bounds).toEqual({ start: '2026-06-01', end: '2026-06-30' });
+    });
+
+    it('resolves NEXT_MONTH (entire next month)', () => {
+      const bounds = resolveTimeframeBounds({ timeframe: 'NEXT_MONTH' }, '2026-06-15');
+      expect(bounds).toEqual({ start: '2026-07-01', end: '2026-07-31' });
     });
 
     it('resolves NEXT_DAYS with custom limit', () => {
