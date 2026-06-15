@@ -468,86 +468,30 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     const originalArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
     const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
-    // Safety guard: Check if we're about to overwrite non-empty archives with empty ones
-    // This can happen if a full-state op (SYNC_IMPORT/REPAIR) was created with the sync
-    // getStateSnapshot() instead of getStateSnapshotAsync(), which returns
-    // DEFAULT_ARCHIVE (empty)
-    const hasExistingYoung = (originalArchiveYoung?.task?.ids?.length ?? 0) > 0;
-    const hasExistingOld = (originalArchiveOld?.task?.ids?.length ?? 0) > 0;
-    const isIncomingYoungEmpty = !archiveYoung?.task?.ids?.length;
-    const isIncomingOldEmpty = !archiveOld?.task?.ids?.length;
-
     // Write archiveYoung if present in the import data
     if (archiveYoung !== undefined) {
-      if (hasExistingYoung && isIncomingYoungEmpty) {
-        const existingCount = originalArchiveYoung?.task?.ids?.length ?? 0;
-        if (
-          action.meta.opType === OpType.SyncImport ||
-          action.meta.opType === OpType.Repair
-        ) {
-          // SYNC_IMPORT/REPAIR with empty archives is most often a bug (full-state
-          // op built with the sync getStateSnapshot() instead of
-          // getStateSnapshotAsync()). Preserve local archives: discarding non-empty
-          // local data for an empty payload is never the safe choice.
-          OpLog.warn(
-            `[ArchiveOperationHandler] ${action.meta.opType} has empty archiveYoung but local has ${existingCount} tasks. ` +
-              'Preserving local archives (this is likely a bug in the full-state op source).',
-          );
-          // Skip writing empty archive - preserve local
-        } else if (action.meta.opType === OpType.BackupImport) {
-          // BACKUP_IMPORT is an explicit user action - ask for confirmation
-          const confirmed = confirmDialog(
-            `This backup has empty archives, but you have ${existingCount} archived tasks locally. ` +
-              'Restoring will delete your archived data. Continue?',
-          );
-          if (!confirmed) {
-            throw new Error(
-              '[ArchiveOperationHandler] User cancelled backup import to preserve archives',
-            );
-          }
-          await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-        } else {
-          await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-        }
-      } else {
+      if (
+        await this._guardArchiveOverwrite({
+          label: 'archiveYoung',
+          existing: originalArchiveYoung,
+          incoming: archiveYoung,
+          opType: action.meta.opType,
+        })
+      ) {
         await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
       }
     }
 
     // Write archiveOld if present in the import data
     if (archiveOld !== undefined) {
-      let shouldWriteArchiveOld = true;
-
-      if (hasExistingOld && isIncomingOldEmpty) {
-        const existingCount = originalArchiveOld?.task?.ids?.length ?? 0;
-        if (
-          action.meta.opType === OpType.SyncImport ||
-          action.meta.opType === OpType.Repair
-        ) {
-          // SYNC_IMPORT/REPAIR with empty archives is most often a bug (full-state
-          // op built with the sync getStateSnapshot() instead of
-          // getStateSnapshotAsync()). Preserve local archives: discarding non-empty
-          // local data for an empty payload is never the safe choice.
-          OpLog.warn(
-            `[ArchiveOperationHandler] ${action.meta.opType} has empty archiveOld but local has ${existingCount} tasks. ` +
-              'Preserving local archives (this is likely a bug in the full-state op source).',
-          );
-          shouldWriteArchiveOld = false;
-        } else if (action.meta.opType === OpType.BackupImport) {
-          // BACKUP_IMPORT is an explicit user action - ask for confirmation
-          const confirmed = confirmDialog(
-            `This backup has empty old archives, but you have ${existingCount} old archived tasks locally. ` +
-              'Restoring will delete your old archived data. Continue?',
-          );
-          if (!confirmed) {
-            throw new Error(
-              '[ArchiveOperationHandler] User cancelled backup import to preserve archives',
-            );
-          }
-        }
-      }
-
-      if (shouldWriteArchiveOld) {
+      if (
+        await this._guardArchiveOverwrite({
+          label: 'archiveOld',
+          existing: originalArchiveOld,
+          incoming: archiveOld,
+          opType: action.meta.opType,
+        })
+      ) {
         try {
           await this._archiveDbAdapter.saveArchiveOld(archiveOld);
         } catch (e) {
@@ -575,5 +519,52 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     OpLog.log(
       '[ArchiveOperationHandler] Wrote archive data from SYNC_IMPORT/BACKUP_IMPORT',
     );
+  }
+
+  /**
+   * Safety guard: prevents overwriting a non-empty local archive with an empty
+   * incoming one. Returns true if the caller should proceed with the write.
+   *
+   * Handles three opType paths:
+   * - SYNC_IMPORT / REPAIR: silently preserves local (empty incoming is likely a bug)
+   * - BACKUP_IMPORT: asks user for confirmation (explicit restore action)
+   * - default: allows the write
+   */
+  private async _guardArchiveOverwrite(opts: {
+    label: 'archiveYoung' | 'archiveOld';
+    existing: ArchiveModel | undefined;
+    incoming: ArchiveModel | undefined;
+    opType: OpType;
+  }): Promise<boolean> {
+    const hasExisting = (opts.existing?.task?.ids?.length ?? 0) > 0;
+    const isIncomingEmpty = !opts.incoming?.task?.ids?.length;
+
+    if (!hasExisting || !isIncomingEmpty) {
+      return true;
+    }
+
+    const existingCount = opts.existing?.task?.ids?.length ?? 0;
+
+    if (opts.opType === OpType.SyncImport || opts.opType === OpType.Repair) {
+      OpLog.warn(
+        `[ArchiveOperationHandler] ${opts.opType} has empty ${opts.label} but local has ${existingCount} tasks. ` +
+          'Preserving local archives (this is likely a bug in the full-state op source).',
+      );
+      return false;
+    }
+
+    if (opts.opType === OpType.BackupImport) {
+      const confirmed = confirmDialog(
+        `This backup has empty ${opts.label === 'archiveYoung' ? '' : 'old '}archives, but you have ${existingCount} ${opts.label === 'archiveYoung' ? '' : 'old '}archived tasks locally. ` +
+          `Restoring will delete your ${opts.label === 'archiveYoung' ? '' : 'old '}archived data. Continue?`,
+      );
+      if (!confirmed) {
+        throw new Error(
+          '[ArchiveOperationHandler] User cancelled backup import to preserve archives',
+        );
+      }
+    }
+
+    return true;
   }
 }
