@@ -562,7 +562,10 @@ export class BoardPanelComponent {
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
-    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.All) {
+    if (
+      !panelCfg.deadlineState ||
+      panelCfg.deadlineState === BoardPanelCfgDeadlineState.All
+    ) {
       return;
     }
     const task = await firstValueFrom(
