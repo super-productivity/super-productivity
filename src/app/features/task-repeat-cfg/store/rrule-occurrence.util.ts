@@ -214,9 +214,16 @@ const _canNeverFire = (o: RRuleParsedOptions): boolean => {
  * Two correctness points beyond "does it parse":
  *  1. It must FIRE. A rule that yields no occurrence (contradictory BY parts) is
  *     invalid → the engine falls back to legacy repeatCycle instead of deferring
- *     to a rule that silently never creates a task. `_canNeverFire` rejects the
- *     realistic such rules without iterating (avoiding rrule.js's year-275760
- *     freeze); the `.after()` non-null check covers the rest.
+ *     to a rule that silently never creates a task. Two layers, both bounded:
+ *     `_canNeverFire` rejects the realistic contradictory rules in O(1) (incl.
+ *     the FREQ=DAILY+BYWEEKNO class, whose per-day expansion is too slow to probe
+ *     even over a short window); the probe below is a BOUNDED `between(anchor,
+ *     anchor+10y)` that early-exits on the first hit. The window bounds the work
+ *     for any exotic never-fire rule the heuristic doesn't model (e.g. BYSETPOS
+ *     past its set) — so rrule.js's walk-to-year-275760 freeze can never trigger
+ *     — and the early-exit keeps a firing rule at one occurrence. "Fires within a
+ *     decade" is a deliberate product rule: a real recurrence whose first
+ *     occurrence is >10y out does not exist in practice.
  *  2. UNTIL/COUNT are stripped for the probe. They are anchor-relative end
  *     conditions; a rule whose window already closed relative to the fixed probe
  *     anchor still has a sound PATTERN, and the engine applies the real
@@ -238,18 +245,22 @@ export const isRRuleValid = (rrule: string | undefined): rrule is string => {
   // repeatCycle fallback like any other invalid rule.
   if (options && FREQ_TO_CYCLE[options.freq] != null && !_canNeverFire(options)) {
     try {
-      // First occurrence on/after the probe anchor. For a firing rule this
-      // returns immediately; the construct + probe also surfaces deeper invalids
-      // (bad BYDAY etc.) that parsing alone misses. `valid` requires a real hit,
-      // so a never-firing rule that slipped past `_canNeverFire` resolves to
-      // false (after a one-time, memoised walk) rather than a spurious true.
-      const occ = new RRule({
+      // Bounded probe: ask for occurrences in [anchor, anchor+10y] but stop at
+      // the first one (the iterator returns false). The construct + probe also
+      // surfaces deeper invalids (bad BYDAY etc.) that parsing alone misses.
+      // `valid` flips only on a real hit, so an exotic never-firing rule that
+      // slipped past `_canNeverFire` resolves to false after a BOUNDED walk
+      // (never rrule.js's year-275760 ceiling).
+      const rule = new RRule({
         ...options,
         dtstart: noonUtc('2020-01-01'),
         until: null,
         count: null,
-      }).after(_midnightUtc('2019-01-01'), false);
-      valid = occ != null;
+      });
+      rule.between(noonUtc('2020-01-01'), noonUtc('2030-01-01'), true, () => {
+        valid = true;
+        return false; // first hit is enough — never enumerate the full window
+      });
     } catch {
       // construct/probe failed → invalid
     }
