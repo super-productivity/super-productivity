@@ -54,9 +54,7 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
     _allExistingIssueIds: string[],
   ): Promise<IssueDataReduced[]> {
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
-    return (await firstValueFrom(
-      this._plainspaceApiService.getMyAndUnassignedTasks$(cfg),
-    )) as IssueDataReduced[];
+    return await firstValueFrom(this._plainspaceApiService.getMyAndUnassignedTasks$(cfg));
   }
 
   protected _apiGetById$(

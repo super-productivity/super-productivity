@@ -71,6 +71,8 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
           : undefined;
       case 'AZURE_DEVOPS':
         return issueProvider.project || undefined;
+      case 'PLAINSPACE':
+        return issueProvider.spaceId || undefined;
       default:
         return undefined;
     }

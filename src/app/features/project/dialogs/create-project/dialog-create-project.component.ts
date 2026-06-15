@@ -120,6 +120,9 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
         const projectDataToSave: Project | Partial<Project> = {
           ...this.projectData,
         };
+        // Never persist the transient share flag (not part of the Project model).
+        delete (projectDataToSave as { isShareOnPlainspace?: boolean })
+          .isShareOnPlainspace;
         if (this._isSaveTmpProject) {
           saveToSessionStorage(SS.PROJECT_TMP, projectDataToSave);
         }
