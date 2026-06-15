@@ -463,6 +463,30 @@ export class DialogEditTaskRepeatCfgComponent {
         day.level = 4;
       }
     }
+    // --- preview-only flourishes (the Activity heatmap never sets these) ---
+    // Occurrence order → stagger index for the reveal animation (capped so the
+    // longest delay stays snappy even for a daily rule).
+    occ.forEach((d, i) => {
+      const day = dayMap.get(getDbDateStr(d));
+      if (day) {
+        day.revealIndex = Math.min(i, 18);
+      }
+    });
+    // Today's ring — only when today falls inside the rendered window.
+    const todayDay = dayMap.get(getDbDateStr(new Date()));
+    if (todayDay) {
+      todayDay.isToday = true;
+    }
+    // Spotlight the next upcoming occurrence — only in the HOME window, where
+    // occ[0] is the true next from today. Derived from the occurrence set this
+    // computed already built (NOT from rrulePreview/repeatCfg), so an unrelated
+    // field keystroke never rebuilds the projection.
+    if (offset === 0 && occ.length) {
+      const nextDay = dayMap.get(getDbDateStr(occ[0]));
+      if (nextDay?.isProjected) {
+        nextDay.isNext = true;
+      }
+    }
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     const monthNames = this._dateAdapter.getMonthNames('short');
     return {
@@ -480,6 +504,71 @@ export class DialogEditTaskRepeatCfgComponent {
       rangeEnd: to,
     };
   });
+
+  // The true next upcoming occurrence (from now, independent of the viewed year)
+  // — drives the "Next: … in N days" chip and the spotlight in resultHeatmapData.
+  readonly nextOccurrence = computed<{
+    dateStr: string;
+    date: Date;
+    daysAway: number;
+  } | null>(() => {
+    const next = this.rrulePreview()?.upcoming?.[0];
+    if (!next) {
+      return null;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(next);
+    d.setHours(0, 0, 0, 0);
+    const daysAway = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+    return { dateStr: getDbDateStr(next), date: next, daysAway };
+  });
+
+  // Rhythm summary shown above the open calendar: how many occurrences are in the
+  // viewed window, their average spacing, and when the series ends.
+  readonly previewStats = computed<{
+    count: number;
+    avgGapDays: number | null;
+    end: string;
+  } | null>(() => {
+    const hd = this.resultHeatmapData();
+    if (!hd) {
+      return null;
+    }
+    const dates = [...hd.dayMap.values()]
+      .filter((d) => d.isProjected || d.isCompleted)
+      .map((d) => d.date)
+      .sort((a, b) => a.getTime() - b.getTime());
+    let avgGapDays: number | null = null;
+    if (dates.length >= 2) {
+      let sum = 0;
+      for (let i = 1; i < dates.length; i++) {
+        sum += (dates[i].getTime() - dates[i - 1].getTime()) / 86_400_000;
+      }
+      avgGapDays = Math.round(sum / (dates.length - 1));
+    }
+    return { count: dates.length, avgGapDays, end: this._previewEndLabel() };
+  });
+
+  /** "ends after N" / "until <date>" / "runs forever" from the rule's COUNT/UNTIL. */
+  private _previewEndLabel(): string {
+    const opts = safeParseRRuleOptions(this.repeatCfg().rrule);
+    if (opts?.count) {
+      return this._translateService.instant(T.F.TASK_REPEAT.F.RRULE_PREVIEW_ENDS_AFTER, {
+        nr: opts.count,
+      });
+    }
+    if (opts?.until) {
+      const date = new Date(opts.until).toLocaleDateString(
+        this._dateTimeFormatService.currentLocale(),
+        { dateStyle: 'medium' },
+      );
+      return this._translateService.instant(T.F.TASK_REPEAT.F.RRULE_PREVIEW_ENDS_UNTIL, {
+        date,
+      });
+    }
+    return this._translateService.instant(T.F.TASK_REPEAT.F.RRULE_PREVIEW_ENDS_NEVER);
+  }
 
   canRemoveInstance = signal<boolean>(false);
   skipInstanceButtonText = computed(() => {

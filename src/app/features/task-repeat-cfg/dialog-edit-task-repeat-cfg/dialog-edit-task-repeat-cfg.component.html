@@ -86,6 +86,22 @@
     <div class="rrule-result">
       @if (rrulePreview(); as p) {
         <div class="rrule-result__human">&rarr; {{ p.human }}</div>
+        @if (nextOccurrence(); as n) {
+          <div class="rrule-result__next-chip">
+            <mat-icon>schedule</mat-icon>
+            <span class="rrule-result__next-date"
+              >{{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_NEXT | translate }}:
+              {{ n.date | date: 'mediumDate' }}</span
+            >
+            <span class="rrule-result__next-away">
+              @if (n.daysAway <= 0) {
+                {{ T.G.HEATMAP_TODAY | translate }}
+              } @else {
+                {{ T.G.HEATMAP_IN_DAYS | translate: { nr: n.daysAway } }}
+              }
+            </span>
+          </div>
+        }
         @if (rruleLegacyIncompat()) {
           <!-- Saving writes the never-fires legacy sentinel for this rule, so
                older app versions (and flag-off devices) on the same account
@@ -125,6 +141,21 @@
           <span>{{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW | translate }}</span>
         </button>
         @if (resultHeatmapData(); as hd) {
+          @if (previewStats(); as s) {
+            <div class="rrule-result__stats">
+              <span>{{
+                T.F.TASK_REPEAT.F.RRULE_PREVIEW_COUNT | translate: { nr: s.count }
+              }}</span>
+              @if (s.avgGapDays) {
+                <span class="rrule-result__sep">&middot;</span>
+                <span>{{
+                  T.F.TASK_REPEAT.F.RRULE_PREVIEW_EVERY | translate: { nr: s.avgGapDays }
+                }}</span>
+              }
+              <span class="rrule-result__sep">&middot;</span>
+              <span>{{ s.end }}</span>
+            </div>
+          }
           <heatmap-switcher
             #calRef
             class="rrule-result__cal"
@@ -138,6 +169,8 @@
             [canNavPrev]="true"
             [canNavNext]="true"
             [monthBoundless]="true"
+            [animateReveal]="true"
+            [showWeekends]="true"
             (navPrev)="previewPrevYear()"
             (navNext)="previewNextYear()"
             (monthViewChange)="onPreviewMonthChange($event)"

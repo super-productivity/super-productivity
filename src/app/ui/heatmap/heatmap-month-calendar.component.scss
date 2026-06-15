@@ -127,6 +127,28 @@
     outline: 2px solid var(--c-primary);
     outline-offset: 1px;
   }
+
+  // Today: accent ring (box-shadow layers over a cell's own outline).
+  &.today {
+    z-index: 1;
+    box-shadow: 0 0 0 1.5px var(--c-accent);
+  }
+
+  // Next upcoming occurrence: pulsing accent ring on a ::after overlay, leaving
+  // the cell's `animation` slot free for the reveal.
+  &.next {
+    position: relative;
+    z-index: 1;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: var(--card-border-radius);
+      pointer-events: none;
+      animation: heatmap-next-pulse 1.8s ease-in-out infinite;
+    }
+  }
 }
 
 // Pointer/hover affordances only where clicking actually does something
@@ -136,6 +158,52 @@
 
   &:hover {
     outline: 1px solid var(--c-dark-20);
+  }
+}
+
+// Weekend tint (showWeekends input) — only non-occurrence in-month cells.
+.cal-day.weekend:not(.projected):not(.completed) {
+  background: color-mix(in srgb, var(--c-accent) 10%, transparent);
+}
+
+// Staggered reveal of occurrence cells when the preview opens (animateReveal).
+// fill-mode backwards so it plays once and leaves no forwards state.
+.month-cal.is-animate-reveal {
+  .cal-day.projected,
+  .cal-day.completed {
+    animation: heatmap-reveal 260ms var(--ani-standard-timing, ease) backwards;
+    animation-delay: calc(var(--reveal-index, 0) * 35ms);
+  }
+}
+
+@keyframes heatmap-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes heatmap-next-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-accent) 70%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 25%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .month-cal.is-animate-reveal .cal-day.projected,
+  .month-cal.is-animate-reveal .cal-day.completed,
+  .cal-day.next::after {
+    animation: none;
   }
 }
 

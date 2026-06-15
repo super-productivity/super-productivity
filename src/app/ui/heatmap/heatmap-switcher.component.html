@@ -21,6 +21,8 @@
       [legendMode]="legendMode()"
       [interactive]="interactive()"
       [boundless]="monthBoundless()"
+      [animateReveal]="animateReveal()"
+      [showWeekends]="showWeekends()"
       (viewMonthChange)="monthViewChange.emit($event)"
       (dayClick)="dayClick.emit($event)"
     />
@@ -32,6 +34,8 @@
       [canNavPrev]="canNavPrev()"
       [canNavNext]="canNavNext()"
       [interactive]="interactive()"
+      [animateReveal]="animateReveal()"
+      [showWeekends]="showWeekends()"
       (navPrev)="navPrev.emit()"
       (navNext)="navNext.emit()"
       (dayClick)="dayClick.emit($event)"

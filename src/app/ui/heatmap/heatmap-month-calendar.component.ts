@@ -81,6 +81,10 @@ export class HeatmapMonthCalendarComponent {
    *  act on `dayClick`, e.g. click-to-simulate). Display-only calendars keep
    *  plain, non-focusable cells. */
   readonly interactive = input<boolean>(false);
+  /** Preview-only flourishes, default OFF so the Activity heatmap is untouched:
+   *  stagger-reveal occurrence cells, and tint weekend columns. */
+  readonly animateReveal = input<boolean>(false);
+  readonly showWeekends = input<boolean>(false);
   /** When true, month navigation is unlimited in both directions instead of
    *  bounded to `[rangeStart, rangeEnd]`. The consumer is expected to listen to
    *  `viewMonthChange` and move its data window along (days the current dayMap
@@ -192,11 +196,32 @@ export class HeatmapMonthCalendarComponent {
 
   getCellClass(cell: CalCell): string {
     if (cell.isOtherMonth) return 'cal-day other-month';
+    const weekend = this.showWeekends() && this._isWeekend(cell) ? ' weekend' : '';
     const d = cell.data;
-    if (!d) return 'cal-day';
+    if (!d) return `cal-day${weekend}`;
     return `cal-day level-${d.level}${d.isProjected ? ' projected' : ''}${
       d.isCompleted ? ' completed' : ''
-    }`;
+    }${d.isNext ? ' next' : ''}${d.isToday ? ' today' : ''}${weekend}`;
+  }
+
+  private _isWeekend(cell: CalCell): boolean {
+    const dow = (cell.data?.date ?? new Date(`${cell.dateStr}T00:00:00`)).getDay();
+    return dow === 0 || dow === 6;
+  }
+
+  /** Day-granular countdown from today, or '' for past days. */
+  private _countdown(date: Date): string {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    const days = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+    if (days < 0) {
+      return '';
+    }
+    return days === 0
+      ? (this._translateService.instant(T.G.HEATMAP_TODAY) as string)
+      : (this._translateService.instant(T.G.HEATMAP_IN_DAYS, { nr: days }) as string);
   }
 
   getCellTitle(cell: CalCell): string {
@@ -206,7 +231,19 @@ export class HeatmapMonthCalendarComponent {
       return `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_COMPLETED_SIM)}`;
     }
     if (d.isProjected) {
-      return `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_PROJECTED)}`;
+      const parts = [this._translateService.instant(T.G.HEATMAP_PROJECTED) as string];
+      if (d.revealIndex != null) {
+        parts.push(
+          this._translateService.instant(T.G.HEATMAP_OCCURRENCE_NR, {
+            nr: d.revealIndex + 1,
+          }) as string,
+        );
+      }
+      const cd = this._countdown(d.date);
+      if (cd) {
+        parts.push(cd);
+      }
+      return `${d.dateStr}: ${parts.join(' · ')}`;
     }
     // A projection calendar has no activity to report — an empty day either
     // invites the simulation click (interactive) or is just its date; faking

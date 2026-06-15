@@ -1,6 +1,7 @@
 <div
   class="month-cal"
   [class.is-interactive]="interactive()"
+  [class.is-animate-reveal]="animateReveal()"
 >
   @if (tip(); as t) {
     <div
@@ -42,6 +43,7 @@
       @for (cell of week; track cell.dateStr) {
         <div
           [class]="getCellClass(cell)"
+          [style.--reveal-index]="cell.data?.revealIndex"
           [attr.role]="isCellInteractive(cell) ? 'button' : null"
           [attr.tabindex]="isCellInteractive(cell) ? 0 : null"
           [attr.aria-label]="!cell.isOtherMonth ? getCellTitle(cell) : null"

@@ -23,6 +23,11 @@ export interface DayData {
   level: number; // 0-4 for color intensity
   isProjected?: boolean; // a future, not-yet-created occurrence (outlined cell)
   isCompleted?: boolean; // a simulated "completed here" day (solid, ringed)
+  // Additive preview-only flags (set by the recurrence dialog; the Activity
+  // heatmap never sets them, so its rendering is unchanged):
+  isNext?: boolean; // the next upcoming occurrence — spotlit with a pulse ring
+  isToday?: boolean; // today's cell — marked with a ring
+  revealIndex?: number; // occurrence order in the window — staggers the reveal anim
 }
 
 export interface WeekData {
@@ -114,6 +119,10 @@ export class HeatmapComponent {
    *  act on `dayClick`, e.g. click-to-simulate). Display-only heatmaps keep
    *  plain, non-focusable cells. */
   readonly interactive = input<boolean>(false);
+  /** Preview-only flourishes, default OFF so the Activity heatmap is untouched:
+   *  stagger-reveal occurrence cells, and tint weekend rows. */
+  readonly animateReveal = input<boolean>(false);
+  readonly showWeekends = input<boolean>(false);
 
   onDayKeydown(event: Event, day: DayData | null): void {
     if (day) {
@@ -135,9 +144,28 @@ export class HeatmapComponent {
     if (!day) {
       return 'day empty';
     }
+    const weekend =
+      this.showWeekends() && (day.date.getDay() === 0 || day.date.getDay() === 6)
+        ? ' weekend'
+        : '';
     return `day level-${day.level}${day.isProjected ? ' projected' : ''}${
       day.isCompleted ? ' completed' : ''
-    }`;
+    }${day.isNext ? ' next' : ''}${day.isToday ? ' today' : ''}${weekend}`;
+  }
+
+  /** Day-granular countdown from today, or '' for past days. */
+  private _countdown(date: Date): string {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    const days = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+    if (days < 0) {
+      return '';
+    }
+    return days === 0
+      ? (this._translateService.instant(T.G.HEATMAP_TODAY) as string)
+      : (this._translateService.instant(T.G.HEATMAP_IN_DAYS, { nr: days }) as string);
   }
 
   getDayTitle(day: DayData | null): string {
@@ -148,7 +176,19 @@ export class HeatmapComponent {
       return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_COMPLETED_SIM)}`;
     }
     if (day.isProjected) {
-      return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_PROJECTED)}`;
+      const parts = [this._translateService.instant(T.G.HEATMAP_PROJECTED) as string];
+      if (day.revealIndex != null) {
+        parts.push(
+          this._translateService.instant(T.G.HEATMAP_OCCURRENCE_NR, {
+            nr: day.revealIndex + 1,
+          }) as string,
+        );
+      }
+      const cd = this._countdown(day.date);
+      if (cd) {
+        parts.push(cd);
+      }
+      return `${day.dateStr}: ${parts.join(' · ')}`;
     }
     // A projection calendar has no activity to report — an empty day either
     // invites the simulation click (interactive) or is just its date; faking

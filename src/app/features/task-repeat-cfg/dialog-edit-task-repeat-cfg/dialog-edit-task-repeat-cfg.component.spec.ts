@@ -611,6 +611,51 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(hasProjected).toBe(true);
     });
 
+    it('exposes the next upcoming occurrence (date + non-negative countdown)', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const n = fixture.componentInstance.nextOccurrence();
+      expect(n).not.toBeNull();
+      expect(n!.dateStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(n!.daysAway).toBeGreaterThanOrEqual(0);
+    });
+
+    it('spotlights exactly one "next" cell in the home window', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const nextCells = [...c.resultHeatmapData()!.dayMap.values()].filter(
+        (d) => d.isNext,
+      );
+      expect(nextCells.length).toBe(1);
+    });
+
+    it('computes rhythm stats: count, average gap, and an end label', async () => {
+      const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      const s = c.previewStats();
+      expect(s).not.toBeNull();
+      expect(s!.count).toBeGreaterThan(0);
+      // FREQ=WEEKLY;INTERVAL=2 → occurrences are 14 days apart.
+      expect(s!.avgGapDays).toBe(14);
+      expect(typeof s!.end).toBe('string');
+      expect(s!.end.length).toBeGreaterThan(0);
+    });
+
+    it('reports a finite end label for a COUNT rule', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: { ...rruleCfg, rrule: 'FREQ=WEEKLY;BYDAY=MO;COUNT=5' },
+      });
+      const c = fixture.componentInstance;
+      c.toggleResultHeatmap();
+      // Whether i18n is loaded (interpolates "5") or not (returns the key
+      // containing "AFTER"), a COUNT rule yields a finite end label — never the
+      // "runs forever" / NEVER one.
+      const end = c.previewStats()!.end;
+      expect(end).toMatch(/5|AFTER/i);
+      expect(end).not.toMatch(/forever|NEVER/i);
+    });
+
     // Simulation only exists for repeat-from-completion schedules.
     const completionCfg: TaskRepeatCfg = {
       ...rruleCfg,

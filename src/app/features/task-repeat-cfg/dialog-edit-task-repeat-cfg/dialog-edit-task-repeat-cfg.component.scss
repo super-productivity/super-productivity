@@ -129,6 +129,41 @@ repeat-freq-picker {
     opacity: 0.8;
   }
 
+  // "Next: <date> · in N days" spotlight chip.
+  &__next-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-half);
+    margin-top: var(--s-half);
+    padding: 2px var(--s);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--c-accent) 14%, transparent);
+    font-size: 12px;
+
+    .mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      color: var(--c-accent);
+    }
+  }
+
+  &__next-date {
+    font-weight: 600;
+  }
+
+  &__next-away {
+    opacity: 0.7;
+  }
+
+  // Rhythm stats row above the open calendar (count · ~every N days · ends …).
+  &__stats {
+    margin-top: var(--s);
+    font-size: 12px;
+    opacity: 0.75;
+    text-align: center;
+  }
+
   &__legacy-warning {
     margin-top: var(--s-quarter, 2px);
     color: var(--c-warn);
