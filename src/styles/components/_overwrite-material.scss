@@ -237,7 +237,7 @@ body.isNativeMobile .project-complete-fullscreen-dialog {
       border-color: var(--input-border-color) !important;
       box-shadow: none !important;
     }
-    &:focus-within .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    &:has(:focus-visible) .mdc-text-field--filled:not(.mdc-text-field--disabled) {
       outline: var(--focus-ring-width) solid var(--focus-ring-color);
       outline-offset: var(--focus-ring-offset);
     }

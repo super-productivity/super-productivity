@@ -22,6 +22,7 @@ import { FieldType, FormlyFieldConfig } from '@ngx-formly/core';
         {{ props.label }}
       </mat-slide-toggle>
       <input
+        aria-hidden="true"
         matInput
         tabindex="-1"
         readonly
