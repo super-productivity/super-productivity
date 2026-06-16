@@ -288,13 +288,50 @@ repeat-freq-picker {
   }
 }
 
-// Grey "(switches to Monthly/…)" hint appended to a menu item whose action would
-// change the frequency. Global (not scoped) because MatMenu renders in a CDK
-// overlay outside this component's view.
-::ng-deep .cal-menu-hint {
-  margin-inline-start: 6px;
-  font-size: 0.85em;
-  opacity: 0.55;
+// Bottom "switch to …" icon row inside a calendar context menu: the options that
+// would CHANGE the frequency are grouped under a per-target-freq icon button,
+// laid on one line. Global (not scoped) because MatMenu renders in a CDK overlay
+// outside this component's view.
+::ng-deep .cal-menu-switch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--s-quarter, 4px);
+  padding: var(--s-quarter, 4px) var(--s, 8px);
+  margin-top: var(--s-quarter, 4px);
+  border-top: 1px solid var(--separator-color, var(--extra-border-color));
+
+  // A menu with no native top items (e.g. a weekday click in Daily mode) is all
+  // switch icons — no border then, it would float above nothing.
+  &:first-child {
+    margin-top: 0;
+    border-top: none;
+  }
+
+  // The switch triggers are mat-menu-items (so the nested sub-menu opens and the
+  // parent stays open — a plain icon-button trigger closes the menu instead), but
+  // restyled into compact, auto-width icon cells laid on one line.
+  .cal-menu-switch__btn {
+    min-width: 0;
+    min-height: 0;
+    width: 40px;
+    height: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+
+    // mat-menu-item appends a trailing submenu chevron — drop it; the icon row is
+    // already a clear affordance and the chevron would bloat each cell.
+    .mat-mdc-menu-submenu-icon {
+      display: none;
+    }
+
+    mat-icon {
+      margin: 0;
+    }
+  }
 }
 
 // Zero-size fixed anchors for the calendar context menus — positioned at the

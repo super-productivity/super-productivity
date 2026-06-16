@@ -250,6 +250,9 @@
         [style.top]="menuPos().y"
         [matMenuTriggerFor]="dayMenu"
       ></div>
+      <!-- Day menu. Native options for the current frequency sit at the top; the
+           "On this day of the month/year" options that would SWITCH the frequency
+           are grouped under a per-target-freq icon button in the bottom row. -->
       <mat-menu #dayMenu="matMenu">
         <button
           mat-menu-item
@@ -267,32 +270,78 @@
             {{ T.F.TASK_REPEAT.F.CAL_MENU_ENDS_ON | translate }}
           </button>
         }
-        <button
-          mat-menu-item
-          type="button"
-          (click)="menuToggleMonthDay()"
-        >
-          {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_MONTH | translate }}
-          @if (dayOfMonthHint()) {
-            <span class="cal-menu-hint">{{ dayOfMonthHint() | translate }}</span>
-          }
-        </button>
-        <button
-          mat-menu-item
-          type="button"
-          (click)="menuSetYearDay()"
-        >
-          {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_YEAR | translate }}
-          @if (dayOfYearHint()) {
-            <span class="cal-menu-hint">{{ dayOfYearHint() | translate }}</span>
-          }
-        </button>
+        @if (isMonthlyRule()) {
+          <button
+            mat-menu-item
+            type="button"
+            (click)="menuToggleMonthDay()"
+          >
+            {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_MONTH | translate }}
+          </button>
+        }
+        @if (isYearlyRule()) {
+          <button
+            mat-menu-item
+            type="button"
+            (click)="menuSetYearDay()"
+          >
+            {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_YEAR | translate }}
+          </button>
+        }
         <button
           mat-menu-item
           type="button"
           (click)="menuSimulate()"
         >
           {{ T.F.TASK_REPEAT.F.CAL_MENU_SIMULATE | translate }}
+        </button>
+        @if (!isMonthlyRule() || !isYearlyRule()) {
+          <div class="cal-menu-switch">
+            @if (!isMonthlyRule()) {
+              <button
+                mat-menu-item
+                type="button"
+                class="cal-menu-switch__btn"
+                [matMenuTriggerFor]="dayMonthlyMenu"
+                [title]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY | translate"
+                [attr.aria-label]="
+                  T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY | translate
+                "
+              >
+                <mat-icon>calendar_view_month</mat-icon>
+              </button>
+            }
+            @if (!isYearlyRule()) {
+              <button
+                mat-menu-item
+                type="button"
+                class="cal-menu-switch__btn"
+                [matMenuTriggerFor]="dayYearlyMenu"
+                [title]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY | translate"
+                [attr.aria-label]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY | translate"
+              >
+                <mat-icon>calendar_month</mat-icon>
+              </button>
+            }
+          </div>
+        }
+      </mat-menu>
+      <mat-menu #dayMonthlyMenu="matMenu">
+        <button
+          mat-menu-item
+          type="button"
+          (click)="menuToggleMonthDay()"
+        >
+          {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_MONTH | translate }}
+        </button>
+      </mat-menu>
+      <mat-menu #dayYearlyMenu="matMenu">
+        <button
+          mat-menu-item
+          type="button"
+          (click)="menuSetYearDay()"
+        >
+          {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_YEAR | translate }}
         </button>
       </mat-menu>
 
@@ -303,61 +352,107 @@
         [style.top]="menuPos().y"
         [matMenuTriggerFor]="weekdayMenu"
       ></div>
+      <!-- Weekday-header menu. Native weekday options for the current frequency at
+           the top; the options that SWITCH frequency live under a per-target-freq
+           icon button in the bottom row (each opening the same Selected-days / Nth
+           sub-menu for that frequency). -->
       <mat-menu #weekdayMenu="matMenu">
-        <!-- Every weekday-targeting rule is listed so all are reachable from one
-             click; the grey "(switches to …)" hint differentiates the same label. -->
+        @if (isWeeklyRule()) {
+          <ng-container *ngTemplateOutlet="weeklyWeekdayItems"></ng-container>
+        }
+        @if (isMonthlyRule()) {
+          <ng-container
+            *ngTemplateOutlet="weekdayItems; context: { freq: 'MONTHLY' }"
+          ></ng-container>
+        }
+        @if (isYearlyRule()) {
+          <ng-container
+            *ngTemplateOutlet="weekdayItems; context: { freq: 'YEARLY' }"
+          ></ng-container>
+        }
+        <div class="cal-menu-switch">
+          @if (!isWeeklyRule()) {
+            <button
+              mat-menu-item
+              type="button"
+              class="cal-menu-switch__btn"
+              [matMenuTriggerFor]="weekWeeklyMenu"
+              [title]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_WEEKLY | translate"
+              [attr.aria-label]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_WEEKLY | translate"
+            >
+              <mat-icon>calendar_view_week</mat-icon>
+            </button>
+          }
+          @if (!isMonthlyRule()) {
+            <button
+              mat-menu-item
+              type="button"
+              class="cal-menu-switch__btn"
+              [matMenuTriggerFor]="weekMonthlyMenu"
+              [title]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY | translate"
+              [attr.aria-label]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY | translate"
+            >
+              <mat-icon>calendar_view_month</mat-icon>
+            </button>
+          }
+          @if (!isYearlyRule()) {
+            <button
+              mat-menu-item
+              type="button"
+              class="cal-menu-switch__btn"
+              [matMenuTriggerFor]="weekYearlyMenu"
+              [title]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY | translate"
+              [attr.aria-label]="T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY | translate"
+            >
+              <mat-icon>calendar_month</mat-icon>
+            </button>
+          }
+        </div>
+      </mat-menu>
+
+      <!-- Weekly has only a Selected-days option (no nth); monthly/yearly add Nth. -->
+      <ng-template #weeklyWeekdayItems>
         <button
           mat-menu-item
           type="button"
           (click)="menuToggleSelectedDay('WEEKLY')"
         >
           {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
-          @if (selectedWeeklyHint()) {
-            <span class="cal-menu-hint">{{ selectedWeeklyHint() | translate }}</span>
-          }
         </button>
+      </ng-template>
+      <ng-template
+        #weekdayItems
+        let-freq="freq"
+      >
         <button
           mat-menu-item
           type="button"
-          (click)="menuToggleSelectedDay('MONTHLY')"
+          (click)="menuToggleSelectedDay(freq)"
         >
           {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
-          @if (selectedMonthlyHint()) {
-            <span class="cal-menu-hint">{{ selectedMonthlyHint() | translate }}</span>
-          }
-        </button>
-        <button
-          mat-menu-item
-          type="button"
-          (click)="menuToggleSelectedDay('YEARLY')"
-        >
-          {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
-          @if (selectedYearlyHint()) {
-            <span class="cal-menu-hint">{{ selectedYearlyHint() | translate }}</span>
-          }
         </button>
         <button
           mat-menu-item
           type="button"
           [matMenuTriggerFor]="nthMenu"
-          (menuOpened)="menuNthFreq.set('MONTHLY')"
+          (menuOpened)="menuNthFreq.set(freq)"
         >
           {{ T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY | translate }}
-          @if (selectedMonthlyHint()) {
-            <span class="cal-menu-hint">{{ selectedMonthlyHint() | translate }}</span>
-          }
         </button>
-        <button
-          mat-menu-item
-          type="button"
-          [matMenuTriggerFor]="nthMenu"
-          (menuOpened)="menuNthFreq.set('YEARLY')"
-        >
-          {{ T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY | translate }}
-          @if (selectedYearlyHint()) {
-            <span class="cal-menu-hint">{{ selectedYearlyHint() | translate }}</span>
-          }
-        </button>
+      </ng-template>
+
+      <mat-menu #weekWeeklyMenu="matMenu">
+        <ng-container *ngTemplateOutlet="weeklyWeekdayItems"></ng-container>
+      </mat-menu>
+      <mat-menu #weekMonthlyMenu="matMenu">
+        <ng-container
+          *ngTemplateOutlet="weekdayItems; context: { freq: 'MONTHLY' }"
+        ></ng-container>
+      </mat-menu>
+      <mat-menu #weekYearlyMenu="matMenu">
+        <ng-container
+          *ngTemplateOutlet="weekdayItems; context: { freq: 'YEARLY' }"
+        ></ng-container>
       </mat-menu>
       <mat-menu #nthMenu="matMenu">
         <button

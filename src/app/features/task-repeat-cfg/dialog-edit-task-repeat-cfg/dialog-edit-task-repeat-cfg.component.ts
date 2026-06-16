@@ -439,30 +439,12 @@ export class DialogEditTaskRepeatCfgComponent {
   private readonly _previewModel = computed(() =>
     rruleToFormModel(this.repeatCfg().rrule, this._previewRefDate()),
   );
+  // Current frequency of the working rule — drives which calendar-menu options are
+  // "native" (shown at the top) vs which SWITCH the frequency (grouped under a
+  // per-target-freq icon button in the menu's bottom row).
+  readonly isWeeklyRule = computed(() => this._previewModel().freq === 'WEEKLY');
   readonly isMonthlyRule = computed(() => this._previewModel().freq === 'MONTHLY');
   readonly isYearlyRule = computed(() => this._previewModel().freq === 'YEARLY');
-  // Menu items are shown in EVERY mode; ones that would change the frequency get
-  // a grey "(switches to …)" hint. Empty string → no hint (already that freq).
-  readonly dayOfMonthHint = computed(() =>
-    this.isMonthlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY,
-  );
-  readonly dayOfYearHint = computed(() =>
-    this.isYearlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY,
-  );
-  // The weekday menu lists EVERY weekday-targeting rule (weekly / monthly / yearly,
-  // plain + nth) so all are reachable from one click; same label, the grey hint is
-  // the differentiator. Empty hint → that entry is already the current frequency.
-  readonly selectedWeeklyHint = computed(() =>
-    this._previewModel().freq === 'WEEKLY'
-      ? ''
-      : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_WEEKLY,
-  );
-  readonly selectedMonthlyHint = computed(() =>
-    this.isMonthlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY,
-  );
-  readonly selectedYearlyHint = computed(() =>
-    this.isYearlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY,
-  );
   // Per-weekday header glyphs (Mon=0 … Sun=6): nth ordinal (top), selected-day
   // dot (mid), in-months grid (bottom) — the generic shape the calendar renders.
   readonly weekdayHeaderGlyphs = computed(() => {
