@@ -1,0 +1,23 @@
+diff --git a/node_modules/@capawesome/capacitor-android-edge-to-edge-support/android/src/main/java/io/capawesome/capacitorjs/plugins/androidedgetoedgesupport/EdgeToEdge.java b/node_modules/@capawesome/capacitor-android-edge-to-edge-support/android/src/main/java/io/capawesome/capacitorjs/plugins/androidedgetoedgesupport/EdgeToEdge.java
+index 0000001..0000002 100644
+--- a/node_modules/@capawesome/capacitor-android-edge-to-edge-support/android/src/main/java/io/capawesome/capacitorjs/plugins/androidedgetoedgesupport/EdgeToEdge.java
++++ b/node_modules/@capawesome/capacitor-android-edge-to-edge-support/android/src/main/java/io/capawesome/capacitorjs/plugins/androidedgetoedgesupport/EdgeToEdge.java
+@@ -91,10 +91,14 @@ public class EdgeToEdge {
+     private void applyInsetsInternal(View view, WindowInsetsCompat currentInsets) {
+         Insets systemBarsInsets = currentInsets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+         Insets imeInsets = currentInsets.getInsets(WindowInsetsCompat.Type.ime());
+-        boolean keyboardVisible = currentInsets.isVisible(WindowInsetsCompat.Type.ime());
+-        // When keyboard is visible, don't apply bottom margin to avoid double-counting
+-        // (the system already resizes the window for the keyboard)
+-        int bottomMargin = keyboardVisible ? 0 : Math.max(imeInsets.bottom, systemBarsInsets.bottom);
++        // Edge-to-edge is enforced on targetSdk 35+ (Android 15/16), where the
++        // system no longer resizes the window for the IME (adjustResize is a
++        // no-op). The WebView must therefore be inset by the keyboard height
++        // itself, or position:fixed content (e.g. the add-task bar) sits behind
++        // the keyboard. imeInsets.bottom already spans the nav-bar area while the
++        // keyboard is up, so one max() is correct in both states; an edge-to-edge
++        // window never resizes for the IME, so nothing is double-counted.
++        int bottomMargin = Math.max(imeInsets.bottom, systemBarsInsets.bottom);
+
+         ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
+         mlp.bottomMargin = bottomMargin;

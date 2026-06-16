@@ -66,7 +66,7 @@ describe('TaskContextMenuInnerComponent', () => {
             cfg: () => ({ reminder: {}, tasks: {} }),
           },
         },
-        { provide: TagService, useValue: { tagsNoMyDayAndNoListSorted: of([]) } },
+        { provide: TagService, useValue: { tagsNoMyDayAndNoList: () => [] } },
         { provide: WorkContextService, useValue: { activeWorkContext$: of({}) } },
         {
           provide: TaskFocusService,

@@ -27,6 +27,7 @@ import {
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { bulkApplyHydrationOperations } from '../apply/bulk-hydration.action';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
@@ -1332,89 +1333,92 @@ describe('OperationLogHydratorService', () => {
   // ===========================================================================
   // These tests verify the retry mechanism for failed remote operations.
   describe('retryFailedRemoteOps', () => {
-    it('should call markApplied for successfully retried failed ops', async () => {
-      const failedOp = createMockOperation('failed-op-1');
-      const failedEntry: OperationLogEntry = {
-        seq: 42,
-        op: failedOp,
-        appliedAt: Date.now(),
-        source: 'remote',
-        applicationStatus: 'failed',
-        retryCount: 1,
-      };
+    const failedEntry = (seq: number, opId: string): OperationLogEntry => ({
+      seq,
+      op: createMockOperation(opId),
+      appliedAt: Date.now(),
+      source: 'remote',
+      applicationStatus: 'failed',
+      retryCount: 1,
+    });
 
-      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve([failedEntry]));
-      mockOperationApplierService.applyOperations.and.returnValue(
-        Promise.resolve({ appliedOps: [] }),
+    it('should retry all failed ops as a single batch (not one at a time) — #8305', async () => {
+      const entries = [
+        failedEntry(40, 'op-a'),
+        failedEntry(41, 'op-b'),
+        failedEntry(42, 'op-c'),
+      ];
+      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve(entries));
+      mockOperationApplierService.applyOperations.and.callFake((ops: Operation[]) =>
+        Promise.resolve({ appliedOps: ops }),
       );
 
       await service.retryFailedRemoteOps();
 
-      // Verify markApplied was called with the sequence number
-      expect(mockOpLogStore.markApplied).toHaveBeenCalledWith([42]);
+      // One batch call carrying every failed op — the per-op retry that
+      // defeated the same-batch archive pre-scan is gone.
+      expect(mockOperationApplierService.applyOperations).toHaveBeenCalledTimes(1);
+      const passedOps = mockOperationApplierService.applyOperations.calls.argsFor(0)[0];
+      expect(passedOps.map((o: Operation) => o.id)).toEqual(['op-a', 'op-b', 'op-c']);
+      expect(mockOpLogStore.markApplied).toHaveBeenCalledWith([40, 41, 42]);
+      expect(mockOpLogStore.markFailed).not.toHaveBeenCalled();
     });
 
-    it('should clear failed status after successful retry (markApplied handles failed status)', async () => {
-      // Verify that markApplied is called with the correct sequence number
-      // after a successful retry. The actual status transition is tested
-      // in operation-log-store.service.spec.ts.
-
-      const failedOp = createMockOperation('failed-op-1');
-      const failedEntry: OperationLogEntry = {
-        seq: 42,
-        op: failedOp,
-        appliedAt: Date.now(),
-        source: 'remote',
-        applicationStatus: 'failed',
-        retryCount: 1,
-      };
-
-      let markAppliedCalledWithSeqs: number[] = [];
-      mockOpLogStore.markApplied.and.callFake((seqs: number[]) => {
-        markAppliedCalledWithSeqs = seqs;
-        return Promise.resolve();
-      });
-
-      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve([failedEntry]));
-      mockOperationApplierService.applyOperations.and.returnValue(
-        Promise.resolve({ appliedOps: [] }),
+    it('should apply failed ops in ascending seq order regardless of store order', async () => {
+      // getFailedRemoteOps reads from an index whose result order is not part of
+      // its contract; the batch must still be applied in causal (seq) order.
+      const entries = [
+        failedEntry(42, 'op-c'),
+        failedEntry(40, 'op-a'),
+        failedEntry(41, 'op-b'),
+      ];
+      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve(entries));
+      mockOperationApplierService.applyOperations.and.callFake((ops: Operation[]) =>
+        Promise.resolve({ appliedOps: ops }),
       );
 
       await service.retryFailedRemoteOps();
 
-      // markApplied should be called with the failed op's sequence number
-      expect(markAppliedCalledWithSeqs).toEqual([42]);
+      const passedOps = mockOperationApplierService.applyOperations.calls.argsFor(0)[0];
+      expect(passedOps.map((o: Operation) => o.id)).toEqual(['op-a', 'op-b', 'op-c']);
+      expect(mockOpLogStore.markApplied).toHaveBeenCalledWith([40, 41, 42]);
     });
 
-    it('should call markFailed for ops that still fail after retry', async () => {
-      const failedOp = createMockOperation('still-failing-op');
-      const failedEntry: OperationLogEntry = {
-        seq: 99,
-        op: failedOp,
-        appliedAt: Date.now(),
-        source: 'remote',
-        applicationStatus: 'failed',
-        retryCount: 1,
-      };
-
-      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve([failedEntry]));
+    it('should mark the failed op and every op after it (in seq order) as still-failing', async () => {
+      const entries = [
+        failedEntry(40, 'op-a'),
+        failedEntry(41, 'op-b'),
+        failedEntry(42, 'op-c'),
+      ];
+      const opB = entries[1].op;
+      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve(entries));
+      // Batch applier stops at op-b: op-a applied, op-b failed, op-c dropped.
       mockOperationApplierService.applyOperations.and.returnValue(
         Promise.resolve({
-          appliedOps: [],
-          failedOp: {
-            op: failedOp,
-            error: new Error('Still failing'),
-          },
+          appliedOps: [entries[0].op],
+          failedOp: { op: opB, error: new Error('Still failing') },
         }),
       );
 
       await service.retryFailedRemoteOps();
 
-      // markFailed should be called with the op ID
+      expect(mockOpLogStore.markApplied).toHaveBeenCalledWith([40]);
+      // op-b (failed) and op-c (after it) are both marked failed, with the
+      // retry-cap so a permanently-failing op is eventually rejected.
       expect(mockOpLogStore.markFailed).toHaveBeenCalledWith(
-        ['still-failing-op'],
-        jasmine.any(Number),
+        ['op-b', 'op-c'],
+        MAX_CONFLICT_RETRY_ATTEMPTS,
       );
+    });
+
+    it('should do nothing when there are no failed ops', async () => {
+      mockOpLogStore.getFailedRemoteOps.and.returnValue(Promise.resolve([]));
+
+      await service.retryFailedRemoteOps();
+
+      expect(mockOperationApplierService.applyOperations).not.toHaveBeenCalled();
+      expect(mockOpLogStore.markApplied).not.toHaveBeenCalled();
+      expect(mockOpLogStore.markFailed).not.toHaveBeenCalled();
     });
   });
 

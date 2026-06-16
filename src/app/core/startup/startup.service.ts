@@ -227,22 +227,36 @@ export class StartupService {
       // If no state cache exists, check if this is truly a fresh instance
       // or if there's legacy v16 data waiting to be migrated
       if (!stateCache) {
-        // Check for legacy data - if it exists, don't show restore dialog
-        // The migration service will handle the legacy data
-        let hasLegacyData = false;
-        try {
-          hasLegacyData = await this._legacyPfDb.hasUsableEntityData();
-        } catch (e) {
-          // If legacy check fails, it means the database exists but can't be read
-          // The migration service will handle this error properly
-          Log.warn('StartupService: Legacy data check failed, skipping backup prompt', e);
-          hasLegacyData = true; // Assume there might be data, don't show backup dialog
-        }
+        // #7901: only consider a backup restore when the op-log is ALSO empty. A
+        // null state cache alone just means "no snapshot saved yet" — the op-log
+        // may still hold real operations the hydrator is concurrently replaying.
+        // Restoring then would be unnecessary (the hydrator loads that data) and
+        // would race the hydrator's replay against importCompleteBackup's
+        // destructive op-log replacement. Gating on an empty op-log restricts
+        // restore to a genuinely blank store (fresh install / evicted storage),
+        // where the hydrator has nothing to replay.
+        const lastSeq = await this._opLogStore.getLastSeq();
+        if (lastSeq === 0) {
+          // Check for legacy data - if it exists, don't show restore dialog
+          // The migration service will handle the legacy data
+          let hasLegacyData = false;
+          try {
+            hasLegacyData = await this._legacyPfDb.hasUsableEntityData();
+          } catch (e) {
+            // If legacy check fails, it means the database exists but can't be read
+            // The migration service will handle this error properly
+            Log.warn(
+              'StartupService: Legacy data check failed, skipping backup prompt',
+              e,
+            );
+            hasLegacyData = true; // Assume there might be data, don't show backup dialog
+          }
 
-        // Only offer to restore from backup if this is truly a fresh install
-        // (no state cache AND no legacy data)
-        if (!hasLegacyData) {
-          await this._localBackupService.askForFileStoreBackupIfAvailable();
+          // Only offer to restore from backup if this is truly a fresh install
+          // (no state cache, no op-log, and no legacy data)
+          if (!hasLegacyData) {
+            await this._localBackupService.askForFileStoreBackupIfAvailable();
+          }
         }
       }
       // trigger backup init after

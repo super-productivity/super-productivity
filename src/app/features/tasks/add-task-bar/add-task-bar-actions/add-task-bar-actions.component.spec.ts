@@ -124,6 +124,10 @@ describe('AddTaskBarActionsComponent', () => {
       value: mockInputTxtSignal.asReadonly(),
       writable: false,
     });
+    Object.defineProperty(mockStateService, 'noteTxt', {
+      value: signal(''),
+      writable: false,
+    });
 
     // Store references to update signals in tests
     (mockStateService as any)._mockStateSignal = mockStateSignal;
@@ -1161,6 +1165,31 @@ describe('AddTaskBarActionsComponent', () => {
       component.openScheduleDialog();
 
       expect(mockStateService.updateDate).toHaveBeenCalledWith('2025-01-01', '00:00');
+    });
+  });
+
+  describe('Note button', () => {
+    it('should emit toggleNote when the note chip is clicked', () => {
+      const emitSpy = spyOn(component.toggleNote, 'emit');
+      fixture.detectChanges();
+
+      const noteBtn = fixture.nativeElement.querySelector(
+        '[data-test="add-task-bar-note-btn"]',
+      ) as HTMLButtonElement;
+      noteBtn.click();
+
+      expect(emitSpy).toHaveBeenCalled();
+    });
+
+    it('should mark the note chip as having a value when a note is entered', () => {
+      (mockStateService as any).noteTxt.set('a note');
+      fixture.detectChanges();
+
+      const noteBtn = fixture.nativeElement.querySelector(
+        '[data-test="add-task-bar-note-btn"]',
+      ) as HTMLButtonElement;
+
+      expect(noteBtn.classList).toContain('has-value');
     });
   });
 });

@@ -328,36 +328,43 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // STEP 8: Verify UI shows migrated data
       // ========================================================================
-      // Navigate to the test project
-      await page.goto('/#/project/TEST_PROJECT');
-      await page.waitForLoadState('networkidle').catch(() => {});
+      // Navigate to the project's TASK list, then RELOAD so it renders from a
+      // clean, single DOM. Two separate problems made the old assertion flaky:
+      //   1. The project route only renders a task list under the `tasks` child
+      //      route (PROJECT_CHILD_ROUTES has no default redirect), so the URL
+      //      must carry the `/tasks` suffix — the same path getStartPageUrlPath()
+      //      builds. The old code used `/project/:id` (no suffix), leaving the
+      //      child <router-outlet> empty, so it only ever matched the parent
+      //      task in the lingering landing (Today) view.
+      //   2. A bare hash navigation switches work-context client-side and leaves
+      //      the previous view's task-list lingering in the DOM, so the parent
+      //      task matched twice (stale Today list + project list).
+      // Reloading on the correct URL fixes both: migration already wrote a
+      // Genesis (MIGRATION) op to SUP_OPS so it does NOT re-trigger migration,
+      // ValidProjectIdGuard resolves TEST_PROJECT, and the project's task list
+      // renders once with no stale list to race or double-match.
+      await page.goto('/#/project/TEST_PROJECT/tasks');
+      await page.reload({ waitUntil: 'domcontentloaded' });
 
-      // page.goto only changes the URL hash, so the SPA switches work-context
-      // client-side (load the project's tasks, recompute selectors, re-render)
-      // while the previous view's task-list lingers in the DOM. Gate on the
-      // switch actually landing — the active project's title rendering in <main>
-      // (the main-header page-title), as projectPage.navigateToProjectByName does
-      // — so the assertions below test THIS project's render instead of racing a
-      // stale one. Without this gate the task-title check alone carries the wait
-      // for the context switch, which under heavy parallel load can outlast its
-      // budget (the original flake).
+      // Wait for the app shell to come back after the reload.
+      await page.waitForSelector('magic-side-nav', {
+        state: 'visible',
+        timeout: 30000,
+      });
+
+      // Gate on the project's work context actually rendering in <main> (the
+      // main-header page-title) before asserting its tasks.
       await expect(page.locator('main')).toContainText('Migration Test Project', {
         timeout: 20000,
       });
 
-      // Wait for task list to appear
-      await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
-
-      // Verify tasks are visible in UI
-      const taskElements = page.locator('task');
-      const taskCount = await taskElements.count();
-      expect(taskCount).toBeGreaterThan(0);
-
-      // Verify parent task title is visible
+      // Verify the parent task title is visible in the project's task list. This
+      // subsumes the earlier "task-list visible + count > 0" checks. Use the
+      // global assertion budget so the render has room under heavy parallel load.
       await expect(
         page.locator('task-title').filter({ hasText: 'Parent Task' }),
       ).toBeVisible({
-        timeout: 10000,
+        timeout: 20000,
       });
 
       // Verify tag exists in sidebar

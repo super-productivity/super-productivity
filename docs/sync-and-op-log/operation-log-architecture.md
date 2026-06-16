@@ -2239,8 +2239,7 @@ When adding new entities or relationships:
 - Entity-level conflict detection (vector clock comparisons)
 - `ConflictResolutionService` (LWW auto-resolution + batch apply)
 - `VectorClockService` (global/entity frontier tracking, compaction recovery)
-- `DependencyResolverService` (extract/check hard/soft dependencies)
-- `OperationApplierService` (fail-fast on missing deps → throws `SyncStateCorruptedError`)
+- `OperationApplierService` (bulk-dispatch apply in causal arrival order; returns a failed op for caller retry/re-validation)
 - Rejected operation tracking (`rejectedAt` field + user notification)
 - Fresh client safety checks (prevents empty clients from overwriting server)
 - Bounded memory during download (`MAX_DOWNLOAD_OPS_IN_MEMORY = 50,000`)
@@ -2296,7 +2295,7 @@ When adding new entities or relationships:
 > - **Server Security Hardening**: Audit logging, structured error codes, request deduplication, transaction isolation, input validation, rate limiting
 > - **Unified Archive Handling**: `ArchiveOperationHandler` is now the single source of truth for all archive operations, used by both local effects and remote operation application
 > - **Simplified OperationCaptureService**: Tracks pending captures with a counter (no positional FIFO queue); `entityChanges` is computed in the write path from the action
-> - **Simplified OperationApplierService**: Refactored to fail-fast approach - throws `SyncStateCorruptedError` on missing hard deps (no retry queues)
+> - **Simplified OperationApplierService**: Applies ops in causal arrival order via bulk dispatch; a failed op is returned to the caller for re-validation/retry (no dependency resolver, no retry queues)
 > - **Tag sanitization**: Remove subtask IDs from tags when parent deleted, filter non-existent taskIds on sync
 > - **Anchor-based move operations**: All task drag-drop moves now use `afterTaskId` instead of full list replacement (including subtask moves)
 > - **Quota handling**: Emergency compaction and circuit breaker on `QuotaExceededError`
@@ -2347,7 +2346,7 @@ src/app/op-log/
 │   ├── operation-write-flush.service.ts      # Batch write operations with flush
 │   └── operation-sync.util.ts                # Sync helper utilities
 ├── processing/
-│   ├── operation-applier.service.ts          # Apply ops with fail-fast dependency handling
+│   ├── operation-applier.service.ts          # Apply ops via bulk dispatch in arrival order
 │   ├── operation-capture.service.ts          # Pending-capture counter + entityChanges extractor
 │   ├── operation-capture.meta-reducer.ts     # Meta-reducer for before/after state capture
 │   ├── hydration-state.service.ts            # Track hydration/remote ops application state

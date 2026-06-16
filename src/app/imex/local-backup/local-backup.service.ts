@@ -16,6 +16,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
 import {
+  backupStrHasSyncEnabled,
   countAllTasks,
   countAllTasksInBackupStr,
   isUsableBackupStr,
@@ -28,6 +29,7 @@ import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 const DEFAULT_BACKUP_INTERVAL = 5 * 60 * 1000;
 // A2 (#7925): high enough that a flurry of UI actions settles into one backup;
@@ -84,13 +86,12 @@ export class LocalBackupService {
   checkBackupAvailable(): Promise<boolean | LocalBackupMeta> {
     if (this._isAndroidWebView) {
       // Available if either ring slot holds a backup (#7901).
-      return androidInterface.loadFromDbWrapped(ANDROID_DB_KEY).then(async (primary) => {
-        if (primary) {
+      return (async () => {
+        if (await this._loadAndroidDbValueSafe(ANDROID_DB_KEY)) {
           return true;
         }
-        const prev = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY_PREV);
-        return !!prev;
-      });
+        return !!(await this._loadAndroidDbValueSafe(ANDROID_DB_KEY_PREV));
+      })();
     }
     if (this._platformService.isIOS()) {
       return this._checkBackupAvailableIOS();
@@ -110,10 +111,44 @@ export class LocalBackupService {
     // usable exists (degrades to the existing import-error snack rather than
     // throwing on the startup path).
     const [primary, prev] = await Promise.all([
-      androidInterface.loadFromDbWrapped(ANDROID_DB_KEY),
-      androidInterface.loadFromDbWrapped(ANDROID_DB_KEY_PREV),
+      this._loadAndroidDbValueSafe(ANDROID_DB_KEY),
+      this._loadAndroidDbValueSafe(ANDROID_DB_KEY_PREV),
     ]);
     return selectBestBackupStr(primary, prev) ?? '';
+  }
+
+  /**
+   * Android-only native-KV read with diagnostics + graceful failure.
+   *
+   * - Logs the blob SIZE (never content — see core/log rule 9) so a shared log
+   *   export shows whether a backup has grown into the ~2 MB CursorWindow danger
+   *   zone that used to make `loadFromDb` throw.
+   * - Returns null instead of throwing, so a read failure degrades to "no backup"
+   *   (the existing snack) rather than an opaque "Error invoking loadFromDb" that
+   *   aborts the whole restore action.
+   */
+  private async _loadAndroidDbValueSafe(key: string): Promise<string | null> {
+    try {
+      const val = await this._nativeDbLoad(key);
+      Log.log(
+        `LocalBackupService: read Android backup '${key}' (${val ? val.length : 0} chars)`,
+      );
+      return val;
+    } catch (e) {
+      Log.err(`LocalBackupService: failed to read Android backup '${key}'`, e);
+      return null;
+    }
+  }
+
+  // Thin seams over the `androidInterface` (window.SUPAndroid) singleton — which
+  // is undefined off-device and has no DI seam — so the read/write logic above is
+  // unit-testable (spec spies these instead of the global).
+  private _nativeDbLoad(key: string): Promise<string | null> {
+    return androidInterface.loadFromDbWrapped(key);
+  }
+
+  private _nativeDbSave(key: string, value: string): Promise<void> {
+    return androidInterface.saveToDbWrapped(key, value);
   }
 
   async loadBackupIOS(): Promise<string> {
@@ -142,6 +177,15 @@ export class LocalBackupService {
     return primary || prev;
   }
 
+  /**
+   * Startup recovery entry point. PRECONDITION (enforced by the only caller,
+   * StartupService._initBackups): invoke only when the live store is genuinely
+   * blank — no state cache AND an empty op-log. The mobile branch may restore a
+   * backup *without a prompt*, which is a destructive op-log replacement; that is
+   * only safe because the empty op-log means the concurrent hydrator has nothing
+   * to replay and cannot be raced. Do NOT call this from a path where real ops
+   * may exist. See #7901.
+   */
   async askForFileStoreBackupIfAvailable(): Promise<void> {
     if (!IS_ELECTRON && !this._isAndroidWebView && !this._platformService.isIOS()) {
       return;
@@ -167,15 +211,41 @@ export class LocalBackupService {
       return;
     }
 
-    // MOBILE (Android / iOS) — load the best ring generation first so the prompt
-    // can tell the user what they would restore (#7901). Loading is cheap and
-    // lets a blind "discard my data?" dialog become an informed one — they should
-    // never dismiss the only copy of their data without seeing it exists.
+    // MOBILE (Android / iOS) — recovery path. StartupService only calls this when
+    // there is no state cache AND the op-log is empty (see _initBackups), i.e. a
+    // genuinely blank store — in practice WebView IndexedDB eviction (#7901/#7892)
+    // or a fresh install. Because the op-log is empty, the concurrently-running
+    // hydrator has nothing to replay, so a destructive import cannot race it.
+    //
+    // Auto-restore WITHOUT a prompt only for a *usable* backup that had *no sync
+    // configured*. Restoring a synced backup resets `lastServerSeq` and writes a
+    // clean-slate BACKUP_IMPORT, which can silently drop other devices' concurrent
+    // work — so a synced backup must go through the informed prompt and let the
+    // user decide (they may prefer to re-pull from the server). Corrupt /
+    // data-less / synced backups all fall through to the prompt below.
     const backupData = await this._loadBestMobileBackupStr();
     if (!backupData) {
       // Nothing usable to restore — stay silent rather than prompt for nothing.
       return;
     }
+    if (isUsableBackupStr(backupData) && !backupStrHasSyncEnabled(backupData)) {
+      Log.log('mobile backupData auto-restored, length: ' + backupData.length);
+      const didImport = await this._importBackup(backupData);
+      if (didImport) {
+        const summary = summarizeBackupStr(backupData);
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.GCF.AUTO_BACKUPS.S_AUTO_RESTORED,
+          translateParams: {
+            tasks: summary?.taskCount ?? 0,
+            projects: summary?.projectCount ?? 0,
+          },
+        });
+      }
+      return;
+    }
+    // Corrupt, data-less, or sync-configured backup: don't silently act — surface
+    // the informed prompt so the user decides.
     if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
       Log.log('mobile backupData loaded, length: ' + backupData.length);
       await this._importBackup(backupData);
@@ -256,17 +326,46 @@ export class LocalBackupService {
       return;
     }
 
+    let didWrite = false;
     if (IS_ELECTRON) {
       // Electron has its own rotated, timestamped chain — no ring or A3 guard
       // needed (the bug class A3 protects against doesn't apply).
       await this._backupElectron(data);
+      didWrite = true;
     }
-    if (this._isAndroidWebView) {
-      await this._backupAndroid(data);
+    if (this._isAndroidWebView && (await this._backupAndroid(data))) {
+      didWrite = true;
     }
-    if (this._platformService.isIOS()) {
-      await this._backupIOS(data);
+    if (this._platformService.isIOS() && (await this._backupIOS(data))) {
+      didWrite = true;
     }
+
+    // #7901: record when a good backup was actually written so Settings can show
+    // the user they're protected. Only on a real write: the per-platform A3
+    // near-empty guard (#7925) can skip the write to preserve an older, larger
+    // backup, and the timestamp must not advance then — it would falsely claim
+    // "just backed up" on exactly the post-eviction boot the guard protects.
+    if (didWrite) {
+      this._recordLastBackupTime();
+    }
+  }
+
+  private _recordLastBackupTime(): void {
+    try {
+      localStorage.setItem(LS.LAST_LOCAL_BACKUP, Date.now().toString());
+    } catch (e) {
+      Log.warn('LocalBackupService: failed to record last backup time', e);
+    }
+  }
+
+  /** Epoch ms of the last successful local backup write, or null if none yet. */
+  getLastBackupTime(): number | null {
+    const raw = localStorage.getItem(LS.LAST_LOCAL_BACKUP);
+    if (!raw) {
+      return null;
+    }
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
   }
 
   private async _backupElectron(data: AppDataComplete): Promise<void> {
@@ -310,26 +409,67 @@ export class LocalBackupService {
     return true;
   }
 
-  private async _backupAndroid(data: AppDataComplete): Promise<void> {
-    const existing = await androidInterface.loadFromDbWrapped(ANDROID_DB_KEY);
-    if (this._guardNearEmptyOverwrite(data, existing, 'Android')) return;
-    if (existing) {
-      await androidInterface.saveToDbWrapped(ANDROID_DB_KEY_PREV, existing);
+  // Returns true when a backup was actually written, false when the A3 guard
+  // skipped it (so the caller knows whether to advance the last-backup time).
+  private async _backupAndroid(data: AppDataComplete): Promise<boolean> {
+    // Read the existing primary slot directly (NOT via _loadAndroidDbValueSafe): on the
+    // write path a read failure is ambiguous — we can't tell "no backup yet" from
+    // "unreadable" — so we must not overwrite the primary on uncertainty. Bail instead,
+    // preserving both ring slots; the next cycle retries (#7901).
+    let existing: string | null;
+    try {
+      existing = await this._nativeDbLoad(ANDROID_DB_KEY);
+    } catch (e) {
+      Log.err(
+        'LocalBackupService: skipping Android backup — could not read existing slot',
+        e,
+      );
+      return false;
     }
-    await androidInterface.saveToDbWrapped(ANDROID_DB_KEY, JSON.stringify(data));
+    if (this._guardNearEmptyOverwrite(data, existing, 'Android')) {
+      return false;
+    }
+    if (existing) {
+      await this._nativeDbSave(ANDROID_DB_KEY_PREV, existing);
+    }
+    const json = JSON.stringify(data);
+    // Size only, never content (core/log rule 9) — lands in shared log exports.
+    Log.log(`LocalBackupService: writing Android backup (${json.length} chars)`);
+    await this._nativeDbSave(ANDROID_DB_KEY, json);
+    return true;
   }
 
-  private async _backupIOS(data: AppDataComplete): Promise<void> {
+  // Returns true when a backup was actually written, false when the A3 guard
+  // skipped it or the write failed.
+  private async _backupIOS(data: AppDataComplete): Promise<boolean> {
+    // Read the existing primary slot in a way that distinguishes "no backup yet"
+    // from "unreadable" (#8414): on the write path a read failure is ambiguous —
+    // we can't tell "no backup" from "couldn't read it" — so we must not overwrite
+    // the primary on uncertainty. Bail instead, preserving both ring slots; the
+    // next cycle retries. Mirrors _backupAndroid.
+    let existing: string | null;
     try {
-      const existing = await this._readIOSFileOrNull(IOS_BACKUP_FILENAME);
-      if (this._guardNearEmptyOverwrite(data, existing, 'iOS')) return;
+      existing = await this._readIOSExistingSlotOrThrow(IOS_BACKUP_FILENAME);
+    } catch (e) {
+      Log.err(
+        'LocalBackupService: skipping iOS backup — could not read existing slot',
+        e,
+      );
+      return false;
+    }
+    if (this._guardNearEmptyOverwrite(data, existing, 'iOS')) {
+      return false;
+    }
+    try {
       if (existing) {
         await this._writeIOSFile(IOS_BACKUP_PREV_FILENAME, existing);
       }
       await this._writeIOSFile(IOS_BACKUP_FILENAME, JSON.stringify(data));
       Log.log('iOS backup saved successfully');
+      return true;
     } catch (error) {
       Log.err('Failed to save iOS backup', error);
+      return false;
     }
   }
 
@@ -342,17 +482,49 @@ export class LocalBackupService {
     });
   }
 
+  private async _readIOSFileRaw(path: string): Promise<string> {
+    const result = await Filesystem.readFile({
+      path,
+      directory: Directory.Data,
+      encoding: Encoding.UTF8,
+    });
+    return result.data as string;
+  }
+
+  /**
+   * Read-path helper: swallows ALL errors and returns null. Safe for
+   * loadBackupIOS (fire-and-forget startup restore), where a missing-vs-unreadable
+   * distinction can't cause data loss and a throw would surface as an unhandled
+   * rejection. NOT for the write path — see _readIOSExistingSlotOrThrow.
+   */
   private async _readIOSFileOrNull(path: string): Promise<string | null> {
     try {
-      const result = await Filesystem.readFile({
-        path,
-        directory: Directory.Data,
-        encoding: Encoding.UTF8,
-      });
-      return result.data as string;
+      return await this._readIOSFileRaw(path);
     } catch {
-      // File doesn't exist
+      // File doesn't exist (or is unreadable — irrelevant on the read path).
       return null;
+    }
+  }
+
+  /**
+   * Write-path helper (#8414): returns null only when the slot is *confirmed
+   * absent* (a legitimate first backup, where the write should proceed), and
+   * rethrows on a transient read failure so the caller bails WITHOUT overwriting,
+   * preserving both ring slots. Capacitor signals a missing file with a thrown
+   * error — the same way it signals a transient failure — so on error we re-probe
+   * with stat(): only a still-absent file reads as "no backup"; anything else is
+   * treated as uncertain and rethrown. Mirrors _backupAndroid's guard.
+   */
+  private async _readIOSExistingSlotOrThrow(path: string): Promise<string | null> {
+    try {
+      return await this._readIOSFileRaw(path);
+    } catch (e) {
+      if (!(await this._iosFileExists(path))) {
+        // Confirmed absent → no existing backup, let the write proceed.
+        return null;
+      }
+      // File is present but unreadable → transient. Don't overwrite on uncertainty.
+      throw e;
     }
   }
 

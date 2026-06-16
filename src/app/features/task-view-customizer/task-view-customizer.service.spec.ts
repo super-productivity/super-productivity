@@ -15,6 +15,7 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { ProjectService } from '../project/project.service';
 import { TagService } from '../tag/tag.service';
+import { MenuTreeService } from '../menu-tree/menu-tree.service';
 import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
@@ -49,6 +50,9 @@ describe('TaskViewCustomizerService', () => {
   };
   let projectUpdateSpy: jasmine.Spy;
   let tagUpdateSpy: jasmine.Spy;
+  // Stand-in for the sidebar (menu-tree) order. Defaults to identity so tags keep
+  // their _allTags order; individual tests override it to assert a custom order.
+  let menuTreeFlattenFn: (tags: Tag[]) => Tag[];
   const mockLanguageService = { detect: () => DEFAULT_LOCALE };
 
   const todayStr = getDbDateStr(new Date());
@@ -128,6 +132,7 @@ describe('TaskViewCustomizerService', () => {
   beforeEach(() => {
     // Clear localStorage before each test
     localStorage.clear();
+    menuTreeFlattenFn = (tags) => tags;
 
     mockWorkContextService = {
       activeWorkContextId: null,
@@ -161,6 +166,10 @@ describe('TaskViewCustomizerService', () => {
         { provide: WorkContextService, useValue: mockWorkContextService },
         { provide: ProjectService, useValue: { update: projectUpdateSpy } },
         { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+        {
+          provide: MenuTreeService,
+          useValue: { flattenTagViewTree: (tags: Tag[]) => menuTreeFlattenFn(tags) },
+        },
         provideMockStore({
           selectors: [
             { selector: selectAllProjects, value: mockProjects },
@@ -348,7 +357,7 @@ describe('TaskViewCustomizerService', () => {
     ]);
   });
 
-  it('should sort by tag (primary alphabetical tag title), with untagged last', () => {
+  it('should sort by tag using the primary tag (sidebar order), with untagged last', () => {
     const extra: TaskWithSubTasks[] = [
       {
         id: 'Aardvark(-)',
@@ -506,6 +515,47 @@ describe('TaskViewCustomizerService', () => {
     expect(Object.keys(grouped)).toContain('No date');
     expect(grouped['No date'].length).toBe(1);
     expect(grouped['No date'][0].id).toBe('task-no-date');
+  });
+
+  describe('tag order matches the sidebar (issue #8400)', () => {
+    beforeEach(() => {
+      // Sidebar order that is intentionally NOT alphabetical: Tag B before Tag A.
+      menuTreeFlattenFn = () => [mockTags[1], mockTags[0]];
+    });
+
+    it('should sort by tag following the sidebar order, not alphabetically', () => {
+      const sorted = service['applySort'](
+        mockTasks,
+        SORT_OPTION_TYPE.tag,
+        SORT_ORDER.ASC,
+      );
+      // Tag B leads the sidebar, so its task comes first; the multi-tag task is
+      // placed by its highest-priority (lowest-index) tag, which is Tag B.
+      expect(sorted.map((t) => t.id)).toEqual([
+        'Beta(Tag B)',
+        'Third Task(Tag A, Tag B)',
+        'Alpha(Tag A)',
+        'Zebra(-)',
+      ]);
+    });
+
+    it('should order tag group headers by sidebar order with untagged last', () => {
+      service.selectedGroup.set({ type: GROUP_OPTION_TYPE.tag } as GroupOption);
+      const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
+
+      expect(service.getOrderedGroupKeys(grouped)).toEqual(['Tag B', 'Tag A', 'No tag']);
+    });
+
+    it('should keep non-tag group headers in ascending order', () => {
+      service.selectedGroup.set({ type: GROUP_OPTION_TYPE.project } as GroupOption);
+      const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.project);
+
+      expect(service.getOrderedGroupKeys(grouped)).toEqual([
+        'No project',
+        'Project A',
+        'Project B',
+      ]);
+    });
   });
 
   // === DEADLINE FILTER ===
@@ -1052,6 +1102,10 @@ describe('TaskViewCustomizerService', () => {
           },
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
           { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          {
+            provide: MenuTreeService,
+            useValue: { flattenTagViewTree: (tags: Tag[]) => tags },
+          },
           provideMockStore({
             selectors: [
               { selector: selectAllProjects, value: mockProjects },
@@ -1232,6 +1286,10 @@ describe('TaskViewCustomizerService', () => {
           { provide: WorkContextService, useValue: mockWorkContextService },
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
           { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          {
+            provide: MenuTreeService,
+            useValue: { flattenTagViewTree: (tags: Tag[]) => tags },
+          },
           provideMockStore({
             selectors: [
               { selector: selectAllProjects, value: allProjects },

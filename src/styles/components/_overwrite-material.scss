@@ -194,6 +194,46 @@ body.isNativeMobile .project-complete-fullscreen-dialog {
 // --------
 .mat-mdc-form-field {
   margin-bottom: var(--s2);
+
+  // Feed semantic input tokens to official Material CSS variables
+  --mat-form-field-filled-container-color: var(--input-bg);
+  --mat-form-field-filled-container-shape: var(--input-border-radius);
+
+  // Hide the active indicators (underline ripple) by setting their color to transparent,
+  // but leave the error indicators intact so the red invalid line shows up.
+  --mat-form-field-filled-active-indicator-color: transparent;
+  --mat-form-field-filled-hover-active-indicator-color: transparent;
+  --mat-form-field-filled-focus-active-indicator-color: transparent;
+
+  // Targets default filled text boxes to transform them into flat, token-driven containers
+  .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    border: 1px solid var(--input-border-color) !important;
+    // Material hardcodes the filled field's bottom corner radii to 0 (the
+    // container-shape token above only rounds the top two corners), so a full
+    // border would render rounded-top/square-bottom. Round all four corners to
+    // read as a card, matching the task-detail panel this style is copied from.
+    border-radius: var(--input-border-radius) !important;
+    transition:
+      background var(--transition-duration-s) ease-out,
+      border-color var(--transition-duration-s) ease-out,
+      box-shadow var(--transition-duration-s) ease-out !important;
+
+    &:hover {
+      background: var(--input-bg-hover) !important;
+    }
+  }
+
+  // Active / Focus state
+  &.mat-focused .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    background: var(--input-bg-hover) !important;
+    border-color: var(--input-border-color-focus) !important;
+    box-shadow: 0 0 0 1px var(--input-border-color-focus) !important;
+  }
+
+  // Error / Invalid state
+  &.mat-form-field-invalid .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    border-color: var(--input-border-color-invalid) !important;
+  }
 }
 
 // needs to be global cause of cdk overlay

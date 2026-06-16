@@ -2479,6 +2479,7 @@
     "WEB_DAV_UPLOAD": "WebDAV: caricamento dei dati ..."
   },
   "MH": {
+    "HISTORY": "Cronologia",
     "ADD_NEW_TASK": "Aggiungi nuova attività",
     "ALL_PLANNED_LIST": "Ripetute/Pianificate",
     "BOARDS": "Schede",

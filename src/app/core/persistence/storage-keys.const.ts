@@ -17,6 +17,12 @@ export enum LS {
   // prompt to hold off for a cooldown after a bad experience. Time only.
   LAST_CRITICAL_ERROR_TIME = 'SUP_LAST_CRITICAL_ERROR_TIME',
   LAST_LOCAL_SYNC_MODEL_CHANGE = 'SUP_LAST_LOCAL_SYNC_MODEL_CHANGE',
+  // Epoch ms of the last successful local (auto-)backup write. Recorded by
+  // LocalBackupService._backup() only when a platform writer actually wrote (past
+  // the meaningful-data and A3 near-empty guards), so it never advances on a
+  // skipped/empty/degraded write. Surfaced in Settings so users can see they're
+  // protected (#7901).
+  LAST_LOCAL_BACKUP = 'SUP_LAST_LOCAL_BACKUP',
   LOCAL_UI_HELPER = 'SUP_UI_HELPER',
 
   ACTION_LOG = 'SUP_ACTION_LOG',
@@ -82,6 +88,7 @@ export enum SS {
   JIRA_WONKY_COOKIE = 'JIRA_WONKY_COOKIE',
   TODO_TMP = 'TODO_TMP_EDIT',
   ADD_TASK_BAR_TXT = 'ADD_TASK_BAR_TXT',
+  ADD_TASK_BAR_NOTE = 'ADD_TASK_BAR_NOTE',
 }
 
 // LEGACY KEYS

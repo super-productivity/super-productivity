@@ -2313,6 +2313,7 @@
     "WEB_DAV_UPLOAD": "WebDAV: Laddar upp data..."
   },
   "MH": {
+    "HISTORY": "Historik",
     "ADD_NEW_TASK": "Lägg till ny uppgift",
     "ALL_PLANNED_LIST": "Planerad / Upprepa",
     "BOARDS": "Tavlor",

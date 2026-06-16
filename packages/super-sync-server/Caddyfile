@@ -27,8 +27,22 @@
     encode gzip zstd
 
     # Logging
+    #
+    # Redact the `token` query param from the logged URI. The WebSocket endpoint
+    # authenticates via `?token=<JWT>` (browsers can't set headers on a
+    # WebSocket), and that JWT is valid for 365 days with no rotation — so
+    # without this filter every WS upgrade writes a year-valid, full-sync
+    # credential to stdout / `docker logs`. `token` is only ever a query param
+    # carrying an auth secret (the WS JWT, plus the email-verification,
+    # passkey-recovery and magic-login links), never a benign field, so
+    # redacting it across this site block is targeted and safe. See #8343.
     log {
         output stdout
-        format console
+        format filter {
+            wrap console
+            request>uri query {
+                replace token REDACTED
+            }
+        }
     }
 }

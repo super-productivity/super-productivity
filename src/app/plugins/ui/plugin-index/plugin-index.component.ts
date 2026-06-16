@@ -80,6 +80,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
 
   private readonly _route = inject(ActivatedRoute);
   private readonly _router = inject(Router);
+  private readonly _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly _sanitizer = inject(DomSanitizer);
   private readonly _pluginService = inject(PluginService);
   private readonly _pluginBridge = inject(PluginBridgeService);
@@ -102,7 +103,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // If directPluginId is provided, load that plugin directly
     if (this.directPluginId) {
       this.pluginId.set(this.directPluginId);
-      this._cleanupIframeCommunication();
+      // NOTE: no _cleanupIframeCommunication() here. On a fresh mount there is
+      // nothing to tear down, and the empty-document srcdoc it would set just
+      // forces an extra iframe load + change-detection pass before the real
+      // document — widening the load-timing race that blanked the panel (#8394).
       await this._waitForPluginSystem();
 
       try {
@@ -241,7 +245,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // other embed slots) don't get answered with this plugin's bound methods.
     this._messageListener = async (event: Event) => {
       const msgEvent = event as MessageEvent;
-      const iframeWin = this.iframeRef?.nativeElement?.contentWindow;
+      const iframeWin = this._getPluginIframeWindow();
       if (!iframeWin || msgEvent.source !== iframeWin) {
         return;
       }
@@ -274,6 +278,27 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
   }
 
+  /**
+   * Resolve the live window of THIS component's plugin iframe.
+   *
+   * Reads the rendered DOM rather than the cached `@ViewChild`: with zoneless
+   * change detection the ViewChild property is only assigned on the next CD
+   * pass (rAF/timeout), which can land AFTER the srcdoc iframe has executed its
+   * scripts and posted its first (tokenless) PLUGIN_MESSAGE. Because a message
+   * can only exist once its iframe is in the DOM, querying this component's
+   * host subtree at message time always finds our iframe — so we no longer
+   * silently drop the plugin's own messages and leave the panel blank (#8394).
+   *
+   * Still scoped to this component's host, so messages from sibling plugin
+   * iframes (side panel vs. embed slot) are not answered with our bound methods.
+   */
+  private _getPluginIframeWindow(): Window | null {
+    const iframeEl = this._elRef.nativeElement.querySelector<HTMLIFrameElement>(
+      'iframe[data-plugin-iframe]',
+    );
+    return iframeEl?.contentWindow ?? null;
+  }
+
   private _cleanupIframeCommunication(): void {
     const currentPluginId = this.pluginId();
     PluginLog.log(`Cleaning up iframe communication for plugin: ${currentPluginId}`);
@@ -303,7 +328,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   onIframeLoad(): void {
     PluginLog.log('Plugin iframe loaded for plugin:', this.pluginId());
 
-    // Register iframe with cleanup service
+    // Reading the cached @ViewChild is fine HERE (unlike the message listener,
+    // which uses _getPluginIframeWindow()): this fires on the iframe's `load`
+    // event, by which point the ViewChild is assigned, and registration is not
+    // race-sensitive. Do not "unify" this with the listener's DOM lookup.
     if (this.iframeRef?.nativeElement && this.pluginId()) {
       this._cleanupService.registerIframe(this.pluginId(), this.iframeRef.nativeElement);
     }

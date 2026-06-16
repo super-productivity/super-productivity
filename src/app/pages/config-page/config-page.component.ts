@@ -38,7 +38,7 @@ import { getAutomaticBackUpFormCfg } from '../../features/config/form-cfgs/autom
 import { getAppVersionStr } from '../../util/get-app-version-str';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { EXPERIMENTAL_APP_FEATURE_KEYS } from '../../features/config/form-cfgs/app-features-form.const';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
@@ -93,6 +93,7 @@ export class ConfigPageComponent implements OnInit {
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _localBackupService = inject(LocalBackupService);
+  private readonly _translateService = inject(TranslateService);
   private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   readonly configService = inject(GlobalConfigService);
@@ -167,14 +168,18 @@ export class ConfigPageComponent implements OnInit {
     if (this._isAndroidWebView) {
       this.globalImexFormCfg = [
         ...this.globalImexFormCfg,
-        getAutomaticBackUpFormCfg(undefined, [
-          {
-            label: T.GCF.AUTO_BACKUPS.RESTORE_LATEST,
-            icon: 'settings_backup_restore',
-            onClick: () =>
-              this._localBackupService.restoreLatestMobileBackupFromSettings(),
-          },
-        ]),
+        getAutomaticBackUpFormCfg(
+          undefined,
+          [
+            {
+              label: T.GCF.AUTO_BACKUPS.RESTORE_LATEST,
+              icon: 'settings_backup_restore',
+              onClick: () =>
+                this._localBackupService.restoreLatestMobileBackupFromSettings(),
+            },
+          ],
+          this._lastBackupInfo(),
+        ),
       ];
     } else if (IS_ELECTRON) {
       window.ea.getBackupPath().then((backupPath) => {
@@ -191,6 +196,23 @@ export class ConfigPageComponent implements OnInit {
       const shortcuts = this._pluginBridgeService.shortcuts();
       Log.log('Plugin shortcuts changed:', { shortcuts });
       this._updateKeyboardFormWithPluginShortcuts(shortcuts);
+    });
+  }
+
+  /**
+   * Pre-formatted "Last backup: <date>" line for the mobile auto-backups section
+   * (#7901), or undefined when no local backup has run yet. Reflects the time as
+   * of opening Settings — good enough for a "you're protected" indicator without
+   * wiring a live subscription. Uses toLocaleString() to match the Electron
+   * restore prompt's date formatting.
+   */
+  private _lastBackupInfo(): string | undefined {
+    const ts = this._localBackupService.getLastBackupTime();
+    if (ts === null) {
+      return undefined;
+    }
+    return this._translateService.instant(T.GCF.AUTO_BACKUPS.LAST_BACKUP_INFO, {
+      date: new Date(ts).toLocaleString(),
     });
   }
 

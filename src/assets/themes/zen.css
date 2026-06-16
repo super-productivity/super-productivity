@@ -206,17 +206,17 @@ body.isDarkTheme .mat-mdc-card {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Material form fields: use main bg with darker underline */
-body .mdc-text-field--filled:not(.mdc-text-field--disabled) {
-  background: var(--bg) !important;
+/* Material form fields: flat border instead of invisible input */
+body {
+  --input-bg: transparent;
+  --input-bg-hover: rgba(0, 0, 0, 0.04);
+  --input-border-color: rgba(0, 0, 0, 0.2);
 }
 
-body .mdc-line-ripple::before {
-  border-bottom-color: rgba(0, 0, 0, 0.3) !important;
-}
-
-body.isDarkTheme .mdc-line-ripple::before {
-  border-bottom-color: rgba(255, 255, 255, 0.3) !important;
+body.isDarkTheme {
+  /* --input-bg stays transparent (inherited from the body rule above) */
+  --input-bg-hover: rgba(255, 255, 255, 0.04);
+  --input-border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Side panel edge close handle */

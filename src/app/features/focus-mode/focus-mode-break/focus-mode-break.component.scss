@@ -18,29 +18,47 @@
 }
 
 // ========== ROW 3: CLOCK ==========
-// The labels below are positioned against focus-clock-face (position: relative),
-// not this wrapper, so it needs no layout of its own.
+// Stack the in-circle readout (label · digits · cycle counter) as a single
+// centered flex column instead of three independently absolute-positioned
+// layers. The old layout pinned the label at top:30% and the digits at top:50%,
+// so a long localized label (e.g. es "Descanso corto", plus the now-removed
+// {{cycle}} suffix) — or simply a small clock face, where the label keeps its
+// size while the ring shrinks — wrapped the label down over the digits (#8391).
+// A column can't overlap: it just stacks and stays centered in the ring.
+//
+// `:host` raises specificity above focus-clock-face's `::ng-deep .clock-wrapper`
+// rule (which still positions the wrapper absolutely to fill the ring — kept).
+:host .clock-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s);
+  // Keep long labels clear of the ring stroke on the sides.
+  padding-inline: var(--s2);
+}
 
 // "Short break" / "Long break" / "Take a break" label inside the circle,
-// positioned above the digits. Two steps up the spacing scale from the
-// cycle counter so it reads as the dominant secondary text.
+// above the digits. Reads as the dominant secondary text.
 .break-label {
-  position: absolute;
-  top: 30%;
-  left: 50%;
-  transform: translateX(-50%);
+  max-width: 100%;
   color: var(--text-color-muted);
   font-size: var(--s3);
   font-weight: bold;
-  line-height: 1;
+  line-height: 1.1;
+  text-align: center;
+}
+
+// Neutralize focus-clock-face's shared absolute centering of the digits so they
+// flow inside the column. (That `::ng-deep .clock-time` rule still positions the
+// digits absolutely in focus-mode-main, which has no above-digits label.)
+:host .clock-wrapper .clock-time {
+  position: static;
+  transform: none;
 }
 
 // Pomodoro cycle counter inside the circle, below the digits.
 .cycle-counter {
-  position: absolute;
-  top: 65%;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: var(--s-half);
