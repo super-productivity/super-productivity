@@ -501,6 +501,28 @@ describe('OperationLogStoreService', () => {
       expect(remaining.length).toBe(1);
       expect(remaining[0].op.actionType).toBe('[Task] Update' as ActionType);
     });
+
+    it('should clear full-state metadata when deleting a full-state op', async () => {
+      const syncImportOp = createTestOperation({
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(syncImportOp);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(syncImportOp.id);
+
+      await service.deleteOpsWhere((entry) => entry.op.id === syncImportOp.id);
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
   });
 
   describe('getLastSeq', () => {
@@ -519,6 +541,122 @@ describe('OperationLogStoreService', () => {
       const allOps = await service.getOpsAfterSeq(0);
       const lastSeq = await service.getLastSeq();
       expect(lastSeq).toBe(allOps[allOps.length - 1].seq);
+    });
+  });
+
+  describe('getLatestFullStateOpEntry', () => {
+    it('should read latest full-state op via metadata without scanning ops', async () => {
+      const oldImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000001',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const regularOp = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000002',
+      });
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000003',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(oldImport);
+      await service.append(regularOp);
+      await service.append(latestImport, 'remote');
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      const latestEntry = await service.getLatestFullStateOpEntry();
+
+      expect(latestEntry?.op.id).toBe(latestImport.id);
+      expect(latestEntry?.source).toBe('remote');
+      expect(latestEntry?.syncedAt).toBeDefined();
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should rebuild missing metadata once and use it for subsequent reads', async () => {
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000011',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000010' }),
+      );
+      await service.append(latestImport);
+
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      await db.delete('meta', 'full_state_ops');
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(adapter.iterate).toHaveBeenCalledTimes(1);
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(adapter.iterate).toHaveBeenCalledTimes(1);
+    });
+
+    it('should delete stale full-state ops via metadata and keep the excluded op', async () => {
+      const staleImportA = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000021',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const staleImportB = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000022',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const keepImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000023',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(staleImportA);
+      await service.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000024' }),
+      );
+      await service.append(staleImportB);
+      await service.append(keepImport);
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      const deletedCount = await service.clearFullStateOpsExcept([keepImport.id]);
+
+      expect(deletedCount).toBe(2);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(keepImport.id);
+      expect((await service.getOpsAfterSeq(0)).map((entry) => entry.op.id)).toEqual([
+        '01900000-0000-7000-8000-000000000024',
+        keepImport.id,
+      ]);
+      expect(adapter.iterate).not.toHaveBeenCalled();
     });
   });
 
@@ -1892,6 +2030,79 @@ describe('OperationLogStoreService', () => {
       expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('priorClient');
       expect(clearCacheSpy).not.toHaveBeenCalled();
     });
+
+    it('should update full-state metadata for the replacement op', async () => {
+      const syncImportOp = createTestOperation({
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+        clientId: 'replacementClient',
+        vectorClock: { replacementClient: 1 },
+        payload: { task: { ids: [], entities: {} } },
+      });
+
+      await service.runDestructiveStateReplacement({
+        syncImportOp,
+        snapshotEntityKeys: [],
+      });
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(syncImportOp.id);
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should preserve full-state metadata when the destructive tx aborts', async () => {
+      const priorImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000031',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(priorImport);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
+
+      const db = (service as any).db;
+      const realTransaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake((stores: any, mode: any) => {
+        const tx = realTransaction(stores, mode);
+        if (Array.isArray(stores) && stores.includes(STORE_NAMES.OPS)) {
+          const opsStore = tx.objectStore(STORE_NAMES.OPS);
+          opsStore.add = async () => {
+            throw new Error('Simulated interrupt inside destructive tx');
+          };
+        }
+        return tx;
+      });
+
+      await expectAsync(
+        service.runDestructiveStateReplacement({
+          syncImportOp: createTestOperation({
+            id: '01900000-0000-7000-8000-000000000032',
+            opType: OpType.SyncImport,
+            entityType: 'ALL' as EntityType,
+            clientId: 'abortClient',
+            vectorClock: { abortClient: 1 },
+          }),
+          snapshotEntityKeys: [],
+        }),
+      ).toBeRejected();
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
   });
 
   describe('appendWithVectorClockUpdate', () => {
@@ -2118,6 +2329,29 @@ describe('OperationLogStoreService', () => {
 
       const unsynced = await service.getUnsynced();
       expect(unsynced.length).toBe(0);
+    });
+
+    it('should clear full-state metadata after clearing operations', async () => {
+      await service.append(
+        createTestOperation({
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+        }),
+      );
+      expect(await service.getLatestFullStateOpEntry()).toBeDefined();
+
+      await service.clearAllOperations();
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+      expect(adapter.iterate).not.toHaveBeenCalled();
     });
 
     it('should not affect state_cache', async () => {

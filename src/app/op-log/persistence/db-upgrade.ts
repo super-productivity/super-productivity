@@ -76,4 +76,11 @@ export const runDbUpgrade = (
   if (oldVersion < 6) {
     db.createObjectStore(STORE_NAMES.CLIENT_ID);
   }
+
+  // Version 7: Add meta store for small derived pointers.
+  // The first full-state lookup on upgraded databases rebuilds the
+  // full_state_ops entry from existing ops; new writes maintain it transactionally.
+  if (oldVersion < 7) {
+    db.createObjectStore(STORE_NAMES.META);
+  }
 };
