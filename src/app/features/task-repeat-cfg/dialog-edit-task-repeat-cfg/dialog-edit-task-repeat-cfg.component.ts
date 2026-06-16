@@ -88,6 +88,7 @@ import {
   heatmapOccurrenceTotal,
 } from '../../../ui/heatmap/build-heatmap-data.util';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import { MatTooltip } from '@angular/material/tooltip';
 import {
   clearMonths,
   setEnd as setEndInRRule,
@@ -147,6 +148,7 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     MatMenu,
     MatMenuItem,
     MatMenuTrigger,
+    MatTooltip,
     SegmentedButtonGroupComponent,
   ],
 })
