@@ -6,6 +6,7 @@ import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceIssue } from './plainspace-issue.model';
 import { mapPlainspaceIssueToSearchResult } from './plainspace-issue-map.util';
+import { IssueLog } from '../../../../core/log';
 
 /**
  * HTTP access to the real Plainspace integration API (plainspace.org /
@@ -38,9 +39,17 @@ export class PlainspaceApiService {
       .get<SPTasksResponse>(`${this._base(cfg)}/tasks`, { headers: this._headers(cfg) })
       .pipe(
         // /tasks spans all my spaces; keep only this provider's space.
-        map((res) =>
-          res.tasks.filter((t) => matchesSpace(t, cfg.spaceId)).map(mapSPTaskToIssue),
-        ),
+        map((res) => {
+          const matched = res.tasks.filter((t) => matchesSpace(t, cfg.spaceId));
+          // Diagnostic counts only (no task content) — pinpoints whether the
+          // space filter, not the import, is dropping tasks.
+          IssueLog.log('Plainspace getMyTasks$', {
+            total: res.tasks.length,
+            matched: matched.length,
+            spaceId: cfg.spaceId,
+          });
+          return matched.map(mapSPTaskToIssue);
+        }),
         catchError(() => of([])),
       );
   }
