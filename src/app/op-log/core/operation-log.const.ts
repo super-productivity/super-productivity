@@ -218,7 +218,7 @@ export const DOWNLOAD_PAGE_SIZE = 500;
  *
  * Re-exported from @sp/shared-schema to ensure client and server use the same value.
  */
-export { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
+export { MAX_VECTOR_CLOCK_SIZE } from '@sp/sync-core';
 
 /**
  * Minimum length for client IDs in vector clocks.

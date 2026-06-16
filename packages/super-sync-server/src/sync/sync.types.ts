@@ -5,12 +5,15 @@ import {
   SUPER_SYNC_OP_TYPES,
   SUPER_SYNC_SNAPSHOT_OP_TYPES,
   type SuperSyncOpType,
+} from '@sp/shared-schema';
+
+import {
   VectorClock,
   VectorClockComparison,
   compareVectorClocks,
   limitVectorClockSize,
   MAX_VECTOR_CLOCK_SIZE,
-} from '@sp/shared-schema';
+} from '@sp/sync-core';
 
 const FULL_STATE_OP_TYPES: ReadonlySet<string> = new Set(SUPER_SYNC_SNAPSHOT_OP_TYPES);
 

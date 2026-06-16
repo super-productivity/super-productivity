@@ -9,8 +9,8 @@ import {
 import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { MAX_VECTOR_CLOCK_SIZE } from '@sp/sync-core';
 
 // Meaningful state (contains a task) so saveCurrentStateAsSnapshot proceeds past
 // the empty-state guard (#7892). Tests that care only about clock pruning /

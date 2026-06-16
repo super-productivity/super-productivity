@@ -27,8 +27,10 @@ import {
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { bulkApplyHydrationOperations } from '../apply/bulk-hydration.action';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
-import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
+import {
+  MAX_CONFLICT_RETRY_ATTEMPTS,
+  MAX_VECTOR_CLOCK_SIZE,
+} from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
 import { SyncProviderId } from '../sync-providers/provider.const';

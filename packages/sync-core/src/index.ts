@@ -23,7 +23,7 @@ export {
   limitVectorClockSize,
   MAX_VECTOR_CLOCK_SIZE,
 } from './vector-clock';
-export type { VectorClockComparison } from './vector-clock';
+export { VectorClockComparison } from './vector-clock';
 
 // Full-state import clean-slate vector-clock decisions.
 export { classifyOpAgainstSyncImport } from './sync-import-filter';
