@@ -148,6 +148,20 @@ test('scan script runs in the direct nodeExecution sandbox without Buffer global
   assert.equal(result.notes[0].title, 'Root Note');
 });
 
+test('scan script preserves valid text around invalid UTF-8 bytes in titles', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  fs.writeFileSync(
+    path.join(root, 'Root.md'),
+    new Uint8Array([0x23, 0x20, 0x41, 0x20, 0xff, 0x20, 0x42, 0x20, 0xe2, 0x82, 0xac]),
+  );
+
+  const result = await runScanScriptInDirectExecutorSandbox(root);
+
+  assert.equal(result.success, true);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.notes[0].title, 'A � B €');
+});
+
 test('read script loads selected markdown note content', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
   const notePath = path.join(root, 'Root.md');
@@ -170,6 +184,20 @@ test('read script runs in the direct nodeExecution sandbox without Buffer global
 
   assert.equal(result.success, true);
   assert.equal(result.content, '# Root Note\nBody');
+});
+
+test('read script preserves valid text around invalid UTF-8 bytes', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  const notePath = path.join(root, 'Root.md');
+  fs.writeFileSync(
+    notePath,
+    new Uint8Array([0x41, 0x20, 0xff, 0x20, 0x42, 0x20, 0xe2, 0x82, 0xac]),
+  );
+
+  const result = await runReadScriptInDirectExecutorSandbox(root, notePath);
+
+  assert.equal(result.success, true);
+  assert.equal(result.content, 'A � B €');
 });
 
 test('read script rejects markdown paths outside the selected root', async () => {
@@ -196,4 +224,21 @@ test('read script truncates large selected notes', async () => {
   assert.equal(result.success, true);
   assert.equal(result.truncated, true);
   assert.equal(result.content.length, 1024 * 1024);
+});
+
+test('read script replaces a truncated trailing multibyte sequence', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  const notePath = path.join(root, 'Large.md');
+  const content = new Uint8Array(1024 * 1024 + 1);
+  content.fill(0x61);
+  content[1024 * 1024 - 1] = 0xe2;
+  content[1024 * 1024] = 0x82;
+  fs.writeFileSync(notePath, content);
+
+  const result = await runReadScriptInDirectExecutorSandbox(root, notePath);
+
+  assert.equal(result.success, true);
+  assert.equal(result.truncated, true);
+  assert.equal(result.content.length, 1024 * 1024);
+  assert.equal(result.content.endsWith('�'), true);
 });

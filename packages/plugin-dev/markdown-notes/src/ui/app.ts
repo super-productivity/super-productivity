@@ -55,7 +55,6 @@ interface AppState {
   scanErrors: ScanError[];
   preview: PreviewState;
   previewCache: Map<string, PreviewCacheEntry>;
-  refreshSeq: number;
   readSeq: number;
   queuedRefresh: boolean;
 }
@@ -92,7 +91,6 @@ const state: AppState = {
     truncated: false,
   },
   previewCache: new Map(),
-  refreshSeq: 0,
   readSeq: 0,
   queuedRefresh: false,
 };
@@ -275,7 +273,6 @@ const refresh = async (): Promise<void> => {
     return;
   }
 
-  const refreshId = ++state.refreshSeq;
   const requestedRootPath = state.config.rootPath.trim();
   state.isLoading = true;
   state.queuedRefresh = false;
@@ -286,10 +283,7 @@ const refresh = async (): Promise<void> => {
   try {
     state.projects = await loadProjects();
     const result = await scanNotes(requestedRootPath);
-    if (
-      refreshId !== state.refreshSeq ||
-      requestedRootPath !== state.config.rootPath.trim()
-    ) {
+    if (requestedRootPath !== state.config.rootPath.trim()) {
       return;
     }
     state.config.rootPath = result.rootPath;
@@ -308,13 +302,13 @@ const refresh = async (): Promise<void> => {
     void saveConfig();
     void loadSelectedNoteContent();
   } catch (error) {
-    if (refreshId !== state.refreshSeq) {
+    if (requestedRootPath !== state.config.rootPath.trim()) {
       return;
     }
     state.error = error instanceof Error ? error.message : String(error);
     state.status = '';
   } finally {
-    if (refreshId === state.refreshSeq) {
+    if (requestedRootPath === state.config.rootPath.trim()) {
       state.isLoading = false;
       render();
       if (state.queuedRefresh) {

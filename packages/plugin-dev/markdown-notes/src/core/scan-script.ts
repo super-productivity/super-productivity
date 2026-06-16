@@ -1,3 +1,77 @@
+const UTF8_DECODER_SCRIPT = `
+const decodeUtf8 = (bytes, length) => {
+  let output = '';
+  let index = 0;
+  const replacement = '\\uFFFD';
+  const appendCodePoint = (codePoint) => {
+    if (codePoint <= 0xffff) {
+      output += String.fromCharCode(codePoint);
+      return;
+    }
+    const offset = codePoint - 0x10000;
+    output += String.fromCharCode(0xd800 + (offset >> 10), 0xdc00 + (offset & 0x3ff));
+  };
+
+  while (index < length) {
+    const first = bytes[index++];
+    if (first < 0x80) {
+      output += String.fromCharCode(first);
+      continue;
+    }
+
+    let needed = 0;
+    let codePoint = 0;
+    let minCodePoint = 0;
+    if (first >= 0xc2 && first <= 0xdf) {
+      needed = 1;
+      codePoint = first & 0x1f;
+      minCodePoint = 0x80;
+    } else if (first >= 0xe0 && first <= 0xef) {
+      needed = 2;
+      codePoint = first & 0x0f;
+      minCodePoint = 0x800;
+    } else if (first >= 0xf0 && first <= 0xf4) {
+      needed = 3;
+      codePoint = first & 0x07;
+      minCodePoint = 0x10000;
+    } else {
+      output += replacement;
+      continue;
+    }
+
+    if (index + needed > length) {
+      output += replacement;
+      break;
+    }
+
+    let isValid = true;
+    for (let offset = 0; offset < needed; offset++) {
+      const next = bytes[index + offset];
+      if ((next & 0xc0) !== 0x80) {
+        isValid = false;
+        break;
+      }
+      codePoint = (codePoint << 6) | (next & 0x3f);
+    }
+
+    if (
+      !isValid ||
+      codePoint < minCodePoint ||
+      codePoint > 0x10ffff ||
+      (codePoint >= 0xd800 && codePoint <= 0xdfff)
+    ) {
+      output += replacement;
+      continue;
+    }
+
+    index += needed;
+    appendCodePoint(codePoint);
+  }
+
+  return output;
+};
+`;
+
 export const SCAN_MARKDOWN_DIRECTORY_SCRIPT = `
 const fs = require('fs');
 const path = require('path');
@@ -18,19 +92,7 @@ const toPosixRelativePath = (value) => value.split(path.sep).join('/');
 const isMarkdownFile = (name) => /\\.(md|markdown)$/i.test(name);
 const shouldSkipDirectory = (name) =>
   name.startsWith('.') || ignoredDirectoryNames.has(name);
-const decodeUtf8 = (bytes, length) => {
-  let binary = '';
-  const chunkSize = 8192;
-  for (let index = 0; index < length; index += chunkSize) {
-    const chunk = bytes.subarray(index, Math.min(index + chunkSize, length));
-    binary += String.fromCharCode.apply(null, Array.from(chunk));
-  }
-  try {
-    return decodeURIComponent(escape(binary));
-  } catch {
-    return binary;
-  }
-};
+${UTF8_DECODER_SCRIPT}
 
 const readTitleChunk = (filePath) => {
   const fd = fs.openSync(filePath, 'r');
@@ -150,19 +212,7 @@ const rootInput = String(rootPathArg || '');
 const noteInput = String(notePathArg || '');
 const MAX_READ_BYTES = 1024 * 1024;
 const isMarkdownFile = (name) => /\\.(md|markdown)$/i.test(name);
-const decodeUtf8 = (bytes, length) => {
-  let binary = '';
-  const chunkSize = 8192;
-  for (let index = 0; index < length; index += chunkSize) {
-    const chunk = bytes.subarray(index, Math.min(index + chunkSize, length));
-    binary += String.fromCharCode.apply(null, Array.from(chunk));
-  }
-  try {
-    return decodeURIComponent(escape(binary));
-  } catch {
-    return binary;
-  }
-};
+${UTF8_DECODER_SCRIPT}
 
 const emptyFailure = (error, resolvedPath) => ({
   success: false,

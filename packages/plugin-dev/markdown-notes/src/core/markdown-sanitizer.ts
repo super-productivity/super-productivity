@@ -1,4 +1,4 @@
-import createDOMPurify, { type WindowLike } from 'dompurify';
+import createDOMPurifyForWindow, { type WindowLike } from 'dompurify';
 import { isSafeMarkdownImageUrl, isSafeMarkdownLinkUrl } from './url-safety';
 
 export type MarkdownSanitizerWindow = WindowLike & { document: Document };
@@ -38,8 +38,8 @@ export const sanitizeMarkdownHtml = (
   html: string,
   windowRef: MarkdownSanitizerWindow = globalThis as unknown as MarkdownSanitizerWindow,
 ): string => {
-  const domPurify = createDOMPurify(windowRef);
-  const sanitized = domPurify.sanitize(html, {
+  const purifier = createDOMPurifyForWindow(windowRef);
+  const sanitized = purifier.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
