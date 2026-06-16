@@ -43,7 +43,12 @@ export class TranslateExtension {
         ? { 'templateOptions.label': this.translate.stream(to.label) }
         : {}),
       ...(typeof to.description === 'string' && to.description.length
-        ? { 'templateOptions.description': this.translate.stream(to.description) }
+        ? {
+            'templateOptions.description': this.translate.stream(
+              to.description,
+              to.descriptionTranslateParams,
+            ),
+          }
         : {}),
       ...(typeof to.placeholder === 'string' && to.placeholder.length
         ? { 'templateOptions.placeholder': this.translate.stream(to.placeholder) }

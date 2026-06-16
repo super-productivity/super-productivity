@@ -10,7 +10,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { PluginService } from '../../plugin.service';
@@ -18,9 +18,8 @@ import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCleanupService } from '../../plugin-cleanup.service';
 import {
   PluginIframeConfig,
-  createPluginIframeUrl,
+  buildPluginIframeHtml,
   handlePluginMessage,
-  cleanupPluginIframeUrl,
 } from '../../util/plugin-iframe.util';
 import {
   MatCard,
@@ -81,6 +80,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
 
   private readonly _route = inject(ActivatedRoute);
   private readonly _router = inject(Router);
+  private readonly _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly _sanitizer = inject(DomSanitizer);
   private readonly _pluginService = inject(PluginService);
   private readonly _pluginBridge = inject(PluginBridgeService);
@@ -93,18 +93,20 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   readonly pluginId = signal<string>('');
   readonly isLoading = signal<boolean>(true);
   readonly error = signal<string | null>(null);
-  readonly iframeSrc = signal<SafeResourceUrl | null>(null);
+  readonly iframeSrcdoc = signal<SafeHtml | null>(null);
   readonly isResizing = this._layoutService.isPanelResizing;
 
   private _messageListener?: EventListener;
   private _routeSubscription?: Subscription;
-  private _currentIframeUrl: string | null = null;
 
   async ngOnInit(): Promise<void> {
     // If directPluginId is provided, load that plugin directly
     if (this.directPluginId) {
       this.pluginId.set(this.directPluginId);
-      this._cleanupIframeCommunication();
+      // NOTE: no _cleanupIframeCommunication() here. On a fresh mount there is
+      // nothing to tear down, and the empty-document srcdoc it would set just
+      // forces an extra iframe load + change-detection pass before the real
+      // document — widening the load-timing race that blanked the panel (#8394).
       await this._waitForPluginSystem();
 
       try {
@@ -207,6 +209,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
         throw new Error('Plugin does not support iframes');
       }
 
+      if (plugin.error) {
+        throw new Error(plugin.error);
+      }
+
       throw new Error('Plugin index.html not loaded');
     }
 
@@ -226,22 +232,30 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       indexHtml: indexContent,
       baseCfg,
       pluginBridge: this._pluginBridge,
+      bridgeToken: this._createBridgeToken(),
+      bridgeGeneration: this._pluginService.getPluginIframeGeneration(pluginId),
       boundMethods: this._pluginBridge.createBoundMethods(pluginId, plugin.manifest),
     };
 
-    // Create iframe URL using blob URL
-    const iframeUrl = createPluginIframeUrl(config);
-
-    // Store the URL for cleanup
-    this._currentIframeUrl = iframeUrl;
+    // Build the iframe document (loaded via srcdoc, not a blob: URL)
+    const iframeHtml = buildPluginIframeHtml(config);
 
     // Store message handler for cleanup
     // Filter by event.source so messages from other plugin iframes (side panel,
     // other embed slots) don't get answered with this plugin's bound methods.
     this._messageListener = async (event: Event) => {
       const msgEvent = event as MessageEvent;
-      const iframeWin = this.iframeRef?.nativeElement?.contentWindow;
+      const iframeWin = this._getPluginIframeWindow();
       if (!iframeWin || msgEvent.source !== iframeWin) {
+        return;
+      }
+      if (
+        this._pluginService.getPluginIframeGeneration(config.pluginId) !==
+        config.bridgeGeneration
+      ) {
+        return;
+      }
+      if (!this._pluginService.getPluginIndexHtml(config.pluginId)) {
         return;
       }
       await handlePluginMessage(msgEvent, config);
@@ -250,17 +264,39 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // Set up message communication
     window.addEventListener('message', this._messageListener);
 
-    // Create safe URL and set iframe source
-    const safeUrl = this._sanitizer.bypassSecurityTrustResourceUrl(iframeUrl);
-    PluginLog.log(
-      `Setting iframe src for plugin ${pluginId}:`,
-      iframeUrl.startsWith('blob:')
-        ? `blob:${iframeUrl.split(':')[1].substring(0, 20)}...`
-        : iframeUrl.substring(0, 100) + '...',
-    );
-    this.iframeSrc.set(safeUrl);
+    // Set the iframe document. `srcdoc` is a SecurityContext.HTML sink, so the
+    // host-built document (which contains the inline API bridge <script>) must
+    // be marked trusted or Angular's HTML sanitizer would strip the script.
+    this.iframeSrcdoc.set(this._sanitizer.bypassSecurityTrustHtml(iframeHtml));
     this.isLoading.set(false);
-    PluginLog.log(`Plugin ${pluginId} iframe src set, loading complete`);
+    PluginLog.log(`Plugin ${pluginId} iframe srcdoc set, loading complete`);
+  }
+
+  private _createBridgeToken(): string {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Resolve the live window of THIS component's plugin iframe.
+   *
+   * Reads the rendered DOM rather than the cached `@ViewChild`: with zoneless
+   * change detection the ViewChild property is only assigned on the next CD
+   * pass (rAF/timeout), which can land AFTER the srcdoc iframe has executed its
+   * scripts and posted its first (tokenless) PLUGIN_MESSAGE. Because a message
+   * can only exist once its iframe is in the DOM, querying this component's
+   * host subtree at message time always finds our iframe — so we no longer
+   * silently drop the plugin's own messages and leave the panel blank (#8394).
+   *
+   * Still scoped to this component's host, so messages from sibling plugin
+   * iframes (side panel vs. embed slot) are not answered with our bound methods.
+   */
+  private _getPluginIframeWindow(): Window | null {
+    const iframeEl = this._elRef.nativeElement.querySelector<HTMLIFrameElement>(
+      'iframe[data-plugin-iframe]',
+    );
+    return iframeEl?.contentWindow ?? null;
   }
 
   private _cleanupIframeCommunication(): void {
@@ -274,13 +310,6 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       PluginLog.log(`Removed message listener for plugin: ${currentPluginId}`);
     }
 
-    // Cleanup blob URL if it exists
-    if (this._currentIframeUrl) {
-      cleanupPluginIframeUrl(this._currentIframeUrl);
-      console.log(`Cleaned up blob URL for plugin: ${currentPluginId}`);
-      this._currentIframeUrl = null;
-    }
-
     // Clear iframe reference from cleanup service (but don't remove from DOM).
     // Skip when embedding (work-view, side panel) so the plugin keeps its hook
     // and button registrations across embed mount/unmount cycles.
@@ -289,19 +318,20 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       PluginLog.log(`Cleaned up plugin references for: ${currentPluginId}`);
     }
 
-    // Set iframe to empty data URL to stop execution but keep iframe in DOM
-    this.iframeSrc.set(
-      this._sanitizer.bypassSecurityTrustResourceUrl(
-        'data:text/html,<html><body></body></html>',
-      ),
+    // Reset iframe to an empty document to stop execution but keep it in DOM
+    this.iframeSrcdoc.set(
+      this._sanitizer.bypassSecurityTrustHtml('<html><body></body></html>'),
     );
-    PluginLog.log(`Set iframe to empty data URL for plugin: ${currentPluginId}`);
+    PluginLog.log(`Reset iframe to empty document for plugin: ${currentPluginId}`);
   }
 
   onIframeLoad(): void {
     PluginLog.log('Plugin iframe loaded for plugin:', this.pluginId());
 
-    // Register iframe with cleanup service
+    // Reading the cached @ViewChild is fine HERE (unlike the message listener,
+    // which uses _getPluginIframeWindow()): this fires on the iframe's `load`
+    // event, by which point the ViewChild is assigned, and registration is not
+    // race-sensitive. Do not "unify" this with the listener's DOM lookup.
     if (this.iframeRef?.nativeElement && this.pluginId()) {
       this._cleanupService.registerIframe(this.pluginId(), this.iframeRef.nativeElement);
     }

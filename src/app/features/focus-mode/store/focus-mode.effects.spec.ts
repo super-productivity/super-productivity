@@ -678,14 +678,22 @@ describe('FocusModeEffects', () => {
       });
     });
 
-    describe('offerFlowtimeBreakOnSessionEnd$', () => {
-      it('should dispatch offerFlowtimeBreak when mode is Flowtime, timer is work, and breakInfo is present', (done) => {
+    describe('autoStartFlowtimeBreakOnSessionEnd$', () => {
+      // The break must auto-start WITHOUT pausing itself. completeFocusSession is
+      // dispatched with isManual:FALSE so stopTrackingOnSessionEnd$ defers (it would
+      // otherwise enqueue unsetCurrentTask AFTER startBreak, making
+      // syncTrackingStopToSession$ pause the just-started break). The unset is done
+      // here, explicitly BEFORE startBreak, mirroring autoStartBreakOnSessionComplete$.
+      it('should complete (isManual:false), unset task, then startBreak when pause-tracking is on', (done) => {
         actions$ = of(actions.endFlowtimeSession({ pausedTaskId: 'task-123' }));
         store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
         store.overrideSelector(
           selectors.selectTimer,
           createMockTimer({ purpose: 'work', elapsed: 1500000 }),
         );
+        store.overrideSelector(selectFocusModeConfig, {
+          isPauseTrackingDuringBreak: true,
+        } as any);
         store.refreshState();
 
         strategyFactoryMock.getStrategy.and.returnValue({
@@ -693,19 +701,61 @@ describe('FocusModeEffects', () => {
           getBreakDuration: () => ({ duration: 300000, isLong: false }),
         });
 
-        effects.offerFlowtimeBreakOnSessionEnd$.pipe(take(1)).subscribe((action) => {
-          expect(action).toEqual(
-            actions.offerFlowtimeBreak({
-              duration: 300000,
-              isLongBreak: false,
-              pausedTaskId: 'task-123',
-            }),
-          );
-          done();
-        });
+        effects.autoStartFlowtimeBreakOnSessionEnd$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(3);
+            expect(actionsArr[0]).toEqual(
+              actions.completeFocusSession({ isManual: false }),
+            );
+            expect(actionsArr[1]).toEqual(unsetCurrentTask());
+            expect(actionsArr[2]).toEqual(
+              actions.startBreak({
+                duration: 300000,
+                isLongBreak: false,
+                pausedTaskId: 'task-123',
+              }),
+            );
+            done();
+          });
       });
 
-      it('should dispatch completeFocusSession when mode is Flowtime, timer is work, but breakInfo is null', (done) => {
+      it('should complete (isManual:false) then startBreak without unsetting when pause-tracking is off', (done) => {
+        actions$ = of(actions.endFlowtimeSession({ pausedTaskId: 'task-123' }));
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({ purpose: 'work', elapsed: 1500000 }),
+        );
+        store.overrideSelector(selectFocusModeConfig, {
+          isPauseTrackingDuringBreak: false,
+        } as any);
+        store.refreshState();
+
+        strategyFactoryMock.getStrategy.and.returnValue({
+          shouldStartBreakAfterSession: true,
+          getBreakDuration: () => ({ duration: 300000, isLong: false }),
+        });
+
+        effects.autoStartFlowtimeBreakOnSessionEnd$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(2);
+            expect(actionsArr[0]).toEqual(
+              actions.completeFocusSession({ isManual: false }),
+            );
+            expect(actionsArr[1]).toEqual(
+              actions.startBreak({
+                duration: 300000,
+                isLongBreak: false,
+                pausedTaskId: undefined,
+              }),
+            );
+            done();
+          });
+      });
+
+      it('should dispatch only completeFocusSession when mode is Flowtime, timer is work, but breakInfo is null', (done) => {
         actions$ = of(actions.endFlowtimeSession({ pausedTaskId: 'task-123' }));
         store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
         store.overrideSelector(
@@ -719,10 +769,15 @@ describe('FocusModeEffects', () => {
           getBreakDuration: () => null,
         });
 
-        effects.offerFlowtimeBreakOnSessionEnd$.pipe(take(1)).subscribe((action) => {
-          expect(action).toEqual(actions.completeFocusSession({ isManual: true }));
-          done();
-        });
+        effects.autoStartFlowtimeBreakOnSessionEnd$
+          .pipe(toArray())
+          .subscribe((actionsArr) => {
+            expect(actionsArr.length).toBe(1);
+            expect(actionsArr[0]).toEqual(
+              actions.completeFocusSession({ isManual: true }),
+            );
+            done();
+          });
       });
 
       it('should skip effect if mode is not Flowtime', (done) => {
@@ -734,7 +789,7 @@ describe('FocusModeEffects', () => {
         );
         store.refreshState();
 
-        effects.offerFlowtimeBreakOnSessionEnd$
+        effects.autoStartFlowtimeBreakOnSessionEnd$
           .pipe(toArray())
           .subscribe((actionsArr) => {
             expect(actionsArr.length).toBe(0);
@@ -950,36 +1005,6 @@ describe('FocusModeEffects', () => {
     });
   });
 
-  describe('stopTrackingOnExitBreakToPlanning$', () => {
-    it('should dispatch unsetCurrentTask when a task is being tracked', (done) => {
-      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
-      store.overrideSelector(selectFocusModeConfig, {} as any);
-      store.refreshState();
-      currentTaskId$.next('task-123');
-
-      effects.stopTrackingOnExitBreakToPlanning$.subscribe((action) => {
-        expect(action).toEqual(unsetCurrentTask());
-        done();
-      });
-    });
-
-    it('should not dispatch when no task is being tracked', (done) => {
-      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
-      store.overrideSelector(selectFocusModeConfig, {} as any);
-      store.refreshState();
-      currentTaskId$.next(null);
-
-      const result: any[] = [];
-      effects.stopTrackingOnExitBreakToPlanning$.subscribe({
-        next: (action) => result.push(action),
-        complete: () => {
-          expect(result.length).toBe(0);
-          done();
-        },
-      });
-    });
-  });
-
   describe('pauseOnIdle$', () => {
     it('should dispatch pauseFocusSession when openIdleDialog is dispatched', (done) => {
       actions$ = of(
@@ -1000,22 +1025,6 @@ describe('FocusModeEffects', () => {
   describe('logFocusSession$', () => {
     it('should call metricService.logFocusSession with duration on completeFocusSession', () => {
       actions$ = of(actions.completeFocusSession({ isManual: false }));
-      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
-      store.refreshState();
-
-      effects.logFocusSession$.subscribe();
-
-      expect(metricServiceMock.logFocusSession).toHaveBeenCalledWith(25 * 60 * 1000);
-    });
-
-    it('should call metricService.logFocusSession with duration on offerFlowtimeBreak', () => {
-      actions$ = of(
-        actions.offerFlowtimeBreak({
-          duration: 5 * 60 * 1000,
-          isLongBreak: false,
-          pausedTaskId: 'task-123',
-        }),
-      );
       store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
       store.refreshState();
 

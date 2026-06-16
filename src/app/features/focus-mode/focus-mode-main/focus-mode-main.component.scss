@@ -6,177 +6,105 @@
   right: 0;
   left: 0;
   bottom: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  padding-top: var(--s2);
-  padding-bottom: var(--s2);
+  // The 4-row skeleton lives in <focus-mode-layout>; this host is just the
+  // positioning context for that layout plus the overlays (notes, task
+  // selector, drag-over) that sit above it.
+  display: block;
+  // Establish a stacking context so the notes-modal backdrop can't bleed
+  // above the parent overlay's close (X) button.
+  z-index: 0;
 
+  // Muted controls (switch/finish/pause/complete/+/-/settings/notes/issue) are
+  // hidden by default and revealed when the user is paying attention — mouse
+  // over this component OR keyboard focus moving into it, AND the OS window has
+  // focus. Buttons read --revealed-opacity for their opacity; the value here
+  // drives whether they appear. --revealed-pointer-events mirrors it so faded
+  // buttons can't capture tooltips that then get stuck after the icon
+  // disappears.
   --muted-opacity: 0;
+  --revealed-opacity: 0;
+  --revealed-pointer-events: none;
+
+  // :focus-within keeps the controls reachable by keyboard — tabbing onto a
+  // hidden button reveals the row even without a pointer hover.
+  &:hover,
+  &:focus-within {
+    --revealed-opacity: 1;
+    --revealed-pointer-events: auto;
+  }
+
+  // Suppress the reveal when the browser window is unfocused. Class is toggled
+  // by the [class.isWindowBlurred] host binding.
+  &.isWindowBlurred:hover,
+  &.isWindowBlurred:focus-within {
+    --revealed-opacity: 0;
+    --revealed-pointer-events: none;
+  }
+
+  // Touch devices: always show controls (no hover available).
+  @media (hover: none) and (pointer: coarse) {
+    --revealed-opacity: 1;
+    --revealed-pointer-events: auto;
+  }
 }
 
-// Mode selector at the top (Preparation state)
+// ========== ROW 1: TOP CONTROLS ==========
+// Mode selector (Preparation) / simple counters (In Progress) project into the
+// layout's reserved top slot; that slot's min-height keeps the row height (and
+// the rows below) stable when the active control is removed.
 .focus-mode-select-mode {
-  position: absolute;
-  top: var(--s2);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: var(--z-focus-mode-main-selector);
+  // Stacking above the centered timer content is handled by the layout's .top
+  // slot (z-index), which lifts the whole top row — see focus-mode-layout.scss.
   padding: 0 var(--s2);
   max-width: 600px;
 }
 
 .mode-settings-btn {
+  // Match the in-progress session controls (.bottom-controls): 56px hit area,
+  // 32px icon, --s2 gap to the FAB — so the cog's size and spacing read the
+  // same before and during a session.
   position: absolute;
-  bottom: calc(var(--clock-face-size) * 0.05);
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: var(--muted-opacity);
+  left: 100%;
+  margin-left: var(--s2);
+  width: 56px !important;
+  height: 56px !important;
+  opacity: var(--revealed-opacity);
   transition: var(--transition-standard);
-  pointer-events: auto;
+  pointer-events: var(--revealed-pointer-events);
 
-  &:hover,
-  .clock-face:hover & {
-    opacity: 1;
-  }
-
-  @media (hover: none) and (pointer: coarse) {
-    opacity: 1;
+  mat-icon {
+    font-size: 32px !important;
+    width: 32px !important;
+    height: 32px !important;
   }
 }
 
-// ========== CENTER BLOCK (Preparation & In Progress) ==========
-.center-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-}
-
-// ========== TASK SECTION ==========
+// ========== ROW 2: TASK SECTION ==========
+// Content-height row beneath the top controls — parent title plus the
+// switch · title · finish row (or the "select task" CTA when none is chosen).
 .task-section {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
   flex-direction: column;
   width: calc(100% - var(--s2));
   max-width: var(--component-max-width);
   min-width: 0;
-  margin: var(--s) auto;
-
-  &:hover button {
-    opacity: 1;
-  }
-
-  button {
-    opacity: var(--muted-opacity);
-    transition: var(--transition-standard);
-    pointer-events: auto;
-
-    @media (hover: none) and (pointer: coarse) {
-      /* styles for primary touch devices go here */
-      opacity: 1;
-    }
-  }
 }
 
-// ========== TASK ACTIONS (below title) ==========
-.task-actions {
-  display: flex;
-  gap: var(--s);
-  justify-content: center;
-}
-
-.task-title,
-.task-title-placeholder {
-  text-align: center;
-  font-size: 30px;
-  line-height: 1.5;
-  border-radius: var(--card-border-radius);
-  border: 1px solid transparent;
-  margin: 0;
-  padding: var(--s-half);
-
-  @include mq(xs, max) {
-    font-size: 24px;
-  }
-
-  @include mq(xxxs, max) {
-    font-size: 18px;
-  }
-}
-
-.parent-title {
-  text-align: center;
-  margin-bottom: 6px;
-  opacity: 0.8;
-  font-size: 15px;
-  line-height: 1.2;
-  max-width: 90%;
-  overflow-wrap: break-word;
-
-  @include mq(xs, max) {
-    font-size: 12px;
-  }
-
-  @include mq(xxxs, max) {
-    font-size: 10px;
-  }
-}
-
-.task-title {
-  width: 100%;
-  max-width: 100%;
-  max-height: min(24vh, 8em);
-  overflow-x: hidden;
-  overflow-y: auto;
-
-  ::ng-deep textarea {
-    text-align: center;
-  }
-
-  &.is-focused {
-    outline: 1px solid var(--c-accent);
-  }
-}
-
-.task-title-placeholder {
-  cursor: pointer;
-  opacity: 0.6;
-  transition: var(--transition-standard);
-  padding: var(--s-half);
-
-  &:hover {
-    opacity: 1;
-  }
-}
-
-// Task switch button no longer needed in task section (moved to task-actions)
-
-// ========== CLOCK DISPLAY ==========
+// ========== ROW 3: CLOCK DISPLAY ==========
+// Projected into the layout's flexing clock row, which centers it. This wrapper
+// just stacks the clock face and the overtime message.
 .clock-display {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: var(--s2);
 
-  // Sizing tokens — scoped here so both .clock-face and the overlayed
-  // duration slider can share the same diameter. --control-offset is the
-  // distance the in-circle controls (pause/done/+/-) sit from the rim;
-  // larger circles allow tucking them slightly further inward.
-  --clock-face-size: 175px;
-  --clock-time-size: 34px;
-  --control-offset: 10px;
-
-  @media (min-height: 600px) and (min-width: 600px) {
-    --clock-face-size: 282px;
-    --clock-time-size: 68px;
-    --control-offset: 20px;
-  }
+  // Mirror the size tokens declared on focus-clock-face's :host so sibling
+  // elements (the duration-slider overlay) can read them. Both pull the
+  // diameter from the shared --clock-face-size-default token.
+  --clock-face-size: var(--clock-face-size-default);
+  --clock-time-size: calc(var(--clock-face-size) * 0.22);
 
   &__content {
     position: relative;
@@ -186,74 +114,6 @@
     width: 100%;
     gap: var(--s1);
   }
-}
-
-.clock-face {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--clock-face-size);
-  height: var(--clock-face-size);
-
-  &__layer {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    opacity: 1;
-    transition: var(--transition-standard);
-
-    &.is-hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-  }
-}
-
-// Breathing dot (flow mode) — sized just under the clock face so the task
-// title / "Select task to focus" placeholder above it stays easy to spot.
-breathing-dot {
-  --breathing-dot-size: calc(var(--clock-face-size) * 0.8);
-}
-
-.focus-progress-circle {
-  width: 100%;
-  height: 100%;
-
-  &__bg {
-    fill: none;
-    stroke: var(--progress-bg, rgba(255, 255, 255, 0.15));
-    stroke-width: 1.8;
-  }
-
-  &__progress {
-    fill: none;
-    stroke: var(--c-primary);
-    stroke-width: 2;
-    stroke-linecap: round;
-    transition: stroke-dasharray 0.3s ease;
-  }
-}
-
-.clock-time {
-  font-size: var(--clock-time-size, 52px);
-  font-weight: bold;
-  // Locked line-height + tabular digits so the ticking countdown doesn't
-  // shift width or vertical metrics mid-session.
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  // Optical centering: Roboto Bold digits sit slightly below the line-box
-  // center, so a plain 50/50 translate looks bottom-heavy. Nudging up by
-  // ~4% of the font-size brings the digits to the visual middle of the
-  // clock face (~3px at 72px, scales with breakpoint).
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, calc(-50% - 0.05em));
 }
 
 .overtime-msg {
@@ -275,12 +135,17 @@ breathing-dot {
 }
 
 .duration-slider-overlay {
-  --input-duration-slider-size: var(--clock-face-size);
-  // Scale the editable duration text with the circle so it's readable on
-  // large screens; ~16% of diameter keeps proportions close to the clock-time.
-  --input-duration-slider-value-size: calc(var(--clock-face-size) * 0.16);
+  // The slider's perimeter sits at radius=size/2 from its center, while
+  // focus-clock-face's SVG ring sits at radius=15.9155/36 of viewBox (≈88.4%
+  // of diameter). Shrink the slider to align its handle with the ring.
+  --input-duration-slider-size: calc(var(--clock-face-size) * 0.884);
+  --input-duration-slider-value-size: var(--clock-time-size);
   display: flex;
   justify-content: center;
+
+  // The bare-ring visual (transparent chrome, dot handle, full-width value)
+  // and the Pomodoro type-only behaviour now live on the slider itself, via
+  // its [bareRing] / [hideHandle] inputs.
 }
 
 // When the duration slider is showing (countdown prep), hide the clock
@@ -290,69 +155,51 @@ breathing-dot {
   visibility: hidden;
 }
 
-// ========== CLOCK WRAPPER (In Progress state) ==========
-.clock-wrapper {
-  @include center;
-  width: 100%;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  // --control-offset declared on .clock-display so it can be tuned per
-  // breakpoint. The earlier formula derived it from font-size and ended up
-  // pushing controls over the digits at larger sizes. See #7403.
+// In-circle buttons (+/-, reset-cycles) — opacity is driven globally by
+// --revealed-opacity (host hover + window focus). Positioning is owned by
+// focus-clock-face's ::ng-deep rules.
+.clock-wrapper button {
+  opacity: var(--revealed-opacity);
+  transition: var(--transition-standard);
+  pointer-events: var(--revealed-pointer-events);
+}
 
-  &:hover button {
-    opacity: 1;
-  }
+// Pomodoro cycle counter — sits inside the circle, just below the digits.
+// One step less intense than the clock time so it reads as a subtitle.
+.cycle-counter {
+  position: absolute;
+  top: 65%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  color: var(--text-color-muted);
+  font-size: var(--s3);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 
-  button {
-    opacity: var(--muted-opacity);
-    transition: var(--transition-standard);
-    pointer-events: auto;
-
-    @media (hover: none) and (pointer: coarse) {
-      /* styles for primary touch devices go here */
-      opacity: 1;
-    }
-  }
-
-  .time-adjust-btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
-  .time-adjust-btn--decrease {
-    left: var(--control-offset);
-  }
-
-  .time-adjust-btn--increase {
-    right: var(--control-offset);
-  }
-
-  // Pause/Resume button inside the circle (top center)
-  .pause-resume-btn {
-    position: absolute;
-    top: var(--control-offset);
-    left: 50%;
-    transform: translateX(-50%);
-  }
-
-  // Complete session button inside the circle (bottom center)
-  .complete-session-btn {
-    position: absolute;
-    bottom: var(--control-offset);
-    left: 50%;
-    transform: translateX(-50%);
+  mat-icon {
+    font-size: var(--s3);
+    width: var(--s3);
+    height: var(--s3);
   }
 }
 
-// ========== PLAY BUTTON ==========
+// ========== ROW 4 (Preparation): PLAY BUTTON + SETTINGS COG ==========
+// Content-height bottom row. The cog floats next to the FAB via absolute
+// positioning (anchored to this relative row), so adding/removing it never
+// shifts the centered FAB.
+.play-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: fit-content;
+}
+
 .play-button {
-  margin-top: var(--s2);
-  width: 64px;
-  height: 64px;
+  width: var(--s8);
+  height: var(--s8);
 
   mat-icon {
     font-size: 36px;
@@ -361,13 +208,10 @@ breathing-dot {
   }
 }
 
-// ========== SIMPLE COUNTER BUTTONS (In Progress) ==========
+// ========== ROW 1 (In Progress): SIMPLE COUNTER BUTTONS ==========
 .simple-counter-buttons {
   display: flex;
-  position: absolute;
-  top: calc(var(--s2) + 80px);
-  left: 50%;
-  transform: translateX(-50%);
+  justify-content: center;
   z-index: var(--z-focus-mode-simple-counter);
   gap: var(--s);
 
@@ -388,25 +232,19 @@ breathing-dot {
   }
 }
 
-// ========== CONTROLS (In Progress) ==========
+// ========== ROW 4 (In Progress): SESSION CONTROL ROW ==========
+// Back to Planning · Pause · Complete · Reset · (issue) · Notes — one
+// content-height bottom row. Keeps the hover/window-focus reveal
+// (--revealed-opacity) so it stays distraction-free, matching the rest of
+// focus mode.
 .bottom-controls {
   display: flex;
   justify-content: center;
   align-items: center;
-  position: fixed;
-  bottom: calc(var(--s2) + var(--safe-area-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-
-  @include mousePrimaryDevice {
-    transition: all var(--transition-leave);
-    opacity: 0;
-  }
-
-  :host:hover & {
-    transition: all var(--transition-enter);
-    opacity: 1;
-  }
+  gap: var(--s2);
+  opacity: var(--revealed-opacity);
+  pointer-events: var(--revealed-pointer-events);
+  transition: var(--transition-standard);
 
   a {
     justify-content: center;
@@ -447,12 +285,24 @@ breathing-dot {
 }
 
 // ========== NOTES AND ATTACHMENTS ==========
+// The notes panel acts as a modal: full-viewport backdrop dims and intercepts
+// clicks (closes the panel), while the panel itself slides up from the bottom
+// over the unmoved timer.
+.notes-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  z-index: 20;
+}
+
 .notes-and-attachments {
   display: flex;
   flex-direction: column;
   width: 100%;
   position: absolute;
   bottom: 0;
+  z-index: 21;
 }
 
 .notes-panel {

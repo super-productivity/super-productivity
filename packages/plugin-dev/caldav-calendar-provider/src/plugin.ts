@@ -62,20 +62,48 @@ const toCompoundId = (
 const parseCompoundId = (
   id: string,
   fallbackCalendarHref: string,
-): { calendarHref: string; eventHref: string } => {
+): { calendarHref: string; eventHref: string; occurrenceMs?: number } => {
   // Strip the occurrence suffix first so the remaining base id is unambiguous.
+  // A present `#occ=<digits>` marks an expanded RRULE instance whose eventHref
+  // still resolves to the shared master resource — surface it so write/read
+  // paths can stay occurrence-aware instead of silently hitting the master.
   const occIdx = id.lastIndexOf(OCCURRENCE_SEP);
-  const baseId =
-    occIdx !== -1 && /^\d+$/.test(id.slice(occIdx + OCCURRENCE_SEP.length))
-      ? id.slice(0, occIdx)
-      : id;
+  const hasOccurrence =
+    occIdx !== -1 && /^\d+$/.test(id.slice(occIdx + OCCURRENCE_SEP.length));
+  const occurrenceMs = hasOccurrence
+    ? parseInt(id.slice(occIdx + OCCURRENCE_SEP.length), 10)
+    : undefined;
+  const baseId = hasOccurrence ? id.slice(0, occIdx) : id;
   const sep = baseId.indexOf(COMPOUND_SEP);
-  if (sep === -1) return { calendarHref: fallbackCalendarHref, eventHref: baseId };
+  if (sep === -1) {
+    return { calendarHref: fallbackCalendarHref, eventHref: baseId, occurrenceMs };
+  }
   return {
     calendarHref: baseId.slice(0, sep),
     eventHref: baseId.slice(sep + COMPOUND_SEP.length),
+    occurrenceMs,
   };
 };
+
+/**
+ * A write that targets a single expanded RRULE occurrence (an `#occ=` id) can't
+ * be applied: the occurrence maps back to the shared master resource, so writing
+ * it would mutate the whole series. We refuse with this marked error. The
+ * `isExpectedSyncSkip` flag tells the host's two-way sync that this is an
+ * expected limitation — the user edited/deleted their *task*, not the calendar —
+ * so it stays silent instead of showing a sync-failure snack. Explicit calendar
+ * actions (agenda reschedule/delete) don't check the flag and still surface the
+ * message, which is the honest feedback there. See issue #7492.
+ */
+const unsupportedOccurrenceWriteError = (action: 'edit' | 'delete'): Error =>
+  Object.assign(
+    new Error(
+      `${action === 'edit' ? 'Editing' : 'Deleting'} a single occurrence of a ` +
+        `recurring event is not supported yet. ` +
+        `Please ${action} the event in your calendar app instead.`,
+    ),
+    { isExpectedSyncSkip: true },
+  );
 
 // --- iCal Helpers ---
 
@@ -434,6 +462,22 @@ const DAV_NS = 'DAV:';
 const CALDAV_NS = 'urn:ietf:params:xml:ns:caldav';
 const CS_NS = 'http://calendarserver.org/ns/';
 
+/**
+ * Parse an XML string into a Document, throwing on parser errors.
+ * The error message intentionally omits the parser output / response body —
+ * it is untrusted server content and the log is exportable (never log it).
+ * DOMParser (browser + jsdom) does not resolve external entities, so this is
+ * safe against XXE; do not swap it for a server-side XML lib without disabling
+ * entity resolution.
+ */
+const parseXmlDoc = (xml: string): Document => {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.querySelector('parsererror')) {
+    throw new Error('[CalDAV] Failed to parse XML response');
+  }
+  return doc;
+};
+
 /** Build PROPFIND body for calendar discovery */
 const buildPropfindBody = (): string =>
   `<?xml version="1.0" encoding="UTF-8"?>
@@ -497,12 +541,7 @@ interface CalendarInfo {
 
 /** Parse PROPFIND multistatus response for calendar discovery */
 const parseCalendarList = (xml: string): CalendarInfo[] => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xml, 'application/xml');
-  const parseErr = doc.querySelector('parsererror');
-  if (parseErr) {
-    throw new Error('[CalDAV] Failed to parse XML response: ' + parseErr.textContent);
-  }
+  const doc = parseXmlDoc(xml);
   const responses = doc.getElementsByTagNameNS(DAV_NS, 'response');
   const calendars: CalendarInfo[] = [];
 
@@ -553,12 +592,7 @@ interface CalendarEventResponse {
 
 /** Parse REPORT multistatus response for calendar events */
 const parseEventResponses = (xml: string): CalendarEventResponse[] => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xml, 'application/xml');
-  const parseErr = doc.querySelector('parsererror');
-  if (parseErr) {
-    throw new Error('[CalDAV] Failed to parse XML response: ' + parseErr.textContent);
-  }
+  const doc = parseXmlDoc(xml);
   const responses = doc.getElementsByTagNameNS(DAV_NS, 'response');
   const events: CalendarEventResponse[] = [];
 
@@ -591,34 +625,124 @@ const caldavHeaders = (extra?: Record<string, string>): Record<string, string> =
   ...extra,
 });
 
-/** Resolve a relative href to a full URL using the server origin */
+/**
+ * Resolve a server-supplied href against the configured server origin and
+ * refuse anything that escapes it. Discovery follows hrefs that the (untrusted)
+ * server controls — principal, calendar-home-set — so this is the SSRF
+ * boundary: credentials are attached to every request and must never be sent
+ * off-origin. Resolving via the URL constructor handles relative, absolute, and
+ * protocol-relative (`//host`) forms uniformly; a prefix sniff + string concat
+ * would mis-handle `//host` and uppercase schemes. The href is omitted from the
+ * error (untrusted content; the log is exportable).
+ */
 const resolveHref = (cfg: CaldavCalendarConfig, href: string): string => {
   const serverOrigin = new URL(getServerUrl(cfg)).origin;
-  if (href.startsWith('http://') || href.startsWith('https://')) {
-    if (new URL(href).origin !== serverOrigin) {
-      throw new Error(`[CalDAV] Refusing cross-origin href: ${href}`);
-    }
-    return href;
+  const resolved = new URL(href, serverOrigin + '/');
+  if (resolved.origin !== serverOrigin) {
+    throw new Error('[CalDAV] Refusing cross-origin href');
   }
-  return serverOrigin + href;
+  return resolved.toString();
 };
 
-/** Discover calendars supporting VEVENT via PROPFIND */
+/** Build PROPFIND body to bootstrap discovery: principal + calendar-home-set */
+const buildDiscoveryPropfindBody = (): string =>
+  `<?xml version="1.0" encoding="UTF-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:c="${CALDAV_NS}">
+  <d:prop>
+    <d:current-user-principal/>
+    <c:calendar-home-set/>
+  </d:prop>
+</d:propfind>`;
+
+/**
+ * Extract the first `<d:href>` nested inside the named property element
+ * (e.g. DAV `current-user-principal` or CalDAV `calendar-home-set`).
+ */
+const getHrefInProp = (doc: Document, ns: string, localName: string): string => {
+  const els = doc.getElementsByTagNameNS(ns, localName);
+  for (let i = 0; i < els.length; i++) {
+    const href = els[i].getElementsByTagNameNS(DAV_NS, 'href')[0];
+    const text = href?.textContent?.trim();
+    if (text) return text;
+  }
+  return '';
+};
+
+const propfind = (
+  http: PluginHttp,
+  url: string,
+  body: string,
+  depth: '0' | '1',
+): Promise<string> =>
+  http.request<string>('PROPFIND', url, body, {
+    headers: { ...caldavHeaders(), Depth: depth },
+    responseType: 'text',
+  });
+
+/** PROPFIND Depth:1 a collection and return its VEVENT-capable calendars */
+const enumerateCalendars = async (
+  http: PluginHttp,
+  url: string,
+): Promise<{ label: string; value: string }[]> => {
+  const xml = await propfind(http, url, buildPropfindBody(), '1');
+  return parseCalendarList(xml)
+    .filter((c) => c.supportsVevent)
+    .map((c) => ({ label: c.displayName, value: c.href }));
+};
+
+/**
+ * Resolve the calendar-home-set collection that actually holds the user's
+ * calendars. CalDAV servers advertise a root or principal URL — e.g. Nextcloud's
+ * `https://host/remote.php/dav`, Fastmail's `https://caldav.fastmail.com/dav/` —
+ * not the calendar-home itself, so a plain Depth:1 PROPFIND there lists no
+ * `<calendar>` resources (they sit one or two levels deeper). Follow the RFC 4791
+ * bootstrap: read `calendar-home-set` directly, else find the
+ * `current-user-principal` and read `calendar-home-set` from it. Returns '' when
+ * neither can be resolved.
+ */
+const resolveCalendarHome = async (
+  http: PluginHttp,
+  cfg: CaldavCalendarConfig,
+  enteredUrl: string,
+): Promise<string> => {
+  const doc = parseXmlDoc(
+    await propfind(http, enteredUrl, buildDiscoveryPropfindBody(), '0'),
+  );
+  const directHome = getHrefInProp(doc, CALDAV_NS, 'calendar-home-set');
+  if (directHome) return ensureTrailingSlash(resolveHref(cfg, directHome));
+
+  const principal = getHrefInProp(doc, DAV_NS, 'current-user-principal');
+  if (!principal) return '';
+  const principalDoc = parseXmlDoc(
+    await propfind(http, resolveHref(cfg, principal), buildDiscoveryPropfindBody(), '0'),
+  );
+  const home = getHrefInProp(principalDoc, CALDAV_NS, 'calendar-home-set');
+  return home ? ensureTrailingSlash(resolveHref(cfg, home)) : '';
+};
+
+/**
+ * Discover calendars supporting VEVENT.
+ * First try the entered URL directly (handles users who pasted the calendar-home
+ * collection). If that lists no calendars, fall back to RFC 4791 service
+ * discovery via the principal / calendar-home-set. See issue #8259.
+ */
 const discoverCalendars = async (
   http: PluginHttp,
   cfg: CaldavCalendarConfig,
 ): Promise<{ label: string; value: string }[]> => {
-  const url = ensureTrailingSlash(getServerUrl(cfg));
-  const xml = await http.request<string>('PROPFIND', url, buildPropfindBody(), {
-    headers: { ...caldavHeaders(), Depth: '1' },
-    responseType: 'text',
-  });
-  return parseCalendarList(xml)
-    .filter((c) => c.supportsVevent)
-    .map((c) => ({
-      label: c.displayName,
-      value: c.href,
-    }));
+  const enteredUrl = ensureTrailingSlash(getServerUrl(cfg));
+
+  try {
+    const direct = await enumerateCalendars(http, enteredUrl);
+    if (direct.length) return direct;
+  } catch {
+    // The entered URL may be a principal/root collection that rejects Depth:1.
+    // Fall through to the discovery bootstrap below.
+  }
+
+  const home = await resolveCalendarHome(http, cfg, enteredUrl);
+  if (!home) return [];
+  return enumerateCalendars(http, home);
 };
 
 // --- ical.js-based RRULE expansion ---
@@ -1016,7 +1140,7 @@ PluginAPI.registerIssueProvider({
       type: 'input' as const,
       label: 'CalDAV server URL',
       description:
-        'The CalDAV endpoint URL (e.g. https://cloud.example.com/remote.php/dav/calendars/username/)',
+        'The CalDAV server URL — the root works (e.g. https://cloud.example.com/remote.php/dav for Nextcloud, https://caldav.fastmail.com/dav/ for Fastmail). A specific calendar-home URL also works.',
       required: true,
     },
     {
@@ -1107,7 +1231,7 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<PluginIssue> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(issueId, getWriteCalendarId(cfg));
+    const { eventHref, occurrenceMs } = parseCompoundId(issueId, getWriteCalendarId(cfg));
     const eventUrl = resolveHref(cfg, eventHref);
     const icalData = await http.get<string>(eventUrl, { responseType: 'text' });
     const events = parseVEvents(icalData);
@@ -1116,8 +1240,48 @@ PluginAPI.registerIssueProvider({
       throw new Error('Event not found: ' + eventHref);
     }
 
-    const startDate = parseIcalDateTime(event.dtstart, event.dtstartParams);
-    const endDate = parseIcalDateTime(event.dtend, event.dtendParams);
+    // The master VEVENT only carries the series' first DTSTART. For an expanded
+    // occurrence, re-anchor start/end onto THIS instance so the detail panel and
+    // the two-way-sync pull use the occurrence's time instead of collapsing every
+    // instance onto the master's. occurrenceMs is the same `toJSDate().getTime()`
+    // value the expander stamped into the id, so it round-trips exactly. See #7492.
+    let { dtstart: start, dtend: end } = event;
+    let startParams = event.dtstartParams;
+    let endParams = event.dtendParams;
+    if (occurrenceMs !== undefined) {
+      const allDay = isDateOnly(event.dtstart, event.dtstartParams);
+      const masterStart = parseIcalDateTime(event.dtstart, event.dtstartParams);
+      let durationMs = parseDuration(event.duration);
+      if (!durationMs && masterStart && event.dtend) {
+        const masterEnd = parseIcalDateTime(event.dtend, event.dtendParams);
+        if (masterEnd) durationMs = masterEnd.getTime() - masterStart.getTime();
+      }
+      const occStart = new Date(occurrenceMs);
+      if (allDay) {
+        // ical.js represents all-day occurrences as local midnight, so the
+        // local-getter formatter (toIcalDate) yields the correct calendar date.
+        start = toIcalDate(occStart);
+        startParams = 'VALUE=DATE';
+        if (durationMs > 0) {
+          const occEnd = new Date(occStart);
+          occEnd.setDate(occEnd.getDate() + Math.round(durationMs / 86400000));
+          end = toIcalDate(occEnd);
+          endParams = 'VALUE=DATE';
+        } else {
+          end = '';
+          endParams = '';
+        }
+      } else {
+        start = toIcalUtcDateTime(occStart);
+        startParams = '';
+        end =
+          durationMs > 0 ? toIcalUtcDateTime(new Date(occurrenceMs + durationMs)) : '';
+        endParams = '';
+      }
+    }
+
+    const startDate = parseIcalDateTime(start, startParams);
+    const endDate = parseIcalDateTime(end, endParams);
 
     return {
       id: issueId,
@@ -1128,10 +1292,10 @@ PluginAPI.registerIssueProvider({
         ? parseIcalDateTime(event.lastModified, '')?.getTime()
         : undefined,
       summary: event.summary || '(No title)',
-      start: event.dtstart,
-      end: event.dtend,
-      startParams: event.dtstartParams,
-      endParams: event.dtendParams,
+      start,
+      end,
+      startParams,
+      endParams,
       startFormatted: startDate?.toLocaleString() || '',
       endFormatted: endDate?.toLocaleString() || '',
       status: event.status,
@@ -1237,7 +1401,9 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    // Editing one occurrence would rewrite the shared master (whole series).
+    if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('edit');
     const eventUrl = resolveHref(cfg, eventHref);
 
     // Fetch current iCal data
@@ -1478,7 +1644,9 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    // Deleting one occurrence would DELETE the shared master (whole series).
+    if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('delete');
     const eventUrl = resolveHref(cfg, eventHref);
     await http.delete(eventUrl, { responseType: 'text' });
   },

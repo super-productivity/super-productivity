@@ -72,8 +72,8 @@ header p {
 .beta-badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;
-  background-color: #ff9800;
-  color: white;
+  background-color: #ffa726;
+  color: #1a1a1a;
   border-radius: 12px;
   font-size: 0.65rem;
   font-weight: 600;
@@ -416,7 +416,7 @@ footer {
 @media (prefers-color-scheme: dark) {
   :root {
     --primary: #4db8e8;
-    --primary-dark: #0099cc;
+    --primary-dark: #16b4e8;
     --secondary: #a3a3a3;
     --secondary-dark: #8b95a5;
     --bg: #1a1a1a;

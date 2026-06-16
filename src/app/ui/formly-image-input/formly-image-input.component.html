@@ -2,7 +2,7 @@
   <input
     #fileInput
     type="file"
-    accept="image/png,image/jpeg,image/gif,image/webp"
+    accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/avif"
     hidden
     (change)="onFileSelected($event)"
   />
@@ -13,14 +13,14 @@
     [formControl]="formControl"
     [formlyAttributes]="field"
     matInput
-    placeholder="https://... or file://..."
+    placeholder="https://..."
   />
   @if (IS_ELECTRON) {
     <button
       mat-stroked-button
       type="button"
       (click)="openFileExplorer()"
-      [disabled]="props.readonly"
+      [disabled]="props.readonly || isPickerBusy()"
       class="select-button"
     >
       <mat-icon>folder_open</mat-icon>

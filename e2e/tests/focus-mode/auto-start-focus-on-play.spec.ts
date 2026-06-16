@@ -1,11 +1,10 @@
 /**
- * E2E coverage for the new `autoStartFocusOnPlay` opt-in.
+ * E2E coverage for the `autoStartFocusOnPlay` opt-in.
  *
- * Behavior under test (from
- * docs/plans/2026-04-29-focus-mode-time-tracking-sync.md): when the user
- * enables this setting and starts tracking a task, a focus session must
- * spawn automatically *without* opening the focus-mode overlay — the
- * header focus-button countdown is the only surface.
+ * Behavior under test: when the user enables this setting and starts
+ * tracking a task, a focus session must spawn automatically *without*
+ * opening the focus-mode overlay — the header focus-button countdown is
+ * the only surface.
  *
  * If this regresses, the headline feature of the rework is broken with
  * no other automated test catching it.

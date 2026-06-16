@@ -6,8 +6,8 @@
   >
     @if (note.imgUrl) {
       <img
-        [enlargeImg]="note.imgUrl"
-        [src]="note.imgUrl"
+        [enlargeImg]="safeImgUrl"
+        [src]="safeImgUrl"
         (longPress)="editFullscreen($event)"
         class="note-img"
       />

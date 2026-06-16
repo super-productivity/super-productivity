@@ -1,10 +1,30 @@
 import { app, dialog, ipcMain, shell } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
+import {
+  isExternalUrlSchemeAllowed,
+  isPathSafeToOpen,
+} from '../shared-with-frontend/is-external-url-allowed';
 import { getWin } from '../main-window';
 
 export const initSystemIpc = (): void => {
-  ipcMain.on(IPC.OPEN_PATH, (ev, path: string) => shell.openPath(path));
-  ipcMain.on(IPC.OPEN_EXTERNAL, (ev, url: string) => shell.openExternal(url));
+  ipcMain.on(IPC.OPEN_PATH, (ev, path: string) => {
+    // Block UNC / network paths and remote file:// URLs: shell.openPath would
+    // resolve \\host\share (and file://host/share) to an SMB connection and leak
+    // the user's NTLM hash. FILE-type task-attachment paths are synced and thus
+    // attacker-controllable. See GHSA-hr87-735w-hfq3.
+    if (!isPathSafeToOpen(path)) {
+      return;
+    }
+    shell.openPath(path);
+  });
+  ipcMain.on(IPC.OPEN_EXTERNAL, (ev, url: string) => {
+    // Defense in depth: never hand an unsafe scheme to the OS handler, even if
+    // the renderer-side guard is bypassed. See GHSA-hr87-735w-hfq3.
+    if (!isExternalUrlSchemeAllowed(url)) {
+      return;
+    }
+    shell.openExternal(url);
+  });
 
   ipcMain.on(
     IPC.SHOW_EMOJI_PANEL,

@@ -12,6 +12,7 @@ import {
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
+import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 
 describe('SnapshotUploadService', () => {
   let service: SnapshotUploadService;
@@ -180,6 +181,31 @@ describe('SnapshotUploadService', () => {
       expect(result.vectorClock).toBe(mockVectorClock);
       expect(result.clientId).toBe('test-client-id');
       expect(result.existingCfg).toEqual({ encryptKey: 'test' } as any);
+    });
+
+    it('should strip local-only sync settings from gathered snapshot state', async () => {
+      const mockState = {
+        globalConfig: {
+          ...DEFAULT_GLOBAL_CONFIG,
+          sync: {
+            ...DEFAULT_GLOBAL_CONFIG.sync,
+            syncProvider: SyncProviderId.WebDAV,
+            syncInterval: 300000,
+            isManualSyncOnly: true,
+            isCompressionEnabled: true,
+          },
+        },
+      };
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
+
+      const result = await service.gatherSnapshotData();
+      const globalConfig = result.state.globalConfig as Record<string, unknown>;
+      const sync = globalConfig['sync'] as Record<string, unknown>;
+
+      expect(sync['syncProvider']).toBeNull();
+      expect(sync['syncInterval']).toBeUndefined();
+      expect(sync['isManualSyncOnly']).toBeUndefined();
+      expect(sync['isCompressionEnabled']).toBe(true);
     });
 
     it('should regenerate client ID when getOrGenerateClientId is used', async () => {

@@ -158,6 +158,20 @@ describe('CaldavClientService._getXhrProvider – web platform', () => {
     expect(headers['Authorization']).toBe(EXPECTED_AUTH);
     expect(headers['X-Requested-With']).toBe('SuperProductivity');
   });
+
+  it('returns an empty DAV response header when the server does not expose it', () => {
+    spyOn(XMLHttpRequest.prototype, 'getResponseHeader').and.returnValue(null);
+    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
+    const xhr = factory();
+    expect(xhr.getResponseHeader('DAV')).toBe('');
+  });
+
+  it('preserves non-DAV missing response headers as null', () => {
+    spyOn(XMLHttpRequest.prototype, 'getResponseHeader').and.returnValue(null);
+    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
+    const xhr = factory();
+    expect(xhr.getResponseHeader('content-type')).toBeNull();
+  });
 });
 
 describe('CaldavClientService.getByIds$', () => {
@@ -356,6 +370,20 @@ describe('CaldavClientService._getNativeXhrProvider – native platform', () => 
     xhr.send(null);
     await Promise.resolve();
     expect(xhr.getResponseHeader('content-type')).toBe('application/xml; charset=utf-8');
+  });
+
+  it('returns an empty DAV response header when native HTTP omits it', async () => {
+    svc.webDavRequestSpy.and.resolveTo({
+      status: 207,
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      headers: { 'content-type': 'application/xml' },
+      data: '',
+    });
+    const xhr = getFakeXhr();
+    xhr.open('REPORT', 'https://cal.example.com/');
+    xhr.send(null);
+    await Promise.resolve();
+    expect(xhr.getResponseHeader('DAV')).toBe('');
   });
 
   it('getAllResponseHeaders returns formatted header string after send()', async () => {

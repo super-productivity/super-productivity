@@ -55,14 +55,14 @@ describe('Race Condition Integration Tests', () => {
   });
 
   describe('Flush polling race conditions', () => {
-    it('should handle rapid queue operations during flush', async () => {
-      // Simulate the scenario where actions are enqueued rapidly
-      // while we're polling for the queue to drain
-      const enqueueCount = 10;
+    it('should handle rapid pending operations during flush', async () => {
+      // Simulate the scenario where actions are captured rapidly
+      // while we're polling for the pending counter to drain
+      const captureCount = 10;
 
-      // Start with some operations in the queue (simulating real capture)
-      for (let i = 0; i < enqueueCount; i++) {
-        captureService.enqueue({
+      // Start with some operations pending (simulating real capture)
+      for (let i = 0; i < captureCount; i++) {
+        captureService.incrementPending({
           type: `[Task] Test Action ${i}`,
           meta: {
             entityType: 'TASK' as any,
@@ -71,42 +71,42 @@ describe('Race Condition Integration Tests', () => {
         } as any);
       }
 
-      // Verify initial queue state
-      expect(captureService.getQueueSize()).toBe(enqueueCount);
+      // Verify initial pending state
+      expect(captureService.getPendingCount()).toBe(captureCount);
 
-      // Drain the queue (simulating the effect processing)
-      for (let i = 0; i < enqueueCount; i++) {
-        captureService.dequeue();
+      // Drain the counter (simulating the effect processing)
+      for (let i = 0; i < captureCount; i++) {
+        captureService.decrementPending();
       }
 
-      // Queue should now be empty
-      expect(captureService.getQueueSize()).toBe(0);
+      // Counter should now be empty
+      expect(captureService.getPendingCount()).toBe(0);
     });
 
-    it('should correctly report queue size during concurrent enqueue/dequeue', async () => {
-      // Test that queue size is consistent under concurrent operations
+    it('should correctly report pending count during concurrent capture/process', async () => {
+      // Test that the pending count is consistent under concurrent operations
       const iterations = 100;
-      let maxObservedSize = 0;
+      let maxObservedCount = 0;
 
       for (let i = 0; i < iterations; i++) {
-        // Enqueue
-        captureService.enqueue({
+        // Capture
+        captureService.incrementPending({
           type: `[Task] Concurrent Action ${i}`,
           meta: { entityType: 'TASK' as any, entityId: `task-${i}` },
         } as any);
 
-        const size = captureService.getQueueSize();
-        maxObservedSize = Math.max(maxObservedSize, size);
+        const count = captureService.getPendingCount();
+        maxObservedCount = Math.max(maxObservedCount, count);
 
-        // Dequeue immediately (simulating rapid processing)
-        captureService.dequeue();
+        // Process immediately (simulating rapid processing)
+        captureService.decrementPending();
       }
 
-      // Queue should be empty at the end
-      expect(captureService.getQueueSize()).toBe(0);
+      // Counter should be empty at the end
+      expect(captureService.getPendingCount()).toBe(0);
 
-      // At some point we should have seen items in the queue
-      expect(maxObservedSize).toBeGreaterThan(0);
+      // At some point we should have seen pending items
+      expect(maxObservedCount).toBeGreaterThan(0);
     });
   });
 

@@ -1,6 +1,10 @@
 // Mapped Data Types
 // -----------------
-import { JiraOriginalComponent, JiraOriginalStatus } from './jira-api-responses';
+import {
+  JiraOriginalComponent,
+  JiraOriginalPriority,
+  JiraOriginalStatus,
+} from './jira-api-responses';
 
 export type JiraAuthor = Readonly<{
   id: string;
@@ -56,6 +60,7 @@ export type JiraIssueReduced = Readonly<{
 
   updated: string;
   status: JiraOriginalStatus;
+  priority?: JiraOriginalPriority | null;
 
   // mapped data
   attachments: JiraAttachment[];

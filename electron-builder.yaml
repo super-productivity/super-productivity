@@ -61,6 +61,13 @@ nsis:
   # allow to install to custom location
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # We ship no in-app auto-updater: electron-updater is not a dependency and the
+  # autoUpdater block in electron/start-app.ts is commented out. elevate.exe is
+  # only ever invoked by electron-updater to apply privileged (per-machine)
+  # updates, so electron-builder bundles it here as dead weight that AV engines
+  # frequently false-positive on. Drop it. Safe because perMachine is not true
+  # (with perMachine: true, packElevateHelper: false is ignored). See #8135.
+  packElevateHelper: false
 portable:
   artifactName: ${name}-${arch}.${ext}
 appx:

@@ -113,6 +113,7 @@ describe('FocusModeMainComponent', () => {
       focusModeConfig: jasmine.createSpy().and.returnValue({
         isSkipPreparation: false,
       }),
+      pomodoroConfig: jasmine.createSpy().and.returnValue(undefined),
       isInOvertime: jasmine.createSpy().and.returnValue(false),
       isSessionPaused: jasmine.createSpy().and.returnValue(false),
     });
@@ -690,6 +691,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       focusModeConfig: signal({
         isSkipPreparation: false,
       }),
+      pomodoroConfig: signal(undefined),
       isInOvertime: signal(false),
     };
 
@@ -730,6 +732,16 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
 
   it('should hide the mode selector while a focus session is in progress', () => {
     expect(component.isShowModeSelector()).toBe(false);
+  });
+
+  it('should remove the mode selector from the DOM (not just visually hide it) while in progress', () => {
+    // Regression: a visibility:hidden selector still left its mat-icons painted,
+    // because the global `body.isMaterialSymbolsLoaded mat-icon` rule forces
+    // visibility:visible (an explicit value beats the inherited hidden one).
+    // The selector must be removed from the DOM so no icons can remain.
+    const selector = fixture.nativeElement.querySelector('segmented-button-group');
+
+    expect(selector).toBeNull();
   });
 
   it('should hide the mode selector while a Flowtime session is in progress', () => {
@@ -870,8 +882,13 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       isSkipPreparation: false,
     });
 
-    const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+    const storeSpy = jasmine.createSpyObj('Store', [
+      'dispatch',
+      'select',
+      'selectSignal',
+    ]);
     storeSpy.select.and.returnValue(of([]));
+    storeSpy.selectSignal.and.returnValue(signal(null));
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       tasks: jasmine.createSpy().and.returnValue({
@@ -919,6 +936,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       mode: signal(FocusModeMode.Pomodoro),
       mainState: signal(FocusMainUIState.Preparation),
       focusModeConfig: focusModeConfigSignal,
+      pomodoroConfig: signal(undefined),
       isInOvertime: signal(false),
     };
 

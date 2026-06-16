@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (bijv. https://try.gitea.io)",
+    "TOKEN": "Access Token",
+    "REPO_FULL_NAME": "Gebruikersnaam of Organisatie naam/project",
+    "SCOPE": "Toepassingsgebied",
+    "SCOPE_ALL": "Alle",
+    "SCOPE_CREATED": "Aangemaakt door mij",
+    "SCOPE_ASSIGNED": "Aan mij toegewezen",
+    "FILTER_LABELS": "Filteren op labels (optioneel)",
+    "EXCLUDE_LABELS": "Labels uitsluiten (optioneel)",
+    "HOW_TO_GET_TOKEN": "Hoe krijg ik een token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Samenvatting",
+    "STATE": "Status",
+    "ASSIGNEE": "Toegewezen persoon",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Beschrijving"
+  },
+  "FORM_HELP": "<p>Hier kun je SuperProductivity configureren om open Gitea kwesties voor een specifieke repository te tonen in het paneel voor het aanmaken van taken in de dagelijkse planningsweergave. Ze worden weergegeven als suggesties en geven een link naar het issue en meer informatie over het issue.</p> <p>Daarnaast kun je automatisch alle openstaande issues toevoegen en importeren.</p><p>Om de gebruikslimieten te omzeilen en toegang te krijgen kun je een toegangstoken geven."
+}

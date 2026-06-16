@@ -26,12 +26,10 @@ import { DeletedTagTitlesSidecarService } from './deleted-tag-titles-sidecar.ser
 import { selectEnabledIssueProviders } from '../store/issue-provider.selectors';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { T } from '../../../t.const';
-import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
-import { TagService } from '../../tag/tag.service';
-import { createPluginSyncAdapter } from '../../../plugins/issue-provider/plugin-sync-adapter.service';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { deleteTag, deleteTags } from '../../tag/store/tag.actions';
+import { IssueSyncAdapterResolverService } from './issue-sync-adapter-resolver.service';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'isDone',
@@ -42,6 +40,19 @@ const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'timeEstimate',
   'tagIds',
 ]);
+
+/**
+ * A provider's write may reject with this marker to signal an *expected*
+ * limitation rather than a real failure — e.g. the CalDAV plugin can't yet edit
+ * or delete a single occurrence of a recurring event (#7492). When it does,
+ * two-way sync stays silent: the user changed/removed their task, not the
+ * calendar. Explicit calendar actions (agenda reschedule/delete) don't consult
+ * this and still surface the message, which is the honest feedback there.
+ */
+const isExpectedSyncSkipError = (err: unknown): boolean =>
+  typeof err === 'object' &&
+  err !== null &&
+  (err as { isExpectedSyncSkip?: boolean }).isExpectedSyncSkip === true;
 
 const toSortedStringArray = (value: unknown): string[] =>
   Array.isArray(value)
@@ -111,9 +122,8 @@ export class IssueTwoWaySyncEffects {
   private readonly _snackService = inject(SnackService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _deletedTagTitlesSidecar = inject(DeletedTagTitlesSidecarService);
+  private readonly _adapterResolver = inject(IssueSyncAdapterResolverService);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
-  private readonly _pluginHttp = inject(PluginHttpService);
-  private readonly _tagService = inject(TagService);
   private _syncOriginatedTaskIds = new Set<string>();
   private static readonly _MAX_SYNC_ORIGINATED_IDS = 1000;
 
@@ -168,6 +178,11 @@ export class IssueTwoWaySyncEffects {
         concatMap(({ fullTask, changes }) =>
           this._pushChanges$(fullTask, changes).pipe(
             catchError((err) => {
+              // Expected provider limitation (e.g. a single recurring occurrence,
+              // #7492) — the local task edit stands; don't alarm the user.
+              if (isExpectedSyncSkipError(err)) {
+                return EMPTY;
+              }
               IssueLog.err('Two-way sync push failed', err);
               this._snackService.open({
                 type: 'ERROR',
@@ -214,6 +229,9 @@ export class IssueTwoWaySyncEffects {
         concatMap((task) =>
           this._pushChanges$(task, { tagIds: task.tagIds }).pipe(
             catchError((err) => {
+              if (isExpectedSyncSkipError(err)) {
+                return EMPTY;
+              }
               IssueLog.err('Two-way sync tag delete push failed', err);
               this._snackService.open({
                 type: 'ERROR',
@@ -443,32 +461,7 @@ export class IssueTwoWaySyncEffects {
   }
 
   private _getAdapter(issueType: string): IssueSyncAdapter<unknown> | undefined {
-    const existing = this._adapterRegistry.get(issueType);
-    if (existing) return existing;
-
-    const provider = this._pluginRegistry.getProvider(issueType);
-    const definition = provider?.definition;
-    if (
-      !provider ||
-      !definition ||
-      (!definition.createIssue &&
-        !definition.deleteIssue &&
-        !(definition.fieldMappings?.length && definition.updateIssue))
-    ) {
-      return undefined;
-    }
-
-    const adapter = createPluginSyncAdapter(
-      definition,
-      (getHeadersFn) =>
-        this._pluginHttp.createHttpHelper(getHeadersFn, {
-          allowPrivateNetwork: provider.allowPrivateNetwork,
-        }),
-      this._tagService,
-    );
-
-    this._adapterRegistry.register(issueType, adapter);
-    return adapter;
+    return this._adapterResolver.getAdapter(issueType);
   }
 
   private _deleteRemoteIssue$(info: DeletedTaskIssueInfo | Task): Observable<unknown> {
@@ -488,6 +481,11 @@ export class IssueTwoWaySyncEffects {
         concatMap((cfg) =>
           from(adapter.deleteIssue!(issueId, cfg)).pipe(
             catchError((err) => {
+              // Expected provider limitation (e.g. a single recurring occurrence,
+              // #7492) — the local task is already removed; stay silent.
+              if (isExpectedSyncSkipError(err)) {
+                return EMPTY;
+              }
               // 404/410 means the remote issue is already gone — treat as success
               // to avoid false "delete failed" toasts (e.g. when polling detects
               // a remote deletion and then deleteIssue is called on the same issue)

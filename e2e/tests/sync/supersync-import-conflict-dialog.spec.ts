@@ -591,4 +591,142 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       if (clientB) await closeClient(clientB);
     }
   });
+
+  /**
+   * Reconvergence guard: an incoming SYNC_IMPORT that conflicts with a LOCAL PENDING op
+   * shows the conflict dialog; cancelling it must leave the client able to recover —
+   * the next sync RE-OFFERS the import and the user can adopt it (USE_REMOTE) to
+   * reconverge. No existing spec covers this scenario (the CANCEL test above is the
+   * local-import path; the silent-accept test below has no pending op).
+   *
+   * SCOPE / what this does and does NOT verify (related to #8304, but not a fix
+   * regression for it): the app syncs download-first, so in this deterministic flow the
+   * incoming SYNC_IMPORT is intercepted by Client B's DOWNLOAD phase, which already
+   * persisted lastServerSeq correctly before #8304 — so this test passes with or
+   * without that fix. #8304's actual bug is on the UPLOAD-piggyback path, reachable only
+   * via a timing race (A uploads between B's download and upload) that a deterministic
+   * E2E cannot force; that path is covered by the unit specs and
+   * operation-log-upload-piggyback-seq.integration.spec.ts. This test is the real-server
+   * end-to-end guard for the shared cancel→re-offer→reconverge contract.
+   *
+   * Actions:
+   * 1. Clients A and B sync a shared baseline task.
+   * 2. Client B creates a NEW local task and does NOT sync it (meaningful pending op).
+   * 3. Client A imports a backup → SYNC_IMPORT lands on the server.
+   * 4. Client B syncs → conflict dialog → CANCEL.
+   * 5. Client B syncs AGAIN → conflict dialog appears AGAIN (re-offered, not lost).
+   * 6. Client B chooses USE_REMOTE → reconverges to the imported state.
+   */
+  test('CANCEL of an incoming SYNC_IMPORT (with a local pending op) re-offers it and reconverges', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.slow();
+
+    const uniqueId = Date.now();
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      // ============ PHASE 1: Both clients sync a shared baseline task ============
+      console.log('[#8304] Phase 1: Both clients sync a shared baseline task');
+
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+
+      const sharedTask = `Shared-Task-${uniqueId}`;
+      await clientA.workView.addTask(sharedTask);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, sharedTask);
+      console.log('[#8304] Both clients synced shared baseline task');
+
+      // ============ PHASE 2: Client B creates a pending (unsynced) local op ============
+      console.log('[#8304] Phase 2: Client B creates a pending local task (no sync)');
+
+      const bPendingTask = `B-Pending-${uniqueId}`;
+      await clientB.workView.addTask(bPendingTask);
+      await waitForTask(clientB.page, bPendingTask);
+      // Deliberately do NOT sync B — this leaves a meaningful pending op so the
+      // incoming SYNC_IMPORT produces a conflict dialog rather than silent accept.
+
+      // ============ PHASE 3: Client A imports a backup and pushes it ============
+      console.log('[#8304] Phase 3: Client A imports backup and pushes SYNC_IMPORT');
+
+      const importPage = new ImportPage(clientA.page);
+      await importPage.navigateToImportPage();
+      const backupPath = ImportPage.getFixturePath('test-backup.json');
+      await importPage.importBackupFile(backupPath);
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
+      // A's local SYNC_IMPORT conflicts with A's previously-synced ops; USE_LOCAL pushes.
+      await clientA.sync.syncAndWait({ useLocal: true });
+      console.log('[#8304] Client A pushed SYNC_IMPORT to server');
+
+      // ============ PHASE 4: Client B syncs and CANCELS the conflict dialog ============
+      console.log('[#8304] Phase 4: Client B syncs → conflict dialog → CANCEL');
+
+      // Click sync directly (not syncAndWait) so the dialog is not auto-dismissed.
+      await clientB.sync.syncBtn.click();
+      const dialog = clientB.page.locator('dialog-sync-import-conflict');
+      await expect(dialog).toBeVisible({ timeout: 20000 });
+      await dialog.getByRole('button', { name: /cancel/i }).click();
+      await expect(dialog).not.toBeVisible({ timeout: 5000 });
+      console.log('[#8304] Client B cancelled the dialog');
+
+      // ============ PHASE 5: B unchanged — still has its pending + baseline, no import ============
+      console.log('[#8304] Phase 5: Verify Client B state is unchanged after cancel');
+
+      await clientB.page.goto('/#/work-view');
+      await clientB.page.waitForLoadState('networkidle');
+      await waitForTask(clientB.page, bPendingTask);
+      await waitForTask(clientB.page, sharedTask);
+      const importedOnBAfterCancel = clientB.page.locator(
+        'task:has-text("E2E Import Test - Active Task With Subtask")',
+      );
+      await expect(importedOnBAfterCancel).not.toBeVisible({ timeout: 5000 });
+      console.log('[#8304] ✓ Client B unchanged (import not applied, pending op intact)');
+
+      // ============ PHASE 6: #8304 KEY — next sync RE-OFFERS the SYNC_IMPORT ============
+      console.log('[#8304] Phase 6: Client B syncs again → dialog must re-appear');
+
+      // If a cancel had advanced the server cursor past A's SYNC_IMPORT (the class of
+      // defect #8304 fixes on the upload path), the next download would skip it and NO
+      // dialog would appear — Client B would be permanently diverged. The dialog
+      // re-appearing proves the import was re-fetched.
+      await clientB.sync.syncBtn.click();
+      await expect(dialog).toBeVisible({ timeout: 20000 });
+      console.log('[#8304] ✓ SYNC_IMPORT was re-offered on the next sync (not lost)');
+
+      // ============ PHASE 7: Adopt server data → reconverge ============
+      console.log('[#8304] Phase 7: Client B chooses USE_REMOTE to reconverge');
+
+      await dialog.getByRole('button', { name: /server/i }).click();
+      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      await clientB.sync.waitForSyncToComplete();
+
+      await clientB.page.goto('/#/work-view');
+      await clientB.page.waitForLoadState('networkidle');
+      await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
+      // USE_REMOTE discards B's local-only pending op in favour of the imported state.
+      const pendingAfterAdopt = clientB.page.locator(`task:has-text("${bPendingTask}")`);
+      await expect(pendingAfterAdopt).not.toBeVisible({ timeout: 5000 });
+      console.log('[#8304] ✓ Client B reconverged on the imported state');
+
+      console.log('[#8304] ✓ Cancel-reconvergence test PASSED!');
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
 });

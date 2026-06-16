@@ -157,6 +157,26 @@ export class MenuTreeService {
     });
   }
 
+  /**
+   * Flatten the tag view tree into the order tags appear in the sidebar
+   * (depth-first, folders expanded). Shared by the tag-toggle menu and the
+   * task-view customizer so tag grouping/sorting matches the sidebar. (#8400)
+   */
+  flattenTagViewTree(tags: Tag[]): Tag[] {
+    const result: Tag[] = [];
+    const walk = (nodes: MenuTreeViewNode[]): void => {
+      for (const node of nodes) {
+        if (node.k === MenuTreeKind.TAG) {
+          result.push(node.tag);
+        } else if (node.k === MenuTreeKind.FOLDER) {
+          walk(node.children);
+        }
+      }
+    };
+    walk(this.buildTagViewTree(tags));
+    return result;
+  }
+
   setProjectTree(tree: MenuTreeTreeNode[]): void {
     this._store.dispatch(updateProjectTree({ tree }));
   }

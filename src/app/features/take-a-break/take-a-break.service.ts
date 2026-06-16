@@ -101,18 +101,18 @@ export class TakeABreakService {
     ),
     this._actions$.pipe(ofType(idleDialogResult)).pipe(
       switchMap(({ trackItems, isResetBreakTimer }) => {
-        if (trackItems.some((t) => t.type === 'BREAK')) {
+        // the dialog checkbox is the single source of truth for resetting; it
+        // auto-defaults to checked when a break is tracked, so an unchecked
+        // value means the user explicitly opted out of the reset
+        if (isResetBreakTimer) {
           return of(0);
         }
-        if ((trackItems.length === 0 || trackItems.length === 1) && !isResetBreakTimer) {
-          return EMPTY;
-        }
-        return of(
-          trackItems.reduce(
-            (acc, t) => acc + (typeof t.time === 'number' ? t.time : 0),
-            0,
-          ),
-        );
+        // without a reset, time tracked to tasks still counts as work; break
+        // items don't (but they don't reset the timer either)
+        const noBreakTime = trackItems
+          .filter((t) => t.type === 'TASK')
+          .reduce((acc, t) => acc + (typeof t.time === 'number' ? t.time : 0), 0);
+        return noBreakTime > 0 ? of(noBreakTime) : EMPTY;
       }),
     ),
     this.otherNoBreakTIme$,

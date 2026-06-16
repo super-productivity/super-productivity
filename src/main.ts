@@ -44,6 +44,7 @@ import {
   MatDateFormats,
   DateAdapter,
 } from '@angular/material/core';
+import { MatDatepickerIntl } from '@angular/material/datepicker';
 import { FormlyConfigModule } from './app/ui/formly-config.module';
 import { markedOptionsFactory } from './app/ui/marked-options-factory';
 import { MaterialCssVarsModule } from 'angular-material-css-vars';
@@ -89,7 +90,8 @@ import { GlobalConfigService } from './app/features/config/global-config.service
 import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
-import { unlockAudioContext } from './app/util/audio-context';
+import { TranslateMatDatepickerIntl } from './app/core/date-time-format/translate-mat-datepicker-intl';
+import { suspendAudioContext, unlockAudioContext } from './app/util/audio-context';
 import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 
 if (environment.production || environment.stage) {
@@ -202,6 +204,7 @@ bootstrapApplication(AppComponent, {
     ShortTimeHtmlPipe,
     ShortTimePipe,
     { provide: DateAdapter, useClass: CustomDateAdapter },
+    { provide: MatDatepickerIntl, useClass: TranslateMatDatepickerIntl },
     {
       provide: MAT_DATE_FORMATS,
       useFactory: (dateTimeFormatService: DateTimeFormatService): MatDateFormats => {
@@ -217,7 +220,7 @@ bootstrapApplication(AppComponent, {
             get dateInput(): string {
               return dateTimeFormatService.dateFormat().raw;
             },
-            monthYearLabel: { year: 'numeric', month: 'short' },
+            monthYearLabel: { year: 'numeric', month: 'long' },
             dateA11yLabel: { year: 'numeric', month: 'long', day: 'numeric' },
             monthYearA11yLabel: { year: 'numeric', month: 'long' },
             timeInput: { hour: 'numeric', minute: 'numeric' },
@@ -342,9 +345,11 @@ bootstrapApplication(AppComponent, {
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {
-        LocaleImportFns[locale as keyof typeof LocaleImportFns]().then((m) => {
-          registerLocaleData(m.default, locale);
-        });
+        LocaleImportFns[locale as keyof typeof LocaleImportFns]()
+          .then((m) => {
+            registerLocaleData(m.default, locale);
+          })
+          .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
       }
     });
   };
@@ -483,6 +488,9 @@ if (IS_ANDROID_WEB_VIEW) {
     if (isActive) {
       return;
     }
+    // Release the audio output stream so a silent-but-running AudioContext does
+    // not keep the audio hardware (and the process) awake in the background (#8243).
+    suspendAudioContext();
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
         await flushPendingOperations('Android');
@@ -500,6 +508,9 @@ if (IS_IOS_NATIVE) {
     if (isActive) {
       return;
     }
+    // Release the audio output stream so a silent-but-running AudioContext does
+    // not keep the audio hardware (and the process) awake in the background (#8243).
+    suspendAudioContext();
     const taskId = await BackgroundTask.beforeExit(async () => {
       try {
         // Dispatch any accumulated tracked time so it is enqueued before the

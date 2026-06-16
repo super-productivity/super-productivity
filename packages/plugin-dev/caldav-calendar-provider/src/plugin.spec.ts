@@ -812,6 +812,201 @@ END:VCALENDAR</cal:calendar-data>
     });
   });
 
+  // Issue #7492 follow-up: an expanded RRULE occurrence (`#occ=<ms>` id) maps
+  // back to the shared master `.ics`. Write paths must NOT silently mutate the
+  // whole series, and getById must report the occurrence's own time.
+  describe('per-occurrence write safety (issue #7492)', () => {
+    const cfg = {
+      serverUrl: 'https://cloud.example.com',
+      username: 'user',
+      password: 'pass',
+      writeCalendarId: '/dav/calendars/user/default/',
+    };
+    const calHref = '/dav/calendars/user/default/';
+    const eventHref = '/dav/calendars/user/default/weekly.ics';
+    const occId = (ms: number): string => `${calHref}::${eventHref}#occ=${ms}`;
+    const masterId = `${calHref}::${eventHref}`;
+
+    const timedMaster = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:weekly-uid',
+      'DTSTART:20260105T100000Z',
+      'DTEND:20260105T110000Z',
+      'RRULE:FREQ=WEEKLY;COUNT=4',
+      'SUMMARY:Weekly Standup',
+      'LAST-MODIFIED:20260101T090000Z',
+      'SEQUENCE:0',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const allDayMaster = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:weekly-allday-uid',
+      'DTSTART;VALUE=DATE:20260105',
+      'DTEND;VALUE=DATE:20260106',
+      'RRULE:FREQ=WEEKLY;COUNT=4',
+      'SUMMARY:Weekly Holiday',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    let mockHttp: any;
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn().mockResolvedValue(timedMaster),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+        request: vi.fn(),
+      };
+    });
+
+    it('updateIssue refuses a single occurrence and writes nothing', async () => {
+      const err: any = await definition.updateIssue!(
+        occId(Date.parse('2026-01-12T10:00:00Z')),
+        { summary: 'Changed' },
+        cfg as any,
+        mockHttp as any,
+      )
+        .then(() => null)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(String(err.message)).toMatch(/single occurrence/i);
+      // Marker tells the host's two-way sync this is an expected limitation, not
+      // a failure, so editing the task stays silent (issue #7492).
+      expect(err.isExpectedSyncSkip).toBe(true);
+      // Guard runs before any network I/O — the master is never touched.
+      expect(mockHttp.get).not.toHaveBeenCalled();
+      expect(mockHttp.put).not.toHaveBeenCalled();
+    });
+
+    it('deleteIssue refuses a single occurrence and deletes nothing', async () => {
+      const err: any = await definition.deleteIssue!(
+        occId(Date.parse('2026-01-12T10:00:00Z')),
+        cfg as any,
+        mockHttp as any,
+      )
+        .then(() => null)
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(String(err.message)).toMatch(/single occurrence/i);
+      expect(err.isExpectedSyncSkip).toBe(true);
+      expect(mockHttp.delete).not.toHaveBeenCalled();
+    });
+
+    it('updateIssue still writes a non-occurrence (no #occ=) event', async () => {
+      await definition.updateIssue!(
+        masterId,
+        { summary: 'Changed' },
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('getById re-anchors a timed occurrence to its own start/end', async () => {
+      const occMs = Date.parse('2026-01-19T10:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119T100000Z');
+      expect(issue.end).toBe('20260119T110000Z');
+      // Must NOT collapse onto the master's first (Jan 5) instance.
+      expect(issue.start).not.toBe('20260105T100000Z');
+      // And it round-trips through the two-way-sync extractor to the right instant.
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_dateTime).toBe('2026-01-19T10:00:00.000Z');
+      expect(vals.duration_ms).toBe(60 * 60 * 1000);
+    });
+
+    it('getById re-anchors an all-day occurrence to its own date', async () => {
+      mockHttp.get = vi.fn().mockResolvedValue(allDayMaster);
+      // ical.js represents an all-day occurrence as local midnight, matching
+      // the value the expander stamps into the id.
+      const occMs = new Date(2026, 0, 19).getTime();
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119');
+      expect(issue.startParams).toBe('VALUE=DATE');
+      expect(issue.end).toBe('20260120');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_date).toBe('2026-01-19');
+    });
+
+    it('getById returns the master start for a non-occurrence id', async () => {
+      const issue: any = await definition.getById!(masterId, cfg as any, mockHttp as any);
+      expect(issue.start).toBe('20260105T100000Z');
+    });
+
+    it('getById re-anchors a TZID-master occurrence to the right instant', async () => {
+      const tzidMaster = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:weekly-tzid-uid',
+        'DTSTART;TZID=America/New_York:20260105T090000',
+        'DTEND;TZID=America/New_York:20260105T100000',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'SUMMARY:Weekly NY Standup',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      mockHttp.get = vi.fn().mockResolvedValue(tzidMaster);
+      // Jan 19 2026 09:00 in America/New_York (EST, UTC-5) = 14:00Z.
+      const occMs = Date.parse('2026-01-19T14:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      // The occurrence instant is preserved as UTC, regardless of the runner's TZ.
+      expect(issue.start).toBe('20260119T140000Z');
+      expect(issue.end).toBe('20260119T150000Z');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.start_dateTime).toBe('2026-01-19T14:00:00.000Z');
+      // Duration comes from the TZID-resolved master (09:00->10:00 = 1h), not a
+      // timezone-skewed value.
+      expect(vals.duration_ms).toBe(60 * 60 * 1000);
+    });
+
+    it('getById re-anchors a floating-time master occurrence and preserves duration', async () => {
+      const floatingMaster = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:weekly-floating-uid',
+        'DTSTART:20260105T090000',
+        'DTEND:20260105T103000',
+        'RRULE:FREQ=WEEKLY;COUNT=4',
+        'SUMMARY:Weekly Floating Standup',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      mockHttp.get = vi.fn().mockResolvedValue(floatingMaster);
+      const occMs = Date.parse('2026-01-19T09:00:00Z');
+      const issue: any = await definition.getById!(
+        occId(occMs),
+        cfg as any,
+        mockHttp as any,
+      );
+      expect(issue.start).toBe('20260119T090000Z');
+      expect(issue.end).toBe('20260119T103000Z');
+      const vals = definition.extractSyncValues!(issue);
+      expect(vals.duration_ms).toBe(90 * 60 * 1000);
+    });
+  });
+
   describe('timeBlock.upsertEvent', () => {
     const cfg = {
       serverUrl: 'https://dav.example.com/',
@@ -945,6 +1140,265 @@ END:VCALENDAR</cal:calendar-data>
         definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any),
       ).rejects.toBeDefined();
       expect(mockHttp.delete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Regression coverage for issue #8259 — CalDAV servers advertise a root or
+  // principal URL, not the calendar-home, so a plain Depth:1 PROPFIND there
+  // lists no <calendar> resources and the config dropdowns stayed empty.
+  describe('calendar discovery / loadOptions (issue #8259)', () => {
+    const getLoadOptions = (): NonNullable<
+      (typeof definition.configFields)[number]['loadOptions']
+    > => {
+      const field = definition.configFields.find((f) => f.key === 'readCalendarIds');
+      if (!field?.loadOptions) throw new Error('readCalendarIds.loadOptions missing');
+      return field.loadOptions;
+    };
+
+    /** Multistatus listing the user's calendars (one VEVENT, one VTODO-only). */
+    const CALENDAR_LIST_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/</d:href>
+    <d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Personal</d:displayname>
+      <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+      <cal:supported-calendar-component-set><cal:comp name="VEVENT"/></cal:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/tasks/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Tasks</d:displayname>
+      <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+      <cal:supported-calendar-component-set><cal:comp name="VTODO"/></cal:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    /** Depth:1 on a root/principal collection — no <calendar> resources. */
+    const NON_CALENDAR_COLLECTION_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/calendars/</d:href>
+    <d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    const PRINCIPAL_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop>
+      <d:current-user-principal><d:href>/remote.php/dav/principals/users/admin/</d:href></d:current-user-principal>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    const HOME_SET_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/principals/users/admin/</d:href>
+    <d:propstat><d:prop>
+      <cal:calendar-home-set><d:href>/remote.php/dav/calendars/admin/</d:href></cal:calendar-home-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+    /** Route PROPFIND responses by URL + Depth; 404 anything unmapped. */
+    const makeHttp = (
+      routes: Record<string, string>,
+    ): { request: any } & Record<string, any> => ({
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+      request: vi.fn(
+        async (
+          _method: string,
+          url: string,
+          _body: unknown,
+          opts: any,
+        ): Promise<string> => {
+          const depth = opts?.headers?.Depth;
+          const res = routes[`${url}|${depth}`];
+          if (res === undefined) {
+            throw Object.assign(new Error(`no route for ${url} depth=${depth}`), {
+              status: 404,
+            });
+          }
+          return res;
+        },
+      ),
+    });
+
+    it('returns [] without any request when credentials are incomplete', async () => {
+      const http = makeHttp({});
+      const result = await getLoadOptions()(
+        { serverUrl: 'https://nc.example.com/remote.php/dav' } as any,
+        http as any,
+      );
+      expect(result).toEqual([]);
+      expect(http.request).not.toHaveBeenCalled();
+    });
+
+    it('uses the entered URL directly when it is already a calendar-home (back-compat)', async () => {
+      const http = makeHttp({
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav/calendars/admin/',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+      // No discovery bootstrap needed — a single Depth:1 PROPFIND.
+      expect(http.request).toHaveBeenCalledTimes(1);
+    });
+
+    it('discovers calendars from a Nextcloud root URL via principal + calendar-home-set', async () => {
+      const http = makeHttp({
+        // Step 1: Depth:1 on the root lists only non-calendar collections.
+        'https://nc.example.com/remote.php/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        // Step 2: Depth:0 on the root yields the current-user-principal.
+        'https://nc.example.com/remote.php/dav/|0': PRINCIPAL_XML,
+        // Step 3: Depth:0 on the principal yields the calendar-home-set.
+        'https://nc.example.com/remote.php/dav/principals/users/admin/|0': HOME_SET_XML,
+        // Step 4: Depth:1 on the calendar-home enumerates the calendars.
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+    });
+
+    it('discovers calendars when calendar-home-set is advertised at the entered URL', async () => {
+      const HOME_AT_ROOT_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/dav/</d:href>
+    <d:propstat><d:prop>
+      <cal:calendar-home-set><d:href>/remote.php/dav/calendars/admin/</d:href></cal:calendar-home-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+      const http = makeHttp({
+        'https://nc.example.com/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        'https://nc.example.com/dav/|0': HOME_AT_ROOT_XML,
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+    });
+
+    it('returns [] when neither calendars nor a principal can be resolved', async () => {
+      const EMPTY_PROPS_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop/></d:propstat>
+  </d:response>
+</d:multistatus>`;
+      const http = makeHttp({
+        'https://nc.example.com/remote.php/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        'https://nc.example.com/remote.php/dav/|0': EMPTY_PROPS_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('falls back to discovery when the entered URL rejects a Depth:1 PROPFIND', async () => {
+      const http = makeHttp({
+        // No '|1' route for the root → Depth:1 throws (e.g. 403/405); bootstrap runs.
+        'https://nc.example.com/remote.php/dav/|0': PRINCIPAL_XML,
+        'https://nc.example.com/remote.php/dav/principals/users/admin/|0': HOME_SET_XML,
+        'https://nc.example.com/remote.php/dav/calendars/admin/|1': CALENDAR_LIST_XML,
+      });
+      const result = await getLoadOptions()(
+        {
+          serverUrl: 'https://nc.example.com/remote.php/dav',
+          username: 'admin',
+          password: 'pass',
+        } as any,
+        http as any,
+      );
+      expect(result).toEqual([
+        { label: 'Personal', value: '/remote.php/dav/calendars/admin/personal/' },
+      ]);
+    });
+
+    it('refuses a cross-origin calendar-home-set href without sending a credentialed request to it (SSRF guard)', async () => {
+      const CROSS_ORIGIN_HOME_XML = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/</d:href>
+    <d:propstat><d:prop>
+      <cal:calendar-home-set><d:href>https://evil.example.com/dav/calendars/admin/</d:href></cal:calendar-home-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+      const http = makeHttp({
+        'https://nc.example.com/remote.php/dav/|1': NON_CALENDAR_COLLECTION_XML,
+        'https://nc.example.com/remote.php/dav/|0': CROSS_ORIGIN_HOME_XML,
+      });
+      // resolveHref rejects the off-origin href → discovery throws rather than
+      // issuing a credentialed PROPFIND to the attacker-controlled host.
+      await expect(
+        getLoadOptions()(
+          {
+            serverUrl: 'https://nc.example.com/remote.php/dav',
+            username: 'admin',
+            password: 'pass',
+          } as any,
+          http as any,
+        ),
+      ).rejects.toThrow();
+      // Every request must have stayed on the entered server origin — no
+      // credentialed PROPFIND escaped to the attacker-named host.
+      const calledOrigins = http.request.mock.calls.map(
+        (c: unknown[]) => new URL(c[1] as string).origin,
+      );
+      expect(calledOrigins.every((o: string) => o === 'https://nc.example.com')).toBe(
+        true,
+      );
     });
   });
 });

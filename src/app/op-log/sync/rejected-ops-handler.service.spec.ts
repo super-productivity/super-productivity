@@ -392,6 +392,53 @@ describe('RejectedOpsHandlerService', () => {
         expect(downloadCallback).toHaveBeenCalled();
       });
 
+      it('should NOT reject pending ops when the download throws transiently, and re-throw (#8331)', async () => {
+        // REGRESSION TEST: A network blip during the concurrent-modification
+        // download must not permanently drop the user's pending local edits.
+        // markRejected() is terminal (rejectedAt is never cleared), so a
+        // rejected op never re-enters getUnsynced() and silently stops syncing.
+        // The op must stay pending so it retries on the next sync.
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        const networkError = new Error('Download failed - partial or no data received.');
+        downloadCallback.and.returnValue(Promise.reject(networkError));
+
+        await expectAsync(
+          service.handleRejectedOps(
+            [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+            downloadCallback,
+          ),
+        ).toBeRejectedWith(networkError);
+
+        // The op must NOT be marked rejected — it stays pending for retry.
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
+      it('should NOT reject after repeated transient download failures (cap rollback, #8331)', async () => {
+        // REGRESSION TEST: a thrown download must not consume the per-entity
+        // resolution-attempt cap. Otherwise a sustained outage where uploads
+        // succeed (server returns CONFLICT_CONCURRENT) but the resolution
+        // download keeps failing would hit MAX_CONCURRENT_RESOLUTION_ATTEMPTS
+        // and permanently reject the edit — the same data loss #8331 fixes.
+        const op = createOp({ id: 'op-1', entityType: 'TASK', entityId: 'flaky-entity' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        const networkError = new Error('Download failed - partial or no data received.');
+        downloadCallback.and.returnValue(Promise.reject(networkError));
+
+        // Far more cycles than the cap (3) — every one fails its download.
+        for (let i = 0; i < MAX_CONCURRENT_RESOLUTION_ATTEMPTS + 3; i++) {
+          await expectAsync(
+            service.handleRejectedOps(
+              [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+              downloadCallback,
+            ),
+          ).toBeRejectedWith(networkError);
+        }
+
+        // The op must never be rejected, no matter how many transient failures.
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
       it('should trigger force download when normal download returns no ops', async () => {
         const op = createOp({ id: 'op-1' });
         opLogStoreSpy.getOpById.and.callFake(async (opId: string) => {

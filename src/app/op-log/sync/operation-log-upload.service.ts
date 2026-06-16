@@ -12,6 +12,7 @@ import {
   FULL_STATE_OP_TYPES,
   extractFullStateFromPayload,
   assertValidFullStatePayload,
+  ActionType,
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { LOCK_NAMES, MAX_OPS_PER_UPLOAD_REQUEST } from '../core/operation-log.const';
@@ -31,6 +32,10 @@ import {
 import { isRetryableUploadError } from '@sp/sync-providers/http';
 import { handleStorageQuotaError } from './sync-error-utils';
 import { DecryptNoPasswordError } from '../core/errors/sync-errors';
+import {
+  stripLocalOnlySyncScheduleSettings,
+  stripLocalOnlySyncSettingsFromAppData,
+} from '../../features/config/local-only-sync-settings.util';
 
 // Re-export for consumers that import from this service
 export type {
@@ -83,6 +88,10 @@ export class OperationLogUploadService {
     // We track this BEFORE decryption to detect the server's actual encryption state.
     let sawAnyPiggybackOps = false;
     let sawEncryptedPiggybackOp = false;
+    // #8304: When this upload collects piggybacked ops for the caller to apply, the
+    // last-server-seq covering them must be persisted by the caller AFTER those ops are
+    // applied — not here. We surface the planned value instead of persisting it.
+    let lastServerSeqToPersist: number | undefined;
 
     await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
       // Execute pre-upload callback INSIDE the lock, BEFORE checking for pending ops.
@@ -104,6 +113,10 @@ export class OperationLogUploadService {
       let lastKnownServerSeq = await syncProvider.getLastServerSeq();
       // Track highest received sequence across ALL chunks to prevent regression
       let highestReceivedSeq = lastKnownServerSeq;
+      // #8304: Becomes true once any chunk collects piggybacked ops the caller must
+      // apply. From that point on we stop persisting lastServerSeq in-loop (and never
+      // regress) — the caller persists the final value after processing those ops.
+      let deferSeqPersistToCaller = false;
 
       // Get encryption key (optional - file-based adapters handle encryption internally)
       const encryptKey = syncProvider.getEncryptKey
@@ -214,10 +227,30 @@ export class OperationLogUploadService {
         regularOps = opsAfterSnapshot;
       }
 
-      // Convert to SyncOperation format
-      let syncOps: SyncOperation[] = regularOps.map((entry) =>
-        this._entryToSyncOp(entry),
-      );
+      // Convert to SyncOperation format. Local-only operations remain in the
+      // local op-log for replay, but are acknowledged locally instead of uploaded.
+      const syncOpPairs = regularOps
+        .map((entry) => ({ entry, syncOp: this._entryToSyncOp(entry) }))
+        .filter(
+          (pair): pair is { entry: OperationLogEntry; syncOp: SyncOperation } =>
+            pair.syncOp !== null,
+        );
+      const localOnlySeqs = regularOps
+        .filter((entry) => !syncOpPairs.some((pair) => pair.entry.seq === entry.seq))
+        .map((entry) => entry.seq);
+      if (localOnlySeqs.length > 0) {
+        await this.opLogStore.markSynced(localOnlySeqs);
+        uploadedCount += localOnlySeqs.length;
+        OpLog.normal(
+          `OperationLogUploadService: Marked ${localOnlySeqs.length} local-only op(s) as synced without upload`,
+        );
+      }
+      if (syncOpPairs.length === 0) {
+        return;
+      }
+
+      let syncOps: SyncOperation[] = syncOpPairs.map((pair) => pair.syncOp);
+      const uploadEntries = syncOpPairs.map((pair) => pair.entry);
 
       // Encrypt payloads if E2E encryption is enabled
       if (isEncryptionEnabled && encryptKey) {
@@ -227,7 +260,7 @@ export class OperationLogUploadService {
 
       // Upload in batches to avoid 413 Payload Too Large errors
       const chunks = chunkArray(syncOps, MAX_OPS_PER_UPLOAD_REQUEST);
-      const correspondingEntries = chunkArray(regularOps, MAX_OPS_PER_UPLOAD_REQUEST);
+      const correspondingEntries = chunkArray(uploadEntries, MAX_OPS_PER_UPLOAD_REQUEST);
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -305,6 +338,9 @@ export class OperationLogUploadService {
 
           const ops = piggybackSyncOps.map((op) => syncOpToOperation(op));
           piggybackedOps.push(...ops);
+          // These ops are returned to the caller for processRemoteOps; defer the seq
+          // persist so it cannot advance past ops that are not yet applied. (#8304)
+          deferSeqPersistToCaller = true;
         }
 
         // Update last known server seq
@@ -327,8 +363,14 @@ export class OperationLogUploadService {
             `OperationLogUploadService: hasMorePiggyback=true but no ops received, keeping lastServerSeq at ${serverSeqPlan.seqToStore}`,
           );
         }
-        await syncProvider.setLastServerSeq(serverSeqPlan.seqToStore);
         lastKnownServerSeq = serverSeqPlan.seqToStore;
+        if (deferSeqPersistToCaller) {
+          // #8304: Hand the value to the caller; it persists after applying the
+          // piggybacked ops (mirrors the download path's "persist AFTER ops stored").
+          lastServerSeqToPersist = serverSeqPlan.seqToStore;
+        } else {
+          await syncProvider.setLastServerSeq(serverSeqPlan.seqToStore);
+        }
 
         // Collect rejected operations - DO NOT mark as rejected here!
         // The sync service must process piggybacked ops FIRST to allow proper conflict detection.
@@ -375,10 +417,16 @@ export class OperationLogUploadService {
       rejectedOps,
       ...(hasMorePiggyback ? { hasMorePiggyback: true } : {}),
       ...(piggybackHasOnlyUnencryptedData ? { piggybackHasOnlyUnencryptedData } : {}),
+      ...(lastServerSeqToPersist !== undefined ? { lastServerSeqToPersist } : {}),
     };
   }
 
-  private _entryToSyncOp(entry: OperationLogEntry): SyncOperation {
+  private _entryToSyncOp(entry: OperationLogEntry): SyncOperation | null {
+    const payload = this._sanitizeRegularOpPayloadForUpload(entry.op);
+    if (payload === null) {
+      return null;
+    }
+
     return {
       id: entry.op.id,
       clientId: entry.op.clientId,
@@ -387,13 +435,54 @@ export class OperationLogUploadService {
       entityType: entry.op.entityType,
       entityId: entry.op.entityId,
       entityIds: entry.op.entityIds,
-      payload: entry.op.payload,
+      payload,
       vectorClock: entry.op.vectorClock,
       timestamp: entry.op.timestamp,
       schemaVersion: entry.op.schemaVersion,
       ...(entry.op.syncImportReason
         ? { syncImportReason: entry.op.syncImportReason }
         : {}),
+    };
+  }
+
+  private _sanitizeRegularOpPayloadForUpload(op: Operation): unknown | null {
+    if (
+      op.actionType !== ActionType.GLOBAL_CONFIG_UPDATE_SECTION ||
+      typeof op.payload !== 'object' ||
+      op.payload === null ||
+      !('actionPayload' in op.payload)
+    ) {
+      return op.payload;
+    }
+
+    const multiEntityPayload = op.payload as {
+      actionPayload?: Record<string, unknown>;
+      entityChanges?: unknown;
+    };
+    const actionPayload = multiEntityPayload.actionPayload;
+    if (
+      !actionPayload ||
+      actionPayload['sectionKey'] !== 'sync' ||
+      typeof actionPayload['sectionCfg'] !== 'object' ||
+      actionPayload['sectionCfg'] === null
+    ) {
+      return op.payload;
+    }
+
+    const sectionCfg = stripLocalOnlySyncScheduleSettings(
+      actionPayload['sectionCfg'] as Record<string, unknown>,
+    );
+    if (Object.keys(sectionCfg).length === 0) {
+      // GLOBAL_CONFIG_UPDATE_SECTION replays from actionPayload; entityChanges are empty.
+      return null;
+    }
+
+    return {
+      ...multiEntityPayload,
+      actionPayload: {
+        ...actionPayload,
+        sectionCfg,
+      },
     };
   }
 
@@ -425,7 +514,9 @@ export class OperationLogUploadService {
 
     // Extract state from payload, handling both wrapped and unwrapped formats.
     // Uses shared utility to ensure consistent handling across the codebase.
-    let state: unknown = extractFullStateFromPayload(op.payload);
+    let state: unknown = stripLocalOnlySyncSettingsFromAppData(
+      extractFullStateFromPayload(op.payload),
+    );
 
     // Validate the payload structure before uploading to catch bugs early.
     // This throws if the payload is malformed (e.g., missing expected keys).

@@ -9,6 +9,7 @@ permissions:
   actions: read
   contents: read
   pull-requests: write
+  issues: write
   deployments: write
 
 jobs:
@@ -95,3 +96,56 @@ jobs:
 
             ---
             <sub>Deployed with Cloudflare Pages</sub>
+
+      - name: Find linked issues
+        id: linked
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          # Only issues linked via a closing keyword (Closes/Fixes #N); most PRs link none.
+          # pipefail surfaces a gh failure instead of silently reporting zero issues.
+          NUMBERS=$(gh pr view "$PR_NUMBER" --repo "$REPO" \
+            --json closingIssuesReferences \
+            --jq '[.closingIssuesReferences[].number | tostring] | join(" ")')
+          echo "numbers=$NUMBERS" >> "$GITHUB_OUTPUT"
+
+      - name: Post preview link to linked issues
+        if: steps.linked.outputs.numbers != '' && steps.cloudflare-deploy.outputs.deployment-url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          URL: ${{ steps.cloudflare-deploy.outputs.deployment-url }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          ISSUE_NUMBERS: ${{ steps.linked.outputs.numbers }}
+        run: |
+          set -euo pipefail
+          MARKER="<!-- pr-preview-issue-comment -->"
+          BODY=$(cat <<EOF
+          $MARKER
+          🔍 A live preview of the proposed fix in #${PR_NUMBER} is available (not yet released):
+
+          ${URL}
+
+          Help testing this would be appreciated 🙏
+          EOF
+          )
+          for ISSUE in $ISSUE_NUMBERS; do
+            # Find-or-update a single bot-authored marker comment per issue: in-place
+            # edits are silent, so subscribers are notified at most once. Restrict to
+            # the Actions bot's own comments so we never overwrite a user's comment.
+            IDS_RAW=$(gh api "repos/$REPO/issues/$ISSUE/comments" --paginate \
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$MARKER\"))) | .id")
+            mapfile -t IDS < <(printf '%s\n' "$IDS_RAW" | grep -E '^[0-9]+$' || true)
+            if [ "${#IDS[@]}" -gt 0 ]; then
+              gh api -X PATCH "repos/$REPO/issues/comments/${IDS[0]}" -f body="$BODY"
+              # Reconcile duplicates from an earlier concurrent run so only one remains.
+              for EXTRA in "${IDS[@]:1}"; do
+                gh api -X DELETE "repos/$REPO/issues/comments/$EXTRA" || true
+              done
+            else
+              gh api -X POST "repos/$REPO/issues/$ISSUE/comments" -f body="$BODY"
+            fi
+          done

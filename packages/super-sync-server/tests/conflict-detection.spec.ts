@@ -63,6 +63,28 @@ vi.mock('../src/db', async () => {
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
           );
         }
+        // Single-entity conflict lookup: where { userId, entityType,
+        // OR: [{ entityId: X }, { entityIds: { has: X } }] } — match X as the
+        // scalar entity_id OR a member of the entity_ids array (#8334).
+        if (Array.isArray(args.where?.OR) && args.where?.entityType) {
+          state.entityConflictFindFirstCount++;
+          const scalarClause = args.where.OR.find((c: any) => 'entityId' in c);
+          const hasClause = args.where.OR.find(
+            (c: any) => c.entityIds?.has !== undefined,
+          );
+          const targetId = scalarClause?.entityId ?? hasClause?.entityIds?.has;
+          const ops = Array.from(state.operations.values())
+            .filter(
+              (op: any) =>
+                op.userId === args.where.userId &&
+                op.entityType === args.where.entityType &&
+                (op.entityId === targetId ||
+                  (Array.isArray(op.entityIds) && op.entityIds.includes(targetId))),
+            )
+            .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+          return applyOperationSelect(ops[0], args.select) || null;
+        }
+        // Scalar-only lookup (other callers): where { userId, entityType, entityId }.
         if (args.where?.entityId && args.where?.entityType) {
           state.entityConflictFindFirstCount++;
           const ops = Array.from(state.operations.values())
@@ -200,23 +222,31 @@ vi.mock('../src/db', async () => {
           (entityId): entityId is string => typeof entityId === 'string',
         ),
       );
+      // An op covers every entity in its entity_ids set UNION its scalar
+      // entity_id — mirrors the `entity_ids || ARRAY[entity_id]` unnest. The
+      // scalar is always folded in (not just for empty/pre-migration rows) so a
+      // divergent scalar entity_id is never missed; the Set below dedupes the
+      // common entity_id = entityIds[0] overlap. (#8334)
+      const coveredEntityIds = (op: any): string[] => {
+        const ids = Array.isArray(op.entityIds) ? [...op.entityIds] : [];
+        if (op.entityId != null) ids.push(op.entityId);
+        return ids;
+      };
       const latestByEntityId = new Map<string, any>();
       const ops = Array.from(state.operations.values())
-        .filter(
-          (op: any) =>
-            op.userId === userId &&
-            op.entityType === entityType &&
-            batchEntityIds.has(op.entityId),
-        )
+        .filter((op: any) => op.userId === userId && op.entityType === entityType)
         .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
 
       for (const op of ops) {
-        if (!op.entityId || latestByEntityId.has(op.entityId)) continue;
-        latestByEntityId.set(op.entityId, op);
+        for (const eid of coveredEntityIds(op)) {
+          if (batchEntityIds.has(eid) && !latestByEntityId.has(eid)) {
+            latestByEntityId.set(eid, op);
+          }
+        }
       }
 
-      return Array.from(latestByEntityId.values()).map((op: any) => ({
-        entityId: op.entityId,
+      return Array.from(latestByEntityId.entries()).map(([eid, op]) => ({
+        entityId: eid,
         clientId: op.clientId,
         vectorClock: op.vectorClock,
       }));
@@ -966,6 +996,76 @@ describe('Conflict Detection', () => {
         accepted: false,
         errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
         existingClock: { [clientB]: 1 },
+      });
+      expect(result[0].error).toContain('TASK:task-2');
+    });
+
+    // Regression for #8334. The test above proves an *incoming* multi-entity op
+    // is checked against all its ids. These two prove the reverse — a *stored*
+    // multi-entity op exposes every entity to later conflict lookups, not just
+    // entityIds[0] — across both the single-entity and batch lookup paths.
+    it('#8334 single path: stale write to a non-first stored entity conflicts', async () => {
+      const service = getSyncService();
+
+      // clientA stores a multi-entity op over [task-1, task-2]
+      // (persisted scalar entity_id = task-1, entity_ids = both).
+      const stored = await service.uploadOps(userId, clientA, [
+        createOp({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          clientId: clientA,
+          vectorClock: { [clientA]: 1 },
+        }),
+      ]);
+      expect(stored[0].accepted).toBe(true);
+
+      // clientB sends a stale single-entity op for task-2 (the SECOND entity).
+      // {clientB:1} is CONCURRENT with {clientA:1}.
+      const result = await service.uploadOps(userId, clientB, [
+        createOp({
+          entityId: 'task-2',
+          clientId: clientB,
+          vectorClock: { [clientB]: 1 },
+        }),
+      ]);
+
+      expect(result[0]).toMatchObject({
+        accepted: false,
+        errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
+      });
+    });
+
+    // NOTE: with the default (non-batch) upload config this exercises
+    // `detectConflictForEntities`. The `prefetchLatestEntityOpsForBatch` variant
+    // (batchUpload=true) shares the same entity_ids matching SQL but is not driven
+    // here; its raw query is validated separately against real Postgres.
+    it('#8334 batch path: incoming multi-entity op hits a non-first stored entity', async () => {
+      const service = getSyncService();
+
+      const stored = await service.uploadOps(userId, clientA, [
+        createOp({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          clientId: clientA,
+          vectorClock: { [clientA]: 1 },
+        }),
+      ]);
+      expect(stored[0].accepted).toBe(true);
+
+      // Incoming *multi-entity* op (→ batch lookup path) touching task-2.
+      const result = await service.uploadOps(userId, clientB, [
+        createOp({
+          entityId: 'task-2',
+          entityIds: ['task-2', 'task-9'],
+          clientId: clientB,
+          vectorClock: { [clientB]: 1 },
+        }),
+      ]);
+
+      expect(testState.batchConflictQueryCount).toBeGreaterThan(0);
+      expect(result[0]).toMatchObject({
+        accepted: false,
+        errorCode: SYNC_ERROR_CODES.CONFLICT_CONCURRENT,
       });
       expect(result[0].error).toContain('TASK:task-2');
     });

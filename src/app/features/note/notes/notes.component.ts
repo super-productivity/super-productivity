@@ -5,7 +5,9 @@ import {
   inject,
   viewChild,
   OnInit,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NoteService } from '../note.service';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -25,6 +27,8 @@ import { HISTORY_STATE } from '../../../app.constants';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from 'src/app/core-ui/layout/layout.service';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
+import { ActivatedRoute } from '@angular/router';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 
 @Component({
   selector: 'notes',
@@ -47,6 +51,11 @@ export class NotesComponent implements OnInit {
   workContextService = inject(WorkContextService);
   private _matDialog = inject(MatDialog);
   private _layoutService = inject(LayoutService);
+  private _activatedRoute = inject(ActivatedRoute);
+  private _destroyRef = inject(DestroyRef);
+
+  private _focusToken?: object;
+  private _focusNoteTimeout?: number;
 
   T: typeof T = T;
   isElementWasAdded: boolean = false;
@@ -93,6 +102,55 @@ export class NotesComponent implements OnInit {
         window.history.pushState({ [HISTORY_STATE.NOTES]: true }, '');
       }
     }
+
+    this._destroyRef.onDestroy(() => {
+      this._focusToken = undefined;
+      window.clearTimeout(this._focusNoteTimeout);
+    });
+
+    this._activatedRoute.queryParams
+      .pipe(
+        map((params) => params.focusItem),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this._destroyRef),
+      )
+      .subscribe((focusItem) => {
+        if (focusItem) {
+          this._focusNote(focusItem);
+        } else {
+          this._focusToken = undefined;
+          window.clearTimeout(this._focusNoteTimeout);
+        }
+      });
+  }
+
+  private _focusNote(noteId: string): void {
+    document.querySelectorAll('.highlight-searched-item').forEach((el) => {
+      el.classList.remove('highlight-searched-item');
+    });
+    const id = `n-${noteId}`;
+    const startTime = Date.now();
+    const timeout = 4000;
+    const token = {};
+    this._focusToken = token;
+    window.clearTimeout(this._focusNoteTimeout);
+
+    const tryFocus = (): void => {
+      if (this._focusToken !== token) {
+        return;
+      }
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-searched-item');
+        setTimeout(() => {
+          el.classList.remove('highlight-searched-item');
+        }, 3000);
+      } else if (Date.now() - startTime < timeout) {
+        this._focusNoteTimeout = window.setTimeout(tryFocus, 100);
+      }
+    };
+    tryFocus();
   }
 
   @HostListener('window:popstate')

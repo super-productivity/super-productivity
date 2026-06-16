@@ -1,7 +1,61 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
-import { GlobalTrackingIntervalService } from './global-tracking-interval.service';
+import { Subject } from 'rxjs';
+import {
+  createGlobalInterval$,
+  GlobalTrackingIntervalService,
+} from './global-tracking-interval.service';
 import { TRACKING_INTERVAL } from '../../app.constants';
+import { DateService } from '../date/date.service';
+
+describe('createGlobalInterval$', () => {
+  it('should emit a plain interval when no background stream is provided', fakeAsync(() => {
+    const emissions: number[] = [];
+    const sub = createGlobalInterval$().subscribe((v) => emissions.push(v));
+
+    tick(TRACKING_INTERVAL * 2);
+    sub.unsubscribe();
+
+    expect(emissions.length).toBe(2);
+  }));
+
+  it('should pause emissions while backgrounded and resume afterwards', fakeAsync(() => {
+    const isInBackground$ = new Subject<boolean>();
+    const emissions: number[] = [];
+    const sub = createGlobalInterval$(isInBackground$).subscribe((v) =>
+      emissions.push(v),
+    );
+
+    tick(TRACKING_INTERVAL * 2);
+    expect(emissions.length).toBe(2);
+
+    isInBackground$.next(true);
+    tick(TRACKING_INTERVAL * 60);
+    expect(emissions.length).toBe(2);
+
+    isInBackground$.next(false);
+    tick(TRACKING_INTERVAL);
+    expect(emissions.length).toBe(3);
+
+    sub.unsubscribe();
+  }));
+
+  it('should not restart the interval on duplicate foreground emissions', fakeAsync(() => {
+    const isInBackground$ = new Subject<boolean>();
+    const emissions: number[] = [];
+    const sub = createGlobalInterval$(isInBackground$).subscribe((v) =>
+      emissions.push(v),
+    );
+
+    // a duplicate "foreground" half-way through the interval must not reset it
+    tick(TRACKING_INTERVAL / 2);
+    isInBackground$.next(false);
+    tick(TRACKING_INTERVAL / 2);
+
+    expect(emissions.length).toBe(1);
+    sub.unsubscribe();
+  }));
+});
 
 describe('GlobalTrackingIntervalService', () => {
   beforeEach(() => {
@@ -79,5 +133,22 @@ describe('GlobalTrackingIntervalService', () => {
     sub.unsubscribe();
 
     expect(observed).toContain(100);
+  }));
+
+  it('should refresh todayDateStr$ when the start-of-next-day offset changes', fakeAsync(() => {
+    spyOn(Date, 'now').and.returnValue(new Date(2026, 4, 22, 10, 5).getTime());
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+    const dateService = TestBed.inject(DateService);
+    const observed: string[] = [];
+
+    const sub = service.todayDateStr$.subscribe((dateStr) => observed.push(dateStr));
+
+    expect(observed).toEqual(['2026-05-22']);
+
+    dateService.setStartOfNextDayDiff('10:10');
+    tick(0);
+
+    expect(observed).toEqual(['2026-05-22', '2026-05-21']);
+    sub.unsubscribe();
   }));
 });

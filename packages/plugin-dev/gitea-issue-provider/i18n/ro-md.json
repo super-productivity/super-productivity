@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Gazdă (d.e. https://try.gitea.io)",
+    "TOKEN": "Jeton de acces",
+    "REPO_FULL_NAME": "Nume utilizator sau nume organizație/proiect",
+    "SCOPE": "Domeniu de aplicare",
+    "SCOPE_ALL": "Toate",
+    "SCOPE_CREATED": "Create de mine",
+    "SCOPE_ASSIGNED": "Atribuite mie",
+    "FILTER_LABELS": "Filtrează după etichete (opțional)",
+    "EXCLUDE_LABELS": "Exclude etichetele (opțional)",
+    "HOW_TO_GET_TOKEN": "Cum se obține un jeton?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sumar",
+    "STATE": "Stare",
+    "ASSIGNEE": "Asignat lui",
+    "LABELS": "Etichete",
+    "DESCRIPTION": "Descriere"
+  },
+  "FORM_HELP": "<p>Aici poți configura Super Productivity pentru a lista problemele deschise pe Gitea pentru un repository specific în panoul de creare a sarcinilor în modul de planificare zilnic. Acestea vor fi listate ca sugestii și vor conține o legătură către problemă și mai multe informații despre acesta.</p> <p>În plus, poți adăuga și importa automat toate problemele deschise.</p><p>Pentru a fenta limitele de utilizare și acces, poți folosi un jeton de acces."
+}

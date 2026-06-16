@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { Store } from '@ngrx/store';
+import { of } from 'rxjs';
 import { RemoteOpsProcessingService } from './remote-ops-processing.service';
 import {
   SchemaMigrationService,
@@ -32,8 +34,12 @@ import {
 import { toEntityKey } from '../util/entity-key.util';
 import { T } from '../../t.const';
 import { OpLog } from '../../core/log';
+import { SyncProviderId } from '../sync-providers/provider.const';
+import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
+
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
+  let storeSpy: jasmine.SpyObj<Store>;
   let schemaMigrationServiceSpy: jasmine.SpyObj<SchemaMigrationService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
@@ -47,6 +53,16 @@ describe('RemoteOpsProcessingService', () => {
   let operationLogEffectsSpy: jasmine.SpyObj<OperationLogEffects>;
 
   beforeEach(() => {
+    storeSpy = jasmine.createSpyObj('Store', ['select']);
+    storeSpy.select.and.returnValue(
+      of({
+        isEnabled: true,
+        isEncryptionEnabled: true,
+        syncProvider: SyncProviderId.WebDAV,
+        syncInterval: 300000,
+        isManualSyncOnly: true,
+      }),
+    );
     schemaMigrationServiceSpy = jasmine.createSpyObj('SchemaMigrationService', [
       'getCurrentVersion',
       'migrateOperation',
@@ -223,6 +239,7 @@ describe('RemoteOpsProcessingService', () => {
     TestBed.configureTestingModule({
       providers: [
         RemoteOpsProcessingService,
+        { provide: Store, useValue: storeSpy },
         { provide: SchemaMigrationService, useValue: schemaMigrationServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: OperationLogStoreService, useValue: opLogStoreSpy },
@@ -699,6 +716,116 @@ describe('RemoteOpsProcessingService', () => {
           priorUnsyncedByOpType: { [OpType.Update]: 1 },
         }),
       );
+    });
+
+    it('should persist current local sync settings into incoming SYNC_IMPORT ops for replay', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-localized',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {
+          task: {},
+          project: {},
+          globalConfig: {
+            sync: {
+              isEnabled: false,
+              isEncryptionEnabled: false,
+              syncProvider: null,
+              syncInterval: 600000,
+              isManualSyncOnly: false,
+              isCompressionEnabled: true,
+            },
+          },
+        },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      let appliedOps: Operation[] = [];
+
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      operationApplierServiceSpy.applyOperations.and.callFake(async (ops) => {
+        appliedOps = ops;
+        return { appliedOps: ops };
+      });
+
+      await service.processRemoteOps([syncImportOp]);
+
+      const writtenOp =
+        opLogStoreSpy.appendBatchSkipDuplicates.calls.mostRecent().args[0][0];
+      const writtenPayload = writtenOp.payload as Record<string, unknown>;
+      const writtenGlobalConfig = writtenPayload['globalConfig'] as Record<
+        string,
+        unknown
+      >;
+      const writtenSync = writtenGlobalConfig['sync'] as Record<string, unknown>;
+
+      expect(writtenSync['isEnabled']).toBe(true);
+      expect(writtenSync['isEncryptionEnabled']).toBe(true);
+      expect(writtenSync['syncProvider']).toBe(SyncProviderId.WebDAV);
+      expect(writtenSync['syncInterval']).toBe(300000);
+      expect(writtenSync['isManualSyncOnly']).toBe(true);
+      expect(writtenSync['isCompressionEnabled']).toBe(true);
+      expect(appliedOps[0]).toBe(writtenOp);
+    });
+
+    // Round-trip pin (issue #8233): iterates LOCAL_ONLY_SYNC_KEYS so adding a
+    // new local-only key in the util grows coverage here automatically.
+    it('preserves every LOCAL_ONLY_SYNC_KEYS value on incoming full-state ops (round-trip)', async () => {
+      const localSync = {
+        isEnabled: true,
+        isEncryptionEnabled: true,
+        syncProvider: SyncProviderId.WebDAV,
+        syncInterval: 300000,
+        isManualSyncOnly: true,
+      };
+      storeSpy.select.and.returnValue(of(localSync));
+
+      const syncImportOp: Operation = {
+        id: 'sync-import-roundtrip',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {
+          globalConfig: {
+            sync: {
+              isEnabled: false,
+              isEncryptionEnabled: false,
+              syncProvider: SyncProviderId.Dropbox,
+              syncInterval: 60000,
+              isManualSyncOnly: false,
+            },
+          },
+        },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      operationApplierServiceSpy.applyOperations.and.callFake(async (ops) => ({
+        appliedOps: ops,
+      }));
+
+      await service.processRemoteOps([syncImportOp]);
+
+      const writtenOp =
+        opLogStoreSpy.appendBatchSkipDuplicates.calls.mostRecent().args[0][0];
+      const writtenSync = (
+        (writtenOp.payload as Record<string, unknown>)['globalConfig'] as Record<
+          string,
+          unknown
+        >
+      )['sync'] as Record<string, unknown>;
+
+      for (const key of LOCAL_ONLY_SYNC_KEYS) {
+        expect(writtenSync[key])
+          .withContext(`replay payload sync.${key} must match local`)
+          .toBe(localSync[key]);
+      }
     });
 
     it('should skip conflict detection when BACKUP_IMPORT is in remote ops', async () => {

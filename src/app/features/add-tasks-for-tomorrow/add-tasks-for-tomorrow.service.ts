@@ -3,7 +3,7 @@ import { TaskCopy, TaskWithDueDay, TaskWithDueTime } from '../tasks/task.model';
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { sortRepeatableTaskCfgs } from '../task-repeat-cfg/sort-repeatable-task-cfg';
 import { TaskRepeatCfgService } from '../task-repeat-cfg/task-repeat-cfg.service';
-import { combineLatest, Observable } from 'rxjs';
+import { combineLatest, firstValueFrom, Observable } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 import {
@@ -71,7 +71,9 @@ export class AddTasksForTomorrowService {
   async addAllDueTomorrow(): Promise<'ADDED' | void> {
     const todayStr = this._dateService.todayStr();
     const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
-    const dueRepeatCfgs = await this._repeatableForTomorrow$.pipe(first()).toPromise();
+    const dueRepeatCfgs = await firstValueFrom(
+      this._repeatableForTomorrow$.pipe(first()),
+    );
 
     const tomorrow = this._dateService.getLogicalTomorrowMs();
 
@@ -87,18 +89,16 @@ export class AddTasksForTomorrowService {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     // NOTE we only get the tasks due after we created the repeatable tasks (which then should be also due tomorrow)
-    const [dueWithTime, dueWithDay] = await combineLatest([
-      this._dueWithTimeForTomorrow$,
-      this._dueForDayForTomorrow$,
-    ])
-      .pipe(first())
-      .toPromise();
+    const [dueWithTime, dueWithDay] = await firstValueFrom(
+      combineLatest([this._dueWithTimeForTomorrow$, this._dueForDayForTomorrow$]).pipe(
+        first(),
+      ),
+    );
 
     // we do this to keep the order of the tasks in planner
-    const tomorrowTasksFromPlanner = await this._store
-      .select(selectTasksForPlannerDay(getDbDateStr(tomorrow)))
-      .pipe(first())
-      .toPromise();
+    const tomorrowTasksFromPlanner = await firstValueFrom(
+      this._store.select(selectTasksForPlannerDay(getDbDateStr(tomorrow))).pipe(first()),
+    );
 
     const allDue = tomorrowTasksFromPlanner;
 
@@ -108,10 +108,9 @@ export class AddTasksForTomorrowService {
       }
     });
 
-    const todaysTaskIds = await this._store
-      .select(selectTodayTaskIds)
-      .pipe(first())
-      .toPromise();
+    const todaysTaskIds = await firstValueFrom(
+      this._store.select(selectTodayTaskIds).pipe(first()),
+    );
     const allDueSorted = this._sortAll([
       ...allDue
         .filter((t) => !todaysTaskIds.includes(t.id))
@@ -149,10 +148,11 @@ export class AddTasksForTomorrowService {
     // have fully propagated before the selector is evaluated. (#7923)
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const dueRepeatCfgs = await this._taskRepeatCfgService
-      .getAllUnprocessedRepeatableTasks$(todayDate.getTime())
-      .pipe(first())
-      .toPromise();
+    const dueRepeatCfgs = await firstValueFrom(
+      this._taskRepeatCfgService
+        .getAllUnprocessedRepeatableTasks$(todayDate.getTime())
+        .pipe(first()),
+    );
 
     // #6230 diagnostic: log whether any repeat configs need processing.
     // If this logs 0 repeatCfgs when the user expects tasks to appear,
@@ -175,23 +175,22 @@ export class AddTasksForTomorrowService {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Get tasks due for today
-    const [dueWithTime, dueWithDay] = await combineLatest([
-      this._store.select(selectTasksWithDueTimeForRange, {
-        ...getDateRangeForDay(todayDate.getTime()),
-      }),
-      this._store.select(selectTasksDueForDay, { day: getDbDateStr(todayDate) }),
-    ])
-      .pipe(first())
-      .toPromise();
+    const [dueWithTime, dueWithDay] = await firstValueFrom(
+      combineLatest([
+        this._store.select(selectTasksWithDueTimeForRange, {
+          ...getDateRangeForDay(todayDate.getTime()),
+        }),
+        this._store.select(selectTasksDueForDay, { day: getDbDateStr(todayDate) }),
+      ]).pipe(first()),
+    );
 
     // Get today from planner instead of tomorrow
     // const daysFromPlanner = await this._plannerService.days$.pipe(first()).toPromise();
     // const todayFromPlanner = daysFromPlanner.find((d) => d.dayDate === todayStr);
     // const todayTasksFromPlanner = todayFromPlanner?.tasks || [];
-    const todayTasksFromPlanner = await this._store
-      .select(selectTasksForPlannerDay(todayStr))
-      .pipe(first())
-      .toPromise();
+    const todayTasksFromPlanner = await firstValueFrom(
+      this._store.select(selectTasksForPlannerDay(todayStr)).pipe(first()),
+    );
 
     const allDue = todayTasksFromPlanner;
 
@@ -201,10 +200,9 @@ export class AddTasksForTomorrowService {
       }
     });
 
-    const todaysTaskIds = await this._store
-      .select(selectTodayTaskIds)
-      .pipe(first())
-      .toPromise();
+    const todaysTaskIds = await firstValueFrom(
+      this._store.select(selectTodayTaskIds).pipe(first()),
+    );
     const allDueSorted = this._sortAll([
       ...allDue
         .filter((t) => !todaysTaskIds.includes(t.id))

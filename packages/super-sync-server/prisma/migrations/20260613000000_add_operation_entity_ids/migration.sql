@@ -1,0 +1,15 @@
+-- Add the entity_ids array column backing #8334 multi-entity conflict detection.
+--
+-- Ops can touch multiple entities (deleteTasks, moveToArchive, __updateMultipleTaskSimple,
+-- round-time-spent, batch board/issue-provider actions). Until now only the scalar
+-- entity_id (= entityIds[0]) was persisted, so once a multi-entity op was stored only its
+-- first entity participated in future conflict lookups; a later stale write to entity 2..n
+-- found no prior writer and was wrongly accepted. entity_ids carries the full set so the
+-- conflict lookups (src/sync/conflict.ts) can match any touched entity across uploads.
+--
+-- ADD COLUMN ... NOT NULL DEFAULT <constant> is a metadata-only operation on PostgreSQL 11+
+-- (the default is stored in the catalog, no table rewrite, no long lock). There is no data
+-- backfill on purpose: pre-migration rows keep an empty array and fall back to entity_id in
+-- the conflict lookups, so the fix is forward-only (entities 2..n of already-stored ops were
+-- never persisted and are unrecoverable).
+ALTER TABLE "operations" ADD COLUMN "entity_ids" TEXT[] NOT NULL DEFAULT '{}';

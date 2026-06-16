@@ -94,7 +94,9 @@ const PROVIDER_FIELD_DEFAULTS: Record<
     encryptKey: '',
   },
   [SyncProviderId.LocalFile]: {
-    syncFolderPath: '',
+    // syncFolderPath is intentionally omitted: post-#8228 the sync folder
+    // path is owned main-side (electron/local-file-sync.ts) so a compromised
+    // renderer cannot rewrite it via the credential store.
     encryptKey: '',
   },
   [SyncProviderId.Dropbox]: {

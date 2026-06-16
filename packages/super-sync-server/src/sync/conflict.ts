@@ -68,16 +68,33 @@ export const detectConflictForEntities = async (
       start,
       start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
     );
+    // Match each requested id against the op's full entity set: the entity_ids
+    // array UNION the scalar entity_id. The scalar is always folded in (not just
+    // when entity_ids is empty) so an op whose entity_id is NOT a member of its
+    // own entity_ids — possible when a multi-entity op dedups to a different
+    // primary, see getStoredEntityIds — still exposes that scalar entity here.
+    // DISTINCT ON dedupes the harmless overlap when entity_id is already in the
+    // array (the common entity_id = entityIds[0] case). The `&&`/`= ANY`
+    // prefilter keeps the GIN(entity_ids) + entity_id indexes usable; `eid = ANY`
+    // keeps only the requested entities, then DISTINCT ON picks the latest op per
+    // entity. Kept inline (not a shared fragment) so the positional params stay
+    // stable for the conflict-detection.spec mock; the same shape is duplicated in
+    // prefetchLatestEntityOpsForBatch — keep them in sync. (#8334)
+    const idArray = Prisma.sql`ARRAY[${Prisma.join(batchEntityIds)}]::text[]`;
     const latestOps = await tx.$queryRaw<LatestEntityOperationRow[]>`
-      SELECT DISTINCT ON (entity_id)
-        entity_id AS "entityId",
-        client_id AS "clientId",
-        vector_clock AS "vectorClock"
-      FROM operations
-      WHERE user_id = ${userId}
-        AND entity_type = ${op.entityType}
-        AND entity_id IN (${Prisma.join(batchEntityIds)})
-      ORDER BY entity_id, server_seq DESC
+      SELECT DISTINCT ON (eid)
+        eid AS "entityId",
+        o.client_id AS "clientId",
+        o.vector_clock AS "vectorClock"
+      FROM operations o
+      CROSS JOIN LATERAL unnest(
+        o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
+      ) AS eid
+      WHERE o.user_id = ${userId}
+        AND o.entity_type = ${op.entityType}
+        AND (o.entity_ids && ${idArray} OR o.entity_id = ANY(${idArray}))
+        AND eid = ANY(${idArray})
+      ORDER BY eid, o.server_seq DESC
     `;
 
     const latestOpByEntityId = new Map<string, LatestEntityOperationRow>();
@@ -173,20 +190,28 @@ export const detectConflictForEntity = async (
   entityId: string,
   tx: Prisma.TransactionClient,
 ): Promise<ConflictResult> => {
-  // Get the latest operation for this entity
+  // Get the latest op that touched this entity. A multi-entity (batch) op stores
+  // its full set in entity_ids, so match the entity as the scalar entity_id OR a
+  // member of entity_ids. Single-entity ops store an empty array and are matched
+  // via the scalar; pre-migration rows likewise fall back to the scalar (#8334).
+  //
+  // PERF: the OR spans the entity_id btree + the entity_ids GIN, so the planner
+  // uses a BitmapOr + sort rather than an ordered LIMIT-1 walk. Bounded by one
+  // entity's stored version depth (op-log pruning keeps that small, so the sort is
+  // sub-ms in practice). If a real-Postgres EXPLAIN on a deep-history entity ever
+  // shows this hot path (run per single-entity upload) is a problem, split into two
+  // ordered LIMIT-1 lookups (scalar btree + entity_ids GIN) and take the higher
+  // server_seq — the array branch stays small because entity_ids is multi-entity-only.
+  // The batch unnest paths (detectConflictForEntities / prefetchLatestEntityOpsForBatch)
+  // carry the larger sort, so EXPLAIN those first under heavy-user latency.
   const existingOp = await tx.operation.findFirst({
     where: {
       userId,
       entityType: op.entityType,
-      entityId,
+      OR: [{ entityId }, { entityIds: { has: entityId } }],
     },
-    select: {
-      clientId: true,
-      vectorClock: true,
-    },
-    orderBy: {
-      serverSeq: 'desc',
-    },
+    select: { clientId: true, vectorClock: true },
+    orderBy: { serverSeq: 'desc' },
   });
 
   // No existing operation = no conflict
@@ -287,6 +312,11 @@ export const toStableJsonValue = (value: unknown): unknown => {
   return value;
 };
 
+/**
+ * All entities an op touches (full set, including single-entity ops). Use for the
+ * incoming-op conflict check and the in-memory in-batch map — NOT for the persisted
+ * `entity_ids` column, which uses {@link getStoredEntityIds} (multi-entity only).
+ */
 export const getConflictEntityIds = (op: Operation): string[] => {
   const rawEntityIds = op.entityIds?.length
     ? op.entityIds
@@ -294,6 +324,26 @@ export const getConflictEntityIds = (op: Operation): string[] => {
       ? [op.entityId]
       : [];
   return Array.from(new Set(rawEntityIds));
+};
+
+/**
+ * The entity_ids array to persist with an op. Ops whose touched-entity set is
+ * already covered by the scalar entity_id store an empty array, so single-entity
+ * ops (the vast majority) stay out of the entity_ids GIN index — keeping it small
+ * and off their insert write path (Postgres GIN indexes no keys for an empty
+ * array). Any other set is stored in full.
+ *
+ * The gate is "is the set exactly [entity_id]?", NOT "length > 1": a batch op
+ * whose ids dedup to a single value that differs from entity_id (the server does
+ * not enforce entity_id === entityIds[0]) must still be stored, or that entity
+ * would be invisible to conflict lookups (#8334).
+ */
+export const getStoredEntityIds = (op: Operation): string[] => {
+  const ids = getConflictEntityIds(op);
+  if (ids.length <= 1 && ids[0] === op.entityId) {
+    return [];
+  }
+  return ids;
 };
 
 export const getEntityConflictKey = (entityType: string, entityId: string): string => {
@@ -332,22 +382,39 @@ export const prefetchLatestEntityOpsForBatch = async (
     start < entityPairs.length;
     start += CONFLICT_DETECTION_ENTITY_BATCH_SIZE
   ) {
-    const touchedRows = entityPairs
-      .slice(start, start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE)
-      .map(({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`);
+    const batchPairs = entityPairs.slice(
+      start,
+      start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+    );
+    const touchedRows = batchPairs.map(
+      ({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`,
+    );
+    // Prefilter array (all requested ids) so the JOIN below can match a requested
+    // id inside a stored op's entity_ids set, not just its scalar entity_id, while
+    // keeping the GIN(entity_ids) + entity_id indexes usable. The unnest folds the
+    // scalar entity_id into the entity_ids set (UNION, deduped by DISTINCT ON) so a
+    // divergent scalar is never missed — see the matching note in
+    // detectConflictForEntities; keep the two shapes in sync. (#8334)
+    const idArray = Prisma.sql`ARRAY[${Prisma.join(
+      batchPairs.map((pair) => pair.entityId),
+    )}]::text[]`;
 
     const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
-      SELECT DISTINCT ON (o.entity_type, o.entity_id)
+      SELECT DISTINCT ON (o.entity_type, eid)
         o.entity_type AS "entityType",
-        o.entity_id AS "entityId",
+        eid AS "entityId",
         o.client_id AS "clientId",
         o.vector_clock AS "vectorClock"
       FROM operations o
+      CROSS JOIN LATERAL unnest(
+        o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
+      ) AS eid
       JOIN (VALUES ${Prisma.join(touchedRows)}) AS touched(entity_type, entity_id)
         ON touched.entity_type = o.entity_type
-       AND touched.entity_id = o.entity_id
+       AND touched.entity_id = eid
       WHERE o.user_id = ${userId}
-      ORDER BY o.entity_type, o.entity_id, o.server_seq DESC
+        AND (o.entity_ids && ${idArray} OR o.entity_id = ANY(${idArray}))
+      ORDER BY o.entity_type, eid, o.server_seq DESC
     `;
 
     for (const latestOp of latestOps) {

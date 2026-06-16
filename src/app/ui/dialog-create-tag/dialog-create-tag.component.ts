@@ -23,6 +23,7 @@ import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autoc
 import { MatOption } from '@angular/material/core';
 import { MaterialIconsLoaderService } from '../material-icons-loader.service';
 import { InputColorPickerComponent } from '../input-color-picker/input-color-picker.component';
+import { Log } from '../../core/log';
 
 export interface CreateTagData {
   title?: string;
@@ -71,7 +72,7 @@ export class DialogCreateTagComponent {
         const icons = await this._iconLoader.loadIcons();
         this.filteredIcons.set(icons.slice(0, 50));
       } catch (error) {
-        console.error('Failed to load material icons:', error);
+        Log.err('Failed to load material icons:', error);
         this.filteredIcons.set([]);
       }
     }
@@ -86,7 +87,7 @@ export class DialogCreateTagComponent {
       filtered.length = Math.min(50, filtered.length);
       this.filteredIcons.set(filtered);
     } catch (error) {
-      console.error('Failed to filter icons:', error);
+      Log.err('Failed to filter icons:', error);
       this.filteredIcons.set([]);
     }
   }

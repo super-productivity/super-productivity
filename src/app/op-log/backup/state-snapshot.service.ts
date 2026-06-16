@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { Selector, Store } from '@ngrx/store';
 import { combineLatest, firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 
@@ -37,10 +37,55 @@ const DEFAULT_ARCHIVE: ArchiveModel = {
 };
 
 /**
+ * Single source of truth for the NgRx selectors that make up the snapshot.
+ * Both _getNgRxDataSync() and getStateSnapshotAsync() iterate this list,
+ * so adding a new synced model requires updating it in exactly one place.
+ *
+ * The order is load-bearing for _getNgRxDataSync — each entry's key
+ * determines where the value lands in the returned AppStateSnapshot.
+ * The first entry must be `task` because it receives special treatment
+ * (selectedTaskId / currentTaskId clearing).
+ */
+type NgRxModelKey = keyof Omit<AppStateSnapshot, 'archiveYoung' | 'archiveOld'>;
+
+const SNAPSHOT_SELECTORS: readonly {
+  key: NgRxModelKey;
+  selector: Selector<object, unknown>;
+}[] = [
+  { key: 'task', selector: selectTaskFeatureState },
+  { key: 'project', selector: selectProjectFeatureState },
+  { key: 'tag', selector: selectTagFeatureState },
+  { key: 'globalConfig', selector: selectConfigFeatureState },
+  { key: 'note', selector: selectNoteFeatureState },
+  { key: 'issueProvider', selector: selectIssueProviderState },
+  { key: 'planner', selector: selectPlannerState },
+  { key: 'boards', selector: selectBoardsState },
+  { key: 'metric', selector: selectMetricFeatureState },
+  { key: 'simpleCounter', selector: selectSimpleCounterFeatureState },
+  { key: 'taskRepeatCfg', selector: selectTaskRepeatCfgFeatureState },
+  { key: 'menuTree', selector: selectMenuTreeState },
+  { key: 'timeTracking', selector: selectTimeTrackingState },
+  { key: 'pluginUserData', selector: selectPluginUserDataFeatureState },
+  { key: 'pluginMetadata', selector: selectPluginMetadataFeatureState },
+  { key: 'reminders', selector: selectReminderFeatureState },
+  { key: 'section', selector: selectSectionFeatureState },
+] as const;
+
+/**
  * Service that reads complete application state from NgRx store and IndexedDB.
  *
  * Most models are persisted via OperationLogEffects to SUP_OPS IndexedDB, so we read from NgRx.
  * Archives (archiveYoung, archiveOld) are read from SUP_OPS via ArchiveDbAdapter.
+ *
+ * ## ⚠️ Returned objects share references with live NgRx state — DO NOT MUTATE
+ * Only the top-level `task` slice is shallow-copied; `project`, `tag`,
+ * `taskRepeatCfg`, every `entities` map, and all entity objects are the same
+ * references held by the store. NgRx runtime freezing is OFF in production
+ * (`src/main.ts`), so mutating a returned object silently corrupts the store
+ * (memoized selectors won't recompute; a throw before the next `loadAllData`
+ * leaves the damage in place with no op-log capture). Any consumer that needs
+ * to modify the snapshot must `structuredClone()` it first — see the #8333
+ * regression in `dataRepair()` (`op-log/validation/data-repair.ts`).
  *
  * ## Usage
  * ```typescript
@@ -63,6 +108,8 @@ export class StateSnapshotService {
   /**
    * Gets all sync model data from NgRx store.
    * Archives are returned with default empty values - use async version for actual archives.
+   *
+   * ⚠️ Returns live store references — never mutate (clone first). See class doc.
    */
   getStateSnapshot(): AppStateSnapshot {
     const ngRxData = this._getNgRxDataSync();
@@ -84,6 +131,8 @@ export class StateSnapshotService {
 
   /**
    * Async version that also loads archives from IndexedDB
+   *
+   * ⚠️ Returns live store references — never mutate (clone first). See class doc.
    */
   async getStateSnapshotAsync(): Promise<AppStateSnapshot> {
     const [archiveYoung, archiveOld] = await Promise.all([
@@ -91,72 +140,19 @@ export class StateSnapshotService {
       this._loadArchive('archiveOld'),
     ]);
 
-    const ngRxData = await firstValueFrom(
-      combineLatest([
-        this._store.select(selectTaskFeatureState),
-        this._store.select(selectProjectFeatureState),
-        this._store.select(selectTagFeatureState),
-        this._store.select(selectConfigFeatureState),
-        this._store.select(selectNoteFeatureState),
-        this._store.select(selectIssueProviderState),
-        this._store.select(selectPlannerState),
-        this._store.select(selectBoardsState),
-        this._store.select(selectMetricFeatureState),
-        this._store.select(selectSimpleCounterFeatureState),
-        this._store.select(selectTaskRepeatCfgFeatureState),
-        this._store.select(selectMenuTreeState),
-        this._store.select(selectTimeTrackingState),
-        this._store.select(selectPluginUserDataFeatureState),
-        this._store.select(selectPluginMetadataFeatureState),
-        this._store.select(selectReminderFeatureState),
-        this._store.select(selectSectionFeatureState),
-      ]).pipe(first()),
+    const ngRxValues = await firstValueFrom(
+      combineLatest(SNAPSHOT_SELECTORS.map((s) => this._store.select(s.selector))).pipe(
+        first(),
+      ),
     );
 
-    const [
-      task,
-      project,
-      tag,
-      globalConfig,
-      note,
-      issueProvider,
-      planner,
-      boards,
-      metric,
-      simpleCounter,
-      taskRepeatCfg,
-      menuTree,
-      timeTracking,
-      pluginUserData,
-      pluginMetadata,
-      reminders,
-      section,
-    ] = ngRxData;
+    const result: Partial<Record<NgRxModelKey, unknown>> = {};
+    for (let i = 0; i < SNAPSHOT_SELECTORS.length; i++) {
+      result[SNAPSHOT_SELECTORS[i].key] = ngRxValues[i];
+    }
 
     return {
-      task: {
-        ...(task as object),
-        selectedTaskId: environment.production
-          ? null
-          : ((task as { selectedTaskId?: string | null })?.selectedTaskId ?? null),
-        currentTaskId: null,
-      },
-      project,
-      tag,
-      globalConfig,
-      note,
-      issueProvider,
-      planner,
-      boards,
-      metric,
-      simpleCounter,
-      taskRepeatCfg,
-      menuTree,
-      timeTracking,
-      pluginUserData,
-      pluginMetadata,
-      reminders,
-      section,
+      ...this._normalizeNgRxData(result),
       archiveYoung,
       archiveOld,
     };
@@ -171,114 +167,38 @@ export class StateSnapshotService {
   }
 
   private _getNgRxDataSync(): Omit<AppStateSnapshot, 'archiveYoung' | 'archiveOld'> {
-    let task: unknown,
-      project: unknown,
-      tag: unknown,
-      globalConfig: unknown,
-      note: unknown;
-    let issueProvider: unknown, planner: unknown, boards: unknown, metric: unknown;
-    let simpleCounter: unknown,
-      taskRepeatCfg: unknown,
-      menuTree: unknown,
-      timeTracking: unknown,
-      section: unknown;
-    let pluginUserData: unknown, pluginMetadata: unknown, reminders: unknown;
+    const result: Partial<Record<NgRxModelKey, unknown>> = {};
 
     // Subscribe synchronously to get current values
-    this._store
-      .select(selectTaskFeatureState)
-      .pipe(first())
-      .subscribe((v) => (task = v));
-    this._store
-      .select(selectProjectFeatureState)
-      .pipe(first())
-      .subscribe((v) => (project = v));
-    this._store
-      .select(selectTagFeatureState)
-      .pipe(first())
-      .subscribe((v) => (tag = v));
-    this._store
-      .select(selectConfigFeatureState)
-      .pipe(first())
-      .subscribe((v) => (globalConfig = v));
-    this._store
-      .select(selectNoteFeatureState)
-      .pipe(first())
-      .subscribe((v) => (note = v));
-    this._store
-      .select(selectIssueProviderState)
-      .pipe(first())
-      .subscribe((v) => (issueProvider = v));
-    this._store
-      .select(selectPlannerState)
-      .pipe(first())
-      .subscribe((v) => (planner = v));
-    this._store
-      .select(selectBoardsState)
-      .pipe(first())
-      .subscribe((v) => (boards = v));
-    this._store
-      .select(selectMetricFeatureState)
-      .pipe(first())
-      .subscribe((v) => (metric = v));
-    this._store
-      .select(selectSimpleCounterFeatureState)
-      .pipe(first())
-      .subscribe((v) => (simpleCounter = v));
-    this._store
-      .select(selectTaskRepeatCfgFeatureState)
-      .pipe(first())
-      .subscribe((v) => (taskRepeatCfg = v));
-    this._store
-      .select(selectMenuTreeState)
-      .pipe(first())
-      .subscribe((v) => (menuTree = v));
-    this._store
-      .select(selectTimeTrackingState)
-      .pipe(first())
-      .subscribe((v) => (timeTracking = v));
-    this._store
-      .select(selectPluginUserDataFeatureState)
-      .pipe(first())
-      .subscribe((v) => (pluginUserData = v));
-    this._store
-      .select(selectPluginMetadataFeatureState)
-      .pipe(first())
-      .subscribe((v) => (pluginMetadata = v));
-    this._store
-      .select(selectReminderFeatureState)
-      .pipe(first())
-      .subscribe((v) => (reminders = v));
-    this._store
-      .select(selectSectionFeatureState)
-      .pipe(first())
-      .subscribe((v) => (section = v));
+    for (const { key, selector } of SNAPSHOT_SELECTORS) {
+      this._store
+        .select(selector)
+        .pipe(first())
+        .subscribe((v) => (result[key] = v));
+    }
 
+    return this._normalizeNgRxData(result);
+  }
+
+  /**
+   * Applies the task-specific normalization (clear selectedTaskId/currentTaskId
+   * in production) and returns the result typed as AppStateSnapshot minus archives.
+   * Shared by both the sync and async snapshot paths.
+   */
+  private _normalizeNgRxData(
+    data: Partial<Record<NgRxModelKey, unknown>>,
+  ): Omit<AppStateSnapshot, 'archiveYoung' | 'archiveOld'> {
+    const task = data['task'] as object;
     return {
+      ...data,
       task: {
-        ...(task as object),
+        ...task,
         selectedTaskId: environment.production
           ? null
           : ((task as { selectedTaskId?: string | null })?.selectedTaskId ?? null),
         currentTaskId: null,
       },
-      project,
-      tag,
-      globalConfig,
-      note,
-      issueProvider,
-      planner,
-      boards,
-      metric,
-      simpleCounter,
-      taskRepeatCfg,
-      menuTree,
-      timeTracking,
-      pluginUserData,
-      pluginMetadata,
-      reminders,
-      section,
-    };
+    } as Omit<AppStateSnapshot, 'archiveYoung' | 'archiveOld'>;
   }
 
   private async _loadArchive(key: 'archiveYoung' | 'archiveOld'): Promise<ArchiveModel> {

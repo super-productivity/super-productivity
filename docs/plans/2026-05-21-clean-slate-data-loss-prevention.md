@@ -38,7 +38,7 @@ This is the exact precondition chain the issue describes.
 
 ### Problem B — No completeness check before clean-slate
 
-Destructive uploads use the *current* in-memory NgRx state as authoritative. If NgRx is partial (hydration incomplete, post-`clearAllOperations()` window, post-rollback empty state), the partial state is what gets sent. Nothing compares "what's about to be uploaded" against "what was here a minute ago."
+Destructive uploads use the _current_ in-memory NgRx state as authoritative. If NgRx is partial (hydration incomplete, post-`clearAllOperations()` window, post-rollback empty state), the partial state is what gets sent. Nothing compares "what's about to be uploaded" against "what was here a minute ago."
 
 **Per multi-review:** Problem B is not in the reported incident (Problem A explains it cleanly). Problem B is hypothetical — defending against unobserved failure modes. The original plan made Problem B the headline fix; this revision demotes it to a follow-up gated on forensic evidence from production logs.
 
@@ -87,7 +87,7 @@ Two callers refactor to use it: `CleanSlateService.createCleanSlate()` and `Back
 
 ### Fix 3 (LOAD-BEARING) — Empty-snapshot throw at `operation-log-sync.service.ts:606`
 
-**Critical correction from multi-review:** Line 606 is in the op-streaming branch (`result.newOps.length > 0`). It is reached *after* the three `if (result.providerMode === 'fileSnapshotOps' && result.snapshotState)` early-returns at lines 458/484/517. `result.snapshotState` is **undefined** at line 606. The original plan's "thread `result.snapshotState`" instruction was wrong for this site.
+**Critical correction from multi-review:** Line 606 is in the op-streaming branch (`result.newOps.length > 0`). It is reached _after_ the three `if (result.providerMode === 'fileSnapshotOps' && result.snapshotState)` early-returns at lines 458/484/517. `result.snapshotState` is **undefined** at line 606. The original plan's "thread `result.snapshotState`" instruction was wrong for this site.
 
 **Two-part fix:**
 
@@ -100,7 +100,7 @@ const remoteOpCount = result.newOps.length;
 throw new LocalDataConflictError(
   0,
   { __synthetic: true, opCount: remoteOpCount },
-  result.snapshotVectorClock,  // may be undefined; OK
+  result.snapshotVectorClock, // may be undefined; OK
 );
 ```
 
@@ -108,11 +108,21 @@ throw new LocalDataConflictError(
 
 ```ts
 type RemoteDataDescriptor =
-  | { kind: 'snapshot'; counts: { tasks: number; projects: number; tags: number; notes: number; trackedHours: number } }
+  | {
+      kind: 'snapshot';
+      counts: {
+        tasks: number;
+        projects: number;
+        tags: number;
+        notes: number;
+        trackedHours: number;
+      };
+    }
   | { kind: 'opCount'; opCount: number };
 ```
 
 This requires changes to:
+
 - `LocalDataConflictError` constructor (`sync-errors.ts:95-105`) — replace `remoteSnapshotState: Record<string, unknown>` with `remoteData: RemoteDataDescriptor`.
 - The two real-snapshot throw sites (lines 458/484) — compute counts from `result.snapshotState` before throwing.
 - `_handleLocalDataConflict` (`sync-wrapper.service.ts:1161-1262`) — pass `remoteData` into `conflictData.remote` instead of `mainModelData`.
@@ -139,6 +149,7 @@ This requires changes to:
 ```
 
 **Constraints:**
+
 - Never log vector-clock contents (per-device client IDs are sensitive). Size only.
 - Never log entity IDs, titles, or any per-entity data.
 - Add the same log at the three `LocalDataConflictError` throw sites (458/484/606) with the remote counts where available.
@@ -161,9 +172,9 @@ restoring from a backup.
 
 Counts go to the forensic log (Fix 4), not the modal UI.
 
-**Performance constraint (Performance S2):** the modal must NOT hold the sync lock while waiting for the user. Acquire the lock only *after* the user clicks "Yes, replace server." Pre-modal reads (preflight, if added in PR-D) are lock-free.
+**Performance constraint (Performance S2):** the modal must NOT hold the sync lock while waiting for the user. Acquire the lock only _after_ the user clicks "Yes, replace server." Pre-modal reads (preflight, if added in PR-D) are lock-free.
 
-**Trigger sites:** all four user-initiated paths (password change, "Keep local", force-upload snackbars, backup restore). Skipped for first-encryption-enable on a *truly* fresh client (`lastSeq===0 && state_cache===null && server-side reports empty`), since this is the legitimate bootstrapping case.
+**Trigger sites:** all four user-initiated paths (password change, "Keep local", force-upload snackbars, backup restore). Skipped for first-encryption-enable on a _truly_ fresh client (`lastSeq===0 && state_cache===null && server-side reports empty`), since this is the legitimate bootstrapping case.
 
 ### Fix 6 — Dead code cleanup
 
@@ -176,7 +187,7 @@ Counts go to the forensic log (Fix 4), not the modal UI.
 The original plan made `CleanSlatePreflightService` the headline fix. Multi-review converged on cutting it from v1:
 
 - **Simplicity C1, C2:** Heuristic gates without incident evidence are YAGNI. Ship Fixes 2/3/4/6 first and let the logs from Fix 4 tell us whether partial-state uploads actually happen in the wild.
-- **Alternatives alt #4:** If a gate is needed later, prefer a *temporal* gate ("refuse clean-slate uploads unless the client successfully downloaded server state within the last 5 minutes") over a count-based threshold. Temporal eliminates the threshold-tuning problem (Q1), the no-reference problem (Q2), and the legitimate-deletion-bypass problem (Q4) in one move.
+- **Alternatives alt #4:** If a gate is needed later, prefer a _temporal_ gate ("refuse clean-slate uploads unless the client successfully downloaded server state within the last 5 minutes") over a count-based threshold. Temporal eliminates the threshold-tuning problem (Q1), the no-reference problem (Q2), and the legitimate-deletion-bypass problem (Q4) in one move.
 
 **If PR-D ships (only if Fix 4 logs show partial-state uploads):**
 
@@ -190,7 +201,8 @@ Three call sites (the multi-review corrected this — the plan's original three-
 
 ```ts
 const lastSuccessfulDownloadAt = await syncProvider.getLastSuccessfulDownloadAt();
-const fresh = lastSuccessfulDownloadAt && (Date.now() - lastSuccessfulDownloadAt < 5 * 60 * 1000);
+const fresh =
+  lastSuccessfulDownloadAt && Date.now() - lastSuccessfulDownloadAt < 5 * 60 * 1000;
 if (!fresh) {
   // Refuse with: "Sync hasn't downloaded server state recently. Reload the app
   // to download, then try again. (If you really want to replace the server data,
@@ -207,12 +219,12 @@ if (!fresh) {
 
 Reordered per multi-review convergence (Correctness S3, Architecture S1, Simplicity S1, Security S3):
 
-| PR | Contents | Risk | Rollback |
-| --- | --- | --- | --- |
-| **PR-A** | Atomicity via `runDestructiveStateReplacement` (Fix 2); `PreMigrationBackupService` deleted (atomic replace makes the recovery layer unnecessary). Empty-snapshot fix + `RemoteDataDescriptor` type (Fix 3) and dead-code cleanup (Fix 6) **deferred** to follow-up PRs. | Medium — touches IDB write patterns | Single revert |
-| **PR-B** | Forensic logging (Fix 4) | Very low — pure observability | Trivial |
-| **PR-C** | Confirmation modal (Fix 5) | Low — UI-only, doesn't refuse uploads | Trivial |
-| **PR-D** | *Conditional.* Temporal preflight gate (Fix 1 — temporal, not count-based) + export-to-file escape hatch | Medium — refuses uploads | Trivial via call-site removal |
+| PR       | Contents                                                                                                                                                                                                                                                                 | Risk                                  | Rollback                      |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | ----------------------------- |
+| **PR-A** | Atomicity via `runDestructiveStateReplacement` (Fix 2); `PreMigrationBackupService` deleted (atomic replace makes the recovery layer unnecessary). Empty-snapshot fix + `RemoteDataDescriptor` type (Fix 3) and dead-code cleanup (Fix 6) **deferred** to follow-up PRs. | Medium — touches IDB write patterns   | Single revert                 |
+| **PR-B** | Forensic logging (Fix 4)                                                                                                                                                                                                                                                 | Very low — pure observability         | Trivial                       |
+| **PR-C** | Confirmation modal (Fix 5)                                                                                                                                                                                                                                               | Low — UI-only, doesn't refuse uploads | Trivial                       |
+| **PR-D** | _Conditional._ Temporal preflight gate (Fix 1 — temporal, not count-based) + export-to-file escape hatch                                                                                                                                                                 | Medium — refuses uploads              | Trivial via call-site removal |
 
 PR-A is the actual bug-closing PR — it eliminates Problem A and fixes the empty-snapshot rendering. PR-B builds the evidence base for PR-D. PR-C is a defense-in-depth layer. PR-D ships only if Fix 4 logs show partial-state uploads happening.
 
@@ -228,6 +240,7 @@ PR-A is the actual bug-closing PR — it eliminates Problem A and fixes the empt
 ### Integration tests (Karma)
 
 In `compaction.integration.spec.ts` style:
+
 - `createCleanSlate` interrupt-during-tx → device state unchanged.
 - `BackupService.importComplete` interrupt-during-tx → device state unchanged.
 - Both flows complete-and-commit → device state correctly replaced.
@@ -238,7 +251,8 @@ Per Performance W1: verify the destructive tx commits on each runtime (Electron,
 
 ### E2E
 
-One Playwright test reproducing the issue #7709 chain on the *fixed* code:
+One Playwright test reproducing the issue #7709 chain on the _fixed_ code:
+
 1. Set up a device with 10 tasks + 1 hour tracked.
 2. Trigger `createCleanSlate` and inject an exception at the destructive tx.
 3. Reload the app.

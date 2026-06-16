@@ -404,22 +404,36 @@ export class FocusModeEffects {
     ),
   );
 
-  // Effect 3b: Offer Flowtime breaks when user explicitly ends their session
-  // Triggers on endFlowtimeSession — NOT pauseFocusSession (which is fired by
-  // sync-stop, idle, and the regular pause button)
-  offerFlowtimeBreakOnSessionEnd$ = createEffect(() =>
+  // Effect 3b: Auto-start the Flowtime break when the user explicitly ends their
+  // session. Triggers on endFlowtimeSession — NOT pauseFocusSession (which is
+  // fired by sync-stop, idle, and the regular pause button).
+  //
+  // Mirrors autoStartBreakOnSessionComplete$ (Pomodoro). The action ORDER matters:
+  // completeFocusSession (isManual:FALSE) → [unsetCurrentTask] → startBreak.
+  //  - isManual:false keeps stopTrackingOnSessionEnd$ out of it (it defers the
+  //    tracking-pause to break-start). If we used isManual:true, that effect would
+  //    enqueue its own unsetCurrentTask AFTER startBreak, and syncTrackingStopToSession$
+  //    would then pause the just-started break.
+  //  - We unset the task HERE, explicitly before startBreak, so the tracking-stop is
+  //    seen while the timer is still idle (syncTrackingStopToSession$ only pauses a
+  //    RUNNING timer), not after the break is running.
+  // completeFocusSession also logs the session (logFocusSession$). When no break is
+  // due we complete with isManual:true (stops tracking) and show the SessionDone screen.
+  autoStartFlowtimeBreakOnSessionEnd$ = createEffect(() =>
     this.actions$.pipe(
       ofType(actions.endFlowtimeSession),
       withLatestFrom(
         this.store.select(selectors.selectMode),
         this.store.select(selectors.selectTimer),
+        this.store.select(selectFocusModeConfig),
+        this.taskService.currentTaskId$,
       ),
       filter(([_action, mode, timer]) => {
         if (mode !== FocusModeMode.Flowtime) return false;
         if (timer.purpose !== 'work') return false;
         return true;
       }),
-      switchMap(([action, mode, timer]) => {
+      switchMap(([action, mode, timer, config, currentTaskId]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         const breakInfo = strategy.getBreakDuration(timer.elapsed);
 
@@ -427,13 +441,21 @@ export class FocusModeEffects {
           return [actions.completeFocusSession({ isManual: true })];
         }
 
-        return [
-          actions.offerFlowtimeBreak({
+        const pausedTaskId = action.pausedTaskId ?? currentTaskId;
+        const shouldPauseTracking =
+          !!config?.isPauseTrackingDuringBreak && !!pausedTaskId;
+        const actionsArr: Action[] = [actions.completeFocusSession({ isManual: false })];
+        if (shouldPauseTracking) {
+          actionsArr.push(unsetCurrentTask());
+        }
+        actionsArr.push(
+          actions.startBreak({
             duration: breakInfo.duration,
             isLongBreak: breakInfo.isLong,
-            pausedTaskId: action.pausedTaskId,
+            pausedTaskId: shouldPauseTracking ? pausedTaskId : undefined,
           }),
-        ];
+        );
+        return actionsArr;
       }),
     ),
   );
@@ -592,17 +614,6 @@ export class FocusModeEffects {
     ),
   );
 
-  // Stop tracking when exiting break to planning
-  // Without this, tracking continues running orphaned after the focus session is reset
-  stopTrackingOnExitBreakToPlanning$ = createEffect(() =>
-    this.actions$.pipe(
-      ofType(actions.exitBreakToPlanning),
-      withLatestFrom(this.taskService.currentTaskId$),
-      filter(([_, currentTaskId]) => !!currentTaskId),
-      map(() => unsetCurrentTask()),
-    ),
-  );
-
   // Pause on idle
   pauseOnIdle$ = createEffect(() =>
     this.actions$.pipe(
@@ -617,9 +628,9 @@ export class FocusModeEffects {
   logFocusSession$ = createEffect(
     () =>
       this.actions$.pipe(
-        // Flowtime sessions are logged when the break is offered, even if the
-        // user declines the break and never starts it.
-        ofType(actions.completeFocusSession, actions.offerFlowtimeBreak),
+        // Every completed session (including Flowtime, which dispatches
+        // completeFocusSession before auto-starting its break) is logged here.
+        ofType(actions.completeFocusSession),
         withLatestFrom(this.store.select(selectors.selectLastSessionDuration)),
         tap(([, duration]) => {
           if (duration > 0) {

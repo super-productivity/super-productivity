@@ -166,11 +166,19 @@ export const BUILT_IN_THEMES: CustomTheme[] = [
     requiredMode: 'light',
   },
   {
+    id: 'plainspace',
+    name: 'Plainspace',
+    kind: 'builtin',
+    url: 'assets/themes/plainspace.css',
+    requiredMode: 'system',
+  },
+  {
     id: 'rainbow',
     name: 'Rainbow',
     kind: 'builtin',
     url: 'assets/themes/rainbow.css',
-    requiredMode: 'system',
+    // Neon glow pass needs a dark canvas — picking it auto-applies dark mode.
+    requiredMode: 'dark',
   },
   {
     id: 'velvet',

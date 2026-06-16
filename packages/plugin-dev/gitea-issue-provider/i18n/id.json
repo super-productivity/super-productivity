@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (contoh: https://try.gitea.io)",
+    "TOKEN": "Akses Token",
+    "REPO_FULL_NAME": "Nama pengguna atau nama/proyek Organisasi",
+    "SCOPE": "Cakupan",
+    "SCOPE_ALL": "Semua",
+    "SCOPE_CREATED": "Dibuat oleh saya",
+    "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
+    "FILTER_LABELS": "Filter berdasarkan label (opsional)",
+    "EXCLUDE_LABELS": "Kecualikan label (opsional)",
+    "HOW_TO_GET_TOKEN": "Bagaimana cara mendapatkan token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Ringkasan",
+    "STATE": "Status",
+    "ASSIGNEE": "Penanggung jawab",
+    "LABELS": "Label",
+    "DESCRIPTION": "Deskripsi"
+  },
+  "FORM_HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open Gitea issues untuk repositori tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua open issues ke backlog tugas Anda.</p><p>Untuk mencapai batas penggunaan dan untuk mengakses, Anda dapat memberikan token akses.</p>"
+}

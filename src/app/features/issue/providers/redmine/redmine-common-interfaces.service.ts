@@ -23,7 +23,8 @@ export class RedmineCommonInterfacesService extends BaseIssueProviderService<Red
   readonly pollInterval: number = REDMINE_POLL_INTERVAL;
 
   isEnabled(cfg: RedmineCfg): boolean {
-    return !!cfg && cfg.isEnabled && !!cfg.host && !!cfg.api_key && !!cfg.projectId;
+    // `projectId` is optional: when empty the provider searches the whole Redmine instance.
+    return !!cfg && cfg.isEnabled && !!cfg.host && !!cfg.api_key;
   }
 
   testConnection(cfg: RedmineCfg): Promise<boolean> {

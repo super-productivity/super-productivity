@@ -74,16 +74,23 @@
       (click)="restoreProject()"
       mat-menu-item
     >
-      <mat-icon>unarchive</mat-icon>
-      <span class="text">{{ T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE | translate }}</span>
+      <mat-icon>{{ (isDone$ | async) ? 'replay' : 'unarchive' }}</mat-icon>
+      <span class="text">
+        {{
+          ((isDone$ | async)
+            ? T.F.PROJECT.COMPLETE.REOPEN
+            : T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE
+          ) | translate
+        }}
+      </span>
     </button>
   } @else {
     <button
-      (click)="archiveProject()"
+      (click)="completeProject()"
       mat-menu-item
     >
-      <mat-icon>archive</mat-icon>
-      <span class="text">{{ T.MH.ARCHIVE_PROJECT | translate }}</span>
+      <mat-icon>check_circle</mat-icon>
+      <span class="text">{{ T.MH.COMPLETE_PROJECT | translate }}</span>
     </button>
   }
   <button

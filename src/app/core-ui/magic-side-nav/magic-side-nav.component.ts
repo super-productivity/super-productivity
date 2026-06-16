@@ -695,7 +695,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
 
       const projectId = navItemElement.getAttribute('data-project-id');
-      Log.debug('Task dropped on Project', { draggedTask, projectId });
+      Log.debug('Task dropped on Project', { taskId: draggedTask.id, projectId });
 
       // We do not want to change the order of the task list if we drop
       // to a project or a tag in the main nav
@@ -713,7 +713,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     } else if (navItemElement.hasAttribute('data-tag-id')) {
       // Task is dropped on a tag
       const tagId = navItemElement.getAttribute('data-tag-id');
-      Log.debug('Task dropped on Tag', { draggedTask, tagId });
+      Log.debug('Task dropped on Tag', { taskId: draggedTask.id, tagId });
 
       this._externalDragService.setCancelNextDrop(true);
 

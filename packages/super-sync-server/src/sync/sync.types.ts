@@ -231,6 +231,12 @@ export interface BatchUploadCandidate {
   resultIndex: number;
   originalTimestamp: number;
   fullStateVectorClock?: VectorClock;
+  /**
+   * UTF-8 byte size of `op.payload` captured during validation, reused when
+   * sizing the stored op so a large payload isn't re-stringified. See
+   * `computeOpStorageBytes`'s `cachedPayloadBytes` parameter.
+   */
+  payloadBytes?: number;
 }
 
 export interface AcceptedBatchOperation extends BatchUploadCandidate {
@@ -268,6 +274,20 @@ export interface UploadResult {
    * Allows clients to create LWW updates that dominate the server's state.
    */
   existingClock?: VectorClock;
+}
+
+/**
+ * Internal return of the serial-path `processOperation`: the client-facing
+ * `UploadResult` plus the op's storage size, computed once at the persist site,
+ * so the caller can accumulate `acceptedDeltaBytes` without re-measuring the
+ * (potentially multi-MB) payload. `storageBytes` / `fallback` are only
+ * meaningful when `result.accepted` is true. Mirrors the batch path, which
+ * returns `acceptedDeltaBytes` from `processOperationBatch`.
+ */
+export interface ProcessOperationResult {
+  result: UploadResult;
+  storageBytes: number;
+  fallback: boolean;
 }
 
 export interface UploadOpsResponse {

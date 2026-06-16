@@ -29,10 +29,8 @@ describe('Multi-Entity Atomicity Integration', () => {
   /**
    * Helper to compute entity changes using the service.
    */
-  const computeChanges = (action: PersistentAction): EntityChange[] => {
-    service.enqueue(action);
-    return service.dequeue();
-  };
+  const computeChanges = (action: PersistentAction): EntityChange[] =>
+    service.extractEntityChanges(action);
 
   beforeEach(() => {
     service = new OperationCaptureService();
@@ -213,9 +211,9 @@ describe('Multi-Entity Atomicity Integration', () => {
     });
   });
 
-  describe('queue behavior', () => {
-    it('should maintain FIFO order for multiple actions', () => {
-      // Enqueue multiple TIME_TRACKING actions
+  describe('entityChanges extraction for multiple actions', () => {
+    it('should extract independent entity changes per action', () => {
+      // Multiple TIME_TRACKING actions
       const action1: PersistentAction = {
         type: '[TimeTracking] Sync Time Tracking',
         contextType: 'PROJECT',
@@ -244,18 +242,11 @@ describe('Multi-Entity Atomicity Integration', () => {
         } satisfies PersistentActionMeta,
       };
 
-      service.enqueue(action1);
-      service.enqueue(action2);
-
-      expect(service.getQueueSize()).toBe(2);
-
-      const changes1 = service.dequeue();
+      const changes1 = service.extractEntityChanges(action1);
       expect(changes1[0].entityId).toBe('PROJECT:p1:2024-01-15');
-      expect(service.getQueueSize()).toBe(1);
 
-      const changes2 = service.dequeue();
+      const changes2 = service.extractEntityChanges(action2);
       expect(changes2[0].entityId).toBe('TAG:t1:2024-01-16');
-      expect(service.getQueueSize()).toBe(0);
     });
   });
 

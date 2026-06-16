@@ -1,5 +1,3 @@
-import { OpType } from './operation.types';
-
 export interface FullStateOpTypeHelpers<TOpType extends string = string> {
   FULL_STATE_OP_TYPES: ReadonlySet<TOpType>;
   isFullStateOpType: (opType: string) => opType is TOpType;
@@ -22,22 +20,3 @@ export const createFullStateOpTypeHelpers = <TOpType extends string>(
       fullStateOpTypeSet.has(opType as TOpType),
   };
 };
-
-const compatibilityFullStateOpTypeHelpers = createFullStateOpTypeHelpers<OpType>([
-  OpType.SyncImport,
-  OpType.BackupImport,
-  OpType.Repair,
-]);
-
-/**
- * @deprecated Super Productivity compatibility export. Hosts should instantiate
- * their own helper with `createFullStateOpTypeHelpers()`.
- */
-export const FULL_STATE_OP_TYPES =
-  compatibilityFullStateOpTypeHelpers.FULL_STATE_OP_TYPES;
-
-/**
- * @deprecated Super Productivity compatibility export. Hosts should instantiate
- * their own helper with `createFullStateOpTypeHelpers()`.
- */
-export const isFullStateOpType = compatibilityFullStateOpTypeHelpers.isFullStateOpType;

@@ -48,7 +48,6 @@ import { DateService } from '../../core/date/date.service';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
-import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
 
 @Component({
   selector: 'main-header',
@@ -92,7 +91,6 @@ export class MainHeaderComponent implements OnDestroy {
   private readonly _metricService = inject(MetricService);
   private readonly _dateService = inject(DateService);
   private readonly _dataInitStateService = inject(DataInitStateService);
-  private readonly _focusModeService = inject(FocusModeService);
 
   readonly isDataLoaded = toSignal(this._dataInitStateService.isAllDataLoadedInitially$, {
     initialValue: false,
@@ -193,22 +191,9 @@ export class MainHeaderComponent implements OnDestroy {
   readonly isFocusModeEnabled = computed(() => {
     return this.globalConfigService.appFeatures().isFocusModeEnabled;
   });
-  // On mobile the focus-button is normally hidden to save space. When a focus
-  // session/break is in flight (including paused) the running countdown lives
-  // on this button, so surface it on mobile too — otherwise the user has no
-  // way to see or resume the session after the overlay is closed.
-  readonly isFocusSessionActive = computed(
-    () =>
-      this._focusModeService.isSessionRunning() ||
-      this._focusModeService.isSessionPaused() ||
-      this._focusModeService.isBreakActive(),
-  );
-  readonly isFocusButtonVisible = computed(
-    () =>
-      this.isFocusModeEnabled() &&
-      !this.isXxxs() &&
-      (this.showDesktopButtons() || this.isFocusSessionActive()),
-  );
+  // Keep the focus entry point visible on mobile too when the feature is enabled.
+  // Otherwise Android users can only discover focus mode by rotating to a wider layout (#8157).
+  readonly isFocusButtonVisible = computed(() => this.isFocusModeEnabled());
   readonly isSyncIconEnabled = computed(() => {
     return this.globalConfigService.appFeatures().isSyncIconEnabled;
   });

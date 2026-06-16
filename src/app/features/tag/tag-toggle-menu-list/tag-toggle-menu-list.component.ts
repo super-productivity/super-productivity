@@ -23,9 +23,7 @@ import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskService } from '../../tasks/task.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
-import { MenuTreeKind, MenuTreeViewNode } from '../../menu-tree/store/menu-tree.model';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
-import { Tag } from '../tag.model';
 
 @Component({
   selector: 'tag-toggle-menu-list',
@@ -60,31 +58,10 @@ export class TagToggleMenuListComponent {
   });
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
-  // Build tree from tags to maintain menu tree ordering
-  private _tagTree = computed(() => {
-    const tags = this._tagList();
-    return this._menuTreeService.buildTagViewTree(tags);
-  });
-
-  // Extract tags in tree order (flattened)
-  toggleTagList = computed(() => {
-    const tree = this._tagTree();
-    const tags: Tag[] = [];
-
-    // Recursive function to extract tags maintaining order
-    const extractTags = (nodes: MenuTreeViewNode[]): void => {
-      for (const node of nodes) {
-        if (node.k === MenuTreeKind.TAG) {
-          tags.push(node.tag);
-        } else if (node.k === MenuTreeKind.FOLDER) {
-          extractTags(node.children);
-        }
-      }
-    };
-
-    extractTags(tree);
-    return tags;
-  });
+  // Flatten the menu tree so tags appear in sidebar order
+  toggleTagList = computed(() =>
+    this._menuTreeService.flattenTagViewTree(this._tagList()),
+  );
   menuEl = viewChild('menuEl', {
     // read: MatMenu,
   });

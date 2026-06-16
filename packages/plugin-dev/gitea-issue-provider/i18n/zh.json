@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "主机（例如：https://try.gitea.io）",
+    "TOKEN": "访问令牌",
+    "REPO_FULL_NAME": "用户名或组织名称/项目",
+    "SCOPE": "范围",
+    "SCOPE_ALL": "全部",
+    "SCOPE_CREATED": "由我创建",
+    "SCOPE_ASSIGNED": "分配给我",
+    "FILTER_LABELS": "按标签筛选（可选）",
+    "EXCLUDE_LABELS": "排除标签（可选）",
+    "HOW_TO_GET_TOKEN": "如何获取令牌？"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "STATE": "状态",
+    "ASSIGNEE": "负责人",
+    "LABELS": "标签",
+    "DESCRIPTION": "描述"
+  },
+  "FORM_HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定存储库的未结 Gitea 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加和导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。"
+}

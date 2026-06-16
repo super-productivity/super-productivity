@@ -2,19 +2,26 @@ import { PluginAPI } from './plugin-api';
 import { PluginBaseCfg } from './plugin-api.model';
 import { PluginBridgeService } from './plugin-bridge.service';
 import { Log } from '../core/log';
-import { BatchUpdateRequest, DialogCfg, NotifyCfg } from '@super-productivity/plugin-api';
+import {
+  BatchUpdateRequest,
+  DialogCfg,
+  DialogResult,
+  NotifyCfg,
+} from '@super-productivity/plugin-api';
 
 describe('PluginAPI', () => {
   let pluginAPI: PluginAPI;
   let showIndexHtmlAsViewSpy: jasmine.Spy;
   let reInitDataSpy: jasmine.Spy;
   let dispatchActionSpy: jasmine.Spy;
+  let getSelectedTaskSpy: jasmine.Spy;
+  let getFocusedTaskSpy: jasmine.Spy;
   let mockBridge: jasmine.SpyObj<{
     createBoundMethods: () => Record<string, unknown>;
     getAppState: () => Promise<unknown>;
     reInitData: () => Promise<void>;
     notify: () => Promise<void>;
-    openDialog: () => Promise<void>;
+    openDialog: (dialogCfg: DialogCfg) => Promise<DialogResult>;
     batchUpdateForProject: () => Promise<unknown>;
   }>;
 
@@ -29,6 +36,12 @@ describe('PluginAPI', () => {
     showIndexHtmlAsViewSpy = jasmine.createSpy('showIndexHtmlAsView');
     reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
     dispatchActionSpy = jasmine.createSpy('dispatchAction');
+    getSelectedTaskSpy = jasmine
+      .createSpy('getSelectedTask')
+      .and.resolveTo({ id: 'selected-task', title: 'Selected Task' });
+    getFocusedTaskSpy = jasmine
+      .createSpy('getFocusedTask')
+      .and.resolveTo({ id: 'focused-task', title: 'Focused Task' });
 
     mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
@@ -42,6 +55,8 @@ describe('PluginAPI', () => {
     mockBridge.createBoundMethods.and.returnValue({
       showIndexHtmlAsView: showIndexHtmlAsViewSpy,
       dispatchAction: dispatchActionSpy,
+      getSelectedTask: getSelectedTaskSpy,
+      getFocusedTask: getFocusedTaskSpy,
       persistDataSynced: jasmine.createSpy('persistDataSynced'),
       log: {
         critical: jasmine.createSpy(),
@@ -85,6 +100,19 @@ describe('PluginAPI', () => {
     });
   });
 
+  describe('runtime API surface', () => {
+    it('does not expose bridge internals as object properties', () => {
+      expect(Object.getOwnPropertyNames(pluginAPI)).not.toContain('_pluginBridge');
+      expect(Object.getOwnPropertyNames(pluginAPI)).not.toContain('_boundMethods');
+      expect(
+        (pluginAPI as unknown as { _pluginBridge?: unknown })._pluginBridge,
+      ).toBeUndefined();
+      expect(
+        (pluginAPI as unknown as { _boundMethods?: unknown })._boundMethods,
+      ).toBeUndefined();
+    });
+  });
+
   describe('dispatchAction()', () => {
     beforeEach(() => Log.clearLogHistory());
     afterEach(() => Log.clearLogHistory());
@@ -114,6 +142,21 @@ describe('PluginAPI', () => {
       pluginAPI.dispatchAction(action);
 
       expect(dispatchActionSpy).toHaveBeenCalledOnceWith(action);
+    });
+  });
+
+  describe('openDialog()', () => {
+    it('delegates to the bridge and returns the selected dialog result', async () => {
+      const dialogCfg: DialogCfg = {
+        htmlContent: '<p>Continue?</p>',
+        buttons: [{ label: 'Continue' }],
+      };
+      mockBridge.openDialog.and.resolveTo('Continue');
+
+      const result = await pluginAPI.openDialog(dialogCfg);
+
+      expect(result).toBe('Continue');
+      expect(mockBridge.openDialog).toHaveBeenCalledOnceWith(dialogCfg);
     });
   });
 
@@ -184,29 +227,42 @@ describe('PluginAPI', () => {
     });
   });
 
-  describe('onReady()', () => {
-    it('should register a callback via the onReadyRegister function', async () => {
-      let registeredFn: (() => void | Promise<void>) | undefined;
-      const mockBridge2 = jasmine.createSpyObj('PluginBridgeService', [
-        'createBoundMethods',
-      ]);
-      mockBridge2.createBoundMethods.and.returnValue({
+  describe('task selection readers', () => {
+    it('should delegate selected task lookup to the bound bridge method', async () => {
+      const selectedTask = await pluginAPI.getSelectedTask();
+
+      expect(selectedTask?.id).toBe('selected-task');
+      expect(selectedTask?.title).toBe('Selected Task');
+      expect(getSelectedTaskSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should delegate focused task lookup to the bound bridge method', async () => {
+      const focusedTask = await pluginAPI.getFocusedTask();
+
+      expect(focusedTask?.id).toBe('focused-task');
+      expect(focusedTask?.title).toBe('Focused Task');
+      expect(getFocusedTaskSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('lifecycle registration', () => {
+    type LifecycleRegisters = NonNullable<ConstructorParameters<typeof PluginAPI>[5]>;
+
+    const buildApiWithLifecycle = (lifecycle: LifecycleRegisters): PluginAPI => {
+      const bridge = jasmine.createSpyObj('PluginBridgeService', ['createBoundMethods']);
+      bridge.createBoundMethods.and.returnValue({
         log: jasmine.createSpyObj('log', ['log', 'err', 'info', 'warn', 'debug']),
       });
-      const mockI18n2 = jasmine.createSpyObj('PluginI18nService', [
+      const i18n = jasmine.createSpyObj('PluginI18nService', [
         'translate',
         'getCurrentLanguage',
       ]);
-      const api = new PluginAPI(
-        baseCfg,
-        'test-plugin-2',
-        mockBridge2,
-        mockI18n2,
-        undefined,
-        (fn) => {
-          registeredFn = fn;
-        },
-      );
+      return new PluginAPI(baseCfg, 'test-plugin-2', bridge, i18n, undefined, lifecycle);
+    };
+
+    it('should register an onReady callback via the lifecycle register', async () => {
+      let registeredFn: (() => void | Promise<void>) | undefined;
+      const api = buildApiWithLifecycle({ onReady: (fn) => (registeredFn = fn) });
 
       const readySpy = jasmine.createSpy('readyFn').and.resolveTo();
       api.onReady(readySpy);
@@ -216,9 +272,22 @@ describe('PluginAPI', () => {
       expect(readySpy).toHaveBeenCalledTimes(1);
     });
 
-    it('should be a no-op when no onReadyRegister is provided', () => {
-      // pluginAPI was constructed without onReadyRegister — should not throw
+    it('should register an onUnload callback via the lifecycle register', async () => {
+      let registeredFn: (() => void | Promise<void>) | undefined;
+      const api = buildApiWithLifecycle({ onUnload: (fn) => (registeredFn = fn) });
+
+      const unloadSpy = jasmine.createSpy('unloadFn').and.resolveTo();
+      api.onUnload(unloadSpy);
+      expect(registeredFn).toBeDefined();
+
+      await registeredFn!();
+      expect(unloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should be a no-op when no lifecycle registers are provided', () => {
+      // pluginAPI was constructed without lifecycle registers — should not throw
       expect(() => pluginAPI.onReady(() => {})).not.toThrow();
+      expect(() => pluginAPI.onUnload(() => {})).not.toThrow();
     });
   });
 });

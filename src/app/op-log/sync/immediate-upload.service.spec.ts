@@ -6,6 +6,7 @@ import { SyncProviderId } from '../sync-providers/provider.const';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
+import { SyncCycleGuardService } from './sync-cycle-guard.service';
 import { BehaviorSubject } from 'rxjs';
 import { RejectedOpInfo } from '../core/types/sync-results.types';
 
@@ -106,6 +107,10 @@ describe('ImmediateUploadService', () => {
     });
 
     service = TestBed.inject(ImmediateUploadService);
+    // The cycle guard is a root singleton; reset it so a prior test that left
+    // it claimed (e.g. an assertion threw before guard.end()) can't poison this
+    // one. Mirrors SyncSessionValidationService's per-test reset.
+    TestBed.inject(SyncCycleGuardService)._resetForTest();
   });
 
   afterEach(() => {
@@ -186,6 +191,47 @@ describe('ImmediateUploadService', () => {
 
       // Piggybacked ops are processed internally, no checkmark shown
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalled();
+    }));
+  });
+
+  // #8309: the immediate-upload side channel must not interleave with another
+  // sync cycle (main sync, force flow, or WS download). It claims the in-tab
+  // SyncCycleGuard synchronously at the start of _performUpload and skips if a
+  // cycle is already active.
+  describe('sync-cycle guard (#8309)', () => {
+    it('skips the upload when another sync cycle is active', fakeAsync(() => {
+      const guard = TestBed.inject(SyncCycleGuardService);
+      // Simulate another cycle holding the guard (e.g. a WS download).
+      expect(guard.tryBegin()).toBe(true);
+
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+
+      guard.end();
+    }));
+
+    it('releases the guard after the upload so a later cycle can run', fakeAsync(() => {
+      const guard = TestBed.inject(SyncCycleGuardService);
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(1);
+      // Guard was released in the finally — a subsequent cycle can claim it.
+      expect(guard.isActive).toBe(false);
     }));
   });
 

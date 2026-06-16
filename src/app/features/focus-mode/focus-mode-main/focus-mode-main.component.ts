@@ -9,17 +9,17 @@ import {
   signal,
 } from '@angular/core';
 import { Log } from '../../../core/log';
-import { expandAnimation } from '../../../ui/animations/expand.ani';
-import { from, Observable, of } from 'rxjs';
+import { from, Observable, of, Subject } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
-import { switchMap, take } from 'rxjs/operators';
+import { debounceTime, switchMap, take } from 'rxjs/operators';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { IssueService } from '../../issue/issue.service';
 import { Store } from '@ngrx/store';
 import {
   adjustRemainingTime,
+  cancelFocusSession,
   completeFocusSession,
   completeTask,
   endFlowtimeSession,
@@ -33,11 +33,11 @@ import {
   startFocusSession,
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
+import { selectPausedTaskId } from '../store/focus-mode.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { SimpleCounterService } from '../../simple-counter/simple-counter.service';
 import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import { ICAL_TYPE } from '../../issue/issue.const';
-import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatFabButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -52,7 +52,9 @@ import { SimpleCounterButtonComponent } from '../../simple-counter/simple-counte
 import { TaskAttachmentListComponent } from '../../tasks/task-attachment/task-attachment-list/task-attachment-list.component';
 import { slideInOutFromBottomAni } from '../../../ui/animations/slide-in-out-from-bottom.ani';
 import { FocusModeService } from '../focus-mode.service';
-import { BreathingDotComponent } from '../../../ui/breathing-dot/breathing-dot.component';
+import { FocusModeLayoutComponent } from '../focus-mode-layout/focus-mode-layout.component';
+import { FocusClockFaceComponent } from '../focus-clock-face/focus-clock-face.component';
+import { FocusModeTaskRowComponent } from '../focus-mode-task-row/focus-mode-task-row.component';
 import {
   FOCUS_MODE_DEFAULTS,
   FocusMainUIState,
@@ -64,7 +66,7 @@ import {
   SegmentedButtonGroupComponent,
   SegmentedButtonOption,
 } from '../../../ui/segmented-button-group/segmented-button-group.component';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { ANI_STANDARD_TIMING } from '../../../ui/animations/animation.const';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
@@ -83,13 +85,13 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
         animate(ANI_STANDARD_TIMING, style({ opacity: 1, transform: 'scale(1)' })),
       ]),
     ]),
-    expandAnimation,
     fadeAnimation,
     slideInOutFromBottomAni,
   ],
   imports: [
-    TaskTitleComponent,
-    BreathingDotComponent,
+    FocusModeLayoutComponent,
+    FocusClockFaceComponent,
+    FocusModeTaskRowComponent,
     MatIconButton,
     MatTooltip,
     MatIcon,
@@ -110,6 +112,7 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
   host: {
     ['[class.isSessionRunning]']: 'isSessionRunning()',
     ['[class.isSessionNotRunning]']: '!isSessionRunning()',
+    ['[class.isWindowBlurred]']: '!isWindowFocused()',
   },
 })
 export class FocusModeMainComponent {
@@ -134,13 +137,33 @@ export class FocusModeMainComponent {
   mainState = this.focusModeService.mainState;
   currentTask = toSignal(this.taskService.currentTask$);
 
+  // Pausing the focus session intentionally dispatches `unsetCurrentTask`
+  // (stops time accumulation). Without a fallback, the UI would flash the
+  // "Select task to focus" placeholder during every pause. Resolve the
+  // paused task from the store so the title stays put.
+  private readonly _pausedTaskId = this._store.selectSignal(selectPausedTaskId);
+  private readonly _pausedTask = toSignal(
+    toObservable(this._pausedTaskId).pipe(
+      switchMap((id) => (id ? this.taskService.getByIdLive$(id) : of(null))),
+    ),
+  );
+
+  readonly displayedTask = computed(() => {
+    const tracked = this.currentTask();
+    if (tracked) return tracked;
+    if (this.focusModeService.isSessionPaused()) {
+      return this._pausedTask() ?? null;
+    }
+    return null;
+  });
+
   // Quantize progress to 0.1% to reduce SVG repaints (~33% fewer updates)
   quantizedProgress = computed(
     () => Math.round((this.focusModeService.progress() || 0) * 10) / 10,
   );
 
   readonly parentTask = toSignal(
-    this.taskService.currentTask$.pipe(
+    toObservable(this.displayedTask).pipe(
       switchMap((t) =>
         t && t.parentId ? this.taskService.getByIdLive$(t.parentId) : of(null),
       ),
@@ -168,6 +191,17 @@ export class FocusModeMainComponent {
   displayDuration = signal(25 * 60 * 1000); // Default 25 minutes
   isTaskSelectorOpen = signal(false);
 
+  // Pomodoro's work duration lives in synced global config. Persisting on every
+  // keystroke emits one sync op per character, so coalesce rapid edits and write
+  // once the user pauses (or when the session starts — see startSession()).
+  private readonly _pomodoroDurationToPersist$ = new Subject<number>();
+
+  // OS-level window focus. When the user tabs away (or focuses another app),
+  // hide the muted control buttons so we don't blink at them.
+  readonly isWindowFocused = signal(
+    typeof document !== 'undefined' ? document.hasFocus() : true,
+  );
+
   isShowModeSelector = computed(() => this._isPreparation());
   isShowPomodoroSettings = computed(
     () => this._isPreparation() && this.mode() === FocusModeMode.Pomodoro,
@@ -176,13 +210,14 @@ export class FocusModeMainComponent {
     () => this._isPreparation() && this.mode() === FocusModeMode.Flowtime,
   );
   isShowSimpleCounters = computed(() => this._isInProgress());
-  isShowPauseButton = computed(() => this._isInProgress());
   isShowCompleteSessionButton = computed(() => this._isInProgress());
   isShowBottomControls = computed(() => this._isInProgress());
   isShowCountdown = computed(() => this._isCountdown());
   isShowPlayButton = computed(() => this._isPreparation());
   isShowDurationSlider = computed(
-    () => this._isPreparation() && this.mode() === FocusModeMode.Countdown,
+    () =>
+      this._isPreparation() &&
+      (this.mode() === FocusModeMode.Countdown || this.mode() === FocusModeMode.Pomodoro),
   );
   isShowTimeAdjustButtons = computed(
     () => this._isInProgress() && this.mode() !== FocusModeMode.Flowtime,
@@ -264,6 +299,19 @@ export class FocusModeMainComponent {
         return;
       }
 
+      // Pomodoro's editable duration is its configured work-period — read
+      // straight from pomodoroConfig so the slider reflects the persisted
+      // value, not the (initially zero) session duration.
+      if (mode === FocusModeMode.Pomodoro && this._isPreparation()) {
+        const pomodoroDuration = this.focusModeService.pomodoroConfig()?.duration;
+        this.displayDuration.set(
+          pomodoroDuration && pomodoroDuration > 0
+            ? pomodoroDuration
+            : FOCUS_MODE_DEFAULTS.SESSION_DURATION,
+        );
+        return;
+      }
+
       if (duration > 0) {
         this.displayDuration.set(duration);
         return;
@@ -276,6 +324,18 @@ export class FocusModeMainComponent {
         this.displayDuration.set(stored);
       }
     });
+
+    this._pomodoroDurationToPersist$
+      .pipe(debounceTime(400), takeUntilDestroyed())
+      .subscribe((duration) => this._persistPomodoroDuration(duration));
+  }
+
+  @HostListener('window:focus') onWindowFocus(): void {
+    this.isWindowFocused.set(true);
+  }
+
+  @HostListener('window:blur') onWindowBlur(): void {
+    this.isWindowFocused.set(false);
   }
 
   @HostListener('dragenter', ['$event']) onDragEnter(ev: DragEvent): void {
@@ -294,7 +354,9 @@ export class FocusModeMainComponent {
   }
 
   @HostListener('drop', ['$event']) onDrop(ev: DragEvent): void {
-    const t = this.currentTask();
+    // Drop attaches to the displayedTask (= currentTask, or the paused task
+    // during a paused session) so drops still work mid-pause.
+    const t = this.displayedTask();
     if (!t) {
       return;
     }
@@ -309,9 +371,11 @@ export class FocusModeMainComponent {
       !$event ||
       $event.trim() !== this.defaultTaskNotes().trim()
     ) {
-      const t = this.currentTask();
+      // Use displayedTask so notes can be edited on the paused task too —
+      // the live currentTask is null during pause.
+      const t = this.displayedTask();
       if (!t) {
-        Log.warn('changeTaskNotes: currentTask is null, skipping update');
+        Log.warn('changeTaskNotes: displayedTask is null, skipping update');
         return;
       }
       this.taskService.update(t.id, { notes: $event });
@@ -382,6 +446,12 @@ export class FocusModeMainComponent {
   }
 
   startSession(): void {
+    // Persist any pending (debounced) Pomodoro duration edit before starting so
+    // a value typed within the debounce window isn't dropped.
+    if (this.mode() === FocusModeMode.Pomodoro) {
+      this._persistPomodoroDuration(this.displayDuration());
+    }
+
     const config = this.focusModeConfig();
 
     // Sync between focus session and tracking is always on — require a task
@@ -430,6 +500,12 @@ export class FocusModeMainComponent {
     this._store.dispatch(resetCycles());
   }
 
+  exitToPlanning(): void {
+    // Cancelling the session clears tracking and hides the overlay, returning
+    // the user to wherever they were before focus mode (no forced navigation).
+    this._store.dispatch(cancelFocusSession());
+  }
+
   selectMode(mode: FocusModeMode | string | number): void {
     if (!Object.values(FocusModeMode).includes(mode as FocusModeMode)) {
       return;
@@ -452,7 +528,23 @@ export class FocusModeMainComponent {
 
   onDurationChange(duration: number): void {
     this.displayDuration.set(duration);
+
+    // Pomodoro's duration is persistent (synced) config, not session store.
+    // Debounce the write (see _pomodoroDurationToPersist$) so typing "25" emits
+    // one sync op rather than one per keystroke.
+    if (this.mode() === FocusModeMode.Pomodoro) {
+      this._pomodoroDurationToPersist$.next(duration);
+      return;
+    }
+
     this._store.dispatch(setFocusSessionDuration({ focusSessionDuration: duration }));
+  }
+
+  private _persistPomodoroDuration(duration: number): void {
+    const current = this.focusModeService.pomodoroConfig();
+    if (current && current.duration !== duration) {
+      this._globalConfigService.updateSection('pomodoro', { ...current, duration }, true);
+    }
   }
 
   openTaskSelector(): void {

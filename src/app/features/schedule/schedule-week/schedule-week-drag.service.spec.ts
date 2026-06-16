@@ -11,6 +11,7 @@ import { GlobalConfigState } from '../../config/global-config.model';
 import { ScheduleEvent } from '../schedule.model';
 import { FH, SVEType, T_ID_PREFIX } from '../schedule.const';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -21,6 +22,7 @@ describe('ScheduleWeekDragService', () => {
   let service: ScheduleWeekDragService;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
+  let calendarEventActionsSpy: jasmine.SpyObj<CalendarEventActionsService>;
 
   const createMockGlobalConfigService = (
     defaultTaskRemindOption: TaskReminderOptionId = TaskReminderOptionId.AtStart,
@@ -46,6 +48,13 @@ describe('ScheduleWeekDragService', () => {
         ScheduleWeekDragService,
         provideMockStore(),
         {
+          provide: CalendarEventActionsService,
+          useValue: jasmine.createSpyObj<CalendarEventActionsService>(
+            'CalendarEventActionsService',
+            ['canMoveEvent', 'moveToStartTime'],
+          ),
+        },
+        {
           provide: GlobalConfigService,
           useValue: createMockGlobalConfigService(defaultTaskRemindOption),
         },
@@ -54,6 +63,11 @@ describe('ScheduleWeekDragService', () => {
 
     service = TestBed.inject(ScheduleWeekDragService);
     store = TestBed.inject(MockStore);
+    calendarEventActionsSpy = TestBed.inject(
+      CalendarEventActionsService,
+    ) as jasmine.SpyObj<CalendarEventActionsService>;
+    calendarEventActionsSpy.canMoveEvent.and.returnValue(true);
+    calendarEventActionsSpy.moveToStartTime.and.resolveTo(true);
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
   };
 
@@ -124,6 +138,211 @@ describe('ScheduleWeekDragService', () => {
           toTaskId: 'target',
         }),
       );
+    });
+  });
+
+  describe('calendar event drag release', () => {
+    const createReleaseEvent = (
+      sourceEvent: ScheduleEvent,
+      sourceEl: HTMLElement,
+    ): CdkDragRelease<ScheduleEvent> =>
+      ({
+        source: {
+          data: sourceEvent,
+          element: {
+            nativeElement: sourceEl,
+          },
+          reset: jasmine.createSpy('reset'),
+        },
+        event: new MouseEvent('mouseup', { clientX: 125, clientY: 120 }),
+      }) as unknown as CdkDragRelease<ScheduleEvent>;
+
+    const createCalendarEvent = (): ScheduleEvent =>
+      ({
+        id: 'calendar-1::event-1',
+        type: SVEType.CalendarEvent,
+        style: '',
+        startHours: 10,
+        timeLeftInHours: 0.5,
+        data: {
+          id: 'calendar-1::event-1',
+          calProviderId: 'provider-1',
+          issueProviderKey: 'plugin:google-calendar-provider',
+          title: 'Meeting',
+          start: new Date('2026-03-20T10:00:00Z').getTime(),
+          duration: THIRTY_MINUTES_MS,
+          icon: 'event',
+        },
+      }) as ScheduleEvent;
+
+    beforeEach(() => {
+      setupTestBed();
+    });
+
+    const setupCalendarGrid = (): void => {
+      const columnEl = document.createElement('div');
+      columnEl.classList.add('col');
+      columnEl.setAttribute('data-day', '2026-03-20');
+      spyOn(document, 'elementsFromPoint').and.returnValue([columnEl]);
+
+      service.setGridContainer(() => {
+        const gridEl = document.createElement('div');
+        spyOn(gridEl, 'getBoundingClientRect').and.returnValue({
+          top: 0,
+          bottom: 24 * FH,
+          left: 0,
+          right: 200,
+          width: 200,
+          height: 24 * FH,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } as DOMRect);
+        return gridEl;
+      });
+      service.setDaysToShowAccessor(() => ['2026-03-20']);
+    };
+
+    it('moves plugin calendar events via the calendar action service when dropped on a time column', () => {
+      const sourceEl = document.createElement('schedule-event');
+      setupCalendarGrid();
+      service.handleDragStarted({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+      } as unknown as any);
+      service.handleDragMoved({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+        pointerPosition: { x: 125, y: 120 },
+      } as unknown as any);
+      service.handleDragReleased(createReleaseEvent(createCalendarEvent(), sourceEl));
+
+      expect(calendarEventActionsSpy.moveToStartTime).toHaveBeenCalledTimes(1);
+      const [calendarEvent, startMs] =
+        calendarEventActionsSpy.moveToStartTime.calls.mostRecent().args;
+      expect(calendarEvent.id).toBe('calendar-1::event-1');
+      expect(startMs).toEqual(jasmine.any(Number));
+    });
+
+    it('treats shift-drop on a calendar event as a normal timed move', () => {
+      const sourceEl = document.createElement('schedule-event');
+      setupCalendarGrid();
+
+      service.setShiftMode(true);
+      service.handleDragStarted({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+      } as unknown as any);
+      service.handleDragMoved({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+        pointerPosition: { x: 125, y: 120 },
+      } as unknown as any);
+      service.handleDragReleased(createReleaseEvent(createCalendarEvent(), sourceEl));
+
+      expect(calendarEventActionsSpy.moveToStartTime).toHaveBeenCalledTimes(1);
+    });
+
+    it('resets the dragged calendar event after the provider write resolves', async () => {
+      const sourceEl = document.createElement('schedule-event');
+      setupCalendarGrid();
+      const releaseEvent = createReleaseEvent(createCalendarEvent(), sourceEl);
+
+      service.handleDragStarted({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+      } as unknown as any);
+      service.handleDragMoved({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+        pointerPosition: { x: 125, y: 120 },
+      } as unknown as any);
+      service.handleDragReleased(releaseEvent);
+
+      expect(releaseEvent.source.reset).not.toHaveBeenCalled();
+      expect(sourceEl.style.pointerEvents).toBe('none');
+      await Promise.resolve();
+
+      expect(releaseEvent.source.reset).toHaveBeenCalled();
+      expect(sourceEl.style.transform).toBe('translate3d(0px, 0px, 0px)');
+      expect(sourceEl.style.pointerEvents).toBe('');
+    });
+
+    it('suppresses the unschedule preview when dragging a calendar event outside the grid', () => {
+      const sourceEl = document.createElement('schedule-event');
+      setupCalendarGrid();
+
+      service.handleDragStarted({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+      } as unknown as any);
+      service.handleDragMoved({
+        source: {
+          data: createCalendarEvent(),
+          element: { nativeElement: sourceEl },
+        },
+        pointerPosition: { x: 125, y: 5000 },
+      } as unknown as any);
+
+      expect(service.dragPreviewContext()).toBeNull();
+    });
+
+    it('does not move calendar events when the provider is read-only', () => {
+      calendarEventActionsSpy.canMoveEvent.and.returnValue(false);
+      const sourceEl = document.createElement('schedule-event');
+      const columnEl = document.createElement('div');
+      columnEl.classList.add('col');
+      columnEl.setAttribute('data-day', '2026-03-20');
+      spyOn(document, 'elementsFromPoint').and.returnValue([columnEl]);
+
+      service.setGridContainer(() => {
+        const gridEl = document.createElement('div');
+        spyOn(gridEl, 'getBoundingClientRect').and.returnValue({
+          top: 0,
+          bottom: 24 * FH,
+          left: 0,
+          right: 200,
+          width: 200,
+          height: 24 * FH,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } as DOMRect);
+        return gridEl;
+      });
+      service.setDaysToShowAccessor(() => ['2026-03-20']);
+
+      const event = createCalendarEvent();
+      service.handleDragStarted({
+        source: {
+          data: event,
+          element: { nativeElement: sourceEl },
+        },
+      } as unknown as any);
+      service.handleDragMoved({
+        source: {
+          data: event,
+          element: { nativeElement: sourceEl },
+        },
+        pointerPosition: { x: 125, y: 120 },
+      } as unknown as any);
+      service.handleDragReleased(createReleaseEvent(event, sourceEl));
+
+      expect(calendarEventActionsSpy.moveToStartTime).not.toHaveBeenCalled();
     });
   });
 

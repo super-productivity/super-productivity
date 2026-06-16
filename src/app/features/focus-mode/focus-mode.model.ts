@@ -12,7 +12,6 @@ export enum FocusMainUIState {
   Preparation = 'Preparation',
   Countdown = 'Countdown',
   InProgress = 'InProgress',
-  BreakOffer = 'BreakOffer',
 }
 
 // UI screens enum

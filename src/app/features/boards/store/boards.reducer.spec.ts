@@ -26,6 +26,7 @@ const makePanel = (overrides: Partial<BoardPanelCfg> = {}): BoardPanelCfg => ({
   scheduledState: BoardPanelCfgScheduledState.All,
   backlogState: BoardPanelCfgTaskTypeFilter.All,
   isParentTasksOnly: false,
+  projectIds: [''],
   ...overrides,
 });
 

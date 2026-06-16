@@ -2,6 +2,7 @@ import { Pipe, PipeTransform, inject } from '@angular/core';
 import { ClipboardImageService } from './clipboard-image.service';
 import { Observable, from, of, defer } from 'rxjs';
 import { map, shareReplay, catchError } from 'rxjs/operators';
+import { Log } from '../log';
 
 @Pipe({
   name: 'resolveClipboardUrl',
@@ -38,7 +39,7 @@ export class ResolveClipboardUrlPipe implements PipeTransform {
         return url;
       }),
       catchError((error) => {
-        console.error('Error resolving clipboard URL:', error);
+        Log.err('Error resolving clipboard URL:', error);
         return of(url);
       }),
       shareReplay({ bufferSize: 1, refCount: false }),

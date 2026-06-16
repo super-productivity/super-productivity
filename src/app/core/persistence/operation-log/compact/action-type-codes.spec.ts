@@ -41,6 +41,7 @@ describe('action-type-codes', () => {
       expect(encodeActionType('[Task Shared] addTask')).toBe('HA');
       expect(encodeActionType('[Tag] Add Tag')).toBe('GA');
       expect(encodeActionType('[Project] Add Project')).toBe('PA');
+      expect(encodeActionType('[Project] Complete Project')).toBe('PCO');
     });
 
     it('should return original action type for unknown action types', () => {
@@ -54,6 +55,7 @@ describe('action-type-codes', () => {
       expect(decodeActionType('HA')).toBe('[Task Shared] addTask');
       expect(decodeActionType('GA')).toBe('[Tag] Add Tag');
       expect(decodeActionType('PA')).toBe('[Project] Add Project');
+      expect(decodeActionType('PCO')).toBe('[Project] Complete Project');
     });
 
     it('should return code as-is for unknown codes (assumed to be full action type)', () => {

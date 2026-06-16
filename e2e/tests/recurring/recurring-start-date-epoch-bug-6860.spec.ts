@@ -10,6 +10,13 @@ import { saveRecurDialog, setRecurStartDate } from '../../utils/recurring-task-h
  * causing validateDate() to reject all dates via Invalid Date comparison,
  * which the formly parser then converted to '1970-01-01'.
  */
+
+// Pin today so the hardcoded start date below stays in the future: the
+// datepicker disables past days, so without a fixed clock the helper-based
+// test breaks once the wall clock passes the hardcoded date (e.g. a scheduled
+// run on 2026-06-16 could no longer click the disabled 2026-06-15 cell).
+const FIXED_TODAY = new Date('2026-05-01T10:00:00');
+
 test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
   test('should preserve start date when configuring recurring task via calendar', async ({
     page,
@@ -41,32 +48,46 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await recurItem.click();
 
     // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container');
+    const repeatDialog = page.locator('mat-dialog-container').first();
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-    // 4. Open the calendar popup and select first day of next month
-    const calendarToggle = repeatDialog.locator('mat-datepicker-toggle button');
-    await calendarToggle.click();
+    // 4. Open the schedule dialog
+    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
+    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+    await scheduleBtn.click();
 
-    const calendar = page.locator('.mat-calendar');
+    // Wait for the schedule dialog to appear
+    const scheduleDialog = page
+      .locator('mat-dialog-container')
+      .filter({ has: page.locator('datetime-picker') });
+    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    const calendar = scheduleDialog.locator('mat-calendar');
     await expect(calendar).toBeVisible({ timeout: 5000 });
 
     // Navigate to next month and select the first available day
-    const nextMonthBtn = page.getByRole('button', { name: /next month/i });
+    const nextMonthBtn = scheduleDialog.getByRole('button', { name: /next month/i });
     await nextMonthBtn.click();
 
-    const firstDay = page
+    const firstDay = scheduleDialog
       .locator('.mat-calendar-body-cell:not(.mat-calendar-body-disabled)')
       .first();
     await expect(firstDay).toBeVisible({ timeout: 5000 });
     await firstDay.click();
 
-    // 5. Verify the date input does not show epoch
-    const dateInput = repeatDialog.getByRole('textbox', { name: /start date/i });
-    await expect(dateInput).toBeVisible();
-    const inputValue = await dateInput.inputValue();
-    expect(inputValue).not.toBe('');
-    expect(inputValue).not.toContain('1970');
+    // Click Schedule button
+    const scheduleSubmitBtn = scheduleDialog.locator(
+      '[data-test-id="schedule-submit-btn"]',
+    );
+    await scheduleSubmitBtn.click();
+    await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+
+    // 5. Verify the date input/val does not show epoch
+    const dateVal = repeatDialog.locator('.planned-date-val');
+    await expect(dateVal).toBeVisible();
+    const valText = await dateVal.innerText();
+    expect(valText).not.toBe('');
+    expect(valText).not.toContain('1970');
 
     // 6. Save and verify the date survives persistence
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
@@ -74,13 +95,16 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await saveBtn.click();
     await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
   });
-
-  test('should preserve start date when typing date manually into input', async ({
+  test('should preserve start date when configuring recurring task via helper', async ({
     page,
     workViewPage,
     taskPage,
     testPrefix,
   }) => {
+    // Fix today to May 1, 2026 so the hardcoded 15/06/2026 start date stays a
+    // selectable (enabled) future day in the datepicker.
+    await page.clock.setFixedTime(FIXED_TODAY);
+    await page.reload();
     await workViewPage.waitForTaskList();
 
     // 1. Create a task
@@ -105,7 +129,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await recurItem.click();
 
     // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container');
+    const repeatDialog = page.locator('mat-dialog-container').first();
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
     await setRecurStartDate(page, '15/06/2026');

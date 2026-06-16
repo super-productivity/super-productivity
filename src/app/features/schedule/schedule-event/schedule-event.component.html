@@ -113,7 +113,7 @@
         {{ T.F.CALENDARS.CONTEXT_MENU.OPEN_IN_CALENDAR | translate }}
       </button>
     }
-    @if (isCalendarEventFromPlugin()) {
+    @if (canRescheduleCalendarEvent()) {
       <button
         mat-menu-item
         (click)="rescheduleCalendarEvent()"
