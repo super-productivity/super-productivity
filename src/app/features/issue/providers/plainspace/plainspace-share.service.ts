@@ -14,6 +14,10 @@ import { Log } from '../../../../core/log';
 import { T } from '../../../../t.const';
 import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
 import { PlainspaceConnectDialogComponent } from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
+import {
+  PlainspaceSpaceChoice,
+  PlainspaceSpacePickerDialogComponent,
+} from '../../../plainspace/space-picker-dialog/plainspace-space-picker-dialog.component';
 
 /**
  * Provisions Plainspace sharing for a project: ensures the user is signed in,
@@ -32,10 +36,12 @@ export class PlainspaceShareService {
 
   /**
    * Self-contained (never rejects) so it is safe to fire-and-forget from the
-   * create-project dialog. Prompts for sign-in if needed. On failure (or if the
-   * user declines sign-in) it surfaces a snack and returns null.
+   * create-project dialog. Prompts for sign-in if needed, then lets the user
+   * create a new space or link an existing one (so tasks already assigned to
+   * them import). On failure (or if the user cancels) it surfaces a snack /
+   * returns null.
    *
-   * @returns the created space id, or null if sharing could not be provisioned.
+   * @returns the bound space id, or null if sharing could not be provisioned.
    */
   async shareProjectOnPlainspace(
     projectId: string,
@@ -47,16 +53,25 @@ export class PlainspaceShareService {
         return null;
       }
 
+      const choice = await this._chooseSpace();
+      if (!choice) {
+        // User cancelled the space picker — nothing to provision.
+        return null;
+      }
+
       const account = this._accountService.account();
       const cfg: PlainspaceCfg = {
         ...DEFAULT_PLAINSPACE_CFG,
         host: account?.host ?? DEFAULT_PLAINSPACE_CFG.host,
         token: account?.token ?? null,
       };
-      const space = await firstValueFrom(
-        this._plainspaceApiService.createSpace$(title, cfg),
-      );
-      if (!space?.id) {
+
+      const spaceId =
+        choice.action === 'create'
+          ? (await firstValueFrom(this._plainspaceApiService.createSpace$(title, cfg)))
+              ?.id
+          : choice.spaceId;
+      if (!spaceId) {
         return null;
       }
 
@@ -70,16 +85,27 @@ export class PlainspaceShareService {
         isAutoAddToBacklog: true,
         host: cfg.host,
         token: cfg.token,
-        spaceId: space.id,
+        spaceId,
       };
       this._store.dispatch(IssueProviderActions.addIssueProvider({ issueProvider }));
-      return space.id;
+      return spaceId;
     } catch {
       // Log ids only — never user content (project title).
       Log.err('Plainspace: failed to share project', { projectId });
       this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.SHARE_FAILED });
       return null;
     }
+  }
+
+  /**
+   * Opens the space picker (create new vs link existing). Returns the chosen
+   * action, or null if the user cancelled.
+   */
+  private async _chooseSpace(): Promise<PlainspaceSpaceChoice | null> {
+    const choice = await firstValueFrom(
+      this._matDialog.open(PlainspaceSpacePickerDialogComponent).afterClosed(),
+    );
+    return choice ?? null;
   }
 
   /**

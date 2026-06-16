@@ -33,6 +33,18 @@ export class PlainspaceApiService {
       .pipe(catchError(() => of(null)));
   }
 
+  /**
+   * The spaces (Plainspace projects) the token can access — used to let the user
+   * link an existing space instead of creating a new one. Empty list on failure.
+   */
+  getSpaces$(cfg: PlainspaceCfg): Observable<PlainspaceSpace[]> {
+    return this.getMe$(cfg).pipe(
+      map((me) =>
+        (me?.projects ?? []).map((p) => ({ id: p.id, name: p.name, slug: p.slug })),
+      ),
+    );
+  }
+
   /** Tasks assigned to me in this provider's space — imported as SP tasks. */
   getMyTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
     return this._http
@@ -40,13 +52,21 @@ export class PlainspaceApiService {
       .pipe(
         // /tasks spans all my spaces; keep only this provider's space.
         map((res) => {
-          const matched = res.tasks.filter((t) => matchesSpace(t, cfg.spaceId));
-          // Diagnostic counts only (no task content) — pinpoints whether the
-          // space filter, not the import, is dropping tasks.
+          const tasks = Array.isArray(res?.tasks) ? res.tasks : [];
+          const matched = tasks.filter((t) => matchesSpace(t, cfg.spaceId));
+          // Diagnostic: ids/slugs/field-names only (never task content). When
+          // `matched` is 0 but `total` is not, `projectIds`/`projectSlugs`/
+          // `sampleKeys` disambiguate why the space filter dropped everything —
+          // a stored `spaceId` that matches no task's space, vs. a server DTO
+          // that doesn't expose `projectId`/`projectSlug` (sampleKeys would then
+          // lack those names). Remove once Plainspace import is confirmed.
           IssueLog.log('Plainspace getMyTasks$', {
-            total: res.tasks.length,
+            total: tasks.length,
             matched: matched.length,
             spaceId: cfg.spaceId,
+            projectIds: [...new Set(tasks.map((t) => t.projectId))],
+            projectSlugs: [...new Set(tasks.map((t) => t.projectSlug))],
+            sampleKeys: tasks[0] ? Object.keys(tasks[0]) : [],
           });
           return matched.map(mapSPTaskToIssue);
         }),
@@ -65,7 +85,9 @@ export class PlainspaceApiService {
       })
       .pipe(
         map((res) =>
-          res.tasks.filter((t) => matchesSpace(t, cfg.spaceId)).map(mapSPTaskToIssue),
+          (Array.isArray(res?.tasks) ? res.tasks : [])
+            .filter((t) => matchesSpace(t, cfg.spaceId))
+            .map(mapSPTaskToIssue),
         ),
         catchError(() => of([])),
       );
@@ -146,6 +168,13 @@ export class PlainspaceApiService {
   private _headers(cfg: PlainspaceCfg): HttpHeaders {
     return new HttpHeaders({ Authorization: `Bearer ${cfg.token ?? ''}` });
   }
+}
+
+/** A Plainspace space (project) the connected account can bind a provider to. */
+export interface PlainspaceSpace {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 /** The Plainspace integration task DTO (`GET /api/integration/tasks`). */

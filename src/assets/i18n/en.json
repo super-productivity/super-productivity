@@ -2858,7 +2858,16 @@
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",
     "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",
     "SHARE_FAILED": "Could not share this project on Plainspace.",
-    "SHARE_LABEL": "Share this project on Plainspace"
+    "SHARE_LABEL": "Share this project on Plainspace",
+    "SPACE_PICKER": {
+      "CREATE_NEW": "Create new space",
+      "INTRO": "Link an existing space to import the tasks assigned to you, or create a new one.",
+      "LINK": "Link space",
+      "LOADING": "Loading your spaces…",
+      "NONE": "You don't have any spaces yet — create one to get started.",
+      "SELECT_LABEL": "Existing space",
+      "TITLE": "Choose a Plainspace space"
+    }
   },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",

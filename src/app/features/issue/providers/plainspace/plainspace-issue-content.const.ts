@@ -13,6 +13,7 @@ export const PLAINSPACE_ISSUE_CONTENT_CONFIG: IssueContentConfig<PlainspaceIssue
       label: T.F.ISSUE.ISSUE_CONTENT.SUMMARY,
       type: IssueFieldType.LINK,
       value: (issue: PlainspaceIssue) => issue.title,
+      getLink: (issue: PlainspaceIssue) => issue.url || '',
     },
   ],
 };

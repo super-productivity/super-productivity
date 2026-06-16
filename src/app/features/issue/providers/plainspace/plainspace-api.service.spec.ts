@@ -102,6 +102,30 @@ describe('PlainspaceApiService', () => {
     expect((await p)?.isDone).toBe(true);
   });
 
+  it('getSpaces$ maps the account spaces from /me', async () => {
+    const p = firstValueFrom(service.getSpaces$(cfg));
+    const req = httpMock.expectOne(`${BASE}/me`);
+    req.flush({
+      email: 'a@b.c',
+      projects: [
+        { id: 'p1', name: 'One', slug: 'one', memberDisplayName: 'Me', role: 'admin' },
+        { id: 'p2', name: 'Two', slug: 'two', memberDisplayName: 'Me', role: 'member' },
+      ],
+    });
+    expect(await p).toEqual([
+      { id: 'p1', name: 'One', slug: 'one' },
+      { id: 'p2', name: 'Two', slug: 'two' },
+    ]);
+  });
+
+  it('getSpaces$ fails soft to [] on error', async () => {
+    const p = firstValueFrom(service.getSpaces$(cfg));
+    httpMock
+      .expectOne(`${BASE}/me`)
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    expect(await p).toEqual([]);
+  });
+
   it('createSpace$ returns the new project id', async () => {
     const p = firstValueFrom(service.createSpace$('My Space', cfg));
     const req = httpMock.expectOne(`${BASE}/spaces`);
