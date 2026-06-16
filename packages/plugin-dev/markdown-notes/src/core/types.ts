@@ -6,7 +6,6 @@ export interface MarkdownNote {
   relativeDir: string;
   fileName: string;
   title: string;
-  content: string;
   modified: number;
   size: number;
 }
@@ -22,6 +21,16 @@ export interface ScanMarkdownDirectoryResult {
   notes: MarkdownNote[];
   errors: ScanError[];
   scannedAt: number;
+  error?: string;
+}
+
+export interface ReadMarkdownNoteResult {
+  success: boolean;
+  path: string;
+  content: string;
+  modified: number;
+  size: number;
+  truncated: boolean;
   error?: string;
 }
 

@@ -71,6 +71,7 @@ const BUNDLED_PLUGIN_IDS = new Set<string>([
   'doc-mode',
   'github-issue-provider',
   'google-calendar-provider',
+  'markdown-notes',
   'procrastination-buster',
   'sync-md',
   'voice-reminder',

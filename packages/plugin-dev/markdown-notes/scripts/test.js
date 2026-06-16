@@ -36,6 +36,7 @@ buildSync({
   platform: 'node',
   format: 'cjs',
   target: 'node22',
+  external: ['jsdom'],
   logLevel: 'warning',
 });
 

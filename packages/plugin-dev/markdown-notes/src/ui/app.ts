@@ -1,13 +1,18 @@
 import { marked } from 'marked';
 import type { PluginAPI, Project } from '@super-productivity/plugin-api';
 import { groupNotes } from '../core/group-notes';
-import { SCAN_MARKDOWN_DIRECTORY_SCRIPT } from '../core/scan-script';
-import { isSafeMarkdownImageUrl, isSafeMarkdownLinkUrl } from '../core/url-safety';
+import {
+  READ_MARKDOWN_NOTE_SCRIPT,
+  SCAN_MARKDOWN_DIRECTORY_SCRIPT,
+} from '../core/scan-script';
+import { sanitizeMarkdownHtml } from '../core/markdown-sanitizer';
+import { loadMarkdownNotesConfig, saveMarkdownNotesConfig } from '../core/config-storage';
 import type {
   MarkdownNote,
   MarkdownNoteGroup,
   MarkdownNotesConfig,
   ProjectOption,
+  ReadMarkdownNoteResult,
   ScanError,
   ScanMarkdownDirectoryResult,
 } from '../core/types';
@@ -18,59 +23,24 @@ declare global {
   }
 }
 
-const CONFIG_STORAGE_KEY = 'markdown-notes-config-v1';
 const AUTO_REFRESH_MS = 30000;
-const DANGEROUS_HTML_TAGS = new Set([
-  'script',
-  'iframe',
-  'object',
-  'embed',
-  'link',
-  'meta',
-  'style',
-  'base',
-  'form',
-  'input',
-  'button',
-  'textarea',
-  'select',
-  'option',
-]);
-const ALLOWED_HTML_TAGS = new Set([
-  'a',
-  'blockquote',
-  'br',
-  'code',
-  'del',
-  'em',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'hr',
-  'img',
-  'li',
-  'ol',
-  'p',
-  'pre',
-  'strong',
-  'table',
-  'tbody',
-  'td',
-  'th',
-  'thead',
-  'tr',
-  'ul',
-]);
-const EMPTY_ATTRS = new Set<string>();
-const ALLOWED_HTML_ATTRS = new Map([
-  ['a', new Set(['href', 'title'])],
-  ['img', new Set(['alt', 'height', 'src', 'title', 'width'])],
-  ['td', new Set(['align'])],
-  ['th', new Set(['align'])],
-]);
+const SEARCH_DEBOUNCE_MS = 150;
+
+interface PreviewCacheEntry {
+  content: string;
+  modified: number;
+  size: number;
+  truncated: boolean;
+}
+
+interface PreviewState {
+  noteId: string | null;
+  content: string;
+  isLoading: boolean;
+  error: string | null;
+  truncated: boolean;
+}
+
 interface AppState {
   config: MarkdownNotesConfig;
   projects: ProjectOption[];
@@ -83,6 +53,11 @@ interface AppState {
   isLoading: boolean;
   scannedAt: number | null;
   scanErrors: ScanError[];
+  preview: PreviewState;
+  previewCache: Map<string, PreviewCacheEntry>;
+  refreshSeq: number;
+  readSeq: number;
+  queuedRefresh: boolean;
 }
 
 const api = window.PluginAPI;
@@ -109,35 +84,31 @@ const state: AppState = {
   isLoading: false,
   scannedAt: null,
   scanErrors: [],
+  preview: {
+    noteId: null,
+    content: '',
+    isLoading: false,
+    error: null,
+    truncated: false,
+  },
+  previewCache: new Map(),
+  refreshSeq: 0,
+  readSeq: 0,
+  queuedRefresh: false,
 };
+
+let searchDebounceId: number | null = null;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const loadConfig = (): MarkdownNotesConfig => {
+const saveConfig = async (): Promise<void> => {
   try {
-    const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
-    if (!raw) return emptyConfig();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) return emptyConfig();
-    const projectMappings = isRecord(parsed.projectMappings)
-      ? Object.fromEntries(
-          Object.entries(parsed.projectMappings).filter(
-            (entry): entry is [string, string] => typeof entry[1] === 'string',
-          ),
-        )
-      : {};
-    return {
-      rootPath: typeof parsed.rootPath === 'string' ? parsed.rootPath : '',
-      projectMappings,
-    };
+    await saveMarkdownNotesConfig(api, state.config);
   } catch {
-    return emptyConfig();
+    state.error = 'Failed to save markdown notes settings.';
+    render();
   }
-};
-
-const saveConfig = (): void => {
-  localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(state.config));
 };
 
 const normalizeProjectFolderPath = (folderPath?: string | null): string | null =>
@@ -169,7 +140,6 @@ const isMarkdownNote = (value: unknown): value is MarkdownNote => {
     typeof value.relativeDir === 'string' &&
     typeof value.fileName === 'string' &&
     typeof value.title === 'string' &&
-    typeof value.content === 'string' &&
     typeof value.modified === 'number' &&
     typeof value.size === 'number'
   );
@@ -190,6 +160,21 @@ const toScanResult = (value: unknown): ScanMarkdownDirectoryResult => {
     notes: notesRaw.filter(isMarkdownNote),
     errors: errorsRaw.filter(isScanError),
     scannedAt: typeof value.scannedAt === 'number' ? value.scannedAt : Date.now(),
+    error: typeof value.error === 'string' ? value.error : undefined,
+  };
+};
+
+const toReadResult = (value: unknown): ReadMarkdownNoteResult => {
+  if (!isRecord(value)) {
+    throw new Error('Invalid note read result');
+  }
+  return {
+    success: value.success === true,
+    path: typeof value.path === 'string' ? value.path : '',
+    content: typeof value.content === 'string' ? value.content : '',
+    modified: typeof value.modified === 'number' ? value.modified : 0,
+    size: typeof value.size === 'number' ? value.size : 0,
+    truncated: value.truncated === true,
     error: typeof value.error === 'string' ? value.error : undefined,
   };
 };
@@ -218,6 +203,33 @@ const scanNotes = async (rootPath: string): Promise<ScanMarkdownDirectoryResult>
   return scanResult;
 };
 
+const readNoteContent = async (
+  rootPath: string,
+  notePath: string,
+): Promise<ReadMarkdownNoteResult> => {
+  if (!api?.executeNodeScript) {
+    throw new Error('Local folder access is available only in the desktop app.');
+  }
+
+  const result = await api.executeNodeScript({
+    script: READ_MARKDOWN_NOTE_SCRIPT,
+    args: [rootPath, notePath],
+    timeout: 30000,
+  });
+
+  if (!result.success) {
+    throw new Error(
+      typeof result.error === 'string' ? result.error : 'Failed to read markdown note',
+    );
+  }
+
+  const readResult = toReadResult(result.result);
+  if (!readResult.success) {
+    throw new Error(readResult.error || 'Failed to read markdown note');
+  }
+  return readResult;
+};
+
 const refreshGroups = (): void => {
   state.groups = groupNotes(
     state.notes,
@@ -227,8 +239,21 @@ const refreshGroups = (): void => {
   );
 };
 
+const cacheKeyForNote = (note: MarkdownNote): string =>
+  `${note.path}:${note.modified}:${note.size}`;
+
+const prunePreviewCache = (): void => {
+  const validKeys = new Set(state.notes.map(cacheKeyForNote));
+  [...state.previewCache.keys()].forEach((key) => {
+    if (!validKeys.has(key)) {
+      state.previewCache.delete(key);
+    }
+  });
+};
+
 const refresh = async (): Promise<void> => {
   if (state.isLoading) {
+    state.queuedRefresh = true;
     return;
   }
 
@@ -238,22 +263,40 @@ const refresh = async (): Promise<void> => {
     state.notes = [];
     state.groups = [];
     state.selectedNoteId = null;
+    state.preview = {
+      noteId: null,
+      content: '',
+      isLoading: false,
+      error: null,
+      truncated: false,
+    };
+    state.previewCache.clear();
     render();
     return;
   }
 
+  const refreshId = ++state.refreshSeq;
+  const requestedRootPath = state.config.rootPath.trim();
   state.isLoading = true;
+  state.queuedRefresh = false;
   state.error = null;
   state.status = 'Scanning markdown files...';
   render();
 
   try {
     state.projects = await loadProjects();
-    const result = await scanNotes(state.config.rootPath.trim());
+    const result = await scanNotes(requestedRootPath);
+    if (
+      refreshId !== state.refreshSeq ||
+      requestedRootPath !== state.config.rootPath.trim()
+    ) {
+      return;
+    }
     state.config.rootPath = result.rootPath;
     state.notes = result.notes;
     state.scanErrors = result.errors;
     state.scannedAt = result.scannedAt;
+    prunePreviewCache();
     refreshGroups();
     if (
       !state.selectedNoteId ||
@@ -262,13 +305,23 @@ const refresh = async (): Promise<void> => {
       state.selectedNoteId = state.notes[0]?.id ?? null;
     }
     state.status = `Loaded ${state.notes.length} markdown note${state.notes.length === 1 ? '' : 's'}.`;
-    saveConfig();
+    void saveConfig();
+    void loadSelectedNoteContent();
   } catch (error) {
+    if (refreshId !== state.refreshSeq) {
+      return;
+    }
     state.error = error instanceof Error ? error.message : String(error);
     state.status = '';
   } finally {
-    state.isLoading = false;
-    render();
+    if (refreshId === state.refreshSeq) {
+      state.isLoading = false;
+      render();
+      if (state.queuedRefresh) {
+        state.queuedRefresh = false;
+        void refresh();
+      }
+    }
   }
 };
 
@@ -278,55 +331,9 @@ const refreshIfIdle = (): void => {
   }
 };
 
-const sanitizeHtml = (html: string): string => {
-  const template = document.createElement('template');
-  template.innerHTML = html;
-
-  template.content.querySelectorAll('*').forEach((el) => {
-    const tagName = el.tagName.toLowerCase();
-
-    if (DANGEROUS_HTML_TAGS.has(tagName)) {
-      el.remove();
-      return;
-    }
-
-    if (!ALLOWED_HTML_TAGS.has(tagName)) {
-      el.replaceWith(...Array.from(el.childNodes));
-      return;
-    }
-
-    const allowedAttrs = ALLOWED_HTML_ATTRS.get(tagName) ?? EMPTY_ATTRS;
-    [...el.attributes].forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      if (!allowedAttrs.has(name)) {
-        el.removeAttribute(attr.name);
-        return;
-      }
-
-      if (name === 'href' && !isSafeMarkdownLinkUrl(attr.value)) {
-        el.removeAttribute(attr.name);
-      }
-      if (name === 'src' && !isSafeMarkdownImageUrl(attr.value)) {
-        el.removeAttribute(attr.name);
-      }
-    });
-
-    if (tagName === 'a') {
-      el.setAttribute('target', '_blank');
-      el.setAttribute('rel', 'noreferrer');
-    }
-    if (tagName === 'img') {
-      el.setAttribute('loading', 'lazy');
-      el.setAttribute('referrerpolicy', 'no-referrer');
-    }
-  });
-
-  return template.innerHTML;
-};
-
 const renderMarkdown = (markdown: string): string => {
   const html = marked.parse(markdown, { async: false, breaks: true, gfm: true });
-  return sanitizeHtml(typeof html === 'string' ? html : '');
+  return sanitizeMarkdownHtml(typeof html === 'string' ? html : '');
 };
 
 const filteredGroups = (): MarkdownNoteGroup[] => {
@@ -337,10 +344,7 @@ const filteredGroups = (): MarkdownNoteGroup[] => {
     .map((group) => ({
       ...group,
       notes: group.notes.filter((note) =>
-        [note.title, note.relativePath, note.content]
-          .join('\n')
-          .toLowerCase()
-          .includes(q),
+        [note.title, note.relativePath].join('\n').toLowerCase().includes(q),
       ),
     }))
     .filter((group) => group.notes.length > 0);
@@ -369,6 +373,92 @@ const createOption = (
   return option;
 };
 
+const renderCurrentPreview = (): void => {
+  const previewEl = document.getElementById('preview') as HTMLElement | null;
+  if (previewEl) {
+    renderPreview(previewEl);
+  }
+};
+
+const loadSelectedNoteContent = async (): Promise<void> => {
+  const note = selectedNote();
+  const readId = ++state.readSeq;
+
+  if (!note) {
+    state.preview = {
+      noteId: null,
+      content: '',
+      isLoading: false,
+      error: null,
+      truncated: false,
+    };
+    renderCurrentPreview();
+    return;
+  }
+
+  const cacheKey = cacheKeyForNote(note);
+  const cached = state.previewCache.get(cacheKey);
+  if (cached) {
+    state.preview = {
+      noteId: note.id,
+      content: cached.content,
+      isLoading: false,
+      error: null,
+      truncated: cached.truncated,
+    };
+    renderCurrentPreview();
+    return;
+  }
+
+  state.preview = {
+    noteId: note.id,
+    content: '',
+    isLoading: true,
+    error: null,
+    truncated: false,
+  };
+  renderCurrentPreview();
+
+  try {
+    const result = await readNoteContent(state.config.rootPath.trim(), note.path);
+    if (readId !== state.readSeq || state.selectedNoteId !== note.id) {
+      return;
+    }
+    const currentNote = selectedNote();
+    if (!currentNote || cacheKeyForNote(currentNote) !== cacheKey) {
+      return;
+    }
+    state.previewCache.set(cacheKey, {
+      content: result.content,
+      modified: result.modified,
+      size: result.size,
+      truncated: result.truncated,
+    });
+    state.preview = {
+      noteId: note.id,
+      content: result.content,
+      isLoading: false,
+      error: null,
+      truncated: result.truncated,
+    };
+  } catch (error) {
+    if (readId !== state.readSeq || state.selectedNoteId !== note.id) {
+      return;
+    }
+    state.preview = {
+      noteId: note.id,
+      content: '',
+      isLoading: false,
+      error: error instanceof Error ? error.message : String(error),
+      truncated: false,
+    };
+  } finally {
+    if (readId === state.readSeq) {
+      renderCurrentPreview();
+    }
+  }
+};
+
 const renderNoteButton = (note: MarkdownNote): HTMLButtonElement => {
   const button = document.createElement('button');
   button.type = 'button';
@@ -394,10 +484,7 @@ const selectNote = (noteId: string): void => {
   document.querySelectorAll<HTMLButtonElement>('.note-btn').forEach((button) => {
     button.classList.toggle('is-selected', button.dataset.noteId === noteId);
   });
-  const previewEl = document.getElementById('preview') as HTMLElement | null;
-  if (previewEl) {
-    renderPreview(previewEl);
-  }
+  void loadSelectedNoteContent();
 };
 
 const renderGroup = (group: MarkdownNoteGroup): HTMLElement => {
@@ -428,7 +515,7 @@ const renderGroup = (group: MarkdownNoteGroup): HTMLElement => {
     } else {
       delete state.config.projectMappings[group.key];
     }
-    saveConfig();
+    void saveConfig();
     refreshGroups();
     render();
   });
@@ -461,9 +548,24 @@ const renderPreview = (container: HTMLElement): void => {
 
   const markdown = document.createElement('div');
   markdown.className = 'markdown-preview';
-  markdown.innerHTML = renderMarkdown(note.content);
+  if (state.preview.noteId !== note.id || state.preview.isLoading) {
+    markdown.className = 'empty';
+    markdown.textContent = 'Loading markdown note...';
+  } else if (state.preview.error) {
+    markdown.className = 'status';
+    markdown.textContent = state.preview.error;
+  } else {
+    markdown.innerHTML = renderMarkdown(state.preview.content);
+  }
 
   container.append(header, markdown);
+
+  if (state.preview.noteId === note.id && state.preview.truncated) {
+    const truncated = document.createElement('div');
+    truncated.className = 'status';
+    truncated.textContent = 'Preview truncated to the first 1 MiB.';
+    container.append(truncated);
+  }
 };
 
 const renderContent = (): void => {
@@ -522,13 +624,19 @@ const render = (): void => {
   formEl.addEventListener('submit', (event) => {
     event.preventDefault();
     state.config.rootPath = rootInput.value.trim();
-    saveConfig();
+    void saveConfig();
     void refresh();
   });
   refreshBtn.addEventListener('click', refreshIfIdle);
   searchInput.addEventListener('input', () => {
     state.search = searchInput.value;
-    renderContent();
+    if (searchDebounceId !== null) {
+      window.clearTimeout(searchDebounceId);
+    }
+    searchDebounceId = window.setTimeout(() => {
+      searchDebounceId = null;
+      renderContent();
+    }, SEARCH_DEBOUNCE_MS);
   });
 
   if (!api?.executeNodeScript) {
@@ -549,9 +657,13 @@ const render = (): void => {
   renderContent();
 };
 
-state.config = loadConfig();
-render();
-refreshIfIdle();
+const init = async (): Promise<void> => {
+  state.config = await loadMarkdownNotesConfig(api);
+  render();
+  refreshIfIdle();
+};
+
+void init();
 window.setInterval(() => {
   if (document.visibilityState === 'visible' && state.config.rootPath.trim()) {
     refreshIfIdle();

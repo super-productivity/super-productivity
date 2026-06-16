@@ -14,7 +14,6 @@ const note = (partial: Partial<MarkdownNote>): MarkdownNote => ({
   relativeDir: partial.relativeDir ?? '',
   fileName: partial.fileName ?? 'Note.md',
   title: partial.title ?? 'Note',
-  content: partial.content ?? 'Content',
   modified: partial.modified ?? 1,
   size: partial.size ?? 7,
 });

@@ -10,11 +10,14 @@
   },
   "dependencies": {
     "@super-productivity/plugin-api": "file:../../plugin-api",
+    "dompurify": "^3.4.10",
     "marked": "^17.0.1"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^22.15.33",
     "esbuild": "^0.25.11",
+    "jsdom": "^29.1.1",
     "typescript": "^5.8.3"
   }
 }

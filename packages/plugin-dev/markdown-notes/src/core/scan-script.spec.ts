@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { SCAN_MARKDOWN_DIRECTORY_SCRIPT } from './scan-script';
-import type { ScanMarkdownDirectoryResult } from './types';
+import vm from 'node:vm';
+import { READ_MARKDOWN_NOTE_SCRIPT, SCAN_MARKDOWN_DIRECTORY_SCRIPT } from './scan-script';
+import type { ReadMarkdownNoteResult, ScanMarkdownDirectoryResult } from './types';
 
 const runScanScript = async (rootPath: string): Promise<ScanMarkdownDirectoryResult> => {
   const fn = new Function(
@@ -13,6 +14,77 @@ const runScanScript = async (rootPath: string): Promise<ScanMarkdownDirectoryRes
     `return (async function() { ${SCAN_MARKDOWN_DIRECTORY_SCRIPT} })();`,
   ) as (requireFn: NodeRequire, args: string[]) => Promise<ScanMarkdownDirectoryResult>;
   return fn(require, [rootPath]);
+};
+
+const runReadScript = async (
+  rootPath: string,
+  notePath: string,
+): Promise<ReadMarkdownNoteResult> => {
+  const fn = new Function(
+    'require',
+    'args',
+    `return (async function() { ${READ_MARKDOWN_NOTE_SCRIPT} })();`,
+  ) as (requireFn: NodeRequire, args: string[]) => Promise<ReadMarkdownNoteResult>;
+  return fn(require, [rootPath, notePath]);
+};
+
+const runScanScriptInDirectExecutorSandbox = async (
+  rootPath: string,
+): Promise<ScanMarkdownDirectoryResult> => {
+  const sandbox = {
+    require: (moduleName: string): unknown => {
+      if (moduleName === 'fs') return fs;
+      if (moduleName === 'path') return path;
+      if (moduleName === 'os') return os;
+      throw new Error(`Module '${moduleName}' is not allowed`);
+    },
+    JSON,
+    args: [rootPath],
+    __result: undefined as ScanMarkdownDirectoryResult | undefined,
+  };
+  const context = vm.createContext(sandbox);
+  const wrappedScript = `
+    (async function() {
+      const result = await (async function() {
+        ${SCAN_MARKDOWN_DIRECTORY_SCRIPT}
+      })();
+      __result = result;
+    })().catch(err => { throw err; });
+  `;
+
+  await vm.runInContext(wrappedScript, context, { timeout: 5000 });
+  if (!sandbox.__result) throw new Error('Missing scan result');
+  return sandbox.__result;
+};
+
+const runReadScriptInDirectExecutorSandbox = async (
+  rootPath: string,
+  notePath: string,
+): Promise<ReadMarkdownNoteResult> => {
+  const sandbox = {
+    require: (moduleName: string): unknown => {
+      if (moduleName === 'fs') return fs;
+      if (moduleName === 'path') return path;
+      if (moduleName === 'os') return os;
+      throw new Error(`Module '${moduleName}' is not allowed`);
+    },
+    JSON,
+    args: [rootPath, notePath],
+    __result: undefined as ReadMarkdownNoteResult | undefined,
+  };
+  const context = vm.createContext(sandbox);
+  const wrappedScript = `
+    (async function() {
+      const result = await (async function() {
+        ${READ_MARKDOWN_NOTE_SCRIPT}
+      })();
+      __result = result;
+    })().catch(err => { throw err; });
+  `;
+
+  await vm.runInContext(wrappedScript, context, { timeout: 5000 });
+  if (!sandbox.__result) throw new Error('Missing read result');
+  return sandbox.__result;
 };
 
 test('scan script recursively reads markdown files and ignores hidden support folders', async () => {
@@ -51,4 +123,77 @@ test('scan script keeps duplicate leaf folders distinct via absolute directory p
     result.notes.map((note) => note.dirPath).sort(),
     [first, second].sort(),
   );
+});
+
+test('scan script returns markdown metadata without note content', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  fs.writeFileSync(path.join(root, 'Root.md'), '# Root Note\nSecret body');
+
+  const result = await runScanScript(root);
+
+  assert.equal(result.success, true);
+  assert.equal(result.notes[0].title, 'Root Note');
+  assert.equal(Object.prototype.hasOwnProperty.call(result.notes[0], 'content'), false);
+});
+
+test('scan script runs in the direct nodeExecution sandbox without Buffer global', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  fs.writeFileSync(path.join(root, 'Root.md'), '# Root Note\nBody');
+
+  const result = await runScanScriptInDirectExecutorSandbox(root);
+
+  assert.equal(result.success, true);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.notes.length, 1);
+  assert.equal(result.notes[0].title, 'Root Note');
+});
+
+test('read script loads selected markdown note content', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  const notePath = path.join(root, 'Root.md');
+  fs.writeFileSync(notePath, '# Root Note\nBody');
+
+  const result = await runReadScript(root, notePath);
+
+  assert.equal(result.success, true);
+  assert.equal(result.path, notePath);
+  assert.equal(result.content, '# Root Note\nBody');
+  assert.equal(result.truncated, false);
+});
+
+test('read script runs in the direct nodeExecution sandbox without Buffer global', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  const notePath = path.join(root, 'Root.md');
+  fs.writeFileSync(notePath, '# Root Note\nBody');
+
+  const result = await runReadScriptInDirectExecutorSandbox(root, notePath);
+
+  assert.equal(result.success, true);
+  assert.equal(result.content, '# Root Note\nBody');
+});
+
+test('read script rejects markdown paths outside the selected root', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-outside-'));
+  const notePath = path.join(outsideRoot, 'Outside.md');
+  fs.writeFileSync(notePath, '# Outside');
+
+  const result = await runReadScript(root, notePath);
+
+  assert.equal(result.success, false);
+  assert.equal(result.content, '');
+  assert.match(result.error ?? '', /outside/i);
+});
+
+test('read script truncates large selected notes', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-md-notes-'));
+  const notePath = path.join(root, 'Large.md');
+  const oversized = 'x'.repeat(1024 * 1024 + 128);
+  fs.writeFileSync(notePath, oversized);
+
+  const result = await runReadScript(root, notePath);
+
+  assert.equal(result.success, true);
+  assert.equal(result.truncated, true);
+  assert.equal(result.content.length, 1024 * 1024);
 });
