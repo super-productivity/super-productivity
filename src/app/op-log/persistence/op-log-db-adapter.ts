@@ -104,6 +104,12 @@ export interface OpLogTx {
   getAll<T>(store: string, range?: DbKeyRange): Promise<T[]>;
   delete(store: string, key: DbKey): Promise<void>;
   clear(store: string): Promise<void>;
+  /**
+   * Count entries in a store, optionally restricted to a primary-key range.
+   * Cheap by construction (the engine aggregates) — unlike a cursor scan it never
+   * materialises the rows, so it is the right primitive for verification counts.
+   */
+  count(store: string, range?: DbKeyRange): Promise<number>;
   getFromIndex<T>(
     store: string,
     index: string,

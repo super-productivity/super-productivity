@@ -45,16 +45,6 @@ interface StoredRow {
 const maxSeq = (rows: ReadonlyArray<{ seq?: number }>): number =>
   rows.reduce((m, r) => (typeof r.seq === 'number' && r.seq > m ? r.seq : m), 0);
 
-/** Count a store's rows via a streaming scan — never materialises the rows. */
-const countRows = async (tx: OpLogTx, store: string): Promise<number> => {
-  let n = 0;
-  await tx.iterate(store, {}, () => {
-    n++;
-    return 'continue';
-  });
-  return n;
-};
-
 /** Highest `seq` across a store's rows, via a streaming scan. */
 const maxSeqInStore = async (tx: OpLogTx, store: string): Promise<number> => {
   let m = 0;
@@ -121,10 +111,11 @@ export const migrateOpLogBackend = async (
 
     // Verify-before-commit: per-store row counts, the ops high-water seq, and the
     // vector clock must all reproduce the source exactly. Any mismatch throws ->
-    // the whole copy rolls back, leaving `dest` empty. Counts are scanned (not
-    // materialised) so verification stays as low-memory as the copy.
+    // the whole copy rolls back, leaving `dest` empty. Counts use the engine's own
+    // aggregate (`tx.count`) rather than a cursor scan, so verification never
+    // re-transfers the (multi-MB) blob-store values it just wrote.
     for (const store of ALL_STORES) {
-      const destCount = await countRows(tx, store);
+      const destCount = await tx.count(store);
       if (destCount !== copiedCounts[store]) {
         throw new OpLogBackendMigrationError(
           `row count mismatch for '${store}': source ${copiedCounts[store]}, dest ${destCount}`,

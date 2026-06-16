@@ -775,15 +775,18 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
  * resets the connection (when the backend offers {@link SqliteDb.reset}).
  */
 describe('SqliteOpLogAdapter — transaction failure recovery', () => {
-  /** A fake whose COMMIT (and optionally ROLLBACK) reject, tracking reset() calls. */
+  /** A fake whose BEGIN/COMMIT/ROLLBACK reject as configured, tracking reset() calls. */
   const makeFlakyDb = (
-    failing: { commit?: boolean; rollback?: boolean } = {},
+    failing: { begin?: boolean; commit?: boolean; rollback?: boolean } = {},
   ): { db: SqliteDb; calls: string[]; resetCount: () => number } => {
     const calls: string[] = [];
     let resetCalls = 0;
     const db: SqliteDb = {
       run: (sql: string) => {
         calls.push(sql);
+        if (/^BEGIN/.test(sql) && failing.begin) {
+          return Promise.reject(new Error('begin failed'));
+        }
         if (sql === 'COMMIT' && failing.commit) {
           return Promise.reject(new Error('commit failed'));
         }
@@ -824,5 +827,21 @@ describe('SqliteOpLogAdapter — transaction failure recovery', () => {
     ).toBeRejected();
 
     expect(resetCount()).toBe(0);
+  });
+
+  it('resets the connection when BEGIN itself fails (leaked/wedged transaction)', async () => {
+    // A failing BEGIN means the connection already holds an open transaction; left
+    // alone, every later BEGIN would fail too. The adapter must drop the connection.
+    const { db, calls, resetCount } = makeFlakyDb({ begin: true });
+    const adapter = new SqliteOpLogAdapter(db);
+
+    await expectAsync(
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', async () => undefined),
+    ).toBeRejected();
+
+    expect(calls).toContain('BEGIN IMMEDIATE');
+    // No COMMIT/ROLLBACK attempted (the body never ran), but the connection is reset.
+    expect(calls).not.toContain('COMMIT');
+    expect(resetCount()).toBe(1);
   });
 });

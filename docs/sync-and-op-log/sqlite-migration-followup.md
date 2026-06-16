@@ -41,16 +41,21 @@ ordered so each item is independently shippable and reviewable.
   restore prompt is informed (`summarizeBackupStr` shows task / project
   counts). Electron continues to use its own rotated backup folder.
 
-- ✅ **B1 + B3 + C1 code landed (flag-gated, default off).** The native plugin
-  (`@capacitor-community/sqlite`) + `CapacitorSqliteDb` wrapper, the
-  flag-gated DI token flip (`native-sqlite-backend.ts`), and the one-time
-  first-launch IDB→SQLite migration bootstrap are all wired. Inert until
-  `SUP_USE_NATIVE_SQLITE_OP_LOG` is set on a native build (which needs
-  `npx cap sync`). On-device validation + staged rollout (C2) remain.
+- ✅ **B1 + B3 + C1 code landed — Android default-on, no opt-in flag.** The native
+  plugin (`@capacitor-community/sqlite`) + `CapacitorSqliteDb` wrapper, the DI token
+  flip (`native-sqlite-backend.ts`), and the one-time first-launch IDB→SQLite
+  migration bootstrap are all wired. On **Android** the SQLite backend is the
+  default (`shouldUseNativeSqliteOpLogBackend()` → `IS_ANDROID_NATIVE`); iOS and
+  web/PWA/Electron stay on IndexedDB. There is **no opt-in flag** — rollout is
+  ramped at the store level (Play Console staged rollout), and the backend falls
+  back to IndexedDB **in-session** if SQLite bootstrap fails recoverably (see C1).
+  On-device validation + the deferred bulk-write perf path remain.
 
-Nothing in the SQLite tracks below changes runtime behavior for existing users
-until the `SUP_USE_NATIVE_SQLITE_OP_LOG` flag flips a native build to the SQLite
-backend. The #7924 local-backup work is already live on Android/iOS.
+The op-log is the app's **authoritative** store (read during boot hydration), so
+the wiring is built to never brick startup and never silently serve stale data —
+see the C1 fallback design. iOS keeps IndexedDB until it is separately validated
+(its WKWebView storage has different eviction semantics, and the SQLite path is
+unvalidated there). The #7924 local-backup work is already live on Android/iOS.
 
 ---
 
@@ -110,9 +115,9 @@ captured on the next tick.
   plugin is pulled in via a **dynamic `import()`** so its web WASM build never
   enters the eager bundle; only a `import type` reaches the web build.
 - ✅ **Web-eviction gotcha respected:** construction is gated behind
-  `shouldUseNativeSqliteOpLogBackend()` (native **and** the opt-in flag). The
-  plugin's **web** build is WASM-SQLite persisted into IndexedDB — never bound on
-  web/PWA/Electron.
+  `shouldUseNativeSqliteOpLogBackend()` (**Android only**, `IS_ANDROID_NATIVE`).
+  The plugin's **web** build is WASM-SQLite persisted into IndexedDB — never bound
+  on web/PWA/Electron, and iOS keeps IndexedDB too.
 - ✅ **Perf mitigation 1 baked in:** `run` returns the plugin's own `lastId` from
   the insert response — no separate `SELECT last_insert_rowid()`. `run` is issued
   with `transaction = false` so the adapter's explicit `BEGIN/COMMIT/ROLLBACK` is
@@ -133,6 +138,17 @@ captured on the next tick.
   (each transaction as one unit) through it. Covered by a real-sql.js concurrency
   test (`sqlite-op-log-adapter.spec.ts`) that asserts the collision without the
   serializer and success with it.
+- ✅ **Open timeout (no boot-brick).** The native open handshake is bounded by
+  `DEFAULT_OPEN_TIMEOUT_MS` (15s); a wedged connection would otherwise leave
+  `open()` pending forever and, because the op-log is read during boot hydration,
+  brick startup with no recovery. On timeout the open rejects so the backend can
+  fall back to IndexedDB (pre-migration) or fail loudly (post-migration). The
+  timeout deliberately does **not** wrap the migration itself (bounded, progressing
+  work; capping it risks never migrating a large account) — a mid-migration wedge
+  is the residual the deferred per-statement timeout would close.
+- ✅ **`databaseExists()` durable existence probe.** Wraps the plugin's
+  `isDatabase`, answerable without a usable connection, so the fallback decision
+  can ask "could a migration have committed?" even when `open()` failed.
 - ⏳ **Remains (device-gated):** run `npx cap sync` (+ `pod install`) so the
   Android/iOS projects pick up the now-allowlisted native plugin, then build + run
   on a real device, including a WebView force-reload to exercise the reuse path.
@@ -204,16 +220,18 @@ captured on the next tick.
   deadlocks on the queue) is documented but unenforced — a lint rule is the right
   future guard (a runtime flag can't tell a re-entrant call from a legal
   concurrent one).
-- ✅ **Token flip landed (flag-gated, default off).** `OP_LOG_DB_ADAPTER_FACTORY`
-  now returns the native SQLite factory when `shouldUseNativeSqliteOpLogBackend()`
-  (`native-sqlite-backend.ts`) — i.e. on native **and** the
-  `SUP_USE_NATIVE_SQLITE_OP_LOG` localStorage flag is `'true'`. Otherwise the
-  IndexedDB default is unchanged. `createNativeSqliteOpLogAdapterFactory()` closes
-  over ONE `CapacitorSqliteDb` and vends every service its own adapter over that
-  single connection (mirroring the shared IDB connection); the bootstrap runs once
-  regardless of how many adapters init. Unit-covered (`native-sqlite-backend.spec.ts`).
-- ⏳ **Remains (device-gated):** flip the flag on a real native build and verify.
-- **Size:** done. **Risk:** gated by the flag — dead in production until set.
+- ✅ **Token flip landed — Android default-on, no flag.** `OP_LOG_DB_ADAPTER_FACTORY`
+  returns the native SQLite factory when `shouldUseNativeSqliteOpLogBackend()`
+  (`native-sqlite-backend.ts`) → `IS_ANDROID_NATIVE`; iOS and web/PWA/Electron keep
+  the IndexedDB default. `createNativeSqliteOpLogAdapterFactory()` closes over ONE
+  `CapacitorSqliteDb` and vends every service a `NativeOpLogAdapter` over a single
+  shared backend decision (bootstrap + fallback choice run once regardless of how
+  many adapters init). Unit-covered (`native-sqlite-backend.spec.ts`).
+- ⏳ **Remains (device-gated):** build a real Android device, confirm the backend
+  binds and basic op-log read/write + sync work.
+- **Risk:** on by default for Android — see the C1 in-session fallback, which keeps
+  a recoverable bootstrap failure from bricking boot. Ramp via Play Console staged
+  rollout (there is no in-app kill-switch).
 
 ---
 
@@ -236,29 +254,54 @@ captured on the next tick.
   verified copy, so a failed/aborted run retries next launch; the IDB copy is left
   **untouched** as a ≥ 1-release fallback. Unit-covered (idempotency, empty-source,
   shared-connection) in `native-sqlite-backend.spec.ts`.
-- ✅ **Bootstrap-failure fallback (no permanent wedge).** A bootstrap that throws
-  every launch (corrupt source row, SQLite open failure) would otherwise leave the
-  op-log uninitialised forever — the factory rethrows and `init()` keeps rejecting.
-  Now `shouldUseNativeSqliteOpLogBackend()` tracks a localStorage failure counter
-  (`SUP_NATIVE_SQLITE_OP_LOG_FAIL_COUNT`) and, after
-  `MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES` (3) **pre-migration** failures, falls back
-  to IndexedDB so the app keeps working. **Critical asymmetry:** the fallback is
-  only safe _before_ migration commits — once the copy succeeds, SQLite holds the
-  live data and the retained IDB copy is a stale frozen snapshot, so falling back
-  to it would silently drop every post-migration op. A localStorage "authoritative"
-  mirror (`SUP_NATIVE_SQLITE_OP_LOG_MIGRATED`, set on first successful bootstrap)
-  makes the gate keep retrying SQLite forever post-migration and never fall back.
-  To re-attempt after hitting the cap, clear the fail-count key. Unit-covered (both
-  branches) in `native-sqlite-backend.spec.ts`.
-- ⏳ **Remains (device-gated):** run on a real device with the flag set and confirm
-  a populated legacy install migrates end-to-end.
+- ✅ **In-session bootstrap-failure fallback (no boot-brick, no stale data).** Since
+  the op-log is the authoritative store and on by default for Android, a bootstrap
+  that fails must neither brick boot nor silently serve stale data. The factory's
+  `init()` (`createNativeSqliteOpLogAdapterFactory` → `NativeOpLogAdapter`):
+  - **Success** → binds the SQLite backend.
+  - **Recoverable PRE-migration failure** → transparently serves a self-opening
+    `IndexedDbOpLogAdapter` **for this session**, so the app still boots; the legacy
+    IDB copy is still complete pre-migration, so the fallback is lossless. SQLite is
+    retried on the next launch.
+  - **POST-migration / ambiguous failure** → rejects (fails loudly) rather than
+    serve the now-stale IDB snapshot, which would drop every post-migration op.
+
+  **The durable authority is the in-SQLite `sup_op_log_meta` marker**, not a
+  localStorage mirror (which, being WebView storage, is exactly what the migration
+  is escaping). `canFallBackToIdb` reads it: marker absent (open OK) → pre-migration
+  → safe; connection unopenable → fall back **only if the DB file does not exist**
+  (`databaseExists()`), since a present-but-unopenable file might hold
+  post-migration ops. The previous localStorage fail-count + "authoritative" mirror
+  are **removed** — in-session fallback makes the across-restart counter obsolete,
+  and the durable marker replaces the mirror. Unit-covered (every branch) in
+  `native-sqlite-backend.spec.ts`.
+
+- ✅ **Low-memory verify (W2).** Verify-before-commit counts via the engine's
+  `tx.count` aggregate, not a cursor scan, so it never re-transfers the (multi-MB)
+  blob-store values it just wrote. Combined with the per-store streaming copy, peak
+  memory is bounded to one store at a time.
+- ⏳ **Deferred perf (on-device-measurable only):** the `ops` store is still
+  buffered fully in JS during the copy (the dominant multi-MB _blob_ stores are
+  already streamed one-at-a-time, so this is the smaller residual), and each op is
+  one JS↔native bridge crossing (N ops = N crossings). A batched `executeSet`
+  write path + seq-windowed `ops` read would cut both, but the win is unmeasurable
+  with in-process sql.js — implement only if on-device profiling shows the
+  first-launch migration is too slow / OOMs on large accounts.
+- ⏳ **Remains (device-gated):** run on a real Android device and confirm a
+  populated legacy install migrates end-to-end; force a wedged/failed open and
+  confirm the in-session IDB fallback boots the app.
 - **Risk:** high (data movement) — mitigated by the verify-before-commit safety
-  net (tested to actually roll back) + retain-source + the run-once marker.
+  net (tested to actually roll back) + retain-source + the run-once durable marker
+  - the in-session fallback.
 
 ### C2. Staged rollout
 
-Beta/dogfood on real Android devices → staged enable → remove the IDB fallback
-and the `adoptConnection` bridge once SQLite is the sole native backend.
+There is **no remote feature flag or in-app kill-switch** (the app is local-first).
+"On by default for Android" therefore ships to 100% of updaters and is only
+reversible via an app-store update. Ramp using **Play Console staged rollout**
+(percentage of the Android release) and watch the `opLogSqliteMigrationFailed` /
+`opLogSqliteFellBackToIdb` breadcrumbs. Once SQLite is proven the sole native
+backend, remove the IDB fallback and the `adoptConnection` bridge (Track D).
 
 ---
 
@@ -280,15 +323,17 @@ and the `adoptConnection` bridge once SQLite is the sole native backend.
 1. ✅ Track A complete — **A1** (storage-persistence diagnostics) → **A2**
    (debounced data-change trigger) → **A3** (near-empty write-time overwrite
    guard) all shipped.
-2. ✅ **B1 → B2 → B3** code landed (SQLite runnable behind the
-   `SUP_USE_NATIVE_SQLITE_OP_LOG` flag, default off); the on-device run +
-   `npx cap sync` remain — tracked in #7931.
-3. ✅ **C1** wiring landed (first-launch IDB→SQLite copy, verify-before-commit);
-   **C2** staged on-device rollout remains — tracked in #7931.
+2. ✅ **B1 → B2 → B3** code landed (SQLite is the Android default backend); the
+   on-device run + `npx cap sync` remain — tracked in #7931.
+3. ✅ **C1** wiring landed (first-launch IDB→SQLite copy, verify-before-commit,
+   in-session fallback); **C2** staged on-device rollout via Play Console remains
+   — tracked in #7931.
 4. **D** (tidy up once SQLite is the native default) — tracked in #7931.
 
-> **Enabling on a native build:** `localStorage.setItem('SUP_USE_NATIVE_SQLITE_OP_LOG', 'true')`
-> then restart. Requires `npx cap sync` first so the native plugin is built in.
+> **Enabling on a native build:** SQLite is the default on Android — no flag.
+> Requires `npx cap sync android` first so the native plugin is built in. To force
+> IndexedDB for debugging, the gate is `IS_ANDROID_NATIVE`; there is no runtime
+> opt-out (rollout is ramped via Play Console).
 
 Tracks A and B/C/D are independent — A shipped while B/C/D moves at its own
 device-gated cadence.
