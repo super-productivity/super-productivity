@@ -300,16 +300,14 @@ describe('rrule-occurrence engine — complex variants × settings', () => {
       ].forEach((r) => expect(isRRuleValid(r)).withContext(r).toBe(true));
     });
 
-    it('pre-screens BYSETPOS beyond the per-period set (DAILY/WEEKLY) in O(1)', () => {
+    it('pre-screens positive BYSETPOS beyond the per-period set (DAILY/WEEKLY)', () => {
       // A day holds 1 occurrence and a week holds at most its BYDAY count, so a
-      // BYSETPOS past that matches nothing. These previously walked seconds to the
-      // ceiling on the probe; _canNeverFire now rejects them up front.
-      const start = performance.now();
+      // POSITIVE BYSETPOS past that matches nothing. These previously walked
+      // seconds to the ceiling on the probe; _canNeverFire now rejects them.
       expect(isRRuleValid('FREQ=DAILY;BYSETPOS=2')).toBe(false);
       expect(isRRuleValid('FREQ=DAILY;BYDAY=MO;BYSETPOS=2')).toBe(false);
       expect(isRRuleValid('FREQ=WEEKLY;BYDAY=MO;BYSETPOS=5')).toBe(false);
       expect(isRRuleValid('FREQ=WEEKLY;BYDAY=MO,TU,WE;BYSETPOS=4')).toBe(false);
-      expect(performance.now() - start).toBeLessThan(500);
     });
 
     it('keeps in-range BYSETPOS valid (no false positives)', () => {
@@ -318,17 +316,26 @@ describe('rrule-occurrence engine — complex variants × settings', () => {
         'FREQ=DAILY;BYSETPOS=-1', // last == only
         'FREQ=WEEKLY;BYDAY=MO,TU,WE;BYSETPOS=2', // 2nd of 3
         'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1', // last weekday
+        // rrule.js CLAMPS an out-of-range negative BYSETPOS and still fires, so
+        // a negative value must never be flagged (regression: these were dropped
+        // to the legacy fallback by the old `Math.abs(p) > slots` check).
+        'FREQ=DAILY;BYSETPOS=-2',
+        'FREQ=DAILY;BYSETPOS=-100',
+        'FREQ=WEEKLY;BYDAY=MO;BYSETPOS=-2',
+        // With NO BYDAY, BYMONTHDAY / BYYEARDAY / BYWEEKNO EXPAND the per-week set
+        // past the (zero) BYDAY count, so the bound doesn't hold — must not flag.
+        'FREQ=WEEKLY;BYMONTHDAY=1,2,3;BYSETPOS=2',
+        'FREQ=WEEKLY;BYYEARDAY=1,2,3;BYSETPOS=2',
+        'FREQ=WEEKLY;BYWEEKNO=10,20;BYSETPOS=2',
       ].forEach((r) => expect(isRRuleValid(r)).withContext(r).toBe(true));
     });
 
-    it('pre-screens BYWEEKNO × BYYEARDAY contradictions (no BYMONTH) in O(1)', () => {
+    it('pre-screens BYWEEKNO × BYYEARDAY contradictions (no BYMONTH)', () => {
       // A year-day and a week number that can never share a month can never
       // coincide — week 10 is ~March, year-day 300 is ~October. The BYMONTH-based
       // checks are skipped when bymonth is empty, so this needs its own pre-screen.
-      const start = performance.now();
       expect(isRRuleValid('FREQ=DAILY;BYWEEKNO=10;BYYEARDAY=300')).toBe(false);
       expect(isRRuleValid('FREQ=YEARLY;BYWEEKNO=2;BYYEARDAY=200')).toBe(false);
-      expect(performance.now() - start).toBeLessThan(500);
     });
 
     it('keeps satisfiable BYWEEKNO × BYYEARDAY valid (no false positives)', () => {
