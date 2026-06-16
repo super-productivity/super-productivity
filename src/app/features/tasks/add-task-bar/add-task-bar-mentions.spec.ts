@@ -35,6 +35,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
   let component: AddTaskBarComponent;
   let fixture: ComponentFixture<TestHostComponent>;
   let tagsSubject: BehaviorSubject<any>;
+  let sortedTagsSubject: BehaviorSubject<any>;
   let miscSubject: BehaviorSubject<any>;
 
   const validTags: Tag[] = [
@@ -94,10 +95,12 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       listSortedForUI: signal(validProjects),
     });
     tagsSubject = new BehaviorSubject(validTags);
+    sortedTagsSubject = new BehaviorSubject([...validTags].reverse());
     const tagServiceSpy = jasmine.createSpyObj('TagService', ['addTag'], {
       tags$: of(validTags),
       tagsNoMyDayAndNoList$: tagsSubject,
-      tagsNoMyDayAndNoListSorted$: tagsSubject,
+      tagsNoMyDayAndNoList: signal(validTags),
+      tagsNoMyDayAndNoListSorted$: sortedTagsSubject,
       tagsNoMyDayAndNoListSorted: signal(validTags),
     });
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
@@ -171,10 +174,23 @@ describe('AddTaskBarComponent Mentions Integration', () => {
   });
 
   describe('mentionCfg$ observable', () => {
+    it('should keep tag mention suggestions in sidebar order', (done) => {
+      component.mentionCfg$.subscribe((config) => {
+        const tagMention = config.mentions!.find((m) => m.triggerChar === '#');
+        const titles = tagMention!.items!.map((item: any) => item.title);
+
+        expect(titles.slice(0, validTags.length)).toEqual(
+          validTags.map((tag) => tag.title),
+        );
+        done();
+      });
+    });
+
     it('should pass through tag items without filtering', (done) => {
       // Mix valid and invalid tags; directive layer handles validation
       const mixedTags = [...validTags, ...invalidTags];
       tagsSubject.next(mixedTags as any);
+      sortedTagsSubject.next([...mixedTags].reverse());
 
       component.mentionCfg$.subscribe((config) => {
         expect(config).toBeTruthy();

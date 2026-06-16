@@ -41,9 +41,15 @@ const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
 );
 
 /** Result of {@link TaskViewCustomizerService.customizeUndoneTasks}. */
+export interface CustomizedTaskGroup {
+  key: string;
+  tasks: TaskWithSubTasks[];
+}
+
 export interface CustomizedUndoneTasks {
   list: TaskWithSubTasks[];
   grouped?: Record<string, TaskWithSubTasks[]>;
+  groups?: CustomizedTaskGroup[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -215,8 +221,9 @@ export class TaskViewCustomizerService {
         const grouped = !isDefaultGroup
           ? this.applyGrouping(sorted, group.type)
           : undefined;
+        const groups = grouped ? this._groupRecordToGroups(grouped) : undefined;
 
-        return { result: { list: sorted, grouped }, isDefault: false };
+        return { result: { list: sorted, grouped, groups }, isDefault: false };
       }),
       // Emit the default (uncustomized) list synchronously, but keep the
       // customized path on the animation-frame scheduler. The customized branch
@@ -425,6 +432,12 @@ export class TaskViewCustomizerService {
       },
       {} as Record<string, TaskWithSubTasks[]>,
     );
+  }
+
+  private _groupRecordToGroups(
+    grouped: Record<string, TaskWithSubTasks[]>,
+  ): CustomizedTaskGroup[] {
+    return Object.entries(grouped).map(([key, tasks]) => ({ key, tasks }));
   }
 
   private _filterByDateFields(

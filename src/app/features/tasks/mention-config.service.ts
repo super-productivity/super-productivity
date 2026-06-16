@@ -37,7 +37,7 @@ export class MentionConfigService {
 
   readonly mentionConfig$: Observable<MentionConfig> = combineLatest([
     this._globalConfigService.shortSyntax$,
-    this._tagService.tagsNoMyDayAndNoListSorted$,
+    this._tagService.tagsNoMyDayAndNoList$,
     this._projectService.listSortedForUI$,
   ]).pipe(
     map(([cfg, tagSuggestions, projectSuggestions]) => {

@@ -131,8 +131,8 @@
             </div>
           }
           @if (customizedUndoneTasks(); as customized) {
-            @if (customized.grouped) {
-              @for (group of customized.grouped | keyvalue; track group.key) {
+            @if (customized.groups) {
+              @for (group of customized.groups; track group.key) {
                 <collapsible
                   [title]="group.key | scheduledDateGroup"
                   [isIconBefore]="true"
@@ -143,7 +143,7 @@
                   [isGroup]="true"
                 >
                   <task-list
-                    [tasks]="group.value"
+                    [tasks]="group.tasks"
                     listId="PARENT"
                     listModelId="UNDONE"
                   ></task-list>
