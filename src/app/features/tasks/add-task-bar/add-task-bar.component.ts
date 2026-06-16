@@ -71,7 +71,10 @@ import { remindOptionToMilliseconds } from '../util/remind-option-to-millisecond
 import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
-import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
@@ -85,6 +88,8 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
+import { TaskBuilderService } from '../task-builder.service';
+import { QuickAddTaskPayload } from '../../../../../electron/shared-with-frontend/quick-add-task-payload.model';
 
 @Component({
   selector: 'add-task-bar',
@@ -131,6 +136,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _markdownPasteService = inject(MarkdownPasteService);
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _taskBuilderService = inject(TaskBuilderService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -147,6 +153,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   tagsToRemove = input<string[]>([]);
   planForDay = input<string>();
   isSubmitViaIpc = input<boolean>(false);
+
+  // NOTE: The global "Quick Add" shortcut (defaulting to Ctrl+Shift+Space on
+  // Win/Linux and Cmd+Shift+Space on Mac) can be configured in settings.
+  // It allows adding tasks from any application without switching context.
 
   // Outputs
   afterTaskAdd = output<{ taskId: string; isAddToBottom: boolean }>();
@@ -172,7 +182,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   suggestions$!: Observable<AddTaskSuggestion[]>;
   activatedIssueTask = toSignal(this.activatedSuggestion$, { initialValue: null });
 
-  tempPlaceholder = signal<string | null>(null);
+  tempPlaceholder = signal<{
+    key: string;
+    params?: Record<string, string | number>;
+  } | null>(null);
   private _tempPlaceholderTimeout?: number;
 
   // Computed values
@@ -515,104 +528,50 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
       Log.x(taskData);
 
-      if (this.isSubmitViaIpc()) {
-        const resolvedRemindOption =
-          state.remindOption ??
-          this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
-          DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
-
-        let repeatCfg: any = null;
-        if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
-          const startDate = state.date || this._dateService.todayStr();
-          const referenceDate = dateStrToUtcDate(startDate);
-          const quickSettingUpdates =
-            getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
-          repeatCfg = {
-            ...DEFAULT_TASK_REPEAT_CFG,
-            startDate,
-            ...quickSettingUpdates,
-            title,
-            quickSetting: state.repeatQuickSetting,
-            tagIds: taskData.tagIds ?? [],
-            defaultEstimate: state.estimate || 0,
-            startTime: state.time || undefined,
-            remindAt: state.time ? resolvedRemindOption : undefined,
-          };
-        }
-
-        if (this.IS_ELECTRON) {
-          window.ea.submitAddTaskViaIpc({
-            title,
-            taskData,
-            isAddToBacklog: this.isAddToBacklog(),
-            isAddToBottom: this.isAddToBottom(),
-            remindOption: resolvedRemindOption,
-            repeatQuickSetting: state.repeatQuickSetting,
-            repeatCfg,
-          });
-        }
-
-        this.afterTaskAdd.emit({ taskId: '', isAddToBottom: this.isAddToBottom() });
-        this._resetAfterAdd(title);
-        return;
-      }
-
-      const taskId = this._taskService.add(
-        title,
-        this.isAddToBacklog(),
-        taskData,
-        this.isAddToBottom(),
-      );
-
-      // Resolve remind option once for both scheduleTask and repeat config paths
       const resolvedRemindOption =
         state.remindOption ??
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
         DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
 
-      // Skip scheduleTask for timed repeat tasks — the addRepeatCfgToTaskUpdateTask$
-      // effect already handles scheduling via scheduleTaskWithTime, so calling both
-      // would cause double-scheduling.
-      const isTimedRepeatTask =
-        !!state.repeatQuickSetting &&
-        state.repeatQuickSetting !== 'CUSTOM' &&
-        !!state.time;
-      if (taskData.dueWithTime && !isTimedRepeatTask) {
-        this._taskService
-          .getByIdOnce$(taskId)
-          .pipe(timeout(1000))
-          .subscribe((task) => {
-            this._taskService.scheduleTask(
-              task,
-              taskData.dueWithTime!,
-              resolvedRemindOption,
-              this.isAddToBacklog(),
-            );
-          });
+      let repeatCfg: Partial<TaskRepeatCfg> | undefined;
+      if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
+        const startDate = state.date || this._dateService.todayStr();
+        const referenceDate = dateStrToUtcDate(startDate);
+        const quickSettingUpdates =
+          getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
+        repeatCfg = {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          startDate,
+          ...quickSettingUpdates,
+          title,
+          quickSetting: state.repeatQuickSetting,
+          tagIds: taskData.tagIds ?? [],
+          defaultEstimate: state.estimate || 0,
+          startTime: state.time || undefined,
+          remindAt: state.time ? resolvedRemindOption : undefined,
+        };
       }
 
-      // Create repeat config if a repeat setting was selected
-      if (state.repeatQuickSetting) {
-        if (state.repeatQuickSetting === 'CUSTOM') {
-          this._openRepeatDialogForTask(taskId, resolvedRemindOption);
-        } else {
-          const startDate = state.date || this._dateService.todayStr();
-          const referenceDate = dateStrToUtcDate(startDate);
-          const quickSettingUpdates =
-            getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
-          this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
-            ...DEFAULT_TASK_REPEAT_CFG,
-            startDate,
-            ...quickSettingUpdates,
-            title,
-            quickSetting: state.repeatQuickSetting,
-            tagIds: taskData.tagIds ?? [],
-            defaultEstimate: state.estimate || 0,
-            startTime: state.time || undefined,
-            remindAt: state.time ? resolvedRemindOption : undefined,
-          });
+      const payload: QuickAddTaskPayload = {
+        title,
+        taskData,
+        isAddToBacklog: this.isAddToBacklog(),
+        isAddToBottom: this.isAddToBottom(),
+        remindOption: resolvedRemindOption,
+        repeatQuickSetting: state.repeatQuickSetting,
+        repeatCfg,
+      };
+
+      if (this.isSubmitViaIpc()) {
+        if (this.IS_ELECTRON && window.ea) {
+          window.ea.submitAddTaskViaIpc(payload);
         }
+        this.afterTaskAdd.emit({ taskId: '', isAddToBottom: this.isAddToBottom() });
+        this._resetAfterAdd(title);
+        return;
       }
+
+      const taskId = this._taskBuilderService.addTaskWithStuff(payload);
 
       this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });
       this._resetAfterAdd(title);
@@ -915,11 +874,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
     // Trigger temporary placeholder text "Task added successfully" in faint gray
     const truncatedTitle = title ? truncate(title, 20) : '';
-    this.tempPlaceholder.set(
-      this._translateService.instant(T.F.TASK.ADD_TASK_BAR.ADD_TASK_SUCCESS, {
-        title: truncatedTitle,
-      }),
-    );
+    this.tempPlaceholder.set({
+      key: T.F.TASK.ADD_TASK_BAR.ADD_TASK_SUCCESS,
+      params: { title: truncatedTitle },
+    });
     if (this._tempPlaceholderTimeout) {
       window.clearTimeout(this._tempPlaceholderTimeout);
     }

@@ -22,6 +22,7 @@ import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { TaskRepeatCfgService } from '../../features/task-repeat-cfg/task-repeat-cfg.service';
+import { TaskBuilderService } from '../../features/tasks/task-builder.service';
 
 // NOTE: Relying on Angular CDK overlay CSS class names keeps shortcut suppression simple.
 // If CDK changes these class names we only need to adjust the helpers below.
@@ -47,6 +48,7 @@ export class ShortcutService {
   private _taskShortcutService = inject(TaskShortcutService);
   private _overlayContainer = inject(OverlayContainer);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
+  private _taskBuilderService = inject(TaskBuilderService);
 
   isCtrlPressed$: Observable<boolean> = fromEvent(document, 'keydown').pipe(
     switchMap((ev: Event) => {
@@ -90,54 +92,10 @@ export class ShortcutService {
         }
       });
       window.ea.onAddTaskViaIpc((payload) => {
-        const taskId = this._taskService.add(
-          payload.title,
-          payload.isAddToBacklog,
-          payload.taskData,
-          payload.isAddToBottom,
-        );
+        this._taskBuilderService.addTaskWithStuff(payload);
 
-        if (payload.taskData.dueWithTime) {
-          const isTimedRepeatTask =
-            !!payload.repeatQuickSetting &&
-            payload.repeatQuickSetting !== 'CUSTOM' &&
-            !!payload.taskData.dueWithTime;
-
-          if (!isTimedRepeatTask) {
-            this._taskService
-              .getByIdOnce$(taskId)
-              .pipe(first())
-              .subscribe((task) => {
-                this._taskService.scheduleTask(
-                  task,
-                  payload.taskData.dueWithTime!,
-                  payload.remindOption,
-                  payload.isAddToBacklog,
-                );
-              });
-          }
-        }
-
-        if (payload.repeatQuickSetting) {
-          if (payload.repeatQuickSetting === 'CUSTOM') {
-            window.ea.showOrFocus();
-            this._taskService
-              .getByIdOnce$(taskId)
-              .pipe(first())
-              .subscribe(async (task) => {
-                const { DialogEditTaskRepeatCfgComponent } =
-                  await import('../../features/task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
-                this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
-                  data: { task, defaultRemindOption: payload.remindOption },
-                });
-              });
-          } else if (payload.repeatCfg) {
-            this._taskRepeatCfgService.addTaskRepeatCfgToTask(
-              taskId,
-              payload.taskData.projectId,
-              payload.repeatCfg,
-            );
-          }
+        if (payload.repeatQuickSetting === 'CUSTOM') {
+          window.ea.showOrFocus();
         }
       });
     }

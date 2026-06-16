@@ -15,10 +15,11 @@
       (listShownChange)="updateListShown($event)"
       [matAutocomplete]="taskAutoCompleteEl"
       [placeholder]="
-        tempPlaceholder() ??
-        (isSearchMode()
-          ? (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH | translate)
-          : (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE | translate))
+        tempPlaceholder()
+          ? (tempPlaceholder()!.key | translate: tempPlaceholder()!.params)
+          : isSearchMode()
+            ? (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH | translate)
+            : (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE | translate)
       "
       matInput
       spellcheck="false"

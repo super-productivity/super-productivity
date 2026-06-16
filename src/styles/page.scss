@@ -282,7 +282,7 @@ body.isQuickAddRoute.isElectron:not(.isFullScreen) {
   border: none !important;
 }
 
-body.isQuickAddRoute {
+.quick-add-overlay {
   .mat-mdc-dialog-surface,
   .mat-mdc-menu-panel,
   .mat-mdc-select-panel,

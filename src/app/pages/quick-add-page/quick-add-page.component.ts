@@ -1,6 +1,14 @@
-import { Component, HostListener, inject, OnInit } from '@angular/core';
+import {
+  Component,
+  HostListener,
+  inject,
+  OnDestroy,
+  OnInit,
+  viewChild,
+} from '@angular/core';
 import { AddTaskBarComponent } from '../../features/tasks/add-task-bar/add-task-bar.component';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+import { OverlayContainer } from '@angular/cdk/overlay';
 
 @Component({
   selector: 'quick-add-page',
@@ -9,6 +17,7 @@ import { LayoutService } from '../../core-ui/layout/layout.service';
   template: `
     <div class="quick-add-container">
       <add-task-bar
+        #addTaskBar
         (closed)="closeWindow()"
         [isGlobalBarVariant]="true"
         [isSubmitViaIpc]="true"
@@ -40,11 +49,24 @@ import { LayoutService } from '../../core-ui/layout/layout.service';
     `,
   ],
 })
-export class QuickAddTaskPageComponent implements OnInit {
+export class QuickAddTaskPageComponent implements OnInit, OnDestroy {
   private _layoutService = inject(LayoutService);
+  private _overlayContainer = inject(OverlayContainer);
+
+  addTaskBar = viewChild.required(AddTaskBarComponent);
 
   ngOnInit(): void {
+    this._overlayContainer.getContainerElement().classList.add('quick-add-overlay');
     this._layoutService.showAddTaskBar();
+  }
+
+  ngOnDestroy(): void {
+    this._overlayContainer.getContainerElement().classList.remove('quick-add-overlay');
+  }
+
+  @HostListener('window:focus')
+  onWindowFocus(): void {
+    this.addTaskBar().focusInput(true);
   }
 
   @HostListener('document:click', ['$event'])

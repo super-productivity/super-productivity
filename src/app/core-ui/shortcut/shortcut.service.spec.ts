@@ -18,6 +18,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { TaskReminderOptionId } from '../../features/tasks/task.model';
+import { QuickAddTaskPayload } from '../../../../electron/shared-with-frontend/quick-add-task-payload.model';
 
 describe('ShortcutService', () => {
   let service: ShortcutService;
@@ -26,7 +27,7 @@ describe('ShortcutService', () => {
   let mockConfigService: any;
   let mockTaskService: any;
   let mockTaskRepeatCfgService: any;
-  let onAddTaskViaIpcListener: (payload: any) => void;
+  let onAddTaskViaIpcListener: (payload: QuickAddTaskPayload) => void;
 
   beforeEach(() => {
     mockTaskShortcutService = {
@@ -175,13 +176,13 @@ describe('ShortcutService', () => {
     });
 
     it('should add repeat config if provided', () => {
-      const payload = {
+      const payload: QuickAddTaskPayload = {
         title: 'Repeat Task',
         isAddToBacklog: false,
         taskData: { projectId: 'P_ID' },
         isAddToBottom: false,
         repeatQuickSetting: 'DAILY',
-        repeatCfg: { some: 'config' },
+        repeatCfg: { title: 'config' },
       };
 
       onAddTaskViaIpcListener(payload);
@@ -189,7 +190,7 @@ describe('ShortcutService', () => {
       expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).toHaveBeenCalledWith(
         'TASK_ID',
         'P_ID',
-        { some: 'config' },
+        jasmine.objectContaining({ title: 'config' }),
       );
     });
   });

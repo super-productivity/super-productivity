@@ -3,6 +3,8 @@ import { join, normalize } from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getWinSafe } from './main-window';
 import { isAppOriginUrl } from './navigation-guard';
+import { IS_MAC } from './common.const';
+import { QuickAddTaskPayload } from './shared-with-frontend/quick-add-task-payload.model';
 
 let quickAddWin: BrowserWindow | null = null;
 let loadUrl: string | undefined;
@@ -25,9 +27,21 @@ export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): 
     hideQuickAddWindow(true);
   });
 
-  ipcMain.on(IPC.QUICK_ADD_SUBMIT, (event, payload) => {
+  ipcMain.on(IPC.QUICK_ADD_SUBMIT, (event, payload: QuickAddTaskPayload) => {
     // Forward the submit event to the main window
     try {
+      // Security: verify that the sender is actually the quick-add window
+      if (BrowserWindow.fromWebContents(event.sender) !== quickAddWin) {
+        console.error('Unauthorized IPC submit: sender is not quickAddWin');
+        return;
+      }
+
+      // Hardening: basic shape check for payload
+      if (!payload || typeof payload.title !== 'string') {
+        console.error('Invalid quick-add payload received');
+        return;
+      }
+
       const mainWin = getWinSafe();
       if (mainWin && !mainWin.isDestroyed()) {
         mainWin.webContents.send(IPC.QUICK_ADD_SUBMIT_FORWARD, payload);
@@ -79,7 +93,7 @@ const createQuickAddWindow = (): void => {
     x,
     y,
     frame: false,
-    transparent: true,
+    transparent: process.platform !== 'linux',
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
@@ -152,7 +166,7 @@ export const showQuickAddWindow = (): void => {
   // We call hide() even if isVisible() is false, because after app.hide()
   // the window is only app-level hidden — re-activation would restore it.
   // Window-level hide (mainWin.hide → orderOut:) survives re-activation.
-  if (process.platform === 'darwin') {
+  if (IS_MAC) {
     const mainWin = getWinSafe();
     if (mainWin && !mainWin.isDestroyed()) {
       mainWinWasVisible = mainWin.isVisible() && !mainWin.isMinimized();
@@ -185,7 +199,11 @@ export const hideQuickAddWindow = (isProgrammatic = false): void => {
 
     quickAddWin.hide();
 
-    if (process.platform === 'darwin') {
+    // Focus restoration: on macOS, we need to explicitly return focus to the
+    // previously active app using app.hide(). On Windows and Linux, the OS
+    // typically handles this automatically when the always-on-top window is hidden,
+    // provided the main app window wasn't already focused.
+    if (IS_MAC) {
       const mainWin = getWinSafe();
 
       // Restore the main window that we hid in showQuickAddWindow

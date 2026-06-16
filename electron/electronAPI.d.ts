@@ -19,6 +19,7 @@ import {
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import { QuickAddTaskPayload } from './shared-with-frontend/quick-add-task-payload.model';
 
 export interface PluginNodeExecutionElectronApi {
   requestGrant(pluginId: string): Promise<{ token: string } | null>;
@@ -28,16 +29,6 @@ export interface PluginNodeExecutionElectronApi {
     request: PluginNodeScriptRequest,
   ): Promise<PluginNodeScriptResult>;
   revokeGrant(pluginId: string, grantToken: string): Promise<void>;
-}
-
-export interface QuickAddTaskPayload {
-  title: string;
-  taskData: any;
-  isAddToBacklog: boolean;
-  isAddToBottom: boolean;
-  remindOption?: any;
-  repeatQuickSetting?: string | null;
-  repeatCfg?: any;
 }
 
 export interface ElectronAPI {
