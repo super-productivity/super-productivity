@@ -45,6 +45,7 @@ const makeLossyDest = (
     getAll: (s, r) => tx.getAll(s, r),
     delete: (s, k) => tx.delete(s, k),
     clear: (s) => tx.clear(s),
+    count: (s, r) => tx.count(s, r),
     getFromIndex: (s, i, k) => tx.getFromIndex(s, i, k),
     getKeyFromIndex: (s, i, k) => tx.getKeyFromIndex(s, i, k),
     getAllFromIndex: (s, i, r) => tx.getAllFromIndex(s, i, r),

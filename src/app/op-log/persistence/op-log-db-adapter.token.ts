@@ -21,12 +21,12 @@ export type OpLogDbAdapterFactory = () => OpLogDbAdapter;
  * DI seam for the op-log persistence backend (Phase B of the SQLite migration;
  * see docs/sync-and-op-log/sqlite-migration.md).
  *
- * Defaults to IndexedDB on every platform. On native, when the
- * `SUP_USE_NATIVE_SQLITE_OP_LOG` opt-in flag is set
- * ({@link shouldUseNativeSqliteOpLogBackend}), it returns the SQLite-backed
- * factory instead — one shared SQLite connection across both stores, with the
- * one-time IDB→SQLite migration run on first init. The stores are untouched;
- * they only know `OpLogDbAdapter`.
+ * Defaults to IndexedDB. On Android ({@link shouldUseNativeSqliteOpLogBackend})
+ * it returns the SQLite-backed factory instead — one shared SQLite connection
+ * across both stores, with the one-time IDB→SQLite migration run on first init
+ * and an in-session fallback to IndexedDB if that bootstrap fails recoverably.
+ * iOS and web/PWA/Electron stay on IndexedDB. The stores are untouched; they
+ * only know `OpLogDbAdapter`.
  */
 export const OP_LOG_DB_ADAPTER_FACTORY = new InjectionToken<OpLogDbAdapterFactory>(
   'OP_LOG_DB_ADAPTER_FACTORY',

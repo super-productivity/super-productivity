@@ -118,6 +118,18 @@ export interface SqliteDb {
    * test stand-in) may omit it — there the failure mode does not arise.
    */
   reset?(): Promise<void>;
+  /**
+   * Optional durable "does the database file exist on disk?" probe, answerable
+   * WITHOUT opening (or successfully opening) the connection. The native backend
+   * uses it to decide — after a bootstrap failure it could not recover from —
+   * whether it is safe to fall back to the legacy IndexedDB copy: only when NO
+   * SQLite file exists (so a migration can never have committed). A
+   * present-but-unopenable file might hold post-migration ops, so falling back
+   * would silently lose them. Returns `false` when the plugin is unavailable
+   * (SQLite was never authoritative here). In-process backends (the sql.js test
+   * stand-in) may omit it.
+   */
+  databaseExists?(): Promise<boolean>;
 }
 
 /**
@@ -702,7 +714,18 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     kind: 'IMMEDIATE' | 'DEFERRED',
     fn: () => Promise<T>,
   ): Promise<T> {
-    await this._db.run(`BEGIN ${kind}`);
+    try {
+      await this._db.run(`BEGIN ${kind}`);
+    } catch (e) {
+      // A failing BEGIN (e.g. "transaction within a transaction" from a leaked
+      // prior tx, or a wedged-connection timeout) is the one spot on the shared
+      // connection that wouldn't otherwise self-heal — every later BEGIN would
+      // fail too. Drop the connection so the next op reopens clean, then rethrow.
+      if (this._db.reset) {
+        await this._db.reset().catch(() => undefined);
+      }
+      return mapSqliteError(e);
+    }
     try {
       const result = await fn();
       await this._db.run('COMMIT');
@@ -785,6 +808,10 @@ class SqliteOpLogTx implements OpLogTx {
 
   clear(store: string): Promise<void> {
     return sqlClear(this._db, this._plan(store));
+  }
+
+  count(store: string, range?: DbKeyRange): Promise<number> {
+    return sqlCount(this._db, this._plan(store), range);
   }
 
   getFromIndex<T>(

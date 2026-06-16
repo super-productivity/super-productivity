@@ -396,6 +396,10 @@ class IdbOpLogTx implements OpLogTx {
     await storeOf(this._tx, store).clear();
   }
 
+  async count(store: string, range?: DbKeyRange): Promise<number> {
+    return storeOf(this._tx, store).count(toIdbKeyRange(range));
+  }
+
   async getFromIndex<T>(
     store: string,
     index: string,

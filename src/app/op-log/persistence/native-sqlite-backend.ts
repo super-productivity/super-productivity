@@ -3,152 +3,54 @@
  * data migration) of the SQLite migration (see
  * docs/sync-and-op-log/sqlite-migration.md).
  *
- * Everything here is gated behind {@link shouldUseNativeSqliteOpLogBackend} and
- * defaults OFF: on web/PWA/Electron, and on native until the feature flag is
- * flipped, the op-log stays on IndexedDB exactly as before. This module is dead
- * in production until a native build sets the flag, so it ships risk-free.
+ * On Android the op-log moves to app-private SQLite to escape WebView IndexedDB
+ * eviction (the documented data-loss root cause). The op-log is the app's
+ * AUTHORITATIVE store — it is read during boot hydration — so this wiring must
+ * never brick startup and never silently serve stale data:
  *
- * Shape: the DI token vends one {@link OpLogDbAdapterFactory} per app. For the
- * native backend that factory closes over a SINGLE {@link CapacitorSqliteDb} (one
- * SQLite file, all tables) and hands every service its own adapter over that one
- * connection — mirroring how the IndexedDB services share one `SUP_OPS`
- * connection today. The first adapter `init()` triggers a one-time bootstrap:
- * create the schema, then (C1) copy any legacy `SUP_OPS` IndexedDB data across
- * with verify-before-commit, leaving the IDB copy untouched as a fallback.
+ * - {@link shouldUseNativeSqliteOpLogBackend} gates on Android only. iOS keeps
+ *   IndexedDB (different WebView storage semantics; not validated here), and
+ *   web/PWA/Electron never reach this (the plugin's web build is WASM-on-IndexedDB,
+ *   which would reintroduce the eviction risk). No opt-in flag — Android is on by
+ *   default, ramped via Play Console staged rollout.
+ * - The factory's `init()` bootstraps SQLite (schema + one-time migration) and,
+ *   if that fails in a way we can prove is PRE-migration, transparently falls back
+ *   to a self-opening IndexedDB adapter FOR THIS SESSION so the app still boots.
+ *   The legacy IDB copy is still complete pre-migration, so the fallback is
+ *   lossless. POST-migration (the durable in-SQLite marker is set) it never falls
+ *   back — the IDB copy is then a stale snapshot and using it would drop every
+ *   op written since the migration. When it cannot prove pre-migration, it fails
+ *   loudly rather than risk that loss.
  */
 import type { OpLogDbAdapterFactory } from './op-log-db-adapter.token';
 import { OpLogDbAdapter } from './op-log-db-adapter';
 import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
 import { SqliteDb, SqliteOpLogAdapter } from './sqlite-op-log-adapter';
 import { CapacitorSqliteDb } from './capacitor-sqlite-db';
+import { NativeOpLogAdapter } from './native-op-log-adapter';
 import { migrateOpLogBackend } from './op-log-backend-migration';
 import { DB_NAME, STORE_NAMES } from './db-keys.const';
-import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
+import { IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 import { Log } from '../../core/log';
 
 /**
- * localStorage flag that opts a native build into the SQLite op-log backend.
- * Set `localStorage.setItem('SUP_USE_NATIVE_SQLITE_OP_LOG', 'true')` and restart.
- * Defaults off — staged dogfood rollout per docs/sync-and-op-log/sqlite-migration.md.
- */
-export const NATIVE_SQLITE_OP_LOG_FLAG_KEY = 'SUP_USE_NATIVE_SQLITE_OP_LOG';
-
-/**
- * localStorage mirror of the in-SQLite "migration complete" marker, set once the
- * SQLite backend is authoritative (migration committed, the dest was already
- * populated, or there was nothing to migrate). The gate reads it WITHOUT opening
- * SQLite to answer one question: may a bootstrap failure fall back to IndexedDB?
- * Before this is set, IDB is still the complete live data, so falling back is
- * safe. After, the IDB copy is a STALE frozen snapshot — falling back would
- * silently drop every op written since the migration, so we never do.
- */
-export const NATIVE_SQLITE_MIGRATED_FLAG_KEY = 'SUP_NATIVE_SQLITE_OP_LOG_MIGRATED';
-
-/**
- * Consecutive PRE-migration bootstrap failures. Once it reaches
- * {@link MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES} the gate stops wedging the op-log
- * on a failing SQLite backend and falls back to the still-complete IndexedDB.
- * Cleared the moment the backend becomes authoritative; clear it by hand to
- * re-attempt after hitting the cap.
- */
-export const NATIVE_SQLITE_FAIL_COUNT_KEY = 'SUP_NATIVE_SQLITE_OP_LOG_FAIL_COUNT';
-
-/** Pre-migration bootstrap attempts before giving up and staying on IndexedDB. */
-export const MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES = 3;
-
-const isNativeSqliteAuthoritative = (): boolean => {
-  try {
-    return localStorage.getItem(NATIVE_SQLITE_MIGRATED_FLAG_KEY) === 'true';
-  } catch {
-    // No localStorage → assume not-yet-authoritative; the gate then treats IDB
-    // as the safe fallback, which it is whenever migration hasn't committed.
-    return false;
-  }
-};
-
-const readBootstrapFailCount = (): number => {
-  try {
-    const n = parseInt(localStorage.getItem(NATIVE_SQLITE_FAIL_COUNT_KEY) ?? '', 10);
-    return n > 0 ? n : 0;
-  } catch {
-    return 0;
-  }
-};
-
-/**
- * Record that the SQLite backend bootstrapped successfully and is now
- * authoritative; clears the failure counter. Best-effort — if localStorage is
- * unavailable the gate simply retries SQLite next launch.
- */
-const markNativeSqliteAuthoritative = (): void => {
-  try {
-    localStorage.setItem(NATIVE_SQLITE_MIGRATED_FLAG_KEY, 'true');
-    localStorage.removeItem(NATIVE_SQLITE_FAIL_COUNT_KEY);
-  } catch {
-    // best-effort bookkeeping; non-fatal (gate just retries SQLite next launch).
-  }
-};
-
-/**
- * Record a PRE-migration bootstrap failure so the gate can eventually fall back
- * to the (still complete) IDB. No-op once authoritative: a post-migration
- * failure must keep retrying SQLite, not fall back to the stale IDB copy.
- */
-const noteNativeSqliteBootstrapFailure = (): void => {
-  if (isNativeSqliteAuthoritative()) {
-    return;
-  }
-  try {
-    localStorage.setItem(
-      NATIVE_SQLITE_FAIL_COUNT_KEY,
-      String(readBootstrapFailCount() + 1),
-    );
-  } catch {
-    // best-effort; a missed increment only delays the IDB fallback by a launch.
-  }
-};
-
-/**
- * Whether to bind the op-log persistence backend to SQLite. ONLY true on native
- * (the plugin's web build is WASM-on-IndexedDB and would reintroduce the
- * eviction risk) AND only when the opt-in flag is set — and, before migration
- * has committed, only while SQLite bootstrap hasn't failed too many times.
+ * Whether to bind the op-log persistence backend to SQLite. ANDROID ONLY:
+ * - iOS keeps IndexedDB — its WKWebView storage has different eviction semantics
+ *   and the SQLite path is not validated there yet.
+ * - web/PWA/Electron never qualify (`@capacitor-community/sqlite`'s web build is
+ *   WASM persisted into IndexedDB, reintroducing the eviction risk this escapes).
  *
- * @param isNative test seam — defaults to the real platform constant. Karma runs
- * in a browser (`IS_NATIVE_PLATFORM === false`), so the native branch is only
+ * Default-on for Android (no opt-in flag); the rollout is ramped at the store
+ * level (Play Console staged rollout), and `createNativeSqliteOpLogAdapterFactory`
+ * falls back to IndexedDB in-session if SQLite bootstrap fails recoverably.
+ *
+ * @param isAndroid test seam — defaults to the real platform constant. Karma runs
+ * in a browser (`IS_ANDROID_NATIVE === false`), so the native branch is only
  * reachable in tests by passing `true`.
  */
 export const shouldUseNativeSqliteOpLogBackend = (
-  isNative: boolean = IS_NATIVE_PLATFORM,
-): boolean => {
-  if (!isNative) {
-    return false;
-  }
-  try {
-    if (localStorage.getItem(NATIVE_SQLITE_OP_LOG_FLAG_KEY) !== 'true') {
-      return false;
-    }
-  } catch {
-    // No localStorage (shouldn't happen on native WebView) → stay on IndexedDB.
-    return false;
-  }
-  // Once SQLite holds the live data, a transient open/bootstrap failure must keep
-  // retrying SQLite — never fall back to the stale frozen IDB copy (silent loss
-  // of every post-migration op). Failing loudly is recoverable; stale data is not.
-  if (isNativeSqliteAuthoritative()) {
-    return true;
-  }
-  // Pre-migration the IDB backend is still complete and live. If SQLite bootstrap
-  // keeps failing, stop wedging the op-log and fall back to IDB so the app works.
-  if (readBootstrapFailCount() >= MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES) {
-    Log.log({
-      id: 'opLogSqliteBootstrapGaveUp',
-      failures: readBootstrapFailCount(),
-    });
-    return false;
-  }
-  return true;
-};
+  isAndroid: boolean = IS_ANDROID_NATIVE,
+): boolean => isAndroid;
 
 // ── C1: one-time IDB → SQLite migration bootstrap ────────────────────────────
 
@@ -158,6 +60,10 @@ export const shouldUseNativeSqliteOpLogBackend = (
  * bookkeeping with no IndexedDB counterpart, so it must never be a store the
  * schema-drift guard expects on IDB nor a table `migrateOpLogBackend` tries to
  * copy (that iterates `STORE_NAMES` only).
+ *
+ * The `MIGRATION_DONE_KEY` row is the DURABLE source of truth for "SQLite is
+ * authoritative". It lives in the same app-private file as the data, so unlike a
+ * localStorage flag it cannot be evicted independently of the data it guards.
  */
 const META_TABLE = 'sup_op_log_meta';
 const MIGRATION_DONE_KEY = 'idb_to_sqlite_migrated_at';
@@ -167,8 +73,7 @@ const MIGRATION_DONE_KEY = 'idb_to_sqlite_migrated_at';
  * The meta statements are bookkeeping outside the op-log schema, so they don't go
  * through the adapter (which is what normally routes ops through `runExclusive`).
  * Wrapping them here keeps the invariant "every statement on the shared
- * connection is serialized" true by construction — not merely by the bootstrap's
- * sequential awaiting — so it stays safe if concurrency is ever added around it.
+ * connection is serialized" true by construction.
  */
 const metaExclusive = <T>(db: SqliteDb, fn: () => Promise<T>): Promise<T> =>
   db.runExclusive ? db.runExclusive(fn) : fn();
@@ -258,7 +163,7 @@ export const bootstrapNativeOpLogBackend = async (db: SqliteDb): Promise<void> =
     // Privacy-safe breadcrumb only (log history is exportable): the error NAME,
     // never its message (a raw SQLite/DOMException message could echo a value).
     // verify-before-commit already rolled `dest` back, so the caller's retry
-    // (ensureBootstrap resets on reject) re-runs cleanly next launch.
+    // re-runs cleanly next launch.
     Log.err({
       id: 'opLogSqliteMigrationFailed',
       name: e instanceof Error ? e.name : 'unknown',
@@ -272,58 +177,85 @@ export const bootstrapNativeOpLogBackend = async (db: SqliteDb): Promise<void> =
   await markMigrationComplete(db);
 };
 
-// ── B3: the DI factory ───────────────────────────────────────────────────────
+// ── B3: the DI factory + in-session fallback ─────────────────────────────────
 
 /**
- * A {@link SqliteOpLogAdapter} whose `init()` runs the shared one-time backend
- * bootstrap (schema + C1 migration) instead of the bare DDL. Every other method
- * is inherited and runs against the shared connection.
+ * After a bootstrap failure we could not recover from, is it SAFE to serve the
+ * legacy IndexedDB copy this session? Only when SQLite is NOT yet authoritative
+ * (no committed migration) — otherwise the IDB copy is a stale snapshot and using
+ * it would silently drop every post-migration op.
+ *
+ * - If the connection opens, the durable in-SQLite marker is the truth: absent →
+ *   pre-migration → safe. A non-empty destination is ALSO authoritative even with
+ *   the marker unset — that is the "copy committed but the separate
+ *   `markMigrationComplete` write died" window; falling back then could let this
+ *   session's IDB writes be lost when the next launch marks SQLite authoritative.
+ * - If the connection cannot open (the marker is unreadable), fall back ONLY when
+ *   the DB file does not exist (so a migration can never have committed). A
+ *   present-but-unopenable file might hold post-migration ops → not safe.
  */
-class BootstrappingSqliteOpLogAdapter extends SqliteOpLogAdapter {
-  constructor(
-    db: SqliteDb,
-    private readonly _ensureBootstrap: () => Promise<void>,
-  ) {
-    super(db);
+const canFallBackToIdb = async (db: SqliteDb): Promise<boolean> => {
+  try {
+    await ensureMetaTable(db);
+    if (await isMigrationComplete(db)) {
+      return false;
+    }
+    // Marker unset but the dest already holds a (verified) copy → treat as
+    // authoritative, not pre-migration. Safe to fall back only when dest is empty.
+    return (await new SqliteOpLogAdapter(db).count(STORE_NAMES.OPS)) === 0;
+  } catch {
+    // Connection is unopenable — the on-disk file is the only signal left.
+    const exists = db.databaseExists ? await db.databaseExists() : false;
+    return exists === false;
   }
+};
 
-  override init(): Promise<void> {
-    return this._ensureBootstrap();
-  }
+export interface NativeSqliteOpLogFactoryOptions {
+  /** Test seam — defaults to the real Capacitor-backed connection. */
+  dbFactory?: () => SqliteDb;
+  /** Test seam — the legacy IndexedDB fallback backend. */
+  idbFactory?: () => OpLogDbAdapter;
 }
 
 /**
  * Build the native `OpLogDbAdapterFactory`. The returned factory hands every
- * caller (OperationLogStoreService, ArchiveStoreService) its own adapter over
- * ONE shared {@link SqliteDb}, and the bootstrap (schema + C1 migration) runs
- * exactly once regardless of how many adapters init.
- *
- * @param dbFactory test seam — defaults to the real Capacitor-backed connection.
+ * caller (OperationLogStoreService, ArchiveStoreService) a {@link NativeOpLogAdapter}
+ * over ONE shared backend decision: the bootstrap (schema + C1 migration) and the
+ * fallback choice run exactly once regardless of how many adapters init.
  */
 export const createNativeSqliteOpLogAdapterFactory = (
-  dbFactory: () => SqliteDb = () => new CapacitorSqliteDb(DB_NAME),
+  options: NativeSqliteOpLogFactoryOptions = {},
 ): OpLogDbAdapterFactory => {
+  const dbFactory = options.dbFactory ?? (() => new CapacitorSqliteDb(DB_NAME));
+  const idbFactory = options.idbFactory ?? (() => new IndexedDbOpLogAdapter());
   const db = dbFactory();
-  let bootstrap: Promise<void> | undefined;
-  const ensureBootstrap = (): Promise<void> => {
-    if (!bootstrap) {
-      bootstrap = bootstrapNativeOpLogBackend(db)
-        .then(() => {
-          // Bootstrap done → SQLite is now the authoritative store. Record it so a
-          // later open failure keeps retrying SQLite instead of falling back to
-          // the now-stale IDB copy.
-          markNativeSqliteAuthoritative();
-        })
-        .catch((e) => {
-          // Reset so the next init() retries rather than caching the rejection,
-          // and count the failure so the gate can eventually fall back to the
-          // still-complete IDB (no-op once authoritative).
-          bootstrap = undefined;
-          noteNativeSqliteBootstrapFailure();
+
+  let backend: Promise<OpLogDbAdapter> | undefined;
+  const resolveBackend = (): Promise<OpLogDbAdapter> => {
+    if (!backend) {
+      backend = bootstrapNativeOpLogBackend(db)
+        .then((): OpLogDbAdapter => new SqliteOpLogAdapter(db))
+        .catch(async (e) => {
+          Log.err({
+            id: 'opLogSqliteBootstrapFailed',
+            name: e instanceof Error ? e.name : 'unknown',
+          });
+          if (await canFallBackToIdb(db)) {
+            // Pre-migration: the legacy IDB copy is still complete. Serve it this
+            // session so the app boots; SQLite is retried on the next launch.
+            const idb = idbFactory();
+            await idb.init();
+            Log.log({ id: 'opLogSqliteFellBackToIdb' });
+            return idb;
+          }
+          // Possibly post-migration: never serve a stale IDB snapshot. Reset so
+          // the next init() retries SQLite rather than caching this rejection.
+          backend = undefined;
           throw e;
         });
     }
-    return bootstrap;
+    return backend;
   };
-  return (): OpLogDbAdapter => new BootstrappingSqliteOpLogAdapter(db, ensureBootstrap);
+
+  return (): OpLogDbAdapter => new NativeOpLogAdapter(resolveBackend);
 };

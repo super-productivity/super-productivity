@@ -35,6 +35,47 @@ import { createConnectionSerializer } from './connection-serializer';
  */
 const NO_ENCRYPTION = 'no-encryption';
 
+/**
+ * Hard cap on the native open handshake. A wedged native SQLite connection can
+ * leave `open()` (or the consistency/create calls) pending forever; because the
+ * op-log is the app's authoritative store and is read during boot hydration, an
+ * un-timed open would brick the app at startup with no recovery. On timeout the
+ * open rejects so the native backend can fall back to IndexedDB (pre-migration)
+ * or fail loudly (post-migration). NOT a cap on the migration itself — that is
+ * bounded, progressing work and capping it risks never migrating a large account.
+ */
+const DEFAULT_OPEN_TIMEOUT_MS = 15_000;
+
+/**
+ * Hard cap on a single statement crossing the native bridge. The open timeout
+ * only bounds connecting; a wedged connection can also hang an individual
+ * `run`/`query` *after* opening (e.g. mid-migration), which would park the shared
+ * connection serializer forever and brick the (boot-hydrated) op-log just the
+ * same. Generous — far above any legitimate single statement — so it only ever
+ * fires on a genuine wedge, converting it into a reject the adapter can roll back
+ * / fall back from instead of an indefinite hang.
+ */
+const DEFAULT_STATEMENT_TIMEOUT_MS = 60_000;
+
+/** Reject with a tagged error if `p` has not settled within `ms`. */
+const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new DOMException(`${label} timed out after ${ms}ms`, 'TimeoutError')),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+
 export class CapacitorSqliteDb implements SqliteDb {
   private _conn?: SQLiteDBConnection;
   private _openPromise?: Promise<SQLiteDBConnection>;
@@ -44,7 +85,45 @@ export class CapacitorSqliteDb implements SqliteDb {
   // connection is chained — never interleaved.
   private readonly _runExclusive = createConnectionSerializer();
 
-  constructor(private readonly _dbName: string) {}
+  constructor(
+    private readonly _dbName: string,
+    private readonly _openTimeoutMs: number = DEFAULT_OPEN_TIMEOUT_MS,
+    private readonly _statementTimeoutMs: number = DEFAULT_STATEMENT_TIMEOUT_MS,
+  ) {}
+
+  /**
+   * Whether the `SUP_OPS` SQLite file exists on disk, answered WITHOUT opening a
+   * usable connection (so it is callable even after `open()` wedged). The native
+   * backend uses it to gate the IndexedDB fallback: a missing file means no
+   * migration can have committed, so the legacy IDB copy is still complete and
+   * safe to use. A plugin-load failure resolves to `false` for the same reason —
+   * SQLite has never been authoritative on a device where the plugin can't load.
+   */
+  async databaseExists(): Promise<boolean> {
+    let sqlite: SQLiteConnection;
+    try {
+      const { CapacitorSQLite, SQLiteConnection: SQLiteConnectionCtor } =
+        await import('@capacitor-community/sqlite');
+      sqlite = new SQLiteConnectionCtor(CapacitorSQLite);
+    } catch {
+      // Plugin unavailable → SQLite has never been authoritative on this device,
+      // so no migration can have committed → report "absent" (fallback is safe).
+      return false;
+    }
+    try {
+      const res = await withTimeout(
+        sqlite.isDatabase(this._dbName),
+        this._openTimeoutMs,
+        'SQLite isDatabase',
+      );
+      return res.result === true;
+    } catch {
+      // The plugin loaded but the probe failed/hung — a migrated file MIGHT exist.
+      // Bias toward "exists" so the caller fails loudly rather than risk serving a
+      // stale IndexedDB snapshot over post-migration ops.
+      return true;
+    }
+  }
 
   runExclusive<T>(fn: () => Promise<T>): Promise<T> {
     return this._runExclusive(fn);
@@ -66,7 +145,13 @@ export class CapacitorSqliteDb implements SqliteDb {
       return;
     }
     try {
-      await sqlite.closeConnection(this._dbName, false);
+      // Bounded: a wedged connection can hang close() too, and reset() runs on the
+      // recovery path — an un-timed close would defeat the recovery it enables.
+      await withTimeout(
+        sqlite.closeConnection(this._dbName, false),
+        this._openTimeoutMs,
+        'SQLite closeConnection',
+      );
     } catch {
       // Non-fatal — the next _open() reconciles via checkConnectionsConsistency.
     }
@@ -91,7 +176,14 @@ export class CapacitorSqliteDb implements SqliteDb {
     return this._openPromise;
   }
 
-  private async _open(): Promise<SQLiteDBConnection> {
+  private _open(): Promise<SQLiteDBConnection> {
+    // Bound the whole native handshake: any of the bridge calls below can wedge
+    // indefinitely on a broken native connection, and the op-log is read during
+    // boot hydration, so an un-timed hang bricks startup (see DEFAULT_OPEN_TIMEOUT_MS).
+    return withTimeout(this._openUntimed(), this._openTimeoutMs, 'SQLite open');
+  }
+
+  private async _openUntimed(): Promise<SQLiteDBConnection> {
     // Dynamic import: the plugin (and its web WASM fallback) must NOT be pulled
     // into the eager bundle — this code path only runs on native.
     const { CapacitorSQLite, SQLiteConnection } =
@@ -148,7 +240,11 @@ export class CapacitorSqliteDb implements SqliteDb {
   ): Promise<{ changes: number; lastId?: number }> {
     const conn = await this._ensureOpen();
     // transaction:false — the SqliteOpLogAdapter drives BEGIN/COMMIT/ROLLBACK.
-    const res = await conn.run(sql, params, false);
+    const res = await withTimeout(
+      conn.run(sql, params, false),
+      this._statementTimeoutMs,
+      'SQLite run',
+    );
     return {
       changes: res.changes?.changes ?? 0,
       lastId: res.changes?.lastId,
@@ -157,7 +253,11 @@ export class CapacitorSqliteDb implements SqliteDb {
 
   async query(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
     const conn = await this._ensureOpen();
-    const res = await conn.query(sql, params);
+    const res = await withTimeout(
+      conn.query(sql, params),
+      this._statementTimeoutMs,
+      'SQLite query',
+    );
     return (res.values ?? []) as Record<string, unknown>[];
   }
 }
