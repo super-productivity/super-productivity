@@ -47,7 +47,6 @@ import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
-import { calcKeyboardHeight } from './calc-keyboard-height';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
@@ -650,6 +649,7 @@ export class GlobalThemeService {
    */
   private _initVisualViewportKeyboardTracking(): void {
     const vv = window.visualViewport;
+    if (!vv) return;
     const root = this.document.documentElement;
     // Filter out small differences from URL bar / overlay UI rather than the
     // IME — keeps us from setting a phantom keyboard offset.
@@ -665,28 +665,15 @@ export class GlobalThemeService {
     const KEYBOARD_RESIZE_DEBOUNCE_MS = 200;
     let resizeTimer: number | null = null;
 
-    let nativeKeyboardHeight = 0;
-    let baseInnerHeight = window.innerHeight;
-
-    const measureKeyboardHeight = (): number =>
-      calcKeyboardHeight({
-        innerHeight: window.innerHeight,
-        visualViewportHeight: vv ? vv.height : null,
-        nativeKeyboardHeight,
-        baseInnerHeight,
-      });
-
     const commit = (): void => {
-      const raw = measureKeyboardHeight();
-      const keyboardHeight = raw > KEYBOARD_THRESHOLD_PX ? raw : 0;
+      const obscured = window.innerHeight - vv.height;
+      const keyboardHeight = obscured > KEYBOARD_THRESHOLD_PX ? obscured : 0;
       root.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, `${keyboardHeight}px`);
     };
 
-    const scheduleCommit = (): void => {
-      if (measureKeyboardHeight() <= KEYBOARD_THRESHOLD_PX) {
-        // Keyboard is (or just became) closed — keep the baseline fresh so a
-        // later rotation/resize doesn't leave a stale value behind.
-        baseInnerHeight = window.innerHeight;
+    const onViewportResize = (): void => {
+      const obscured = window.innerHeight - vv.height;
+      if (obscured <= KEYBOARD_THRESHOLD_PX) {
         if (resizeTimer !== null) {
           window.clearTimeout(resizeTimer);
           resizeTimer = null;
@@ -704,24 +691,9 @@ export class GlobalThemeService {
     };
 
     commit();
-
-    if (vv) {
-      vv.addEventListener('resize', scheduleCommit, { passive: true });
-    }
-
-    if (IS_ANDROID_WEB_VIEW && androidInterface.keyboardHeightPx$) {
-      androidInterface.keyboardHeightPx$
-        .pipe(distinctUntilChanged(), takeUntilDestroyed(this._destroyRef))
-        .subscribe((physicalPx) => {
-          nativeKeyboardHeight = Math.max(0, physicalPx / (window.devicePixelRatio || 1));
-          scheduleCommit();
-        });
-    }
-
+    vv.addEventListener('resize', onViewportResize, { passive: true });
     this._destroyRef.onDestroy(() => {
-      if (vv) {
-        vv.removeEventListener('resize', scheduleCommit);
-      }
+      vv.removeEventListener('resize', onViewportResize);
       if (resizeTimer !== null) {
         window.clearTimeout(resizeTimer);
       }

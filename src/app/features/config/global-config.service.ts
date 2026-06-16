@@ -1,9 +1,8 @@
 import { Injectable, inject, Signal } from '@angular/core';
 import { select, Store } from '@ngrx/store';
-import type { SyncConfigPort, SyncConfigSnapshot } from '@sp/sync-core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { updateGlobalConfigSection } from './store/global-config.actions';
-import { firstValueFrom, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import { DEFAULT_GLOBAL_CONFIG } from './default-global-config.const';
 import {
   AppFeaturesConfig,
@@ -47,9 +46,7 @@ import { distinctUntilChangedObject } from '../../util/distinct-until-changed-ob
 @Injectable({
   providedIn: 'root',
 })
-export class GlobalConfigService implements SyncConfigPort<
-  NonNullable<SyncConfig['syncProvider']>
-> {
+export class GlobalConfigService {
   private readonly _store = inject<Store<any>>(Store);
 
   // Keep observables for backward compatibility
@@ -194,27 +191,5 @@ export class GlobalConfigService implements SyncConfigPort<
         isSkipSnack,
       }),
     );
-  }
-
-  async getSyncConfig(): Promise<
-    SyncConfigSnapshot<NonNullable<SyncConfig['syncProvider']>>
-  > {
-    const {
-      isEnabled,
-      syncProvider,
-      isEncryptionEnabled,
-      isCompressionEnabled,
-      isManualSyncOnly,
-      syncInterval,
-    } = await firstValueFrom(this.sync$);
-
-    return {
-      isEnabled,
-      syncProvider,
-      isEncryptionEnabled,
-      isCompressionEnabled,
-      isManualSyncOnly,
-      syncInterval,
-    };
   }
 }

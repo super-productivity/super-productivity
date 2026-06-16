@@ -8,10 +8,30 @@
  * `ms-msdt:`, `search-ms:`, etc.
  * See GHSA-hr87-735w-hfq3.
  *
+ * The app-deep-link schemes below (obsidian:, vscode:, …) only launch a
+ * registered desktop app with a parameter (open a note/file/reference) — a far
+ * narrower surface than the OS-level handlers this allowlist exists to block.
+ * They are allow-listed because productivity users routinely link tasks to such
+ * apps (#8429: obsidian:// links stopped opening after the GHSA-hr87 fix).
+ * shortcut: a curated set — if a user needs a scheme that isn't here, the
+ * upgrade path is a user-configurable allowlist in settings (MiscConfig).
+ *
  * Shared between the Angular renderer (link rendering) and the Electron main
  * process (shell.openExternal call sites) so both layers enforce one policy.
  */
-export const ALLOWED_EXTERNAL_URL_SCHEMES = ['http:', 'https:', 'mailto:', 'file:'];
+export const ALLOWED_EXTERNAL_URL_SCHEMES = [
+  'http:',
+  'https:',
+  'mailto:',
+  'file:',
+  'tel:',
+  'sms:',
+  'obsidian:',
+  'vscode:',
+  'vscode-insiders:',
+  'zotero:',
+  'logseq:',
+];
 
 const LOCAL_FILE_URL_PREFIX = 'file:///';
 const ASCII_CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;

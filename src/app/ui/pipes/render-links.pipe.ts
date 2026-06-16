@@ -1,5 +1,6 @@
 import { inject, Pipe, PipeTransform } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { ALLOWED_EXTERNAL_URL_SCHEMES } from '../../../../electron/shared-with-frontend/is-external-url-allowed';
 
 /** Hint substrings used for fast pre-checks to skip regex when no URLs/markdown are present. */
 export const LINK_HINT_PROTOCOL = '://';
@@ -102,8 +103,15 @@ const _isUrlSchemeSafe = (url: string): boolean => {
   ) {
     return true;
   }
+  // Allow the shared deep-link / standard schemes (mailto:, tel:, obsidian:,
+  // vscode:, …) so links behave the same here as in the markdown note renderer.
+  // The dangerous schemes (javascript:, data:, vbscript:, ms-msdt:, …) are not
+  // in the allowlist and fall through to the scheme-shaped rejection below. #8429
+  if (ALLOWED_EXTERNAL_URL_SCHEMES.some((scheme) => lowerUrl.startsWith(scheme))) {
+    return true;
+  }
   // Reject any URL that looks like it has a scheme (letters followed by colon).
-  // This catches javascript:, data:, vbscript:, tel:, mailto:, ftp://, ssh://, etc.
+  // This catches javascript:, data:, vbscript:, ftp://, ssh://, etc.
   // Does NOT match host:port (e.g. www.example.com:8080) because dots precede the colon.
   if (SCHEME_RE.test(lowerUrl)) {
     return false;
@@ -121,6 +129,12 @@ const _normalizeHref = (url: string): string => {
   }
   if (url.startsWith('//')) {
     return `https:${url}`;
+  }
+  // Preserve an allow-listed scheme (mailto:, tel:, obsidian:, vscode:, …)
+  // verbatim; only schemeless host-style URLs get an http:// prefix. #8429
+  const lower = url.toLowerCase();
+  if (ALLOWED_EXTERNAL_URL_SCHEMES.some((scheme) => lower.startsWith(scheme))) {
+    return url;
   }
   return `http://${url}`;
 };

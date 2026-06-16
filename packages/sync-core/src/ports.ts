@@ -57,29 +57,6 @@ export interface ArchiveSideEffectPort<TAction extends SyncActionLike = SyncActi
   handleOperation(action: TAction): Promise<void> | void;
 }
 
-/**
- * Domain-free sync configuration snapshot.
- *
- * Provider IDs stay plain strings at the package boundary. Host applications can
- * narrow them in their adapter layer.
- */
-export interface SyncConfigSnapshot<TProviderId extends string = string> {
-  isEnabled: boolean;
-  syncProvider: TProviderId | null;
-  isEncryptionEnabled?: boolean;
-  isCompressionEnabled?: boolean;
-  isManualSyncOnly?: boolean;
-  syncInterval?: number;
-}
-
-/**
- * Port for reading host sync configuration without importing framework store
- * selectors or host provider enums.
- */
-export interface SyncConfigPort<TProviderId extends string = string> {
-  getSyncConfig(): Promise<SyncConfigSnapshot<TProviderId>>;
-}
-
 export interface ConflictUiDialogRequest {
   conflictType: string;
   scenario?: string;
@@ -89,20 +66,10 @@ export interface ConflictUiDialogRequest {
   meta?: SyncPortMeta;
 }
 
-export type ConflictUiNotificationSeverity = 'info' | 'warning' | 'error';
-
-export interface ConflictUiNotification {
-  severity: ConflictUiNotificationSeverity;
-  message: string;
-  reason?: string;
-  meta?: SyncPortMeta;
-}
-
 /**
  * Port for conflict dialogs/snacks. Resolutions are strings so the host owns
  * user-facing choices such as USE_LOCAL, USE_REMOTE, or CANCEL.
  */
 export interface ConflictUiPort<TResolution extends string = string> {
   showConflictDialog(request: ConflictUiDialogRequest): Promise<TResolution>;
-  notify?(notification: ConflictUiNotification): Promise<void> | void;
 }

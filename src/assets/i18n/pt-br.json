@@ -2456,6 +2456,7 @@
     "WEB_DAV_UPLOAD": "WebDAV: Enviando dados..."
   },
   "MH": {
+    "HISTORY": "Histórico",
     "ADD_NEW_TASK": "Adicionar nova Tarefa",
     "ALL_PLANNED_LIST": "Próximas",
     "BOARDS": "Quadros",

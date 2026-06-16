@@ -111,8 +111,6 @@ export type {
   OperationApplyPort,
   RemoteApplyWindowPort,
   SyncActionLike,
-  SyncConfigPort,
-  SyncConfigSnapshot,
 } from './ports';
 
 // Conflict-resolution helpers.
