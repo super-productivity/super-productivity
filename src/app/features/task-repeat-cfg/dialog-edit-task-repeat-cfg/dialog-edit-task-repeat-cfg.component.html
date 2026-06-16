@@ -314,19 +314,21 @@
             }}
           </button>
         }
-        <button
-          mat-menu-item
-          type="button"
-          (click)="menuSimulate()"
-        >
-          <mat-icon>science</mat-icon>
-          {{
-            (menuDayIsSim()
-              ? T.F.TASK_REPEAT.F.CAL_MENU_STOP_SIMULATE
-              : T.F.TASK_REPEAT.F.CAL_MENU_SIMULATE
-            ) | translate
-          }}
-        </button>
+        @if (menuDaySimAllowed() || menuDayIsSim()) {
+          <button
+            mat-menu-item
+            type="button"
+            (click)="menuSimulate()"
+          >
+            <mat-icon>science</mat-icon>
+            {{
+              (menuDayIsSim()
+                ? T.F.TASK_REPEAT.F.CAL_MENU_STOP_SIMULATE
+                : T.F.TASK_REPEAT.F.CAL_MENU_SIMULATE
+              ) | translate
+            }}
+          </button>
+        }
         @if (!isMonthlyRule() || !isYearlyRule()) {
           <div class="cal-menu-switch">
             @if (!isMonthlyRule()) {

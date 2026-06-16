@@ -690,15 +690,47 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(c.simulatedCompletion()).toBeNull();
     });
 
-    it('simulates a completion on any schedule, incl. a fixed calendar', async () => {
-      // The simulate action is offered in the day menu for every rule (a "what
-      // if I did it here" preview); for a fixed calendar it just marks the day,
-      // for from-completion it re-anchors the series.
+    it('simulating a completion turns the from-completion schedule on', async () => {
+      // A simulated completion only re-anchors a from-completion series, so the
+      // action flips that mode on — otherwise the what-if wouldn't shift anything.
       const fixture = await setupTestBed({ repeatCfg: rruleCfg });
+      const c = fixture.componentInstance;
+      expect(c.repeatCfg().repeatFromCompletionDate).toBeFalsy();
+      c.menuDay.set({ dateStr: '2099-01-06' } as DayData);
+      c.menuSimulate();
+      // Flush the sim-watcher effect: flipping the schedule type changes the
+      // schedule slice, which would normally clear the sim — but the sim must
+      // SURVIVE here because it is the reason the flip happened.
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBe('2099-01-06');
+      expect(c.repeatCfg().repeatFromCompletionDate).toBe(true);
+    });
+
+    it('offers simulate only on/after the start date', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: { ...rruleCfg, startDate: '2099-01-05' },
+      });
+      const c = fixture.componentInstance;
+      c.menuDay.set({ dateStr: '2099-01-04' } as DayData); // before start
+      expect(c.menuDaySimAllowed()).toBe(false);
+      c.menuDay.set({ dateStr: '2099-01-05' } as DayData); // the start
+      expect(c.menuDaySimAllowed()).toBe(true);
+      c.menuDay.set({ dateStr: '2099-01-09' } as DayData); // after start
+      expect(c.menuDaySimAllowed()).toBe(true);
+    });
+
+    it('clears a simulation that the new start date would precede', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: { ...completionCfg, startDate: '2099-01-01' },
+      });
       const c = fixture.componentInstance;
       c.menuDay.set({ dateStr: '2099-01-06' } as DayData);
       c.menuSimulate();
       expect(c.simulatedCompletion()).toBe('2099-01-06');
+      // Move the start AFTER the sim → the sim is now before the start → dropped.
+      c.menuDay.set({ dateStr: '2099-01-10' } as DayData);
+      c.menuSetStart();
+      expect(c.simulatedCompletion()).toBeNull();
     });
 
     it('clears an active simulation when the rule is edited', async () => {

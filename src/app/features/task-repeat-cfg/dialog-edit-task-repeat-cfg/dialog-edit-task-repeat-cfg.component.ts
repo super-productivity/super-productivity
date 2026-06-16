@@ -591,6 +591,13 @@ export class DialogEditTaskRepeatCfgComponent {
     const d = this.menuDay()?.dateStr;
     return !!d && d === this.simulatedCompletion();
   });
+  /** A completion can't happen before the rule starts, so "simulate completing
+   *  here" is only offered on/after the start date. */
+  readonly menuDaySimAllowed = computed(() => {
+    const d = this.menuDay()?.dateStr;
+    const s = this.repeatCfg().startDate as string | undefined;
+    return !!d && !!s && d >= s;
+  });
   menuSetStart(): void {
     const d = this.menuDay()?.dateStr;
     // Floor at today (new-cfg rule) and skip a no-op re-pick.
@@ -613,6 +620,11 @@ export class DialogEditTaskRepeatCfgComponent {
         : {}),
     }));
     this._clearEndIfBeforeStart(dateStr);
+    // A simulation that now sits before the start makes no sense — drop it.
+    const sim = this.simulatedCompletion();
+    if (sim && sim < dateStr) {
+      this.simulatedCompletion.set(null);
+    }
     this.focusStart.set(dateStr);
   }
   menuEndsOn(): void {
@@ -655,7 +667,19 @@ export class DialogEditTaskRepeatCfgComponent {
     if (!d) {
       return;
     }
-    this.simulatedCompletion.set(d === this.simulatedCompletion() ? null : d);
+    const turningOn = d !== this.simulatedCompletion();
+    this.simulatedCompletion.set(turningOn ? d : null);
+    // A simulated completion only re-anchors a "from completion" schedule, so
+    // turning one on flips that mode on (if it wasn't already) — otherwise the
+    // preview wouldn't actually shift and the what-if would do nothing.
+    if (turningOn && !this.repeatCfg().repeatFromCompletionDate) {
+      this.repeatCfg.update((cfg) => ({ ...cfg, repeatFromCompletionDate: true }));
+      // That flip changes the schedule slice, which the sim-watcher effect would
+      // normally treat as an edit and clear the sim. But here the sim IS why we
+      // flipped, so advance the tracker in lockstep: the watcher then sees no net
+      // change and the freshly-set sim survives.
+      this._lastScheduleSlice = this._previewScheduleCfg();
+    }
   }
 
   // --- weekday-header-menu actions ---
@@ -1142,6 +1166,14 @@ export class DialogEditTaskRepeatCfgComponent {
     });
   });
 
+  // Last schedule slice the sim-watcher effect saw. A field (not an effect-local
+  // `let`) so `menuSimulate` can advance it in lockstep when it flips the
+  // schedule type ON for the sim itself — otherwise that flip's slice change
+  // would trip the watcher and wipe the sim we just set.
+  private _lastScheduleSlice!: ReturnType<
+    DialogEditTaskRepeatCfgComponent['_previewScheduleCfg']
+  >;
+
   constructor() {
     // Size the dialog surface responsively (widens with the viewport up to a
     // cap, lifts Material's 80vw default so mobile isn't clipped). Fullscreen's
@@ -1175,11 +1207,11 @@ export class DialogEditTaskRepeatCfgComponent {
     // as a new formly model, so watch the schedule slice and drop the sim on
     // any change. (`_previewScheduleCfg` is value-equal, so the reference only
     // changes when a schedule-relevant field actually changes.)
-    let lastScheduleSlice = this._previewScheduleCfg();
+    this._lastScheduleSlice = this._previewScheduleCfg();
     effect(() => {
       const slice = this._previewScheduleCfg();
-      if (slice !== lastScheduleSlice) {
-        lastScheduleSlice = slice;
+      if (slice !== this._lastScheduleSlice) {
+        this._lastScheduleSlice = slice;
         this.simulatedCompletion.set(null);
       }
     });
