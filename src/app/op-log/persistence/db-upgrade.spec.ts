@@ -1,5 +1,7 @@
 import { runDbUpgrade } from './db-upgrade';
-import { STORE_NAMES, OPS_INDEXES } from './db-keys.const';
+import { FULL_STATE_OPS_META_KEY, STORE_NAMES, OPS_INDEXES } from './db-keys.const';
+import { deleteDB, openDB } from 'idb';
+import { OpType } from '../core/operation.types';
 
 describe('runDbUpgrade', () => {
   // Mock store with index tracking
@@ -240,6 +242,59 @@ describe('runDbUpgrade', () => {
       runDbUpgrade(db, 6, tx);
 
       expect(db.createObjectStore).toHaveBeenCalledTimes(1);
+    });
+
+    it('should populate full-state metadata from existing ops', async () => {
+      const dbName = `SUP_OPS_upgrade_meta_${Date.now()}_${Math.random()}`;
+      await deleteDB(dbName);
+
+      const v6Db = await openDB(dbName, 6, {
+        upgrade: (db) => {
+          const opStore = db.createObjectStore(STORE_NAMES.OPS, {
+            keyPath: 'seq',
+            autoIncrement: true,
+          });
+          opStore.createIndex(OPS_INDEXES.BY_ID, 'op.id', { unique: true });
+          opStore.createIndex(OPS_INDEXES.BY_SYNCED_AT, 'syncedAt');
+          opStore.createIndex(OPS_INDEXES.BY_SOURCE_AND_STATUS, [
+            'source',
+            'applicationStatus',
+          ]);
+        },
+      });
+      await v6Db.add(STORE_NAMES.OPS, {
+        op: { id: '01900000-0000-7000-8000-000000000041', o: OpType.SyncImport },
+        appliedAt: Date.now(),
+        source: 'local',
+      });
+      await v6Db.add(STORE_NAMES.OPS, {
+        op: { id: '01900000-0000-7000-8000-000000000043', o: OpType.Update },
+        appliedAt: Date.now(),
+        source: 'local',
+      });
+      await v6Db.add(STORE_NAMES.OPS, {
+        op: { id: '01900000-0000-7000-8000-000000000042', o: OpType.BackupImport },
+        appliedAt: Date.now(),
+        source: 'remote',
+        syncedAt: Date.now(),
+      });
+      v6Db.close();
+
+      const v7Db = await openDB(dbName, 7, {
+        upgrade: (db, oldVersion, _newVersion, tx) => runDbUpgrade(db, oldVersion, tx),
+      });
+
+      const meta = await v7Db.get(STORE_NAMES.META, FULL_STATE_OPS_META_KEY);
+      expect(meta).toEqual({
+        refs: [
+          { opId: '01900000-0000-7000-8000-000000000041', seq: 1 },
+          { opId: '01900000-0000-7000-8000-000000000042', seq: 3 },
+        ],
+        latest: { opId: '01900000-0000-7000-8000-000000000042', seq: 3 },
+      });
+
+      v7Db.close();
+      await deleteDB(dbName);
     });
   });
 

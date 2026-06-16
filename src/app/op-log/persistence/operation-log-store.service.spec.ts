@@ -26,7 +26,7 @@ import {
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-import { SINGLETON_KEY, STORE_NAMES } from './db-keys.const';
+import { FULL_STATE_OPS_META_KEY, SINGLETON_KEY, STORE_NAMES } from './db-keys.const';
 
 describe('OperationLogStoreService', () => {
   let service: OperationLogStoreService;
@@ -511,16 +511,23 @@ describe('OperationLogStoreService', () => {
       await service.append(syncImportOp);
       expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(syncImportOp.id);
 
-      await service.deleteOpsWhere((entry) => entry.op.id === syncImportOp.id);
-
       const adapter = (
         service as unknown as {
           _adapter: OpLogDbAdapter;
         }
       )._adapter;
+      const transactionSpy = spyOn(adapter, 'transaction').and.callThrough();
+
+      await service.deleteOpsWhere((entry) => entry.op.id === syncImportOp.id);
+
       spyOn(adapter, 'iterate').and.callThrough();
 
       expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+      expect(transactionSpy).toHaveBeenCalledWith(
+        [STORE_NAMES.OPS, STORE_NAMES.META],
+        'readwrite',
+        jasmine.any(Function),
+      );
       expect(adapter.iterate).not.toHaveBeenCalled();
     });
   });
@@ -610,6 +617,71 @@ describe('OperationLogStoreService', () => {
       expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
       expect(adapter.iterate).toHaveBeenCalledTimes(1);
 
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(adapter.iterate).toHaveBeenCalledTimes(1);
+    });
+
+    it('should rebuild missing metadata inside a full-state append before recording the new ref', async () => {
+      const latestExistingImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000032',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const lowerNewImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000031',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(latestExistingImport);
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      await db.delete(STORE_NAMES.META, FULL_STATE_OPS_META_KEY);
+
+      await service.append(lowerNewImport, 'remote');
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(
+        latestExistingImport.id,
+      );
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should rebuild malformed metadata instead of throwing', async () => {
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000041',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(latestImport);
+
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      await db.put(STORE_NAMES.META, { refs: 'not-an-array' }, FULL_STATE_OPS_META_KEY);
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      await expectAsync(service.getLatestFullStateOpEntry()).toBeResolved();
       expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
       expect(adapter.iterate).toHaveBeenCalledTimes(1);
     });

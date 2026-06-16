@@ -402,12 +402,46 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     );
   }
 
+  private _buildFullStateOpsMeta(refs: FullStateOpRef[]): FullStateOpsMetaEntry {
+    const latest = this._getLatestFullStateRef(refs);
+    return latest ? { refs, latest } : { refs };
+  }
+
+  private _normalizeFullStateOpsMeta(meta: unknown): FullStateOpsMetaEntry | undefined {
+    if (typeof meta !== 'object' || meta === null || !('refs' in meta)) {
+      return undefined;
+    }
+    const refs = (meta as { refs: unknown }).refs;
+    if (!Array.isArray(refs)) {
+      return undefined;
+    }
+
+    const normalizedRefs: FullStateOpRef[] = [];
+    for (const ref of refs) {
+      if (
+        typeof ref !== 'object' ||
+        ref === null ||
+        !('opId' in ref) ||
+        !('seq' in ref)
+      ) {
+        return undefined;
+      }
+      const { opId, seq } = ref as { opId: unknown; seq: unknown };
+      if (typeof opId !== 'string' || typeof seq !== 'number') {
+        return undefined;
+      }
+      normalizedRefs.push({ opId, seq });
+    }
+
+    return this._buildFullStateOpsMeta(normalizedRefs);
+  }
+
   private _withFullStateRef(
     meta: FullStateOpsMetaEntry | undefined,
     ref: FullStateOpRef,
   ): FullStateOpsMetaEntry {
     const refs = [...(meta?.refs ?? []).filter((r) => r.opId !== ref.opId), ref];
-    return { refs, latest: this._getLatestFullStateRef(refs) };
+    return this._buildFullStateOpsMeta(refs);
   }
 
   private _withoutFullStateRefs(
@@ -415,7 +449,33 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     opIdsToRemove: Set<string>,
   ): FullStateOpsMetaEntry {
     const refs = (meta?.refs ?? []).filter((ref) => !opIdsToRemove.has(ref.opId));
-    return { refs, latest: this._getLatestFullStateRef(refs) };
+    return this._buildFullStateOpsMeta(refs);
+  }
+
+  private async _rebuildFullStateOpsMetaInTx(
+    tx: OpLogTx,
+  ): Promise<FullStateOpsMetaEntry> {
+    const refs: FullStateOpRef[] = [];
+    await tx.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value, key) => {
+      const ref = this._getFullStateRef(value.op, key as number);
+      if (ref) {
+        refs.push(ref);
+      }
+      return 'continue';
+    });
+
+    const meta = this._buildFullStateOpsMeta(refs);
+    await tx.put(STORE_NAMES.META, meta, FULL_STATE_OPS_META_KEY);
+    return meta;
+  }
+
+  private async _getFullStateOpsMetaInTxOrRebuild(
+    tx: OpLogTx,
+  ): Promise<FullStateOpsMetaEntry> {
+    const meta = this._normalizeFullStateOpsMeta(
+      await tx.get<unknown>(STORE_NAMES.META, FULL_STATE_OPS_META_KEY),
+    );
+    return meta ?? (await this._rebuildFullStateOpsMetaInTx(tx));
   }
 
   private async _recordFullStateOpInTx(
@@ -428,10 +488,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       return;
     }
 
-    const meta = await tx.get<FullStateOpsMetaEntry>(
-      STORE_NAMES.META,
-      FULL_STATE_OPS_META_KEY,
-    );
+    const meta = await this._getFullStateOpsMetaInTxOrRebuild(tx);
     await tx.put(
       STORE_NAMES.META,
       this._withFullStateRef(meta, ref),
@@ -453,20 +510,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       },
     );
 
-    const meta: FullStateOpsMetaEntry = {
-      refs,
-      latest: this._getLatestFullStateRef(refs),
-    };
+    const meta = this._buildFullStateOpsMeta(refs);
     await this._adapter.put(STORE_NAMES.META, meta, FULL_STATE_OPS_META_KEY);
     return meta;
   }
 
   private async _getFullStateOpsMetaOrRebuild(): Promise<FullStateOpsMetaEntry> {
     return (
-      (await this._adapter.get<FullStateOpsMetaEntry>(
-        STORE_NAMES.META,
-        FULL_STATE_OPS_META_KEY,
-      )) ?? (await this._rebuildFullStateOpsMeta())
+      this._normalizeFullStateOpsMeta(
+        await this._adapter.get<unknown>(STORE_NAMES.META, FULL_STATE_OPS_META_KEY),
+      ) ?? (await this._rebuildFullStateOpsMeta())
     );
   }
 
@@ -1093,32 +1146,39 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     // (A range delete isn't possible — the predicate is on decoded fields.)
     let deletedCount = 0;
     const deletedFullStateOpIds = new Set<string>();
-    await this._adapter.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
-      // Decode stored entry before applying predicate
-      const decoded = decodeStoredEntry(value);
-      if (predicate(decoded)) {
-        deletedCount++;
-        if (isFullStateOpType(decoded.op.opType)) {
-          deletedFullStateOpIds.add(decoded.op.id);
+    await this._adapter.transaction(
+      [STORE_NAMES.OPS, STORE_NAMES.META],
+      'readwrite',
+      async (tx) => {
+        await tx.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value) => {
+          // Decode stored entry before applying predicate
+          const decoded = decodeStoredEntry(value);
+          if (predicate(decoded)) {
+            deletedCount++;
+            if (isFullStateOpType(decoded.op.opType)) {
+              deletedFullStateOpIds.add(decoded.op.id);
+            }
+            return 'delete';
+          }
+          return 'continue';
+        });
+
+        if (deletedFullStateOpIds.size > 0) {
+          const meta = await this._getFullStateOpsMetaInTxOrRebuild(tx);
+          await tx.put(
+            STORE_NAMES.META,
+            this._withoutFullStateRefs(meta, deletedFullStateOpIds),
+            FULL_STATE_OPS_META_KEY,
+          );
         }
-        return 'delete';
-      }
-      return 'continue';
-    });
+      },
+    );
 
     // Invalidate caches if any ops were deleted to prevent stale data
     if (deletedCount > 0) {
       this._appliedOpIdsCache = null;
       this._cacheLastSeq = 0;
       this._invalidateUnsyncedCache();
-    }
-    if (deletedFullStateOpIds.size > 0) {
-      const meta = await this._getFullStateOpsMetaOrRebuild();
-      await this._adapter.put(
-        STORE_NAMES.META,
-        this._withoutFullStateRefs(meta, deletedFullStateOpIds),
-        FULL_STATE_OPS_META_KEY,
-      );
     }
   }
 

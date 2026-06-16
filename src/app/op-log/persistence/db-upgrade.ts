@@ -8,8 +8,95 @@
  * This shared function ensures schema consistency regardless of service initialization order.
  */
 
-import { IDBPDatabase, IDBPTransaction } from 'idb';
-import { STORE_NAMES, OPS_INDEXES } from './db-keys.const';
+import { IDBPDatabase, IDBPTransaction, unwrap } from 'idb';
+import { FULL_STATE_OPS_META_KEY, STORE_NAMES, OPS_INDEXES } from './db-keys.const';
+import { isFullStateOpType } from '../core/operation.types';
+
+interface FullStateOpRef {
+  opId: string;
+  seq: number;
+}
+
+interface FullStateOpsMetaEntry {
+  refs: FullStateOpRef[];
+  latest?: FullStateOpRef;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const getStoredOpId = (op: unknown): string | undefined => {
+  if (!isRecord(op)) {
+    return undefined;
+  }
+  return typeof op['id'] === 'string' ? op['id'] : undefined;
+};
+
+const getStoredOpType = (op: unknown): string | undefined => {
+  if (!isRecord(op)) {
+    return undefined;
+  }
+  const compactType = op['o'];
+  if (typeof compactType === 'string') {
+    return compactType;
+  }
+  const fullType = op['opType'];
+  return typeof fullType === 'string' ? fullType : undefined;
+};
+
+const getLatestFullStateRef = (
+  refs: ReadonlyArray<FullStateOpRef>,
+): FullStateOpRef | undefined =>
+  refs.reduce<FullStateOpRef | undefined>(
+    (latest, ref) => (!latest || ref.opId > latest.opId ? ref : latest),
+    undefined,
+  );
+
+const getFullStateRefFromStoredEntry = (
+  storedEntry: unknown,
+  seq: number,
+): FullStateOpRef | undefined => {
+  if (!isRecord(storedEntry)) {
+    return undefined;
+  }
+  const op = storedEntry['op'];
+  const opId = getStoredOpId(op);
+  const opType = getStoredOpType(op);
+  return opId && opType && isFullStateOpType(opType) ? { opId, seq } : undefined;
+};
+
+const buildFullStateOpsMeta = (
+  refs: ReadonlyArray<FullStateOpRef>,
+): FullStateOpsMetaEntry => {
+  const latest = getLatestFullStateRef(refs);
+  return latest ? { refs: [...refs], latest } : { refs: [...refs] };
+};
+
+const populateFullStateOpsMetaDuringUpgrade = (
+  transaction: IDBPTransaction<any, any, 'versionchange'>,
+): void => {
+  const opsStore = unwrap(transaction.objectStore(STORE_NAMES.OPS)) as IDBObjectStore;
+  const metaStore = unwrap(transaction.objectStore(STORE_NAMES.META)) as IDBObjectStore;
+  if (!opsStore?.openCursor || !metaStore?.put) {
+    return;
+  }
+  const refs: FullStateOpRef[] = [];
+  const request = opsStore.openCursor();
+
+  request.onsuccess = (): void => {
+    const cursor = request.result;
+    if (!cursor) {
+      metaStore.put(buildFullStateOpsMeta(refs), FULL_STATE_OPS_META_KEY);
+      return;
+    }
+
+    const ref = getFullStateRefFromStoredEntry(cursor.value, Number(cursor.primaryKey));
+    if (ref) {
+      refs.push(ref);
+    }
+    cursor.continue();
+  };
+};
 
 /**
  * Performs the database upgrade for SUP_OPS.
@@ -77,10 +164,10 @@ export const runDbUpgrade = (
     db.createObjectStore(STORE_NAMES.CLIENT_ID);
   }
 
-  // Version 7: Add meta store for small derived pointers.
-  // The first full-state lookup on upgraded databases rebuilds the
-  // full_state_ops entry from existing ops; new writes maintain it transactionally.
+  // Version 7: Add meta store for small derived pointers and seed it from
+  // existing ops before any post-upgrade write can observe an empty meta row.
   if (oldVersion < 7) {
     db.createObjectStore(STORE_NAMES.META);
+    populateFullStateOpsMetaDuringUpgrade(transaction);
   }
 };
