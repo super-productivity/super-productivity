@@ -730,7 +730,28 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       // Move the start AFTER the sim → the sim is now before the start → dropped.
       c.menuDay.set({ dateStr: '2099-01-10' } as DayData);
       c.menuSetStart();
+      fixture.detectChanges();
       expect(c.simulatedCompletion()).toBeNull();
+    });
+
+    it('keeps a simulation when the new start date precedes it', async () => {
+      // Moving the start to BEFORE the sim leaves the completion valid (it still
+      // sits on/after the start), so the sim must survive — including the
+      // sim-watcher effect that fires on the startDate slice change.
+      const fixture = await setupTestBed({
+        repeatCfg: { ...completionCfg, startDate: '2099-01-05' },
+      });
+      const c = fixture.componentInstance;
+      c.menuDay.set({ dateStr: '2099-01-20' } as DayData);
+      c.menuSimulate();
+      fixture.detectChanges();
+      expect(c.simulatedCompletion()).toBe('2099-01-20');
+      // Move the start EARLIER, still before the sim → the sim stays.
+      c.menuDay.set({ dateStr: '2099-01-10' } as DayData);
+      c.menuSetStart();
+      fixture.detectChanges();
+      expect(c.repeatCfg().startDate).toBe('2099-01-10');
+      expect(c.simulatedCompletion()).toBe('2099-01-20');
     });
 
     it('clears an active simulation when the rule is edited', async () => {

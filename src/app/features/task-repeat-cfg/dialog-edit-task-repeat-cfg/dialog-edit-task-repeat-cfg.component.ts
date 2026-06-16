@@ -620,10 +620,19 @@ export class DialogEditTaskRepeatCfgComponent {
         : {}),
     }));
     this._clearEndIfBeforeStart(dateStr);
-    // A simulation that now sits before the start makes no sense — drop it.
     const sim = this.simulatedCompletion();
-    if (sim && sim < dateStr) {
-      this.simulatedCompletion.set(null);
+    if (sim) {
+      if (sim < dateStr) {
+        // The new start moved PAST the sim — a completion can't precede the
+        // rule's start, so the sim no longer makes sense; drop it.
+        this.simulatedCompletion.set(null);
+      } else {
+        // The sim still sits on/after the new start, so it stays valid. Moving
+        // the start changes the schedule slice, which the sim-watcher effect
+        // would otherwise treat as an edit and clear — advance its tracker in
+        // lockstep so the kept sim survives the start change.
+        this._lastScheduleSlice = this._previewScheduleCfg();
+      }
     }
     this.focusStart.set(dateStr);
   }
