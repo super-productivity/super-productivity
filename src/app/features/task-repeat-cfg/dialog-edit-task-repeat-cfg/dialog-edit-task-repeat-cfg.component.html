@@ -100,7 +100,12 @@
               </div>
             </div>
             <div class="rrule-ends__hint">
-              {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESCRIPTION | translate }}
+              {{
+                (scheduleSelectedId() === 'COMPLETION'
+                  ? T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESC_COMPLETION
+                  : T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESC_FIXED
+                ) | translate
+              }}
             </div>
           </div>
         </rrule-builder>

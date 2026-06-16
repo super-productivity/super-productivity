@@ -2040,6 +2040,8 @@
         "RRULE_SCHEDULE_FROM_START": "Fixed dates (from start)",
         "RRULE_SCHEDULE_FROM_COMPLETION": "After I complete it",
         "RRULE_SCHEDULE_TYPE_DESCRIPTION": "Fixed: keeps a set calendar rhythm from the start date. After I complete it: counts the interval from each completion (e.g. every 3 days = 3 days after you finish).",
+        "RRULE_SCHEDULE_TYPE_DESC_FIXED": "Keep a set calendar rhythm from the start date.",
+        "RRULE_SCHEDULE_TYPE_DESC_COMPLETION": "Count the interval from each completion (e.g. every 3 days = 3 days after you finish).",
         "RRULE_NEXT": "Upcoming",
         "RRULE_NEXT_AFTER_COMPLETION": "After completion, e.g.",
         "RRULE_CALENDAR_PREVIEW": "Calendar preview",
