@@ -143,11 +143,14 @@
     outline: 1px dotted var(--c-primary);
     outline-offset: -2px;
   }
-  // Next upcoming occurrence: the accent ring, PULSING like the cell marker.
+  // Next upcoming occurrence: an accent ring, PULSING. Uses outline (not an
+  // inset box-shadow, which didn't render on the tiny transparent swatch in
+  // some themes) so it's reliably visible — like the dotted `.projected` swatch.
   &.next {
     background: transparent;
-    box-shadow: inset 0 0 0 2px var(--c-accent);
-    animation: heatmap-next-pulse 1.8s ease-in-out infinite;
+    outline: 2px solid var(--c-accent);
+    outline-offset: -2px;
+    animation: heatmap-next-legend-pulse 1.8s ease-in-out infinite;
   }
   // Recurrence end (UNTIL) day: a SOLID error block (vs the hollow `.next` ring).
   &.end {
@@ -169,13 +172,17 @@
   &.activity-4 {
     background: var(--c-success, #43a047);
   }
-  // Today: an ink (theme text) outline — matches the cell marker.
+  // Today: an ink (theme text) ring via outline (reliably visible on the small
+  // transparent swatch, unlike an inset box-shadow).
   &.today {
     background: transparent;
-    box-shadow: inset 0 0 0 2px var(--ink, currentColor);
+    outline: 2px solid var(--ink, currentColor);
+    outline-offset: -2px;
   }
+  // Simulated completion: warm amber — a distinct hue from the green
+  // tracked-time / activity cells (was --c-success, which read too close).
   &.completed {
-    background: var(--c-success, #43a047);
+    background: var(--c-warning, #e8a13a);
   }
 }
 
@@ -252,12 +259,13 @@
     outline: 2px dotted var(--c-primary);
     outline-offset: -2px;
   }
-  // Simulated "completed here" day: solid SUCCESS (green) with a ring — "done".
-  // A distinct hue from start (primary), next (accent) and end (error).
+  // Simulated "completed here" day: solid WARM AMBER + ring — a distinct hue
+  // from start (primary), next (accent), end (error) AND the green tracked-time
+  // cells (was --c-success/green, which read too close to tracked time).
   &.completed {
-    background: var(--c-success, #43a047);
+    background: var(--c-warning, #e8a13a);
     color: var(--c-contrast);
-    outline: 2px solid var(--c-success, #43a047);
+    outline: 2px solid var(--c-warning, #e8a13a);
     outline-offset: 1px;
   }
 
@@ -346,6 +354,19 @@
 
   50% {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 25%, transparent);
+  }
+}
+
+// Legend swatch pulse — animates the outline COLOUR (the swatch uses an outline
+// ring, not a box-shadow), so it fades in/out without reflow.
+@keyframes heatmap-next-legend-pulse {
+  0%,
+  100% {
+    outline-color: var(--c-accent);
+  }
+
+  50% {
+    outline-color: color-mix(in srgb, var(--c-accent) 35%, transparent);
   }
 }
 

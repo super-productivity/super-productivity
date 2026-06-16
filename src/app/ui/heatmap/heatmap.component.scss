@@ -256,11 +256,11 @@
     outline-offset: -1px;
   }
 
-  // Simulated "completed here" day: solid SUCCESS (green) — "done", a distinct
-  // hue from start (primary), next (accent) and end (error).
+  // Simulated "completed here" day: warm amber — a distinct hue from start
+  // (primary), next (accent), end (error) AND the green tracked-time cells.
   &.completed {
-    background: var(--c-success, #43a047);
-    outline: 2px solid var(--c-success, #43a047);
+    background: var(--c-warning, #e8a13a);
+    outline: 2px solid var(--c-warning, #e8a13a);
     outline-offset: 1px;
   }
 
@@ -350,6 +350,19 @@
   }
 }
 
+// Legend swatch pulse — animates the outline COLOUR (the swatch rings with an
+// outline, not a box-shadow), fading in/out without reflow.
+@keyframes heatmap-next-legend-pulse {
+  0%,
+  100% {
+    outline-color: var(--c-accent);
+  }
+
+  50% {
+    outline-color: color-mix(in srgb, var(--c-accent) 35%, transparent);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .day.next::after,
   .heatmap-legend .legend-item.next {
@@ -430,11 +443,14 @@
       outline-offset: -1px;
     }
 
-    // Next upcoming occurrence: the accent ring, PULSING like the cell marker.
+    // Next upcoming occurrence: an accent ring, PULSING. Uses outline (not an
+    // inset box-shadow, which didn't render on the tiny transparent swatch in
+    // some themes) so it's reliably visible, like the dotted `.projected` swatch.
     &.next {
       background: transparent;
-      box-shadow: inset 0 0 0 2px var(--c-accent);
-      animation: heatmap-next-pulse 1.8s ease-in-out infinite;
+      outline: 2px solid var(--c-accent);
+      outline-offset: -1px;
+      animation: heatmap-next-legend-pulse 1.8s ease-in-out infinite;
     }
 
     // Recurrence end (UNTIL) day: a SOLID error block (vs the hollow `.next` ring).
@@ -460,13 +476,15 @@
       background: var(--c-success, #43a047);
     }
 
+    // Today + completed: outline ring / amber fill — see the cell rules above.
     &.today {
       background: transparent;
-      box-shadow: inset 0 0 0 1.5px var(--ink, currentColor);
+      outline: 2px solid var(--ink, currentColor);
+      outline-offset: -1px;
     }
 
     &.completed {
-      background: var(--c-success, #43a047);
+      background: var(--c-warning, #e8a13a);
     }
   }
 }
