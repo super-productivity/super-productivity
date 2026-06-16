@@ -2827,18 +2827,32 @@
   "PLAINSPACE": {
     "CLAIM": "Claim",
     "CLAIM_POOL_TITLE": "Available to claim",
+    "CONNECT": {
+      "CONNECT": "Connect",
+      "CONNECTING": "Connecting…",
+      "EMAIL_HINT": "A Space needs a verified email before it can create tokens.",
+      "INTRO": "Paste a Plainspace API token to import the tasks assigned to you and to share projects. Creating one in Plainspace only takes a moment:",
+      "INVALID": "That token didn't work. Make sure you copied the whole token (it starts with \"pat_\") and try again.",
+      "OPEN_LINK": "Open Plainspace",
+      "STEP_1": "Open Plainspace and pick one of your Spaces (or create one).",
+      "STEP_2": "Open the People panel, then expand Advanced → API tokens.",
+      "STEP_3": "Name a token (e.g. \"Super Productivity\") and create it.",
+      "STEP_4": "Copy the token and paste it below.",
+      "TITLE": "Connect to Plainspace",
+      "TOKEN_LABEL": "API token",
+      "TOKEN_PLACEHOLDER": "pat_…"
+    },
     "FORM": {
       "HOST": "Plainspace host",
       "SPACE_ID": "Space ID",
       "SPACE_ID_DESCRIPTION": "The Plainspace space this provider syncs with. Leave empty to set later.",
       "TOKEN": "API token",
-      "TOKEN_DESCRIPTION": "Personal API token (starts with \"pat_\"). Create one in Plainspace under your Space settings → API tokens."
+      "TOKEN_DESCRIPTION": "Personal API token (starts with \"pat_\"). In Plainspace, open a Space → People → Advanced → API tokens to create one."
     },
     "FORM_SECTION": {
       "HELP": "Connect a Plainspace space with a personal API token to import tasks assigned to you and claim unclaimed tasks.",
       "TITLE": "Plainspace"
     },
-    "LOGIN_PROMPT": "Paste your Plainspace API token (Space settings → API tokens)",
     "LOGIN_REQUIRED": "A Plainspace API token is required to share a project.",
     "NO_UNCLAIMED": "No unclaimed tasks right now.",
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",

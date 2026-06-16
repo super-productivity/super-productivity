@@ -13,7 +13,7 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { Log } from '../../../../core/log';
 import { T } from '../../../../t.const';
 import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
-import { DialogPromptComponent } from '../../../../ui/dialog-prompt/dialog-prompt.component';
+import { PlainspaceConnectDialogComponent } from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
 
 /**
  * Provisions Plainspace sharing for a project: ensures the user is signed in,
@@ -83,23 +83,21 @@ export class PlainspaceShareService {
   }
 
   /**
-   * Ensures a Plainspace account is connected, prompting for an API token (PAT)
-   * if not. The token is validated against the host before it is accepted.
+   * Ensures a Plainspace account is connected, opening the guided connect dialog
+   * (link + step-by-step) if not. The dialog validates the pasted token against
+   * the host and resolves to whether a connection was established.
    */
   private async _ensureConnected(): Promise<boolean> {
     if (this._accountService.isLoggedIn()) {
       return true;
     }
-    const token: string | undefined = await firstValueFrom(
+    const connected = await firstValueFrom(
       this._matDialog
-        .open(DialogPromptComponent, {
-          data: { placeholder: T.PLAINSPACE.LOGIN_PROMPT },
+        .open(PlainspaceConnectDialogComponent, {
+          data: { host: DEFAULT_PLAINSPACE_CFG.host },
         })
         .afterClosed(),
     );
-    if (!token?.trim()) {
-      return false;
-    }
-    return this._accountService.connect(token.trim());
+    return connected === true;
   }
 }

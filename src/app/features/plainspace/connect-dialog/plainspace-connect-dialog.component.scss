@@ -1,0 +1,36 @@
+:host {
+  display: block;
+  max-width: 440px;
+}
+
+.intro {
+  margin-top: 0;
+}
+
+.steps {
+  margin: 0 0 12px;
+  padding-inline-start: 20px;
+}
+
+.steps li {
+  margin-bottom: 4px;
+}
+
+.email-hint {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--text-color-muted);
+}
+
+.open-link {
+  margin-bottom: 16px;
+}
+
+.token-field {
+  width: 100%;
+}
+
+.error {
+  margin: 4px 0 0;
+  color: var(--c-warn);
+}
