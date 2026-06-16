@@ -267,7 +267,12 @@
             type="button"
             (click)="menuEndsOn()"
           >
-            {{ T.F.TASK_REPEAT.F.CAL_MENU_ENDS_ON | translate }}
+            {{
+              (menuDayIsEnd()
+                ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_ENDS
+                : T.F.TASK_REPEAT.F.CAL_MENU_ENDS_ON
+              ) | translate
+            }}
           </button>
         }
         @if (isMonthlyRule()) {
@@ -276,7 +281,12 @@
             type="button"
             (click)="menuToggleMonthDay()"
           >
-            {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_MONTH | translate }}
+            {{
+              (menuDayMonthActive()
+                ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_DAY_OF_MONTH
+                : T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_MONTH
+              ) | translate
+            }}
           </button>
         }
         @if (isYearlyRule()) {
@@ -285,7 +295,12 @@
             type="button"
             (click)="menuSetYearDay()"
           >
-            {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_YEAR | translate }}
+            {{
+              (menuDayYearActive()
+                ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_DAY_OF_YEAR
+                : T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_YEAR
+              ) | translate
+            }}
           </button>
         }
         <button
@@ -293,7 +308,12 @@
           type="button"
           (click)="menuSimulate()"
         >
-          {{ T.F.TASK_REPEAT.F.CAL_MENU_SIMULATE | translate }}
+          {{
+            (menuDayIsSim()
+              ? T.F.TASK_REPEAT.F.CAL_MENU_STOP_SIMULATE
+              : T.F.TASK_REPEAT.F.CAL_MENU_SIMULATE
+            ) | translate
+          }}
         </button>
         @if (!isMonthlyRule() || !isYearlyRule()) {
           <div class="cal-menu-switch">
@@ -368,7 +388,12 @@
             type="button"
             (click)="menuToggleSelectedDay('WEEKLY')"
           >
-            {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
+            {{
+              (menuWeekdaySelectedActive()
+                ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_SELECTED_DAYS
+                : T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS
+              ) | translate
+            }}
           </button>
         }
         @if (isMonthlyRule()) {
@@ -377,7 +402,12 @@
             type="button"
             (click)="menuToggleSelectedDay('MONTHLY')"
           >
-            {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
+            {{
+              (menuWeekdaySelectedActive()
+                ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_SELECTED_DAYS
+                : T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS
+              ) | translate
+            }}
           </button>
           <button
             mat-menu-item
@@ -394,7 +424,12 @@
             type="button"
             (click)="menuToggleSelectedDay('YEARLY')"
           >
-            {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
+            {{
+              (menuWeekdaySelectedActive()
+                ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_SELECTED_DAYS
+                : T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS
+              ) | translate
+            }}
           </button>
           <button
             mat-menu-item
@@ -489,41 +524,78 @@
           *ngTemplateOutlet="weekdayItems; context: { freq: 'YEARLY' }"
         ></ng-container>
       </mat-menu>
+      <!-- nth-ordinal items toggle: an ordinal already holding this weekday flips
+           to "Remove <ordinal>" (the ordinal label nested into the remove string). -->
       <mat-menu #nthMenu="matMenu">
         <button
           mat-menu-item
           type="button"
           (click)="menuToggleNth(1, menuNthFreq())"
         >
-          {{ T.F.TASK_REPEAT.F.ORD_FIRST | translate }}
+          @if (menuNthActive(1)) {
+            {{
+              T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
+                | translate: { ordinal: (T.F.TASK_REPEAT.F.ORD_FIRST | translate) }
+            }}
+          } @else {
+            {{ T.F.TASK_REPEAT.F.ORD_FIRST | translate }}
+          }
         </button>
         <button
           mat-menu-item
           type="button"
           (click)="menuToggleNth(2, menuNthFreq())"
         >
-          {{ T.F.TASK_REPEAT.F.ORD_SECOND | translate }}
+          @if (menuNthActive(2)) {
+            {{
+              T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
+                | translate: { ordinal: (T.F.TASK_REPEAT.F.ORD_SECOND | translate) }
+            }}
+          } @else {
+            {{ T.F.TASK_REPEAT.F.ORD_SECOND | translate }}
+          }
         </button>
         <button
           mat-menu-item
           type="button"
           (click)="menuToggleNth(3, menuNthFreq())"
         >
-          {{ T.F.TASK_REPEAT.F.ORD_THIRD | translate }}
+          @if (menuNthActive(3)) {
+            {{
+              T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
+                | translate: { ordinal: (T.F.TASK_REPEAT.F.ORD_THIRD | translate) }
+            }}
+          } @else {
+            {{ T.F.TASK_REPEAT.F.ORD_THIRD | translate }}
+          }
         </button>
         <button
           mat-menu-item
           type="button"
           (click)="menuToggleNth(4, menuNthFreq())"
         >
-          {{ T.F.TASK_REPEAT.F.ORD_FOURTH | translate }}
+          @if (menuNthActive(4)) {
+            {{
+              T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
+                | translate: { ordinal: (T.F.TASK_REPEAT.F.ORD_FOURTH | translate) }
+            }}
+          } @else {
+            {{ T.F.TASK_REPEAT.F.ORD_FOURTH | translate }}
+          }
         </button>
         <button
           mat-menu-item
           type="button"
           (click)="menuToggleNth(-1, menuNthFreq())"
         >
-          {{ T.F.TASK_REPEAT.F.ORD_LAST | translate }}
+          @if (menuNthActive(-1)) {
+            {{
+              T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
+                | translate: { ordinal: (T.F.TASK_REPEAT.F.ORD_LAST | translate) }
+            }}
+          } @else {
+            {{ T.F.TASK_REPEAT.F.ORD_LAST | translate }}
+          }
         </button>
       </mat-menu>
 

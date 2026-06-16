@@ -507,6 +507,41 @@ export class DialogEditTaskRepeatCfgComponent {
     const s = this.repeatCfg().startDate as string | undefined;
     return !!d && !!s && d > s;
   });
+  // Whether the clicked day is ALREADY the target of each settable action. When it
+  // is, the menu item flips to "Remove …" and the action toggles off (the day-of-
+  // month / day-of-year / simulate ops already add-or-remove; only the end date
+  // needs the handler to branch). Mirrors the month menu's Limit/Unlimit pattern.
+  readonly menuDayIsEnd = computed(() => {
+    const d = this.menuDay()?.dateStr;
+    return !!d && this.endType() === 'UNTIL' && d === this.endUntil();
+  });
+  readonly menuDayMonthActive = computed(() => {
+    const day = this.menuDay()?.date?.getDate();
+    const m = this._previewModel();
+    return (
+      day != null &&
+      m.freq === 'MONTHLY' &&
+      m.monthlyMode === 'DAY_OF_MONTH' &&
+      m.monthDays.includes(day)
+    );
+  });
+  readonly menuDayYearActive = computed(() => {
+    const dt = this.menuDay()?.date;
+    const m = this._previewModel();
+    return (
+      !!dt &&
+      m.freq === 'YEARLY' &&
+      m.yearlyMode === 'DAY_OF_MONTH' &&
+      m.byMonth.length === 1 &&
+      m.byMonth[0] === dt.getMonth() + 1 &&
+      m.monthDays.length === 1 &&
+      m.monthDays[0] === dt.getDate()
+    );
+  });
+  readonly menuDayIsSim = computed(() => {
+    const d = this.menuDay()?.dateStr;
+    return !!d && d === this.simulatedCompletion();
+  });
   menuSetStart(): void {
     const d = this.menuDay()?.dateStr;
     // Floor at today (new-cfg rule) and skip a no-op re-pick.
@@ -536,8 +571,11 @@ export class DialogEditTaskRepeatCfgComponent {
     if (!d) {
       return;
     }
+    // Toggle: clicking the day that's already the end clears the end back to Never.
     this.onRRuleChange(
-      setUntilInRRule(this.repeatCfg().rrule, this._previewRefDate(), d),
+      this.menuDayIsEnd()
+        ? setEndInRRule(this.repeatCfg().rrule, this._previewRefDate(), 'NEVER')
+        : setUntilInRRule(this.repeatCfg().rrule, this._previewRefDate(), d),
     );
   }
   menuToggleMonthDay(): void {
@@ -575,6 +613,35 @@ export class DialogEditTaskRepeatCfgComponent {
   private _menuWeekday(): RRuleWeekday | null {
     const i = this.menuWeekdayIdx();
     return i == null ? null : (RRULE_WEEKDAYS[i] ?? null);
+  }
+  // The menu's weekday is already in the CURRENT frequency's selected-days set →
+  // the native item flips to "Remove from selected days" (the switch variants
+  // always add, since the weekday can't already be selected in another freq).
+  readonly menuWeekdaySelectedActive = computed(() => {
+    const wd = this._menuWeekday();
+    if (!wd) {
+      return false;
+    }
+    const m = this._previewModel();
+    const inSet =
+      m.freq === 'WEEKLY' ||
+      (m.freq === 'MONTHLY' && m.monthlyMode === 'WEEKDAYS') ||
+      (m.freq === 'YEARLY' && m.yearlyMode === 'WEEKDAYS');
+    return inSet && m.byDay.includes(wd);
+  });
+  /** True when the menu's weekday already sits at ordinal `ord` in the nth-weekday
+   *  mode the open sub-menu targets (menuNthFreq) — flips that ordinal to "Remove". */
+  menuNthActive(ord: number): boolean {
+    const wd = this._menuWeekday();
+    if (!wd) {
+      return false;
+    }
+    const m = this._previewModel();
+    const freq = this.menuNthFreq();
+    const inNth =
+      (freq === 'MONTHLY' && m.freq === 'MONTHLY' && m.monthlyMode === 'NTH_WEEKDAY') ||
+      (freq === 'YEARLY' && m.freq === 'YEARLY' && m.yearlyMode === 'NTH_WEEKDAY');
+    return inNth && m.nthDays.some((r) => r.pos === ord && r.days.includes(wd));
   }
   menuToggleNth(ordinal: number, freq: 'MONTHLY' | 'YEARLY'): void {
     const wd = this._menuWeekday();

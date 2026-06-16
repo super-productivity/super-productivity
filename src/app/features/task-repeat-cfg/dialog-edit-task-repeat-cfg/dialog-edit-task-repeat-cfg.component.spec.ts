@@ -917,8 +917,24 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       const fixture = await setupTestBed({ repeatCfg: monthlyCfg });
       const c = fixture.componentInstance;
       c.menuDay.set({ date: new Date(2027, 0, 1), dateStr: '2027-01-01' } as DayData);
+      expect(c.menuDayIsEnd()).toBe(false);
       c.menuEndsOn();
       expect(c.repeatCfg().rrule).toContain('UNTIL=20270101');
+    });
+
+    it('day menu: clicking the day that IS the end removes the end (toggle)', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: {
+          ...monthlyCfg,
+          rrule: 'FREQ=MONTHLY;BYMONTHDAY=10;UNTIL=20270101T120000Z',
+        },
+      });
+      const c = fixture.componentInstance;
+      c.menuDay.set({ date: new Date(2027, 0, 1), dateStr: '2027-01-01' } as DayData);
+      // The clicked day is the end → the menu flips to "Remove" and toggles off.
+      expect(c.menuDayIsEnd()).toBe(true);
+      c.menuEndsOn();
+      expect(c.repeatCfg().rrule).not.toContain('UNTIL');
     });
 
     it('weekday menu: nth ordinal adds BYDAY=2MO', async () => {
