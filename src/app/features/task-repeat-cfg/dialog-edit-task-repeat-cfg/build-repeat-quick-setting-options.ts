@@ -25,6 +25,30 @@ export const buildRepeatQuickSettingOptions = (
     day: 'numeric',
     month: 'numeric',
   });
+  // Compact forms for the concise preset labels ("Weekly (Mon)", "Monthly
+  // (15th)", "Yearly (Jun 15)"). Each option passes its own params, so these
+  // don't affect the verbose presets that still use the long/numeric forms.
+  const refWeekdayShortStr = safeRefDate.toLocaleDateString(locale, { weekday: 'short' });
+  const refMonthDayShortStr = safeRefDate.toLocaleDateString(locale, {
+    month: 'short',
+    day: 'numeric',
+  });
+  // Locale-aware day ordinal (en: 15→"15th", 1→"1st"); plain number if the
+  // runtime can't form ordinals for the locale.
+  const refDayOrdinalStr = ((n: number): string => {
+    try {
+      const suffix: Record<string, string> = {
+        one: 'st',
+        two: 'nd',
+        few: 'rd',
+        other: 'th',
+      };
+      const cat = new Intl.PluralRules(locale, { type: 'ordinal' }).select(n);
+      return `${n}${suffix[cat] ?? 'th'}`;
+    } catch {
+      return String(n);
+    }
+  })(safeRefDate.getDate());
   // 1-based occurrence of refDate's weekday within its month, capped to 4.
   const weekOfMonth = Math.min(Math.floor((safeRefDate.getDate() - 1) / 7) + 1, 4);
   const ordinalStr = translateService.instant(ORDINAL_KEYS[weekOfMonth - 1]);
@@ -49,7 +73,7 @@ export const buildRepeatQuickSettingOptions = (
     {
       value: 'WEEKLY_CURRENT_WEEKDAY',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_WEEKLY_CURRENT_WEEKDAY, {
-        weekdayStr: refWeekdayStr,
+        weekdayStr: refWeekdayShortStr,
       }),
     },
     {
@@ -61,7 +85,7 @@ export const buildRepeatQuickSettingOptions = (
     {
       value: 'MONTHLY_CURRENT_DATE',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE, {
-        dateDayStr: refDayStr,
+        dateDayStr: refDayOrdinalStr,
       }),
     },
     {
@@ -100,7 +124,7 @@ export const buildRepeatQuickSettingOptions = (
     {
       value: 'YEARLY_CURRENT_DATE',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_YEARLY_CURRENT_DATE, {
-        dayAndMonthStr: refDayAndMonthStr,
+        dayAndMonthStr: refMonthDayShortStr,
       }),
     },
     {
