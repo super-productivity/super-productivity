@@ -13,7 +13,9 @@ export const DEFAULT_PLAINSPACE_CFG: PlainspaceCfg = {
   spaceId: null,
   token: null,
   isAutoPoll: true,
-  isAutoAddToBacklog: false,
+  // Tasks assigned to me auto-import into the bound project's backlog, and the
+  // poll keeps them in sync — Plainspace is meant to feel automatic.
+  isAutoAddToBacklog: true,
 };
 
 export const PLAINSPACE_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderPlainspace>[] =

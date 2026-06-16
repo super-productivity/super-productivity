@@ -8,6 +8,7 @@ import { IssueProviderService } from '../issue-provider.service';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
 import { IssueSyncAdapterResolverService } from './issue-sync-adapter-resolver.service';
 import { CaldavSyncAdapterService } from '../providers/caldav/caldav-sync-adapter.service';
+import { PlainspaceSyncAdapterService } from '../providers/plainspace/plainspace-sync-adapter.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -125,6 +126,14 @@ describe('IssueTwoWaySyncEffects', () => {
       'extractSyncValues',
     ]);
 
+    const plainspaceSpy = jasmine.createSpyObj('PlainspaceSyncAdapterService', [
+      'getFieldMappings',
+      'getSyncConfig',
+      'fetchIssue',
+      'pushChanges',
+      'extractSyncValues',
+    ]);
+
     TestBed.configureTestingModule({
       providers: [
         IssueTwoWaySyncEffects,
@@ -136,6 +145,7 @@ describe('IssueTwoWaySyncEffects', () => {
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
         { provide: CaldavSyncAdapterService, useValue: caldavSpy },
+        { provide: PlainspaceSyncAdapterService, useValue: plainspaceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         {
           provide: IssueSyncAdapterResolverService,
