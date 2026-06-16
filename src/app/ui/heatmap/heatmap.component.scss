@@ -256,29 +256,27 @@
     outline-offset: -1px;
   }
 
-  // Simulated "completed here" day: solid ACCENT (distinct from the primary-blue
-  // start/projection so the what-if completion reads apart).
+  // Simulated "completed here" day: solid SUCCESS (green) — "done", a distinct
+  // hue from start (primary), next (accent) and end (error).
   &.completed {
-    background: var(--c-accent);
-    outline: 2px solid var(--c-accent);
+    background: var(--c-success, #43a047);
+    outline: 2px solid var(--c-success, #43a047);
     outline-offset: 1px;
   }
 
-  // Recurrence end (UNTIL) day: a SOLID warn block — the series stops here.
-  // Solid (not a ring) so it reads clearly apart from the hollow `.next` ring,
-  // which shares a near-identical accent/warn colour in most themes.
+  // Recurrence end (UNTIL) day: a SOLID error block — the "stop" hue, distinct
+  // from next / completed; falls back to base warn for themes without --c-error.
   &.end {
     position: relative;
     z-index: 2;
-    background: var(--c-warn, var(--c-accent));
-    box-shadow: 0 0 0 1px var(--c-warn, var(--c-accent));
+    background: var(--c-error, var(--c-warn));
+    box-shadow: 0 0 0 1px var(--c-error, var(--c-warn));
   }
 
-  // Today: a white square ring (white + faint dark edge for cross-theme
-  // visibility). Drawn on a ::before overlay rather than the cell's own
-  // box-shadow so it is NEVER clobbered when the cell is also `.start`,
-  // `.completed`, etc. (those set the cell's box-shadow) — today stays visible
-  // even when the start anchor lands on it.
+  // Today: an INK ring (the theme's text colour) — matches the picked theme and
+  // stays high-contrast on any background while reading as neutral (never one of
+  // the coloured occurrence markers). On a ::before overlay so it's never
+  // clobbered when the cell is also `.start` / `.completed`.
   &.today {
     position: relative;
     z-index: 2;
@@ -288,11 +286,8 @@
       position: absolute;
       inset: 0;
       border-radius: 2px;
-      // INSET ring so the white square sits ON TOP of any fill (incl. the blue
-      // `.start` background when the anchor lands on today).
-      box-shadow:
-        inset 0 0 0 1.5px #fff,
-        inset 0 0 0 2.5px var(--c-dark-20, rgba(0, 0, 0, 0.3));
+      // INSET ring so it sits ON TOP of any fill (incl. a solid start anchor).
+      box-shadow: inset 0 0 0 1.5px var(--ink, currentColor);
       pointer-events: none;
       z-index: 3;
     }
@@ -437,10 +432,9 @@
       box-shadow: inset 0 0 0 2px var(--c-accent);
     }
 
-    // Recurrence end (UNTIL) day: a SOLID warn block (vs the hollow `.next`
-    // ring) so the two legend swatches never read alike.
+    // Recurrence end (UNTIL) day: a SOLID error block (vs the hollow `.next` ring).
     &.end {
-      background: var(--c-warn, var(--c-accent));
+      background: var(--c-error, var(--c-warn));
     }
 
     &.start {
@@ -463,13 +457,11 @@
 
     &.today {
       background: transparent;
-      box-shadow:
-        inset 0 0 0 1.5px #fff,
-        inset 0 0 0 2.5px var(--c-dark-20, rgba(0, 0, 0, 0.3));
+      box-shadow: inset 0 0 0 1.5px var(--ink, currentColor);
     }
 
     &.completed {
-      background: var(--c-primary);
+      background: var(--c-success, #43a047);
     }
   }
 }

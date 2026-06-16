@@ -148,10 +148,9 @@
     background: transparent;
     box-shadow: inset 0 0 0 2px var(--c-accent);
   }
-  // Recurrence end (UNTIL) day: a SOLID warn block (vs the hollow `.next` ring)
-  // so the two legend swatches never read alike.
+  // Recurrence end (UNTIL) day: a SOLID error block (vs the hollow `.next` ring).
   &.end {
-    background: var(--c-warn, var(--c-accent));
+    background: var(--c-error, var(--c-warn));
   }
   &.start {
     background: var(--c-primary);
@@ -169,15 +168,13 @@
   &.activity-4 {
     background: var(--c-success, #43a047);
   }
-  // Today: white square outline (matches the cell marker).
+  // Today: an ink (theme text) outline — matches the cell marker.
   &.today {
     background: transparent;
-    box-shadow:
-      inset 0 0 0 2px #fff,
-      inset 0 0 0 3px var(--c-dark-20, rgba(0, 0, 0, 0.3));
+    box-shadow: inset 0 0 0 2px var(--ink, currentColor);
   }
   &.completed {
-    background: var(--c-primary);
+    background: var(--c-success, #43a047);
   }
 }
 
@@ -201,6 +198,11 @@
   border-radius: var(--card-border-radius);
   font-size: 13px;
   transition: var(--transition-fast);
+  // Use the THEME's text colour explicitly — inside a mat-dialog the cells would
+  // otherwise inherit Material's on-surface colour (e.g. white), which ignores a
+  // theme that recolours its text (cybr → red). Solid-fill markers below set
+  // their own contrast colour on top.
+  color: var(--text-color);
 
   &.other-month {
     color: var(--text-color-muted);
@@ -237,43 +239,43 @@
   &.activity-3 {
     background: color-mix(in srgb, var(--c-success, #43a047) 65%, transparent);
   }
+  // Top activity level keeps the theme's own text colour (no hard-coded white) so
+  // the number reads as part of the picked theme, like every other cell.
   &.activity-4 {
     background: var(--c-success, #43a047);
-    color: #fff;
   }
 
-  // Projected future occurrence: dotted blue (primary) border.
+  // Projected future occurrence: dotted primary border.
   &.projected {
     background: transparent;
     outline: 2px dotted var(--c-primary);
     outline-offset: -2px;
   }
-  // Simulated "completed here" day: solid ACCENT (distinct from the primary-blue
-  // start/projection).
+  // Simulated "completed here" day: solid SUCCESS (green) with a ring — "done".
+  // A distinct hue from start (primary), next (accent) and end (error).
   &.completed {
-    background: var(--c-accent);
+    background: var(--c-success, #43a047);
     color: var(--c-contrast);
-    outline: 2px solid var(--c-accent);
+    outline: 2px solid var(--c-success, #43a047);
     outline-offset: 1px;
   }
 
-  // Recurrence end (UNTIL) day: a SOLID warn block — the series stops here.
-  // Solid (not a ring) so it reads clearly apart from the hollow `.next` ring,
-  // which shares a near-identical accent/warn colour in most themes.
+  // Recurrence end (UNTIL) day: a SOLID error block — the series stops here.
+  // Error (red) is the "stop" hue and a distinct marker from next / completed;
+  // falls back to the base warn token for themes that don't set --c-error.
   &.end {
     position: relative;
     z-index: 2;
-    background: var(--c-warn, var(--c-accent));
+    background: var(--c-error, var(--c-warn));
     color: var(--c-contrast);
-    outline: 2px solid var(--c-warn, var(--c-accent));
+    outline: 2px solid var(--c-error, var(--c-warn));
     outline-offset: 1px;
   }
 
-  // Today: a white square ring (white edge with a faint dark edge so it stays
-  // visible on both light and dark themes, and on filled cells). Drawn on a
-  // ::before overlay rather than the cell's own box-shadow so it is NEVER
-  // clobbered when the cell is also `.start` / `.completed` (those set the
-  // cell's box-shadow) — today stays visible even under the start anchor.
+  // Today: an INK ring (the theme's text colour) so it matches the picked theme
+  // and stays high-contrast on any background — neutral, so it never reads as
+  // one of the coloured occurrence markers. Drawn on a ::before overlay so it is
+  // NEVER clobbered when the cell is also `.start` / `.completed`.
   &.today {
     position: relative;
     z-index: 2;
@@ -283,12 +285,8 @@
       position: absolute;
       inset: 0;
       border-radius: inherit;
-      // INSET ring so the white square sits ON TOP of any fill (incl. the blue
-      // `.start` background when the anchor lands on today) instead of only
-      // ringing the outside, where a solid start fill would swallow it.
-      box-shadow:
-        inset 0 0 0 2px #fff,
-        inset 0 0 0 3px var(--c-dark-20, rgba(0, 0, 0, 0.3));
+      // INSET ring so it sits ON TOP of any fill (incl. a solid start anchor).
+      box-shadow: inset 0 0 0 2px var(--ink, currentColor);
       pointer-events: none;
       z-index: 3;
     }
