@@ -1,12 +1,12 @@
 /**
- * The signed-in Plainspace identity. Defines "me" — which space tasks are mine
- * (imported as SP tasks) vs unclaimed (the claim pool). Stored local-only (per
- * device), never synced. See docs/plainspace-integration-plan.md §3.3.
+ * The connected Plainspace account: the personal API token (PAT) plus the host
+ * it was validated against, and the email it belongs to. Stored local-only (per
+ * device), never synced. Used by the share-on-create flow to provision a space
+ * before any provider exists, and to avoid re-entering the token.
  */
 export interface PlainspaceAccount {
   host: string;
-  userId: string;
-  displayName: string;
-  /** Bearer token (mock value in the prototype). */
+  /** Personal API token (`pat_…`). */
   token: string;
+  email: string;
 }

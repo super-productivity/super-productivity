@@ -1,40 +1,44 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { nanoid } from 'nanoid';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { Log } from '../../core/log';
 import { PlainspaceAccount } from './plainspace-account.model';
-import { PLAINSPACE_MOCK_CURRENT_USER_ID } from './plainspace-identity.const';
+import { PlainspaceApiService } from '../issue/providers/plainspace/plainspace-api.service';
+import { DEFAULT_PLAINSPACE_CFG } from '../issue/providers/plainspace/plainspace-cfg-form.const';
 
 const DEFAULT_HOST = 'https://plainspace.org';
 
 /**
- * Holds the signed-in Plainspace identity and exposes it as signals so the rest
- * of the app can react to login/logout. Persisted to localStorage (local-only,
- * never synced — identity is per device).
- *
- * The `login` here is a mock: a real implementation would perform a token
- * exchange (or OAuth redirect via src/app/plugins/oauth) and read the user id
- * from Plainspace. The prototype mints a token and uses the fixed mock identity
- * so the assigned/unassigned split lines up with the mock space data.
+ * Holds the connected Plainspace account (a personal API token + host) and
+ * exposes it as signals. Persisted to localStorage (local-only, never synced —
+ * a PAT is per device). Used by the share-on-create flow, which needs a token
+ * before any provider/space exists.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceAccountService {
+  private readonly _api = inject(PlainspaceApiService);
   private readonly _account = signal<PlainspaceAccount | null>(this._load());
 
   readonly account = this._account.asReadonly();
   readonly isLoggedIn = computed(() => !!this._account());
-  readonly currentUserId = computed(() => this._account()?.userId ?? null);
+  readonly token = computed(() => this._account()?.token ?? null);
+  readonly host = computed(() => this._account()?.host ?? null);
 
-  login(displayName: string, host: string = DEFAULT_HOST): PlainspaceAccount {
-    const account: PlainspaceAccount = {
-      host,
-      userId: PLAINSPACE_MOCK_CURRENT_USER_ID,
-      displayName: displayName.trim() || 'Me',
-      token: `mock-token-${nanoid()}`,
-    };
+  /**
+   * Validates a PAT against the host (`GET /api/integration/me`) and, on
+   * success, stores it. Returns whether the token was accepted.
+   */
+  async connect(token: string, host: string = DEFAULT_HOST): Promise<boolean> {
+    const me = await firstValueFrom(
+      this._api.getMe$({ ...DEFAULT_PLAINSPACE_CFG, host, token }),
+    );
+    if (!me) {
+      return false;
+    }
+    const account: PlainspaceAccount = { host, token, email: me.email };
     this._account.set(account);
     this._save(account);
-    return account;
+    return true;
   }
 
   logout(): void {

@@ -1,23 +1,20 @@
 /**
- * Plainspace API issue shapes (assumed contract — see
- * docs/plainspace-integration-plan.md §3.2). Kept isolated so the real API can
- * be wired in by changing only this file + `PlainspaceApiService`.
+ * Internal Plainspace issue shape used across the SP provider.
+ *
+ * The real Plainspace integration API returns an `SPTask`
+ * (`GET {host}/api/integration/tasks`, see docs/plainspace-api-extension-plan.md).
+ * `PlainspaceApiService` maps that DTO to this shape, so the rest of the
+ * provider depends on one stable interface and the wire format stays isolated to
+ * the API service.
  */
-
-export interface PlainspaceIssueAssignee {
-  id: string;
-  name: string;
-  avatarUrl?: string | null;
-}
-
 export type PlainspaceIssue = Readonly<{
   id: string;
   title: string;
   isDone: boolean;
-  /** null = unassigned. */
-  assigneeId: string | null;
-  assignee: PlainspaceIssueAssignee | null;
   /** ISO timestamp; used for poll-based update detection. */
   updatedAt: string;
+  /** Absolute link to open the task in the Plainspace web UI. */
   url: string | null;
+  /** Remote Plainspace project/space id — used to scope tasks to a provider. */
+  projectId: string;
 }>;

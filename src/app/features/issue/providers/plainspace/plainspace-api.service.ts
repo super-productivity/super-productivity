@@ -1,97 +1,120 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { nanoid } from 'nanoid';
+import { catchError, map } from 'rxjs/operators';
 import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceIssue } from './plainspace-issue.model';
 import { mapPlainspaceIssueToSearchResult } from './plainspace-issue-map.util';
-import { PLAINSPACE_USE_MOCK } from './plainspace.const';
-import { PLAINSPACE_MOCK_ISSUES } from './plainspace-mock-data.const';
-import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
 
 /**
- * HTTP access to the Plainspace API. While `PLAINSPACE_USE_MOCK` is true every
- * method serves in-memory mock data, so the provider, the share flow and the
- * claim flow work end-to-end without a live backend. The real HTTP calls are
- * stubbed against an assumed contract (see
- * docs/plainspace-integration-plan.md §10) and isolated here so only this file
- * changes once the real API is known.
+ * HTTP access to the real Plainspace integration API (plainspace.org /
+ * `Johannesjo/spaces`). Every endpoint lives under `{host}/api/integration` and
+ * is authorized with the provider's personal API token (`Authorization: Bearer
+ * pat_…`). The server already scopes `/tasks` to the caller, so "mine" is decided
+ * server-side — no client-side identity filtering is needed.
  *
- * Ownership model (docs §7): only tasks assigned to me become SP tasks;
- * unclaimed tasks are a read-only pool you claim from; tasks assigned to others
- * are not represented in SP.
+ * The wire format (`SPTask`) is mapped to the provider-internal `PlainspaceIssue`
+ * here, keeping the real contract isolated to this file. See
+ * docs/plainspace-api-extension-plan.md for the endpoint contract.
+ *
+ * Reads fail soft (empty list / null) so a Plainspace outage never blocks the SP
+ * UI; `createSpace$` lets errors propagate so the share flow can report them.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceApiService {
   private _http = inject(HttpClient);
-  private _accountService = inject(PlainspaceAccountService);
 
-  /** Creates a remote space and returns its id (used by the share flow). */
-  createSpace$(title: string, cfg: PlainspaceCfg): Observable<{ id: string }> {
-    if (PLAINSPACE_USE_MOCK) {
-      return of({ id: `space-${nanoid()}` });
-    }
-    return this._http.post<{ id: string }>(`${cfg.host}/api/spaces`, { title });
+  /** Verifies the token and returns the account's email + spaces, or null. */
+  getMe$(cfg: PlainspaceCfg): Observable<SPMeResponse | null> {
+    return this._http
+      .get<SPMeResponse>(`${this._base(cfg)}/me`, { headers: this._headers(cfg) })
+      .pipe(catchError(() => of(null)));
   }
 
-  /** All tasks in the configured space. */
-  getTasksForSpace$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
-    if (PLAINSPACE_USE_MOCK) {
-      return of(PLAINSPACE_MOCK_ISSUES);
-    }
-    return this._http.get<PlainspaceIssue[]>(
-      `${cfg.host}/api/spaces/${cfg.spaceId}/tasks`,
-    );
-  }
-
-  /** Tasks assigned to me — the only tasks imported as first-class SP tasks. */
+  /** Tasks assigned to me in this provider's space — imported as SP tasks. */
   getMyTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
-    const meId = this._accountService.currentUserId();
-    return this.getTasksForSpace$(cfg).pipe(
-      map((issues) => issues.filter((issue) => !!meId && issue.assigneeId === meId)),
-    );
+    return this._http
+      .get<SPTasksResponse>(`${this._base(cfg)}/tasks`, { headers: this._headers(cfg) })
+      .pipe(
+        // /tasks spans all my spaces; keep only this provider's space.
+        map((res) =>
+          res.tasks
+            .filter((t) => !cfg.spaceId || t.projectId === cfg.spaceId)
+            .map(mapSPTaskToIssue),
+        ),
+        catchError(() => of([])),
+      );
   }
 
-  /** Unclaimed (unassigned, not done) tasks — the read-only claim pool. */
+  /** Unclaimed (unassigned, not-done) tasks in this space — the claim pool. */
   getUnclaimedTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
-    return this.getTasksForSpace$(cfg).pipe(
-      map((issues) =>
-        issues.filter((issue) => issue.assigneeId === null && !issue.isDone),
-      ),
-    );
-  }
-
-  /**
-   * Assigns an unclaimed task to the signed-in user ("claim"). In mock mode this
-   * mutates the in-memory space data; the real call would POST the assignment.
-   */
-  claimTask$(issueId: string, cfg: PlainspaceCfg): Observable<PlainspaceIssue | null> {
-    if (PLAINSPACE_USE_MOCK) {
-      const meId = this._accountService.currentUserId();
-      const idx = PLAINSPACE_MOCK_ISSUES.findIndex((i) => i.id === issueId);
-      if (idx === -1 || !meId) {
-        return of(null);
-      }
-      const claimed: PlainspaceIssue = {
-        ...PLAINSPACE_MOCK_ISSUES[idx],
-        assigneeId: meId,
-        assignee: { id: meId, name: this._accountService.account()?.displayName ?? 'Me' },
-      };
-      PLAINSPACE_MOCK_ISSUES[idx] = claimed;
-      return of(claimed);
-    }
-    return this._http.post<PlainspaceIssue>(
-      `${cfg.host}/api/spaces/${cfg.spaceId}/tasks/${issueId}/claim`,
-      {},
-    );
+    const params = cfg.spaceId ? `?projectId=${encodeURIComponent(cfg.spaceId)}` : '';
+    return this._http
+      .get<SPTasksResponse>(`${this._base(cfg)}/claimable-tasks${params}`, {
+        headers: this._headers(cfg),
+      })
+      .pipe(
+        map((res) => res.tasks.map(mapSPTaskToIssue)),
+        catchError(() => of([])),
+      );
   }
 
   getById$(id: string, cfg: PlainspaceCfg): Observable<PlainspaceIssue | null> {
-    return this.getTasksForSpace$(cfg).pipe(
-      map((issues) => issues.find((issue) => issue.id === id) ?? null),
-    );
+    return this._http
+      .get<SPTaskResponse>(`${this._base(cfg)}/tasks/${encodeURIComponent(id)}`, {
+        headers: this._headers(cfg),
+      })
+      .pipe(
+        map((res) => mapSPTaskToIssue(res.task)),
+        catchError(() => of(null)),
+      );
+  }
+
+  /**
+   * Self-assigns ("claims") an unclaimed task. Returns the claimed task, or null
+   * if it could not be claimed (already taken, offline, …).
+   */
+  claimTask$(id: string, cfg: PlainspaceCfg): Observable<PlainspaceIssue | null> {
+    return this._http
+      .post<SPTaskResponse>(
+        `${this._base(cfg)}/tasks/${encodeURIComponent(id)}/claim`,
+        {},
+        { headers: this._headers(cfg) },
+      )
+      .pipe(
+        map((res) => mapSPTaskToIssue(res.task)),
+        catchError(() => of(null)),
+      );
+  }
+
+  /** Pushes a done/undone change back to Plainspace; null on failure. */
+  setTaskDone$(
+    id: string,
+    isDone: boolean,
+    cfg: PlainspaceCfg,
+  ): Observable<PlainspaceIssue | null> {
+    return this._http
+      .patch<SPTaskResponse>(
+        `${this._base(cfg)}/tasks/${encodeURIComponent(id)}`,
+        { done: isDone },
+        { headers: this._headers(cfg) },
+      )
+      .pipe(
+        map((res) => mapSPTaskToIssue(res.task)),
+        catchError(() => of(null)),
+      );
+  }
+
+  /** Creates a remote space and returns its id (used by the share flow). */
+  createSpace$(title: string, cfg: PlainspaceCfg): Observable<{ id: string }> {
+    return this._http
+      .post<SPCreateSpaceResponse>(
+        `${this._base(cfg)}/spaces`,
+        { name: title },
+        { headers: this._headers(cfg) },
+      )
+      .pipe(map((res) => ({ id: res.project.id })));
   }
 
   searchIssues$(query: string, cfg: PlainspaceCfg): Observable<SearchResultItem[]> {
@@ -104,4 +127,58 @@ export class PlainspaceApiService {
       ),
     );
   }
+
+  private _base(cfg: PlainspaceCfg): string {
+    return `${cfg.host}/api/integration`;
+  }
+
+  private _headers(cfg: PlainspaceCfg): HttpHeaders {
+    return new HttpHeaders({ Authorization: `Bearer ${cfg.token ?? ''}` });
+  }
 }
+
+/** The Plainspace integration task DTO (`GET /api/integration/tasks`). */
+interface SPTask {
+  id: string;
+  title: string;
+  done: boolean;
+  projectId: string;
+  projectName: string;
+  projectSlug: string;
+  listId: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SPTaskResponse {
+  task: SPTask;
+}
+
+interface SPTasksResponse {
+  tasks: SPTask[];
+}
+
+interface SPCreateSpaceResponse {
+  project: { id: string };
+}
+
+interface SPMeResponse {
+  email: string;
+  projects: {
+    id: string;
+    name: string;
+    slug: string;
+    memberDisplayName: string;
+    role: string;
+  }[];
+}
+
+const mapSPTaskToIssue = (t: SPTask): PlainspaceIssue => ({
+  id: t.id,
+  title: t.title,
+  isDone: t.done,
+  updatedAt: t.updatedAt,
+  url: t.url,
+  projectId: t.projectId,
+});

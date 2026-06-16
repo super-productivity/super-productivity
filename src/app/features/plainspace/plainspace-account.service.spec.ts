@@ -1,55 +1,68 @@
+import {
+  HttpClientTestingModule,
+  HttpTestingController,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { PlainspaceAccountService } from './plainspace-account.service';
-import { PLAINSPACE_MOCK_CURRENT_USER_ID } from './plainspace-identity.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('PlainspaceAccountService', () => {
   let service: PlainspaceAccountService;
+  let httpMock: HttpTestingController;
+  const ME_URL = 'https://plainspace.org/api/integration/me';
 
   beforeEach(() => {
     localStorage.removeItem(LS.PLAINSPACE_ACCOUNT);
-    TestBed.configureTestingModule({ providers: [PlainspaceAccountService] });
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [PlainspaceAccountService],
+    });
     service = TestBed.inject(PlainspaceAccountService);
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => {
     localStorage.removeItem(LS.PLAINSPACE_ACCOUNT);
+    httpMock.verify();
   });
 
   it('starts logged out', () => {
     expect(service.isLoggedIn()).toBe(false);
-    expect(service.currentUserId()).toBeNull();
+    expect(service.token()).toBeNull();
   });
 
-  it('login sets the mock identity and persists it', () => {
-    const account = service.login('Alice');
+  it('connect validates the token via /me, stores it, and persists', async () => {
+    const p = service.connect('pat_x');
+    const req = httpMock.expectOne(ME_URL);
+    expect(req.request.headers.get('Authorization')).toBe('Bearer pat_x');
+    req.flush({ email: 'me@example.com', projects: [] });
+
+    expect(await p).toBe(true);
     expect(service.isLoggedIn()).toBe(true);
-    expect(service.currentUserId()).toBe(PLAINSPACE_MOCK_CURRENT_USER_ID);
-    expect(account.displayName).toBe('Alice');
-    expect(account.token).toBeTruthy();
-    expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toContain(
-      PLAINSPACE_MOCK_CURRENT_USER_ID,
-    );
+    expect(service.token()).toBe('pat_x');
+    expect(service.account()?.email).toBe('me@example.com');
+    expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toContain('pat_x');
   });
 
-  it('login falls back to a default display name when blank', () => {
-    const account = service.login('   ');
-    expect(account.displayName).toBe('Me');
-  });
+  it('connect returns false and stays logged out on an invalid token', async () => {
+    const p = service.connect('bad');
+    httpMock
+      .expectOne(ME_URL)
+      .flush({ error: 'nope' }, { status: 401, statusText: 'Unauthorized' });
 
-  it('logout clears the account and storage', () => {
-    service.login('Alice');
-    service.logout();
+    expect(await p).toBe(false);
     expect(service.isLoggedIn()).toBe(false);
-    expect(service.currentUserId()).toBeNull();
     expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
   });
 
-  it('restores a persisted account on construction', () => {
-    service.login('Bob');
-    // a fresh instance reads the persisted account from localStorage
-    const fresh = TestBed.runInInjectionContext(() => new PlainspaceAccountService());
-    expect(fresh.isLoggedIn()).toBe(true);
-    expect(fresh.account()?.displayName).toBe('Bob');
+  it('logout clears the account and storage', async () => {
+    const p = service.connect('pat_x');
+    httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
+    await p;
+
+    service.logout();
+    expect(service.isLoggedIn()).toBe(false);
+    expect(service.token()).toBeNull();
+    expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
   });
 });

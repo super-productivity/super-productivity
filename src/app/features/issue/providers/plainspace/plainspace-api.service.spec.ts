@@ -1,85 +1,131 @@
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import {
+  HttpClientTestingModule,
+  HttpTestingController,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { PlainspaceApiService } from './plainspace-api.service';
 import { PlainspaceCfg } from './plainspace.model';
-import { PLAINSPACE_USE_MOCK } from './plainspace.const';
-import { resetPlainspaceMockData } from './plainspace-mock-data.const';
-import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
+import { DEFAULT_PLAINSPACE_CFG } from './plainspace-cfg-form.const';
 
-// Covers the prototype's mock-mode behaviour (PLAINSPACE_USE_MOCK === true):
-// the ownership split (mine vs unclaimed), search scoping, lookup, claim, and
-// space creation. "Mine" depends on the signed-in identity, so each test logs
-// in first. The mock space is reset per test (claim mutates it in place).
-describe('PlainspaceApiService (mock mode)', () => {
+// Covers the real Plainspace integration API: PAT auth, the SPTask -> internal
+// PlainspaceIssue mapping, per-space scoping, claim/create, and fail-soft reads.
+describe('PlainspaceApiService', () => {
   let service: PlainspaceApiService;
-  let accountService: PlainspaceAccountService;
+  let httpMock: HttpTestingController;
 
-  const mockCfg: PlainspaceCfg = {
-    isEnabled: true,
+  const cfg: PlainspaceCfg = {
+    ...DEFAULT_PLAINSPACE_CFG,
     host: 'https://plainspace.org',
     spaceId: 'space-1',
+    token: 'pat_test',
   };
+  const BASE = 'https://plainspace.org/api/integration';
+
+  const spTask = (id: string, projectId: string, done = false): SPTaskLike => ({
+    id,
+    title: `Task ${id}`,
+    done,
+    projectId,
+    projectName: 'P',
+    projectSlug: 'p',
+    listId: 'l',
+    url: `https://plainspace.org/p/item/${id}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-02T00:00:00.000Z',
+  });
 
   beforeEach(() => {
-    resetPlainspaceMockData();
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
-      providers: [PlainspaceApiService, PlainspaceAccountService],
+      providers: [PlainspaceApiService],
     });
     service = TestBed.inject(PlainspaceApiService);
-    accountService = TestBed.inject(PlainspaceAccountService);
-    accountService.login('Tester'); // me === ps-me
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => {
-    accountService.logout();
-    resetPlainspaceMockData();
+  afterEach(() => httpMock.verify());
+
+  it('getMyTasks$ sends the PAT, keeps only this space, and maps to PlainspaceIssue', async () => {
+    const p = firstValueFrom(service.getMyTasks$(cfg));
+    const req = httpMock.expectOne(`${BASE}/tasks`);
+    expect(req.request.headers.get('Authorization')).toBe('Bearer pat_test');
+    req.flush({ tasks: [spTask('a', 'space-1', true), spTask('b', 'other')] });
+    const tasks = await p;
+    expect(tasks.map((t) => t.id)).toEqual(['a']);
+    expect(tasks[0].isDone).toBe(true);
+    expect(tasks[0].url).toBe('https://plainspace.org/p/item/a');
   });
 
-  it('runs in mock mode for the prototype', () => {
-    expect(PLAINSPACE_USE_MOCK).toBe(true);
+  it('getUnclaimedTasks$ scopes the claim-pool call to the space', async () => {
+    const p = firstValueFrom(service.getUnclaimedTasks$(cfg));
+    const req = httpMock.expectOne(`${BASE}/claimable-tasks?projectId=space-1`);
+    req.flush({ tasks: [spTask('u1', 'space-1')] });
+    expect((await p).map((t) => t.id)).toEqual(['u1']);
   });
 
-  it('getMyTasks$ returns only tasks assigned to me', async () => {
-    const tasks = await firstValueFrom(service.getMyTasks$(mockCfg));
-    expect(tasks.map((t) => t.id)).toEqual(['ps-101']);
+  it('claimTask$ POSTs to the claim endpoint and maps the task', async () => {
+    const p = firstValueFrom(service.claimTask$('u1', cfg));
+    const req = httpMock.expectOne(`${BASE}/tasks/u1/claim`);
+    expect(req.request.method).toBe('POST');
+    req.flush({ task: spTask('u1', 'space-1') });
+    expect((await p)?.id).toBe('u1');
   });
 
-  it('getUnclaimedTasks$ returns only unassigned, not-done tasks', async () => {
-    const tasks = await firstValueFrom(service.getUnclaimedTasks$(mockCfg));
-    expect(tasks.map((t) => t.id).sort()).toEqual(['ps-102', 'ps-105', 'ps-106']);
-    expect(tasks.every((t) => t.assigneeId === null && !t.isDone)).toBe(true);
+  it('getById$ returns null on 404', async () => {
+    const p = firstValueFrom(service.getById$('missing', cfg));
+    httpMock
+      .expectOne(`${BASE}/tasks/missing`)
+      .flush({ error: 'Task not found' }, { status: 404, statusText: 'Not Found' });
+    expect(await p).toBeNull();
   });
 
-  it('searchIssues$ searches only my tasks', async () => {
-    const mine = await firstValueFrom(service.searchIssues$('finalize', mockCfg));
-    expect(mine.length).toBe(1);
-    expect(mine[0].issueType).toBe('PLAINSPACE');
-    // an unclaimed task is not surfaced by search
-    const unclaimed = await firstValueFrom(service.searchIssues$('triage', mockCfg));
-    expect(unclaimed.length).toBe(0);
+  it('setTaskDone$ PATCHes the done flag', async () => {
+    const p = firstValueFrom(service.setTaskDone$('a', true, cfg));
+    const req = httpMock.expectOne(`${BASE}/tasks/a`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ done: true });
+    req.flush({ task: spTask('a', 'space-1', true) });
+    expect((await p)?.isDone).toBe(true);
   });
 
-  it('claimTask$ assigns an unclaimed task to me', async () => {
-    const claimed = await firstValueFrom(service.claimTask$('ps-102', mockCfg));
-    expect(claimed?.assigneeId).toBe('ps-me');
-    // it now counts as mine and leaves the unclaimed pool
-    const mine = await firstValueFrom(service.getMyTasks$(mockCfg));
-    expect(mine.map((t) => t.id).sort()).toEqual(['ps-101', 'ps-102']);
-    const unclaimed = await firstValueFrom(service.getUnclaimedTasks$(mockCfg));
-    expect(unclaimed.map((t) => t.id)).not.toContain('ps-102');
+  it('createSpace$ returns the new project id', async () => {
+    const p = firstValueFrom(service.createSpace$('My Space', cfg));
+    const req = httpMock.expectOne(`${BASE}/spaces`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ name: 'My Space' });
+    req.flush({ project: { id: 'proj-new' }, url: 'x', memberId: 'm' });
+    expect((await p).id).toBe('proj-new');
   });
 
-  it('getById$ resolves any task in the space, or null when missing', async () => {
-    const found = await firstValueFrom(service.getById$('ps-103', mockCfg));
-    expect(found?.id).toBe('ps-103');
-    const missing = await firstValueFrom(service.getById$('does-not-exist', mockCfg));
-    expect(missing).toBeNull();
+  it('searchIssues$ filters my tasks by title', async () => {
+    const p = firstValueFrom(service.searchIssues$('task a', cfg));
+    httpMock
+      .expectOne(`${BASE}/tasks`)
+      .flush({ tasks: [spTask('a', 'space-1'), spTask('b', 'space-1')] });
+    const res = await p;
+    expect(res.length).toBe(1);
+    expect(res[0].issueType).toBe('PLAINSPACE');
   });
 
-  it('createSpace$ returns a generated space id', async () => {
-    const space = await firstValueFrom(service.createSpace$('My Space', mockCfg));
-    expect(space.id.startsWith('space-')).toBe(true);
+  it('reads fail soft to [] on a network error', async () => {
+    const p = firstValueFrom(service.getMyTasks$(cfg));
+    httpMock
+      .expectOne(`${BASE}/tasks`)
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    expect(await p).toEqual([]);
   });
 });
+
+interface SPTaskLike {
+  id: string;
+  title: string;
+  done: boolean;
+  projectId: string;
+  projectName: string;
+  projectSlug: string;
+  listId: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+}

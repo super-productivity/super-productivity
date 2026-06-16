@@ -6,12 +6,3 @@ export {
 
 export const PLAINSPACE_POLL_INTERVAL = 5 * 60 * 1000;
 export const PLAINSPACE_INITIAL_POLL_DELAY = 8 * 1000;
-
-/**
- * Prototype flag: while true, `PlainspaceApiService` serves in-memory mock data
- * instead of making HTTP calls, so the feature is fully demonstrable without a
- * live Plainspace backend. Flip to `false` once the real API is wired up.
- * Typed as `boolean` (not the literal `true`) so the real HTTP branches don't
- * become "unreachable code".
- */
-export const PLAINSPACE_USE_MOCK: boolean = true;

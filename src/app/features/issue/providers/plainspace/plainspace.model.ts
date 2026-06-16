@@ -5,13 +5,15 @@ import { BaseIssueProviderCfg } from '../../issue.model';
  * issue provider. One instance is bound to one SP project (via the provider's
  * `defaultProjectId`) and one remote Plainspace space (`spaceId`).
  *
- * The auth token is NOT stored here — in the full design it lives with the
- * Plainspace account (see docs/plainspace-integration-plan.md §3.3) so a single
- * login covers every space. For the mock-backed prototype no token is needed.
+ * `token` is a Plainspace personal API token (PAT, `pat_…`) created in the
+ * Plainspace web UI (Space settings → API tokens). It authorizes every call to
+ * `{host}/api/integration/*`. Stored per provider like other issue providers'
+ * secrets; a single PAT is valid across all of the user's spaces.
  */
 export interface PlainspaceCfg extends BaseIssueProviderCfg {
   host: string | null;
   spaceId: string | null;
+  token?: string | null;
   isAutoPoll?: boolean;
   isAutoAddToBacklog?: boolean;
 }

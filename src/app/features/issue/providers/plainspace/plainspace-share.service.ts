@@ -7,6 +7,7 @@ import { IssueProviderActions } from '../../store/issue-provider.actions';
 import { IssueProviderPlainspace } from '../../issue.model';
 import { ISSUE_PROVIDER_DEFAULT_COMMON_CFG } from '../../issue.const';
 import { PlainspaceApiService } from './plainspace-api.service';
+import { PlainspaceCfg } from './plainspace.model';
 import { DEFAULT_PLAINSPACE_CFG } from './plainspace-cfg-form.const';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { Log } from '../../../../core/log';
@@ -41,12 +42,17 @@ export class PlainspaceShareService {
     title: string,
   ): Promise<string | null> {
     try {
-      if (!(await this._ensureLoggedIn())) {
+      if (!(await this._ensureConnected())) {
         this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.LOGIN_REQUIRED });
         return null;
       }
 
-      const cfg = { ...DEFAULT_PLAINSPACE_CFG };
+      const account = this._accountService.account();
+      const cfg: PlainspaceCfg = {
+        ...DEFAULT_PLAINSPACE_CFG,
+        host: account?.host ?? DEFAULT_PLAINSPACE_CFG.host,
+        token: account?.token ?? null,
+      };
       const space = await firstValueFrom(
         this._plainspaceApiService.createSpace$(title, cfg),
       );
@@ -62,6 +68,8 @@ export class PlainspaceShareService {
         isEnabled: true,
         defaultProjectId: projectId,
         isAutoAddToBacklog: true,
+        host: cfg.host,
+        token: cfg.token,
         spaceId: space.id,
       };
       this._store.dispatch(IssueProviderActions.addIssueProvider({ issueProvider }));
@@ -75,25 +83,23 @@ export class PlainspaceShareService {
   }
 
   /**
-   * Returns true if a Plainspace account is available, prompting a (mock)
-   * sign-in if not. The real flow would do an OAuth/token exchange instead of a
-   * name prompt.
+   * Ensures a Plainspace account is connected, prompting for an API token (PAT)
+   * if not. The token is validated against the host before it is accepted.
    */
-  private async _ensureLoggedIn(): Promise<boolean> {
+  private async _ensureConnected(): Promise<boolean> {
     if (this._accountService.isLoggedIn()) {
       return true;
     }
-    const displayName: string | undefined = await firstValueFrom(
+    const token: string | undefined = await firstValueFrom(
       this._matDialog
         .open(DialogPromptComponent, {
           data: { placeholder: T.PLAINSPACE.LOGIN_PROMPT },
         })
         .afterClosed(),
     );
-    if (!displayName?.trim()) {
+    if (!token?.trim()) {
       return false;
     }
-    this._accountService.login(displayName);
-    return true;
+    return this._accountService.connect(token.trim());
   }
 }

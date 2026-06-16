@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, switchMap } from 'rxjs/operators';
 import { TaskCopy } from '../../../tasks/task.model';
 import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
 import { IssueData, IssueDataReduced, SearchResultItem } from '../../issue.model';
@@ -19,21 +19,25 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
   readonly pollInterval: number = PLAINSPACE_POLL_INTERVAL;
 
   isEnabled(cfg: PlainspaceCfg): boolean {
-    return !!cfg && cfg.isEnabled && !!cfg.host && !!cfg.spaceId;
+    return !!cfg && cfg.isEnabled && !!cfg.host && !!cfg.spaceId && !!cfg.token;
   }
 
   testConnection(cfg: PlainspaceCfg): Promise<boolean> {
     return firstValueFrom(
-      this._plainspaceApiService
-        .getTasksForSpace$(cfg)
-        .pipe(map((res) => Array.isArray(res))),
+      this._plainspaceApiService.getMe$(cfg).pipe(map((res) => !!res)),
     ).then((result) => result ?? false);
   }
 
   issueLink(issueId: string | number, issueProviderId: string): Promise<string> {
+    // The canonical link (`{origin}/{slug}/item/{id}`) comes from the task's own
+    // `url`; fall back to the host root if the task can't be fetched (offline).
     return firstValueFrom(
       this._getCfgOnce$(issueProviderId).pipe(
-        map((cfg) => `${cfg.host}/spaces/${cfg.spaceId}/tasks/${issueId}`),
+        switchMap((cfg) =>
+          this._plainspaceApiService
+            .getById$(String(issueId), cfg)
+            .pipe(map((issue) => issue?.url || `${cfg.host}`)),
+        ),
       ),
     ).then((result) => result ?? '');
   }

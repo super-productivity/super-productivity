@@ -11,6 +11,7 @@ export const DEFAULT_PLAINSPACE_CFG: PlainspaceCfg = {
   isEnabled: false,
   host: 'https://plainspace.org',
   spaceId: null,
+  token: null,
   isAutoPoll: true,
   isAutoAddToBacklog: false,
 };
@@ -33,6 +34,16 @@ export const PLAINSPACE_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderPlain
         label: T.PLAINSPACE.FORM.SPACE_ID,
         required: false,
         description: T.PLAINSPACE.FORM.SPACE_ID_DESCRIPTION,
+      },
+    },
+    {
+      key: 'token',
+      type: 'input',
+      templateOptions: {
+        label: T.PLAINSPACE.FORM.TOKEN,
+        type: 'password',
+        required: true,
+        description: T.PLAINSPACE.FORM.TOKEN_DESCRIPTION,
       },
     },
     {

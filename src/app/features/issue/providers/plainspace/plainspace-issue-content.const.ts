@@ -14,11 +14,5 @@ export const PLAINSPACE_ISSUE_CONTENT_CONFIG: IssueContentConfig<PlainspaceIssue
       type: IssueFieldType.LINK,
       value: (issue: PlainspaceIssue) => issue.title,
     },
-    {
-      label: T.F.ISSUE.ISSUE_CONTENT.ASSIGNEE,
-      type: IssueFieldType.TEXT,
-      value: (issue: PlainspaceIssue) => issue.assignee?.name ?? '',
-      isVisible: (issue: PlainspaceIssue) => !!issue.assignee,
-    },
   ],
 };

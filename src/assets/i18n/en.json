@@ -2830,14 +2830,16 @@
     "FORM": {
       "HOST": "Plainspace host",
       "SPACE_ID": "Space ID",
-      "SPACE_ID_DESCRIPTION": "The Plainspace space this provider syncs with. Leave empty to set later."
+      "SPACE_ID_DESCRIPTION": "The Plainspace space this provider syncs with. Leave empty to set later.",
+      "TOKEN": "API token",
+      "TOKEN_DESCRIPTION": "Personal API token (starts with \"pat_\"). Create one in Plainspace under your Space settings → API tokens."
     },
     "FORM_SECTION": {
-      "HELP": "Connect a Plainspace space to import tasks assigned to you and to see tasks assigned to others.",
+      "HELP": "Connect a Plainspace space with a personal API token to import tasks assigned to you and claim unclaimed tasks.",
       "TITLE": "Plainspace"
     },
-    "LOGIN_PROMPT": "Enter your Plainspace display name to sign in",
-    "LOGIN_REQUIRED": "Sign in to Plainspace to share a project.",
+    "LOGIN_PROMPT": "Paste your Plainspace API token (Space settings → API tokens)",
+    "LOGIN_REQUIRED": "A Plainspace API token is required to share a project.",
     "NO_UNCLAIMED": "No unclaimed tasks right now.",
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",
     "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",
