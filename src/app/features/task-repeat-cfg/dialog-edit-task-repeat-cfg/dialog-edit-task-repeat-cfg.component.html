@@ -259,6 +259,7 @@
           type="button"
           (click)="menuSetStart()"
         >
+          <mat-icon>flag</mat-icon>
           {{ T.F.TASK_REPEAT.F.CAL_MENU_SET_START | translate }}
         </button>
         @if (menuDayAfterStart()) {
@@ -267,6 +268,7 @@
             type="button"
             (click)="menuEndsOn()"
           >
+            <mat-icon>event_busy</mat-icon>
             {{
               (menuDayIsEnd()
                 ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_ENDS
@@ -281,6 +283,7 @@
             type="button"
             (click)="menuToggleMonthDay()"
           >
+            <mat-icon>calendar_view_month</mat-icon>
             {{
               (menuDayMonthActive()
                 ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_DAY_OF_MONTH
@@ -295,6 +298,7 @@
             type="button"
             (click)="menuSetYearDay()"
           >
+            <mat-icon>calendar_month</mat-icon>
             {{
               (menuDayYearActive()
                 ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_DAY_OF_YEAR
@@ -308,6 +312,7 @@
           type="button"
           (click)="menuSimulate()"
         >
+          <mat-icon>science</mat-icon>
           {{
             (menuDayIsSim()
               ? T.F.TASK_REPEAT.F.CAL_MENU_STOP_SIMULATE
@@ -352,6 +357,7 @@
           type="button"
           (click)="menuToggleMonthDay()"
         >
+          <mat-icon>calendar_view_month</mat-icon>
           {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_MONTH | translate }}
         </button>
       </mat-menu>
@@ -361,6 +367,7 @@
           type="button"
           (click)="menuSetYearDay()"
         >
+          <mat-icon>calendar_month</mat-icon>
           {{ T.F.TASK_REPEAT.F.CAL_MENU_DAY_OF_YEAR | translate }}
         </button>
       </mat-menu>
@@ -388,6 +395,7 @@
             type="button"
             (click)="menuToggleSelectedDay('WEEKLY')"
           >
+            <mat-icon>calendar_view_week</mat-icon>
             {{
               (menuWeekdaySelectedActive()
                 ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_SELECTED_DAYS
@@ -402,6 +410,7 @@
             type="button"
             (click)="menuToggleSelectedDay('MONTHLY')"
           >
+            <mat-icon>calendar_view_week</mat-icon>
             {{
               (menuWeekdaySelectedActive()
                 ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_SELECTED_DAYS
@@ -415,6 +424,7 @@
             [matMenuTriggerFor]="nthMenu"
             (menuOpened)="menuNthFreq.set('MONTHLY')"
           >
+            <mat-icon>format_list_numbered</mat-icon>
             {{ T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY | translate }}
           </button>
         }
@@ -424,6 +434,7 @@
             type="button"
             (click)="menuToggleSelectedDay('YEARLY')"
           >
+            <mat-icon>calendar_view_week</mat-icon>
             {{
               (menuWeekdaySelectedActive()
                 ? T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_SELECTED_DAYS
@@ -437,6 +448,7 @@
             [matMenuTriggerFor]="nthMenu"
             (menuOpened)="menuNthFreq.set('YEARLY')"
           >
+            <mat-icon>format_list_numbered</mat-icon>
             {{ T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY | translate }}
           </button>
         }
@@ -487,6 +499,7 @@
           type="button"
           (click)="menuToggleSelectedDay('WEEKLY')"
         >
+          <mat-icon>calendar_view_week</mat-icon>
           {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
         </button>
       </ng-template>
@@ -499,6 +512,7 @@
           type="button"
           (click)="menuToggleSelectedDay(freq)"
         >
+          <mat-icon>calendar_view_week</mat-icon>
           {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
         </button>
         <button
@@ -507,6 +521,7 @@
           [matMenuTriggerFor]="nthMenu"
           (menuOpened)="menuNthFreq.set(freq)"
         >
+          <mat-icon>format_list_numbered</mat-icon>
           {{ T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY | translate }}
         </button>
       </ng-template>
@@ -532,6 +547,7 @@
           type="button"
           (click)="menuToggleNth(1, menuNthFreq())"
         >
+          <mat-icon>looks_one</mat-icon>
           @if (menuNthActive(1)) {
             {{
               T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
@@ -546,6 +562,7 @@
           type="button"
           (click)="menuToggleNth(2, menuNthFreq())"
         >
+          <mat-icon>looks_two</mat-icon>
           @if (menuNthActive(2)) {
             {{
               T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
@@ -560,6 +577,7 @@
           type="button"
           (click)="menuToggleNth(3, menuNthFreq())"
         >
+          <mat-icon>looks_3</mat-icon>
           @if (menuNthActive(3)) {
             {{
               T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
@@ -574,6 +592,7 @@
           type="button"
           (click)="menuToggleNth(4, menuNthFreq())"
         >
+          <mat-icon>looks_4</mat-icon>
           @if (menuNthActive(4)) {
             {{
               T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
@@ -588,6 +607,7 @@
           type="button"
           (click)="menuToggleNth(-1, menuNthFreq())"
         >
+          <mat-icon>last_page</mat-icon>
           @if (menuNthActive(-1)) {
             {{
               T.F.TASK_REPEAT.F.CAL_MENU_REMOVE_NTH
@@ -612,6 +632,7 @@
           type="button"
           (click)="menuToggleMonth()"
         >
+          <mat-icon>filter_alt</mat-icon>
           @if (menuMonthActive()) {
             {{
               T.F.TASK_REPEAT.F.CAL_MENU_UNLIMIT_MONTH
@@ -630,6 +651,7 @@
             type="button"
             (click)="menuClearMonthLimits()"
           >
+            <mat-icon>filter_alt_off</mat-icon>
             {{
               T.F.TASK_REPEAT.F.CAL_MENU_CLEAR_MONTHS
                 | translate: { months: limitedMonthNames() }
