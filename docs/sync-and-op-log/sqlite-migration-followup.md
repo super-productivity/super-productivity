@@ -236,6 +236,20 @@ captured on the next tick.
   verified copy, so a failed/aborted run retries next launch; the IDB copy is left
   **untouched** as a ≥ 1-release fallback. Unit-covered (idempotency, empty-source,
   shared-connection) in `native-sqlite-backend.spec.ts`.
+- ✅ **Bootstrap-failure fallback (no permanent wedge).** A bootstrap that throws
+  every launch (corrupt source row, SQLite open failure) would otherwise leave the
+  op-log uninitialised forever — the factory rethrows and `init()` keeps rejecting.
+  Now `shouldUseNativeSqliteOpLogBackend()` tracks a localStorage failure counter
+  (`SUP_NATIVE_SQLITE_OP_LOG_FAIL_COUNT`) and, after
+  `MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES` (3) **pre-migration** failures, falls back
+  to IndexedDB so the app keeps working. **Critical asymmetry:** the fallback is
+  only safe _before_ migration commits — once the copy succeeds, SQLite holds the
+  live data and the retained IDB copy is a stale frozen snapshot, so falling back
+  to it would silently drop every post-migration op. A localStorage "authoritative"
+  mirror (`SUP_NATIVE_SQLITE_OP_LOG_MIGRATED`, set on first successful bootstrap)
+  makes the gate keep retrying SQLite forever post-migration and never fall back.
+  To re-attempt after hitting the cap, clear the fail-count key. Unit-covered (both
+  branches) in `native-sqlite-backend.spec.ts`.
 - ⏳ **Remains (device-gated):** run on a real device with the flag set and confirm
   a populated legacy install migrates end-to-end.
 - **Risk:** high (data movement) — mitigated by the verify-before-commit safety

@@ -8,6 +8,9 @@ import {
   createNativeSqliteOpLogAdapterFactory,
   shouldUseNativeSqliteOpLogBackend,
   NATIVE_SQLITE_OP_LOG_FLAG_KEY,
+  NATIVE_SQLITE_MIGRATED_FLAG_KEY,
+  NATIVE_SQLITE_FAIL_COUNT_KEY,
+  MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES,
 } from './native-sqlite-backend';
 import { Log } from '../../core/log';
 
@@ -62,9 +65,14 @@ const withMutex = (db: SqliteDb): SqliteDb => ({
 });
 
 describe('native-sqlite-backend', () => {
-  describe('shouldUseNativeSqliteOpLogBackend', () => {
-    afterEach(() => localStorage.removeItem(NATIVE_SQLITE_OP_LOG_FLAG_KEY));
+  // The gate + fallback bookkeeping live in localStorage; isolate every test.
+  afterEach(() => {
+    localStorage.removeItem(NATIVE_SQLITE_OP_LOG_FLAG_KEY);
+    localStorage.removeItem(NATIVE_SQLITE_MIGRATED_FLAG_KEY);
+    localStorage.removeItem(NATIVE_SQLITE_FAIL_COUNT_KEY);
+  });
 
+  describe('shouldUseNativeSqliteOpLogBackend', () => {
     it('is false on a non-native platform regardless of the flag', () => {
       // Karma runs in a browser → IS_NATIVE_PLATFORM is false.
       localStorage.setItem(NATIVE_SQLITE_OP_LOG_FLAG_KEY, 'true');
@@ -82,6 +90,39 @@ describe('native-sqlite-backend', () => {
     it('stays on IndexedDB if localStorage throws', () => {
       spyOn(localStorage, 'getItem').and.throwError('blocked');
       expect(shouldUseNativeSqliteOpLogBackend(true)).toBe(false);
+    });
+
+    it('falls back to IndexedDB after repeated PRE-migration bootstrap failures', () => {
+      localStorage.setItem(NATIVE_SQLITE_OP_LOG_FLAG_KEY, 'true');
+
+      // One short of the cap → still attempts SQLite (IDB is still complete, but
+      // we keep trying to migrate).
+      localStorage.setItem(
+        NATIVE_SQLITE_FAIL_COUNT_KEY,
+        String(MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES - 1),
+      );
+      expect(shouldUseNativeSqliteOpLogBackend(true)).toBe(true);
+
+      // At the cap → give up and stay on the still-complete IDB so the op-log
+      // isn't wedged on a failing SQLite backend.
+      localStorage.setItem(
+        NATIVE_SQLITE_FAIL_COUNT_KEY,
+        String(MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES),
+      );
+      expect(shouldUseNativeSqliteOpLogBackend(true)).toBe(false);
+    });
+
+    it('keeps using SQLite once authoritative, even past the failure cap', () => {
+      // After a committed migration the IDB copy is a stale frozen snapshot, so a
+      // later failure must NEVER fall back to it (silent loss of post-migration
+      // ops). The authoritative flag overrides the failure counter.
+      localStorage.setItem(NATIVE_SQLITE_OP_LOG_FLAG_KEY, 'true');
+      localStorage.setItem(NATIVE_SQLITE_MIGRATED_FLAG_KEY, 'true');
+      localStorage.setItem(
+        NATIVE_SQLITE_FAIL_COUNT_KEY,
+        String(MAX_NATIVE_SQLITE_BOOTSTRAP_FAILURES + 5),
+      );
+      expect(shouldUseNativeSqliteOpLogBackend(true)).toBe(true);
     });
   });
 
@@ -252,6 +293,42 @@ describe('native-sqlite-backend', () => {
       expect(dbCreations).toBe(1);
       await a.add(STORE_NAMES.OPS, makeOpEntry('shared'));
       expect(await b.count(STORE_NAMES.OPS)).toBe(1);
+    });
+
+    it('counts a pre-migration bootstrap failure, then marks authoritative on success', async () => {
+      // Deterministic: no legacy IDB to copy, so bootstrap only does schema +
+      // meta-table + mark. Fail the meta-table create once to force a failure.
+      spyOn(indexedDB, 'databases').and.resolveTo([]);
+      const shared = failOnceDb(
+        await createSqlJsDb(),
+        /CREATE TABLE IF NOT EXISTS sup_op_log_meta/i,
+      );
+      const factory = createNativeSqliteOpLogAdapterFactory(() => shared);
+
+      // First init() fails → failure counted, not yet authoritative.
+      await expectAsync(factory().init()).toBeRejected();
+      expect(localStorage.getItem(NATIVE_SQLITE_FAIL_COUNT_KEY)).toBe('1');
+      expect(localStorage.getItem(NATIVE_SQLITE_MIGRATED_FLAG_KEY)).toBeNull();
+
+      // Retry succeeds → authoritative flag set, failure counter cleared.
+      await factory().init();
+      expect(localStorage.getItem(NATIVE_SQLITE_MIGRATED_FLAG_KEY)).toBe('true');
+      expect(localStorage.getItem(NATIVE_SQLITE_FAIL_COUNT_KEY)).toBeNull();
+    });
+
+    it('does NOT count a failure once SQLite is already authoritative', async () => {
+      // Post-migration failures must keep retrying SQLite, never inflate the
+      // counter toward an (unsafe) fallback to the stale IDB copy.
+      localStorage.setItem(NATIVE_SQLITE_MIGRATED_FLAG_KEY, 'true');
+      spyOn(indexedDB, 'databases').and.resolveTo([]);
+      const shared = failOnceDb(
+        await createSqlJsDb(),
+        /CREATE TABLE IF NOT EXISTS sup_op_log_meta/i,
+      );
+      const factory = createNativeSqliteOpLogAdapterFactory(() => shared);
+
+      await expectAsync(factory().init()).toBeRejected();
+      expect(localStorage.getItem(NATIVE_SQLITE_FAIL_COUNT_KEY)).toBeNull();
     });
   });
 });
