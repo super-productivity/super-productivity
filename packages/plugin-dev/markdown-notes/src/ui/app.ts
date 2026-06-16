@@ -2,6 +2,7 @@ import { marked } from 'marked';
 import type { PluginAPI, Project } from '@super-productivity/plugin-api';
 import { groupNotes } from '../core/group-notes';
 import { SCAN_MARKDOWN_DIRECTORY_SCRIPT } from '../core/scan-script';
+import { isSafeMarkdownImageUrl, isSafeMarkdownLinkUrl } from '../core/url-safety';
 import type {
   MarkdownNote,
   MarkdownNoteGroup,
@@ -70,9 +71,6 @@ const ALLOWED_HTML_ATTRS = new Map([
   ['td', new Set(['align'])],
   ['th', new Set(['align'])],
 ]);
-const LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
-const IMAGE_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
-
 interface AppState {
   config: MarkdownNotesConfig;
   projects: ProjectOption[];
@@ -230,6 +228,10 @@ const refreshGroups = (): void => {
 };
 
 const refresh = async (): Promise<void> => {
+  if (state.isLoading) {
+    return;
+  }
+
   if (!state.config.rootPath.trim()) {
     state.status = 'Choose a local markdown folder to display notes.';
     state.error = null;
@@ -270,24 +272,9 @@ const refresh = async (): Promise<void> => {
   }
 };
 
-const isSafeUrl = (value: string, allowedProtocols: Set<string>): boolean => {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  if (
-    trimmed.startsWith('#') ||
-    trimmed.startsWith('/') ||
-    trimmed.startsWith('./') ||
-    trimmed.startsWith('../')
-  ) {
-    return true;
-  }
-
-  try {
-    const hasExplicitProtocol = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
-    const url = new URL(trimmed, 'https://local.invalid');
-    return hasExplicitProtocol ? allowedProtocols.has(url.protocol) : true;
-  } catch {
-    return false;
+const refreshIfIdle = (): void => {
+  if (!state.isLoading) {
+    void refresh();
   }
 };
 
@@ -316,10 +303,10 @@ const sanitizeHtml = (html: string): string => {
         return;
       }
 
-      if (name === 'href' && !isSafeUrl(attr.value, LINK_PROTOCOLS)) {
+      if (name === 'href' && !isSafeMarkdownLinkUrl(attr.value)) {
         el.removeAttribute(attr.name);
       }
-      if (name === 'src' && !isSafeUrl(attr.value, IMAGE_PROTOCOLS)) {
+      if (name === 'src' && !isSafeMarkdownImageUrl(attr.value)) {
         el.removeAttribute(attr.name);
       }
     });
@@ -386,9 +373,9 @@ const renderNoteButton = (note: MarkdownNote): HTMLButtonElement => {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = `note-btn${note.id === state.selectedNoteId ? ' is-selected' : ''}`;
+  button.dataset.noteId = note.id;
   button.addEventListener('click', () => {
-    state.selectedNoteId = note.id;
-    render();
+    selectNote(note.id);
   });
 
   const title = document.createElement('div');
@@ -400,6 +387,17 @@ const renderNoteButton = (note: MarkdownNote): HTMLButtonElement => {
 
   button.append(title, meta);
   return button;
+};
+
+const selectNote = (noteId: string): void => {
+  state.selectedNoteId = noteId;
+  document.querySelectorAll<HTMLButtonElement>('.note-btn').forEach((button) => {
+    button.classList.toggle('is-selected', button.dataset.noteId === noteId);
+  });
+  const previewEl = document.getElementById('preview') as HTMLElement | null;
+  if (previewEl) {
+    renderPreview(previewEl);
+  }
 };
 
 const renderGroup = (group: MarkdownNoteGroup): HTMLElement => {
@@ -527,7 +525,7 @@ const render = (): void => {
     saveConfig();
     void refresh();
   });
-  refreshBtn.addEventListener('click', () => void refresh());
+  refreshBtn.addEventListener('click', refreshIfIdle);
   searchInput.addEventListener('input', () => {
     state.search = searchInput.value;
     renderContent();
@@ -553,15 +551,15 @@ const render = (): void => {
 
 state.config = loadConfig();
 render();
-void refresh();
+refreshIfIdle();
 window.setInterval(() => {
   if (document.visibilityState === 'visible' && state.config.rootPath.trim()) {
-    void refresh();
+    refreshIfIdle();
   }
 }, AUTO_REFRESH_MS);
 
 window.addEventListener('focus', () => {
   if (state.config.rootPath.trim()) {
-    void refresh();
+    refreshIfIdle();
   }
 });

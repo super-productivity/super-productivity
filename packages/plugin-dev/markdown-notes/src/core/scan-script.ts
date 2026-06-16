@@ -2,7 +2,8 @@ export const SCAN_MARKDOWN_DIRECTORY_SCRIPT = `
 const fs = require('fs');
 const path = require('path');
 
-const rootInput = String(args[0] || '');
+const [rootPathArg] = args;
+const rootInput = String(rootPathArg || '');
 const ignoredDirectoryNames = new Set([
   '.git',
   '.hg',
