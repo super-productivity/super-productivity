@@ -109,6 +109,7 @@ export interface AndroidInterface {
   onPause$: Subject<void>;
   isInBackground$: Observable<boolean>;
   isKeyboardShown$: Subject<boolean>;
+  keyboardHeightPx$: Subject<number>;
 
   onShareWithAttachment$: Subject<AndroidShareData>;
 
@@ -168,6 +169,7 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
   androidInterface.onShareWithAttachment$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
+  androidInterface.keyboardHeightPx$ = new BehaviorSubject(0);
 
   androidInterface.isInBackground$ = merge(
     androidInterface.onResume$.pipe(mapTo(false)),

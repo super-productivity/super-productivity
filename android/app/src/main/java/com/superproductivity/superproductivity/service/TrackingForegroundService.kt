@@ -2,9 +2,7 @@ package com.superproductivity.superproductivity.service
 
 import android.app.Service
 import android.content.Intent
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 
@@ -70,16 +68,6 @@ class TrackingForegroundService : Service() {
     }
 
     private var taskTitle: String = ""
-
-    private val handler = Handler(Looper.getMainLooper())
-    private val updateRunnable = object : Runnable {
-        override fun run() {
-            if (isTracking) {
-                updateNotification()
-                handler.postDelayed(this, 1000)
-            }
-        }
-    }
 
     override fun onCreate() {
         super.onCreate()
@@ -187,7 +175,6 @@ class TrackingForegroundService : Service() {
 
     private fun stopAfterForegroundFailure(startId: Int) {
         isTracking = false
-        handler.removeCallbacks(updateRunnable)
         currentTaskId = null
         startTimestamp = 0
         accumulatedMs = 0
@@ -208,21 +195,20 @@ class TrackingForegroundService : Service() {
 
         currentTaskId = taskId
         taskTitle = title
-        accumulatedMs = timeSpentMs
+        // Anchor first, accumulated second: a torn getElapsedMs() read from the
+        // JS bridge thread then under-reports (caught by the negative-duration
+        // keep-app-value path) instead of double-counting the since-last-anchor
+        // gap — which can be hours now that nothing re-anchors every second.
         startTimestamp = System.currentTimeMillis()
+        accumulatedMs = timeSpentMs
         isTracking = true
 
         // The foreground-service start token was already satisfied at the top
         // of onStartCommand(). Replace the placeholder notification without
         // risking a second startForeground() failure resetting tracking state.
-        if (!updateNotification()) {
-            return false
-        }
-
-        // Start update loop
-        handler.removeCallbacks(updateRunnable)
-        handler.post(updateRunnable)
-        return true
+        // The chronometer in the notification ticks on its own — no update
+        // loop needed (#8243).
+        return updateNotification()
     }
 
     private fun updateTimeSpent(timeSpentMs: Long) {
@@ -232,9 +218,10 @@ class TrackingForegroundService : Service() {
         }
         Log.d(TAG, "Updating time spent: timeSpentMs=$timeSpentMs (was accumulated=$accumulatedMs)")
 
-        // Reset the timer with the new accumulated value
-        accumulatedMs = timeSpentMs
+        // Reset the timer with the new accumulated value. Anchor first (see
+        // startTracking) so a torn bridge-thread read errs toward under-reporting.
         startTimestamp = System.currentTimeMillis()
+        accumulatedMs = timeSpentMs
 
         // Update notification immediately
         updateNotification()
@@ -244,7 +231,6 @@ class TrackingForegroundService : Service() {
         Log.d(TAG, "Stopping tracking, elapsed=${getElapsedMs()}ms")
 
         isTracking = false
-        handler.removeCallbacks(updateRunnable)
 
         // Reset state
         currentTaskId = null
@@ -285,7 +271,6 @@ class TrackingForegroundService : Service() {
         // before onStartCommand cleared it, drop the stale flag so the next cold
         // stop uses stopService() rather than needlessly re-spawning the service.
         clearStartPending()
-        handler.removeCallbacks(updateRunnable)
     }
 
     // Do not override onTaskRemoved — foreground service must survive app swipe (#7818).

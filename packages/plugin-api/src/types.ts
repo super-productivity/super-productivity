@@ -44,13 +44,19 @@ export interface PluginBaseCfg {
 export interface DialogButtonCfg {
   label: string;
   icon?: string;
-  onClick: () => void | Promise<void>;
+  onClick?: () => void | Promise<void>;
   color?: 'primary' | 'warn';
   raised?: boolean;
 }
 
+export type DialogResult = string | undefined;
+
 export interface DialogCfg {
+  title?: string;
   htmlContent?: string;
+  content?: string;
+  okBtnLabel?: string;
+  cancelBtnLabel?: string;
   buttons?: DialogButtonCfg[];
 }
 
@@ -162,6 +168,7 @@ export interface FinishDayPayload {
 
 export interface LanguageChangePayload {
   code: string;
+  newLanguage: string;
 
   [key: string]: unknown;
 }
@@ -466,6 +473,7 @@ export interface PluginAppState {
 
 export interface PluginAPI {
   cfg: PluginBaseCfg;
+  readonly Hooks: typeof PluginHooks;
 
   registerHook<T extends Hooks>(hook: T, fn: PluginHookHandler<T>): void;
 
@@ -533,6 +541,17 @@ export interface PluginAPI {
   // plugin API typings remain assignable; the host always provides it.
   onReady?(fn: () => void | Promise<void>): void;
 
+  // teardown signal — register a callback the host invokes when the plugin is
+  // disabled, reloaded, or uninstalled. Code-based plugins run directly in the
+  // renderer, so timers/listeners they create survive unload unless cleared
+  // here (clearInterval, removeEventListener, speechSynthesis.cancel, …).
+  // The returned promise is NOT awaited — do synchronous cleanup before any
+  // await. In iframe plugins this is a no-op: the iframe is unmounted on
+  // unload and takes its timers with it. Registering again replaces the
+  // previous callback. Optional so older plugin API typings remain assignable;
+  // the host always provides it.
+  onUnload?(fn: () => void | Promise<void>): void;
+
   // cross-process communication
   onMessage?(handler: (message: unknown) => Promise<unknown> | unknown): void;
 
@@ -543,7 +562,7 @@ export interface PluginAPI {
 
   showIndexHtmlAsView(): void;
 
-  openDialog(dialogCfg: DialogCfg): Promise<void>;
+  openDialog(dialogCfg: DialogCfg): Promise<DialogResult>;
 
   // tasks
   getTasks(): Promise<Task[]>;
@@ -551,6 +570,21 @@ export interface PluginAPI {
   getArchivedTasks(): Promise<Task[]>;
 
   getCurrentContextTasks(): Promise<Task[]>;
+
+  /**
+   * Returns the task currently selected in the task detail panel, or null if
+   * no task is selected. This is the stable task reader for side-panel plugins
+   * that need to keep working after their iframe receives focus.
+   */
+  getSelectedTask(): Promise<Task | null>;
+
+  /**
+   * Returns the task row currently focused by the user, or null if no task row
+   * has focus. Task-row focus is transient and is cleared when focus moves
+   * elsewhere, including into an iframe side panel. Use `getSelectedTask()` when
+   * the plugin needs persistent task context.
+   */
+  getFocusedTask(): Promise<Task | null>;
 
   /**
    * Returns a complete read-only snapshot of the application state including
@@ -624,6 +658,16 @@ export interface PluginAPI {
 
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 
+  // i18n
+  translate(key: string, params?: Record<string, string | number>): string;
+
+  formatDate(
+    date: Date | string | number,
+    format: 'short' | 'medium' | 'long' | 'time' | 'datetime',
+  ): string;
+
+  getCurrentLanguage(): string;
+
   // oauth
   startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
 
@@ -634,7 +678,8 @@ export interface PluginAPI {
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 
-  // node execution (only available in Electron with nodeExecution permission)
+  // node execution (Electron desktop only; currently grantable only to packaged
+  // built-in plugins with nodeExecution permission after main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
   // action execution - dispatch NgRx actions (limited to allowed subset)

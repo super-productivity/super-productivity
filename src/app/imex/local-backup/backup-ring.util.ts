@@ -1,5 +1,6 @@
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
 import { INBOX_PROJECT } from '../../features/project/project.const';
+import type { SyncConfig } from '../../features/config/global-config.model';
 
 const entityCount = (val: unknown): number => {
   const ids = (val as { ids?: unknown })?.ids;
@@ -102,6 +103,40 @@ export const isUsableBackupStr = (str: string | null | undefined): boolean => {
   }
   try {
     return hasMeaningfulStateData(JSON.parse(str));
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * True if the backup blob shows the user had sync configured (sync enabled or a
+ * provider set). Used to decide whether a startup restore may proceed *silently*:
+ * restoring a synced backup re-baselines the sync account (it resets
+ * `lastServerSeq` and writes a clean-slate `BACKUP_IMPORT`), which can drop other
+ * devices' concurrent work — so a synced backup must go through the informed
+ * confirm prompt rather than auto-restore. Conservative: any hint of sync counts.
+ * Corrupt/unparseable blobs return false (they never auto-restore anyway —
+ * `isUsableBackupStr` gates that). See issue #7901.
+ */
+export const backupStrHasSyncEnabled = (str: string | null | undefined): boolean => {
+  if (!str) {
+    return false;
+  }
+  try {
+    // Keyed off SyncConfig so a rename of these fields breaks the build here
+    // instead of silently weakening this guard (a moved field would make a
+    // synced backup look non-synced and auto-restore it).
+    const s = JSON.parse(str) as {
+      globalConfig?: { sync?: Partial<Pick<SyncConfig, 'isEnabled' | 'syncProvider'>> };
+    };
+    const sync = s.globalConfig?.sync;
+    if (!sync) {
+      return false;
+    }
+    return (
+      sync.isEnabled === true ||
+      (sync.syncProvider !== null && sync.syncProvider !== undefined)
+    );
   } catch {
     return false;
   }

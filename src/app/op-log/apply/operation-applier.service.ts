@@ -16,6 +16,7 @@ import {
 import { HydrationStateService } from './hydration-state.service';
 import { remoteArchiveDataApplied } from '../../features/archive/store/archive.actions';
 import { bulkApplyOperations } from './bulk-hydration.action';
+import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { ApplyOperationsResult, ApplyOperationsOptions } from '../core/types/apply.types';
 
@@ -48,6 +49,7 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
   private store: ActionDispatchPort<SyncActionLike> = inject(Store);
   private archiveOperationHandler = inject(ArchiveOperationHandler);
   private hydrationState = inject(HydrationStateService);
+  private clientIdProvider = inject(CLIENT_ID_PROVIDER);
   // Use Injector to avoid circular dependency: OperationLogEffects depends on services
   // that may depend on this service indirectly through the Store.
   private injector = inject(Injector);
@@ -86,11 +88,28 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
       );
     }
 
+    // Identify THIS device so the bulk meta-reducer can tell own-op replay apart
+    // from genuinely remote ops (preserves per-device local-only sync settings
+    // only against another client's ops, never while replaying our own).
+    //
+    // Use loadClientId (lenient — returns null, never throws). Do NOT switch to
+    // getOrGenerateClientId to "fail safe": applyRemoteOperations appends the
+    // incoming ops as PENDING before calling this applier and only marks them
+    // applied/failed from the returned result, so a throw here would strand those
+    // appended ops — a same-session retry then skips them as duplicates. That is
+    // worse than the unprotected-foreign-op leak it would prevent. The leak is
+    // unreachable on this path anyway: applying remote ops means the clientId was
+    // already resolved (download/vector-clocks need it), so the cached read
+    // returns it. A null only happens off this path (cold-boot hydration), where
+    // the unset flag's own-op default is the safe direction. See meta-reducer.
+    const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
+
     const result = await replayOperationBatch({
       ops,
       applyOptions: { isLocalHydration },
       dispatcher: this.store,
-      createBulkApplyAction: (operations) => bulkApplyOperations({ operations }),
+      createBulkApplyAction: (operations) =>
+        bulkApplyOperations({ operations, localClientId }),
       remoteApplyWindow: this.hydrationState,
       deferredLocalActions: {
         processDeferredActions: () =>

@@ -2,8 +2,10 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -87,6 +89,8 @@ export class DialogSimpleCounterEditComponent {
     'streakWeeklyFrequency',
     'countdownDuration',
   ];
+
+  readonly countInput = viewChild<ElementRef<HTMLInputElement>>('countInput');
 
   // State
   readonly localCounter = signal<SimpleCounterCopy>({
@@ -188,11 +192,21 @@ export class DialogSimpleCounterEditComponent {
 
   updateValue(value: number): void {
     const date = this.selectedDateStr();
+    // counts and durations can never be negative; clamp invalid/empty input to 0
+    const safeValue = Math.max(0, value || 0);
+    // A type="number" field still accepts typed/pasted negatives, and the
+    // one-way [ngModel] binding won't repaint the field when the clamped value
+    // equals the previously bound value (e.g. editing from 0) — so reset the
+    // element directly to reject a negative visibly.
+    const inputEl = this.countInput()?.nativeElement;
+    if (inputEl && value < 0) {
+      inputEl.value = String(safeValue);
+    }
     this.localCounter.update((counter) => ({
       ...counter,
       countOnDay: {
         ...counter.countOnDay,
-        [date]: value,
+        [date]: safeValue,
       },
     }));
   }

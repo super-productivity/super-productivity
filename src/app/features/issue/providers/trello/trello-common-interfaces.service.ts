@@ -81,9 +81,26 @@ export class TrelloCommonInterfacesService extends BaseIssueProviderService<Trel
     searchTerm: string,
     cfg: TrelloCfg,
   ): Observable<SearchResultItem[]> {
-    return this._trelloApiService
-      .issuePicker$(searchTerm, cfg)
-      .pipe(tap((v) => IssueLog.log('trello.issuePicker$', v)));
+    return this._trelloApiService.issuePicker$(searchTerm, cfg).pipe(
+      tap((results) =>
+        IssueLog.log('Trello issue picker results fetched', {
+          resultCount: results.length,
+          hasIssueKeys: results.some((result) => !!result.issueData.key),
+          labelCount: results.reduce(
+            (sum, result) => sum + result.issueData.labels.length,
+            0,
+          ),
+          memberCount: results.reduce(
+            (sum, result) => sum + result.issueData.members.length,
+            0,
+          ),
+          attachmentCount: results.reduce(
+            (sum, result) => sum + result.issueData.attachments.length,
+            0,
+          ),
+        }),
+      ),
+    );
   }
 
   protected _formatIssueTitleForSnack(issue: IssueData): string {

@@ -59,20 +59,6 @@ export const completeBreak = createAction(
   props<{ pausedTaskId?: string | null }>(),
 );
 
-export const exitBreakToPlanning = createAction(
-  '[FocusMode] Exit Break To Planning',
-  props<{ pausedTaskId?: string | null }>(),
-);
-
-export const offerFlowtimeBreak = createAction(
-  '[FocusMode] Offer Flowtime Break',
-  props<{
-    duration: number;
-    isLongBreak?: boolean;
-    pausedTaskId?: string | null;
-  }>(),
-);
-
 export const incrementCycle = createAction('[FocusMode] Next Cycle');
 export const resetCycles = createAction('[FocusMode] Reset Cycles');
 

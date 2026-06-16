@@ -104,7 +104,7 @@ describe('FocusMode Bug #7707: timer keeps ticking after duration adjusted to 0'
   });
 
   it('should still auto-complete a Flowtime break when its duration elapses', () => {
-    // Flowtime breaks are started via offerFlowtimeBreak → startBreak with a
+    // Flowtime breaks are auto-started via endFlowtimeSession → startBreak with a
     // real positive duration. They must auto-stop on tick even though
     // state.mode === Flowtime.
     const breakDuration = 5 * 60 * 1000; // 5 min

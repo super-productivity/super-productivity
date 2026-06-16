@@ -15,14 +15,15 @@ import { LOCK_NAMES } from '../core/operation-log.const';
  *
  * ### Two-Phase Wait Strategy
  *
- * **Phase 1: Wait for RxJS Queue to Drain**
- * The NgRx effect uses `concatMap` for sequential processing. Actions are enqueued
- * in the OperationCaptureService synchronously (in meta-reducer), then dequeued by
- * the effect. We poll the queue size until it reaches 0, meaning all dispatched
- * actions have been processed by the effect.
+ * **Phase 1: Wait for the pending counter to reach 0**
+ * The NgRx effect uses `concatMap` for sequential processing. The meta-reducer
+ * increments OperationCaptureService's pending counter synchronously when it
+ * captures an action; the effect decrements it (in a `finally`) after each write
+ * attempt completes. We poll the counter until it reaches 0, meaning all
+ * dispatched actions have been processed by the effect.
  *
  * **Phase 2: Acquire Write Lock**
- * Once the RxJS queue is drained, we acquire the same lock used by `writeOperation()`.
+ * Once the counter is drained, we acquire the same lock used by `writeOperation()`.
  * This ensures the final write has completed its IndexedDB transaction.
  *
  * This two-phase approach handles the case where many actions are dispatched rapidly
@@ -47,49 +48,43 @@ export class OperationWriteFlushService {
    * Waits for all pending operation writes to complete.
    *
    * This is a two-phase wait:
-   * 1. Poll the capture service queue until it's empty (all actions processed by effect)
+   * 1. Poll the capture service pending counter until it's 0 (all actions
+   *    processed by the effect)
    * 2. Acquire the write lock to ensure the final IndexedDB transaction is complete
    *
    * @returns Promise that resolves when all pending writes are complete
-   * @throws Error if timeout is reached while waiting for queue to drain
+   * @throws Error if timeout is reached while waiting for the counter to drain
    */
   async flushPendingWrites(): Promise<void> {
-    // Phase 1: Wait for the capture service queue to drain
-    // This ensures all dispatched actions have been dequeued by the effect
+    // Phase 1: Wait for the capture service pending counter to drain
+    // This ensures all dispatched actions have been processed by the effect
     const startTime = Date.now();
-    let lastLoggedSize = -1;
-    const initialQueueSize = this.captureService.getQueueSize();
+    let lastLoggedCount = -1;
+    const initialPendingCount = this.captureService.getPendingCount();
     OpLog.normal(
-      `OperationWriteFlushService: Starting flush. Initial queue size: ${initialQueueSize}`,
+      `OperationWriteFlushService: Starting flush. Initial pending count: ${initialPendingCount}`,
     );
 
-    while (this.captureService.getQueueSize() > 0) {
-      const queueSize = this.captureService.getQueueSize();
+    while (this.captureService.getPendingCount() > 0) {
+      const pendingCount = this.captureService.getPendingCount();
 
-      // Log progress periodically (when queue size changes significantly)
-      if (queueSize !== lastLoggedSize && queueSize % 10 === 0) {
+      // Log progress periodically (when pending count changes significantly)
+      if (pendingCount !== lastLoggedCount && pendingCount % 10 === 0) {
         OpLog.verbose(
-          `OperationWriteFlushService: Waiting for queue to drain, current size: ${queueSize}`,
+          `OperationWriteFlushService: Waiting for writes to drain, pending: ${pendingCount}`,
         );
-        lastLoggedSize = queueSize;
+        lastLoggedCount = pendingCount;
       }
 
       // Check for timeout
       if (Date.now() - startTime > this.MAX_WAIT_TIME) {
-        // Get diagnostic info about stuck operations
-        const pendingOps = this.captureService.peekPendingOperations();
-        const sampleOps = pendingOps.slice(0, 5).map((op) => ({
-          opType: op.opType,
-          entityType: op.entityType,
-          entityId: op.entityId,
-        }));
         OpLog.err(
-          `OperationWriteFlushService: Timeout waiting for queue to drain. ` +
-            `Queue still has ${queueSize} items after ${this.MAX_WAIT_TIME}ms.`,
-          { queueSize, sampleOps },
+          `OperationWriteFlushService: Timeout waiting for writes to drain. ` +
+            `${pendingCount} operation(s) still pending after ${this.MAX_WAIT_TIME}ms.`,
+          { pendingCount },
         );
         throw new Error(
-          `Operation write flush timeout: queue still has ${queueSize} pending items. ` +
+          `Operation write flush timeout: ${pendingCount} pending operation(s). ` +
             `This may indicate a stuck effect. Try reloading the app.`,
         );
       }
@@ -106,10 +101,10 @@ export class OperationWriteFlushService {
     });
 
     const totalWait = Date.now() - startTime;
-    const finalQueueSize = this.captureService.getQueueSize();
+    const finalPendingCount = this.captureService.getPendingCount();
     OpLog.normal(
       `OperationWriteFlushService: Flush complete in ${totalWait}ms. ` +
-        `Initial queue: ${initialQueueSize}, Final queue: ${finalQueueSize}`,
+        `Initial pending: ${initialPendingCount}, Final pending: ${finalPendingCount}`,
     );
   }
 }

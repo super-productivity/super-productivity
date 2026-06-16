@@ -21,6 +21,7 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { updateGlobalConfigSection } from '../../features/config/store/global-config.actions';
 
 describe('OperationLogEffects', () => {
   let effects: OperationLogEffects;
@@ -75,7 +76,8 @@ describe('OperationLogEffects', () => {
       'getOrGenerateClientId',
     ]);
     mockOperationCaptureService = jasmine.createSpyObj('OperationCaptureService', [
-      'dequeue',
+      'extractEntityChanges',
+      'decrementPending',
     ]);
 
     // Default mock implementations
@@ -94,7 +96,7 @@ describe('OperationLogEffects', () => {
     mockClientIdService.getOrGenerateClientId.and.returnValue(
       Promise.resolve('testClient'),
     );
-    mockOperationCaptureService.dequeue.and.returnValue([]);
+    mockOperationCaptureService.extractEntityChanges.and.returnValue([]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -327,6 +329,74 @@ describe('OperationLogEffects', () => {
       });
     });
 
+    it('should persist sync updates that only change local schedule settings for local replay', (done) => {
+      const action = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: {
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+        },
+      });
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOperationCaptureService.extractEntityChanges).toHaveBeenCalled();
+          expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+              payload: {
+                actionPayload: {
+                  sectionKey: 'sync',
+                  sectionCfg: {
+                    syncInterval: 300000,
+                    isManualSyncOnly: true,
+                  },
+                },
+                entityChanges: [],
+              },
+            }),
+            'local',
+          );
+          expect(mockImmediateUploadService.trigger).toHaveBeenCalled();
+          done();
+        },
+      });
+    });
+
+    it('should keep local schedule settings in persisted sync updates', (done) => {
+      const action = updateGlobalConfigSection({
+        sectionKey: 'sync',
+        sectionCfg: {
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: true,
+        },
+      });
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          const operation =
+            mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
+
+          expect(operation.actionType).toBe(ActionType.GLOBAL_CONFIG_UPDATE_SECTION);
+          expect(operation.payload).toEqual({
+            actionPayload: {
+              sectionKey: 'sync',
+              sectionCfg: {
+                syncInterval: 300000,
+                isManualSyncOnly: true,
+                isCompressionEnabled: true,
+              },
+            },
+            entityChanges: [],
+          });
+          done();
+        },
+      });
+    });
+
     it('should persist planTasksForToday replay date fields in actionPayload', (done) => {
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task-1'],
@@ -434,6 +504,37 @@ describe('OperationLogEffects', () => {
       expect(mockCompactionService.emergencyCompact).toHaveBeenCalled();
       // Should have tried to append twice (initial + retry after compaction)
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+    }));
+
+    it('re-extracts the SAME action on the quota-exceeded retry, never a second op (#8307)', fakeAsync(() => {
+      // Regression (#8307, now structural): the positional dequeue is gone.
+      // entityChanges is recomputed by the pure, idempotent extractEntityChanges()
+      // on every write, so the quota retry re-extracts THIS action's changes and
+      // can never steal the next pending action's entry the way the old
+      // double-dequeue did.
+      const quotaError = new DOMException('Quota exceeded', 'QuotaExceededError');
+      let appendCount = 0;
+      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(() => {
+        appendCount++;
+        if (appendCount === 1) {
+          return Promise.reject(quotaError);
+        }
+        return Promise.resolve(1);
+      });
+
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe();
+
+      tick(100);
+      // Append ran twice (initial + retry). Extraction ran once per write and
+      // always against the same action — no positional queue to mis-consume.
+      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+      expect(mockOperationCaptureService.extractEntityChanges).toHaveBeenCalledTimes(2);
+      expect(mockOperationCaptureService.extractEntityChanges).toHaveBeenCalledWith(
+        action,
+      );
     }));
 
     it('should use updated clientId after backup import generates new one', (done) => {

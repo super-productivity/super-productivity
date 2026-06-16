@@ -99,3 +99,39 @@ mat-dialog-actions {
     }
   }
 }
+
+.planned-start-date-field-wrapper {
+  margin-bottom: var(--s2);
+  width: 100%;
+}
+
+.planned-start-date-btn {
+  width: 100%;
+  text-align: start !important;
+  justify-content: start !important;
+  height: 48px !important;
+  padding: 0 var(--s2) !important;
+}
+
+.planned-start-date-btn-content {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  width: 100%;
+  text-align: start;
+}
+
+.planned-date-label {
+  font-weight: bold;
+}
+
+.planned-date-val {
+  flex-grow: 1;
+}
+
+.reminder-badge {
+  color: var(--color-warning);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

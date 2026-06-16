@@ -10,6 +10,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { ScheduleEvent } from '../schedule.model';
 import { SVEType } from '../schedule.const';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 describe('ScheduleWeekComponent', () => {
   let fixture: ComponentFixture<ScheduleWeekComponent>;
@@ -31,6 +32,13 @@ describe('ScheduleWeekComponent', () => {
           useValue: {
             cfg: signal(DEFAULT_GLOBAL_CONFIG),
           },
+        },
+        {
+          provide: CalendarEventActionsService,
+          useValue: jasmine.createSpyObj<CalendarEventActionsService>(
+            'CalendarEventActionsService',
+            ['canMoveEvent'],
+          ),
         },
       ],
     })

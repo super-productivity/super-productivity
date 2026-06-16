@@ -5,6 +5,7 @@ import { Store } from '@ngrx/store';
 import { selectTasksWithSubTasksByIds } from '../tasks/store/task.selectors';
 import { Task, TaskWithSubTasks } from '../tasks/task.model';
 import { first } from 'rxjs/operators';
+import { Log } from '../../core/log';
 
 @Injectable({
   providedIn: 'root',
@@ -167,7 +168,7 @@ export class WorkContextMarkdownService {
         await navigator.clipboard.writeText(text);
         return true;
       } catch (err) {
-        console.warn('Clipboard write failed, trying fallback method:', err);
+        Log.warn('Clipboard write failed, trying fallback method:', err);
       }
     }
 
@@ -189,7 +190,7 @@ export class WorkContextMarkdownService {
     try {
       isSuccess = document.execCommand('copy');
     } catch (err) {
-      console.error('Fallback copy failed:', err);
+      Log.err('Fallback copy failed:', err);
       isSuccess = false;
     } finally {
       document.body.removeChild(textarea);

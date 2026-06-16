@@ -29,6 +29,7 @@
     <package android:name="com.chrome.canary" />
     <package android:name="com.sec.android.app.sbrowser" />
     <package android:name="com.huawei.webview" />
+    <package android:name="app.vanadium.webview" />
   </queries>
 
   <application

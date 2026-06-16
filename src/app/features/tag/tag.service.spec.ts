@@ -10,6 +10,7 @@ import {
   selectAllTagsWithoutMyDay,
   selectTagById,
   selectTagsByIds,
+  TAG_FEATURE_NAME,
 } from './store/tag.reducer';
 import { PRESET_COLORS } from '../work-context/work-context-color';
 import { selectMenuTreeTagTree } from '../menu-tree/store/menu-tree.selectors';
@@ -29,14 +30,16 @@ describe('TagService', () => {
   });
 
   /* eslint-disable @typescript-eslint/naming-convention */
-  const initialState: { tags: TagState } = {
-    tags: {
-      ids: ['tag-1', 'tag-2'],
-      entities: {
-        'tag-1': createTag({ id: 'tag-1', title: 'Tag 1', color: '#ff0000' }),
-        'tag-2': createTag({ id: 'tag-2', title: 'Tag 2', color: '#00ff00' }),
-      },
+  const initialTagState: TagState = {
+    ids: ['tag-1', 'tag-2'],
+    entities: {
+      'tag-1': createTag({ id: 'tag-1', title: 'Tag 1', color: '#ff0000' }),
+      'tag-2': createTag({ id: 'tag-2', title: 'Tag 2', color: '#00ff00' }),
     },
+  };
+  const initialState: { tags: TagState; [TAG_FEATURE_NAME]: TagState } = {
+    tags: initialTagState,
+    [TAG_FEATURE_NAME]: initialTagState,
   };
   /* eslint-enable @typescript-eslint/naming-convention */
 
@@ -93,7 +96,7 @@ describe('TagService', () => {
   });
 
   describe('tree order lists', () => {
-    it('should expose tags in menu tree order', (done) => {
+    it('should expose tags in menu tree order', () => {
       const tags = [
         createTag({ id: 'tag-1', title: 'Tag 1' }),
         createTag({ id: 'tag-2', title: 'Tag 2' }),
@@ -112,13 +115,14 @@ describe('TagService', () => {
       ]);
       store.refreshState();
 
-      service.tagsInTreeOrder$.subscribe((result) => {
-        expect(result.map((tag) => tag.id)).toEqual(['tag-2', 'tag-1', 'tag-3']);
-        done();
-      });
+      expect(service.tagsInTreeOrder().map((tag) => tag.id)).toEqual([
+        'tag-2',
+        'tag-1',
+        'tag-3',
+      ]);
     });
 
-    it('should expose non-My-Day tags in menu tree order', (done) => {
+    it('should expose non-My-Day tags in menu tree order', () => {
       const tags = [
         createTag({ id: 'tag-1', title: 'Tag 1' }),
         createTag({ id: 'tag-2', title: 'Tag 2' }),
@@ -137,10 +141,11 @@ describe('TagService', () => {
       ]);
       store.refreshState();
 
-      service.tagsNoMyDayAndNoListInTreeOrder$.subscribe((result) => {
-        expect(result.map((tag) => tag.id)).toEqual(['tag-3', 'tag-1', 'tag-2']);
-        done();
-      });
+      expect(service.tagsNoMyDayAndNoListInTreeOrder().map((tag) => tag.id)).toEqual([
+        'tag-3',
+        'tag-1',
+        'tag-2',
+      ]);
     });
   });
 

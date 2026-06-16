@@ -82,7 +82,7 @@ const captureDarkScenes = async (
   await page.locator('focus-mode-main .play-button').click();
   await page.clock.runFor(6500);
   await page
-    .locator('focus-mode-main .pause-resume-btn')
+    .locator('focus-mode-main focus-mode-task-tracking')
     .waitFor({ state: 'visible', timeout: 10_000 });
   // Tick a minute of session time so the clock face shows progress and the
   // remaining time isn't exactly the starting duration.

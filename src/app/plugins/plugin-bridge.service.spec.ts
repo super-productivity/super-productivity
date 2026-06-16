@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 // Active tests for setCounter fix (issue #5812)
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
@@ -16,9 +17,11 @@ import {
 import { EMPTY_SIMPLE_COUNTER } from '../features/simple-counter/simple-counter.const';
 import { SnackService } from '../core/snack/snack.service';
 import { NotifyService } from '../core/notify/notify.service';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
+import { TaskFocusService } from '../features/tasks/task-focus.service';
+import { DEFAULT_TASK, TaskWithSubTasks } from '../features/tasks/task.model';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
@@ -36,6 +39,8 @@ import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
+import { T } from '../t.const';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -345,6 +350,279 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
     });
 
     expect(Log.exportLogHistory()).toContain(updateGlobalConfigSection.type);
+  });
+});
+
+describe('PluginBridgeService - iframe task selection methods', () => {
+  const focusedTask = {
+    ...DEFAULT_TASK,
+    id: 'focused-task',
+    title: 'Focused Task',
+    projectId: 'INBOX_PROJECT',
+  };
+  const selectedTask: TaskWithSubTasks = {
+    ...DEFAULT_TASK,
+    id: 'selected-task',
+    title: 'Selected Task',
+    projectId: 'INBOX_PROJECT',
+    subTasks: [],
+  };
+
+  let service: PluginBridgeService;
+  let taskService: jasmine.SpyObj<TaskService>;
+
+  beforeEach(() => {
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', ['getByIdOnce$'], {
+      allTasks$: of([]),
+      selectedTask$: of(selectedTask),
+    });
+    taskService.getByIdOnce$.and.returnValue(of(focusedTask));
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: taskService },
+        {
+          provide: TaskFocusService,
+          useValue: {
+            focusedTaskId: signal<string | null>(focusedTask.id),
+          },
+        },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  it('exposes selected and focused task readers on iframe bound methods', async () => {
+    const bound = service.createBoundMethods('iframe-plugin');
+
+    const selectedResult = await bound.getSelectedTask();
+    const selectedTaskWithoutSubTasks = Object.fromEntries(
+      Object.entries(selectedTask).filter(([key]) => key !== 'subTasks'),
+    ) as typeof selectedResult;
+    expect(selectedResult).toEqual(selectedTaskWithoutSubTasks);
+    expect((selectedResult as { subTasks?: unknown } | null)?.subTasks).toBeUndefined();
+    await expectAsync(bound.getFocusedTask()).toBeResolvedTo(focusedTask);
+    expect(taskService.getByIdOnce$).toHaveBeenCalledOnceWith(focusedTask.id);
+  });
+
+  it('returns null for stale focused task ids', async () => {
+    taskService.getByIdOnce$.and.returnValue(
+      of(undefined as unknown as TaskWithSubTasks),
+    );
+    const bound = service.createBoundMethods('iframe-plugin');
+
+    await expectAsync(bound.getFocusedTask()).toBeResolvedTo(null);
+    expect(taskService.getByIdOnce$).toHaveBeenCalledOnceWith(focusedTask.id);
+  });
+});
+
+describe('PluginBridgeService - openDialog', () => {
+  let service: PluginBridgeService;
+  let matDialog: jasmine.SpyObj<MatDialog>;
+
+  beforeEach(() => {
+    matDialog = jasmine.createSpyObj('MatDialog', ['open']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: matDialog },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  it('resolves with the dialog close result', async () => {
+    matDialog.open.and.returnValue({
+      afterClosed: () => of('Confirm'),
+    } as unknown as MatDialogRef<PluginDialogComponent>);
+
+    const dialogCfg = {
+      htmlContent: '<p>Continue?</p>',
+      buttons: [{ label: 'Confirm' }],
+    };
+
+    const result = await service.openDialog(dialogCfg);
+
+    expect(result).toBe('Confirm');
+    expect(matDialog.open).toHaveBeenCalledOnceWith(
+      PluginDialogComponent,
+      jasmine.objectContaining({
+        data: dialogCfg,
+        autoFocus: true,
+        restoreFocus: true,
+        disableClose: false,
+        closeOnNavigation: false,
+      }),
+    );
+  });
+
+  it('resolves with undefined when the dialog is dismissed', async () => {
+    matDialog.open.and.returnValue({
+      afterClosed: () => of(undefined),
+    } as unknown as MatDialogRef<PluginDialogComponent>);
+
+    const result = await service.openDialog({
+      htmlContent: '<p>Continue?</p>',
+    });
+
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('PluginBridgeService - nodeExecution grant tokens', () => {
+  let service: PluginBridgeService;
+  let originalElectronApi: typeof window.ea | undefined;
+  let pluginExecNodeScriptSpy: jasmine.Spy;
+  let consumePluginNodeExecutionApiSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    originalElectronApi = window.ea;
+    pluginExecNodeScriptSpy = jasmine.createSpy('pluginExecNodeScript');
+    consumePluginNodeExecutionApiSpy = jasmine
+      .createSpy('consumePluginNodeExecutionApi')
+      .and.returnValue({
+        requestGrant: jasmine.createSpy('requestGrant'),
+        executeScript: pluginExecNodeScriptSpy,
+        revokeGrant: jasmine.createSpy('revokeGrant'),
+      });
+    window.ea = {
+      ...(window.ea ?? {}),
+      consumePluginNodeExecutionApi: consumePluginNodeExecutionApiSpy,
+    } as typeof window.ea;
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string): string => key },
+        },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  afterEach(() => {
+    window.ea = originalElectronApi as typeof window.ea;
+  });
+
+  it('stores and revokes nodeExecution grant tokens internally', () => {
+    expect(consumePluginNodeExecutionApiSpy).toHaveBeenCalledTimes(1);
+
+    service.setNodeExecutionGrantToken('node-plugin', 'token-1');
+
+    expect(service.hasNodeExecutionGrantToken('node-plugin')).toBeTrue();
+    expect(service.getNodeExecutionGrantToken('node-plugin')).toBe('token-1');
+    expect(service.revokeNodeExecutionGrantToken('node-plugin')).toBe('token-1');
+    expect(service.hasNodeExecutionGrantToken('node-plugin')).toBeFalse();
+  });
+
+  it('does not call Electron node execution in a web runtime', async () => {
+    service.setNodeExecutionGrantToken('node-plugin', 'token-1');
+    const bound = service.createBoundMethods('node-plugin', {
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      manifestVersion: 1,
+      version: '1.0.0',
+      minSupVersion: '1.0.0',
+      permissions: ['nodeExecution'],
+      hooks: [],
+    });
+
+    const result = await bound.executeNodeScript({ script: 'return true' });
+
+    expect(result).toEqual({
+      success: false,
+      error: T.PLUGINS.NODE_ONLY_DESKTOP,
+    });
+    expect(pluginExecNodeScriptSpy).not.toHaveBeenCalled();
+  });
+
+  it('passes the stored grant token to Electron node execution', async () => {
+    const runtime = service as unknown as { _isElectronRuntime: () => boolean };
+    spyOn(runtime, '_isElectronRuntime').and.returnValue(true);
+    const request = { script: 'return 42' };
+    const electronResult = { success: true, result: 42 };
+    pluginExecNodeScriptSpy.and.resolveTo(electronResult);
+    service.setNodeExecutionGrantToken('node-plugin', 'token-1');
+    const bound = service.createBoundMethods('node-plugin', {
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      manifestVersion: 1,
+      version: '1.0.0',
+      minSupVersion: '1.0.0',
+      permissions: ['nodeExecution'],
+      hooks: [],
+    });
+
+    await expectAsync(bound.executeNodeScript(request)).toBeResolvedTo(electronResult);
+    expect(pluginExecNodeScriptSpy).toHaveBeenCalledOnceWith(
+      'node-plugin',
+      'token-1',
+      request,
+    );
   });
 });
 

@@ -4,7 +4,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { createValidatedHandler } from './ipc-handler-wrapper';
-import { EXTENSION_MIME_TYPES } from './shared-with-frontend/mime-type-mapping.const';
+import {
+  EXTENSION_MIME_TYPES,
+  SUPPORTED_IMAGE_EXTENSIONS,
+} from './shared-with-frontend/mime-type-mapping.const';
 
 interface ClipboardImageMeta {
   id: string;
@@ -12,16 +15,6 @@ interface ClipboardImageMeta {
   createdAt: number;
   size: number;
 }
-
-const SUPPORTED_IMAGE_EXTENSIONS = [
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.webp',
-  '.svg',
-  '.bmp',
-];
 
 /**
  * Ensures the clipboard-images directory exists.
@@ -184,6 +177,12 @@ export const initClipboardImageHandlers = (): void => {
         // Generate unique ID
         const id = Date.now().toString(36) + Math.random().toString(36).substring(2);
         const ext = path.extname(filePath).toLowerCase();
+        // SECURITY: only copy actual image files. `filePath` is renderer-supplied;
+        // without this a plugin/XSS could copy an arbitrary file (e.g. a secret)
+        // into the images dir and read it back via CLIPBOARD_IMAGE_LOAD.
+        if (!SUPPORTED_IMAGE_EXTENSIONS.includes(ext)) {
+          throw new Error('Invalid source image');
+        }
         const destFileName = `${id}${ext}`;
         const destPath = path.join(basePath, destFileName);
 

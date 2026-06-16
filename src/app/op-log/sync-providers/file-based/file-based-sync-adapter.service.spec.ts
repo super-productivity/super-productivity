@@ -18,6 +18,7 @@ import { getSyncFilePrefix } from '../../util/sync-file-prefix';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../../features/time-tracking/time-tracking.model';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../../features/config/default-global-config.const';
 
 describe('FileBasedSyncAdapterService', () => {
   let service: FileBasedSyncAdapterService;
@@ -137,6 +138,16 @@ describe('FileBasedSyncAdapterService', () => {
     mockStateSnapshotService.getStateSnapshot.and.returnValue({
       tasks: [],
       projects: [],
+      globalConfig: {
+        ...DEFAULT_GLOBAL_CONFIG,
+        sync: {
+          ...DEFAULT_GLOBAL_CONFIG.sync,
+          syncProvider: SyncProviderId.WebDAV,
+          syncInterval: 300000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: true,
+        },
+      },
     } as any);
 
     TestBed.configureTestingModule({
@@ -684,7 +695,16 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.accepted).toBe(true);
       const uploadedData = parseWithPrefix(uploadedDataStr);
       // State should come from getStateSnapshot(), not the passed parameter
-      expect(uploadedData.state).toEqual({ tasks: [], projects: [] } as any);
+      expect(uploadedData.state).toEqual(
+        jasmine.objectContaining({ tasks: [], projects: [] }) as any,
+      );
+      const uploadedState = uploadedData.state as Record<string, unknown>;
+      const globalConfig = uploadedState['globalConfig'] as Record<string, unknown>;
+      const sync = globalConfig['sync'] as Record<string, unknown>;
+      expect(sync['syncProvider']).toBeNull();
+      expect(sync['syncInterval']).toBeUndefined();
+      expect(sync['isManualSyncOnly']).toBeUndefined();
+      expect(sync['isCompressionEnabled']).toBe(true);
       expect(uploadedData.vectorClock).toEqual(vectorClock);
       expect(uploadedData.schemaVersion).toBe(2);
       expect(uploadedData.syncVersion).toBe(1);
@@ -1019,6 +1039,12 @@ describe('FileBasedSyncAdapterService', () => {
         const uploadedData = parseWithPrefix(uploadedDataStr);
         expect(uploadedData.archiveYoung).toBeUndefined();
         expect(uploadedData.archiveOld).toBeUndefined();
+        const uploadedState = uploadedData.state as Record<string, unknown>;
+        const globalConfig = uploadedState['globalConfig'] as Record<string, unknown>;
+        const sync = globalConfig['sync'] as Record<string, unknown>;
+        expect(sync['syncProvider']).toBeNull();
+        expect(sync['syncInterval']).toBeUndefined();
+        expect(sync['isManualSyncOnly']).toBeUndefined();
       });
     });
 

@@ -8,7 +8,9 @@
   font-family: 'Material Symbols Outlined';
   font-style: normal;
   font-weight: 400;
-  font-display: swap; // Prevent render blocking, show text immediately
+  // `block` (not `swap`) so the brief load window renders blank glyph space instead
+  // of the ligature names (e.g. "settings", "wb_sunny") as fallback-font text (#8138).
+  font-display: block;
   src: url('../../assets/fonts/material-symbols-outlined.woff2') format('woff2');
 }
 

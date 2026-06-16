@@ -7,7 +7,6 @@ import { FocusModeService } from '../focus-mode.service';
 import { ConfettiService } from '../../../core/confetti/confetti.service';
 import {
   cancelFocusSession,
-  hideFocusOverlay,
   selectFocusTask,
   selectFocusDuration,
 } from '../store/focus-mode.actions';
@@ -108,13 +107,7 @@ describe('FocusModeSessionDoneComponent', () => {
   });
 
   describe('cancelAndCloseFocusOverlay', () => {
-    it('should dispatch hideFocusOverlay action', () => {
-      component.cancelAndCloseFocusOverlay();
-
-      expect(mockStore.dispatch).toHaveBeenCalledWith(hideFocusOverlay());
-    });
-
-    it('should dispatch cancelFocusSession action', () => {
+    it('should dispatch cancelFocusSession (clears tracking + hides overlay)', () => {
       component.cancelAndCloseFocusOverlay();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(cancelFocusSession());

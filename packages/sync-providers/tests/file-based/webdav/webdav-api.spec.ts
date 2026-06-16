@@ -16,6 +16,7 @@ import {
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
   WebDavNativeRequestError,
+  WebDavSyncFolderUnusableSPError,
 } from '../../../src/errors';
 
 const cfg: WebdavPrivateCfg = {
@@ -224,6 +225,34 @@ describe('WebdavApi', () => {
       expect(r.rev).toBe(await md5HashWasm(data));
       // PUT + MKCOL + PUT + GET
       expect(adapter.request).toHaveBeenCalledTimes(4);
+    });
+
+    // A 409 that persists after we create the parent dir means the
+    // Base URL / Sync Folder Path is misconfigured (classic Synology /
+    // raw-WebDAV setup mistake). Surface an actionable error instead of a
+    // bare `HTTP 409 Conflict` so the user knows what to fix.
+    it('throws an actionable WebDavSyncFolderUnusableSPError when 409 persists after creating parent', async () => {
+      const adapter = makeAdapter();
+      const data = 'fresh';
+      // First PUT → 409
+      adapter.request.mockRejectedValueOnce(
+        new HttpNotOkAPIError(new Response('', { status: 409 })),
+      );
+      // MKCOL → success
+      adapter.request.mockResolvedValueOnce(okResponse('', 201));
+      // Retry PUT → 409 again (folder path still unresolvable)
+      adapter.request.mockRejectedValueOnce(
+        new HttpNotOkAPIError(new Response('', { status: 409 })),
+      );
+
+      const err = await makeApi(adapter)
+        .upload({ path: 'sp/op-1.json', data })
+        .catch((e) => e);
+      expect(err).toBeInstanceOf(WebDavSyncFolderUnusableSPError);
+      // Privacy-safe + actionable message, no path or response body.
+      expect(err.message).toContain('Base URL');
+      expect(err.message).toContain('Sync Folder Path');
+      expect(err.message).not.toContain('op-1.json');
     });
   });
 

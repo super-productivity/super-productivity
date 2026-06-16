@@ -165,7 +165,12 @@ export class AddTaskBarIssueSearchService {
         item.issueType,
         this._workContextService.activeWorkContextId as string,
       );
-      TaskLog.log(res);
+      TaskLog.log('Issue search existing task result', {
+        hasMatch: !!res,
+        taskId: res?.task.id,
+        isFromArchive: res?.isFromArchive,
+        subTaskCount: res?.subTasks?.length ?? 0,
+      });
       if (!res) {
         return await this._issueService.addTaskFromIssue({
           issueProviderKey: item.issueType,

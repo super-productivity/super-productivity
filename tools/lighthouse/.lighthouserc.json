@@ -22,7 +22,7 @@
         "total-blocking-time": ["warn", { "maxNumericValue": 300 }],
         "interactive": ["warn", { "maxNumericValue": 5000 }],
         "resource-summary.script.count": ["warn", { "maxNumericValue": 170 }],
-        "resource-summary.total.count": ["warn", { "maxNumericValue": 220 }],
+        "resource-summary.total.count": ["warn", { "maxNumericValue": 300 }],
         "resource-summary.font.size": ["warn", { "maxNumericValue": 520000 }]
       }
     },

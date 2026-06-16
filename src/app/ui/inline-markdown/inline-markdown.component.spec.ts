@@ -5,10 +5,12 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { InlineMarkdownComponent } from './inline-markdown.component';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { Log } from '../../core/log';
 
 describe('InlineMarkdownComponent', () => {
   let component: InlineMarkdownComponent;
@@ -110,6 +112,68 @@ describe('InlineMarkdownComponent', () => {
       expect(mockTextareaEl.nativeElement.value).toBe('Hello__ world');
       expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(6, 6);
     });
+  });
+
+  describe('long note wrapping', () => {
+    it('should wrap long words while editing and previewing notes', fakeAsync(() => {
+      const longToken = 'AVeryLongUnbrokenWordThatShouldWrapInsideTheEditor';
+      component.model = `[${longToken}](https://example.com/${longToken})`;
+      component['isShowEdit'].set(true);
+      fixture.detectChanges();
+      tick();
+
+      const textarea = fixture.nativeElement.querySelector(
+        'textarea.markdown-unparsed',
+      ) as HTMLTextAreaElement;
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      const previewLink = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed a',
+      ) as HTMLAnchorElement;
+
+      expect(window.getComputedStyle(textarea).overflowWrap).toBe('anywhere');
+      expect(window.getComputedStyle(textarea).whiteSpace).toBe('pre-wrap');
+      expect(window.getComputedStyle(preview).overflowWrap).toBe('anywhere');
+      expect(window.getComputedStyle(previewLink).overflowWrap).toBe('anywhere');
+    }));
+  });
+
+  describe('XSS sanitization (GHSA-4rrp-xhp8-hf4p)', () => {
+    it('should not render an executable event handler from a malicious note', fakeAsync(() => {
+      component.model = '<img src=x onerror="alert(document.domain)">';
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      tick();
+
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      expect(preview).toBeTruthy();
+      expect(preview.innerHTML).not.toContain('onerror');
+      // The sanitizer keeps the (now inert) <img>, just without the handler.
+      const img = preview.querySelector('img');
+      if (img) {
+        expect(img.getAttribute('onerror')).toBeNull();
+      }
+    }));
+
+    it('should still render a normal note (sanitizer does not break rendering)', fakeAsync(() => {
+      component.model = '**bold** and [link](https://example.com)';
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      tick();
+
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      expect(preview.querySelector('strong')?.textContent).toBe('bold');
+      expect(preview.querySelector('a')?.getAttribute('href')).toBe(
+        'https://example.com',
+      );
+    }));
   });
 
   describe('ngOnDestroy', () => {
@@ -352,6 +416,30 @@ describe('InlineMarkdownComponent', () => {
       // Assert
       expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n- [ ] Task 2');
     });
+
+    it('should toggle the right item when a non-task "- [" bullet precedes it', () => {
+      // Regression: a markdown link bullet contains "- [" but is NOT a checklist
+      // item. The old loose filter counted it, shifting the source index so the
+      // real item's checkbox toggled the wrong line (i.e. did nothing).
+      component.model = '- [Open docs](https://example.com)\n- [ ] Real task';
+      fixture.detectChanges();
+
+      // Only the real task renders a checkbox-wrapper; the link bullet does not.
+      const wrapper = document.createElement('li');
+      wrapper.className = 'checkbox-wrapper';
+      wrapper.innerHTML =
+        '<span class="checkbox material-icons">check_box_outline_blank</span>' +
+        '<span class="checkbox-label">Real task</span>';
+      mockPreviewEl.element.nativeElement.appendChild(wrapper);
+
+      // Act
+      component['_handleCheckboxClick'](wrapper);
+
+      // Assert - the real task is toggled, the link bullet is left untouched
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        '- [Open docs](https://example.com)\n- [x] Real task',
+      );
+    });
   });
 
   describe('clickPreview', () => {
@@ -427,6 +515,7 @@ describe('InlineMarkdownComponent', () => {
       checkbox2.className = 'checkbox material-icons';
       checkbox2.textContent = 'check_box_outline_blank';
       const textSpan2 = document.createElement('span');
+      textSpan2.className = 'checkbox-label';
       textSpan2.textContent = 'Task 2';
       wrapper2.appendChild(checkbox2);
       wrapper2.appendChild(textSpan2);
@@ -444,7 +533,7 @@ describe('InlineMarkdownComponent', () => {
       expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n- [x] Task 2');
     });
 
-    it('should toggle checkbox when clicking directly on the checkbox-wrapper element', () => {
+    it('should NOT toggle when clicking the empty row area, only open the editor', () => {
       // Arrange
       component.model = '- [ ] Task 1';
       fixture.detectChanges();
@@ -454,19 +543,24 @@ describe('InlineMarkdownComponent', () => {
       const checkbox1 = document.createElement('span');
       checkbox1.className = 'checkbox material-icons';
       checkbox1.textContent = 'check_box_outline_blank';
+      const label1 = document.createElement('span');
+      label1.className = 'checkbox-label';
+      label1.textContent = 'Task 1';
       wrapper1.appendChild(checkbox1);
-      wrapper1.appendChild(document.createTextNode('Task 1'));
+      wrapper1.appendChild(label1);
 
       mockPreviewEl.element.nativeElement.appendChild(wrapper1);
+      spyOn<any>(component, '_toggleShowEdit');
 
-      // Act - simulate clicking directly on the wrapper
+      // Act - click the wrapper itself (the dead space beside the label)
       const mockEvent = {
         target: wrapper1,
       } as unknown as MouseEvent;
       component.clickPreview(mockEvent);
 
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith('- [x] Task 1');
+      // Assert - no toggle, editor opens instead
+      expect(component.changed.emit).not.toHaveBeenCalled();
+      expect(component['_toggleShowEdit']).toHaveBeenCalled();
     });
 
     it('should not toggle checkbox when clicking on a link', () => {
@@ -661,6 +755,51 @@ describe('InlineMarkdownComponent', () => {
       expect(finalText).toContain(defaultTemplate);
       expect(finalText).toContain('- [ ] ');
       expect(component.changed.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('should replace the unmodified default template with a fresh checklist', () => {
+      // Arrange — only the (replaceable) default template is shown, untouched
+      spyOn(component.changed, 'emit');
+      const template = '**How can I best achieve it now?**';
+      component.model = template;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn(component, 'defaultText').and.returnValue(template);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — template replaced, not appended to
+      expect(component.modelCopy()).toBe('- [ ] ');
+      expect(component.changed.emit).toHaveBeenCalledOnceWith('- [ ] ');
+    });
+
+    it('should append (not replace) once the default template has been edited', () => {
+      // Arrange — default text is replaceable, but the user already typed into it
+      spyOn(component.changed, 'emit');
+      const template = '**How can I best achieve it now?**';
+      component.model = template + ' typed';
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn(component, 'defaultText').and.returnValue(template);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — edited content preserved, checkbox appended below
+      expect(component.modelCopy()).toBe(template + ' typed\n- [ ] ');
     });
 
     it('should insert checklist item after cursor line, not at end', () => {
@@ -1450,6 +1589,28 @@ describe('InlineMarkdownComponent', () => {
       );
     });
 
+    it('should ignore regular text containing task-like brackets', () => {
+      // Arrange
+      component.model = '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [ ] Task 2';
+      fixture.detectChanges();
+
+      const wrapper1 = document.createElement('li');
+      wrapper1.className = 'checkbox-wrapper';
+      const wrapper2 = document.createElement('li');
+      wrapper2.className = 'checkbox-wrapper';
+
+      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
+      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
+
+      // Act - toggle Task 2
+      component['_handleCheckboxClick'](wrapper2);
+
+      // Assert - regular text with "- [" should not offset the checkbox mapping
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [x] Task 2',
+      );
+    });
+
     it('should handle mixed checked and unchecked items', () => {
       // Arrange
       component.model = '- [x] Done\n- [ ] Todo\n- [x] Also Done';
@@ -1549,6 +1710,157 @@ describe('InlineMarkdownComponent', () => {
 
       // Assert
       expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('checklist actions', () => {
+    beforeEach(() => {
+      component.model = '- [ ] a\n- [x] b\n- [ ] c';
+      fixture.detectChanges();
+      spyOn(component.changed, 'emit');
+    });
+
+    it('checkAll should check every item and emit', () => {
+      component.checkAllChecklistItems();
+      expect(component.changed.emit).toHaveBeenCalledWith('- [x] a\n- [x] b\n- [x] c');
+    });
+
+    it('uncheckAll should uncheck every item and emit', () => {
+      component.uncheckAllChecklistItems();
+      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] a\n- [ ] b\n- [ ] c');
+    });
+
+    it('clearCompleted should drop checked items and emit', () => {
+      component.clearCompletedChecklistItems();
+      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] a\n- [ ] c');
+    });
+
+    it('should not emit when a bulk action is a no-op', () => {
+      component.model = '- [ ] a\n- [ ] b';
+      fixture.detectChanges();
+      component.uncheckAllChecklistItems();
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fullscreen editor save after the host is destroyed mid-edit', () => {
+    let afterClosed$: Subject<unknown>;
+    let store: MockStore;
+
+    beforeEach(() => {
+      afterClosed$ = new Subject<unknown>();
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => afterClosed$.asObservable(),
+      } as any);
+      store = TestBed.inject(MockStore);
+      spyOn(store, 'dispatch');
+      spyOn(component.changed, 'emit');
+      fixture.componentRef.setInput('taskId', 'task-1');
+      fixture.detectChanges();
+    });
+
+    // Regression: the fullscreen dialog is a detached overlay. When the focus
+    // session ends mid-edit it destroys the component that opened the dialog, so
+    // emitting `changed` on save would reach no listener and the note is lost.
+    it('persists the note directly to the task when destroyed while the dialog is open', () => {
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('saved note');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { notes: 'saved note' } },
+        }),
+      );
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits via `changed` (no direct dispatch) when still alive', () => {
+      component.openFullScreen();
+
+      afterClosed$.next('saved note');
+
+      expect(component.changed.emit).toHaveBeenCalledWith('saved note');
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('persists a replacement of pre-existing notes when destroyed mid-edit', () => {
+      component.model = 'original notes';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('original notes plus more');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { notes: 'original notes plus more' } },
+        }),
+      );
+    });
+
+    it('clears the note (DELETE) directly when destroyed mid-edit', () => {
+      component.model = 'some real notes';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next({ action: 'DELETE' });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({ task: { id: 'task-1', changes: { notes: '' } } }),
+      );
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the dialog is closed without a result (Close, not Save)', () => {
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next(undefined);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('does not persist when the content is unchanged (no default-text write-back)', () => {
+      component.model = 'How can I best achieve it now?';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('How can I best achieve it now?');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('treats a whitespace-only diff of the loaded text as unchanged', () => {
+      component.model = 'How can I best achieve it now?';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      // The editor can re-emit the placeholder with a trailing newline; that is
+      // not a real edit and must not be written back as a note.
+      afterClosed$.next('How can I best achieve it now?\n');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('warns rather than silently dropping when destroyed without a taskId', () => {
+      const warnSpy = spyOn(Log, 'warn');
+      fixture.componentRef.setInput('taskId', undefined);
+      component.model = 'orig';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('edited content');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
     });
   });
 });

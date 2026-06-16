@@ -17,7 +17,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
     {
       hideExpression: (m, v, field) => !field?.model.isWorkStartEndEnabled,
       key: 'workStart',
-      type: 'input',
+      type: 'time',
       templateOptions: {
         required: true,
         label: T.GCF.SCHEDULE.L_WORK_START,
@@ -32,7 +32,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
     {
       hideExpression: (m, v, field) => !field?.model.isWorkStartEndEnabled,
       key: 'workEnd',
-      type: 'input',
+      type: 'time',
       templateOptions: {
         required: true,
         label: T.GCF.SCHEDULE.L_WORK_END,
@@ -54,7 +54,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
     {
       hideExpression: (m, v, field) => !field?.model.isLunchBreakEnabled,
       key: 'lunchBreakStart',
-      type: 'input',
+      type: 'time',
       templateOptions: {
         required: true,
         label: T.GCF.SCHEDULE.L_LUNCH_BREAK_START,
@@ -69,7 +69,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
     {
       hideExpression: (m, v, field) => !field?.model.isLunchBreakEnabled,
       key: 'lunchBreakEnd',
-      type: 'input',
+      type: 'time',
       templateOptions: {
         required: true,
         label: T.GCF.SCHEDULE.L_LUNCH_BREAK_END,

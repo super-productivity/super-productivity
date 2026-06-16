@@ -214,6 +214,13 @@ export class CaldavClientService {
     return hash;
   }
 
+  private static _getResponseHeaderWithDavFallback(
+    name: string,
+    value: string | null,
+  ): string | null {
+    return value === null && name.toLowerCase() === 'dav' ? '' : value;
+  }
+
   async _get_client(cfg: CaldavCfg): Promise<ClientCache> {
     this._checkSettings(cfg);
 
@@ -352,6 +359,7 @@ export class CaldavClientService {
     function xhrProvider(): XMLHttpRequest {
       const xhr = new XMLHttpRequest();
       const oldOpen = xhr.open;
+      const oldGetResponseHeader = xhr.getResponseHeader;
 
       // override open() method to add headers
 
@@ -366,6 +374,15 @@ export class CaldavClientService {
           'Basic ' + btoa(cfg.username + ':' + cfg.password),
         );
         return result;
+      };
+      xhr.getResponseHeader = function (
+        this: XMLHttpRequest,
+        name: string,
+      ): string | null {
+        return CaldavClientService._getResponseHeaderWithDavFallback(
+          name,
+          oldGetResponseHeader.call(this, name),
+        );
       };
       return xhr;
     }
@@ -449,7 +466,10 @@ export class CaldavClientService {
         },
 
         getResponseHeader: (name: string): string | null => {
-          return responseHeaders[name.toLowerCase()] ?? null;
+          return CaldavClientService._getResponseHeaderWithDavFallback(
+            name,
+            responseHeaders[name.toLowerCase()] ?? null,
+          );
         },
 
         getAllResponseHeaders: (): string => {

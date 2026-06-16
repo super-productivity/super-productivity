@@ -92,9 +92,15 @@ export class EnlargeImgDirective {
     this.enlargedImgWrapperEl = this._htmlToElement(
       `<div class="enlarged-image-wrapper"></div>`,
     );
-    this.newImageEl = this._htmlToElement(
-      `<img src="${src}" class="enlarged-image" id=${LARGE_IMG_ID}>`,
-    );
+    // SECURITY: build the <img> via DOM properties, never innerHTML. `src` can
+    // originate from synced/imported note data (note.imgUrl); interpolating it
+    // into an HTML string let a crafted URL break out of the src attribute and
+    // inject an event handler (stored DOM-XSS). See GHSA-78rv-m663-4fph.
+    const newImageEl = document.createElement('img');
+    newImageEl.src = src;
+    newImageEl.className = 'enlarged-image';
+    newImageEl.id = LARGE_IMG_ID;
+    this.newImageEl = newImageEl;
     this._renderer.appendChild(this.enlargedImgWrapperEl, this.newImageEl);
     this._renderer.appendChild(this.lightboxParentEl, this.enlargedImgWrapperEl);
     this.zoomMode = 0;

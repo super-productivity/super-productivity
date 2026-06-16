@@ -87,7 +87,12 @@
       </div>
       <mat-card-title>{{ plugin.manifest.name }}</mat-card-title>
       <mat-card-subtitle>
-        v{{ plugin.manifest.version }}
+        <span>v{{ plugin.manifest.version }}</span>
+        @if (getPluginAuthor(plugin); as author) {
+          <span class="plugin-author">
+            {{ T.PLUGINS.AUTHORED_BY | translate: { author } }}
+          </span>
+        }
         @if (isPluginLoading(plugin)) {
           <mat-chip color="accent">
             <mat-icon class="loading-icon">autorenew</mat-icon>

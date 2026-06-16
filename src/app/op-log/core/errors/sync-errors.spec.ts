@@ -16,7 +16,7 @@ describe('sync errors', () => {
   });
 
   // NOTE: InvalidDataSPError (and the other moved provider errors) no
-  // longer log on construction — see PR 5a (docs/plans/2026-05-12-pr5-dropbox-slice.md).
+  // longer log on construction (they were moved into @sp/sync-providers).
   // Privacy guarantee for those classes is now "no log = no leak" and is
   // covered by packages/sync-providers/tests/errors.spec.ts. App-side
   // privacy responsibility shifts entirely to catch-site logging.

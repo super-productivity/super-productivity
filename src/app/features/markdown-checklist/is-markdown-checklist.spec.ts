@@ -12,7 +12,7 @@ and not:
 Some text yeah
  */
 
-import { isMarkdownChecklist } from './is-markdown-checklist';
+import { isMarkdownChecklist, isMarkdownChecklistLine } from './is-markdown-checklist';
 
 describe('isMarkdownChecklist()', () => {
   [
@@ -38,5 +38,17 @@ describe('isMarkdownChecklist()', () => {
     it(`should return false for a non valid checklist #${i}`, () => {
       expect(isMarkdownChecklist(text)).toBe(false);
     });
+  });
+});
+
+describe('isMarkdownChecklistLine()', () => {
+  it('should identify markdown checklist lines', () => {
+    expect(isMarkdownChecklistLine('- [ ] task')).toBe(true);
+    expect(isMarkdownChecklistLine('  - [x] task')).toBe(true);
+  });
+
+  it('should ignore regular text with task-like brackets', () => {
+    expect(isMarkdownChecklistLine('Note: use - [flags] here')).toBe(false);
+    expect(isMarkdownChecklistLine('- [flags] here')).toBe(false);
   });
 });

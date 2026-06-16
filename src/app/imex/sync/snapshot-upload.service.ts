@@ -23,6 +23,7 @@ import { VectorClock } from '../../core/util/vector-clock';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 import { isCryptoSubtleAvailable } from '@sp/sync-core';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
+import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
 
 /**
  * Data gathered for a snapshot upload operation.
@@ -118,7 +119,9 @@ export class SnapshotUploadService {
     // IMPORTANT: Must use async version to load real archives from IndexedDB
     // The sync getStateSnapshot() returns DEFAULT_ARCHIVE (empty) which causes data loss
     SyncLog.normal(`${prefix}Getting current state...`);
-    const state = await this._stateSnapshotService.getStateSnapshotAsync();
+    const state = stripLocalOnlySyncSettingsFromAppData(
+      await this._stateSnapshotService.getStateSnapshotAsync(),
+    ) as AppStateSnapshot;
     const vectorClock = await this._vectorClockService.getCurrentVectorClock();
     const clientId = await this._clientIdProvider.getOrGenerateClientId();
 

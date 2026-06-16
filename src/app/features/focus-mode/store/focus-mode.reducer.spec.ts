@@ -300,26 +300,6 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(true);
     });
 
-    it('should not unpause a BreakOffer state', () => {
-      const pausedBreakOfferState = {
-        ...initialState,
-        timer: {
-          isRunning: false,
-          startedAt: null,
-          elapsed: 0,
-          duration: 300000,
-          purpose: 'break' as const,
-        },
-        mainState: FocusMainUIState.BreakOffer,
-        currentScreen: FocusScreen.Break,
-      };
-
-      const action = a.unPauseFocusSession();
-      const result = focusModeReducer(pausedBreakOfferState, action);
-
-      expect(result).toBe(pausedBreakOfferState);
-    });
-
     it('should not unpause sessions with no purpose (idle)', () => {
       const idleState = {
         ...initialState,
@@ -429,21 +409,6 @@ describe('FocusModeReducer', () => {
       expect(result.currentScreen).toBe(initialState.currentScreen);
     });
 
-    it('offerFlowtimeBreak should switch currentScreen to Break and set break timer', () => {
-      const action = a.offerFlowtimeBreak({
-        duration: 5000,
-        isLongBreak: false,
-      });
-      const result = focusModeReducer(initialState, action);
-
-      expect(result.currentScreen).toBe(FocusScreen.Break);
-      expect(result.mainState).toBe(FocusMainUIState.BreakOffer);
-      expect(result.timer.isRunning).toBe(false);
-      expect(result.timer.elapsed).toBe(0);
-      expect(result.timer.purpose).toBe('break');
-      expect(result.timer.duration).toBe(5000);
-    });
-
     it('should start break with default duration', () => {
       const action = a.startBreak({});
       const result = focusModeReducer(initialState, action);
@@ -509,74 +474,6 @@ describe('FocusModeReducer', () => {
       expect(result.mainState).toBe(FocusMainUIState.Preparation);
       expect(result.timer.isRunning).toBe(false);
       expect(result.timer.purpose).toBeNull();
-    });
-
-    it('should exit break to planning', () => {
-      const breakState = {
-        ...initialState,
-        timer: {
-          isRunning: true,
-          startedAt: Date.now(),
-          elapsed: 120000,
-          duration: 300000,
-          purpose: 'break' as const,
-        },
-        currentScreen: FocusScreen.Break,
-        pausedTaskId: 'task-123',
-      };
-
-      const action = a.exitBreakToPlanning({ pausedTaskId: 'task-123' });
-      const result = focusModeReducer(breakState, action);
-
-      expect(result.currentScreen).toBe(FocusScreen.Main);
-      expect(result.mainState).toBe(FocusMainUIState.Preparation);
-      expect(result.timer.isRunning).toBe(false);
-      expect(result.timer.purpose).toBeNull();
-      expect(result.pausedTaskId).toBeNull();
-    });
-
-    it('should exit paused break to planning', () => {
-      const pausedBreakState = {
-        ...initialState,
-        timer: {
-          isRunning: false,
-          startedAt: Date.now() - 60000,
-          elapsed: 60000,
-          duration: 300000,
-          purpose: 'break' as const,
-        },
-        currentScreen: FocusScreen.Break,
-        pausedTaskId: 'task-456',
-      };
-
-      const action = a.exitBreakToPlanning({ pausedTaskId: 'task-456' });
-      const result = focusModeReducer(pausedBreakState, action);
-
-      expect(result.currentScreen).toBe(FocusScreen.Main);
-      expect(result.mainState).toBe(FocusMainUIState.Preparation);
-      expect(result.timer.isRunning).toBe(false);
-      expect(result.timer.purpose).toBeNull();
-      expect(result.pausedTaskId).toBeNull();
-    });
-
-    it('should clear pausedTaskId when exiting break to planning', () => {
-      const breakState = {
-        ...initialState,
-        timer: {
-          isRunning: true,
-          startedAt: Date.now(),
-          elapsed: 0,
-          duration: 300000,
-          purpose: 'break' as const,
-        },
-        currentScreen: FocusScreen.Break,
-        pausedTaskId: 'some-task',
-      };
-
-      const action = a.exitBreakToPlanning({ pausedTaskId: null });
-      const result = focusModeReducer(breakState, action);
-
-      expect(result.pausedTaskId).toBeNull();
     });
   });
 

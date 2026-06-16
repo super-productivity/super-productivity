@@ -88,6 +88,7 @@ PluginAPI.registerShortcut({
 ### UI Types
 
 - `DialogCfg` - Dialog configuration
+- `DialogResult` - Dialog return value
 - `SnackCfg` - Notification configuration
 - `PluginMenuEntryCfg` - Menu entry configuration
 - `PluginShortcutCfg` - Keyboard shortcut configuration
@@ -129,6 +130,8 @@ Add these to your manifest.json based on what your plugin needs:
 - `getTasks` - Read tasks
 - `getArchivedTasks` - Read archived tasks
 - `getCurrentContextTasks` - Read current context tasks
+- `getSelectedTask` - Read the task selected in the task detail panel
+- `getFocusedTask` - Read the currently focused task row, if any
 - `addTask` - Create tasks
 - `getAllProjects` - Read projects
 - `addProject` - Create projects

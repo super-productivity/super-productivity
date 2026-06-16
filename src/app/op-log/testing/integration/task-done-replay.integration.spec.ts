@@ -114,7 +114,7 @@ describe('done task operation replay', () => {
     );
     const mockOperationCaptureService = jasmine.createSpyObj<OperationCaptureService>(
       'OperationCaptureService',
-      ['dequeue'],
+      ['extractEntityChanges', 'decrementPending'],
     );
     const mockSnackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
     const mockImmediateUploadService = jasmine.createSpyObj<ImmediateUploadService>(
@@ -139,7 +139,7 @@ describe('done task operation replay', () => {
     );
     mockCompactionService.compact.and.returnValue(Promise.resolve());
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
-    mockOperationCaptureService.dequeue.and.returnValue([]);
+    mockOperationCaptureService.extractEntityChanges.and.returnValue([]);
     mockClientIdService.getOrGenerateClientId.and.returnValue(Promise.resolve('clientA'));
 
     TestBed.configureTestingModule({

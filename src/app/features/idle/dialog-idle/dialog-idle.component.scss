@@ -1,38 +1,148 @@
 @use '../../../../styles/_globals.scss' as *;
 
 .dialog-content {
-  @include mq(xs) {
-    min-width: 400px;
-  }
+  text-align: center;
 
-  p,
-  .track-to-label,
-  .simple-counter-section,
-  .time {
-    text-align: center;
+  @include mq(xs) {
+    min-width: 480px;
   }
+}
+
+.idle-for {
+  margin-bottom: 0;
+  color: var(--text-color-muted);
 }
 
 .time {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: bold;
-  margin-bottom: var(--s);
+  margin-bottom: var(--s2);
 }
 
-.track-to-label {
-  padding-top: var(--s3);
-  margin: var(--s) calc(var(--s) * -3) var(--s);
-  font-size: 22px;
-  @include extraBorder('-top');
+.question {
+  font-size: 16px;
+  margin: 0 0 var(--s);
+}
+
+.mode-select {
+  display: flex;
+  width: 100%;
+
+  mat-button-toggle {
+    flex: 1 1 0;
+  }
+
+  mat-icon {
+    margin-right: var(--s-half);
+    vertical-align: middle;
+  }
+}
+
+.mode-content {
+  margin-top: var(--s2);
+}
+
+.break-summary {
+  margin-top: var(--s2);
+  margin-bottom: 0;
+  color: var(--text-color-muted);
+}
+
+.simple-counter-section {
+  margin-top: var(--s2);
 }
 
 .simple-counter {
   margin: 0 var(--s-half);
   box-shadow: none !important;
 
-  &.mat-primary {
+  &.is-track-to {
     animation: pulse 2s infinite;
   }
+}
+
+.simple-counter-warning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-half);
+  margin: var(--s) auto 0;
+  font-size: 12px;
+  color: var(--text-color-muted);
+
+  mat-icon {
+    flex-shrink: 0;
+  }
+}
+
+.split-items {
+  text-align: left;
+}
+
+.split-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s);
+  padding: var(--s) 0;
+
+  &:not(:first-of-type) {
+    @include extraBorder('-top');
+  }
+
+  .split-type {
+    flex-shrink: 0;
+  }
+
+  select-task,
+  .split-break-label {
+    flex: 1 1 140px;
+  }
+
+  .split-break-label {
+    color: var(--text-color-muted);
+  }
+
+  .duration-field {
+    width: 150px;
+    flex-shrink: 0;
+  }
+
+  .simple-counter {
+    animation: none;
+  }
+}
+
+.split-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s);
+  margin-top: var(--s);
+}
+
+.remaining-info {
+  font-size: 13px;
+  color: var(--text-color-muted);
+
+  &.is-done {
+    color: var(--color-success);
+  }
+
+  &.is-over {
+    color: var(--color-warning);
+  }
+}
+
+.reset-break-timer {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--s2);
+}
+
+.dialog-actions {
+  justify-content: space-between;
 }
 
 @keyframes pulse {

@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Host (e.g. https://try.gitea.io)",
+    "TOKEN": "Access Token",
+    "REPO_FULL_NAME": "Username or Organization name/repository",
+    "SCOPE": "Scope",
+    "SCOPE_ALL": "All",
+    "SCOPE_CREATED": "Created by me",
+    "SCOPE_ASSIGNED": "Assigned to me",
+    "FILTER_LABELS": "Filter by labels (optional)",
+    "EXCLUDE_LABELS": "Exclude labels (optional)",
+    "HOW_TO_GET_TOKEN": "How to get a token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATE": "Status",
+    "ASSIGNEE": "Assignee",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and gain access, you can provide an access token."
+}

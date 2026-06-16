@@ -124,7 +124,13 @@ export class ShortSyntaxEffects {
             isReplaceTagIds ? 'replace' : 'combine',
           ).then((r) => {
             if (environment.production) {
-              TaskLog.log('shortSyntax', r);
+              TaskLog.log('shortSyntax', {
+                taskId: task.id,
+                hasResult: !!r,
+                changedFields: r ? Object.keys(r.taskChanges) : [],
+                attachmentCount: r?.attachments.length ?? 0,
+                projectId: r?.projectId,
+              });
             }
             const isAddDefaultProjectIfNecessary: boolean =
               !!defaultProjectId &&
@@ -199,7 +205,9 @@ export class ShortSyntaxEffects {
 
             // Build task changes including tagIds update
             const tagIds: string[] = [...(r.taskChanges.tagIds || task.tagIds)];
-            const isEqualTags = JSON.stringify(tagIds) === JSON.stringify(task.tagIds);
+            const isEqualTags =
+              tagIds.length === task.tagIds.length &&
+              tagIds.every((id, i) => id === task.tagIds[i]);
             const finalTaskChanges = { ...taskChanges };
             if (tagIds && tagIds.length && !isEqualTags) {
               finalTaskChanges.tagIds = unique(tagIds);

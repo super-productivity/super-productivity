@@ -3,6 +3,7 @@
     <mat-form-field
       class="search-field"
       appearance="outline"
+      subscriptSizing="dynamic"
     >
       <mat-label>{{ T.F.SEARCH_BAR.PLACEHOLDER | translate }}</mat-label>
       <input
@@ -21,6 +22,13 @@
         </button>
       }
     </mat-form-field>
+
+    <mat-checkbox
+      class="include-completed-toggle"
+      [formControl]="includeCompletedForm"
+    >
+      {{ T.F.SEARCH_BAR.INCLUDE_COMPLETED | translate }}
+    </mat-checkbox>
   </div>
 
   <div class="search-results">
@@ -56,6 +64,9 @@
                       [svgIcon]="item.issueType | issueIcon"
                       class="issue-icon"
                     ></mat-icon>
+                  }
+                  @if (item.isNote) {
+                    <mat-icon class="issue-icon">comment</mat-icon>
                   }
                   @if (item.isArchiveTask) {
                     <mat-icon class="archive-icon">archive</mat-icon>

@@ -55,8 +55,6 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
         return issueProvider.host;
       case 'GITLAB':
         return issueProvider.project;
-      case 'GITEA':
-        return issueProvider.repoFullname;
       case 'CALDAV':
         return issueProvider.caldavUrl;
       case 'ICAL':
@@ -139,8 +137,6 @@ export const getIssueProviderInitials = (
 
     case 'GITLAB':
       return getRepoInitials(issueProvider.project);
-    case 'GITEA':
-      return getRepoInitials(issueProvider.repoFullname);
     case 'TRELLO':
       return (issueProvider.boardName || issueProvider.boardId)
         ?.substring(0, 2)
@@ -150,5 +146,4 @@ export const getIssueProviderInitials = (
     case 'AZURE_DEVOPS':
       return issueProvider.project?.substring(0, 2)?.toUpperCase() || 'AD';
   }
-  return undefined;
 };

@@ -708,7 +708,6 @@ export class DropboxApi {
     // On native platforms (except iOS), use CapacitorHttp.
     // iOS uses fetch (via CapacitorWebFetch) to bypass Capacitor's URLSession.shared,
     // which causes persistent -1005 "The network connection was lost" errors.
-    // See: docs/long-term-plans/ios-dropbox-sync-reliability.md
     if (
       this._deps.platformInfo.isNativePlatform &&
       !this._deps.platformInfo.isIosNative

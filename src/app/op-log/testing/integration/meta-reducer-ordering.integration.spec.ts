@@ -105,7 +105,7 @@ describe('Meta-reducer ordering integration', () => {
     enqueuedActions = [];
 
     // Spy on enqueue to capture what actions are being passed
-    spyOn(captureService, 'enqueue').and.callFake((action: PersistentAction) => {
+    spyOn(captureService, 'incrementPending').and.callFake((action: PersistentAction) => {
       enqueuedActions.push(action);
     });
 
@@ -141,7 +141,7 @@ describe('Meta-reducer ordering integration', () => {
       expect(resultState[TASKS_FEATURE].entities['task-1']).toBeUndefined();
 
       // Verify enqueue was called with the action
-      expect(captureService.enqueue).toHaveBeenCalledWith(action);
+      expect(captureService.incrementPending).toHaveBeenCalledWith(action);
       expect(enqueuedActions.length).toBe(1);
       expect(enqueuedActions[0].meta.entityId).toBe('task-1');
     });
@@ -166,7 +166,7 @@ describe('Meta-reducer ordering integration', () => {
       expect(resultState[TASKS_FEATURE].ids).not.toContain('task-1');
 
       // enqueue should still be called with the action
-      expect(captureService.enqueue).toHaveBeenCalledWith(action);
+      expect(captureService.incrementPending).toHaveBeenCalledWith(action);
       expect(enqueuedActions.length).toBe(1);
     });
 
@@ -219,7 +219,7 @@ describe('Meta-reducer ordering integration', () => {
       composedReducer(initialState, remoteAction);
 
       // Should NOT enqueue remote actions
-      expect(captureService.enqueue).not.toHaveBeenCalled();
+      expect(captureService.incrementPending).not.toHaveBeenCalled();
       expect(enqueuedActions.length).toBe(0);
     });
   });
@@ -241,7 +241,7 @@ describe('Meta-reducer ordering integration', () => {
       composedReducer(initialState, action);
 
       // Should NOT enqueue when sync is in progress
-      expect(captureService.enqueue).not.toHaveBeenCalled();
+      expect(captureService.incrementPending).not.toHaveBeenCalled();
     });
 
     it('should resume capturing after sync completes', () => {

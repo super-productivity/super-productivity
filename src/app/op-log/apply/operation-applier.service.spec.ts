@@ -11,6 +11,7 @@ import { ArchiveOperationHandler } from './archive-operation-handler.service';
 import { HydrationStateService } from './hydration-state.service';
 import { remoteArchiveDataApplied } from '../../features/archive/store/archive.actions';
 import { bulkApplyOperations } from './bulk-hydration.action';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 
 describe('OperationApplierService', () => {
@@ -19,6 +20,7 @@ describe('OperationApplierService', () => {
   let mockArchiveOperationHandler: jasmine.SpyObj<ArchiveOperationHandler>;
   let mockHydrationState: jasmine.SpyObj<HydrationStateService>;
   let mockOperationLogEffects: jasmine.SpyObj<OperationLogEffects>;
+  let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
 
   const createMockOperation = (
     id: string,
@@ -53,9 +55,15 @@ describe('OperationApplierService', () => {
     mockOperationLogEffects = jasmine.createSpyObj('OperationLogEffects', [
       'processDeferredActions',
     ]);
+    mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', [
+      'loadClientId',
+      'getOrGenerateClientId',
+      'clearCache',
+    ]);
 
     mockArchiveOperationHandler.handleOperation.and.returnValue(Promise.resolve());
     mockOperationLogEffects.processDeferredActions.and.returnValue(Promise.resolve());
+    mockClientIdProvider.loadClientId.and.resolveTo('testClient');
 
     TestBed.configureTestingModule({
       providers: [
@@ -64,6 +72,7 @@ describe('OperationApplierService', () => {
         { provide: ArchiveOperationHandler, useValue: mockArchiveOperationHandler },
         { provide: HydrationStateService, useValue: mockHydrationState },
         { provide: OperationLogEffects, useValue: mockOperationLogEffects },
+        { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
       ],
     });
 
@@ -79,7 +88,7 @@ describe('OperationApplierService', () => {
 
       expect(result.appliedOps).toEqual([op]);
       expect(mockStore.dispatch).toHaveBeenCalledOnceWith(
-        bulkApplyOperations({ operations: [op] }),
+        bulkApplyOperations({ operations: [op], localClientId: 'testClient' }),
       );
     });
 
@@ -475,6 +484,9 @@ describe('OperationApplierService', () => {
       }) as typeof window.setTimeout);
 
       const applyPromise = service.applyOperations([op]);
+      // applyOperations awaits the (cached) clientId load before dispatching, so
+      // flush that one microtask before asserting the synchronous dispatch.
+      await Promise.resolve();
 
       expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
       expect(archiveCalls).toEqual([]);

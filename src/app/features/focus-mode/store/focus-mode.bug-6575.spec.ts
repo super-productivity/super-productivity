@@ -81,9 +81,9 @@ describe('FocusMode Bug #6575: unPauseFocusSession should restore InProgress sta
     const pausedState = createPausedBreakState();
     const result = focusModeReducer(pausedState, a.unPauseFocusSession());
 
-    // Break sessions now also restore InProgress mainState.
-    // This is safe because BreakOffer is handled separately in the reducer,
-    // so only real paused breaks resume here, not a Flowtime BreakOffer.
+    // Break sessions now also restore InProgress mainState. Flowtime breaks are
+    // real running breaks (auto-started after the session ends), so resuming a
+    // paused break here is always correct.
     expect(result.mainState).toBe(FocusMainUIState.InProgress);
     expect(result.timer.isRunning).toBe(true);
     expect(result.timer.purpose).toBe('break');

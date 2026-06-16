@@ -64,6 +64,7 @@ import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { PlannerActions } from '../../../planner/store/planner.actions';
 import { addSubTask } from '../../../tasks/store/task.actions';
 import { combineDateAndTime } from '../../../../util/combine-date-and-time';
+import { getNextWeekDayOffset } from '../../../../util/get-next-week-day-offset';
 import { DateAdapter } from '@angular/material/core';
 import { ICAL_TYPE } from '../../../issue/issue.const';
 import { IssueIconPipe } from '../../../issue/issue-icon/issue-icon.pipe';
@@ -341,6 +342,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   focusFirstBtn(ev: FocusEvent): void {
     const t = ev.target as HTMLElement;
     t?.parentElement?.querySelector('button')?.focus();
+  }
+
+  focusFirstSubmenuItem(menu: MatMenu): void {
+    menu.focusFirstItem('program');
   }
 
   goToFocusMode(): void {
@@ -721,11 +726,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         break;
       case 3:
         const nextFirstDayOfWeek = tDate;
-        const dayOffset =
-          (this._dateAdapter.getFirstDayOfWeek() -
-            this._dateAdapter.getDayOfWeek(nextFirstDayOfWeek) +
-            7) %
-            7 || 7;
+        const dayOffset = getNextWeekDayOffset(this._dateAdapter, nextFirstDayOfWeek);
         nextFirstDayOfWeek.setDate(nextFirstDayOfWeek.getDate() + dayOffset);
         this._schedule(nextFirstDayOfWeek);
         break;

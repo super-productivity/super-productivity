@@ -12,6 +12,7 @@ describe('AddTaskBarStateService', () => {
   beforeEach(() => {
     // Clear sessionStorage before each test to ensure clean state
     sessionStorage.removeItem(SS.ADD_TASK_BAR_TXT);
+    sessionStorage.removeItem(SS.ADD_TASK_BAR_NOTE);
 
     TestBed.configureTestingModule({
       providers: [AddTaskBarStateService],
@@ -109,6 +110,20 @@ describe('AddTaskBarStateService', () => {
       service.updateDate(null);
 
       expect(service.state().date).toBe(null);
+    });
+
+    it('should not mark parser-driven date clears as explicitly cleared', () => {
+      service.updateDate(null);
+
+      expect(service.state().isDateExplicitlyCleared).toBe(false);
+    });
+
+    it('should clear the explicit date clear flag when date is set', () => {
+      service.clearDate();
+
+      service.updateDate('2024-01-15');
+
+      expect(service.state().isDateExplicitlyCleared).toBe(false);
     });
   });
 
@@ -346,6 +361,7 @@ describe('AddTaskBarStateService', () => {
 
       expect(service.state().date).toBe(null);
       expect(service.state().time).toBe(null);
+      expect(service.state().isDateExplicitlyCleared).toBe(true);
     });
 
     it('should update input text when cleanedInputTxt provided', () => {
@@ -654,6 +670,52 @@ describe('AddTaskBarStateService', () => {
       expect(service.state().projectId).toBe('project-1');
       expect(service.state().date).toBe('2024-01-15');
       expect(service.state().estimate).toBe(3600000);
+    });
+
+    it('should preserve an explicitly cleared date', () => {
+      service.updateDate('2024-01-15', '14:00');
+      service.clearDate();
+
+      service.resetAfterAdd();
+
+      expect(service.state().date).toBe(null);
+      expect(service.state().time).toBe(null);
+      expect(service.state().isDateExplicitlyCleared).toBe(true);
+    });
+
+    it('should clear the note text but keep the panel expanded', () => {
+      service.isNoteExpanded.set(true);
+      service.noteTxt.set('Some note');
+
+      service.resetAfterAdd();
+
+      expect(service.noteTxt()).toBe('');
+      // Expanded state is intentionally preserved for consecutive note-tasks
+      expect(service.isNoteExpanded()).toBe(true);
+    });
+  });
+
+  describe('note', () => {
+    it('should default to empty and collapsed', () => {
+      expect(service.noteTxt()).toBe('');
+      expect(service.isNoteExpanded()).toBe(false);
+    });
+
+    it('should persist the draft note to sessionStorage', () => {
+      service.noteTxt.set('Draft note');
+      TestBed.flushEffects();
+
+      expect(sessionStorage.getItem(SS.ADD_TASK_BAR_NOTE)).toBe('Draft note');
+    });
+
+    it('should restore a persisted draft note on init', () => {
+      sessionStorage.setItem(SS.ADD_TASK_BAR_NOTE, 'Persisted note');
+
+      const freshService = TestBed.runInInjectionContext(
+        () => new AddTaskBarStateService(),
+      );
+
+      expect(freshService.noteTxt()).toBe('Persisted note');
     });
   });
 });

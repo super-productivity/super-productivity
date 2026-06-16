@@ -67,11 +67,17 @@ object TrackingNotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // SystemUI renders the ticking elapsed time via the chronometer, so the
+        // service never has to re-post the notification just to advance the
+        // timer — a 1 Hz notify() loop kept the process busy around the clock
+        // and showed up as battery drain (#8243).
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_sp)
             .setContentTitle(taskTitle)
-            .setContentText(formatDuration(elapsedMs))
             .setContentIntent(contentPendingIntent)
+            .setWhen(System.currentTimeMillis() - elapsedMs)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
@@ -80,18 +86,5 @@ object TrackingNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-    }
-
-    fun formatDuration(ms: Long): String {
-        val totalSeconds = ms / 1000
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-
-        return when {
-            hours > 0 -> String.format("%dh %dm %ds", hours, minutes, seconds)
-            minutes > 0 -> String.format("%dm %ds", minutes, seconds)
-            else -> String.format("%ds", seconds)
-        }
     }
 }

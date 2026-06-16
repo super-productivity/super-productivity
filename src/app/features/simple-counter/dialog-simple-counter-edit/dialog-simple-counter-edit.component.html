@@ -73,8 +73,10 @@
           <mat-form-field>
             <mat-label>{{ T.F.SIMPLE_COUNTER.D_EDIT.L_COUNTER | translate }}</mat-label>
             <input
+              #countInput
               matInput
               type="number"
+              min="0"
               name="count"
               [ngModel]="selectedValue()"
               (ngModelChange)="updateValue($event)"

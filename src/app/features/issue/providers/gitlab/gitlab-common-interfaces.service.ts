@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Task, TaskCopy } from 'src/app/features/tasks/task.model';
+import { Task } from 'src/app/features/tasks/task.model';
 import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
 import { IssueData, SearchResultItem } from '../../issue.model';
 import { GitlabApiService } from './gitlab-api/gitlab-api.service';
@@ -75,60 +75,6 @@ export class GitlabCommonInterfacesService extends BaseIssueProviderService<Gitl
   ): Promise<IssueData[]> {
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
     return await firstValueFrom(this._gitlabApiService.getProjectIssues$(cfg));
-  }
-
-  // Uses comment filtering for update detection
-  override async getFreshDataForIssueTask(task: Task): Promise<{
-    taskChanges: Partial<Task>;
-    issue: GitlabIssue;
-    issueTitle: string;
-  } | null> {
-    if (!task.issueProviderId) {
-      throw new Error('No issueProviderId');
-    }
-    if (!task.issueId) {
-      throw new Error('No issueId');
-    }
-
-    const cfg = await firstValueFrom(this._getCfgOnce$(task.issueProviderId));
-    const issue = await firstValueFrom(
-      this._gitlabApiService.getById$(task.issueId, cfg),
-    );
-
-    const issueUpdate: number = new Date(issue.updated_at).getTime();
-    const commentsByOthers =
-      cfg.filterUsername && cfg.filterUsername.length > 1
-        ? issue.comments.filter(
-            (comment) => comment.author.username !== cfg.filterUsername,
-          )
-        : issue.comments;
-
-    const commentUpdates: number[] = commentsByOthers
-      .map((comment) => new Date(comment.created_at).getTime())
-      .sort();
-    const newestCommentUpdate = commentUpdates[commentUpdates.length - 1];
-
-    const wasUpdated =
-      (newestCommentUpdate && newestCommentUpdate > (task.issueLastUpdated || 0)) ||
-      issueUpdate > (task.issueLastUpdated || 0);
-
-    if (wasUpdated) {
-      // Exclude dueDay from polling updates to prevent overwriting
-      // user-set schedules (see issue #6792)
-      const taskData: Partial<TaskCopy> & { title: string } = {
-        ...this.getAddTaskData(issue),
-      };
-      delete taskData.dueDay;
-      return {
-        taskChanges: {
-          ...taskData,
-          issueWasUpdated: true,
-        },
-        issue,
-        issueTitle: truncate(this._formatIssueTitle(issue)),
-      };
-    }
-    return null;
   }
 
   protected _apiGetById$(

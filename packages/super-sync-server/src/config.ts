@@ -69,6 +69,7 @@ export interface PrivacyConfig {
 
 export interface ServerConfig {
   port: number;
+  host: string;
   dataDir: string;
   /**
    * Enables the batched upload implementation in SyncService.
@@ -123,6 +124,7 @@ const DEFAULT_CORS_ORIGINS: CorsOrigin[] = [
 
 const DEFAULT_CONFIG: ServerConfig = {
   port: 1900,
+  host: '0.0.0.0',
   dataDir: './data',
   batchUpload: false,
   publicUrl: 'http://localhost:1900',
@@ -156,6 +158,22 @@ export const loadConfigFromEnv = (
     } else {
       throw new Error(`Invalid PORT: ${process.env.PORT}. Must be a positive integer.`);
     }
+  }
+
+  if (process.env.HOST !== undefined) {
+    const trimmedHost = process.env.HOST.trim();
+    if (!trimmedHost) {
+      throw new Error('Invalid HOST: must not be empty.');
+    }
+    if (/\s/.test(trimmedHost)) {
+      throw new Error(`Invalid HOST: ${process.env.HOST}. Must not contain whitespace.`);
+    }
+    if (/^https?:\/\//i.test(trimmedHost) || trimmedHost.includes('/')) {
+      throw new Error(
+        `Invalid HOST: ${process.env.HOST}. Use a hostname or IP address without protocol or path.`,
+      );
+    }
+    config.host = trimmedHost;
   }
 
   if (process.env.DATA_DIR) {
@@ -294,6 +312,10 @@ export const loadConfigFromEnv = (
   // Validation
   if (!Number.isInteger(config.port) || config.port <= 0) {
     throw new Error(`Invalid port configuration: ${config.port}`);
+  }
+
+  if (!config.host) {
+    throw new Error('Host configuration is missing');
   }
 
   if (!config.dataDir) {

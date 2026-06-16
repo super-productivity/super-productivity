@@ -89,6 +89,13 @@ export class AddTaskBarParserService {
     // wiped on first parse.
     const wasDeadlineFromSyntax =
       this._previousParseResult?.isDeadlineFromSyntax ?? false;
+    const isDateExplicitlyCleared = currentState.isDateExplicitlyCleared === true;
+    const defaultDueDate = isDateExplicitlyCleared
+      ? null
+      : currentState.date || defaultDate || null;
+    const defaultDueTime = isDateExplicitlyCleared
+      ? null
+      : currentState.time || defaultTime || null;
 
     if (!parseResult) {
       // No parse result means no short syntax found
@@ -103,9 +110,10 @@ export class AddTaskBarParserService {
         newTagTitles: [],
         timeSpentOnDay: null,
         timeEstimate: null,
-        // Preserve current date/time if user has selected them, otherwise use defaults
-        dueDate: currentState.date || (defaultDate ? defaultDate : null),
-        dueTime: currentState.time || defaultTime || null,
+        // Preserve current date/time if user has selected them, otherwise use defaults.
+        // But if the user explicitly cleared a default date, keep it cleared.
+        dueDate: defaultDueDate,
+        dueTime: defaultDueTime,
         attachments: [],
         deadlineDate: wasDeadlineFromSyntax ? null : currentState.deadlineDate || null,
         deadlineTime: wasDeadlineFromSyntax ? null : currentState.deadlineTime || null,
@@ -135,9 +143,9 @@ export class AddTaskBarParserService {
             dueTime = timeStr;
           }
         }
-      } else if (defaultDate) {
-        dueDate = defaultDate;
-        dueTime = defaultTime || null;
+      } else if (defaultDueDate) {
+        dueDate = defaultDueDate;
+        dueTime = defaultDueTime;
       }
 
       let deadlineDate: string | null = null;

@@ -480,7 +480,7 @@
         "moveTaskToTop": "Ctrl+Alt+ArrowUp",
         "moveTaskToBottom": "Ctrl+Alt+ArrowDown",
         "moveToBacklog": "Shift+B",
-        "moveToTodaysTasks": "Shift+T",
+        "taskScheduleToday": "Shift+T",
         "expandSubTasks": null,
         "collapseSubTasks": null,
         "togglePlay": "y",

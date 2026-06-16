@@ -287,6 +287,70 @@ describe('AddTaskBarParserService', () => {
         expect(typeof date).toBe('string');
         expect(time).toBe(defaultTime);
       });
+
+      it('should keep a cleared default date cleared when no date syntax is present', async () => {
+        const defaultDate = '2024-01-15';
+        const defaultTime = '09:00';
+
+        mockStateService.state.and.returnValue({
+          projectId: mockDefaultProject.id,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          isDateExplicitlyCleared: true,
+          spent: null,
+          estimate: null,
+          cleanText: null,
+          remindOption: null,
+          attachments: [],
+          repeatQuickSetting: null,
+        });
+
+        await service.parseAndUpdateText(
+          'Task after clearing Today',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+          defaultDate,
+          defaultTime,
+        );
+
+        expect(mockStateService.updateDate).toHaveBeenCalledWith(null, null);
+      });
+
+      it('should keep a cleared default date cleared when unrelated syntax is parsed', async () => {
+        const defaultDate = '2024-01-15';
+
+        mockStateService.state.and.returnValue({
+          projectId: mockDefaultProject.id,
+          tagIds: [],
+          tagIdsFromTxt: [],
+          newTagTitles: [],
+          date: null,
+          time: null,
+          isDateExplicitlyCleared: true,
+          spent: null,
+          estimate: null,
+          cleanText: null,
+          remindOption: null,
+          attachments: [],
+          repeatQuickSetting: null,
+        });
+
+        await service.parseAndUpdateText(
+          'Task after clearing Today #urgent',
+          mockConfig,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+          defaultDate,
+        );
+
+        expect(mockStateService.updateDate).toHaveBeenCalledWith(null, null);
+      });
     });
 
     describe('Deadline Parsing', () => {

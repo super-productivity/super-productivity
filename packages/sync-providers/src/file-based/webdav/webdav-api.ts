@@ -6,6 +6,7 @@ import {
   MissingCredentialsSPError,
   RemoteFileChangedUnexpectedly,
   RemoteFileNotFoundAPIError,
+  WebDavSyncFolderUnusableSPError,
 } from '../../errors';
 import { errorMeta } from '../../log/error-meta';
 import { computeContentRev } from '../content-rev';
@@ -257,13 +258,17 @@ export class WebdavApi {
               retryError.response.status === WebDavHttpStatus.CONFLICT
             ) {
               // Demoted from `critical` to `normal`: this is a config-debug
-              // hint, not an exceptional / unrecoverable condition. The
-              // caller still gets the thrown error to surface in the UI.
+              // hint, not an exceptional / unrecoverable condition.
               this._deps.logger.normal(
                 `${WebdavApi.L}.upload() 409 Conflict persists after creating parent. ` +
                   `Verify syncFolderPath is relative to the WebDAV server root.`,
                 { path },
               );
+              // Re-throw as an actionable, privacy-safe error so the user
+              // sees *why* sync fails (misconfigured Base URL / Sync Folder
+              // Path) instead of a bare "HTTP 409 Conflict". The raw 409 is
+              // already captured by the logger.normal() call above.
+              throw new WebDavSyncFolderUnusableSPError();
             }
             throw retryError;
           }

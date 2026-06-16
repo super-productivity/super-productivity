@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { PermissionState } from '@capacitor/core';
 import {
   ActionPerformed,
   LocalNotifications,
@@ -158,20 +159,33 @@ export class CapacitorNotificationService {
   }
 
   /**
-   * Check current notification permission status
+   * Read the current notification permission state WITHOUT prompting.
+   *
+   * Distinguishes 'denied' (user explicitly said no — they must re-enable in OS
+   * settings) from 'prompt' / 'prompt-with-rationale' (never asked yet — stay
+   * silent and let the lazy request on first real schedule surface the OS
+   * dialog). Returns 'denied' when notifications are unavailable here or the
+   * check throws.
    */
-  async checkPermissions(): Promise<boolean> {
+  async getPermissionState(): Promise<PermissionState> {
     if (!this.isAvailable) {
-      return false;
+      return 'denied';
     }
 
     try {
       const result = await LocalNotifications.checkPermissions();
-      return result.display === 'granted';
+      return result.display;
     } catch (error) {
-      Log.err('CapacitorNotificationService: Failed to check permissions', error);
-      return false;
+      Log.err('CapacitorNotificationService: Failed to read permission state', error);
+      return 'denied';
     }
+  }
+
+  /**
+   * Check current notification permission status
+   */
+  async checkPermissions(): Promise<boolean> {
+    return (await this.getPermissionState()) === 'granted';
   }
 
   /**

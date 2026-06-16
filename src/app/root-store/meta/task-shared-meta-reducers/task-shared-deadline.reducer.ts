@@ -13,6 +13,7 @@ import { getTag, updateTags, removeTaskFromPlannerDays } from './task-shared-hel
 import { unique } from '../../../util/unique';
 import { getDeadlineAutoPlanDecision } from '../../../features/tasks/util/get-deadline-auto-plan-fields';
 import type { DeadlineAutoPlanContext } from '../../../features/tasks/util/get-deadline-auto-plan-fields';
+import { TaskLog } from '../../../core/log';
 
 // =============================================================================
 // ACTION HANDLERS
@@ -107,15 +108,15 @@ const handleSetDeadline = (
 
   // Input validation
   if (deadlineDay && !isDBDateStr(deadlineDay)) {
-    console.error('Invalid deadlineDay format:', deadlineDay);
+    TaskLog.err('Invalid deadlineDay format:', deadlineDay);
     return state;
   }
   if (deadlineWithTime !== undefined && !Number.isFinite(deadlineWithTime)) {
-    console.error('Invalid deadlineWithTime:', deadlineWithTime);
+    TaskLog.err('Invalid deadlineWithTime:', deadlineWithTime);
     return state;
   }
   if (deadlineRemindAt !== undefined && !Number.isFinite(deadlineRemindAt)) {
-    console.error('Invalid deadlineRemindAt:', deadlineRemindAt);
+    TaskLog.err('Invalid deadlineRemindAt:', deadlineRemindAt);
     return state;
   }
 

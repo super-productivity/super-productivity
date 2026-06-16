@@ -18,7 +18,7 @@ export const sendJiraRequest = ({
   jiraCfg: JiraCfg;
 }): void => {
   const mainWin = getWin();
-  const agent = createProxyAwareAgent(jiraCfg?.isAllowSelfSignedCertificate);
+  const agent = createProxyAwareAgent(url, jiraCfg?.isAllowSelfSignedCertificate);
 
   fetch(url, {
     ...requestInit,

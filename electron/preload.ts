@@ -13,7 +13,6 @@ import {
 } from './shared-with-frontend/get-dist-channel';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
-  PluginManifest,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
 } from '../packages/plugin-api/src/types';
@@ -21,6 +20,8 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+
+let pluginNodeExecutionApiConsumed = false;
 
 const _send: (channel: IPCEventValue, ...args: unknown[]) => void = (channel, ...args) =>
   ipcRenderer.send(channel, ...args);
@@ -68,20 +69,19 @@ const ea: ElectronAPI = {
     _invoke('BACKUP_IS_AVAILABLE') as Promise<false | LocalBackupMeta>,
   loadBackupData: (backupPath) =>
     _invoke('BACKUP_LOAD_DATA', backupPath) as Promise<string>,
-  fileSyncSave: (filePath) =>
-    _invoke('FILE_SYNC_SAVE', filePath) as Promise<string | Error>,
-  fileSyncLoad: (filePath) =>
-    _invoke('FILE_SYNC_LOAD', filePath) as Promise<{
+  fileSyncSave: (args) => _invoke('FILE_SYNC_SAVE', args) as Promise<string | Error>,
+  fileSyncLoad: (args) =>
+    _invoke('FILE_SYNC_LOAD', args) as Promise<{
       rev: string;
       dataStr: string | undefined;
     }>,
-  fileSyncRemove: (filePath) => _invoke('FILE_SYNC_REMOVE', filePath) as Promise<void>,
+  fileSyncRemove: (args) => _invoke('FILE_SYNC_REMOVE', args) as Promise<void>,
   fileSyncListFiles: (args) =>
     _invoke('FILE_SYNC_LIST_FILES', args) as Promise<string[] | Error>,
-  checkDirExists: (dirPath) =>
-    _invoke('CHECK_DIR_EXISTS', dirPath) as Promise<true | Error>,
+  checkDirExists: (args) => _invoke('CHECK_DIR_EXISTS', args) as Promise<true | Error>,
 
-  pickDirectory: () => _invoke('PICK_DIRECTORY') as Promise<string | undefined>,
+  pickDirectory: () => _invoke('PICK_DIRECTORY') as Promise<string | Error | undefined>,
+  getSyncFolderPath: () => _invoke('GET_SYNC_FOLDER_PATH') as Promise<string | null>,
 
   showOpenDialog: (options: {
     properties: string[];
@@ -90,9 +90,17 @@ const ea: ElectronAPI = {
     filters?: { name: string; extensions: string[] }[];
   }) => _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
 
-  toFileUrl: (filePath: string) => ipcRenderer.invoke(IPC.TO_FILE_URL, filePath),
-  readLocalImageAsDataUrl: (filePathOrUrl: string) =>
-    _invoke('READ_LOCAL_IMAGE_AS_DATA_URL', filePathOrUrl) as Promise<string | null>,
+  imagePickAndImport: () =>
+    _invoke('IMAGE_PICK_AND_IMPORT') as Promise<
+      | {
+          id: string;
+          mimeType: string;
+        }
+      | null
+      | Error
+    >,
+  imageCacheGetDataUrl: (id: string) =>
+    _invoke('IMAGE_CACHE_GET_DATA_URL', id) as Promise<string | null>,
   // STANDARD
   // --------
   setZoomFactor: (zoomFactor: number) => {
@@ -248,17 +256,35 @@ const ea: ElectronAPI = {
   },
 
   // Plugin API
-  pluginExecNodeScript: (
-    pluginId: string,
-    manifest: PluginManifest,
-    request: PluginNodeScriptRequest,
-  ) =>
-    _invoke(
-      'PLUGIN_EXEC_NODE_SCRIPT',
-      pluginId,
-      manifest,
-      request,
-    ) as Promise<PluginNodeScriptResult>,
+  consumePluginNodeExecutionApi: () => {
+    if (pluginNodeExecutionApiConsumed) {
+      return null;
+    }
+    pluginNodeExecutionApiConsumed = true;
+    return {
+      requestGrant: (pluginId: string) =>
+        _invoke('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', pluginId) as Promise<{
+          token: string;
+        } | null>,
+      executeScript: (
+        pluginId: string,
+        grantToken: string,
+        request: PluginNodeScriptRequest,
+      ) =>
+        _invoke(
+          'PLUGIN_EXEC_NODE_SCRIPT',
+          pluginId,
+          grantToken,
+          request,
+        ) as Promise<PluginNodeScriptResult>,
+      revokeGrant: (pluginId: string, grantToken: string) =>
+        _invoke(
+          'PLUGIN_REVOKE_NODE_EXECUTION_GRANT',
+          pluginId,
+          grantToken,
+        ) as Promise<void>,
+    };
+  },
 
   // Plugin OAuth
   pluginOAuthPrepare: () => _invoke('PLUGIN_OAUTH_PREPARE') as Promise<{ port: number }>,

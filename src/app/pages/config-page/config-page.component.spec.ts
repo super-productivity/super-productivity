@@ -13,14 +13,21 @@ import { ShareService } from '../../core/share/share.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
+import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { T } from '../../t.const';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
   let mockSyncWrapperService: jasmine.SpyObj<SyncWrapperService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
+  let mockLocalBackupService: jasmine.SpyObj<LocalBackupService>;
 
-  beforeEach(async () => {
+  const setup = async (
+    isAndroidWebView: boolean = false,
+    lastBackupTime: number | null = null,
+  ): Promise<void> => {
     const mockSyncConfigService = jasmine.createSpyObj(
       'SyncConfigService',
       ['updateSettingsFromForm'],
@@ -38,10 +45,22 @@ describe('ConfigPageComponent', () => {
       },
     );
     mockProviderManager.getProviderById.and.returnValue(Promise.resolve(undefined));
+    mockLocalBackupService = jasmine.createSpyObj('LocalBackupService', [
+      'restoreLatestMobileBackupFromSettings',
+      'getLastBackupTime',
+    ]);
+    mockLocalBackupService.restoreLatestMobileBackupFromSettings.and.resolveTo();
+    mockLocalBackupService.getLastBackupTime.and.returnValue(lastBackupTime);
+
+    const mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
+    // Mirror real ngx-translate: return the key (with params ignored) so the
+    // "Last backup" line is a deterministic, non-empty string.
+    mockTranslateService.instant.and.callFake((key: string) => key);
 
     await TestBed.configureTestingModule({
       providers: [
         { provide: SyncConfigService, useValue: mockSyncConfigService },
+        { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: isAndroidWebView },
         {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
@@ -60,9 +79,10 @@ describe('ConfigPageComponent', () => {
         { provide: ShareService, useValue: {} },
         { provide: UserProfileService, useValue: {} },
         { provide: MatDialog, useValue: mockMatDialog },
+        { provide: LocalBackupService, useValue: mockLocalBackupService },
         {
           provide: TranslateService,
-          useValue: jasmine.createSpyObj('TranslateService', ['instant']),
+          useValue: mockTranslateService,
         },
       ],
     })
@@ -72,6 +92,10 @@ describe('ConfigPageComponent', () => {
       .compileComponents();
 
     component = TestBed.createComponent(ConfigPageComponent).componentInstance;
+  };
+
+  beforeEach(async () => {
+    await setup();
   });
 
   it('should expose an empty syncStatus by default', () => {
@@ -87,5 +111,51 @@ describe('ConfigPageComponent', () => {
   it('openSyncCfgDialog() should open DialogSyncCfgComponent', async () => {
     await component.openSyncCfgDialog();
     expect(mockMatDialog.open).toHaveBeenCalled();
+  });
+
+  it('should expose Android automatic backup restore action', async () => {
+    TestBed.resetTestingModule();
+    await setup(true);
+
+    const automaticBackupsSection = component.globalImexFormCfg.find(
+      (section) => section.key === 'localBackup',
+    );
+    const action = automaticBackupsSection?.actions?.[0];
+
+    expect(action?.label).toBe(T.GCF.AUTO_BACKUPS.RESTORE_LATEST);
+
+    await action?.onClick();
+
+    expect(
+      mockLocalBackupService.restoreLatestMobileBackupFromSettings,
+    ).toHaveBeenCalled();
+  });
+
+  const findLastBackupLine = (): unknown => {
+    const section = component.globalImexFormCfg.find((s) => s.key === 'localBackup');
+    const items = (section?.items ?? []) as Array<{
+      type?: string;
+      templateOptions?: { text?: string };
+    }>;
+    return items.find(
+      (i) =>
+        i.type === 'tpl' &&
+        i.templateOptions?.text === T.GCF.AUTO_BACKUPS.LAST_BACKUP_INFO,
+    );
+  };
+
+  it('shows the "Last backup" line when a backup timestamp exists (#7901)', async () => {
+    TestBed.resetTestingModule();
+    await setup(true, 1_718_000_000_000);
+
+    expect(mockLocalBackupService.getLastBackupTime).toHaveBeenCalled();
+    expect(findLastBackupLine()).toBeTruthy();
+  });
+
+  it('omits the "Last backup" line when no backup has run yet', async () => {
+    TestBed.resetTestingModule();
+    await setup(true, null);
+
+    expect(findLastBackupLine()).toBeUndefined();
   });
 });

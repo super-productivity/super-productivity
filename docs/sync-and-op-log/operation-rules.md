@@ -186,7 +186,7 @@ export class MyEffects {
 ### 5.2 Capture Multi-Entity Changes
 
 - **Rule:** The `OperationCaptureService` automatically captures all entity changes from a single action.
-- **Implementation:** The `operation-capture.meta-reducer` calls `OperationCaptureService.enqueue()` with the action.
+- **Implementation:** The `operation-capture.meta-reducer` calls `OperationCaptureService.incrementPending()` with the action; the persist effect computes the changes via `OperationCaptureService.extractEntityChanges()` and decrements the pending counter in a `finally`.
 - **Result:** Single operation with `entityChanges[]` array containing all affected entities.
 
 ## 6. Configuration Constants

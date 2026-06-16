@@ -1,6 +1,7 @@
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { ShareResult } from './share.model';
+import { Log } from '../log';
 
 /**
  * Sanitize filename for safe file system usage.
@@ -43,7 +44,7 @@ export const downloadBlob = (blob: Blob, filename: string): boolean => {
     anchor.click();
     return true;
   } catch (error) {
-    console.warn('Browser download failed:', error);
+    Log.warn('Browser download failed:', error);
     return false;
   } finally {
     document.body.removeChild(anchor);
@@ -65,7 +66,7 @@ export const cleanupCacheFile = async (relativePath: string): Promise<void> => {
       directory: Directory.Cache,
     });
   } catch (cleanupError) {
-    console.warn('Failed to cleanup shared file:', cleanupError);
+    Log.warn('Failed to cleanup shared file:', cleanupError);
   }
 };
 
@@ -120,7 +121,7 @@ export const openDownloadResult = async (result: ShareResult): Promise<void> => 
       (window as any).ea.openPath(path);
       return;
     } catch (error) {
-      console.warn('Failed to open path via Electron bridge:', error);
+      Log.warn('Failed to open path via Electron bridge:', error);
     }
   }
 
@@ -131,7 +132,7 @@ export const openDownloadResult = async (result: ShareResult): Promise<void> => 
       window.open(candidate, '_blank', 'noopener');
       return;
     } catch (error) {
-      console.warn('Failed to open download in new window:', error);
+      Log.warn('Failed to open download in new window:', error);
     }
   }
 };

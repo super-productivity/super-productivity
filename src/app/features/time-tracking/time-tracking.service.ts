@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { combineLatest, Observable, Subject } from 'rxjs';
+import { combineLatest, firstValueFrom, Observable, Subject } from 'rxjs';
 import { TimeTrackingState, TTDateMap, TTWorkContextData } from './time-tracking.model';
-import { first, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
+import { map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 import { mergeTimeTrackingStates } from './merge-time-tracking-states';
 import { Store } from '@ngrx/store';
 import { selectTimeTrackingState } from './store/time-tracking.selectors';
@@ -72,7 +72,7 @@ export class TimeTrackingService {
   }
 
   async cleanupDataEverywhereForProject(projectId: string): Promise<void> {
-    const current = await this.current$.pipe(first()).toPromise();
+    const current = await firstValueFrom(this.current$);
     const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
     const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
@@ -108,7 +108,7 @@ export class TimeTrackingService {
    * Current state cleanup is now handled atomically in tag-shared.reducer.ts.
    */
   async cleanupDataEverywhereForTag(tagId: string): Promise<void> {
-    const current = await this.current$.pipe(first()).toPromise();
+    const current = await firstValueFrom(this.current$);
     const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
     const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
@@ -163,7 +163,7 @@ export class TimeTrackingService {
     id: string;
     type: WorkContextType;
   }): Promise<TTDateMap<TTWorkContextData>> {
-    return this.getWorkStartEndForWorkContext$(ctx).pipe(first()).toPromise();
+    return firstValueFrom(this.getWorkStartEndForWorkContext$(ctx));
   }
 
   async getLegacyWorkStartEndForWorkContext(ctx: {
