@@ -357,18 +357,53 @@
            icon button in the bottom row (each opening the same Selected-days / Nth
            sub-menu for that frequency). -->
       <mat-menu #weekdayMenu="matMenu">
+        <!-- Native options are INLINE (not via *ngTemplateOutlet): MatMenu focuses
+             its first registered item on open, and template-projected items
+             register AFTER static ones — which made the focus land on a switch
+             icon below, painting a stray state-layer circle on it. Inline = static
+             = first, so focus lands on this text item as expected. -->
         @if (isWeeklyRule()) {
-          <ng-container *ngTemplateOutlet="weeklyWeekdayItems"></ng-container>
+          <button
+            mat-menu-item
+            type="button"
+            (click)="menuToggleSelectedDay('WEEKLY')"
+          >
+            {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
+          </button>
         }
         @if (isMonthlyRule()) {
-          <ng-container
-            *ngTemplateOutlet="weekdayItems; context: { freq: 'MONTHLY' }"
-          ></ng-container>
+          <button
+            mat-menu-item
+            type="button"
+            (click)="menuToggleSelectedDay('MONTHLY')"
+          >
+            {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
+          </button>
+          <button
+            mat-menu-item
+            type="button"
+            [matMenuTriggerFor]="nthMenu"
+            (menuOpened)="menuNthFreq.set('MONTHLY')"
+          >
+            {{ T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY | translate }}
+          </button>
         }
         @if (isYearlyRule()) {
-          <ng-container
-            *ngTemplateOutlet="weekdayItems; context: { freq: 'YEARLY' }"
-          ></ng-container>
+          <button
+            mat-menu-item
+            type="button"
+            (click)="menuToggleSelectedDay('YEARLY')"
+          >
+            {{ T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS | translate }}
+          </button>
+          <button
+            mat-menu-item
+            type="button"
+            [matMenuTriggerFor]="nthMenu"
+            (menuOpened)="menuNthFreq.set('YEARLY')"
+          >
+            {{ T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY | translate }}
+          </button>
         }
         <div class="cal-menu-switch">
           @if (!isWeeklyRule()) {
