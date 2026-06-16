@@ -57,11 +57,24 @@ describe('PlainspaceApiService', () => {
     expect(tasks[0].url).toBe('https://plainspace.org/p/item/a');
   });
 
-  it('getUnclaimedTasks$ scopes the claim-pool call to the space', async () => {
+  it('getUnclaimedTasks$ fetches the claim pool and keeps only this space', async () => {
     const p = firstValueFrom(service.getUnclaimedTasks$(cfg));
-    const req = httpMock.expectOne(`${BASE}/claimable-tasks?projectId=space-1`);
-    req.flush({ tasks: [spTask('u1', 'space-1')] });
+    const req = httpMock.expectOne(`${BASE}/claimable-tasks`);
+    req.flush({ tasks: [spTask('u1', 'space-1'), spTask('u2', 'other')] });
     expect((await p).map((t) => t.id)).toEqual(['u1']);
+  });
+
+  it('getMyTasks$ matches the bound space by slug, not just the id', async () => {
+    const slugCfg: PlainspaceCfg = { ...cfg, spaceId: 'my-slug' };
+    const p = firstValueFrom(service.getMyTasks$(slugCfg));
+    const req = httpMock.expectOne(`${BASE}/tasks`);
+    req.flush({
+      tasks: [
+        { ...spTask('a', 'uuid-1'), projectSlug: 'my-slug' },
+        { ...spTask('b', 'uuid-2'), projectSlug: 'other-slug' },
+      ],
+    });
+    expect((await p).map((t) => t.id)).toEqual(['a']);
   });
 
   it('claimTask$ POSTs to the claim endpoint and maps the task', async () => {

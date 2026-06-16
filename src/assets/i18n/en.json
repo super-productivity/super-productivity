@@ -2845,7 +2845,7 @@
     "FORM": {
       "HOST": "Plainspace host",
       "SPACE_ID": "Space ID",
-      "SPACE_ID_DESCRIPTION": "The Plainspace space this provider syncs with. Leave empty to set later.",
+      "SPACE_ID_DESCRIPTION": "The space this provider syncs with — paste the id or the slug shown in the space URL (plainspace.org/<slug>/…).",
       "TOKEN": "API token",
       "TOKEN_DESCRIPTION": "Personal API token (starts with \"pat_\"). In Plainspace, open a Space → People → Advanced → API tokens to create one."
     },

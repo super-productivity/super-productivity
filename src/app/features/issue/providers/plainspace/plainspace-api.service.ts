@@ -39,9 +39,7 @@ export class PlainspaceApiService {
       .pipe(
         // /tasks spans all my spaces; keep only this provider's space.
         map((res) =>
-          res.tasks
-            .filter((t) => !cfg.spaceId || t.projectId === cfg.spaceId)
-            .map(mapSPTaskToIssue),
+          res.tasks.filter((t) => matchesSpace(t, cfg.spaceId)).map(mapSPTaskToIssue),
         ),
         catchError(() => of([])),
       );
@@ -49,13 +47,17 @@ export class PlainspaceApiService {
 
   /** Unclaimed (unassigned, not-done) tasks in this space — the claim pool. */
   getUnclaimedTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
-    const params = cfg.spaceId ? `?projectId=${encodeURIComponent(cfg.spaceId)}` : '';
+    // Filter to the bound space client-side so `spaceId` works whether it holds
+    // the project UUID or the slug (the server `?projectId=` param only accepts
+    // the UUID).
     return this._http
-      .get<SPTasksResponse>(`${this._base(cfg)}/claimable-tasks${params}`, {
+      .get<SPTasksResponse>(`${this._base(cfg)}/claimable-tasks`, {
         headers: this._headers(cfg),
       })
       .pipe(
-        map((res) => res.tasks.map(mapSPTaskToIssue)),
+        map((res) =>
+          res.tasks.filter((t) => matchesSpace(t, cfg.spaceId)).map(mapSPTaskToIssue),
+        ),
         catchError(() => of([])),
       );
   }
@@ -173,6 +175,11 @@ interface SPMeResponse {
     role: string;
   }[];
 }
+
+// `cfg.spaceId` may hold either the Plainspace project UUID or its slug (what
+// users see in the space URL, e.g. plainspace.org/<slug>/…), so match both.
+const matchesSpace = (t: SPTask, spaceId: string | null | undefined): boolean =>
+  !spaceId || t.projectId === spaceId || t.projectSlug === spaceId;
 
 const mapSPTaskToIssue = (t: SPTask): PlainspaceIssue => ({
   id: t.id,
