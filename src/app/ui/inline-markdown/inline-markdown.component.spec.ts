@@ -5,10 +5,12 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { InlineMarkdownComponent } from './inline-markdown.component';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { Log } from '../../core/log';
 
 describe('InlineMarkdownComponent', () => {
   let component: InlineMarkdownComponent;
@@ -1738,6 +1740,127 @@ describe('InlineMarkdownComponent', () => {
       fixture.detectChanges();
       component.uncheckAllChecklistItems();
       expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fullscreen editor save after the host is destroyed mid-edit', () => {
+    let afterClosed$: Subject<unknown>;
+    let store: MockStore;
+
+    beforeEach(() => {
+      afterClosed$ = new Subject<unknown>();
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => afterClosed$.asObservable(),
+      } as any);
+      store = TestBed.inject(MockStore);
+      spyOn(store, 'dispatch');
+      spyOn(component.changed, 'emit');
+      fixture.componentRef.setInput('taskId', 'task-1');
+      fixture.detectChanges();
+    });
+
+    // Regression: the fullscreen dialog is a detached overlay. When the focus
+    // session ends mid-edit it destroys the component that opened the dialog, so
+    // emitting `changed` on save would reach no listener and the note is lost.
+    it('persists the note directly to the task when destroyed while the dialog is open', () => {
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('saved note');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { notes: 'saved note' } },
+        }),
+      );
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits via `changed` (no direct dispatch) when still alive', () => {
+      component.openFullScreen();
+
+      afterClosed$.next('saved note');
+
+      expect(component.changed.emit).toHaveBeenCalledWith('saved note');
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('persists a replacement of pre-existing notes when destroyed mid-edit', () => {
+      component.model = 'original notes';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('original notes plus more');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { notes: 'original notes plus more' } },
+        }),
+      );
+    });
+
+    it('clears the note (DELETE) directly when destroyed mid-edit', () => {
+      component.model = 'some real notes';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next({ action: 'DELETE' });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({ task: { id: 'task-1', changes: { notes: '' } } }),
+      );
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the dialog is closed without a result (Close, not Save)', () => {
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next(undefined);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('does not persist when the content is unchanged (no default-text write-back)', () => {
+      component.model = 'How can I best achieve it now?';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('How can I best achieve it now?');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('treats a whitespace-only diff of the loaded text as unchanged', () => {
+      component.model = 'How can I best achieve it now?';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      // The editor can re-emit the placeholder with a trailing newline; that is
+      // not a real edit and must not be written back as a note.
+      afterClosed$.next('How can I best achieve it now?\n');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('warns rather than silently dropping when destroyed without a taskId', () => {
+      const warnSpy = spyOn(Log, 'warn');
+      fixture.componentRef.setInput('taskId', undefined);
+      component.model = 'orig';
+      fixture.detectChanges();
+      component.openFullScreen();
+      component.ngOnDestroy();
+
+      afterClosed$.next('edited content');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
     });
   });
 });

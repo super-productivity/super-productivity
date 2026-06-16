@@ -38,6 +38,9 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { Store } from '@ngrx/store';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { Log } from '../../core/log';
 import { handleListKeydown } from './markdown-toolbar.util';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
@@ -68,8 +71,10 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _clipboardImageService = inject(ClipboardImageService);
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
+  private _store = inject(Store);
   private _currentPastePlaceholder: string | null = null;
   private _isFullscreenDialogOpen = false;
+  private _isDestroyed = false;
   private _resolveGeneration = 0;
 
   readonly isLock = input<boolean>(false);
@@ -187,6 +192,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._isDestroyed = true;
     if (this._hideOverFlowTimeout) {
       window.clearTimeout(this._hideOverFlowTimeout);
     }
@@ -352,6 +358,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   openFullScreen(): void {
     this._isFullscreenDialogOpen = true;
+    const taskId = this.taskId();
     // Read directly from textarea since modelCopy may be stale (one-way ngModel binding)
     const textareaEl = this.textareaEl();
     const currentContent = textareaEl ? textareaEl.nativeElement.value : this.modelCopy();
@@ -362,21 +369,64 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       autoFocus: 'textarea',
       data: {
         content: currentContent,
-        taskId: this.taskId(),
+        taskId,
       },
     });
 
+    // Intentionally NOT torn down with takeUntilDestroyed: this MUST still fire
+    // after the component is destroyed — see the `_isDestroyed` branch below.
+    // afterClosed emits once then completes, so there is no leak.
     dialogRef.afterClosed().subscribe((res) => {
       this._isFullscreenDialogOpen = false;
-      // This resets the task note to its default text
+      // DELETE resets the note to its default text; a string is the saved note.
+      // A missing result (Close without saving) leaves the note untouched.
+      let newVal: string | null = null;
       if (res?.action === 'DELETE') {
-        this.modelCopy.set('');
-        this.changed.emit('');
-        // This updates the task note on click of the "Save" button only if it contains text.
+        newVal = '';
       } else if (typeof res === 'string') {
-        this.modelCopy.set(res);
-        this.changed.emit(res);
+        newVal = res;
       }
+      if (newVal === null) {
+        return;
+      }
+      this.modelCopy.set(newVal);
+
+      // The fullscreen editor is a detached overlay that outlives this
+      // component: a focus session can end mid-edit and swap the focus-mode
+      // screen, destroying us while the dialog stays open. Our `changed` output
+      // then has no listener, so emitting it would silently drop the user's
+      // note. When we've been destroyed, persist the note directly so the save
+      // survives the teardown.
+      if (this._isDestroyed) {
+        // Skip when the content is effectively unchanged from what we loaded:
+        // avoids a redundant op and stops the unmodified default-text
+        // placeholder being written back as a real note. Trimmed compare to
+        // ignore whitespace-only diffs the editor may introduce. This
+        // approximates (not duplicates) the parent's default-text guard —
+        // comparing against the loaded model is the closest signal we have here.
+        if (newVal.trim() !== (this._model ?? '').trim()) {
+          if (taskId) {
+            // shortcut: a shared ui/ component dispatching a task action is a
+            // layering compromise (TaskService can't be injected here — its
+            // eager effects need a full GlobalConfigService under test). Clean
+            // upgrade: give the surviving focus-mode container ownership of the
+            // fullscreen dialog so the save never depends on this lifetime.
+            this._store.dispatch(
+              TaskSharedActions.updateTask({
+                task: { id: taskId, changes: { notes: newVal } },
+              }),
+            );
+          } else {
+            // No task to persist to and our `changed` listener is gone — the
+            // edit cannot be saved. Surface it rather than dropping it silently.
+            Log.warn(
+              'inline-markdown: fullscreen note edit dropped on destroy (no taskId)',
+            );
+          }
+        }
+        return;
+      }
+      this.changed.emit(newVal);
     });
   }
 
