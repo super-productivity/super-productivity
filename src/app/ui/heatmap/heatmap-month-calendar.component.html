@@ -50,6 +50,7 @@
           (focus)="showTip(cell, $event)"
           (blur)="hideTip()"
           (click)="onCellClick(cell)"
+          (dblclick)="onCellDblClick(cell)"
           (keydown.enter)="isCellInteractive(cell) && onCellKeydown($event, cell)"
           (keydown.space)="isCellInteractive(cell) && onCellKeydown($event, cell)"
         >
@@ -72,11 +73,26 @@
         <span class="month-cal__legend-item">{{ T.G.HEATMAP_HIGH | translate }}</span>
       } @else {
         <span class="month-cal__legend-item"
+          ><i class="sw start"></i>{{ T.G.HEATMAP_START_DAY | translate }}</span
+        >
+        <span class="month-cal__legend-item"
+          ><i class="sw today"></i>{{ T.G.HEATMAP_TODAY | translate }}</span
+        >
+        <span class="month-cal__legend-item"
           ><i class="sw projected"></i>{{ T.G.HEATMAP_PROJECTED | translate }}</span
         >
         <span class="month-cal__legend-item"
-          ><i class="sw completed"></i>{{ T.G.HEATMAP_COMPLETED_SIM | translate }}</span
+          ><i class="sw next"></i>{{ T.G.HEATMAP_NEXT | translate }}</span
         >
+        @if (showActivity()) {
+          <span class="month-cal__legend-item">
+            <span class="sw-ramp">
+              <i class="sw activity-1"></i><i class="sw activity-2"></i
+              ><i class="sw activity-3"></i><i class="sw activity-4"></i>
+            </span>
+            {{ T.G.HEATMAP_ACTIVITY_LEGEND | translate }}
+          </span>
+        }
       }
     </div>
   }

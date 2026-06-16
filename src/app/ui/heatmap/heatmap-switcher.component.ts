@@ -45,6 +45,8 @@ export class HeatmapSwitcherComponent {
   readonly legendMode = input<'intensity' | 'projection' | 'none'>('intensity');
   /** Storage slot for remembering the chosen view (empty → not persisted). */
   readonly persistKey = input<string>('');
+  /** View to open on first render when nothing is persisted. */
+  readonly initialView = input<HeatmapView>('year');
   /** Optional in-card nav for the YEAR view (e.g. ‹ 2026 ›); the month view has
    *  its own ‹ June 2026 › nav. Hidden while the label is empty. */
   readonly navLabel = input<string>('');
@@ -53,6 +55,7 @@ export class HeatmapSwitcherComponent {
   readonly navPrev = output<void>();
   readonly navNext = output<void>();
   readonly dayClick = output<DayData>();
+  readonly dayDblClick = output<DayData>();
   /** Passed through to both views: makes day cells keyboard-reachable buttons
    *  for consumers that act on `dayClick` (e.g. click-to-simulate). */
   readonly interactive = input<boolean>(false);
@@ -62,27 +65,34 @@ export class HeatmapSwitcherComponent {
   readonly monthViewChange = output<{ y: number; m: number }>();
   /** Passed through to both views — preview-only flourish (default off). */
   readonly showWeekends = input<boolean>(false);
+  /** Passed through to both views — show the green activity legend swatch. */
+  readonly showActivity = input<boolean>(false);
 
   readonly view = signal<HeatmapView>('year');
 
   private _restored = false;
 
   constructor() {
-    // Inputs aren't available at construction time — restore once they are.
+    // Inputs aren't available at construction time — apply the initial view once
+    // they are: a persisted preference wins, otherwise the consumer's initialView.
     effect(() => {
-      const key = this.persistKey();
-      if (!key || this._restored) {
+      if (this._restored) {
         return;
       }
       this._restored = true;
-      try {
-        const stored = localStorage.getItem(STORAGE_PREFIX + key);
-        if (stored === 'year' || stored === 'month') {
-          this.view.set(stored);
+      const key = this.persistKey();
+      if (key) {
+        try {
+          const stored = localStorage.getItem(STORAGE_PREFIX + key);
+          if (stored === 'year' || stored === 'month') {
+            this.view.set(stored);
+            return;
+          }
+        } catch (e) {
+          Log.err('Failed to read heatmap view preference', e);
         }
-      } catch (e) {
-        Log.err('Failed to read heatmap view preference', e);
       }
+      this.view.set(this.initialView());
     });
   }
 

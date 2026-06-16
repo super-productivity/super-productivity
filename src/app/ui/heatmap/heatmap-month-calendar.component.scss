@@ -75,11 +75,51 @@
   }
   &.projected {
     background: transparent;
-    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline: 1px dotted var(--c-primary);
     outline-offset: -2px;
+  }
+  // Next upcoming occurrence: the pulsing accent ring, shown static here.
+  &.next {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--c-accent);
+  }
+  &.start {
+    background: var(--c-primary);
+  }
+  // Activity (tracked time) legend ramp — low → high green, matching the cells.
+  &.activity-1 {
+    background: color-mix(in srgb, var(--c-success, #43a047) 25%, transparent);
+  }
+  &.activity-2 {
+    background: color-mix(in srgb, var(--c-success, #43a047) 45%, transparent);
+  }
+  &.activity-3 {
+    background: color-mix(in srgb, var(--c-success, #43a047) 65%, transparent);
+  }
+  &.activity-4 {
+    background: var(--c-success, #43a047);
+  }
+  // Today: white square outline (matches the cell marker).
+  &.today {
+    background: transparent;
+    box-shadow:
+      inset 0 0 0 2px #fff,
+      inset 0 0 0 3px var(--c-dark-20, rgba(0, 0, 0, 0.3));
   }
   &.completed {
     background: var(--c-primary);
+  }
+}
+
+// Tracked-time range in the legend: 4 green swatches packed flush into a bar.
+.sw-ramp {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+
+  .sw {
+    margin-right: 0;
   }
 }
 
@@ -116,9 +156,26 @@
     color: var(--c-contrast);
   }
 
+  // Activity (tracked time) overlay — a GREEN spectrum, distinct from the blue
+  // projection/start so past effort reads apart from future occurrences.
+  &.activity-1 {
+    background: color-mix(in srgb, var(--c-success, #43a047) 25%, transparent);
+  }
+  &.activity-2 {
+    background: color-mix(in srgb, var(--c-success, #43a047) 45%, transparent);
+  }
+  &.activity-3 {
+    background: color-mix(in srgb, var(--c-success, #43a047) 65%, transparent);
+  }
+  &.activity-4 {
+    background: var(--c-success, #43a047);
+    color: #fff;
+  }
+
+  // Projected future occurrence: dotted blue (primary) border.
   &.projected {
     background: transparent;
-    outline: 1px dashed color-mix(in srgb, var(--c-primary) 55%, transparent);
+    outline: 2px dotted var(--c-primary);
     outline-offset: -2px;
   }
   &.completed {
@@ -128,10 +185,29 @@
     outline-offset: 1px;
   }
 
-  // Today: accent ring (box-shadow layers over a cell's own outline).
+  // Today: a white square ring (white edge with a faint dark edge so it stays
+  // visible on both light and dark themes, and on filled cells). Drawn on a
+  // ::before overlay rather than the cell's own box-shadow so it is NEVER
+  // clobbered when the cell is also `.start` / `.completed` (those set the
+  // cell's box-shadow) — today stays visible even under the start anchor.
   &.today {
-    z-index: 1;
-    box-shadow: 0 0 0 1.5px var(--c-accent);
+    position: relative;
+    z-index: 2;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      // INSET ring so the white square sits ON TOP of any fill (incl. the blue
+      // `.start` background when the anchor lands on today) instead of only
+      // ringing the outside, where a solid start fill would swallow it.
+      box-shadow:
+        inset 0 0 0 2px #fff,
+        inset 0 0 0 3px var(--c-dark-20, rgba(0, 0, 0, 0.3));
+      pointer-events: none;
+      z-index: 3;
+    }
   }
 
   // Next upcoming occurrence: pulsing accent ring on a ::after overlay (kept off
@@ -148,6 +224,17 @@
       pointer-events: none;
       animation: heatmap-next-pulse 1.8s ease-in-out infinite;
     }
+  }
+
+  // Recurrence start / anchor day — the "selected" day in the click-to-set
+  // preview (Option A). Solid primary fill + halo so it stands out from the
+  // dashed projected occurrences.
+  &.start {
+    background: var(--c-primary);
+    color: var(--c-contrast);
+    font-weight: 600;
+    z-index: 2;
+    box-shadow: 0 0 0 2px var(--c-primary);
   }
 }
 

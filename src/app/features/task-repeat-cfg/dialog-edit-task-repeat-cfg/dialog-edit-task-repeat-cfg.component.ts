@@ -3,11 +3,9 @@ import {
   Component,
   computed,
   effect,
-  ElementRef,
   inject,
   signal,
   untracked,
-  viewChild,
 } from '@angular/core';
 import { Task, TaskReminderOptionId } from '../../tasks/task.model';
 import {
@@ -42,7 +40,12 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { first } from 'rxjs/operators';
+import { first, filter, switchMap } from 'rxjs/operators';
+import { from as fromPromise } from 'rxjs';
+import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveService } from '../../archive/task-archive.service';
+import { calcRepeatTaskSeriesTimeSpent } from '../calc-repeat-task-series-time-spent.util';
+import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -62,18 +65,17 @@ import {
 import { RruleBuilderComponent } from './rrule-builder/rrule-builder.component';
 import { RepeatFreqPickerComponent } from './repeat-freq-picker/repeat-freq-picker.component';
 import { buildRRuleHumanizeOpts, getRRulePreview } from '../util/rrule-preview.util';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Log } from '../../../core/log';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
-import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { DateAdapter } from '@angular/material/core';
 import { DayData, HeatmapViewData } from '../../../ui/heatmap/heatmap.component';
@@ -118,12 +120,12 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     MatButton,
     MatIconButton,
     MatIcon,
-    RepeatTaskHeatmapComponent,
     HeatmapSwitcherComponent,
     CollapsibleComponent,
     RruleBuilderComponent,
     RepeatFreqPickerComponent,
     DatePipe,
+    NgTemplateOutlet,
   ],
 })
 export class DialogEditTaskRepeatCfgComponent {
@@ -131,6 +133,8 @@ export class DialogEditTaskRepeatCfgComponent {
   private _dateAdapter = inject(DateAdapter);
   private _tagService = inject(TagService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
+  private _taskService = inject(TaskService);
+  private _taskArchiveService = inject(TaskArchiveService);
   private _matDialog = inject(MatDialog);
   private _matDialogRef =
     inject<MatDialogRef<DialogEditTaskRepeatCfgComponent>>(MatDialogRef);
@@ -148,9 +152,6 @@ export class DialogEditTaskRepeatCfgComponent {
   }>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
-  // Optionally start with the Activity section open (Settings → Tasks).
-  isHeatmapExpanded =
-    !!this._globalConfigService.cfg()?.tasks?.isExpandActivityForRepeatEdit;
 
   repeatCfgInitial = signal<TaskRepeatCfgCopy | undefined>(undefined);
   repeatCfg = signal<RepeatCfgWorking>(this._initializeRepeatCfg());
@@ -168,6 +169,69 @@ export class DialogEditTaskRepeatCfgComponent {
     }
     return this._data.repeatCfg?.id || this._data.task?.repeatCfgId || null;
   });
+
+  // --- Activity overlay: tracked time of the saved series, merged into the
+  // preview calendar as a GREEN spectrum (distinct from the blue projection).
+  // Only an existing cfg has history; new ones show projection only. Togglable —
+  // OFF hides the green cells, the time summary, and the activity legend. ---
+  private readonly _seriesTasks = toSignal(
+    toObservable(this.repeatCfgId).pipe(
+      filter((id): id is string => !!id),
+      switchMap((id) => fromPromise(this._loadSeriesTasks(id))),
+    ),
+    { initialValue: [] as Task[] },
+  );
+  /** Total tracked ms per `YYYY-MM-DD` across the whole series. */
+  readonly activityByDay = computed<Map<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const t of this._seriesTasks() ?? []) {
+      for (const [d, ms] of Object.entries(t.timeSpentOnDay ?? {})) {
+        if (ms > 0) {
+          m.set(d, (m.get(d) ?? 0) + ms);
+        }
+      }
+    }
+    return m;
+  });
+  readonly hasActivity = computed(() => this.activityByDay().size > 0);
+  readonly showActivity = signal(true);
+  readonly activitySummary = computed<{
+    total: string;
+    thisWeek: string;
+    thisMonth: string;
+  } | null>(() => {
+    if (!this.hasActivity()) {
+      return null;
+    }
+    const s = calcRepeatTaskSeriesTimeSpent(this._seriesTasks() ?? []);
+    return {
+      total: msToString(s.total),
+      thisWeek: msToString(s.thisWeek),
+      thisMonth: msToString(s.thisMonth),
+    };
+  });
+
+  private async _loadSeriesTasks(id: string): Promise<Task[]> {
+    const [archive, currentTasks] = await Promise.all([
+      this._taskArchiveService.load(),
+      this._taskService.allTasks$.pipe(first()).toPromise(),
+    ]);
+    const out: Task[] = [];
+    for (const t of currentTasks ?? []) {
+      if (t.repeatCfgId === id) {
+        out.push(t);
+      }
+    }
+    if (archive?.ids) {
+      for (const tid of archive.ids) {
+        const a = archive.entities[tid];
+        if (a && a.repeatCfgId === id) {
+          out.push(a as Task);
+        }
+      }
+    }
+    return out;
+  }
 
   essentialFormFields = signal<FormlyFieldConfig[]>([]);
   advancedFormFields = signal<FormlyFieldConfig[]>(TASK_REPEAT_CFG_ADVANCED_FORM_CFG);
@@ -228,8 +292,12 @@ export class DialogEditTaskRepeatCfgComponent {
   // (e.g. raw override FREQ=DAILY;BYWEEKNO=53;BYMONTH=2: a multi-second
   // main-thread freeze PER KEYSTROKE). isRRuleValid is memoised and pre-screens
   // exactly that class, the same guard the save path applies.
+  // True once the working cfg carries a fireable rule. Presets carry their own
+  // canonical rrule too, so the calendar/preview now shows in EVERY mode, not
+  // only the RRULE builder — the start date is picked there for all of them.
+  readonly hasRule = computed(() => isRRuleValid(this.repeatCfg().rrule));
   rrulePreview = computed(() =>
-    this.isRRuleMode() && isRRuleValid(this.repeatCfg().rrule)
+    isRRuleValid(this.repeatCfg().rrule)
       ? getRRulePreview(
           this.repeatCfg().rrule,
           this.repeatCfg().startDate,
@@ -245,16 +313,18 @@ export class DialogEditTaskRepeatCfgComponent {
   // that would sync back to every device.
   rruleLegacyIncompat = computed(
     () =>
-      this.isRRuleMode() &&
       isRRuleValid(this.repeatCfg().rrule) &&
       !isRRuleLegacyRepresentable(this.repeatCfg().rrule),
   );
 
-  // Togglable calendar (heatmap) preview of the next year's occurrences for the
-  // live rule — built from the in-progress rrule, no saved cfg required (so it
-  // works while authoring a brand-new recurrence).
+  // Calendar (heatmap) preview of the next year's occurrences for the live rule
+  // — built from the in-progress rrule, no saved cfg required (so it works while
+  // authoring a brand-new recurrence). Always shown for a valid rule (it doubles
+  // as the start-date picker), gated only on `hasRule()` / `resultHeatmapData()`.
   private readonly _PREVIEW_HEATMAP_DAYS = 365;
-  showResultHeatmap = signal(false);
+  // Months of look-back included in the home/shifted window so recent tracked
+  // time (the green Activity overlay) shows alongside the upcoming occurrences.
+  private readonly _PREVIEW_PAST_MONTHS = 3;
   // Year-window navigation: 0 = the next 365 days from today; ±n shifts the
   // window by whole years, unbounded in both directions (the projection is
   // computed per window, so any year is reachable).
@@ -299,14 +369,12 @@ export class DialogEditTaskRepeatCfgComponent {
   // repeat-from-completion schedule the rule re-anchors from that day (the
   // After-completion behavior, made interactive).
   simulatedCompletion = signal<string | null>(null);
-  // Fullscreen: a manual toggle in the title bar; opening the calendar preview
-  // auto-expands the dialog, and closing the preview shrinks it back ONLY when
-  // the preview caused the expansion (a manual toggle takes ownership).
+  // Fullscreen: a manual toggle in the title bar (the dialog already widens
+  // dynamically via `dialog-recurring`; this is the user's escape hatch for the
+  // full-width year strip).
   isFullScreen = signal(false);
-  private _fullScreenOwnedByCalendar = false;
   toggleFullScreen(): void {
     this._setFullScreen(!this.isFullScreen());
-    this._fullScreenOwnedByCalendar = false;
   }
   private _setFullScreen(isFullScreen: boolean): void {
     this.isFullScreen.set(isFullScreen);
@@ -316,63 +384,51 @@ export class DialogEditTaskRepeatCfgComponent {
       this._matDialogRef.removePanelClass('dialog-fullscreen');
     }
   }
-  private readonly _calRef = viewChild('calRef', { read: ElementRef });
-  toggleResultHeatmap(): void {
-    this.showResultHeatmap.update((v) => !v);
-    if (this.showResultHeatmap()) {
-      // Expand only when needed: measure AFTER the calendar has rendered and
-      // go fullscreen only if it doesn't fit the dialog as-is (clipped
-      // vertically, or the year strip has to scroll sideways).
-      setTimeout(() => this._expandIfCalendarDoesNotFit());
-    } else {
-      this.simulatedCompletion.set(null);
-      this.previewYearOffset.set(0);
-      if (this._fullScreenOwnedByCalendar) {
-        this._setFullScreen(false);
-      }
-      this._fullScreenOwnedByCalendar = false;
-    }
-  }
-  private _expandIfCalendarDoesNotFit(): void {
-    const el = this._calRef()?.nativeElement as HTMLElement | undefined;
-    if (!el || !this.showResultHeatmap() || this.isFullScreen()) {
-      return;
-    }
-    const rect = el.getBoundingClientRect();
-    // Vertically clipped: the calendar (or the action row after it) extends
-    // past the viewport — the 85vh dialog cap couldn't absorb it.
-    const isClippedVertically = rect.bottom > window.innerHeight || rect.top < 0;
-    // The year strip scrolls horizontally inside its own block row — if it has
-    // to, fullscreen buys it the missing width (when there IS more width).
-    const blocks = el.querySelector('.heatmap-month-blocks');
-    const needsHorizontalScroll =
-      !!blocks &&
-      blocks.scrollWidth > blocks.clientWidth + 1 &&
-      window.innerWidth > el.clientWidth + 1;
-    if (isClippedVertically || needsHorizontalScroll) {
-      this._setFullScreen(true);
-      this._fullScreenOwnedByCalendar = true;
-    }
-  }
   clearSimulation(): void {
     this.simulatedCompletion.set(null);
   }
+  // A pending single-click start-move, held briefly so a double-click (simulate
+  // completion) can cancel it before it fires.
+  private _setStartTimer: ReturnType<typeof setTimeout> | null = null;
+
   onPreviewDayClick(day: DayData): void {
     if (!day?.dateStr) {
       return;
     }
-    // Only a "repeat from completion" schedule re-anchors when a task is
-    // completed — for a fixed-calendar schedule completing a day never shifts
-    // the rest, so there is nothing to simulate: ignore the click instead of
-    // rendering a misleading "completed" marker on a day the rule never fires.
+    // Single click SETS the recurrence start/anchor (the merged picker), and the
+    // projection re-renders around it. Deferred ~220ms so a double-click can
+    // cancel it (a dblclick also fires two single-clicks).
+    if (this._setStartTimer) {
+      clearTimeout(this._setStartTimer);
+    }
+    const dateStr = day.dateStr;
+    this._setStartTimer = setTimeout(() => {
+      this._setStartTimer = null;
+      // Floor at today (new-cfg rule) and skip a no-op re-pick.
+      if (dateStr < getDbDateStr(new Date()) || dateStr === this.repeatCfg().startDate) {
+        return;
+      }
+      // startDate is the single source of truth: updating it re-feeds the formly
+      // date field ([model]="repeatCfg()") AND re-projects the calendar.
+      this.repeatCfg.update((cfg) => ({ ...cfg, startDate: dateStr }));
+    }, 220);
+  }
+
+  onPreviewDayDblClick(day: DayData): void {
+    if (!day?.dateStr) {
+      return;
+    }
+    // Cancel the pending single-click start-move — a double-click means "simulate
+    // completing here", not "move the start".
+    if (this._setStartTimer) {
+      clearTimeout(this._setStartTimer);
+      this._setStartTimer = null;
+    }
+    // Only a "repeat from completion" schedule re-anchors on completion, so the
+    // what-if is meaningless otherwise. Toggle the simulation on the clicked day.
     if (!this.repeatCfg().repeatFromCompletionDate) {
       return;
     }
-    // Tap the already-simulated day again to clear it. Otherwise simulate
-    // completing on the clicked day — ANY day, not only scheduled occurrences:
-    // re-anchoring to an on-schedule day is a no-op (next = same grid), so the
-    // series only visibly rebuilds when you complete off-schedule (early/late),
-    // which is exactly the "repeat from completion" what-if.
     this.simulatedCompletion.set(
       day.dateStr === this.simulatedCompletion() ? null : day.dateStr,
     );
@@ -405,9 +461,6 @@ export class DialogEditTaskRepeatCfgComponent {
     },
   );
   resultHeatmapData = computed<HeatmapViewData | null>(() => {
-    if (!this.isRRuleMode() || !this.showResultHeatmap()) {
-      return null;
-    }
     const cfg = this._previewScheduleCfg();
     if (!isRRuleValid(cfg.rrule)) {
       return null;
@@ -416,19 +469,23 @@ export class DialogEditTaskRepeatCfgComponent {
     // Per-instance overrides (moves / RDATE) are Phase 8; here only EXDATE skips
     // (deletedInstanceDates) apply to the projection.
     const exdates = cfg.exdatesKey ? cfg.exdatesKey.split(',') : [];
-    // The window: a 365-day span anchored at today, shifted by whole years via
-    // the ‹ › navigation, then padded to full calendar months so the month
-    // view never shows a half-covered month. Projection starts at TODAY in the
-    // home window (no "projected" marks on days already past); shifted windows
-    // show the full pattern.
+    // The window: a look-back of a few months plus a ~365-day forward span,
+    // shifted by whole years via the ‹ › navigation and padded to full calendar
+    // months so the month view never shows a half-covered month. The look-back
+    // is what surfaces the GREEN activity overlay — tracked time lives in the
+    // PAST, so a purely forward window would never show any of it. Projection
+    // (blue) still starts at TODAY in the home window (no "projected" marks on
+    // days already past); shifted windows show the full pattern.
     const offset = this.previewYearOffset();
     const today = new Date();
     today.setHours(12, 0, 0, 0);
     const anchor = new Date(today);
     anchor.setFullYear(anchor.getFullYear() + offset);
+    const backStart = new Date(anchor);
+    backStart.setMonth(backStart.getMonth() - this._PREVIEW_PAST_MONTHS);
     const anchorEnd = new Date(anchor);
     anchorEnd.setDate(anchorEnd.getDate() + this._PREVIEW_HEATMAP_DAYS);
-    const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12, 0, 0);
+    const from = new Date(backStart.getFullYear(), backStart.getMonth(), 1, 12, 0, 0);
     const to = new Date(anchorEnd.getFullYear(), anchorEnd.getMonth() + 1, 0, 12, 0, 0);
     const occFrom = offset === 0 ? today : from;
     // The util only reads repeatFromCompletionDate / lastTaskCreationDay /
@@ -508,6 +565,34 @@ export class DialogEditTaskRepeatCfgComponent {
         nextDay.isNext = true;
       }
     }
+    // Mark the start / anchor day — the click-to-set target (Option A). baseStart
+    // is the effective anchor the projection above is computed from.
+    const startDay = dayMap.get(baseStart);
+    if (startDay) {
+      startDay.isStart = true;
+    }
+    // Activity overlay (GREEN) — merge the saved series' tracked time into the
+    // same window when enabled. Levels are relative to the busiest tracked day in
+    // view, mirroring the standalone Activity heatmap this replaces.
+    if (this.showActivity()) {
+      const act = this.activityByDay();
+      let maxMs = 0;
+      act.forEach((ms, d) => {
+        if (dayMap.has(d)) {
+          maxMs = Math.max(maxMs, ms);
+        }
+      });
+      if (maxMs > 0) {
+        act.forEach((ms, d) => {
+          const day = dayMap.get(d);
+          if (day) {
+            day.timeSpent = ms;
+            const ratio = ms / maxMs;
+            day.activityLevel = ratio > 0.75 ? 4 : ratio > 0.5 ? 3 : ratio > 0.25 ? 2 : 1;
+          }
+        });
+      }
+    }
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     const monthNames = this._dateAdapter.getMonthNames('short');
     return {
@@ -544,6 +629,63 @@ export class DialogEditTaskRepeatCfgComponent {
     const daysAway = Math.round((d.getTime() - today.getTime()) / 86_400_000);
     return { dateStr: getDbDateStr(next), date: next, daysAway };
   });
+
+  // The chosen start broken into editable Month / Day / Year parts. The dedicated
+  // start-date form field is hidden in RRULE mode (the calendar below IS the
+  // picker — Option A); these three fields, shown above the calendar, are the
+  // precise alternative to clicking a day. Both write the same
+  // `repeatCfg().startDate`, so the calendar and the fields stay in sync.
+  readonly startParts = computed<{ y: number; m: number; d: number } | null>(() => {
+    const sd = this.repeatCfg().startDate as string | Date | undefined;
+    if (!sd) {
+      return null;
+    }
+    if (sd instanceof Date) {
+      return { y: sd.getFullYear(), m: sd.getMonth() + 1, d: sd.getDate() };
+    }
+    const [y, m, d] = sd.split('-').map(Number);
+    if (!y || !m || !d) {
+      return null;
+    }
+    return { y, m, d };
+  });
+  // Localized month names for the month <select> (1-based value).
+  readonly monthOptions = computed<{ value: number; name: string }[]>(() =>
+    (this._dateAdapter.getMonthNames('long') as string[]).map((name, i) => ({
+      value: i + 1,
+      name,
+    })),
+  );
+  setStartMonth(m: number): void {
+    const p = this.startParts();
+    if (p && m >= 1 && m <= 12) {
+      this._commitStartParts(p.y, m, p.d);
+    }
+  }
+  setStartDay(d: number): void {
+    const p = this.startParts();
+    if (p && d >= 1) {
+      this._commitStartParts(p.y, p.m, d);
+    }
+  }
+  setStartYear(y: number): void {
+    const p = this.startParts();
+    if (p && y >= 1970 && y <= 2999) {
+      this._commitStartParts(y, p.m, p.d);
+    }
+  }
+  // Reassemble a valid YYYY-MM-DD from edited parts: the day is clamped to the
+  // month's real length (so e.g. switching Feb→a 31-day entry can't yield an
+  // invalid date), then written back as the single source of truth.
+  private _commitStartParts(y: number, m: number, d: number): void {
+    const maxDay = new Date(y, m, 0).getDate();
+    const day = Math.min(Math.max(1, d), maxDay);
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (dateStr === this.repeatCfg().startDate) {
+      return;
+    }
+    this.repeatCfg.update((cfg) => ({ ...cfg, startDate: dateStr }));
+  }
 
   // Rhythm summary shown above the open calendar: how many occurrences are in the
   // viewed window, their average spacing, and when the series ends.
@@ -672,7 +814,7 @@ export class DialogEditTaskRepeatCfgComponent {
       const startTime = this._data.task.dueWithTime
         ? clockStringFromDate(this._data.task.dueWithTime)
         : undefined;
-      return {
+      const freshCfg: RepeatCfgWorking = {
         ...DEFAULT_TASK_REPEAT_CFG,
         ...(this._data.initialQuickSetting
           ? { quickSetting: this._data.initialQuickSetting }
@@ -692,6 +834,10 @@ export class DialogEditTaskRepeatCfgComponent {
         tagIds: unique(this._data.task.tagIds),
         defaultEstimate: this._data.task.timeEstimate,
       };
+      // Populate the preset's canonical rrule (same processing as the edit path)
+      // so the calendar/preview renders for a brand-new recurrence too. A new cfg
+      // has no stored initial to diff against, so this is free of #7373 concerns.
+      return this._processQuickSettingForDate(freshCfg);
     } else {
       throw new Error('Invalid params given for repeat dialog!');
     }
@@ -770,6 +916,11 @@ export class DialogEditTaskRepeatCfgComponent {
       const minFloor = initialStartDate < today ? initialStartDate : today;
       (startDateField.templateOptions as Record<string, unknown>).min =
         getDbDateStr(minFloor);
+      // The in-modal calendar IS the start picker whenever the cfg has a fireable
+      // rule (every preset + the builder), so hide this redundant field then;
+      // keep it only as a fallback when there is no rule yet to drive a calendar.
+      startDateField.hideExpression = (m: Record<string, unknown>) =>
+        isRRuleValid(m['rrule'] as string | undefined);
       formConfig[startDateIdx] = startDateField;
     }
 
@@ -1173,7 +1324,20 @@ export class DialogEditTaskRepeatCfgComponent {
         quickSetting: 'RRULE',
       };
     }
-    return cfg;
+    // A kept preset with no stored rrule yet (e.g. a fresh DAILY default, or an
+    // older preset cfg): fill in its canonical rrule so the calendar/preview
+    // renders immediately for it — the calendar is the start picker for EVERY
+    // repeat setting now. repeatCfgInitial mirrors this processed cfg, so the
+    // populated rrule is baseline (no change-diff), and the save path overwrites
+    // it with the same canonical rule anyway.
+    const presetRefDate = cfg.startDate
+      ? dateStrToUtcDate(cfg.startDate)
+      : this._getReferenceDate();
+    const presetRrule = getQuickSettingUpdates(
+      cfg.quickSetting as RepeatQuickSetting,
+      presetRefDate,
+    )?.rrule;
+    return presetRrule ? { ...cfg, rrule: presetRrule } : cfg;
   }
 
   private _checkCanRemoveInstance(): void {

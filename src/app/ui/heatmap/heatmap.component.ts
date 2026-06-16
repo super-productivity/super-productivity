@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  ElementRef,
   inject,
   input,
   output,
@@ -27,7 +26,9 @@ export interface DayData {
   // heatmap never sets them, so its rendering is unchanged):
   isNext?: boolean; // the next upcoming occurrence — spotlit with a pulse ring
   isToday?: boolean; // today's cell — marked with a ring
+  isStart?: boolean; // the recurrence's start/anchor day (click-to-set in the dialog preview)
   occurrenceIndex?: number; // 0-based order in the window — drives the tooltip's "occurrence #N"
+  activityLevel?: number; // 1-4 tracked-time intensity (GREEN overlay), distinct from projection
 }
 
 export interface WeekData {
@@ -70,7 +71,6 @@ export class HeatmapComponent {
   readonly T = T;
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
-  private readonly _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // Single shared tooltip: instead of a matTooltip overlay per cell (which
   // stacked into a trail on a fast sweep across the dense grid), one readout
@@ -82,19 +82,16 @@ export class HeatmapComponent {
   showTip(day: DayData | null, ev: Event): void {
     const text = this.getDayTitle(day);
     const cell = ev.currentTarget as HTMLElement | null;
-    const container = this._elRef.nativeElement.querySelector(
-      '.heatmap-container',
-    ) as HTMLElement | null;
-    if (!text || !cell || !container) {
+    if (!text || !cell) {
       this.tip.set(null);
       return;
     }
+    // VIEWPORT coords for a position:fixed tip — a container-relative absolute
+    // tip extended the scroll area of whatever scrolls around the heatmap (the
+    // dialog content), which jittered the bottom scrollbar on hover.
     const cr = cell.getBoundingClientRect();
-    const hr = container.getBoundingClientRect();
     const halfWidth = cr.width / 2;
-    const x = cr.left - hr.left + halfWidth;
-    const y = cr.top - hr.top;
-    this.tip.set({ x, y, text });
+    this.tip.set({ x: cr.left + halfWidth, y: cr.top, text });
   }
 
   hideTip(): void {
@@ -115,6 +112,8 @@ export class HeatmapComponent {
   readonly navNext = output<void>();
   /** Emits the clicked day (non-empty cells only). Consumers decide what to do. */
   readonly dayClick = output<DayData>();
+  /** Emits the double-clicked day (e.g. simulate-completion in the dialog). */
+  readonly dayDblClick = output<DayData>();
   /** When true, day cells become keyboard-reachable buttons (for consumers that
    *  act on `dayClick`, e.g. click-to-simulate). Display-only heatmaps keep
    *  plain, non-focusable cells. */
@@ -122,6 +121,8 @@ export class HeatmapComponent {
   /** Preview-only flourish, default OFF so the Activity heatmap is untouched:
    *  tint weekend rows. */
   readonly showWeekends = input<boolean>(false);
+  /** When true, the legend shows the green "tracked time" (activity) swatch. */
+  readonly showActivity = input<boolean>(false);
 
   onDayKeydown(event: Event, day: DayData | null): void {
     if (day) {
@@ -129,6 +130,78 @@ export class HeatmapComponent {
       event.preventDefault();
       this.dayClick.emit(day);
     }
+  }
+
+  // --- Drag-to-pan the month strip (it overflows horizontally for a full year).
+  // Pointer-based so it works with mouse, touch and pen; a drag past a small
+  // threshold suppresses the trailing click so panning never sets the start day.
+  readonly isDragging = signal(false);
+  private _dragEl: HTMLElement | null = null;
+  private _dragStartX = 0;
+  private _dragStartScroll = 0;
+  private _dragMoved = false;
+  private _dragPointerId: number | null = null;
+  private _dragCaptured = false;
+
+  onBlocksPointerDown(ev: PointerEvent): void {
+    if (ev.button !== 0) {
+      return;
+    }
+    const el = ev.currentTarget as HTMLElement;
+    this._dragEl = el;
+    this._dragStartX = ev.clientX;
+    this._dragStartScroll = el.scrollLeft;
+    this._dragMoved = false;
+    this._dragCaptured = false;
+    this._dragPointerId = ev.pointerId;
+    // Capture is DEFERRED until an actual drag starts (see move). Capturing on
+    // pointerdown retargets the synthesized `click` to this container, which
+    // swallowed plain clicks on a day cell — set-start stopped working in the
+    // year view.
+  }
+
+  onBlocksPointerMove(ev: PointerEvent): void {
+    if (!this._dragEl || this._dragPointerId !== ev.pointerId) {
+      return;
+    }
+    const dx = ev.clientX - this._dragStartX;
+    if (!this._dragMoved && Math.abs(dx) > 3) {
+      // A real pan began: NOW take pointer capture (smooth tracking) and flag the
+      // move so the trailing click is suppressed.
+      this._dragMoved = true;
+      this.isDragging.set(true);
+      this._dragEl.setPointerCapture?.(ev.pointerId);
+      this._dragCaptured = true;
+    }
+    if (this._dragMoved) {
+      this._dragEl.scrollLeft = this._dragStartScroll - dx;
+    }
+  }
+
+  onBlocksPointerUp(ev: PointerEvent): void {
+    if (!this._dragEl) {
+      return;
+    }
+    if (this._dragCaptured) {
+      this._dragEl.releasePointerCapture?.(ev.pointerId);
+    }
+    this._dragEl = null;
+    this._dragPointerId = null;
+    this._dragCaptured = false;
+    this.isDragging.set(false);
+  }
+
+  // Cell click — swallowed when it is the tail of a pan (see _dragMoved), so a
+  // drag across the dense grid never lands as a "set start here".
+  onDayClick(day: DayData | null): void {
+    if (!this.interactive() || !day) {
+      return;
+    }
+    if (this._dragMoved) {
+      this._dragMoved = false;
+      return;
+    }
+    this.dayClick.emit(day);
   }
 
   readonly dayLabels = computed(() => {
@@ -147,9 +220,11 @@ export class HeatmapComponent {
       this.showWeekends() && (day.date.getDay() === 0 || day.date.getDay() === 6)
         ? ' weekend'
         : '';
-    return `day level-${day.level}${day.isProjected ? ' projected' : ''}${
-      day.isCompleted ? ' completed' : ''
-    }${day.isNext ? ' next' : ''}${day.isToday ? ' today' : ''}${weekend}`;
+    return `day level-${day.level}${
+      day.activityLevel ? ` activity activity-${day.activityLevel}` : ''
+    }${day.isProjected ? ' projected' : ''}${day.isCompleted ? ' completed' : ''}${
+      day.isNext ? ' next' : ''
+    }${day.isToday ? ' today' : ''}${day.isStart ? ' start' : ''}${weekend}`;
   }
 
   /** Day-granular countdown from today, or '' for past days. */
@@ -171,6 +246,9 @@ export class HeatmapComponent {
     if (!day) {
       return '';
     }
+    if (day.isStart) {
+      return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_START_DAY)}`;
+    }
     if (day.isCompleted) {
       return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_COMPLETED_SIM)}`;
     }
@@ -189,13 +267,11 @@ export class HeatmapComponent {
       }
       return `${day.dateStr}: ${parts.join(' · ')}`;
     }
-    // A projection calendar has no activity to report — an empty day either
-    // invites the simulation click (interactive) or is just its date; faking
-    // "0 tasks, 0m" would mislabel a valid action as activity data.
+    // A projection calendar has no activity to report on an empty day — just its
+    // date. (Clicking sets the start; that affordance lives in the caption above
+    // the calendar, not a per-day tooltip claim.)
     if (this.legendMode() === 'projection') {
-      return this.interactive()
-        ? `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_SIMULATE_DAY)}`
-        : day.dateStr;
+      return day.dateStr;
     }
     return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_ACTIVITY, {
       count: day.taskCount,

@@ -77,6 +77,7 @@ export class HeatmapMonthCalendarComponent {
   /** Which legend to show beneath the grid. */
   readonly legendMode = input<'intensity' | 'projection' | 'none'>('intensity');
   readonly dayClick = output<DayData>();
+  readonly dayDblClick = output<DayData>();
   /** When true, day cells become keyboard-reachable buttons (for consumers that
    *  act on `dayClick`, e.g. click-to-simulate). Display-only calendars keep
    *  plain, non-focusable cells. */
@@ -84,6 +85,8 @@ export class HeatmapMonthCalendarComponent {
   /** Preview-only flourish, default OFF so the Activity heatmap is untouched:
    *  tint weekend columns. */
   readonly showWeekends = input<boolean>(false);
+  /** When true, the legend shows the green "tracked time" (activity) swatch. */
+  readonly showActivity = input<boolean>(false);
   /** When true, month navigation is unlimited in both directions instead of
    *  bounded to `[rangeStart, rangeEnd]`. The consumer is expected to listen to
    *  `viewMonthChange` and move its data window along (days the current dayMap
@@ -193,14 +196,22 @@ export class HeatmapMonthCalendarComponent {
     }
   }
 
+  onCellDblClick(cell: CalCell): void {
+    if (this.interactive() && cell.data && !cell.isOtherMonth) {
+      this.dayDblClick.emit(cell.data);
+    }
+  }
+
   getCellClass(cell: CalCell): string {
     if (cell.isOtherMonth) return 'cal-day other-month';
     const weekend = this.showWeekends() && this._isWeekend(cell) ? ' weekend' : '';
     const d = cell.data;
     if (!d) return `cal-day${weekend}`;
-    return `cal-day level-${d.level}${d.isProjected ? ' projected' : ''}${
-      d.isCompleted ? ' completed' : ''
-    }${d.isNext ? ' next' : ''}${d.isToday ? ' today' : ''}${weekend}`;
+    return `cal-day level-${d.level}${
+      d.activityLevel ? ` activity activity-${d.activityLevel}` : ''
+    }${d.isProjected ? ' projected' : ''}${d.isCompleted ? ' completed' : ''}${
+      d.isNext ? ' next' : ''
+    }${d.isToday ? ' today' : ''}${d.isStart ? ' start' : ''}${weekend}`;
   }
 
   private _isWeekend(cell: CalCell): boolean {
@@ -226,6 +237,9 @@ export class HeatmapMonthCalendarComponent {
   getCellTitle(cell: CalCell): string {
     const d = cell.data;
     if (!d || cell.isOtherMonth) return cell.dateStr;
+    if (d.isStart) {
+      return `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_START_DAY)}`;
+    }
     if (d.isCompleted) {
       return `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_COMPLETED_SIM)}`;
     }
@@ -244,13 +258,11 @@ export class HeatmapMonthCalendarComponent {
       }
       return `${d.dateStr}: ${parts.join(' · ')}`;
     }
-    // A projection calendar has no activity to report — an empty day either
-    // invites the simulation click (interactive) or is just its date; faking
-    // "0 tasks, 0m" would mislabel a valid action as activity data.
+    // A projection calendar has no activity to report on an empty day — just its
+    // date. (Clicking sets the start; that affordance is the caption above the
+    // calendar, not a per-day tooltip claim.)
     if (this.legendMode() === 'projection') {
-      return this.interactive()
-        ? `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_SIMULATE_DAY)}`
-        : d.dateStr;
+      return d.dateStr;
     }
     return `${d.dateStr}: ${this._translateService.instant(T.G.HEATMAP_ACTIVITY, {
       count: d.taskCount,

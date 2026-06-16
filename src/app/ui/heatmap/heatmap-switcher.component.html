@@ -5,11 +5,11 @@
     (change)="setView($event.value)"
     hideSingleSelectionIndicator
   >
-    <mat-button-toggle value="year">
-      {{ T.G.HEATMAP_VIEW_YEAR | translate }}
-    </mat-button-toggle>
     <mat-button-toggle value="month">
       {{ T.G.HEATMAP_VIEW_MONTH | translate }}
+    </mat-button-toggle>
+    <mat-button-toggle value="year">
+      {{ T.G.HEATMAP_VIEW_YEAR | translate }}
     </mat-button-toggle>
   </mat-button-toggle-group>
 
@@ -22,8 +22,10 @@
       [interactive]="interactive()"
       [boundless]="monthBoundless()"
       [showWeekends]="showWeekends()"
+      [showActivity]="showActivity()"
       (viewMonthChange)="monthViewChange.emit($event)"
       (dayClick)="dayClick.emit($event)"
+      (dayDblClick)="dayDblClick.emit($event)"
     />
   } @else if (data(); as d) {
     <heatmap
@@ -34,9 +36,11 @@
       [canNavNext]="canNavNext()"
       [interactive]="interactive()"
       [showWeekends]="showWeekends()"
+      [showActivity]="showActivity()"
       (navPrev)="navPrev.emit()"
       (navNext)="navNext.emit()"
       (dayClick)="dayClick.emit($event)"
+      (dayDblClick)="dayDblClick.emit($event)"
     />
   }
 </div>

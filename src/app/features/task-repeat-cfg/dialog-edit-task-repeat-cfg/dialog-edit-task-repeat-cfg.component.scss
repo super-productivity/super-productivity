@@ -105,6 +105,126 @@ repeat-freq-picker {
   margin-top: var(--s-half);
 }
 
+// Start-date picker + occurrence calendar, placed inline ABOVE the repeat
+// dropdown. No card framing / accent bar (unlike the bottom summary strip) — it
+// reads as part of the form, not a pinned result.
+.rrule-cal {
+  margin: var(--s) 0;
+
+  // Start-date editor: Month / Day / Year fields, the precise alternative to
+  // clicking a day in the calendar below (both write the same start date).
+  &__start {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-half);
+    margin-bottom: var(--s-half);
+    font-size: 12px;
+  }
+
+  &__start-label {
+    font-weight: 600;
+  }
+
+  &__start-fields {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-quarter, 4px);
+  }
+
+  &__start-field {
+    padding: 3px 6px;
+    border: 1px solid var(--separator-color, var(--extra-border-color));
+    border-radius: var(--card-border-radius);
+    background: var(--bg-lightest, transparent);
+    color: var(--text-color);
+    font: inherit;
+    font-size: 12px;
+
+    &:focus {
+      outline: none;
+      border-color: var(--c-primary);
+    }
+  }
+
+  // Drop the native number spinners on the day/year fields — the calendar below
+  // is the spinner; the bare number reads cleaner.
+  &__start-day,
+  &__start-year {
+    -moz-appearance: textfield;
+    appearance: textfield;
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  }
+
+  &__start-day {
+    width: 2.6em;
+    text-align: center;
+  }
+
+  &__start-year {
+    width: 3.6em;
+    text-align: center;
+  }
+
+  &__start-month {
+    max-width: 9em;
+  }
+
+  &__pick-tap {
+    opacity: 0.6;
+  }
+
+  &__activity {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s);
+    margin-bottom: var(--s-half);
+    font-size: 12px;
+  }
+
+  &__activity-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-quarter, 4px);
+    cursor: pointer;
+  }
+
+  &__activity-summary {
+    opacity: 0.75;
+  }
+
+  &__hint {
+    margin-top: var(--s-half);
+    font-size: 12px;
+    opacity: 0.7;
+    text-align: center;
+  }
+
+  &__sim {
+    margin-top: var(--s-half);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  &__sim-reset {
+    margin-left: var(--s-half);
+    border: none;
+    background: transparent;
+    color: var(--c-primary);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+}
+
 // Live recurrence summary card, pinned above the action buttons (outside the
 // scroll area), so the evaluated rule stays in view while the form scrolls.
 .rrule-result {
@@ -127,6 +247,19 @@ repeat-freq-picker {
   &__next {
     margin-top: var(--s-quarter, 2px);
     opacity: 0.8;
+  }
+
+  // Caption above the calendar picker (Option A) — shows the chosen start and
+  // hints that tapping a day changes it.
+  &__pick-hint {
+    margin-top: var(--s-half);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  &__pick-tap {
+    margin-left: var(--s-half);
+    opacity: 0.6;
   }
 
   // "Next: <date> · in N days" spotlight chip.

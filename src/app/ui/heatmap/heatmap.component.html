@@ -46,7 +46,15 @@
             <div class="day-label">{{ label }}</div>
           }
         </div>
-        <div class="heatmap-month-blocks">
+        <div
+          class="heatmap-month-blocks"
+          [class.dragging]="isDragging()"
+          [class.is-pannable]="interactive()"
+          (pointerdown)="onBlocksPointerDown($event)"
+          (pointermove)="onBlocksPointerMove($event)"
+          (pointerup)="onBlocksPointerUp($event)"
+          (pointercancel)="onBlocksPointerUp($event)"
+        >
           @for (m of months; track $index) {
             <div class="heatmap-month">
               <div class="weeks">
@@ -62,7 +70,8 @@
                         (mouseleave)="hideTip()"
                         (focus)="showTip(day, $event)"
                         (blur)="hideTip()"
-                        (click)="interactive() && day && dayClick.emit(day)"
+                        (click)="onDayClick(day)"
+                        (dblclick)="interactive() && day && dayDblClick.emit(day)"
                         (keydown.enter)="interactive() && onDayKeydown($event, day)"
                         (keydown.space)="interactive() && onDayKeydown($event, day)"
                       ></div>
@@ -95,10 +104,23 @@
         </div>
       } @else if (legendMode() === 'projection') {
         <div class="heatmap-legend">
+          <div class="legend-item start"></div>
+          <span>{{ T.G.HEATMAP_START_DAY | translate }}</span>
+          <div class="legend-item today"></div>
+          <span>{{ T.G.HEATMAP_TODAY | translate }}</span>
           <div class="legend-item projected"></div>
           <span>{{ T.G.HEATMAP_PROJECTED | translate }}</span>
-          <div class="legend-item completed"></div>
-          <span>{{ T.G.HEATMAP_COMPLETED_SIM | translate }}</span>
+          <div class="legend-item next"></div>
+          <span>{{ T.G.HEATMAP_NEXT | translate }}</span>
+          @if (showActivity()) {
+            <span>{{ T.G.HEATMAP_ACTIVITY_LEGEND | translate }}</span>
+            <span class="legend-ramp">
+              <span class="legend-item activity-1"></span>
+              <span class="legend-item activity-2"></span>
+              <span class="legend-item activity-3"></span>
+              <span class="legend-item activity-4"></span>
+            </span>
+          }
         </div>
       }
     </div>

@@ -22,19 +22,6 @@
   </h1>
 
   <mat-dialog-content>
-    @if (repeatCfgId(); as cfgId) {
-      <collapsible
-        [title]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"
-        icon="bar_chart"
-        [isExpanded]="isHeatmapExpanded"
-        (isExpandedChange)="isHeatmapExpanded = $event"
-      >
-        @if (isHeatmapExpanded) {
-          <repeat-task-heatmap [repeatCfgId]="cfgId" />
-        }
-      </collapsible>
-    }
-
     <div class="form-wrapper">
       <formly-form
         (modelChange)="repeatCfg.set($event)"
@@ -43,6 +30,8 @@
         [model]="repeatCfg()"
       ></formly-form>
 
+      <!-- The recurrence controls (Repeat / Every / On / Ends / Schedule type)
+           come FIRST; the calendar below previews the rule they define. -->
       <repeat-freq-picker
         [label]="T.F.TASK_REPEAT.F.QUICK_SETTING | translate"
         [options]="quickSettingOptions()"
@@ -52,14 +41,151 @@
       ></repeat-freq-picker>
 
       @if (isRRuleMode()) {
+        <!-- Custom mode: the builder hosts the calendar in its projection slot
+             (between On and Ends), so Ends / Schedule type sit BELOW it. -->
         <rrule-builder
           [rrule]="repeatCfg().rrule ?? ''"
           [startDate]="repeatCfg().startDate"
           [repeatFromCompletion]="repeatCfg().repeatFromCompletionDate ?? false"
           (rruleChange)="onRRuleChange($event)"
           (repeatFromCompletionChange)="onRepeatFromCompletionChange($event)"
-        ></rrule-builder>
+        >
+          <ng-container [ngTemplateOutlet]="cal"></ng-container>
+        </rrule-builder>
+      } @else {
+        <!-- Preset mode: no builder, so the calendar renders standalone. -->
+        <ng-container [ngTemplateOutlet]="cal"></ng-container>
       }
+
+      <!-- Start-date picker + occurrence calendar — the start picker for EVERY
+           repeat mode (click a day = set start; double-click = simulate). In
+           RRULE mode it's projected into the builder between On and Ends; for
+           presets it renders standalone. The textual summary stays in the
+           sticky strip at the bottom. -->
+      <ng-template #cal>
+        @if (hasRule()) {
+          @if (resultHeatmapData(); as hd) {
+            <div class="rrule-cal">
+              @if (startParts(); as sp) {
+                <div class="rrule-cal__start">
+                  <span class="rrule-cal__start-label"
+                    >{{ T.F.TASK_REPEAT.F.START_DATE | translate }}:</span
+                  >
+                  <div class="rrule-cal__start-fields">
+                    <select
+                      class="rrule-cal__start-field rrule-cal__start-month"
+                      (change)="setStartMonth(+$any($event.target).value)"
+                      [attr.aria-label]="T.F.TASK_REPEAT.F.START_DATE | translate"
+                    >
+                      @for (mo of monthOptions(); track mo.value) {
+                        <option
+                          [value]="mo.value"
+                          [selected]="mo.value === sp.m"
+                        >
+                          {{ mo.name }}
+                        </option>
+                      }
+                    </select>
+                    <input
+                      class="rrule-cal__start-field rrule-cal__start-day"
+                      type="number"
+                      min="1"
+                      max="31"
+                      [value]="sp.d"
+                      (change)="setStartDay(+$any($event.target).value)"
+                      [attr.aria-label]="T.F.TASK_REPEAT.F.START_DATE | translate"
+                    />
+                    <input
+                      class="rrule-cal__start-field rrule-cal__start-year"
+                      type="number"
+                      min="1970"
+                      max="2999"
+                      [value]="sp.y"
+                      (change)="setStartYear(+$any($event.target).value)"
+                      [attr.aria-label]="T.F.TASK_REPEAT.F.START_DATE | translate"
+                    />
+                  </div>
+                  <span class="rrule-cal__pick-tap">{{
+                    T.F.TASK_REPEAT.F.RRULE_PICK_START_HINT | translate
+                  }}</span>
+                </div>
+              }
+              @if (hasActivity()) {
+                <div class="rrule-cal__activity">
+                  <label class="rrule-cal__activity-toggle">
+                    <input
+                      type="checkbox"
+                      [checked]="showActivity()"
+                      (change)="showActivity.set($any($event.target).checked)"
+                    />
+                    {{ T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate }}
+                  </label>
+                  @if (showActivity() && activitySummary(); as a) {
+                    <span class="rrule-cal__activity-summary">
+                      {{ T.F.TASK_REPEAT.D_EDIT.TIME_SPENT_TOTAL | translate }}:
+                      {{ a.total }}
+                      <span class="rrule-result__sep">&middot;</span>
+                      {{ T.F.TASK_REPEAT.D_EDIT.TIME_SPENT_THIS_WEEK | translate }}:
+                      {{ a.thisWeek }}
+                      <span class="rrule-result__sep">&middot;</span>
+                      {{ T.F.TASK_REPEAT.D_EDIT.TIME_SPENT_THIS_MONTH | translate }}:
+                      {{ a.thisMonth }}
+                    </span>
+                  }
+                </div>
+              }
+              <heatmap-switcher
+                class="rrule-cal__switcher"
+                [data]="hd"
+                [dayMap]="hd.dayMap"
+                [rangeStart]="hd.rangeStart"
+                [rangeEnd]="hd.rangeEnd"
+                legendMode="projection"
+                [initialView]="'month'"
+                [showActivity]="showActivity() && hasActivity()"
+                [interactive]="true"
+                [navLabel]="previewNavLabel()"
+                [canNavPrev]="true"
+                [canNavNext]="true"
+                [monthBoundless]="true"
+                [showWeekends]="true"
+                (navPrev)="previewPrevYear()"
+                (navNext)="previewNextYear()"
+                (monthViewChange)="onPreviewMonthChange($event)"
+                (dayClick)="onPreviewDayClick($event)"
+                (dayDblClick)="onPreviewDayDblClick($event)"
+              />
+              @if (previewWindowEmpty()) {
+                <div class="rrule-cal__hint">
+                  {{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_EMPTY_WINDOW | translate }}
+                </div>
+              }
+              @if (repeatCfg().repeatFromCompletionDate) {
+                @if (simulatedCompletion(); as sim) {
+                  <div class="rrule-cal__sim">
+                    {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }} {{ sim }}
+                    <button
+                      type="button"
+                      class="rrule-cal__sim-reset"
+                      (click)="clearSimulation()"
+                    >
+                      {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
+                    </button>
+                  </div>
+                } @else {
+                  <div class="rrule-cal__hint">
+                    {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
+                  </div>
+                }
+              }
+            </div>
+          } @else {
+            <div class="rrule-cal__hint">
+              {{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_INVALID | translate }}
+            </div>
+          }
+        }
+      </ng-template>
 
       <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
         <chip-list-input
@@ -81,141 +207,36 @@
     </div>
   </mat-dialog-content>
 
-  <!-- Live result/preview — pinned above the action buttons in RRULE mode. -->
-  @if (isRRuleMode()) {
+  <!-- Natural-language summary of the rule — Custom (RRULE) mode only, kept in a
+       sticky strip above the actions so it stays in view as the form scrolls. -->
+  @if (isRRuleMode() && rrulePreview(); as p) {
     <div class="rrule-result">
-      @if (rrulePreview(); as p) {
-        <div class="rrule-result__human">&rarr; {{ p.human }}</div>
-        @if (nextOccurrence(); as n) {
-          <div class="rrule-result__next-chip">
-            <mat-icon>schedule</mat-icon>
-            <span class="rrule-result__next-date"
-              >{{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_NEXT | translate }}:
-              {{ n.date | date: 'mediumDate' }}</span
-            >
-            <span class="rrule-result__next-away">
-              @if (n.daysAway <= 0) {
-                {{ T.G.HEATMAP_TODAY | translate }}
-              } @else {
-                {{ T.G.HEATMAP_IN_DAYS | translate: { nr: n.daysAway } }}
-              }
-            </span>
-          </div>
-        }
-        @if (rruleLegacyIncompat()) {
-          <!-- Saving writes the never-fires legacy sentinel for this rule, so
-               older app versions (and flag-off devices) on the same account
-               create no tasks for it — surfaced at authoring time. -->
-          <div class="rrule-result__legacy-warning">
-            {{ T.F.TASK_REPEAT.F.RRULE_LEGACY_INCOMPAT | translate }}
-          </div>
-        }
-        @if (repeatCfg().repeatFromCompletionDate) {
-          @if (p.completionExample; as ex) {
-            <div class="rrule-result__next">
-              {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
-              {{ ex.done | date: 'mediumDate' }} &rarr; {{ ex.next | date: 'mediumDate' }}
-            </div>
-          }
-        } @else if (!showResultHeatmap() && p.upcoming.length) {
-          <!-- The textual "Upcoming: …" line is the no-calendar fallback — the
-               open calendar shows the same occurrences spatially. -->
-          <div class="rrule-result__next">
-            {{ T.F.TASK_REPEAT.F.RRULE_NEXT | translate }}:
-            @for (d of p.upcoming; track d.getTime(); let last = $last) {
-              <span>{{ d | date: 'mediumDate' }}</span>
-              @if (!last) {
-                <span class="rrule-result__sep">&middot;</span>
-              }
-            }
-          </div>
-        }
-        <button
-          type="button"
-          class="rrule-result__cal-toggle"
-          (click)="toggleResultHeatmap()"
-        >
-          <mat-icon>{{
-            showResultHeatmap() ? 'expand_less' : 'calendar_month'
-          }}</mat-icon>
-          <span>{{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW | translate }}</span>
-        </button>
-        @if (resultHeatmapData(); as hd) {
-          @if (previewStats(); as s) {
-            <div class="rrule-result__stats">
-              <span>{{
-                T.F.TASK_REPEAT.F.RRULE_PREVIEW_COUNT | translate: { nr: s.count }
-              }}</span>
-              @if (s.avgGapDays) {
-                <span class="rrule-result__sep">&middot;</span>
-                <span>{{
-                  T.F.TASK_REPEAT.F.RRULE_PREVIEW_EVERY | translate: { nr: s.avgGapDays }
-                }}</span>
-              }
-              <span class="rrule-result__sep">&middot;</span>
-              <span>{{ s.end }}</span>
-            </div>
-          }
-          <heatmap-switcher
-            #calRef
-            class="rrule-result__cal"
-            [data]="hd"
-            [dayMap]="hd.dayMap"
-            [rangeStart]="hd.rangeStart"
-            [rangeEnd]="hd.rangeEnd"
-            legendMode="projection"
-            [interactive]="!!repeatCfg().repeatFromCompletionDate"
-            [navLabel]="previewNavLabel()"
-            [canNavPrev]="true"
-            [canNavNext]="true"
-            [monthBoundless]="true"
-            [showWeekends]="true"
-            (navPrev)="previewPrevYear()"
-            (navNext)="previewNextYear()"
-            (monthViewChange)="onPreviewMonthChange($event)"
-            (dayClick)="onPreviewDayClick($event)"
-          />
-          @if (previewWindowEmpty()) {
-            <div class="rrule-result__empty-hint">
-              {{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_EMPTY_WINDOW | translate }}
-            </div>
-          }
-          <!-- Simulation only exists for "repeat from completion" schedules — a
-             fixed calendar never re-anchors, so the hint would invite clicks
-             that (correctly) do nothing. -->
-          @if (repeatCfg().repeatFromCompletionDate) {
-            @if (simulatedCompletion(); as sim) {
-              <div class="rrule-result__sim">
-                {{ T.F.TASK_REPEAT.F.RRULE_SIM_LABEL | translate }}
-                {{ sim }}
-                <button
-                  type="button"
-                  class="rrule-result__sim-reset"
-                  (click)="clearSimulation()"
-                >
-                  {{ T.F.TASK_REPEAT.F.RRULE_SIM_RESET | translate }}
-                </button>
-              </div>
+      <div class="rrule-result__human">&rarr; {{ p.human }}</div>
+      @if (nextOccurrence(); as n) {
+        <div class="rrule-result__next-chip">
+          <mat-icon>schedule</mat-icon>
+          <span class="rrule-result__next-date"
+            >{{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_NEXT | translate }}:
+            {{ n.date | date: 'mediumDate' }}</span
+          >
+          <span class="rrule-result__next-away">
+            @if (n.daysAway <= 0) {
+              {{ T.G.HEATMAP_TODAY | translate }}
             } @else {
-              <div class="rrule-result__sim-hint">
-                {{ T.F.TASK_REPEAT.F.RRULE_SIM_HINT | translate }}
-              </div>
+              {{ T.G.HEATMAP_IN_DAYS | translate: { nr: n.daysAway } }}
             }
-          }
-        } @else if (showResultHeatmap()) {
-          <!-- The preview is toggled ON but there is nothing to draw (e.g. no
-             occurrence lands in the 365-day window). Without this the calendar
-             silently vanishes and the toggle looks broken. -->
-          <div class="rrule-result__cal-empty">
-            {{ T.F.TASK_REPEAT.F.RRULE_CALENDAR_PREVIEW_EMPTY | translate }}
-          </div>
-        }
-      } @else {
-        <!-- Mid-edit unparseable rule: keep the strip visible (instead of
-             yanking the whole preview incl. its toggle out of the dialog) and
-             say WHY there's nothing to show. -->
-        <div class="rrule-result__cal-empty">
-          {{ T.F.TASK_REPEAT.F.RRULE_PREVIEW_INVALID | translate }}
+          </span>
+        </div>
+      }
+      @if (rruleLegacyIncompat()) {
+        <div class="rrule-result__legacy-warning">
+          {{ T.F.TASK_REPEAT.F.RRULE_LEGACY_INCOMPAT | translate }}
+        </div>
+      }
+      @if (repeatCfg().repeatFromCompletionDate && p.completionExample; as ex) {
+        <div class="rrule-result__next">
+          {{ T.F.TASK_REPEAT.F.RRULE_NEXT_AFTER_COMPLETION | translate }}:
+          {{ ex.done | date: 'mediumDate' }} &rarr; {{ ex.next | date: 'mediumDate' }}
         </div>
       }
     </div>

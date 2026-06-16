@@ -32,6 +32,19 @@
   gap: var(--s);
 }
 
+// Inline variant: label sits on the SAME line as its control (e.g. "Ends" +
+// the three end-type buttons, "Schedule type" + the two options). Wraps only
+// on a genuinely narrow surface.
+.rb-field--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+
+  > label {
+    margin-right: var(--s-half);
+  }
+}
+
 // "Repeat every" reads as one inline phrase: label + stepper + unit dropdown
 // grouped close together (no space-between push).
 .rb-row--repeat {
