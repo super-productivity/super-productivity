@@ -1,10 +1,22 @@
 .heatmap-container {
+  // Themeable palette (folded from upstream v18.10.0's heatmap redesign): the
+  // cell levels, container, border and hover outline are driven by these vars so
+  // a theme (and the dark-mode block below) can re-tune them in one place.
+  --heatmap-container-bg: var(--c-dark-10);
+  --heatmap-cell-border: transparent;
+  --heatmap-hover-outline: var(--c-dark-20);
+  --heatmap-level-0-bg: var(--c-dark-10);
+  --heatmap-level-1-bg: color-mix(in srgb, var(--c-primary) 20%, transparent);
+  --heatmap-level-2-bg: color-mix(in srgb, var(--c-primary) 40%, transparent);
+  --heatmap-level-3-bg: color-mix(in srgb, var(--c-primary) 60%, transparent);
+  --heatmap-level-4-bg: var(--c-primary);
+
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s);
   padding: var(--s2);
-  background: var(--c-dark-10);
+  background: var(--heatmap-container-bg);
   border-radius: var(--card-border-radius);
 }
 
@@ -195,29 +207,31 @@
   border-radius: 2px;
   transition: var(--transition-fast);
   flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px var(--heatmap-cell-border);
 
   &.empty {
     background: transparent;
+    box-shadow: none;
   }
 
   &.level-0 {
-    background: var(--c-dark-10);
+    background: var(--heatmap-level-0-bg);
   }
 
   &.level-1 {
-    background: color-mix(in srgb, var(--c-primary) 20%, transparent);
+    background: var(--heatmap-level-1-bg);
   }
 
   &.level-2 {
-    background: color-mix(in srgb, var(--c-primary) 40%, transparent);
+    background: var(--heatmap-level-2-bg);
   }
 
   &.level-3 {
-    background: color-mix(in srgb, var(--c-primary) 60%, transparent);
+    background: var(--heatmap-level-3-bg);
   }
 
   &.level-4 {
-    background: var(--c-primary);
+    background: var(--heatmap-level-4-bg);
   }
 
   // Activity (tracked time) overlay — GREEN spectrum, distinct from the blue
@@ -316,7 +330,7 @@
 
   &:hover {
     transform: scale(1.3);
-    outline: 1px solid var(--c-dark-20);
+    outline: 1px solid var(--heatmap-hover-outline);
     z-index: 1;
   }
 }
@@ -324,7 +338,7 @@
 // Weekend tint (showWeekends input) — only the empty background cells, so
 // occurrence cells keep their look. Activity heatmap never sets it.
 .day.level-0.weekend {
-  background: color-mix(in srgb, var(--c-accent) 12%, var(--c-dark-10));
+  background: color-mix(in srgb, var(--c-accent) 12%, var(--heatmap-level-0-bg));
 }
 
 @keyframes heatmap-next-pulse {
@@ -389,25 +403,26 @@
     width: 12px;
     height: 12px;
     border-radius: 2px;
+    box-shadow: inset 0 0 0 1px var(--heatmap-cell-border);
 
     &.level-0 {
-      background: var(--c-dark-10);
+      background: var(--heatmap-level-0-bg);
     }
 
     &.level-1 {
-      background: color-mix(in srgb, var(--c-primary) 20%, transparent);
+      background: var(--heatmap-level-1-bg);
     }
 
     &.level-2 {
-      background: color-mix(in srgb, var(--c-primary) 40%, transparent);
+      background: var(--heatmap-level-2-bg);
     }
 
     &.level-3 {
-      background: color-mix(in srgb, var(--c-primary) 60%, transparent);
+      background: var(--heatmap-level-3-bg);
     }
 
     &.level-4 {
-      background: var(--c-primary);
+      background: var(--heatmap-level-4-bg);
     }
 
     &.projected {
@@ -459,23 +474,28 @@
   }
 }
 
-// Dark theme support
+// Dark theme support — re-tune the palette vars only (v18.10.0): a more opaque
+// level-0 base (ink overlay) and stronger primary mixes give the cells better
+// contrast on dark backgrounds; cells, legend and hover all read from the vars.
 :host-context(.isDarkTheme) {
   .heatmap-container {
-    background: var(--c-light-05);
-  }
-
-  .day {
-    &.level-0 {
-      background: var(--c-light-05);
-    }
-  }
-
-  .heatmap-container.is-interactive .day:not(.empty):hover {
-    outline-color: var(--c-light-10);
-  }
-
-  .heatmap-legend .legend-item.level-0 {
-    background: var(--c-light-05);
+    --heatmap-container-bg: var(--c-light-05);
+    --heatmap-hover-outline: var(--c-light-60);
+    --heatmap-level-0-bg: rgba(var(--ink-on-channel), 0.16);
+    --heatmap-level-1-bg: color-mix(
+      in srgb,
+      var(--c-primary) 38%,
+      rgba(var(--ink-on-channel), 0.16)
+    );
+    --heatmap-level-2-bg: color-mix(
+      in srgb,
+      var(--c-primary) 55%,
+      rgba(var(--ink-on-channel), 0.16)
+    );
+    --heatmap-level-3-bg: color-mix(
+      in srgb,
+      var(--c-primary) 72%,
+      rgba(var(--ink-on-channel), 0.16)
+    );
   }
 }

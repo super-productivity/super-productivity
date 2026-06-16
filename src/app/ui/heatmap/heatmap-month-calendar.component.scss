@@ -1,10 +1,18 @@
 .month-cal {
+  // Same themeable palette as the year strip (folded from upstream v18.10.0) so
+  // the Calendar and 365 views share one look; the dark block below re-tunes it.
+  --heatmap-container-bg: var(--c-dark-10);
+  --heatmap-level-1-bg: color-mix(in srgb, var(--c-primary) 20%, transparent);
+  --heatmap-level-2-bg: color-mix(in srgb, var(--c-primary) 40%, transparent);
+  --heatmap-level-3-bg: color-mix(in srgb, var(--c-primary) 60%, transparent);
+  --heatmap-level-4-bg: var(--c-primary);
+
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s);
   padding: var(--s2);
-  background: var(--c-dark-10);
+  background: var(--heatmap-container-bg);
   border-radius: var(--card-border-radius);
   // The 1fr/aspect-ratio cells scale with the container, so on a wide page
   // (metrics) the calendar outgrows the viewport — cap it and keep it centered.
@@ -119,16 +127,16 @@
   margin-right: 4px;
 
   &.level-1 {
-    background: color-mix(in srgb, var(--c-primary) 25%, transparent);
+    background: var(--heatmap-level-1-bg);
   }
   &.level-2 {
-    background: color-mix(in srgb, var(--c-primary) 45%, transparent);
+    background: var(--heatmap-level-2-bg);
   }
   &.level-3 {
-    background: color-mix(in srgb, var(--c-primary) 65%, transparent);
+    background: var(--heatmap-level-3-bg);
   }
   &.level-4 {
-    background: var(--c-primary);
+    background: var(--heatmap-level-4-bg);
   }
   &.projected {
     background: transparent;
@@ -205,16 +213,16 @@
   // BOTH light and dark themes. Solid-primary cells use the palette's contrast
   // token (what themes declare as readable ON primary) — never a hex literal.
   &.level-1 {
-    background: color-mix(in srgb, var(--c-primary) 25%, transparent);
+    background: var(--heatmap-level-1-bg);
   }
   &.level-2 {
-    background: color-mix(in srgb, var(--c-primary) 45%, transparent);
+    background: var(--heatmap-level-2-bg);
   }
   &.level-3 {
-    background: color-mix(in srgb, var(--c-primary) 65%, transparent);
+    background: var(--heatmap-level-3-bg);
   }
   &.level-4 {
-    background: var(--c-primary);
+    background: var(--heatmap-level-4-bg);
     color: var(--c-contrast);
   }
 
@@ -346,9 +354,27 @@
   }
 }
 
+// Dark theme — re-tune the palette vars for contrast (v18.10.0), matching the
+// year strip: stronger primary mixes over an ink overlay so the activity cells
+// stay distinct on dark backgrounds.
 :host-context(.isDarkTheme) {
   .month-cal {
-    background: var(--c-light-05);
+    --heatmap-container-bg: var(--c-light-05);
+    --heatmap-level-1-bg: color-mix(
+      in srgb,
+      var(--c-primary) 38%,
+      rgba(var(--ink-on-channel), 0.16)
+    );
+    --heatmap-level-2-bg: color-mix(
+      in srgb,
+      var(--c-primary) 55%,
+      rgba(var(--ink-on-channel), 0.16)
+    );
+    --heatmap-level-3-bg: color-mix(
+      in srgb,
+      var(--c-primary) 72%,
+      rgba(var(--ink-on-channel), 0.16)
+    );
   }
 }
 
