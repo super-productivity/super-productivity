@@ -140,10 +140,10 @@
     background: transparent;
     box-shadow: inset 0 0 0 2px var(--c-accent);
   }
-  // Recurrence end (UNTIL) day: a warn ring.
+  // Recurrence end (UNTIL) day: a SOLID warn block (vs the hollow `.next` ring)
+  // so the two legend swatches never read alike.
   &.end {
-    background: transparent;
-    box-shadow: inset 0 0 0 2px var(--c-warn, var(--c-accent));
+    background: var(--c-warn, var(--c-accent));
   }
   &.start {
     background: var(--c-primary);
@@ -249,11 +249,16 @@
     outline-offset: 1px;
   }
 
-  // Recurrence end (UNTIL) day: a warn-coloured ring — the series stops here.
+  // Recurrence end (UNTIL) day: a SOLID warn block — the series stops here.
+  // Solid (not a ring) so it reads clearly apart from the hollow `.next` ring,
+  // which shares a near-identical accent/warn colour in most themes.
   &.end {
     position: relative;
     z-index: 2;
-    box-shadow: 0 0 0 2px var(--c-warn, var(--c-accent));
+    background: var(--c-warn, var(--c-accent));
+    color: var(--c-contrast);
+    outline: 2px solid var(--c-warn, var(--c-accent));
+    outline-offset: 1px;
   }
 
   // Today: a white square ring (white edge with a faint dark edge so it stays
