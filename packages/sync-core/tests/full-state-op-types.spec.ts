@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FULL_STATE_OP_TYPES,
-  createFullStateOpTypeHelpers,
-  isFullStateOpType,
-} from '../src/full-state-op-types';
+import { createFullStateOpTypeHelpers } from '../src/full-state-op-types';
 import {
   partitionLwwResolutions,
   planLwwConflictResolutions,
@@ -38,14 +34,6 @@ describe('createFullStateOpTypeHelpers', () => {
     expect(helpers.FULL_STATE_OP_TYPES.has('HOST_FULL_REPLACE')).toBe(true);
     expect(helpers.isFullStateOpType('HOST_FULL_REPLACE')).toBe(true);
     expect(helpers.isFullStateOpType('SYNC_IMPORT')).toBe(false);
-  });
-
-  it('keeps deprecated Super Productivity compatibility exports', () => {
-    expect(FULL_STATE_OP_TYPES.has(OpType.SyncImport)).toBe(true);
-    expect(FULL_STATE_OP_TYPES.has(OpType.BackupImport)).toBe(true);
-    expect(FULL_STATE_OP_TYPES.has(OpType.Repair)).toBe(true);
-    expect(isFullStateOpType(OpType.SyncImport)).toBe(true);
-    expect(isFullStateOpType(OpType.Create)).toBe(false);
   });
 
   it('allows host-specific operation opType strings across exported wrappers', () => {

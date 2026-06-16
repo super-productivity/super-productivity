@@ -1,52 +1,97 @@
 @use '../../../../styles/_globals.scss' as *;
 
-.focus-mode-break {
+// The 4-row skeleton lives in <focus-mode-layout>; this host is just its
+// positioning context, mirroring focus-mode-main.
+:host {
+  position: absolute;
+  inset: 0;
+}
+
+// ========== ROW 2: TASK NAME ==========
+.task-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  width: calc(100% - var(--s2));
+  max-width: var(--component-max-width);
+}
+
+// ========== ROW 3: CLOCK ==========
+// Stack the in-circle readout (label · digits · cycle counter) as a single
+// centered flex column instead of three independently absolute-positioned
+// layers. The old layout pinned the label at top:30% and the digits at top:50%,
+// so a long localized label (e.g. es "Descanso corto", plus the now-removed
+// {{cycle}} suffix) — or simply a small clock face, where the label keeps its
+// size while the ring shrinks — wrapped the label down over the digits (#8391).
+// A column can't overlap: it just stacks and stays centered in the ring.
+//
+// `:host` raises specificity above focus-clock-face's `::ng-deep .clock-wrapper`
+// rule (which still positions the wrapper absolutely to fill the ring — kept).
+:host .clock-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  gap: var(--s);
+  // Keep long labels clear of the ring stroke on the sides.
+  padding-inline: var(--s2);
+}
+
+// "Short break" / "Long break" / "Take a break" label inside the circle,
+// above the digits. Reads as the dominant secondary text.
+.break-label {
+  max-width: 100%;
+  color: var(--text-color-muted);
+  font-size: var(--s3);
+  font-weight: bold;
+  line-height: 1.1;
   text-align: center;
-  gap: 2rem;
 }
 
-.timer-container {
-  position: relative;
+// Neutralize focus-clock-face's shared absolute centering of the digits so they
+// flow inside the column. (That `::ng-deep .clock-time` rule still positions the
+// digits absolutely in focus-mode-main, which has no above-digits label.)
+:host .clock-wrapper .clock-time {
+  position: static;
+  transform: none;
+}
+
+// Pomodoro cycle counter inside the circle, below the digits.
+.cycle-counter {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--s-half);
+  color: var(--text-color-muted);
+  font-size: var(--s3);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 
-  .timer-text {
-    position: absolute;
-    font-size: 1.8rem;
-    font-weight: 500;
-  }
-
-  // Pause/Resume button inside the circle (top center)
-  .pause-resume-btn {
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
+  mat-icon {
+    font-size: var(--s3);
+    width: var(--s3);
+    height: var(--s3);
   }
 }
 
-.break-message {
-  font-size: 1.1rem;
-  opacity: 0.8;
-  margin: 0;
-}
-
-.button-row {
+// ========== ROW 4: primary actions ==========
+// Single icon-button row, mirroring focus-mode-main's bottom controls (the
+// 56px / 32px icon size + --s2 gap) so the break's actions read as one row,
+// identical to the focus session.
+.bottom-controls {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: var(--s2);
-  align-items: center;
-}
 
-.reset-cycles-btn {
-  @include mq(xs, max) {
-    display: none;
+  button {
+    width: 56px !important;
+    height: 56px !important;
+
+    mat-icon {
+      font-size: 32px !important;
+      width: 32px !important;
+      height: 32px !important;
+    }
   }
 }

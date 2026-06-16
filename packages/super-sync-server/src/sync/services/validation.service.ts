@@ -13,7 +13,7 @@ import {
   sanitizeVectorClock,
   validatePayload,
 } from '../sync.types';
-import { ENTITY_TYPES } from '@sp/shared-schema';
+import { ENTITY_TYPES, SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
 import { Logger } from '../../logger';
 
 /**
@@ -28,6 +28,12 @@ export interface ValidationResult {
   valid: boolean;
   error?: string;
   errorCode?: SyncErrorCode;
+  /**
+   * UTF-8 byte size of `op.payload`, measured once here to enforce the size
+   * limit and threaded to the persist site so the payload isn't re-stringified.
+   * Set only on the `valid: true` result.
+   */
+  payloadBytes?: number;
 }
 
 export class ValidationService {
@@ -100,6 +106,32 @@ export class ValidationService {
       }
     }
 
+    // Validate the multi-entity set the same way as the scalar entityId. The HTTP
+    // contract Zod schema also bounds this, but enforcing it here keeps the invariant
+    // with the op (defense-in-depth for any non-HTTP caller) since entityIds is now
+    // persisted and consulted by conflict detection (#8334).
+    if (op.entityIds !== undefined && op.entityIds !== null) {
+      if (
+        !Array.isArray(op.entityIds) ||
+        op.entityIds.length > SUPER_SYNC_MAX_ENTITY_IDS_PER_OP
+      ) {
+        return {
+          valid: false,
+          error: 'Invalid entityIds: not an array or too many entries',
+          errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
+        };
+      }
+      for (const id of op.entityIds) {
+        if (typeof id !== 'string' || id.length > 255 || id.trim().length === 0) {
+          return {
+            valid: false,
+            error: 'Invalid entityIds element: must be a non-empty string <= 255 chars',
+            errorCode: SYNC_ERROR_CODES.INVALID_ENTITY_ID,
+          };
+        }
+      }
+    }
+
     // Require entityId for regular entity operations.
     // Full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) and bulk entity types
     // (ALL, RECOVERY) legitimately don't have entityId.
@@ -167,8 +199,13 @@ export class ValidationService {
       };
     }
 
-    const payloadSize = JSON.stringify(op.payload).length;
-    if (payloadSize > this.config.maxPayloadSizeBytes) {
+    // Measure UTF-8 bytes, not String#length (UTF-16 code units), so this
+    // per-payload limit agrees with the UTF-8 byte accounting used by the quota
+    // gate, the persisted payloadBytes column, and the storage counter. With
+    // `.length`, a non-ASCII payload undercounts and could pass this check while
+    // exceeding the same byte limit everywhere else.
+    const payloadBytes = Buffer.byteLength(JSON.stringify(op.payload), 'utf8');
+    if (payloadBytes > this.config.maxPayloadSizeBytes) {
       return {
         valid: false,
         error: 'Payload too large',
@@ -196,7 +233,7 @@ export class ValidationService {
       };
     }
 
-    return { valid: true };
+    return { valid: true, payloadBytes };
   }
 
   /**

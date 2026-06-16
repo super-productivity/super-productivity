@@ -112,6 +112,103 @@ describe('TrelloApiService', () => {
     });
   });
 
+  describe('getBoards$', () => {
+    it('should include open boards from Trello organizations', (done) => {
+      service.getBoards$(mockCfg).subscribe((boards) => {
+        expect(boards).toEqual([
+          { id: 'member-board', name: 'Member Board' },
+          { id: 'shared-board', name: 'Shared Board from Member List' },
+          { id: 'org-board', name: 'Organization Board' },
+        ]);
+        done();
+      });
+
+      const memberBoardsReq = httpMock.expectOne(
+        (request) => request.url === 'https://api.trello.com/1/members/me/boards',
+      );
+      expect(memberBoardsReq.request.params.get('filter')).toBe('open');
+      expect(memberBoardsReq.request.params.get('fields')).toBe('name,id');
+      memberBoardsReq.flush([
+        { id: 'member-board', name: 'Member Board' },
+        { id: 'shared-board', name: 'Shared Board from Member List' },
+      ]);
+
+      const organizationsReq = httpMock.expectOne(
+        (request) => request.url === 'https://api.trello.com/1/members/me/organizations',
+      );
+      expect(organizationsReq.request.params.get('fields')).toBe('id');
+      organizationsReq.flush([{ id: 'org-1' }]);
+
+      const organizationBoardsReq = httpMock.expectOne(
+        (request) =>
+          request.url === 'https://api.trello.com/1/organizations/org-1/boards',
+      );
+      expect(organizationBoardsReq.request.params.get('filter')).toBe('open');
+      expect(organizationBoardsReq.request.params.get('fields')).toBe('name,id');
+      organizationBoardsReq.flush([
+        { id: 'shared-board', name: 'Duplicate Organization Board' },
+        { id: 'org-board', name: 'Organization Board' },
+      ]);
+    });
+
+    it('should keep member boards if organization lookup fails', (done) => {
+      service.getBoards$(mockCfg).subscribe((boards) => {
+        expect(boards).toEqual([{ id: 'member-board', name: 'Member Board' }]);
+        expect(snackService.open).not.toHaveBeenCalled();
+        done();
+      });
+
+      const memberBoardsReq = httpMock.expectOne(
+        (request) => request.url === 'https://api.trello.com/1/members/me/boards',
+      );
+      memberBoardsReq.flush([{ id: 'member-board', name: 'Member Board' }]);
+
+      const organizationsReq = httpMock.expectOne(
+        (request) => request.url === 'https://api.trello.com/1/members/me/organizations',
+      );
+      organizationsReq.flush(
+        { error: 'Unauthorized' },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+    });
+
+    it('should keep other boards if one organization boards request fails', (done) => {
+      service.getBoards$(mockCfg).subscribe((boards) => {
+        expect(boards).toEqual([
+          { id: 'member-board', name: 'Member Board' },
+          { id: 'org-board', name: 'Organization Board' },
+        ]);
+        expect(snackService.open).not.toHaveBeenCalled();
+        done();
+      });
+
+      const memberBoardsReq = httpMock.expectOne(
+        (request) => request.url === 'https://api.trello.com/1/members/me/boards',
+      );
+      memberBoardsReq.flush([{ id: 'member-board', name: 'Member Board' }]);
+
+      const organizationsReq = httpMock.expectOne(
+        (request) => request.url === 'https://api.trello.com/1/members/me/organizations',
+      );
+      organizationsReq.flush([{ id: 'org-1' }, { id: 'org-2' }]);
+
+      const org1BoardsReq = httpMock.expectOne(
+        (request) =>
+          request.url === 'https://api.trello.com/1/organizations/org-1/boards',
+      );
+      org1BoardsReq.flush([{ id: 'org-board', name: 'Organization Board' }]);
+
+      const org2BoardsReq = httpMock.expectOne(
+        (request) =>
+          request.url === 'https://api.trello.com/1/organizations/org-2/boards',
+      );
+      org2BoardsReq.flush(
+        { error: 'Forbidden' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+    });
+  });
+
   describe('configuration validation', () => {
     it('should throw error when apiKey is missing', () => {
       const invalidCfg = { ...mockCfg, apiKey: null };

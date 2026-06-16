@@ -114,6 +114,37 @@ describe('ValidationService', () => {
       expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_ENTITY_ID);
     });
 
+    // === entityIds (multi-entity batch ops) validation (#8334) ===
+
+    it('should accept a valid entityIds array', () => {
+      const op = createValidOp({ entityIds: ['task-1', 'task-2'] });
+      expect(validationService.validateOp(op, clientId).valid).toBe(true);
+    });
+
+    it('should reject an entityIds element longer than 255 characters', () => {
+      const op = createValidOp({ entityIds: ['ok', 'x'.repeat(256)] });
+      const result = validationService.validateOp(op, clientId);
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_ENTITY_ID);
+    });
+
+    it('should reject a non-string / empty entityIds element', () => {
+      expect(
+        validationService.validateOp(createValidOp({ entityIds: [123] }), clientId).valid,
+      ).toBe(false);
+      expect(
+        validationService.validateOp(createValidOp({ entityIds: ['  '] }), clientId)
+          .valid,
+      ).toBe(false);
+    });
+
+    it('should reject more than SUPER_SYNC_MAX_ENTITY_IDS_PER_OP entries', () => {
+      const op = createValidOp({ entityIds: new Array(1001).fill('id') });
+      const result = validationService.validateOp(op, clientId);
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_ENTITY_ID);
+    });
+
     // === entityId validation for regular entity types ===
 
     it('should reject null entityId for regular entity type (TASK)', () => {
@@ -358,6 +389,43 @@ describe('ValidationService', () => {
       const result = service.validateOp(op, clientId);
       expect(result.valid).toBe(false);
       expect(result.errorCode).toBe(SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE);
+    });
+
+    it('should measure the size limit in UTF-8 bytes, not UTF-16 code units', () => {
+      // '✓' (U+2713) is one UTF-16 code unit but three UTF-8 bytes.
+      // JSON.stringify({ data: '✓'×100 }) is 111 UTF-16 code units but 311 UTF-8
+      // bytes. With a 200-byte limit the old String#length check (111) wrongly
+      // passed; the UTF-8 byte measure (311) correctly rejects.
+      const service = new ValidationService({
+        ...DEFAULT_SYNC_CONFIG,
+        maxPayloadSizeBytes: 200,
+      });
+      const payload = { data: '✓'.repeat(100) };
+      expect(JSON.stringify(payload).length).toBeLessThanOrEqual(200);
+      expect(Buffer.byteLength(JSON.stringify(payload), 'utf8')).toBeGreaterThan(200);
+      const result = service.validateOp(createValidOp({ payload }), clientId);
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE);
+    });
+
+    it('returns the UTF-8 payload byte size on the valid result', () => {
+      const asciiOp = createValidOp({ payload: { name: 'Test' } });
+      const asciiResult = validationService.validateOp(asciiOp, clientId);
+      expect(asciiResult.valid).toBe(true);
+      expect(asciiResult.payloadBytes).toBe(
+        Buffer.byteLength(JSON.stringify(asciiOp.payload), 'utf8'),
+      );
+
+      // Non-ASCII: byte size exceeds the UTF-16 code-unit count.
+      const unicodeOp = createValidOp({ payload: { note: '日本語✓' } });
+      const unicodeResult = validationService.validateOp(unicodeOp, clientId);
+      expect(unicodeResult.valid).toBe(true);
+      expect(unicodeResult.payloadBytes).toBe(
+        Buffer.byteLength(JSON.stringify(unicodeOp.payload), 'utf8'),
+      );
+      expect(unicodeResult.payloadBytes).toBeGreaterThan(
+        JSON.stringify(unicodeOp.payload).length,
+      );
     });
 
     it('should accept timestamps in the future (clamping handled during upload)', () => {

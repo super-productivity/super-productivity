@@ -19,7 +19,7 @@
           "/assets/icons/icon-*.png",
           "/assets/icons/favicon-*.png",
           "/assets/i18n/en.json",
-          "/assets/fonts/material-symbols-outlined.woff2",
+          "/media/material-symbols-outlined-*.woff2",
           "/*.(otf|ttf|woff|woff2)"
         ]
       }
@@ -29,7 +29,7 @@
       "installMode": "lazy",
       "updateMode": "prefetch",
       "resources": {
-        "files": ["/assets/**"]
+        "files": ["/assets/**", "/media/**"]
       }
     },
     {

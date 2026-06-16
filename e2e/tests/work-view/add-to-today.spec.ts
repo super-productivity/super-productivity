@@ -42,7 +42,7 @@ test.describe('Add to Today - Subtask Support', () => {
     // Now use keyboard shortcut to add subtask to Today
     // (This is the most reliable method and what users would actually do)
     await subtask.click();
-    await page.keyboard.press('Control+t');
+    await page.keyboard.press('Shift+T');
     await page.waitForTimeout(500);
 
     // Verify subtask appears in Today view
@@ -85,8 +85,8 @@ test.describe('Add to Today - Subtask Support', () => {
     // Focus the subtask (click on it)
     await subtask.click();
 
-    // Press Ctrl+T to add to today
-    await page.keyboard.press('Control+t');
+    // Press Shift+T to add to today
+    await page.keyboard.press('Shift+T');
 
     // Wait for state update
     await page.waitForTimeout(500);

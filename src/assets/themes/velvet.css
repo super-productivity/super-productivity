@@ -179,6 +179,12 @@ body.isDarkTheme {
   --task-detail-shadow: none;
   --task-detail-value-color: rgba(237, 237, 237, 0.85);
 
+  /* Input fields overrides */
+  --input-bg: var(--velvet-fill-2);
+  --input-bg-hover: color-mix(in srgb, var(--c-primary) 6%, transparent);
+  --input-border-color: transparent;
+  --input-border-radius: 8px;
+
   /* Schedule events read as cards, not list rows — they have borders, a
      project-color left edge, and distinct shapes — so they sit a few stops
      above the task-row default. Side-panel variant stays one stop lower
@@ -318,31 +324,20 @@ body.isDarkTheme add-task-bar.global .add-task-container {
     inset 0 1px 0 var(--velvet-fill-2);
 }
 
-/* Form fields: dark, rounded, with coral focus glow — Raycast input feel */
-body.isDarkTheme input.mat-mdc-input-element,
-body.isDarkTheme textarea.mat-mdc-input-element,
-body.isDarkTheme .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+/* Form fields outline: restore fill for outline inputs in Velvet */
+body.isDarkTheme .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
   background: var(--velvet-fill-2) !important;
   border-radius: 8px !important;
   transition:
     background 120ms ease-out,
-    box-shadow 120ms ease-out !important;
+    border-color 120ms ease-out !important;
 }
 
+body.isDarkTheme .mdc-text-field--outlined:not(.mdc-text-field--disabled):hover,
 body.isDarkTheme
   .mat-mdc-form-field.mat-focused
-  .mdc-text-field--filled:not(.mdc-text-field--disabled),
-body.isDarkTheme .mdc-text-field--focused:not(.mdc-text-field--disabled) {
+  .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
   background: color-mix(in srgb, var(--c-primary) 6%, transparent) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-primary) 40%, transparent) !important;
-}
-
-/* Hide the underline-style line-ripple — Raycast inputs are bordered, not
-   underlined. */
-body.isDarkTheme .mdc-line-ripple,
-body.isDarkTheme .mdc-text-field--filled .mdc-line-ripple::before,
-body.isDarkTheme .mdc-text-field--filled .mdc-line-ripple::after {
-  display: none !important;
 }
 
 /* Primary buttons get a subtle coral gradient — like Raycast's CTAs */

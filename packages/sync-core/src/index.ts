@@ -66,11 +66,7 @@ export { extractErrorMessage } from './error.util';
 export { WebCryptoNotAvailableError } from './web-crypto-error';
 
 // Full-state operation classification helper. Hosts supply their own op strings.
-export {
-  FULL_STATE_OP_TYPES,
-  createFullStateOpTypeHelpers,
-  isFullStateOpType,
-} from './full-state-op-types';
+export { createFullStateOpTypeHelpers } from './full-state-op-types';
 export type { FullStateOpTypeHelpers } from './full-state-op-types';
 
 // LWW (Last-Writer-Wins) update action-type helpers — factory parameterized by
@@ -163,6 +159,3 @@ export type { SyncLogError, SyncLogMeta, SyncLogger } from './sync-logger';
 
 // Entity key encoding helpers.
 export { toEntityKey, parseEntityKey } from './entity-key.util';
-
-// Sync state corruption error.
-export { SyncStateCorruptedError } from './sync-state-corrupted.error';

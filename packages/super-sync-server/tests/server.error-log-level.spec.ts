@@ -13,7 +13,16 @@ vi.mock('../src/logger', () => ({
   },
 }));
 
-const { pickErrorLogLevel } = await import('../src/server');
+const { createListenOptions, pickErrorLogLevel } = await import('../src/server');
+
+describe('createListenOptions', () => {
+  it('passes the configured host and port to Fastify listen', () => {
+    expect(createListenOptions({ port: 1900, host: '::' })).toEqual({
+      port: 1900,
+      host: '::',
+    });
+  });
+});
 
 describe('pickErrorLogLevel', () => {
   describe('5xx', () => {

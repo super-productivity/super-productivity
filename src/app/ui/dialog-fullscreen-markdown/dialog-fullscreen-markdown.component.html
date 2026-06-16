@@ -39,7 +39,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBold()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate) +
+            shortcutLabels['bold'].tooltip
+          "
           aria-label="Bold"
         >
           <mat-icon>format_bold</mat-icon>
@@ -48,7 +51,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyItalic()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate) +
+            shortcutLabels['italic'].tooltip
+          "
           aria-label="Italic"
         >
           <mat-icon>format_italic</mat-icon>
@@ -57,7 +63,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyStrikethrough()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate) +
+            shortcutLabels['strikethrough'].tooltip
+          "
           aria-label="Strikethrough"
         >
           <mat-icon>strikethrough_s</mat-icon>
@@ -69,7 +78,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBulletList()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate) +
+            shortcutLabels['bullet'].tooltip
+          "
           aria-label="Bulleted list"
         >
           <mat-icon>format_list_bulleted</mat-icon>
@@ -78,7 +90,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyNumberedList()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate) +
+            shortcutLabels['numbered'].tooltip
+          "
           aria-label="Numbered list"
         >
           <mat-icon>format_list_numbered</mat-icon>
@@ -99,7 +114,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyQuote()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate) +
+            shortcutLabels['quote'].tooltip
+          "
           aria-label="Quote"
         >
           <mat-icon>format_quote</mat-icon>
@@ -108,7 +126,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onApplyInlineCode()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate) +
+            shortcutLabels['code'].tooltip
+          "
           aria-label="Inline code"
         >
           <mat-icon>code</mat-icon>
@@ -129,7 +150,10 @@
           mat-icon-button
           (mousedown)="$event.preventDefault()"
           (click)="onInsertLink()"
-          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate"
+          [matTooltip]="
+            (T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate) +
+            shortcutLabels['link'].tooltip
+          "
           aria-label="Insert link"
         >
           <mat-icon>link</mat-icon>
@@ -152,6 +176,18 @@
         >
           <mat-icon>table_chart</mat-icon>
         </button>
+
+        <span class="toolbar-divider"></span>
+
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="openShortcutsHelp()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.KEYBOARD_SHORTCUTS | translate"
+          [aria-label]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.KEYBOARD_SHORTCUTS | translate"
+        >
+          <mat-icon>keyboard</mat-icon>
+        </button>
       </div>
 
       <textarea
@@ -170,7 +206,6 @@
       #previewEl
       (click)="clickPreview($event)"
       [data]="resolvedContentData"
-      [disableSanitizer]="true"
       class="markdown-preview markdown"
     ></markdown>
   }

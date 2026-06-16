@@ -298,29 +298,29 @@ export const selectOverdueTasksWithSubTasks = createSelector(
           (!task.parentId || !overdueIdSet.has(task.parentId)) && !task.isDone,
       )
       .map((task) => {
-        return mapSubTasksToTask(task as Task, taskState) as TaskWithSubTasks;
-      })
-      .sort((a, b) => {
-        // sort all chronologically
-        if (a.dueWithTime && b.dueWithTime) {
-          return a.dueWithTime - b.dueWithTime;
-        } else if (a.dueWithTime && b.dueDay) {
-          // Use dateStrToUtcDate to avoid timezone issues
-          const bStartOfDueDay = dateStrToUtcDate(b.dueDay);
-          bStartOfDueDay.setHours(0, 0, 0, 0);
-          return a.dueWithTime - bStartOfDueDay.getTime();
-        } else if (a.dueDay && b.dueWithTime) {
-          // Use dateStrToUtcDate to avoid timezone issues
-          const aStartOfDueDay = dateStrToUtcDate(a.dueDay);
-          aStartOfDueDay.setHours(0, 0, 0, 0);
-          return aStartOfDueDay.getTime() - b.dueWithTime;
-        } else if (a.dueDay && b.dueDay) {
-          // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
-          // which is lexicographically sortable. This avoids timezone conversion issues.
-          return a.dueDay.localeCompare(b.dueDay);
+        // Pre-compute a chronological sort key so the comparator stays allocation-free
+        // (parsing dueDay inside .sort() costs O(n log n) Date objects).
+        // dueWithTime takes priority over dueDay; dueDay counts as start of that day.
+        // Use dateStrToUtcDate to avoid timezone issues.
+        let sortKey = 0;
+        if (task.dueWithTime) {
+          sortKey = task.dueWithTime;
+        } else if (task.dueDay) {
+          const startOfDueDay = dateStrToUtcDate(task.dueDay);
+          startOfDueDay.setHours(0, 0, 0, 0);
+          const startOfDueDayMs = startOfDueDay.getTime();
+          // A calendar-invalid dueDay (e.g. 2024-02-30 passes the lexical isDBDateStr
+          // guard in selectOverdueTasks) parses to NaN, which would poison the sort
+          // comparator; pin such tasks to the front instead.
+          sortKey = Number.isNaN(startOfDueDayMs) ? 0 : startOfDueDayMs;
         }
-        return 0;
-      });
+        return {
+          task: mapSubTasksToTask(task as Task, taskState) as TaskWithSubTasks,
+          sortKey,
+        };
+      })
+      .sort((a, b) => a.sortKey - b.sortKey)
+      .map((t) => t.task);
   },
 );
 

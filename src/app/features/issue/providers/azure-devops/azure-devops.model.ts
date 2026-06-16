@@ -6,4 +6,5 @@ export interface AzureDevOpsCfg extends BaseIssueProviderCfg {
   organization: string | null;
   project: string | null;
   scope: 'all' | 'created-by-me' | 'assigned-to-me';
+  autoImportLimit?: number;
 }

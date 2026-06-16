@@ -87,11 +87,14 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    * 3. Deferred actions (buffered during sync, processed later by processDeferredActions)
    *
    * Note: We do NOT filter by `isApplyingRemoteOps()` here because of a race
-   * condition: the meta-reducer may enqueue an action before sync starts, but
-   * the effect processes it after sync starts. Filtering by isApplyingRemoteOps
-   * would skip the action while its queue entry remains, causing flushPendingWrites
-   * to time out. Instead, we use isDeferredAction() which precisely identifies
-   * actions that were buffered (not enqueued) by the meta-reducer.
+   * condition: the meta-reducer may capture (increment the pending counter for)
+   * an action before sync starts, but the effect processes it after sync starts.
+   * Filtering by isApplyingRemoteOps would skip the action while its pending
+   * count stays elevated, causing flushPendingWrites to time out. Instead, we use
+   * isDeferredAction() — a stable, per-action property decided at meta-reducer
+   * time — which precisely identifies actions that were buffered (not counted) by
+   * the meta-reducer. This keeps the increment set (meta-reducer) and the
+   * decrement set (this effect) identical, so the counter always balances.
    */
   persistOperation$ = createEffect(
     () =>
@@ -102,15 +105,56 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
             !action.meta.isRemote &&
             !isDeferredAction(action),
         ),
-        // Use concatMap for sequential processing to maintain FIFO queue order
-        concatMap((action) => this.writeOperation(action)),
+        // concatMap for sequential, ordered processing (one write at a time).
+        concatMap((action) => this.writeOperationFromEffect(action)),
       ),
     { dispatch: false },
   );
 
+  /**
+   * Effect-path wrapper around {@link writeOperation}.
+   *
+   * #8306: a thrown write (e.g. a `LockAcquisitionTimeoutError`) must NOT error
+   * the `persistOperation$` stream. If it did, `concatMap` would tear down and
+   * silently drop every action buffered behind it, no snackbar would fire for
+   * them, and after NgRx's default 10 resubscribes the effect would die until
+   * reload. So we catch here — `writeOperation` already surfaced the failure to
+   * the user via a sticky snackbar — and the stream lives on.
+   *
+   * The `finally` decrements the pending counter exactly once per dispatched
+   * action, regardless of success, failure, or internal quota-retry recursion.
+   * This is what frees `flushPendingWrites()`: the counter cannot leak even when
+   * the write throws (the structural fix for the #8306 flush wedge).
+   *
+   * NOTE: the deferred-action path (`processDeferredActions` → `writeOperation`)
+   * deliberately does NOT go through here — it keeps `writeOperation`'s throw so
+   * its own retry loop can react (#7700), and its actions were never counted.
+   */
+  private async writeOperationFromEffect(action: PersistentAction): Promise<void> {
+    try {
+      await this.writeOperation(action);
+    } catch (e) {
+      // Already surfaced to the user inside writeOperation; swallow so the
+      // shared effect stream is never torn down by a single failed write.
+      OpLog.err('OperationLogEffects: persist failed (handled; stream preserved)', e);
+    } finally {
+      this.operationCaptureService.decrementPending();
+    }
+  }
+
+  /**
+   * Persists a single action as an operation.
+   *
+   * @param isDeferredWrite when true, the action was buffered during the sync
+   *   window and is being flushed by `processDeferredActions`. Deferred writes
+   *   emit `entityChanges: []` (matching the pre-counter behaviour — deferred
+   *   actions were never run through the extractor) and are NOT tracked by the
+   *   pending counter (they were never incremented). Throws on lock timeout so
+   *   the deferred retry loop can react (#7700).
+   */
   private async writeOperation(
     action: PersistentAction,
-    skipDequeue = false,
+    isDeferredWrite = false,
     options: WriteOperationOptions = {},
   ): Promise<void> {
     const operationTimestamp = Date.now();
@@ -130,10 +174,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         (id: unknown) => id && typeof id === 'string' && (id as string).trim().length > 0,
       );
     if (!isBulkAllOperation && !hasValidEntityId && !hasValidEntityIds) {
-      // IMPORTANT: Dequeue first to prevent queue from getting stuck
-      if (!skipDequeue) {
-        this.operationCaptureService.dequeue();
-      }
+      // No queue bookkeeping needed here: the effect wrapper's `finally`
+      // decrements the pending counter for this action even on early return.
       devError(
         `[OperationLogEffects] Action ${action.type} has invalid entityId/entityIds (${action.meta.entityId}) - skipping persistence`,
       );
@@ -175,12 +217,15 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // cache, so Tab B's cache could be stale if Tab A wrote while Tab B was waiting.
         this.opLogStore.clearVectorClockCache();
 
-        // Get entity changes from the FIFO queue (for TIME_TRACKING and TASK time sync)
-        // For most actions, this returns empty array since action payloads are sufficient.
-        // IMPORTANT: This MUST happen inside the lock to prevent race with flushPendingWrites.
-        // Deferred actions skip dequeue because the meta-reducer buffers them without
-        // enqueueing — there's no matching queue entry to dequeue.
-        const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
+        // Compute entity changes from the action (for TIME_TRACKING and TASK time
+        // sync; empty array for everything else, where the action payload suffices).
+        // extractEntityChanges is a pure function of the action, so it is safe to
+        // call here and idempotent across the quota-retry path. Deferred writes
+        // emit [] to preserve the pre-counter behaviour (they were buffered without
+        // being run through the extractor).
+        const entityChanges = isDeferredWrite
+          ? []
+          : this.operationCaptureService.extractEntityChanges(action);
 
         const actionPayload = this.addReplayDateFieldsToActionPayload(
           action,
@@ -294,14 +339,12 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
       if (options.callerHoldsOperationLogLock) {
         await writeInsideOperationLogLock();
       } else {
-        // CRITICAL: Acquire lock BEFORE dequeuing to prevent race condition with flushPendingWrites().
-        // Previously, dequeue happened before lock acquisition, which caused a race:
-        // 1. dequeue() runs, queue becomes 0
-        // 2. flushPendingWrites() polls, sees queue = 0, tries to acquire lock
-        // 3. If flush wins the lock, it returns before this effect writes to IndexedDB
-        // 4. Sync uploads with "No pending operations" even though operations were dispatched
-        //
-        // By acquiring the lock first, flushPendingWrites() must wait for us to finish writing.
+        // The pending counter is only decremented by the effect wrapper's
+        // `finally`, which runs AFTER this request resolves (i.e. after the
+        // IndexedDB write committed and the lock was released). So the count
+        // cannot reach 0 before the write is durable, and flushPendingWrites()
+        // (phase 1 polls the count, phase 2 re-acquires this lock) can never
+        // report "all flushed" while a write is still pending or in flight.
         await this.lockService.request(
           LOCK_NAMES.OPERATION_LOG,
           writeInsideOperationLogLock,
@@ -313,11 +356,14 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
       if (e instanceof LockAcquisitionTimeoutError) {
         // #7700: do NOT silently swallow lock timeouts. Pre-fix, a reentrant
         // sp_op_log timeout was caught here, the user got a snackbar, and the
-        // deferred action vanished from the op log. Re-throw after notifying so
-        // processDeferredActions's retry loop retries and persistOperation$'s
-        // concatMap surfaces the failure upstream. Defense in depth: even if a
-        // future caller forgets to pass callerHoldsOperationLogLock, the bug is
+        // deferred action vanished from the op log. Notify, then re-throw so
+        // processDeferredActions's retry loop retries. Defense in depth: even
+        // if a future caller forgets callerHoldsOperationLogLock, the bug is
         // loud instead of silent.
+        //
+        // #8306: the effect path catches this throw in writeOperationFromEffect
+        // — the shared persistOperation$ stream must NOT be torn down by one
+        // failed write — while still showing the sticky snackbar below.
         this.notifyUserAndTriggerRollback();
         throw e;
       }
@@ -329,7 +375,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
           );
           this.notifyUserAndTriggerRollback();
         } else {
-          await this.handleQuotaExceeded(action, skipDequeue, options);
+          await this.handleQuotaExceeded(action, isDeferredWrite, options);
         }
       } else {
         this.notifyUserAndTriggerRollback();
@@ -455,7 +501,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    */
   private async handleQuotaExceeded(
     action: PersistentAction,
-    skipDequeue = false,
+    isDeferredWrite = false,
     options: WriteOperationOptions = {},
   ): Promise<void> {
     OpLog.err(
@@ -487,8 +533,12 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         try {
           // Set circuit breaker before retry to prevent recursive handling
           this.isHandlingQuotaExceeded = true;
-          // Retry the failed operation after compaction freed space
-          await this.writeOperation(action, skipDequeue, options);
+          // Retry the failed operation after compaction freed space.
+          // #8307 (structural): there is no longer a positional dequeue to
+          // double-consume — entityChanges is recomputed by the pure, idempotent
+          // extractEntityChanges() inside writeOperation, so the retry simply
+          // re-extracts the same changes. Pass isDeferredWrite through unchanged.
+          await this.writeOperation(action, isDeferredWrite, options);
           this.snackService.open({
             type: 'SUCCESS',
             msg: T.F.SYNC.S.STORAGE_RECOVERED_AFTER_COMPACTION,
@@ -569,7 +619,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-          // skipDequeue=true: deferred actions were buffered, not enqueued
+          // isDeferredWrite=true: deferred actions were buffered (never counted),
+          // emit entityChanges: [], and keep writeOperation's throw so this retry
+          // loop can react.
           await this.writeOperation(action, true, options);
           success = true;
           break;

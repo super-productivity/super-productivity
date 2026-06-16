@@ -178,6 +178,14 @@ export class SelectTaskComponent {
     }
   }
 
+  // Seeds the input with a plain text value (e.g. a new-task title typed in a
+  // previous instance), so recreating the component doesn't drop typed text.
+  @Input() set initialTitle(title: string | undefined) {
+    if (title && !this.taskSelectCtrl.value) {
+      this.taskSelectCtrl.setValue(title);
+    }
+  }
+
   displayWith(task?: Task): string | undefined {
     // NOTE: apparently task can be undefined for displayWith
     return task?.title;

@@ -31,8 +31,63 @@ describe('OperationCaptureService', () => {
     service.clear();
   });
 
-  describe('enqueue and dequeue', () => {
-    it('should enqueue and dequeue empty entityChanges for regular actions', () => {
+  describe('pending counter', () => {
+    it('should start at zero', () => {
+      expect(service.getPendingCount()).toBe(0);
+    });
+
+    it('should increment on capture and decrement on processing', () => {
+      const action = createPersistentAction('[Task] Update Task', 'TASK', 'task-1');
+
+      service.incrementPending(action);
+      expect(service.getPendingCount()).toBe(1);
+
+      service.decrementPending();
+      expect(service.getPendingCount()).toBe(0);
+    });
+
+    it('should track multiple pending operations', () => {
+      const action = createPersistentAction('[Task] Update', 'TASK');
+
+      service.incrementPending(action);
+      service.incrementPending(action);
+      service.incrementPending(action);
+      expect(service.getPendingCount()).toBe(3);
+
+      service.decrementPending();
+      expect(service.getPendingCount()).toBe(2);
+
+      service.decrementPending();
+      service.decrementPending();
+      expect(service.getPendingCount()).toBe(0);
+    });
+
+    it('should clamp at zero on underflow (decrement without matching increment)', () => {
+      // Degenerate window: a decrement arrives with nothing pending. The counter
+      // must stay at 0 so the flush signal never goes negative.
+      service.decrementPending();
+      expect(service.getPendingCount()).toBe(0);
+
+      const action = createPersistentAction('[Task] Update', 'TASK');
+      service.incrementPending(action);
+      service.decrementPending();
+      service.decrementPending();
+      expect(service.getPendingCount()).toBe(0);
+    });
+
+    it('should reset the counter on clear', () => {
+      const action = createPersistentAction('[Task] Update', 'TASK');
+      service.incrementPending(action);
+      service.incrementPending(action);
+      expect(service.getPendingCount()).toBe(2);
+
+      service.clear();
+      expect(service.getPendingCount()).toBe(0);
+    });
+  });
+
+  describe('extractEntityChanges', () => {
+    it('should return empty entityChanges for regular actions', () => {
       const action = createPersistentAction(
         '[Task] Update Task',
         'TASK',
@@ -40,53 +95,27 @@ describe('OperationCaptureService', () => {
         OpType.Update,
       );
 
-      service.enqueue(action);
-      expect(service.getQueueSize()).toBe(1);
-
-      const changes = service.dequeue();
-      expect(changes).toEqual([]);
-      expect(service.getQueueSize()).toBe(0);
+      expect(service.extractEntityChanges(action)).toEqual([]);
     });
 
-    it('should maintain FIFO order', () => {
-      const action1 = createPersistentAction(
-        '[Task] Add Task',
-        'TASK',
-        'task-1',
-        OpType.Create,
-      );
-      const action2 = createPersistentAction(
-        '[Task] Update Task',
-        'TASK',
-        'task-2',
-        OpType.Update,
-      );
-      const action3 = createPersistentAction(
-        '[Task] Delete Task',
-        'TASK',
-        'task-3',
-        OpType.Delete,
-      );
+    it('should be a pure function (idempotent across repeated calls)', () => {
+      const action = {
+        type: '[TimeTracking] Sync Time Tracking',
+        contextType: 'PROJECT',
+        contextId: 'project-1',
+        date: '2024-01-15',
+        data: { workedMs: 3600000 },
+        meta: {
+          isPersistent: true,
+          entityType: 'TIME_TRACKING' as EntityType,
+          entityId: 'time-1',
+          opType: OpType.Update,
+        },
+      } as PersistentAction;
 
-      service.enqueue(action1);
-      service.enqueue(action2);
-      service.enqueue(action3);
-
-      expect(service.getQueueSize()).toBe(3);
-
-      service.dequeue();
-      expect(service.getQueueSize()).toBe(2);
-
-      service.dequeue();
-      expect(service.getQueueSize()).toBe(1);
-
-      service.dequeue();
-      expect(service.getQueueSize()).toBe(0);
-    });
-
-    it('should return empty array when dequeue from empty queue', () => {
-      const changes = service.dequeue();
-      expect(changes).toEqual([]);
+      const first = service.extractEntityChanges(action);
+      const second = service.extractEntityChanges(action);
+      expect(first).toEqual(second);
     });
   });
 
@@ -106,8 +135,7 @@ describe('OperationCaptureService', () => {
         },
       } as PersistentAction;
 
-      service.enqueue(action);
-      const changes = service.dequeue();
+      const changes = service.extractEntityChanges(action);
 
       expect(changes.length).toBe(1);
       expect(changes[0].entityType).toBe('TIME_TRACKING');
@@ -135,8 +163,7 @@ describe('OperationCaptureService', () => {
         },
       } as PersistentAction;
 
-      service.enqueue(action);
-      const changes = service.dequeue();
+      const changes = service.extractEntityChanges(action);
 
       expect(changes.length).toBe(1);
       expect(changes[0].entityType).toBe('TIME_TRACKING');
@@ -156,8 +183,7 @@ describe('OperationCaptureService', () => {
         },
       } as PersistentAction;
 
-      service.enqueue(action);
-      const changes = service.dequeue();
+      const changes = service.extractEntityChanges(action);
 
       expect(changes).toEqual([]);
     });
@@ -179,8 +205,7 @@ describe('OperationCaptureService', () => {
         },
       } as PersistentAction;
 
-      service.enqueue(action);
-      const changes = service.dequeue();
+      const changes = service.extractEntityChanges(action);
 
       expect(changes.length).toBe(1);
       expect(changes[0].entityType).toBe('TASK');
@@ -209,61 +234,10 @@ describe('OperationCaptureService', () => {
         },
       } as PersistentAction;
 
-      service.enqueue(action);
-      const changes = service.dequeue();
+      const changes = service.extractEntityChanges(action);
 
       // Should return empty - not captured as syncTimeSpent
       expect(changes).toEqual([]);
-    });
-  });
-
-  describe('queue management', () => {
-    it('should track queue size correctly', () => {
-      expect(service.getQueueSize()).toBe(0);
-
-      const action = createPersistentAction('[Task] Update', 'TASK');
-      service.enqueue(action);
-      expect(service.getQueueSize()).toBe(1);
-
-      service.enqueue(action);
-      expect(service.getQueueSize()).toBe(2);
-
-      service.dequeue();
-      expect(service.getQueueSize()).toBe(1);
-    });
-
-    it('should clear all queued operations', () => {
-      const action = createPersistentAction('[Task] Update', 'TASK');
-      service.enqueue(action);
-      service.enqueue(action);
-      expect(service.getQueueSize()).toBe(2);
-
-      service.clear();
-      expect(service.getQueueSize()).toBe(0);
-    });
-
-    it('should peek at pending operations without removing them', () => {
-      // TIME_TRACKING action to generate actual entity changes
-      const action = {
-        type: '[TimeTracking] Sync',
-        contextType: 'PROJECT',
-        contextId: 'p1',
-        date: '2024-01-15',
-        data: {},
-        meta: {
-          isPersistent: true,
-          entityType: 'TIME_TRACKING' as EntityType,
-          entityId: 'time-1',
-          opType: OpType.Update,
-        },
-      } as PersistentAction;
-
-      service.enqueue(action);
-      expect(service.getQueueSize()).toBe(1);
-
-      const pending = service.peekPendingOperations();
-      expect(pending.length).toBe(1);
-      expect(service.getQueueSize()).toBe(1); // Still in queue
     });
   });
 });

@@ -9,12 +9,12 @@
   }
 
   @if (isEmoji()) {
-    <span
+    <mat-icon
       class="menu-icon-emoji"
       [style.color]="color()"
     >
       {{ effectiveIcon() }}
-    </span>
+    </mat-icon>
   } @else {
     <mat-icon
       class="option-main-icon"

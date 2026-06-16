@@ -6,6 +6,10 @@
 let audioContext: AudioContext | null = null;
 const audioBufferCache = new Map<string, AudioBuffer>();
 let unlocked = false;
+// Whether something still needs the context running while the app is backgrounded
+// (e.g. focus-mode white noise). While set, suspendAudioContext() is a no-op so
+// the ongoing sound is not cut off. See setAudioContextKeepAwake().
+let keepAwake = false;
 
 /**
  * Returns the singleton AudioContext instance, creating it if necessary.
@@ -94,6 +98,37 @@ export const playBuffer = async (
 };
 
 /**
+ * Marks (or clears) a need to keep the AudioContext running even while the app is
+ * backgrounded. Used by long-lived background audio such as the focus-mode white
+ * noise so that suspendAudioContext() does not cut it off mid-playback.
+ *
+ * Single-owner: white noise is currently the only caller. If a second long-lived
+ * background sound is ever added, replace this boolean with a reference count so
+ * one source clearing the flag cannot release another's.
+ */
+export const setAudioContextKeepAwake = (keep: boolean): void => {
+  keepAwake = keep;
+};
+
+/**
+ * Suspends the singleton AudioContext to release the underlying audio output
+ * stream. On Android a `running` AudioContext keeps an AudioTrack open in the
+ * audio HAL even while completely silent — which drains the battery around the
+ * clock and keeps the process alive in the background (issue #8243). Suspending
+ * releases that stream; the next playback resumes it via ensureAudioContextRunning().
+ *
+ * No-op when the context was never created, is already suspended, or something
+ * still needs it running (see setAudioContextKeepAwake).
+ */
+export const suspendAudioContext = (): void => {
+  if (!keepAwake && audioContext && audioContext.state === 'running') {
+    // suspend() returns a promise; the release begins immediately so we don't
+    // await it. Swallow errors — the context may already be closing.
+    void audioContext.suspend().catch(() => {});
+  }
+};
+
+/**
  * Registers one-time touchend/click listeners that create and resume the AudioContext
  * on the first user gesture. This is required on iOS where AudioContext can only be
  * unlocked from within a user gesture event handler.
@@ -137,4 +172,5 @@ export const closeAudioContext = (): void => {
   }
   audioBufferCache.clear();
   unlocked = false;
+  keepAwake = false;
 };

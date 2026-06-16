@@ -3,18 +3,20 @@ import { nanoid } from 'nanoid';
 import { ChromeExtensionInterfaceService } from '../../../../core/chrome-extension-interface/chrome-extension-interface.service';
 import {
   JIRA_ADDITIONAL_ISSUE_FIELDS,
+  JIRA_MAX_AUTO_IMPORT_PAGES,
   JIRA_MAX_RESULTS,
   JIRA_REQUEST_TIMEOUT_DURATION,
 } from './jira.const';
 import {
   mapIssueResponse,
-  mapIssuesResponse,
   mapResponse,
   mapToSearchResults,
   mapToSearchResultsForJQL,
   mapTransitionResponse,
 } from './jira-issue-map.util';
 import {
+  JiraApiEnvelope,
+  JiraIssueOriginal,
   JiraOriginalStatus,
   JiraOriginalTransition,
   JiraOriginalUser,
@@ -30,6 +32,7 @@ import {
   concatMap,
   finalize,
   first,
+  map,
   mapTo,
   shareReplay,
   take,
@@ -84,6 +87,15 @@ interface JiraRequestCfg {
   transform?: (res: any, jiraCfg: JiraCfg) => unknown;
   body?: Record<string, unknown>;
 }
+
+type JiraIssueSearchResponse = {
+  issues: JiraIssueOriginal[];
+  maxResults?: number;
+  startAt?: number;
+  total?: number;
+  isLast?: boolean;
+  nextPageToken?: string;
+};
 
 @Injectable({
   providedIn: 'root',
@@ -232,33 +244,27 @@ export class JiraApiService {
       });
     }
 
-    return this._sendRequest$({
-      jiraReqCfg: {
-        transform: mapIssuesResponse,
-        pathname: 'search/jql',
-        method: 'POST',
-        body: {
-          ...options,
-          jql: searchQuery,
-        },
-      },
+    return this._fetchAllJiraSearchPages$({
       cfg,
+      pathname: 'search/jql',
+      body: {
+        ...options,
+        jql: searchQuery,
+      },
+      isCloudJqlSearch: true,
       suppressErrorSnack: true,
     }).pipe(
       catchError((err) => {
         const code = extractHttpStatus(err);
         if (code === 401 || code === 403) return throwError(() => err);
         // Fallback for Server/DC: POST /search with jql in body
-        return this._sendRequest$({
-          jiraReqCfg: {
-            transform: mapIssuesResponse,
-            pathname: 'search',
-            method: 'POST',
-            body: { ...options, jql: searchQuery },
-          },
+        return this._fetchAllJiraSearchPages$({
           cfg,
+          pathname: 'search',
+          body: { ...options, jql: searchQuery },
         });
       }),
+      map((issues) => issues.map((issue) => mapIssueResponse({ response: issue }, cfg))),
     ) as Observable<JiraIssueReduced[]>;
   }
 
@@ -390,6 +396,160 @@ export class JiraApiService {
   // Complex Functions
 
   // --------
+  private _fetchAllJiraSearchPages$({
+    cfg,
+    pathname,
+    body,
+    isCloudJqlSearch = false,
+    suppressErrorSnack = false,
+  }: {
+    cfg: JiraCfg;
+    pathname: string;
+    body: Record<string, unknown>;
+    isCloudJqlSearch?: boolean;
+    suppressErrorSnack?: boolean;
+  }): Observable<JiraIssueOriginal[]> {
+    return this._fetchJiraSearchPage$({
+      cfg,
+      pathname,
+      body,
+      suppressErrorSnack,
+    }).pipe(
+      concatMap((firstPage) => {
+        return this._fetchRemainingJiraSearchPages$({
+          cfg,
+          pathname,
+          baseBody: body,
+          previousPage: firstPage,
+          isCloudJqlSearch,
+          suppressErrorSnack,
+          fetchedPages: 1,
+        }).pipe(map((issues) => [...(firstPage.issues || []), ...issues]));
+      }),
+    );
+  }
+
+  private _fetchRemainingJiraSearchPages$({
+    cfg,
+    pathname,
+    baseBody,
+    previousPage,
+    isCloudJqlSearch,
+    suppressErrorSnack,
+    fetchedPages,
+  }: {
+    cfg: JiraCfg;
+    pathname: string;
+    baseBody: Record<string, unknown>;
+    previousPage: JiraIssueSearchResponse;
+    isCloudJqlSearch: boolean;
+    suppressErrorSnack: boolean;
+    fetchedPages: number;
+  }): Observable<JiraIssueOriginal[]> {
+    if (fetchedPages >= JIRA_MAX_AUTO_IMPORT_PAGES) {
+      return of([]);
+    }
+
+    const nextPageBody = this._getNextJiraSearchPageBody({
+      previousPage,
+      baseBody,
+      isCloudJqlSearch,
+    });
+
+    if (!nextPageBody) {
+      return of([]);
+    }
+
+    return this._fetchJiraSearchPage$({
+      cfg,
+      pathname,
+      body: nextPageBody,
+      suppressErrorSnack,
+    }).pipe(
+      concatMap((page) =>
+        this._fetchRemainingJiraSearchPages$({
+          cfg,
+          pathname,
+          baseBody,
+          previousPage: page,
+          isCloudJqlSearch,
+          suppressErrorSnack,
+          fetchedPages: fetchedPages + 1,
+        }).pipe(map((issues) => [...(page.issues || []), ...issues])),
+      ),
+    );
+  }
+
+  private _fetchJiraSearchPage$({
+    cfg,
+    pathname,
+    body,
+    suppressErrorSnack,
+  }: {
+    cfg: JiraCfg;
+    pathname: string;
+    body: Record<string, unknown>;
+    suppressErrorSnack: boolean;
+  }): Observable<JiraIssueSearchResponse> {
+    return this._sendRequest$({
+      jiraReqCfg: {
+        pathname,
+        method: 'POST',
+        body,
+      },
+      cfg,
+      suppressErrorSnack,
+    }).pipe(
+      map(
+        (res) =>
+          ((res as JiraApiEnvelope<JiraIssueSearchResponse>).response ||
+            {}) as JiraIssueSearchResponse,
+      ),
+    );
+  }
+
+  private _getNextJiraSearchPageBody({
+    previousPage,
+    baseBody,
+    isCloudJqlSearch,
+  }: {
+    previousPage: JiraIssueSearchResponse;
+    baseBody: Record<string, unknown>;
+    isCloudJqlSearch: boolean;
+  }): Record<string, unknown> | null {
+    const maxResults =
+      typeof previousPage.maxResults === 'number'
+        ? previousPage.maxResults
+        : (baseBody.maxResults as number | undefined);
+    const issueCount = previousPage.issues?.length || 0;
+    const pageSize = Math.max(maxResults || issueCount || JIRA_MAX_RESULTS, 1);
+
+    if (isCloudJqlSearch) {
+      return previousPage.nextPageToken
+        ? {
+            ...baseBody,
+            nextPageToken: previousPage.nextPageToken,
+          }
+        : null;
+    }
+
+    if (
+      previousPage.total === undefined ||
+      previousPage.startAt === undefined ||
+      issueCount === 0
+    ) {
+      return null;
+    }
+
+    const startAt = previousPage.startAt + pageSize;
+    return startAt < previousPage.total
+      ? {
+          ...baseBody,
+          startAt,
+        }
+      : null;
+  }
+
   private _isInterfacesReadyIfNeeded$(cfg: JiraCfg): Observable<boolean> {
     if (IS_ELECTRON || IS_ANDROID_WEB_VIEW || cfg.allowFetchFallback) {
       return of(true);

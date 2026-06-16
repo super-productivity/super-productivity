@@ -74,6 +74,7 @@ describe('ScheduleComponent', () => {
       [
         'hasEventUrl',
         'isPluginEvent',
+        'canMoveEvent',
         'openEventLink',
         'reschedule',
         'createAsTask',

@@ -45,6 +45,7 @@ import {
 } from '../../plugins/plugin-persistence.model';
 import { AppDataComplete } from '../model/model-config';
 import { OpLog } from '../../core/log';
+import { migrateLegacyTaskRemindersIntoTasks } from '../../features/reminder/migrate-legacy-task-reminders.util';
 
 const LEGACY_INBOX_PROJECT_ID = 'INBOX' as const;
 
@@ -93,6 +94,9 @@ export const migrateLegacyBackup = (
 
   // === Migration 4: plannedAt → dueWithTime, remove TODAY_TAG from tagIds ===
   data = _migration4TaskDateTimeFields(data);
+
+  // === Legacy reminders: reminders[] + task.reminderId → task.remindAt ===
+  data = _migrationLegacyTaskReminders(data);
 
   // === Migration 4.1: Remove TODAY_TAG from task repeat configs ===
   data = _migration41RepeatCfgTodayTag(data);
@@ -590,6 +594,16 @@ function _migrateTasksForMigration4(taskState: any): void {
       task.tagIds = task.tagIds.filter((v: string) => v !== TODAY_TAG.id);
     }
   }
+}
+
+function _migrationLegacyTaskReminders(data: Record<string, any>): Record<string, any> {
+  if (!Array.isArray(data.reminders) || !data.task?.entities) {
+    return data;
+  }
+
+  migrateLegacyTaskRemindersIntoTasks(data.task, data.reminders);
+  data.reminders = [];
+  return data;
 }
 
 // ---------------------------------------------------------------------------

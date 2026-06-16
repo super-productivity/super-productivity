@@ -125,22 +125,83 @@ describe('FormlyImageInputComponent', () => {
     });
   });
 
-  it('sets file url from electron dialog selection', async () => {
+  it('triggers the atomic pick+import IPC and stores image:<id>', async () => {
     (component as any).IS_ELECTRON = true;
 
-    (window as any).ea = {
-      showOpenDialog: jasmine
-        .createSpy('showOpenDialog')
-        .and.resolveTo(['/home/test/image.png']),
-      toFileUrl: jasmine
-        .createSpy('toFileUrl')
-        .and.resolveTo('file:///home/test/image.png'),
-    };
+    const imagePickAndImport = jasmine
+      .createSpy('imagePickAndImport')
+      .and.resolveTo({ id: 'a'.repeat(32), mimeType: 'image/png' });
+
+    (window as any).ea = { imagePickAndImport };
 
     const setValueSpy = spyOn(formControl, 'setValue').and.callThrough();
 
     await component.openFileExplorer();
 
-    expect(setValueSpy).toHaveBeenCalledWith('file:///home/test/image.png');
+    expect(imagePickAndImport).toHaveBeenCalledWith();
+    expect(setValueSpy).toHaveBeenCalledWith(`image:${'a'.repeat(32)}`);
+  });
+
+  it('does not pass the previous image id before the form save is durable', async () => {
+    (component as any).IS_ELECTRON = true;
+    formControl.setValue(`image:${'b'.repeat(32)}`);
+
+    const imagePickAndImport = jasmine
+      .createSpy('imagePickAndImport')
+      .and.resolveTo({ id: 'c'.repeat(32), mimeType: 'image/png' });
+    (window as any).ea = { imagePickAndImport };
+
+    await component.openFileExplorer();
+
+    expect(imagePickAndImport).toHaveBeenCalledWith();
+  });
+
+  it('shows a snack on validation failure (Error return) but not on cancel (null)', async () => {
+    (component as any).IS_ELECTRON = true;
+    const setValueSpy = spyOn(formControl, 'setValue').and.callThrough();
+
+    // Cancel: returns null, no snack, no setValue.
+    (window as any).ea = {
+      imagePickAndImport: jasmine.createSpy('imagePickAndImport').and.resolveTo(null),
+    };
+    await component.openFileExplorer();
+    expect(setValueSpy).not.toHaveBeenCalled();
+    expect(snackService.open).not.toHaveBeenCalled();
+
+    // Failure: IPC returns an Error (parity with FS handlers' contract).
+    (window as any).ea = {
+      imagePickAndImport: jasmine
+        .createSpy('imagePickAndImport')
+        .and.resolveTo(new Error('Selected image could not be imported')),
+    };
+    await component.openFileExplorer();
+    expect(setValueSpy).not.toHaveBeenCalled();
+    expect(snackService.open).toHaveBeenCalledWith({
+      msg: T.F.PROJECT.FORM_THEME.S_BACKGROUND_IMAGE_READ_ERROR,
+      type: 'ERROR',
+    });
+  });
+
+  it('blocks a second concurrent click while a pick is in flight', async () => {
+    (component as any).IS_ELECTRON = true;
+    let resolveFirst!: (v: { id: string; mimeType: string }) => void;
+    const imagePickAndImport = jasmine.createSpy('imagePickAndImport').and.callFake(
+      () =>
+        new Promise<{ id: string; mimeType: string }>((r) => {
+          resolveFirst = r;
+        }),
+    );
+    (window as any).ea = { imagePickAndImport };
+
+    const firstClick = component.openFileExplorer();
+    // Second click while the first is awaiting must be a no-op so the form
+    // does not queue multiple imports and orphan all but the last selected one.
+    await component.openFileExplorer();
+    expect(imagePickAndImport).toHaveBeenCalledTimes(1);
+    expect(component.isPickerBusy()).toBe(true);
+
+    resolveFirst({ id: 'd'.repeat(32), mimeType: 'image/png' });
+    await firstClick;
+    expect(component.isPickerBusy()).toBe(false);
   });
 });

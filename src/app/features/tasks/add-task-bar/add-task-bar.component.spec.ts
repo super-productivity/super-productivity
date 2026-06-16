@@ -396,6 +396,97 @@ describe('AddTaskBarComponent', () => {
       expect(taskData.deadlineWithTime).toBe(expectedTimestamp);
       expect(taskData.deadlineRemindAt).toBe(expectedTimestamp);
     });
+
+    it('should pass the trimmed note text as notes when a note is entered', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      component.stateService.noteTxt.set('  remember the oat milk  ');
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.notes).toBe('remember the oat milk');
+    });
+
+    it('should not set notes when the note is empty or whitespace', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      component.stateService.noteTxt.set('   ');
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.notes).toBeUndefined();
+    });
+  });
+
+  describe('note panel', () => {
+    it('toggleNote should flip the expanded state', () => {
+      // focusInput re-focuses the title input, which tries to open the
+      // autocomplete in the test harness — irrelevant to this assertion.
+      spyOn(component, 'focusInput');
+      expect(component.stateService.isNoteExpanded()).toBe(false);
+
+      component.toggleNote();
+      expect(component.stateService.isNoteExpanded()).toBe(true);
+
+      component.toggleNote();
+      expect(component.stateService.isNoteExpanded()).toBe(false);
+    });
+
+    it('Ctrl+Enter on the title input expands the note without adding a task', () => {
+      const addTaskSpy = spyOn(component, 'addTask');
+
+      component.onInputKeydown(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }),
+      );
+
+      expect(component.stateService.isNoteExpanded()).toBe(true);
+      expect(addTaskSpy).not.toHaveBeenCalled();
+    });
+
+    it('Ctrl+Enter inside the note submits the task', () => {
+      const addTaskSpy = spyOn(component, 'addTask');
+
+      component.onNoteKeydown(
+        new KeyboardEvent('keydown', { key: 'Enter', metaKey: true }),
+      );
+
+      expect(addTaskSpy).toHaveBeenCalled();
+    });
+
+    it('Escape inside the note collapses it instead of submitting', () => {
+      const addTaskSpy = spyOn(component, 'addTask');
+      spyOn(component, 'focusInput');
+      component.stateService.isNoteExpanded.set(true);
+
+      component.onNoteKeydown(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+      expect(component.stateService.isNoteExpanded()).toBe(false);
+      expect(addTaskSpy).not.toHaveBeenCalled();
+    });
+
+    it('typing in the note textarea writes back to noteTxt (two-way bind)', () => {
+      component.stateService.isNoteExpanded.set(true);
+      fixture.detectChanges();
+
+      const textarea = fixture.nativeElement.querySelector(
+        'textarea.note-input',
+      ) as HTMLTextAreaElement;
+      expect(textarea).toBeTruthy();
+
+      textarea.value = 'a multi\nline note';
+      textarea.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      expect(component.stateService.noteTxt()).toBe('a multi\nline note');
+    });
   });
 
   describe('defaultProject$ observable', () => {

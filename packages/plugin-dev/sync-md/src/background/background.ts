@@ -8,10 +8,12 @@ initUiBridge();
 log.log('UI bridge initialized');
 
 // Load saved config from local storage and start sync if enabled
-const config = loadLocalConfig();
-log.log('Loaded config:', config);
+PluginAPI.onReady(() => {
+  const config = loadLocalConfig();
+  log.log('Loaded config:', config);
 
-if (config?.filePath) {
-  // Transform config to match sync-manager expectations
-  initSyncManager(config);
-}
+  if (config?.filePath) {
+    // Transform config to match sync-manager expectations
+    initSyncManager(config);
+  }
+});

@@ -204,7 +204,7 @@ export class TaskPage extends BasePage {
   async waitForTaskCount(expectedCount: number, timeout: number = 10000): Promise<void> {
     await this.page.waitForFunction(
       (args) => {
-        const currentCount = document.querySelectorAll('task').length;
+        const currentCount = document.querySelectorAll('task, planner-task').length;
         return currentCount === args.expectedCount;
       },
       { expectedCount },

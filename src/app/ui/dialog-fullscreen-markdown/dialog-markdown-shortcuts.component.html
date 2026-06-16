@@ -1,0 +1,42 @@
+<h2 mat-dialog-title>{{ T.F.NOTE.D_FULLSCREEN.SHORTCUTS.DIALOG_TITLE | translate }}</h2>
+
+<mat-dialog-content class="keyboard-shortcuts-dialog-content">
+  <table class="shortcuts-table">
+    <thead>
+      <tr>
+        <th>{{ T.F.NOTE.D_FULLSCREEN.SHORTCUTS.COLUMN_ACTION | translate }}</th>
+        <th>{{ T.F.NOTE.D_FULLSCREEN.SHORTCUTS.COLUMN_SHORTCUT | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (shortcut of MARKDOWN_SHORTCUTS; track shortcut.name) {
+        <tr>
+          <td class="action-name">
+            {{ 'F.NOTE.D_FULLSCREEN.TOOLBAR.' + shortcut.translationKey | translate }}
+          </td>
+          <td class="shortcut-cell">
+            @for (
+              key of shortcutLabels[shortcut.name].keys;
+              track $index;
+              let last = $last
+            ) {
+              <span class="shortcut-key">{{ key }}</span>
+              @if (!last) {
+                +
+              }
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    mat-dialog-close
+  >
+    {{ T.G.CLOSE | translate }}
+  </button>
+</mat-dialog-actions>

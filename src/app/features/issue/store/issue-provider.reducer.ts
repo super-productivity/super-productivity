@@ -75,6 +75,51 @@ export const issueProviderReducer = createReducer(
           },
         } as unknown as IssueProvider;
       }
+
+      // Migrate pre-plugin GITEA providers to plugin shape
+      if (
+        provider &&
+        provider['issueProviderKey'] === 'GITEA' &&
+        !provider['pluginConfig']
+      ) {
+        needsMigration = true;
+        // TODO: Remove legacy field preservation after a few releases.
+        // Spread original provider so legacy fields (host, token, etc.) survive
+        // for older clients that haven't upgraded yet.
+        migratedEntities[id] = {
+          ...provider,
+          pluginId: 'gitea-issue-provider',
+          pluginConfig: {
+            host: provider['host'] ?? '',
+            token: provider['token'] ?? '',
+            repoFullname: provider['repoFullname'] ?? '',
+            scope: provider['scope'] ?? 'created-by-me',
+            filterLabels: provider['filterLabels'] ?? '',
+            excludeLabels: provider['excludeLabels'] ?? '',
+          },
+        } as unknown as IssueProvider;
+      }
+
+      // Migrate pre-plugin LINEAR providers to plugin shape
+      if (
+        provider &&
+        provider['issueProviderKey'] === 'LINEAR' &&
+        !provider['pluginConfig']
+      ) {
+        needsMigration = true;
+        // TODO: Remove legacy field preservation after a few releases.
+        // Spread original provider so legacy fields (apiKey, teamId, etc.) survive
+        // for older clients that haven't upgraded yet.
+        migratedEntities[id] = {
+          ...provider,
+          pluginId: 'linear-issue-provider',
+          pluginConfig: {
+            apiKey: provider['apiKey'] ?? '',
+            teamId: provider['teamId'] ?? '',
+            projectId: provider['projectId'] ?? '',
+          },
+        } as unknown as IssueProvider;
+      }
     }
     if (!needsMigration) {
       return state;

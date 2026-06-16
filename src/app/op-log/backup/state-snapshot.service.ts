@@ -42,6 +42,16 @@ const DEFAULT_ARCHIVE: ArchiveModel = {
  * Most models are persisted via OperationLogEffects to SUP_OPS IndexedDB, so we read from NgRx.
  * Archives (archiveYoung, archiveOld) are read from SUP_OPS via ArchiveDbAdapter.
  *
+ * ## ⚠️ Returned objects share references with live NgRx state — DO NOT MUTATE
+ * Only the top-level `task` slice is shallow-copied; `project`, `tag`,
+ * `taskRepeatCfg`, every `entities` map, and all entity objects are the same
+ * references held by the store. NgRx runtime freezing is OFF in production
+ * (`src/main.ts`), so mutating a returned object silently corrupts the store
+ * (memoized selectors won't recompute; a throw before the next `loadAllData`
+ * leaves the damage in place with no op-log capture). Any consumer that needs
+ * to modify the snapshot must `structuredClone()` it first — see the #8333
+ * regression in `dataRepair()` (`op-log/validation/data-repair.ts`).
+ *
  * ## Usage
  * ```typescript
  * const snapshot = inject(StateSnapshotService);
@@ -63,6 +73,8 @@ export class StateSnapshotService {
   /**
    * Gets all sync model data from NgRx store.
    * Archives are returned with default empty values - use async version for actual archives.
+   *
+   * ⚠️ Returns live store references — never mutate (clone first). See class doc.
    */
   getStateSnapshot(): AppStateSnapshot {
     const ngRxData = this._getNgRxDataSync();
@@ -84,6 +96,8 @@ export class StateSnapshotService {
 
   /**
    * Async version that also loads archives from IndexedDB
+   *
+   * ⚠️ Returns live store references — never mutate (clone first). See class doc.
    */
   async getStateSnapshotAsync(): Promise<AppStateSnapshot> {
     const [archiveYoung, archiveOld] = await Promise.all([

@@ -20,6 +20,7 @@ import { containsEmoji, extractFirstEmoji } from '../../../util/extract-first-em
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { startWith } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Log } from '../../../core/log';
 
 @Component({
   selector: 'icon-input',
@@ -80,7 +81,7 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
           this.filteredIcons.set(icons.slice(0, 50));
         }
       } catch (error) {
-        console.error('Failed to load material icons:', error);
+        Log.err('Failed to load material icons:', error);
         this.filteredIcons.set([]);
       }
     }
@@ -123,7 +124,7 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
         this.isEmoji.set(false);
       }
     } catch (error) {
-      console.error('Failed to filter icons:', error);
+      Log.err('Failed to filter icons:', error);
       this.filteredIcons.set([]);
     }
   }

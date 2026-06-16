@@ -118,7 +118,7 @@ The validator's warning pass is **presence-only** in v1: it does not parse selec
 
 ## Forking instructions
 
-1. Pick the closest shipped theme as a starting point: `src/assets/themes/{arc,catppuccin-mocha,cybr,dark-base,dracula,everforest,glass,lines,nord-polar-night,nord-snow-storm,rainbow,velvet,zen}.css`.
+1. Pick the closest shipped theme as a starting point: `src/assets/themes/{arc,catppuccin-mocha,cybr,dark-base,dracula,everforest,glass,lines,nord-polar-night,nord-snow-storm,plainspace,rainbow,velvet,zen}.css`.
 2. Copy it to a new file. Rename `.css` to whatever you want — the picker uses the filename slug as the theme id.
 3. Edit the primitive declarations under `body` and `body.isDarkTheme`. Start with `--surface-1`, `--surface-2`, `--ink`, `--ink-on-channel`. Leave everything else default.
 4. Drop the file into Settings → Theme → "Install theme…". The file lives in IndexedDB; nothing leaves your machine.

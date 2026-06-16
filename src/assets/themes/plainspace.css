@@ -1,0 +1,405 @@
+/**
+ * Plainspace Theme for Super Productivity
+ * A warm "paper" aesthetic ported from plainspace.org: cream surfaces, a
+ * terracotta primary and a teal accent. Light and dark.
+ *
+ * Mostly colors + surfaces: the surface ladder and ink primitives drive the
+ * semantic tokens (--bg, --card-bg, --text-color, …) automatically, and the
+ * primary/accent palette ramps recolor the brand. The few non-token rules are
+ * the signature paper touches — a squared "graph paper" backdrop (reusing SP's
+ * body::before layer) and hand-drawn terracotta underlines on headings and
+ * collapsible section headers.
+ */
+
+/* ============================================================
+ * LIGHT — warm paper
+ * ============================================================ */
+body {
+  /* Surface ladder: page background → cards → raised sheets */
+  --surface-0: #e4dcc8; /* deepest: toolbars / --bg-darker */
+  --surface-1: #ece5d4; /* app background (plainspace --color-bg) */
+  --surface-2: #faf6ef; /* cards / tasks / panels (plainspace --color-surface) */
+  --surface-3: #fffaf2; /* elevated (plainspace --color-surface-raised) */
+  --surface-4: #fffdf8; /* highest: banner / mobile bottom panel */
+
+  /* Ink */
+  --ink-strong: #14110d;
+  --ink: #1f1c17; /* plainspace --color-text */
+  /* Plainspace's --color-text-secondary is #8a8275, but at ~3:1 on the cream
+     surfaces it misses WCAG AA for normal text; nudged a touch darker. */
+  --ink-muted: #746d5f;
+  /* Warm near-black triplet, so hover/focus overlays read warm not grey. */
+  --ink-on-channel: 31, 28, 23;
+
+  /* Separators & overlays */
+  --separator: #d9d2c4; /* plainspace --color-border */
+  --divider: rgba(31, 28, 23, 0.12);
+  --scrim: rgba(31, 28, 23, 0.28); /* plainspace --color-overlay */
+  --bg-overlay: rgba(255, 250, 242, 0.82);
+
+  /* Primary — terracotta (plainspace --color-primary #c87154) */
+  --palette-primary-50: #faf0eb;
+  --palette-primary-100: #f1ddd4;
+  --palette-primary-200: #e7c2b4;
+  --palette-primary-300: #dca795;
+  --palette-primary-400: #d28d75;
+  --palette-primary-500: #c87154;
+  --palette-primary-600: #b15e44;
+  --palette-primary-700: #984a35;
+  --palette-primary-800: #7e3b29;
+  --palette-primary-900: #632c1e;
+  /* dark text on the light tints, warm-white on terracotta itself */
+  --palette-primary-contrast-50: #1f1c17;
+  --palette-primary-contrast-100: #1f1c17;
+  --palette-primary-contrast-200: #1f1c17;
+  --palette-primary-contrast-300: #1f1c17;
+  --palette-primary-contrast-400: #1f1c17;
+  --palette-primary-contrast-500: #fffaf2;
+  --palette-primary-contrast-600: #fffaf2;
+  --palette-primary-contrast-700: #fffaf2;
+  --palette-primary-contrast-800: #fffaf2;
+  --palette-primary-contrast-900: #fffaf2;
+
+  /* Accent — teal (plainspace --color-accent #3f7473) */
+  --palette-accent-50: #eaf1f1;
+  --palette-accent-100: #cbdedd;
+  --palette-accent-200: #a6c4c3;
+  --palette-accent-300: #80aaa9;
+  --palette-accent-400: #5a9190;
+  --palette-accent-500: #3f7473;
+  --palette-accent-600: #356261;
+  --palette-accent-700: #2b4f4e;
+  --palette-accent-800: #213d3c;
+  --palette-accent-900: #172b2a;
+  --palette-accent-contrast-50: #1f1c17;
+  --palette-accent-contrast-100: #1f1c17;
+  --palette-accent-contrast-200: #1f1c17;
+  --palette-accent-contrast-300: #1f1c17;
+  --palette-accent-contrast-400: #fffaf2;
+  --palette-accent-contrast-500: #fffaf2;
+  --palette-accent-contrast-600: #fffaf2;
+  --palette-accent-contrast-700: #fffaf2;
+  --palette-accent-contrast-800: #fffaf2;
+  --palette-accent-contrast-900: #fffaf2;
+
+  /* Status (plainspace) */
+  --color-success: #59795f;
+  --color-warning: #b7792f;
+  --color-danger: #b3402f;
+  --c-success: #59795f;
+  --c-warning: #b7792f;
+  --c-error: #b3402f;
+}
+
+/* ============================================================
+ * DARK — warm low light
+ * ============================================================ */
+body.isDarkTheme {
+  --surface-0: #141210; /* deepest */
+  --surface-1: #1a1816; /* app background (plainspace dark --color-bg) */
+  --surface-2: #2f2a23; /* cards / tasks (plainspace dark --color-surface) */
+  --surface-3: #3a3329; /* elevated (plainspace dark --color-surface-raised) */
+  --surface-4: #473f33; /* highest (plainspace dark --color-soft) */
+
+  --ink-strong: #fffaf2;
+  --ink: #f3eee2; /* plainspace dark --color-text */
+  --ink-muted: #b6ad9c; /* plainspace dark --color-text-secondary */
+  --ink-on-channel: 243, 238, 226;
+
+  --separator: #5a5043; /* plainspace dark --color-border */
+  --divider: rgba(243, 238, 226, 0.12);
+  --scrim: rgba(10, 9, 8, 0.58);
+  --bg-overlay: rgba(20, 18, 16, 0.82);
+
+  /* Primary — terracotta (plainspace dark --color-primary #f0a07c) */
+  --palette-primary-50: #fdeee5;
+  --palette-primary-100: #fce3d7;
+  --palette-primary-200: #f9cdba;
+  --palette-primary-300: #f6b89d;
+  --palette-primary-400: #f3ac8b;
+  --palette-primary-500: #f0a07c;
+  --palette-primary-600: #e0875f;
+  --palette-primary-700: #c9714b;
+  --palette-primary-800: #a85c3c;
+  --palette-primary-900: #87492f;
+  /* The light peach shades need dark text (plainspace --color-on-primary). */
+  --palette-primary-contrast-50: #1f1c17;
+  --palette-primary-contrast-100: #1f1c17;
+  --palette-primary-contrast-200: #1f1c17;
+  --palette-primary-contrast-300: #1f1c17;
+  --palette-primary-contrast-400: #1f1c17;
+  --palette-primary-contrast-500: #1f1c17;
+  --palette-primary-contrast-600: #1f1c17;
+  --palette-primary-contrast-700: #fffaf2;
+  --palette-primary-contrast-800: #fffaf2;
+  --palette-primary-contrast-900: #fffaf2;
+
+  /* Accent — teal (plainspace dark --color-accent #8fc7c2) */
+  --palette-accent-50: #eef6f5;
+  --palette-accent-100: #e2f1ef;
+  --palette-accent-200: #cbe5e2;
+  --palette-accent-300: #b3d9d4;
+  --palette-accent-400: #a1d0cb;
+  --palette-accent-500: #8fc7c2;
+  --palette-accent-600: #79b4ae;
+  --palette-accent-700: #639c96;
+  --palette-accent-800: #4f7f7a;
+  --palette-accent-900: #3c615d;
+  --palette-accent-contrast-50: #18221f;
+  --palette-accent-contrast-100: #18221f;
+  --palette-accent-contrast-200: #18221f;
+  --palette-accent-contrast-300: #18221f;
+  --palette-accent-contrast-400: #18221f;
+  --palette-accent-contrast-500: #18221f;
+  --palette-accent-contrast-600: #18221f;
+  --palette-accent-contrast-700: #18221f;
+  --palette-accent-contrast-800: #fffaf2;
+  --palette-accent-contrast-900: #fffaf2;
+
+  /* Status (plainspace dark) */
+  --color-success: #8aae82;
+  --color-warning: #e0b977;
+  --color-danger: #f08f86;
+  --c-success: #8aae82;
+  --c-warning: #e0b977;
+  --c-error: #f08f86;
+
+  /* Warm task/subtask/note/panel surfaces.
+   * The base maps these "Category B" tokens to a cold grey ramp (--dark*) that
+   * the surface-ladder override above doesn't reach — so nested subtasks, notes
+   * and selected rows render grey against the warm paper. Re-derive them from
+   * the plainspace surface ladder: subtasks lift a step above the task card,
+   * done rows recede toward the page, selected rows sit on surface-3. */
+  --sub-task-c-bg: #352f27;
+  --sub-task-c-bg-in-selected: #443c30;
+  --sub-task-c-bg-done: #28231c;
+  --task-c-bg-done: #221e1a;
+  --task-c-selected-bg: #3a3329;
+  --selected-task-bg-color: #3a3329;
+  --standard-note-bg: #352f27;
+  --standard-note-bg-hovered: #443c30;
+  --bottom-panel-bg: #1f1b17;
+  --task-detail-bg: #2f2a23;
+  --task-detail-bg-hover: #3a3329;
+  --schedule-event-bg-in-side-panel: #3a3329;
+  --bg-slightly-lighter: #352f27;
+}
+
+/* ============================================================
+ * PAPER BACKDROP — squared "graph paper" ruling
+ * ============================================================
+ * The only always-present ambient gradient is SP's full-viewport backdrop wash
+ * at body::before (a primary-tinted radial glow). The flat paper look has no
+ * place for it, so repurpose that same layer into a faint grid. The remaining
+ * gradients in the app are all contextual — the read-only-calendar hatch and
+ * the project-complete celebration glow — and are intentionally untouched. */
+body {
+  /* Horizontal ruling slightly stronger than vertical — reads as paper, not a
+     spreadsheet. Kept visible on purpose (plainspace's own 0.018 is nearly
+     invisible; the grid is a requested feature here). */
+  --paper-grid-line: rgba(31, 28, 23, 0.04);
+  --paper-grid-line-v: rgba(31, 28, 23, 0.03);
+  --paper-grid-size: 24px;
+}
+body.isDarkTheme {
+  --paper-grid-line: rgba(243, 238, 226, 0.05);
+  --paper-grid-line-v: rgba(243, 238, 226, 0.04);
+}
+
+body.isLightTheme::before,
+body.isDarkTheme::before {
+  display: block;
+  opacity: 1;
+  background-color: transparent;
+  background-image:
+    linear-gradient(var(--paper-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-grid-line-v) 1px, transparent 1px);
+  background-size: var(--paper-grid-size) var(--paper-grid-size);
+  background-position: center top;
+}
+
+@media (max-width: 720px) {
+  body {
+    --paper-grid-size: 20px;
+  }
+}
+
+/* ============================================================
+ * PAPER TYPOGRAPHY — hand-drawn underlines
+ * ============================================================ */
+body,
+body.isDarkTheme {
+  /* Wobbly hand-drawn line used as a mask, so its ink comes from the
+     element's background-color (themeable) and the SVG is only the shape. */
+  --underline-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cpath d='M2 7 C 40 4 90 8 140 6 C 190 4 240 8 298 5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* Headings: the wobble hugs the text (fit-content + a small overshoot). */
+.page-wrapper h2,
+.page-wrapper h3 {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+.page-wrapper h2::after,
+.page-wrapper h3::after {
+  content: '';
+  position: absolute;
+  /* Overshoot the text a touch each side — wider reads more hand-drawn
+     (matches plainspace's ListCard .name underline). */
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  height: 7px;
+  background-color: var(--palette-primary-500);
+  opacity: 0.9;
+  -webkit-mask: var(--underline-hand) center / 100% 100% no-repeat;
+  mask: var(--underline-hand) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+/* Collapsible section headers: the title stays flex-grow:1 (it pushes the
+   expand chevron to the right edge), so the wobble reads as a full-width
+   hand-drawn divider under the whole header row rather than under the text. */
+.collapsible-header {
+  position: relative;
+}
+.collapsible-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 6px;
+  background-color: var(--palette-primary-500);
+  opacity: 0.45;
+  -webkit-mask: var(--underline-hand) center / 100% 100% no-repeat;
+  mask: var(--underline-hand) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+/* ============================================================
+ * PERIPHERAL SURFACES — warm the remaining cold/grey fallbacks
+ * ============================================================
+ * Tokens the base maps to neutral greys or hardcodes that the surface ladder
+ * doesn't reach: scrollbars, the schedule ruling, chip outlines, progress
+ * tracks, attachment controls, and the task-detail row hover (a cold #eeeeee
+ * in light). Re-tinted toward the warm ink/paper so nothing reads grey. */
+body {
+  --scrollbar-thumb: rgba(71, 63, 51, 0.35);
+  --scrollbar-thumb-hover: rgba(71, 63, 51, 0.6);
+  --scrollbar-track: transparent;
+  --grid-color: rgba(31, 28, 23, 0.1);
+  /* Warm the faint cold (#eee) 1px card outline so cards read on the cream. */
+  --extra-border-color: var(--separator);
+  --chip-outline-color: rgba(71, 63, 51, 0.3);
+  --progress-bg: rgba(31, 28, 23, 0.12);
+  --task-detail-bg-hover: #f1ece0;
+  --schedule-event-bg: #fffaf2; /* lift events off the same-tone card */
+  --attachment-control-bg: rgba(255, 250, 242, 0.6);
+  --attachment-control-border: rgba(255, 250, 242, 0.5);
+  --attachment-control-hover-bg: rgba(255, 250, 242, 0.92);
+  /* Warm text selection (plainspace --color-primary-soft). */
+  --plainspace-selection: rgba(200, 113, 84, 0.12);
+}
+body.isDarkTheme {
+  --scrollbar-thumb: rgba(243, 238, 226, 0.22);
+  --scrollbar-thumb-hover: rgba(243, 238, 226, 0.45);
+  --scrollbar-track: transparent;
+  --grid-color: rgba(243, 238, 226, 0.1);
+  --extra-border-color: var(--separator);
+  --chip-outline-color: rgba(243, 238, 226, 0.22);
+  --progress-bg: rgba(243, 238, 226, 0.14);
+  /* Dark counterpart of the light override above — without it dark events
+     inherit the cream (light) value from the body block and render near-white. */
+  --schedule-event-bg: #3a3329;
+  --attachment-control-bg: rgba(26, 24, 22, 0.4);
+  --attachment-control-border: rgba(26, 24, 22, 0.5);
+  --attachment-control-hover-bg: rgba(26, 24, 22, 0.85);
+  --plainspace-selection: rgba(240, 160, 124, 0.16);
+  /* Base note text is a cold #eeeeee; warm it to the paper ink. */
+  --standard-note-fg: var(--ink);
+}
+
+::selection {
+  background: var(--plainspace-selection);
+}
+
+/* Links carry the terracotta brand, like plainspace. */
+body a[href] {
+  color: var(--palette-primary-500);
+}
+
+/* The base pins the html element (iOS safe-area / overscroll gutter) to a cold
+   grey; warm it so the gutter matches the page. */
+html:has(body.isLightTheme) {
+  background: #ece5d4;
+}
+html:has(body.isDarkTheme) {
+  background: #1a1816;
+}
+
+/* ============================================================
+ * PAPER DEPTH — warm soft shadows + crisper "paper card" radii
+ * ============================================================
+ * The base uses a cool black Material shadow and 6/8/12 radii; plainspace uses
+ * a warm, soft paper shadow and tighter 3/6/8 radii. Radii and the (dark-toned,
+ * mode-independent) task shadow sit on `body` — for custom properties the
+ * nearest ancestor wins, so a body-level value beats the base's :root scale for
+ * every component. --card-shadow is split per mode (the base defines it on body,
+ * so the dark value must override explicitly). */
+body {
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  /* Warm-toned, deliberately tight (dense task lists shouldn't get muddy). */
+  --task-shadow: 0 1px 3px rgba(31, 28, 23, 0.13);
+  /* Soft "sheet of paper" lift (plainspace --shadow-paper, light). */
+  --card-shadow: 0 1px 2px rgba(31, 28, 23, 0.05), 0 6px 16px rgba(31, 28, 23, 0.07);
+}
+body.isDarkTheme {
+  /* Plainspace --shadow-paper, dark: deeper drop + a faint top catch-light. */
+  --card-shadow: 0 2px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(243, 238, 226, 0.05);
+}
+
+/* ============================================================
+ * BOARDS — squiggly line instead of panels
+ * ============================================================
+ * Board columns ship with only a faint 1px outline and no fill, so against the
+ * cream page they read as barely-there. Rather than a filled panel, delineate
+ * each column with a hand-drawn line under its header — the same wobble motif
+ * the section headers use — and drop the column's box outline entirely. The
+ * task cards keep their own surface + shadow, so the column reads as a titled
+ * list under a sketched rule. A full hand-drawn box frame is deliberately
+ * avoided: the column is an overflow:auto scroll container, so a framing pseudo
+ * would scroll away with the tasks rather than stay pinned around them. */
+board-panel {
+  /* Drop the box outline so the squiggle (below) is the only delineation. The
+     component's :host border is specificity (0,1,0), so the override needs
+     !important to win from the theme's element-level selector. */
+  border-color: transparent !important;
+}
+board-panel header {
+  position: relative;
+}
+board-panel header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  /* Taller than the heading underline: stretched across the full column width
+     the wobble flattens, so give it more vertical room to read as hand-drawn. */
+  height: 10px;
+  background-color: var(--palette-primary-500);
+  opacity: 0.9;
+  -webkit-mask: var(--underline-hand) center / 100% 100% no-repeat;
+  mask: var(--underline-hand) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+/* Lift the cards a surface step so they read against the bare desk — in dark
+   their drop-shadow vanishes, leaving only a faint color step otherwise. */
+board-panel planner-task {
+  --task-c-bg: var(--surface-3);
+}

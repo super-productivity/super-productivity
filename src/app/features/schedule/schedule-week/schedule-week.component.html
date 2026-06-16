@@ -121,7 +121,7 @@
 
   <!-- Events -->
   @for (ev of safeEvents(); track trackEventKey(ev)) {
-    @if (isDraggableSE(ev)) {
+    @if (canDragEvent(ev)) {
       <schedule-event
         class="draggable"
         [cdkDragData]="ev"

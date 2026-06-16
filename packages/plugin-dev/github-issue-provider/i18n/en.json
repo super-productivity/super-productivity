@@ -2,6 +2,7 @@
   "CFG": {
     "REPO": "Repository (owner/repo)",
     "TOKEN": "Personal Access Token (required for private repos/optional for public repos)",
+    "API_BASE_URL": "GitHub API base URL (default: https://api.github.com)",
     "FILTER_USERNAME": "Filter username (ignore own comments for update detection)",
     "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\" with token, otherwise \"sort:updated state:open\" — without a token all open issues are imported, not just yours)",
     "INCLUDE_PULL_REQUESTS": "Include pull requests (search and backlog return PRs alongside issues)",

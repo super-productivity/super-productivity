@@ -8,7 +8,6 @@ import {
   VectorClock,
   SYNC_ERROR_CODES,
 } from './sync.types';
-import { computeOpStorageBytes } from './sync.const';
 import { Logger } from '../logger';
 import { Prisma } from '@prisma/client';
 import {
@@ -186,18 +185,20 @@ export class SyncService {
             uploadDbRoundtrips++;
 
             for (const op of ops) {
-              const result = await this.operationUploadService.processOperation(
-                userId,
-                clientId,
-                op,
-                now,
-                tx,
-              );
+              const { result, storageBytes, fallback } =
+                await this.operationUploadService.processOperation(
+                  userId,
+                  clientId,
+                  op,
+                  now,
+                  tx,
+                );
               results.push(result);
               if (result.accepted) {
-                const sized = computeOpStorageBytes(op);
-                acceptedDeltaBytes += sized.bytes;
-                if (sized.fallback) unserializableAccepted += 1;
+                // Reuse the size computed in processOperation instead of
+                // re-measuring (the payload can be multi-MB).
+                acceptedDeltaBytes += storageBytes;
+                if (fallback) unserializableAccepted += 1;
               }
             }
           }

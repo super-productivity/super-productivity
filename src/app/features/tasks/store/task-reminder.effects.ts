@@ -17,6 +17,7 @@ import {
 import { androidInterface } from '../../android/android-interface';
 import { generateNotificationId } from '../../android/android-notification-id.util';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { TaskLog } from '../../../core/log';
 
 @Injectable()
 export class TaskReminderEffects {
@@ -97,7 +98,7 @@ export class TaskReminderEffects {
                 const notificationId = generateNotificationId(task.id);
                 androidInterface.cancelNativeReminder?.(notificationId);
               } catch (e) {
-                console.error('Failed to cancel native reminder:', e);
+                TaskLog.err('Failed to cancel native reminder:', e);
               }
             }
 
@@ -115,7 +116,7 @@ export class TaskReminderEffects {
                 const notificationId = generateNotificationId(task.id + '_deadline');
                 androidInterface.cancelNativeReminder?.(notificationId);
               } catch (e) {
-                console.error('Failed to cancel native deadline reminder:', e);
+                TaskLog.err('Failed to cancel native deadline reminder:', e);
               }
             }
 
@@ -218,7 +219,7 @@ export class TaskReminderEffects {
               androidInterface.cancelNativeReminder?.(deadlineNotificationId);
             }
           } catch (e) {
-            console.error('Failed to cancel native reminder:', e);
+            TaskLog.err('Failed to cancel native reminder:', e);
           }
         }),
       ),
@@ -243,7 +244,7 @@ export class TaskReminderEffects {
               const notificationId = generateNotificationId(id);
               androidInterface.cancelNativeReminder?.(notificationId);
             } catch (e) {
-              console.error('Failed to cancel native reminder:', e);
+              TaskLog.err('Failed to cancel native reminder:', e);
             }
           });
         }),
@@ -267,7 +268,7 @@ export class TaskReminderEffects {
                   generateNotificationId(id + '_deadline'),
                 );
               } catch (e) {
-                console.error('Failed to cancel native reminder:', e);
+                TaskLog.err('Failed to cancel native reminder:', e);
               }
             });
           }),
@@ -290,7 +291,7 @@ export class TaskReminderEffects {
                   generateNotificationId(id + '_deadline'),
                 );
               } catch (e) {
-                console.error('Failed to cancel native reminder:', e);
+                TaskLog.err('Failed to cancel native reminder:', e);
               }
             });
           }),
@@ -313,7 +314,7 @@ export class TaskReminderEffects {
                   generateNotificationId(task.id + '_deadline'),
                 );
               } catch (e) {
-                console.error('Failed to cancel native reminder:', e);
+                TaskLog.err('Failed to cancel native reminder:', e);
               }
               // Also cancel for subtasks
               task.subTaskIds?.forEach((subId) => {
@@ -323,7 +324,7 @@ export class TaskReminderEffects {
                     generateNotificationId(subId + '_deadline'),
                   );
                 } catch (e) {
-                  console.error('Failed to cancel native reminder:', e);
+                  TaskLog.err('Failed to cancel native reminder:', e);
                 }
               });
             });

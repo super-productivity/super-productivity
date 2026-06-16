@@ -242,14 +242,15 @@ export const operationCaptureMetaReducer = <S, A extends Action = Action>(
         try {
           const persistentAction = action as PersistentAction;
 
-          // Enqueue action for effect processing (no state diffing needed)
-          operationCaptureService.enqueue(persistentAction);
+          // Record the action as pending; the persist effect decrements the
+          // counter after writing it. No state diffing needed.
+          operationCaptureService.incrementPending(persistentAction);
 
           // Reset failure counter on success
           consecutiveCaptureFailures = 0;
 
           OpLog.verbose(
-            'operationCaptureMetaReducer: Enqueued action for operation capture',
+            'operationCaptureMetaReducer: Captured action for operation persistence',
             {
               actionType: persistentAction.type,
             },

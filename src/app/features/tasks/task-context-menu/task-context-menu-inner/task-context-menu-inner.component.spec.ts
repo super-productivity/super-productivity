@@ -66,7 +66,7 @@ describe('TaskContextMenuInnerComponent', () => {
             cfg: () => ({ reminder: {}, tasks: {} }),
           },
         },
-        { provide: TagService, useValue: { tagsNoMyDayAndNoListSorted: of([]) } },
+        { provide: TagService, useValue: { tagsNoMyDayAndNoList: () => [] } },
         { provide: WorkContextService, useValue: { activeWorkContext$: of({}) } },
         {
           provide: TaskFocusService,
@@ -212,5 +212,22 @@ describe('TaskContextMenuInnerComponent', () => {
 
       expect(getByIdSpy).toHaveBeenCalledWith('t-task-with-{special}-chars');
     }));
+  });
+
+  describe('focusFirstSubmenuItem()', () => {
+    it('should focus the submenu so Material typeahead owns keyboard input', () => {
+      const menu = jasmine.createSpyObj('MatMenu', ['focusFirstItem']);
+      component.task = {
+        id: 'T1',
+        title: 'Test',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+      } as any;
+
+      component.focusFirstSubmenuItem(menu);
+
+      expect(menu.focusFirstItem).toHaveBeenCalledWith('program');
+    });
   });
 });

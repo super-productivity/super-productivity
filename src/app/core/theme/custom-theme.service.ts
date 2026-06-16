@@ -166,6 +166,13 @@ export const BUILT_IN_THEMES: CustomTheme[] = [
     requiredMode: 'light',
   },
   {
+    id: 'plainspace',
+    name: 'Plainspace',
+    kind: 'builtin',
+    url: 'assets/themes/plainspace.css',
+    requiredMode: 'system',
+  },
+  {
     id: 'rainbow',
     name: 'Rainbow',
     kind: 'builtin',

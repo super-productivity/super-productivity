@@ -1,122 +1,137 @@
-<div class="focus-mode-break">
-  <h1>
-    @if (isBreakOffer()) {
-      {{ T.F.FOCUS_MODE.FLOWTIME_BREAK_TITLE | translate }}
-    } @else {
-      {{
-        (focusModeService.isBreakLong()
-          ? T.F.FOCUS_MODE.LONG_BREAK_TITLE
-          : T.F.FOCUS_MODE.SHORT_BREAK_TITLE
-        ) | translate: { cycle: focusModeService.currentCycle() - 1 }
-      }}
-    }
-  </h1>
+<focus-mode-layout>
+  <!-- Row 1 (top controls) is intentionally empty for breaks; the layout still
+       reserves its height so the title/clock baseline matches the focus session. -->
 
-  <div class="timer-container">
-    <mat-progress-spinner
-      mode="determinate"
-      [value]="progressPercentage()"
-      diameter="160"
-      strokeWidth="6"
+  <!-- ========== ROW 2: Task module (shared with the focus session) ========== -->
+  <!-- Same module as the focus session: switch · title · time · finish when a
+       task is tracked through the break ("pause tracking during breaks" off);
+       the relax message when tracking is paused for the break (currentTask null
+       → showRelaxMessage). -->
+  <div
+    fmTask
+    class="task-section"
+  >
+    <focus-mode-task-row
+      [task]="currentTask() ?? null"
+      [showRelaxMessage]="true"
+      (switchTask)="openTaskSelector()"
+      (finishTask)="finishCurrentTask()"
+      (titleEdited)="updateTaskTitle($event.wasChanged, $event.newVal)"
+    ></focus-mode-task-row>
+  </div>
+
+  <!-- ========== ROW 3: Clock ========== -->
+  <div
+    fmClock
+    class="clock-display"
+  >
+    <focus-clock-face
+      variant="ring"
+      [progress]="progressPercentage()"
     >
-    </mat-progress-spinner>
-    <div class="timer-text">
-      {{ remainingTime() | msToMinuteClockString }}
-    </div>
-    @if (remainingTime() > 0 && !isBreakOffer()) {
+      <div class="clock-wrapper">
+        <!-- "Short break" / "Long break" / "Take a break" label, sits above
+             the digits inside the circle. Mirrors the cycle counter below. -->
+        <div class="break-label">{{ breakLabelKey() | translate }}</div>
+
+        <div class="clock-time">
+          {{ remainingTime() | msToMinuteClockString }}
+        </div>
+
+        @if (isPomodoro()) {
+          <div class="cycle-counter">
+            <mat-icon>repeat</mat-icon>
+            {{ displayedCycle() }}
+          </div>
+        }
+      </div>
+    </focus-clock-face>
+  </div>
+
+  <!-- ========== ROW 4: primary actions ========== -->
+  <!-- Single icon-button row, structurally identical to the focus session's
+       bottom controls (no stacked tracking info) so the clock centers the same
+       on both. Back to Planning + the forward CTA are icons (with aria-labels)
+       so the break reads as one row rather than a stack of mixed button types. -->
+  <section
+    fmBottom
+    class="bottom-controls"
+  >
+    <!-- Back to Planning (cancels the session + closes the focus overlay) -->
+    <button
+      mat-icon-button
+      class="exit-session-btn"
+      [attr.aria-label]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
+      [matTooltip]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
+      (click)="exitToPlanning()"
+    >
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+
+    @if (remainingTime() > 0) {
       @if (isBreakPaused()) {
         <button
           mat-icon-button
+          class="pause-resume-btn"
+          [attr.aria-label]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
           [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
           (click)="resumeBreak()"
-          class="pause-resume-btn"
         >
           <mat-icon>play_arrow</mat-icon>
         </button>
       } @else {
         <button
           mat-icon-button
+          class="pause-resume-btn"
+          [attr.aria-label]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
           [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
           (click)="pauseBreak()"
-          class="pause-resume-btn"
         >
           <mat-icon>pause</mat-icon>
         </button>
       }
-    }
-  </div>
-
-  <task-tracking-info></task-tracking-info>
-
-  <p class="break-message">{{ T.F.FOCUS_MODE.BREAK_RELAX_MSG | translate }}</p>
-
-  @if (remainingTime() > 0) {
-    <div class="button-row">
-      @if (isBreakOffer()) {
-        <button
-          mat-raised-button
-          color="primary"
-          (click)="resumeBreak()"
-        >
-          <mat-icon>play_arrow</mat-icon>
-          {{ T.F.FOCUS_MODE.START_BREAK | translate }}
-        </button>
-      }
 
       <button
-        mat-stroked-button
-        (click)="exitToPlanning()"
-      >
-        <mat-icon>edit_calendar</mat-icon>
-        {{ T.F.FOCUS_MODE.BACK_TO_PLANNING | translate }}
-      </button>
-      @if (isPomodoro()) {
-        <button
-          mat-stroked-button
-          (click)="resetCycles()"
-          class="reset-cycles-btn"
-        >
-          <mat-icon>restart_alt</mat-icon>
-          {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
-        </button>
-      }
-      <button
-        mat-stroked-button
+        mat-icon-button
+        [attr.aria-label]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
+        [matTooltip]="T.F.FOCUS_MODE.SKIP_BREAK | translate"
         (click)="skipBreak()"
       >
         <mat-icon>skip_next</mat-icon>
-        {{ T.F.FOCUS_MODE.SKIP_BREAK | translate }}
       </button>
-    </div>
-  } @else {
-    <div class="button-row">
+    }
+
+    @if (isPomodoro()) {
       <button
-        mat-stroked-button
-        (click)="exitToPlanning()"
+        mat-icon-button
+        [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+        [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+        (click)="resetCycles()"
       >
-        <mat-icon>done_all</mat-icon>
-        {{ T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate }}
+        <mat-icon>restart_alt</mat-icon>
       </button>
+    }
 
-      @if (isPomodoro()) {
-        <button
-          mat-stroked-button
-          (click)="resetCycles()"
-          class="reset-cycles-btn"
-        >
-          <mat-icon>restart_alt</mat-icon>
-          {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
-        </button>
-      }
-
+    <!-- Forward CTA: start the next focus session -->
+    @if (remainingTime() <= 0) {
       <button
-        mat-raised-button
+        mat-icon-button
         color="primary"
+        [attr.aria-label]="T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate"
+        [matTooltip]="T.F.FOCUS_MODE.START_NEXT_FOCUS_SESSION | translate"
         (click)="completeBreak()"
       >
         <mat-icon>arrow_forward</mat-icon>
-        {{ T.F.FOCUS_MODE.CONTINUE_TO_NEXT_SESSION | translate }}
       </button>
-    </div>
-  }
-</div>
+    }
+  </section>
+</focus-mode-layout>
+
+<!-- Task selector — opened by the shared task row's switch / finish controls
+     (anchored to :host, above the layout, like the focus session). -->
+@if (isTaskSelectorOpen()) {
+  <focus-mode-task-selector
+    (taskSelected)="onTaskSelected($event)"
+    (closed)="closeTaskSelector()"
+  ></focus-mode-task-selector>
+}

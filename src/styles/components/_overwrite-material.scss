@@ -13,6 +13,7 @@
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-700);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-700);
   --mat-tab-header-inactive-label-text-color: var(--text-color-muted);
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 35%, transparent);
 }
 
 // Dark theme tab overrides for better contrast - use lighter shade
@@ -22,6 +23,7 @@ body.isDarkTheme {
   --mat-tab-header-active-focus-label-text-color: var(--palette-primary-300);
   --mat-tab-header-active-hover-label-text-color: var(--palette-primary-300);
   --mdc-tab-indicator-active-indicator-color: var(--palette-primary-300);
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 20%, transparent);
 }
 
 // Apply tab colors explicitly to tab components
@@ -160,10 +162,78 @@ body .mat-mdc-dialog-surface {
   }
 }
 
+.project-complete-fullscreen-dialog {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+
+  @supports (height: 100dvh) {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+body.isNativeMobile .project-complete-fullscreen-dialog {
+  width: calc(100vw - var(--safe-area-left) - var(--safe-area-right)) !important;
+  height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
+}
+
 // FORMS
 // --------
 .mat-mdc-form-field {
   margin-bottom: var(--s2);
+
+  // Feed semantic input tokens to official Material CSS variables
+  --mat-form-field-filled-container-color: var(--input-bg);
+  --mat-form-field-filled-container-shape: var(--input-border-radius);
+
+  // Hide the active indicators (underline ripple) by setting their color to transparent,
+  // but leave the error indicators intact so the red invalid line shows up.
+  --mat-form-field-filled-active-indicator-color: transparent;
+  --mat-form-field-filled-hover-active-indicator-color: transparent;
+  --mat-form-field-filled-focus-active-indicator-color: transparent;
+
+  // Targets default filled text boxes to transform them into flat, token-driven containers
+  .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    border: 1px solid var(--input-border-color) !important;
+    // Material hardcodes the filled field's bottom corner radii to 0 (the
+    // container-shape token above only rounds the top two corners), so a full
+    // border would render rounded-top/square-bottom. Round all four corners to
+    // read as a card, matching the task-detail panel this style is copied from.
+    border-radius: var(--input-border-radius) !important;
+    transition:
+      background var(--transition-duration-s) ease-out,
+      border-color var(--transition-duration-s) ease-out,
+      box-shadow var(--transition-duration-s) ease-out !important;
+
+    &:hover {
+      background: var(--input-bg-hover) !important;
+    }
+  }
+
+  // Active / Focus state
+  &.mat-focused .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    background: var(--input-bg-hover) !important;
+    border-color: var(--input-border-color-focus) !important;
+    box-shadow: 0 0 0 1px var(--input-border-color-focus) !important;
+  }
+
+  // Error / Invalid state
+  &.mat-form-field-invalid .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+    border-color: var(--input-border-color-invalid) !important;
+  }
 }
 
 // needs to be global cause of cdk overlay
@@ -313,6 +383,32 @@ body .mat-mdc-button-base .mat-icon {
   background: var(--bg-lightest) !important;
 }
 
+.cdk-drag-preview.tree-dnd-drag-preview {
+  box-sizing: border-box;
+  max-width: calc(100vw - var(--s2));
+  border-radius: var(--card-border-radius);
+  color: var(--sidenav-text);
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  .nav-child-item,
+  nav-item,
+  .nav-link {
+    min-width: 0;
+  }
+
+  .nav-link,
+  .nav-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .drag-preview-time-badge {
   position: absolute;
   right: 6px;
@@ -428,4 +524,24 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
   padding-bottom: 6px !important;
   display: flex !important;
   align-items: center !important;
+}
+
+// Shared calendar hover and focus overrides
+.mat-calendar:not(.no-hover-effects) {
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+    > .mat-calendar-body-cell-content {
+    outline: 2px solid color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
+  }
+
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+    > .mat-calendar-body-cell-content {
+    outline: 2px dashed color-mix(in srgb, var(--c-accent) 80%, transparent) !important;
+  }
+
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):hover
+    > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected),
+  .mat-calendar-body-cell:not(.mat-calendar-body-disabled):focus
+    > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
+    background-color: var(--calendar-hover-bg) !important;
+  }
 }

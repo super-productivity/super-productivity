@@ -133,6 +133,30 @@
   }
 }
 
+.note-input-section {
+  border-top: 1px dashed var(--extra-border-color);
+}
+
+.note-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  // cdkTextareaAutosize manages the height
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-primary-stack);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: var(--s) var(--s2);
+
+  &::placeholder {
+    opacity: 0.6;
+  }
+}
+
 .add-issue-info-text {
   height: 38px;
   padding: 0 var(--s);

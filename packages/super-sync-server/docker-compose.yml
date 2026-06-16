@@ -22,6 +22,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=1900
+      - HOST=${HOST:-0.0.0.0}
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}}
       - RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}
       - JWT_SECRET=${JWT_SECRET}

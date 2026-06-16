@@ -31,6 +31,7 @@ import {
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { OperationApplierService } from '../apply/operation-applier.service';
+import { getFailedOpIdsFromBatch } from '../apply/failed-op-ids.util';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OpLog } from '../../core/log';
 import { toEntityKey } from '../util/entity-key.util';
@@ -438,11 +439,10 @@ export class ConflictResolutionService {
         }
 
         if (applyResult.failedOp) {
-          const failedOpIndex = allOpsToApply.findIndex(
-            (op) => op.id === applyResult.failedOp!.op.id,
+          const failedOpIds = getFailedOpIdsFromBatch(
+            allOpsToApply,
+            applyResult.failedOp.op,
           );
-          const failedOps = allOpsToApply.slice(failedOpIndex);
-          const failedOpIds = failedOps.map((op) => op.id);
 
           OpLog.err(
             `ConflictResolutionService: ${applyResult.appliedOps.length} ops applied before failure. ` +

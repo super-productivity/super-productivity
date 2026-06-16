@@ -10,6 +10,13 @@
     display: block;
   }
 
+  .section-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s);
+    margin-top: var(--s2);
+  }
+
   &.keyboard {
     ::ng-deep formly-field > formly-group {
       box-sizing: border-box;

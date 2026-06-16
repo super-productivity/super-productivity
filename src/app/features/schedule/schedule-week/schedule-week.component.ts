@@ -13,7 +13,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { ScheduleEvent } from '../schedule.model';
+import { isScheduleCalendarEvent, ScheduleEvent } from '../schedule.model';
 import { CdkDragMove, CdkDragRelease, CdkDragStart } from '@angular/cdk/drag-drop';
 import { FH, SVEType } from '../schedule.const';
 import { isDraggableSE } from '../map-schedule-data/is-schedule-types-type';
@@ -34,6 +34,7 @@ import { calculatePlaceholderForGridMove } from './schedule-week-placeholder.uti
 import { formatScheduleDragPreviewLabel } from './format-schedule-drag-preview-label.util';
 import { truncate } from '../../../util/truncate';
 import { LS } from '../../../core/persistence/storage-keys.const';
+import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 
 const D_HOURS = 24;
 const DEFAULT_ROW_HEIGHT_PX = 9;
@@ -80,6 +81,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _service = inject(ScheduleWeekDragService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
+  private _calendarEventActions = inject(CalendarEventActionsService);
 
   isInPanel = input<boolean>(false);
   isHorizontalScrollMode = input<boolean>(false);
@@ -185,6 +187,16 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   // segment has a unique @for track key and Angular can reconcile them.
   trackEventKey(ev: ScheduleEvent): string {
     return `${ev.id}_${ev.plannedForDay ?? ''}_${ev.startHours}`;
+  }
+
+  canDragEvent(ev: ScheduleEvent): boolean {
+    if (isScheduleCalendarEvent(ev)) {
+      return this._calendarEventActions.canMoveEvent(ev.data);
+    }
+    if (isDraggableSE(ev)) {
+      return true;
+    }
+    return false;
   }
 
   newTaskPlaceholder = signal<{

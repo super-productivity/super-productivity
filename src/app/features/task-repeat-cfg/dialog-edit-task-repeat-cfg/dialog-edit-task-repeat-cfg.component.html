@@ -25,6 +25,26 @@
     }
 
     <div class="form-wrapper">
+      <div class="planned-start-date-field-wrapper">
+        <button
+          type="button"
+          mat-stroked-button
+          class="planned-start-date-btn"
+          (click)="openScheduleDialog()"
+        >
+          <span class="planned-start-date-btn-content">
+            <mat-icon>today</mat-icon>
+            <span class="planned-date-label">
+              {{ T.F.TASK_REPEAT.F.START_DATE | translate }}:
+            </span>
+            <span class="planned-date-val">{{ plannedStartDateStr() }}</span>
+            @if (repeatCfg().remindAt && repeatCfg().remindAt !== 'DoNotRemind') {
+              <mat-icon class="reminder-badge">alarm</mat-icon>
+            }
+          </span>
+        </button>
+      </div>
+
       <formly-form
         (modelChange)="repeatCfg.set($event)"
         [form]="formGroup1()"

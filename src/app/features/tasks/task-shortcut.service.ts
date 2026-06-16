@@ -11,6 +11,13 @@ import { isInputElement } from '../../util/dom-element';
 
 type TaskId = string;
 
+const isNativeContextMenuKey = (ev: KeyboardEvent): boolean =>
+  !ev.ctrlKey &&
+  !ev.altKey &&
+  !ev.metaKey &&
+  !ev.shiftKey &&
+  (ev.key === 'ContextMenu' || ev.key === 'Menu' || ev.code === 'ContextMenu');
+
 /**
  * Available methods on the task component for keyboard shortcut delegation.
  * These correspond to actual methods implemented in the TaskComponent.
@@ -162,6 +169,21 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskScheduleTomorrow)) {
+      this._handleTaskShortcut(focusedTaskId, 'scheduleTaskTomorrow');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskScheduleNextWeek)) {
+      this._handleTaskShortcut(focusedTaskId, 'scheduleTaskNextWeek');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskScheduleNextMonth)) {
+      this._handleTaskShortcut(focusedTaskId, 'scheduleTaskNextMonth');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskScheduleDeadline)) {
       this._handleTaskShortcut(focusedTaskId, 'openDeadlineDialog');
       ev.preventDefault();
@@ -208,7 +230,7 @@ export class TaskShortcutService {
     }
 
     // Toggle context menu
-    if (checkKeyCombo(ev, keys.taskOpenContextMenu)) {
+    if (checkKeyCombo(ev, keys.taskOpenContextMenu) || isNativeContextMenuKey(ev)) {
       this._handleTaskShortcut(focusedTaskId, 'openContextMenu', ev);
       ev.preventDefault();
       return true;
@@ -222,7 +244,7 @@ export class TaskShortcutService {
       return true;
     }
 
-    if (checkKeyCombo(ev, keys.moveToTodaysTasks)) {
+    if (checkKeyCombo(ev, keys.taskScheduleToday)) {
       this._handleTaskShortcut(focusedTaskId, 'moveToTodayWithFocus');
       ev.preventDefault();
       ev.stopPropagation();

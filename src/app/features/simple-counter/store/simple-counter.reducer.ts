@@ -154,7 +154,8 @@ const _reducer = createReducer<SimpleCounterState>(
         changes: {
           countOnDay: {
             ...entity.countOnDay,
-            [today]: newVal,
+            // counts and durations can never be negative
+            [today]: Math.max(0, newVal),
           },
         },
       },
@@ -173,7 +174,8 @@ const _reducer = createReducer<SimpleCounterState>(
         changes: {
           countOnDay: {
             ...entity.countOnDay,
-            [date]: newVal,
+            // counts and durations can never be negative
+            [date]: Math.max(0, newVal),
           },
         },
       },

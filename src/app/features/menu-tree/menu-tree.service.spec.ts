@@ -161,4 +161,48 @@ describe('MenuTreeService', () => {
       expect(folderMap.get('tag-1')).toBe('Folder 2');
     });
   });
+
+  describe('flattenTagViewTree', () => {
+    it('should return tags in sidebar (tree) order, descending into folders', () => {
+      const tags = [
+        { id: 'tag-1', title: 'Tag 1' },
+        { id: 'tag-2', title: 'Tag 2' },
+        { id: 'tag-3', title: 'Tag 3' },
+      ] as any[];
+      // Stored order is intentionally not alphabetical: tag-3, folder(tag-1), tag-2
+      const tree: MenuTreeTreeNode[] = [
+        { id: 'tag-3', k: MenuTreeKind.TAG },
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder',
+          children: [{ id: 'tag-1', k: MenuTreeKind.TAG }],
+        },
+        { id: 'tag-2', k: MenuTreeKind.TAG },
+      ];
+      store.overrideSelector(selectMenuTreeTagTree, tree);
+      store.refreshState();
+
+      expect(service.flattenTagViewTree(tags).map((t) => t.id)).toEqual([
+        'tag-3',
+        'tag-1',
+        'tag-2',
+      ]);
+    });
+
+    it('should append tags missing from the stored tree at the end', () => {
+      const tags = [
+        { id: 'tag-1', title: 'Tag 1' },
+        { id: 'tag-2', title: 'Tag 2' },
+      ] as any[];
+      const tree: MenuTreeTreeNode[] = [{ id: 'tag-2', k: MenuTreeKind.TAG }];
+      store.overrideSelector(selectMenuTreeTagTree, tree);
+      store.refreshState();
+
+      expect(service.flattenTagViewTree(tags).map((t) => t.id)).toEqual([
+        'tag-2',
+        'tag-1',
+      ]);
+    });
+  });
 });

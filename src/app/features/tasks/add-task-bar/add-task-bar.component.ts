@@ -16,6 +16,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { MentionModule } from '../../../ui/mentions';
 import { MatInput } from '@angular/material/input';
 import { MatIconButton } from '@angular/material/button';
@@ -94,6 +95,7 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
   standalone: true,
   imports: [
     FormsModule,
+    CdkTextareaAutosize,
     MatInput,
     MatIconButton,
     MatIcon,
@@ -269,6 +271,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // View children
   inputEl = viewChild<ElementRef>('inputEl');
+  noteEl = viewChild<ElementRef<HTMLTextAreaElement>>('noteEl');
   taskAutoCompleteEl = viewChild<MatAutocomplete>('taskAutoCompleteEl');
   actionsComponent = viewChild(AddTaskBarActionsComponent);
 
@@ -448,6 +451,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             : additionalFields?.attachments || [],
       };
 
+      const note = this.stateService.noteTxt().trim();
+      if (note) {
+        taskData.notes = note;
+      }
+
       if (state.spent) {
         taskData.timeSpentOnDay = state.spent;
       }
@@ -498,8 +506,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         // This prevents automatic assignment of today's date in TODAY context
         taskData.dueDay = undefined;
       }
-
-      Log.x(taskData);
 
       const taskId = this._taskService.add(
         title,
@@ -721,6 +727,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
+    // Ctrl/Cmd+Enter reveals the note field instead of submitting, so a note
+    // can be added without leaving the keyboard.
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) {
+      event.preventDefault();
+      this.expandNote();
+      return;
+    }
+
     // Handle Enter key
     if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
@@ -886,6 +900,44 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         }
       }, 50);
     }
+  }
+
+  toggleNote(): void {
+    const willExpand = !this.stateService.isNoteExpanded();
+    this.stateService.isNoteExpanded.set(willExpand);
+    if (willExpand) {
+      this._focusNote();
+    } else {
+      this.focusInput();
+    }
+  }
+
+  expandNote(): void {
+    this.stateService.isNoteExpanded.set(true);
+    this._focusNote();
+  }
+
+  onNoteKeydown(event: KeyboardEvent): void {
+    // Ctrl/Cmd+Enter submits from the note field; plain Enter inserts a newline.
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) {
+      event.preventDefault();
+      void this.addTask();
+      return;
+    }
+
+    // Escape collapses the note and returns focus to the title without
+    // closing the whole bar (a second Escape on the title closes it).
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.stateService.isNoteExpanded.set(false);
+      this.focusInput();
+    }
+  }
+
+  private _focusNote(): void {
+    // Defer so the textarea has been rendered by the `@if` before focusing.
+    window.setTimeout(() => this.noteEl()?.nativeElement.focus());
   }
 
   updateListShown(isShown: boolean): void {

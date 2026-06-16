@@ -1,4 +1,5 @@
 import {
+  backupStrHasSyncEnabled,
   countAllTasks,
   countAllTasksInBackupStr,
   isUsableBackupStr,
@@ -28,6 +29,42 @@ const EMPTY_STATE = JSON.stringify({
 });
 
 describe('backup-ring.util', () => {
+  describe('backupStrHasSyncEnabled', () => {
+    it('returns false for null / undefined / empty / corrupt input', () => {
+      expect(backupStrHasSyncEnabled(null)).toBe(false);
+      expect(backupStrHasSyncEnabled(undefined)).toBe(false);
+      expect(backupStrHasSyncEnabled('')).toBe(false);
+      expect(backupStrHasSyncEnabled('{corrupt')).toBe(false);
+    });
+
+    it('returns false when there is no sync config or it is disabled', () => {
+      expect(backupStrHasSyncEnabled(MEANINGFUL)).toBe(false);
+      expect(
+        backupStrHasSyncEnabled(
+          JSON.stringify({
+            globalConfig: { sync: { isEnabled: false, syncProvider: null } },
+          }),
+        ),
+      ).toBe(false);
+      expect(backupStrHasSyncEnabled(JSON.stringify({ globalConfig: {} }))).toBe(false);
+    });
+
+    it('returns true when sync is enabled or a provider is set', () => {
+      expect(
+        backupStrHasSyncEnabled(
+          JSON.stringify({ globalConfig: { sync: { isEnabled: true } } }),
+        ),
+      ).toBe(true);
+      expect(
+        backupStrHasSyncEnabled(
+          JSON.stringify({
+            globalConfig: { sync: { isEnabled: false, syncProvider: 'WebDAV' } },
+          }),
+        ),
+      ).toBe(true);
+    });
+  });
+
   describe('isUsableBackupStr', () => {
     it('returns false for null / undefined / empty string', () => {
       expect(isUsableBackupStr(null)).toBe(false);

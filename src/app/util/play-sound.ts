@@ -1,4 +1,5 @@
 import { getAudioBuffer, playBuffer } from './audio-context';
+import { Log } from '../core/log';
 
 const BASE = './assets/snd';
 
@@ -13,6 +14,6 @@ export const playSound = async (filePath: string, vol = 100): Promise<void> => {
     const buffer = await getAudioBuffer(`${BASE}/${filePath}`);
     await playBuffer(buffer, vol);
   } catch (e) {
-    console.error('Error playing sound:', e);
+    Log.err('Error playing sound:', e);
   }
 };

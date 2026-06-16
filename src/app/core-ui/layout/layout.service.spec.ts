@@ -73,18 +73,24 @@ describe('LayoutService', () => {
     });
 
     afterEach(() => {
+      // These tests shadow the native document.activeElement getter with an own
+      // data property via Object.defineProperty. Delete it so the prototype
+      // accessor shows through again; otherwise a stale activeElement leaks into
+      // later specs (e.g. TaskService.focusTaskById reads the clobbered value).
+      Reflect.deleteProperty(document, 'activeElement');
       if (mockTaskElement && mockTaskElement.parentNode) {
         mockTaskElement.parentNode.removeChild(mockTaskElement);
       }
+      // Restore the native activeElement getter — the tests below shadow it with
+      // a static own property via Object.defineProperty, which otherwise leaks
+      // into later specs and freezes document.activeElement (e.g. breaking
+      // task.service focusTaskById, which reads the real activeElement).
+      delete (document as unknown as { activeElement?: unknown }).activeElement;
     });
 
     it('should store focused task element when showing add task bar', () => {
       // Focus the task element
-      Object.defineProperty(document, 'activeElement', {
-        value: mockTaskElement,
-        writable: true,
-        configurable: true,
-      });
+      spyOnProperty(document, 'activeElement').and.returnValue(mockTaskElement);
 
       // Show add task bar
       service.showAddTaskBar();
@@ -141,11 +147,7 @@ describe('LayoutService', () => {
       spyOn(mockTaskElement, 'focus');
 
       // Set as active element
-      Object.defineProperty(document, 'activeElement', {
-        value: mockTaskElement,
-        writable: true,
-        configurable: true,
-      });
+      spyOnProperty(document, 'activeElement').and.returnValue(mockTaskElement);
 
       // Show add task bar (which stores the focused element)
       service.showAddTaskBar();
@@ -168,11 +170,7 @@ describe('LayoutService', () => {
       const nonTaskElement = document.createElement('input');
       nonTaskElement.id = 'some-input';
       document.body.appendChild(nonTaskElement);
-      Object.defineProperty(document, 'activeElement', {
-        value: nonTaskElement,
-        writable: true,
-        configurable: true,
-      });
+      spyOnProperty(document, 'activeElement').and.returnValue(nonTaskElement);
 
       // Show add task bar
       service.showAddTaskBar();
@@ -193,11 +191,7 @@ describe('LayoutService', () => {
       spyOn(mockTaskElement, 'focus');
 
       // Set as active element
-      Object.defineProperty(document, 'activeElement', {
-        value: mockTaskElement,
-        writable: true,
-        configurable: true,
-      });
+      spyOnProperty(document, 'activeElement').and.returnValue(mockTaskElement);
 
       // Show add task bar (which stores the focused element)
       service.showAddTaskBar();
@@ -220,11 +214,7 @@ describe('LayoutService', () => {
     it('should fallback to previously focused task when new task element is missing', (done) => {
       spyOn(mockTaskElement, 'focus');
 
-      Object.defineProperty(document, 'activeElement', {
-        value: mockTaskElement,
-        writable: true,
-        configurable: true,
-      });
+      spyOnProperty(document, 'activeElement').and.returnValue(mockTaskElement);
 
       service.showAddTaskBar();
 

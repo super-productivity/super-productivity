@@ -3,7 +3,7 @@ import { ProjectService } from './project.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
-import { TaskState } from '../tasks/task.model';
+import { Task, TaskState } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
 import { Store, StoreModule } from '@ngrx/store';
 import { createProject } from './project.test-helper';
@@ -88,6 +88,11 @@ describe('ProjectService', () => {
     taskService = jasmine.createSpyObj('TaskService', [
       'add',
       'createNewTaskWithDefaults',
+      'getByIdWithSubTaskData$',
+      'moveToProject',
+      'setDone',
+      'setUnDone',
+      'getAllTasksForProject',
     ]);
     taskService.createNewTaskWithDefaults.and.callFake(() => {
       taskCounter++;
@@ -96,6 +101,13 @@ describe('ProjectService', () => {
         title: `New Task ${taskCounter}`,
       });
     });
+    taskService.getAllTasksForProject.and.callFake((projectId: string) =>
+      Promise.resolve(
+        Object.values(initialTaskState.entities).filter(
+          (task): task is Task => task?.projectId === projectId,
+        ),
+      ),
+    );
     workContextService = jasmine.createSpyObj('WorkContextService', [
       'getWorkContextById$',
       'onWorkContextChange$',
@@ -288,19 +300,6 @@ describe('ProjectService', () => {
     }));
   });
 
-  describe('archive', () => {
-    it('dispatches archiveProject and opens a plain snack', () => {
-      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
-      service.archive('project-1');
-      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
-      expect(types).toContain('[Project] Archive Project');
-      expect(snackService.open).toHaveBeenCalledWith({
-        ico: 'archive',
-        msg: T.F.PROJECT.S.ARCHIVED,
-      });
-    });
-  });
-
   describe('unarchive', () => {
     it('dispatches unarchiveProject and shows a plain restore snack', async () => {
       const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
@@ -351,6 +350,197 @@ describe('ProjectService', () => {
         const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
         expect(types).toContain('[Project] Toggle hide from menu');
       });
+    });
+  });
+
+  describe('complete', () => {
+    it('dispatches the plain completeProject project action', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.complete('project-1', 12345);
+      const completeAction = dispatchSpy.calls
+        .allArgs()
+        .map((args: any) => args[0])
+        .find((a: any) => a?.type === '[Project] Complete Project');
+      expect(completeAction).toBeTruthy();
+      expect(completeAction.id).toBe('project-1');
+      expect(completeAction.doneOn).toBe(12345);
+    });
+
+    it('does not show an undo snack (completion is not reversible)', () => {
+      service.complete('project-1', 1);
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reopen', () => {
+    it('dispatches reopenProject and shows a snack', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.reopen('project-1');
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Reopen Project');
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.PROJECT.S.REOPENED }),
+      );
+    });
+
+    it('offers to show the project in the menu when reopening a hidden project', () => {
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.reopen('project-1', { isHiddenFromMenu: true });
+      const snackArg = snackService.open.calls.mostRecent().args[0] as any;
+
+      expect(snackArg.actionStr).toBe(T.F.PROJECT.S.SHOW_IN_MENU);
+      dispatchSpy.calls.reset();
+      snackArg.actionFn();
+
+      const types = dispatchSpy.calls.allArgs().map((args: any) => args[0]?.type);
+      expect(types).toContain('[Project] Toggle hide from menu');
+    });
+  });
+
+  describe('getCompletionInfo', () => {
+    beforeEach(() => {
+      store.setState({
+        projects: {
+          ids: ['project-1'],
+          entities: {
+            /* eslint-disable @typescript-eslint/naming-convention */
+            'project-1': createProject({
+              id: 'project-1',
+              title: 'Project 1',
+              taskIds: ['task-1', 'task-2'],
+            }),
+            /* eslint-enable @typescript-eslint/naming-convention */
+          },
+        },
+      });
+    });
+
+    it('returns top-level tasks, all tasks incl. subtasks, and unfinished tasks', async () => {
+      const info = await service.getCompletionInfo('project-1');
+      expect(info.topLevelTasks.map((t) => t.id)).toEqual(['task-1', 'task-2']);
+      // task-1 has sub-task-1 → included in allTasks, after its parent
+      expect(info.allTasks.map((t) => t.id)).toEqual(['task-1', 'sub-task-1', 'task-2']);
+      expect(info.unfinishedTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'sub-task-1',
+        'task-2',
+      ]);
+      expect(info.topLevelTasksWithUnfinishedWork.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+    });
+
+    it('keeps a done parent with an unfinished subtask in topLevelTasksWithUnfinishedWork', async () => {
+      store.overrideSelector(selectTaskFeatureState, {
+        ...initialTaskState,
+        entities: {
+          ...initialTaskState.entities,
+          /* eslint-disable-next-line @typescript-eslint/naming-convention */
+          'task-1': { ...initialTaskState.entities['task-1'], isDone: true } as any,
+        },
+      });
+      store.refreshState();
+      const info = await service.getCompletionInfo('project-1');
+      expect(info.unfinishedTasks.map((t) => t.id)).toEqual(['sub-task-1', 'task-2']);
+      expect(info.topLevelTasksWithUnfinishedWork.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+    });
+
+    it('includes archived project tasks in stats lists without resolving them as unfinished work', async () => {
+      const archivedParent = createTask({
+        id: 'archived-task',
+        title: 'Archived Task',
+        projectId: 'project-1',
+        isDone: true,
+        subTaskIds: ['archived-sub-task'],
+      });
+      const archivedSubTask = createTask({
+        id: 'archived-sub-task',
+        title: 'Archived Sub Task',
+        projectId: 'project-1',
+        parentId: 'archived-task',
+        isDone: false,
+      });
+      taskService.getAllTasksForProject.and.returnValue(
+        Promise.resolve([
+          initialTaskState.entities['task-1']!,
+          initialTaskState.entities['sub-task-1']!,
+          initialTaskState.entities['task-2']!,
+          archivedParent,
+          archivedSubTask,
+        ]),
+      );
+
+      const info = await service.getCompletionInfo('project-1');
+
+      expect(info.topLevelTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+        'archived-task',
+      ]);
+      expect(info.allTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'sub-task-1',
+        'task-2',
+        'archived-task',
+        'archived-sub-task',
+      ]);
+      expect(info.unfinishedTasks.map((t) => t.id)).toEqual([
+        'task-1',
+        'sub-task-1',
+        'task-2',
+      ]);
+      expect(info.topLevelTasksWithUnfinishedWork.map((t) => t.id)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+    });
+  });
+
+  describe('resolve unfinished completion tasks', () => {
+    it('moves top-level task trees with unfinished work to the Inbox', async () => {
+      const task = { ...initialTaskState.entities['task-1']!, isDone: true };
+      const taskWithSubTasks = {
+        ...task,
+        subTasks: [initialTaskState.entities['sub-task-1']!],
+      };
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskWithSubTasks as any));
+
+      await service.moveTasksToInbox([task]);
+
+      expect(taskService.getByIdWithSubTaskData$).toHaveBeenCalledWith('task-1');
+      expect(taskService.moveToProject).toHaveBeenCalledWith(
+        taskWithSubTasks as any,
+        'INBOX_PROJECT',
+      );
+      expect(taskService.setUnDone).toHaveBeenCalledWith('task-1');
+    });
+
+    it('does not re-open an unfinished task moved to the Inbox', async () => {
+      const task = { ...initialTaskState.entities['task-1']!, isDone: false };
+      taskService.getByIdWithSubTaskData$.and.returnValue(
+        of({ ...task, subTasks: [] } as any),
+      );
+
+      await service.moveTasksToInbox([task]);
+
+      expect(taskService.moveToProject).toHaveBeenCalled();
+      expect(taskService.setUnDone).not.toHaveBeenCalled();
+    });
+
+    it('marks every unfinished task done, including subtasks', async () => {
+      const parent = initialTaskState.entities['task-1']!;
+      const subTask = initialTaskState.entities['sub-task-1']!;
+
+      await service.markTasksDone([parent, subTask]);
+
+      expect(taskService.setDone).toHaveBeenCalledWith('task-1');
+      expect(taskService.setDone).toHaveBeenCalledWith('sub-task-1');
+      // Exactly the passed set — no dropped or double-dispatched tasks.
+      expect(taskService.setDone).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -19,14 +19,7 @@ export class PluginMetaPersistenceService {
    * Set plugin enabled/disabled status
    */
   async setPluginEnabled(pluginId: string, isEnabled: boolean): Promise<void> {
-    const currentState = await firstValueFrom(
-      this._store.select(selectPluginMetadataFeatureState),
-    );
-    const existing = currentState.find((item) => item.id === pluginId);
-
-    const pluginMetadata: PluginMetadata = existing
-      ? { ...existing, isEnabled }
-      : { id: pluginId, isEnabled };
+    const pluginMetadata: PluginMetadata = { id: pluginId, isEnabled };
 
     this._store.dispatch(upsertPluginMetadata({ pluginMetadata }));
   }
@@ -67,32 +60,5 @@ export class PluginMetaPersistenceService {
    */
   removePluginMetadata(pluginId: string): void {
     this._store.dispatch(deletePluginMetadata({ pluginId }));
-  }
-
-  /**
-   * Set Node.js execution consent for a plugin
-   */
-  async setNodeExecutionConsent(pluginId: string, hasConsent: boolean): Promise<void> {
-    const currentState = await firstValueFrom(
-      this._store.select(selectPluginMetadataFeatureState),
-    );
-    const existing = currentState.find((item) => item.id === pluginId);
-
-    const pluginMetadata: PluginMetadata = existing
-      ? { ...existing, nodeExecutionConsent: hasConsent }
-      : { id: pluginId, isEnabled: false, nodeExecutionConsent: hasConsent };
-
-    this._store.dispatch(upsertPluginMetadata({ pluginMetadata }));
-  }
-
-  /**
-   * Get Node.js execution consent for a plugin
-   */
-  async getNodeExecutionConsent(pluginId: string): Promise<boolean | undefined> {
-    const currentState = await firstValueFrom(
-      this._store.select(selectPluginMetadataFeatureState),
-    );
-    const pluginMetadata = currentState.find((item) => item.id === pluginId);
-    return pluginMetadata?.nodeExecutionConsent;
   }
 }

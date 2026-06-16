@@ -5,6 +5,7 @@ import {
 } from '../global-config.model';
 import { T } from '../../../t.const';
 import { IS_ELECTRON, IS_GNOME_DESKTOP } from '../../../app.constants';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 
 export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   title: T.GCF.MISC.TITLE,
@@ -51,16 +52,18 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
       : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     {
       key: 'startOfNextDayTime',
-      type: 'input',
+      type: 'time',
       defaultValue: '00:00',
       templateOptions: {
         required: true,
         label: T.GCF.MISC.START_OF_NEXT_DAY,
         description: T.GCF.MISC.START_OF_NEXT_DAY_HINT,
-        type: 'text',
-        pattern: '^([01]\\d|2[0-3]):([0-5]\\d)$',
-        maxLength: 5,
-        minLength: 5,
+      },
+      // Guard against a corrupt/legacy stored value (e.g. from an import): a
+      // truthy-but-invalid time would otherwise display blank yet pass silently.
+      // Mirrors the work-time fields in schedule-form.const.ts.
+      validators: {
+        validTimeString: (c: { value: string | undefined }) => isValidSplitTime(c.value),
       },
     },
     {

@@ -8,7 +8,7 @@
 .segmented-button-group {
   display: flex;
   gap: var(--s3);
-  padding: var(--s);
+  padding: 0;
   border-radius: var(--s4);
   //background: var(--bg-lightest);
   //box-shadow: 0 18px 45px var(--c-dark-20);
@@ -20,13 +20,13 @@
 
 .segment {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   justify-content: center;
   align-items: center;
-  gap: var(--s-quarter);
+  gap: var(--s);
   flex: 1 1 0;
   border-radius: 16px;
-  padding: var(--s) var(--s2);
+  padding: var(--s);
   border: 1px solid var(--options-border-color);
   background: var(--bg-lighter);
   background: transparent;
@@ -41,10 +41,6 @@
     border-color var(--transition-duration-m) var(--ani-enter-timing),
     background var(--transition-duration-m) var(--ani-enter-timing),
     color var(--transition-duration-m) var(--ani-enter-timing);
-
-  @include mq(xs, max) {
-    padding: var(--s) var(--s);
-  }
 
   @include mousePrimaryDevice {
     &:not(.is-active):hover {

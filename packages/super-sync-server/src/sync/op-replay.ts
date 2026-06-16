@@ -93,6 +93,10 @@ export type ReplayOperationRow = {
   opType: string;
   entityType: string;
   entityId: string | null;
+  // Full entity set for multi-entity (batch) ops; empty for single-entity and
+  // pre-migration rows, which fall back to the scalar entityId. Optional so the
+  // many manually-built test rows don't need it (#8340).
+  entityIds?: string[];
   payload: unknown;
   schemaVersion: number;
   isPayloadEncrypted: boolean;
@@ -269,11 +273,26 @@ export const replayOpsToState = (
             };
           }
           break;
-        case 'DEL':
-          if (processEntityId) {
-            delete state[processEntityType][processEntityId];
+        case 'DEL': {
+          // A batch delete (deleteTasks) stores its full set in entityIds and
+          // sets the scalar entityId to entityIds[0]. Delete every member, not
+          // just the scalar — otherwise entities 2..n survive in restore
+          // snapshots and feed back to clients (#8340). Single-entity and
+          // pre-migration ops have an empty/absent array and fall back to the
+          // scalar. (Migration never splits multi-entity ops, so reading the
+          // row's entityIds here is equivalent to the per-op scalar.)
+          const idsToDelete = row.entityIds?.length
+            ? row.entityIds
+            : processEntityId
+              ? [processEntityId]
+              : [];
+          for (const delId of idsToDelete) {
+            // Same prototype-pollution guard as the scalar entityId path.
+            if (isUnsafeEntityKey(delId)) continue;
+            delete state[processEntityType][delId];
           }
           break;
+        }
         case 'MOV':
           if (processEntityId && processPayload) {
             state[processEntityType][processEntityId] = {

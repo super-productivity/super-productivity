@@ -3,15 +3,16 @@
 :host {
   display: flex;
   justify-content: center;
-  overflow-x: auto;
   padding: var(--s);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .habit-tracker-container {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 800px;
+  width: fit-content;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -23,6 +24,9 @@
   gap: 12px var(--s);
   margin-bottom: var(--s2);
   padding: 0 var(--s-half);
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 400px;
 
   @include mq(xs, max) {
     margin-bottom: 12px;
@@ -70,34 +74,46 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0; // Critical for flex children truncation
+}
+
+.header-row,
+.habit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(7, 48px);
+  gap: var(--s-half);
+  width: 100%;
+  align-items: center;
+
+  @media screen and (max-width: 1000px) {
+    grid-template-columns: minmax(0, 1fr) repeat(7, 40px);
+  }
+
+  @media screen and (max-width: 800px) {
+    grid-template-columns: minmax(0, 1fr) repeat(7, 32px);
+    gap: 4px;
+  }
+
+  @include mq(xs, max) {
+    grid-template-columns: 40px repeat(7, 1fr);
+    gap: 0;
+  }
 }
 
 .header-row {
-  display: flex;
   margin-bottom: var(--s-half);
   align-items: flex-end;
 }
 
 .header-spacer {
-  flex: 0 0 120px;
-  width: 120px;
-
-  @include mq(xs, max) {
-    flex: 0 0 40px;
-    width: 40px;
-  }
 }
 
 .day-header {
-  flex: 1 1 0px;
-  min-width: 30px;
-  max-width: 100px;
   text-align: center;
   font-size: 11px;
   opacity: 0.7;
 
   @include mq(xs, max) {
-    min-width: 32px;
     font-size: 10px;
   }
 
@@ -117,10 +133,7 @@
 }
 
 .habit-row {
-  display: flex;
-  align-items: center;
   padding: var(--s) 0;
-
   border-bottom: 1px solid var(--c-dark-10);
 
   @include darkTheme() {
@@ -132,12 +145,24 @@
   }
 
   &.cdk-drag-preview {
+    display: flex; // Maintain flex for floating preview
+    align-items: center;
+    gap: var(--s-half);
     box-sizing: border-box;
     border-radius: var(--card-border-radius);
     box-shadow:
       0 5px 5px -3px var(--c-dark-20),
       0 8px 10px 1px rgba(0, 0, 0, 0.14),
       0 3px 14px 2px rgba(0, 0, 0, 0.12);
+
+    .habit-title {
+      flex: 1 1 0px;
+      min-width: 120px;
+    }
+
+    .day-cell {
+      flex: 0 0 48px;
+    }
   }
 
   &.cdk-drag-placeholder {
@@ -150,8 +175,6 @@
 }
 
 .habit-title {
-  flex: 0 0 120px;
-  width: 120px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -261,6 +284,7 @@
 .disabled-section {
   margin-top: var(--s);
   padding: 0 var(--s-half);
+  width: 100%;
 }
 
 .disabled-section-header {
@@ -306,16 +330,9 @@
 }
 
 .day-cell {
-  flex: 1 1 0px;
-  min-width: 30px;
-  max-width: 100px;
   display: flex;
   justify-content: center;
   cursor: pointer;
-
-  @include mq(xs, max) {
-    min-width: 32px;
-  }
 
   &.is-disabled {
     cursor: default;

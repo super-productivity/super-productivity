@@ -19,7 +19,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.33",
     "archiver": "^7.0.1",
-    "esbuild": "^0.25.11",
+    "esbuild": "^0.28.1",
     "jest": "^30.0.4",
     "jest-environment-jsdom": "^30.0.4",
     "ts-jest": "^29.4.0",

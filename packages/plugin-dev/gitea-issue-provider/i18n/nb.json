@@ -1,0 +1,22 @@
+{
+  "CFG": {
+    "HOST": "Vert (f.eks.: https://try.gitea.io)",
+    "TOKEN": "Access Token",
+    "REPO_FULL_NAME": "Brukernavn eller organisasjonsnavn/prosjekt",
+    "SCOPE": "Omfang",
+    "SCOPE_ALL": "Alle",
+    "SCOPE_CREATED": "Laget av meg",
+    "SCOPE_ASSIGNED": "Tildelt til meg",
+    "FILTER_LABELS": "Filter by labels (optional)",
+    "EXCLUDE_LABELS": "Exclude labels (optional)",
+    "HOW_TO_GET_TOKEN": "Hvordan får man et token?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammendrag",
+    "STATE": "Status",
+    "ASSIGNEE": "Tildelt",
+    "LABELS": "Etiketter",
+    "DESCRIPTION": "Beskrivelse"
+  },
+  "FORM_HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Gitea-problemer for et spesifikt repository i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.<\\/p> <p>I tillegg kan du automatisk legge til og importere alle åpne problemer.<\\/p><p>For å komme forbi bruksgrensene og få tilgang kan du gi et tilgangstoken."
+}

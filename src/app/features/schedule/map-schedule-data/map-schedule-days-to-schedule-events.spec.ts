@@ -180,7 +180,8 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
       ],
       FH,
     );
-    expect(res.eventsFlat[1].overlap).toEqual({ count: 1, offset: 1 });
+    expect(res.eventsFlat[0].overlap).toEqual({ count: 2, offset: 0 });
+    expect(res.eventsFlat[1].overlap).toEqual({ count: 2, offset: 1 });
   });
 
   it('should detect overlap for three zero-duration events at the same time', () => {
@@ -197,8 +198,9 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
       ],
       FH,
     );
-    expect(res.eventsFlat[1].overlap).toEqual({ count: 1, offset: 1 });
-    expect(res.eventsFlat[2].overlap).toEqual({ count: 2, offset: 2 });
+    expect(res.eventsFlat[0].overlap).toEqual({ count: 3, offset: 0 });
+    expect(res.eventsFlat[1].overlap).toEqual({ count: 3, offset: 1 });
+    expect(res.eventsFlat[2].overlap).toEqual({ count: 3, offset: 2 });
   });
 
   it('should detect overlap for two events with normal duration at the same time', () => {
@@ -214,7 +216,8 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
       ],
       FH,
     );
-    expect(res.eventsFlat[1].overlap).toEqual({ count: 1, offset: 1 });
+    expect(res.eventsFlat[0].overlap).toEqual({ count: 2, offset: 0 });
+    expect(res.eventsFlat[1].overlap).toEqual({ count: 2, offset: 1 });
   });
 
   it('should NOT detect overlap for two zero-duration events at different times', () => {

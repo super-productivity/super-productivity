@@ -869,4 +869,60 @@ describe('TaskService', () => {
 
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
+
+  describe('focusTaskById', () => {
+    let created: HTMLElement[];
+
+    const addTaskEl = (id: string, focusable: boolean): HTMLElement => {
+      const el = document.createElement('div');
+      el.id = `t-${id}`;
+      if (focusable) {
+        el.tabIndex = 0;
+      } else {
+        // display:none mirrors a copy inside a collapsed expansion panel: in the
+        // DOM (matched by querySelectorAll) but unable to receive focus.
+        el.style.display = 'none';
+      }
+      document.body.appendChild(el);
+      created.push(el);
+      return el;
+    };
+
+    beforeEach(() => {
+      created = [];
+      // Run the double requestAnimationFrame synchronously.
+      spyOn(window, 'requestAnimationFrame').and.callFake(
+        (cb: FrameRequestCallback): number => {
+          cb(0);
+          return 0;
+        },
+      );
+    });
+
+    afterEach(() => created.forEach((el) => el.remove()));
+
+    it('focuses the last copy when it is focusable (in-panel preference, #7120)', () => {
+      addTaskEl('X', true);
+      const last = addTaskEl('X', true);
+
+      service.focusTaskById('X', false);
+
+      expect(document.activeElement).toBe(last);
+    });
+
+    it('falls back to an earlier copy when the last one cannot take focus', () => {
+      const visible = addTaskEl('X', true);
+      addTaskEl('X', false); // collapsed/hidden in-panel copy, last in DOM
+
+      service.focusTaskById('X', false);
+
+      expect(document.activeElement).toBe(visible);
+    });
+
+    it('does nothing when no element matches', () => {
+      const active = document.activeElement;
+      service.focusTaskById('missing', false);
+      expect(document.activeElement).toBe(active);
+    });
+  });
 });

@@ -32,6 +32,8 @@ import { LocalDataConflictError } from '../core/errors/sync-errors';
 import { SyncHydrationService } from '../persistence/sync-hydration.service';
 import { SyncImportConflictDialogService } from './sync-import-conflict-dialog.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { BackupService } from '../backup/backup.service';
+import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { TODAY_TAG, SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 
@@ -45,6 +47,7 @@ describe('OperationLogSyncService', () => {
   let writeFlushServiceSpy: jasmine.SpyObj<OperationWriteFlushService>;
   let superSyncStatusServiceSpy: jasmine.SpyObj<SuperSyncStatusService>;
   let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
+  let backupServiceSpy: jasmine.SpyObj<BackupService>;
   let syncImportConflictDialogServiceSpy: jasmine.SpyObj<SyncImportConflictDialogService>;
 
   beforeEach(() => {
@@ -87,6 +90,13 @@ describe('OperationLogSyncService', () => {
       tag: { ids: [TODAY_TAG.id] }, // Only default TODAY tag
       note: { ids: [] },
     } as any);
+
+    backupServiceSpy = jasmine.createSpyObj('BackupService', [
+      'captureImportBackup',
+      'restoreImportBackup',
+    ]);
+    backupServiceSpy.captureImportBackup.and.resolveTo(1);
+    backupServiceSpy.restoreImportBackup.and.resolveTo(true);
 
     remoteOpsProcessingServiceSpy = jasmine.createSpyObj('RemoteOpsProcessingService', [
       'processRemoteOps',
@@ -215,6 +225,7 @@ describe('OperationLogSyncService', () => {
           ]),
         },
         { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
+        { provide: BackupService, useValue: backupServiceSpy },
         {
           provide: SyncImportConflictDialogService,
           useValue: syncImportConflictDialogServiceSpy,
@@ -389,6 +400,172 @@ describe('OperationLogSyncService', () => {
         expect(
           syncImportConflictDialogServiceSpy.showConflictDialog,
         ).toHaveBeenCalledWith(jasmine.objectContaining({ isNeverSynced: true }));
+      });
+
+      // #8304: the upload service defers persisting lastServerSeq for piggybacked ops;
+      // the orchestrator must persist it ONLY after processRemoteOps applies them.
+      describe('lastServerSeq persistence for piggybacked ops (#8304)', () => {
+        it('should persist lastServerSeq AFTER processing piggybacked ops', async () => {
+          opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+
+          const piggybackedOp: Operation = {
+            id: 'piggybacked-1',
+            clientId: 'client-B',
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'Remote Title' },
+            vectorClock: { clientB: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 1,
+            piggybackedOps: [piggybackedOp],
+            rejectedCount: 0,
+            rejectedOps: [],
+            lastServerSeqToPersist: 77,
+          });
+
+          // Track order: setLastServerSeq must run AFTER processRemoteOps.
+          const callOrder: string[] = [];
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.callFake(async () => {
+            callOrder.push('processRemoteOps');
+            return {
+              localWinOpsCreated: 0,
+              allOpsFilteredBySyncImport: false,
+              filteredOpCount: 0,
+              isLocalUnsyncedImport: false,
+            };
+          });
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.callFake(async () => {
+              callOrder.push('setLastServerSeq');
+            });
+
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as any;
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('completed');
+          expect(setLastServerSeqSpy).toHaveBeenCalledWith(77);
+          // The seq must NOT advance before the ops it covers are applied.
+          expect(callOrder).toEqual(['processRemoteOps', 'setLastServerSeq']);
+        });
+
+        it('should NOT persist lastServerSeq when a piggybacked SYNC_IMPORT dialog is cancelled', async () => {
+          // A meaningful local op remains pending so the gate produces dialog data for
+          // the incoming SYNC_IMPORT, which the user then cancels (default dialog result).
+          opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+          opLogStoreSpy.getUnsynced.and.resolveTo([
+            {
+              seq: 1,
+              op: {
+                id: 'local-task-create',
+                clientId: 'client-A',
+                actionType: 'test' as ActionType,
+                opType: OpType.Create,
+                entityType: 'TASK',
+                entityId: 'task-1',
+                payload: { title: 'Real local task' },
+                vectorClock: { clientA: 1 },
+                timestamp: Date.now(),
+                schemaVersion: 1,
+              },
+              appliedAt: Date.now(),
+              source: 'local',
+            },
+          ]);
+
+          const piggybackedSyncImport: Operation = {
+            id: 'remote-sync-import',
+            clientId: 'client-B',
+            actionType: ActionType.LOAD_ALL_DATA,
+            opType: OpType.SyncImport,
+            entityType: 'ALL',
+            payload: {},
+            vectorClock: { clientB: 5 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 0,
+            piggybackedOps: [piggybackedSyncImport],
+            rejectedCount: 0,
+            rejectedOps: [],
+            lastServerSeqToPersist: 99,
+          });
+
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.resolveTo();
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as any;
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('cancelled');
+          // CRITICAL: the seq must NOT advance — the piggybacked ops (the SYNC_IMPORT and
+          // any siblings) were never applied, so the next download must re-fetch them.
+          expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).not.toHaveBeenCalled();
+        });
+
+        it('should NOT persist lastServerSeq if processRemoteOps throws (crash window)', async () => {
+          opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+
+          const piggybackedOp: Operation = {
+            id: 'piggybacked-1',
+            clientId: 'client-B',
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'Test' },
+            vectorClock: { clientB: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 1,
+            piggybackedOps: [piggybackedOp],
+            rejectedCount: 0,
+            rejectedOps: [],
+            lastServerSeqToPersist: 88,
+          });
+
+          // Simulate a crash mid-apply (e.g. DecryptNoPasswordError, validation throw).
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.rejectWith(
+            new Error('apply failed mid-flight'),
+          );
+
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.resolveTo();
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as any;
+
+          await expectAsync(service.uploadPendingOps(mockProvider)).toBeRejected();
+
+          // The seq must NOT have advanced — the apply threw before completing, so the
+          // next download must re-fetch the piggybacked ops instead of skipping them.
+          expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+        });
       });
 
       describe('rejected ops handling delegation', () => {
@@ -1854,6 +2031,69 @@ describe('OperationLogSyncService', () => {
       await service.forceDownloadRemoteState(mockProvider);
 
       expect(callOrder[0]).toBe('clearUnsyncedOps');
+    });
+
+    it('should capture a safety backup BEFORE clearing unsynced ops (#8107)', async () => {
+      const callOrder: string[] = [];
+      backupServiceSpy.captureImportBackup.and.callFake(async () => {
+        callOrder.push('captureImportBackup');
+        return 1;
+      });
+      opLogStoreSpy.clearUnsyncedOps.and.callFake(async () => {
+        callOrder.push('clearUnsyncedOps');
+      });
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+      });
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+
+      expect(callOrder).toEqual(['captureImportBackup', 'clearUnsyncedOps']);
+    });
+
+    it('should ABORT without wiping local data if the safety backup fails (#8107)', async () => {
+      backupServiceSpy.captureImportBackup.and.rejectWith(new Error('disk full'));
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await expectAsync(service.forceDownloadRemoteState(mockProvider)).toBeRejected();
+
+      expect(opLogStoreSpy.clearUnsyncedOps).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.clearFullStateOps).not.toHaveBeenCalled();
+      expect(downloadServiceSpy.downloadRemoteOps).not.toHaveBeenCalled();
+    });
+
+    it('should offer to restore the previous data after replacing (#8107)', async () => {
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+      });
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_UNDO,
+          actionStr: T.G.UNDO,
+        }),
+      );
     });
 
     it('should reset lastServerSeq to 0', async () => {
