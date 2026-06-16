@@ -343,4 +343,10 @@
   flex-direction: column;
   gap: var(--s2);
   padding-top: var(--s);
+
+  // Divider between the projected Ends/Schedule block and the rrule-only
+  // advanced fields (BYMONTH / WKST / raw …).
+  &__sep {
+    border-top: 1px solid var(--separator-color, var(--extra-border-color));
+  }
 }

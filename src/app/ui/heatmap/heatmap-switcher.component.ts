@@ -67,6 +67,22 @@ export class HeatmapSwitcherComponent {
   readonly showWeekends = input<boolean>(false);
   /** Passed through to both views — show the green activity legend swatch. */
   readonly showActivity = input<boolean>(false);
+  /** Direct-manipulation mode — day clicks become contextual-menu requests, and
+   *  (month view) weekday headers / month title become clickable + annotated. */
+  readonly interactiveMenus = input<boolean>(false);
+  /** Per-weekday header glyphs (Mon=0 … Sun=6), passed to the MONTH view. */
+  readonly weekdayHeaderGlyphs = input<Map<
+    number,
+    { top?: string; mid?: string; bottom?: string }
+  > | null>(null);
+  /** Months (0=Jan … 11=Dec) limited via BYMONTH — shown with a chip in both views. */
+  readonly limitedMonths = input<number[] | null>(null);
+  readonly dayMenu = output<{ data: DayData; event: MouseEvent }>();
+  readonly weekdayHeaderMenu = output<{ weekdayIdx: number; event: MouseEvent }>();
+  readonly monthLabelMenu = output<{ month: number; event: MouseEvent }>();
+  /** A date (YYYY-MM-DD) to bring into view in the active sub-view — month view
+   *  jumps to its month, year strip scrolls to its cell. */
+  readonly focusDate = input<string | null>(null);
 
   readonly view = signal<HeatmapView>('year');
 

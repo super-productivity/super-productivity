@@ -184,18 +184,19 @@ describe('HeatmapMonthCalendarComponent', () => {
     c.dayClick.subscribe((d) => emitted.push(d));
     const flat = c.weeks().flat();
     const inMonth = flat.find((cell) => !cell.isOtherMonth && !!cell.data);
+    const ev = new MouseEvent('click');
     // Display-only (default): mouse clicks must not act — keyboard users
     // couldn't activate the same cells.
-    c.onCellClick(inMonth!);
+    c.onCellClick(inMonth!, ev);
     expect(emitted.length).toBe(0);
 
     fixture.componentRef.setInput('interactive', true);
     fixture.detectChanges();
     const greyWithData = flat.find((cell) => cell.isOtherMonth && !!cell.data);
     expect(greyWithData).toBeTruthy();
-    c.onCellClick(greyWithData!);
+    c.onCellClick(greyWithData!, ev);
     expect(emitted.length).toBe(0);
-    c.onCellClick(inMonth!);
+    c.onCellClick(inMonth!, ev);
     expect(emitted.length).toBe(1);
   });
 });

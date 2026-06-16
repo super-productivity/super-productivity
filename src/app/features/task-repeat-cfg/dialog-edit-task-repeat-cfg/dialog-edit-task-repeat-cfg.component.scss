@@ -208,6 +208,14 @@ repeat-freq-picker {
     text-align: center;
   }
 
+  // Explains the weekday-header annotation glyphs (nth / selected / in-months).
+  &__glyph-hint {
+    margin-top: var(--s-quarter, 4px);
+    font-size: 11px;
+    opacity: 0.6;
+    text-align: center;
+  }
+
   &__sim {
     margin-top: var(--s-half);
     font-size: 12px;
@@ -223,6 +231,80 @@ repeat-freq-picker {
     text-decoration: underline;
     cursor: pointer;
   }
+}
+
+// Ends + Schedule type — schedule-level controls shown below the calendar for
+// every mode (presets too). Centered, label + control on one line each.
+.rrule-ends {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-half);
+  margin: var(--s) 0;
+
+  &__field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s);
+
+    > label {
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0.75;
+    }
+  }
+
+  &__control {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--s-half);
+  }
+
+  &__num,
+  &__date {
+    height: 34px;
+    padding: 0 var(--s);
+    border: 1px solid var(--separator-color, var(--extra-border-color));
+    border-radius: var(--card-border-radius);
+    background: var(--bg-lightest, transparent);
+    color: var(--text-color);
+    font: inherit;
+    font-size: 13px;
+  }
+
+  &__num {
+    width: 4.5em;
+    text-align: center;
+  }
+
+  &__hint {
+    max-width: 520px;
+    font-size: 12px;
+    opacity: 0.6;
+    text-align: center;
+  }
+}
+
+// Grey "(switches to Monthly/…)" hint appended to a menu item whose action would
+// change the frequency. Global (not scoped) because MatMenu renders in a CDK
+// overlay outside this component's view.
+::ng-deep .cal-menu-hint {
+  margin-inline-start: 6px;
+  font-size: 0.85em;
+  opacity: 0.55;
+}
+
+// Zero-size fixed anchors for the calendar context menus — positioned at the
+// click point; the MatMenu opens from here.
+.cal-menu-anchor {
+  position: fixed;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 // Live recurrence summary card, pinned above the action buttons (outside the

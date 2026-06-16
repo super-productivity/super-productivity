@@ -2,10 +2,13 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
   inject,
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
@@ -27,6 +30,7 @@ export interface DayData {
   isNext?: boolean; // the next upcoming occurrence — spotlit with a pulse ring
   isToday?: boolean; // today's cell — marked with a ring
   isStart?: boolean; // the recurrence's start/anchor day (click-to-set in the dialog preview)
+  isEnd?: boolean; // the recurrence's UNTIL (end) day — marked specially
   occurrenceIndex?: number; // 0-based order in the window — drives the tooltip's "occurrence #N"
   activityLevel?: number; // 1-4 tracked-time intensity (GREEN overlay), distinct from projection
 }
@@ -39,6 +43,7 @@ export interface MonthBlock {
   label: string; // localized short month name (e.g. "Jan")
   total: string; // pre-formatted total shown beneath (caller picks time vs count)
   weeks: WeekData[]; // this month's days, laid in weekday-row columns
+  monthIndex: number; // 0=Jan … 11=Dec — for click targeting + limited-month chip
 }
 
 export interface HeatmapData {
@@ -71,6 +76,40 @@ export class HeatmapComponent {
   readonly T = T;
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
+  private readonly _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** A date (YYYY-MM-DD) the consumer wants brought into view — e.g. the start
+   *  date just changed. Scrolls the (horizontally panned) month strip so that
+   *  day's cell is centred. No-op when the day isn't in the rendered window. */
+  readonly focusDate = input<string | null>(null);
+
+  constructor() {
+    effect(() => {
+      const f = this.focusDate();
+      if (!f) {
+        return;
+      }
+      // The `.start` cell is repainted from the same change that moved focusDate;
+      // defer one tick so the scroll targets the up-to-date DOM.
+      untracked(() => setTimeout(() => this._scrollFocusIntoView()));
+    });
+  }
+
+  private _scrollFocusIntoView(): void {
+    const container = this._elRef.nativeElement.querySelector(
+      '.heatmap-month-blocks',
+    ) as HTMLElement | null;
+    const cell = container?.querySelector('.day.start') as HTMLElement | null;
+    if (!container || !cell) {
+      return;
+    }
+    const cr = cell.getBoundingClientRect();
+    const kr = container.getBoundingClientRect();
+    const halfCell = cr.width / 2;
+    const halfView = container.clientWidth / 2;
+    // Centre the cell in the (horizontally panned) strip.
+    container.scrollLeft += cr.left - kr.left + halfCell - halfView;
+  }
 
   // Single shared tooltip: instead of a matTooltip overlay per cell (which
   // stacked into a trail on a fast sweep across the dense grid), one readout
@@ -114,6 +153,17 @@ export class HeatmapComponent {
   readonly dayClick = output<DayData>();
   /** Emits the double-clicked day (e.g. simulate-completion in the dialog). */
   readonly dayDblClick = output<DayData>();
+  /** Direct-manipulation mode: a (non-drag) day click emits `dayMenu` with the
+   *  DOM event so the consumer can anchor a contextual menu, instead of firing
+   *  `dayClick`. */
+  readonly interactiveMenus = input<boolean>(false);
+  readonly dayMenu = output<{ data: DayData; event: MouseEvent }>();
+  /** Weekday-label click (weekday index Mon=0 … Sun=6) + event — direct-manip. */
+  readonly weekdayHeaderMenu = output<{ weekdayIdx: number; event: MouseEvent }>();
+  /** Month-label click (0=Jan … 11=Dec) + event — direct-manip. */
+  readonly monthLabelMenu = output<{ month: number; event: MouseEvent }>();
+  /** Months (0=Jan … 11=Dec) currently limited via BYMONTH — shown with a chip. */
+  readonly limitedMonths = input<number[] | null>(null);
   /** When true, day cells become keyboard-reachable buttons (for consumers that
    *  act on `dayClick`, e.g. click-to-simulate). Display-only heatmaps keep
    *  plain, non-focusable cells. */
@@ -123,6 +173,20 @@ export class HeatmapComponent {
   readonly showWeekends = input<boolean>(false);
   /** When true, the legend shows the green "tracked time" (activity) swatch. */
   readonly showActivity = input<boolean>(false);
+
+  onYearWeekdayClick(weekdayIdx: number, event: MouseEvent): void {
+    if (this.interactiveMenus()) {
+      this.weekdayHeaderMenu.emit({ weekdayIdx, event });
+    }
+  }
+  onYearMonthClick(month: number, event: MouseEvent): void {
+    if (this.interactiveMenus()) {
+      this.monthLabelMenu.emit({ month, event });
+    }
+  }
+  isMonthLimited(month: number): boolean {
+    return !!this.limitedMonths()?.includes(month);
+  }
 
   onDayKeydown(event: Event, day: DayData | null): void {
     if (day) {
@@ -192,8 +256,8 @@ export class HeatmapComponent {
   }
 
   // Cell click — swallowed when it is the tail of a pan (see _dragMoved), so a
-  // drag across the dense grid never lands as a "set start here".
-  onDayClick(day: DayData | null): void {
+  // drag across the dense grid never lands as a click/menu.
+  onDayClick(day: DayData | null, event: MouseEvent): void {
     if (!this.interactive() || !day) {
       return;
     }
@@ -201,7 +265,11 @@ export class HeatmapComponent {
       this._dragMoved = false;
       return;
     }
-    this.dayClick.emit(day);
+    if (this.interactiveMenus()) {
+      this.dayMenu.emit({ data: day, event });
+    } else {
+      this.dayClick.emit(day);
+    }
   }
 
   readonly dayLabels = computed(() => {
@@ -210,6 +278,19 @@ export class HeatmapComponent {
     const allDays = this._dateAdapter.getDayOfWeekNames('short');
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     return [...allDays.slice(firstDay), ...allDays.slice(0, firstDay)];
+  });
+
+  /** Weekday rows tagged with their weekday index (Mon=0 … Sun=6) so a click maps
+   *  to a stable weekday regardless of the locale's first day. */
+  readonly dayLabelRows = computed<{ label: string; weekdayIdx: number }[]>(() => {
+    const names = this._dateAdapter.getDayOfWeekNames('short') as string[];
+    const firstDay = this._dateAdapter.getFirstDayOfWeek();
+    const rows: { label: string; weekdayIdx: number }[] = [];
+    for (let r = 0; r < 7; r++) {
+      const jsDay = (firstDay + r) % 7; // 0=Sun … 6=Sat
+      rows.push({ label: names[jsDay], weekdayIdx: (jsDay + 6) % 7 }); // → Mon=0
+    }
+    return rows;
   });
 
   getDayClass(day: DayData | null): string {
@@ -224,7 +305,9 @@ export class HeatmapComponent {
       day.activityLevel ? ` activity activity-${day.activityLevel}` : ''
     }${day.isProjected ? ' projected' : ''}${day.isCompleted ? ' completed' : ''}${
       day.isNext ? ' next' : ''
-    }${day.isToday ? ' today' : ''}${day.isStart ? ' start' : ''}${weekend}`;
+    }${day.isToday ? ' today' : ''}${day.isStart ? ' start' : ''}${
+      day.isEnd ? ' end' : ''
+    }${weekend}`;
   }
 
   /** Day-granular countdown from today, or '' for past days. */
@@ -246,13 +329,23 @@ export class HeatmapComponent {
     if (!day) {
       return '';
     }
+    // Activity heatmap (intensity mode) already reports tracked time in its line.
+    if (this.legendMode() !== 'projection') {
+      return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_ACTIVITY, {
+        count: day.taskCount,
+        time: msToString(day.timeSpent),
+      })}`;
+    }
+    // Projection preview: an occurrence/start label, plus the tracked time when
+    // the day has any (so hovering a green day shows the hours spent).
+    let title: string;
     if (day.isStart) {
-      return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_START_DAY)}`;
-    }
-    if (day.isCompleted) {
-      return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_COMPLETED_SIM)}`;
-    }
-    if (day.isProjected) {
+      title = `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_START_DAY)}`;
+    } else if (day.isEnd) {
+      title = `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_END_DAY)}`;
+    } else if (day.isCompleted) {
+      title = `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_COMPLETED_SIM)}`;
+    } else if (day.isProjected) {
       const parts = [this._translateService.instant(T.G.HEATMAP_PROJECTED) as string];
       if (day.occurrenceIndex != null) {
         parts.push(
@@ -265,17 +358,15 @@ export class HeatmapComponent {
       if (cd) {
         parts.push(cd);
       }
-      return `${day.dateStr}: ${parts.join(' · ')}`;
+      title = `${day.dateStr}: ${parts.join(' · ')}`;
+    } else {
+      title = day.dateStr;
     }
-    // A projection calendar has no activity to report on an empty day — just its
-    // date. (Clicking sets the start; that affordance lives in the caption above
-    // the calendar, not a per-day tooltip claim.)
-    if (this.legendMode() === 'projection') {
-      return day.dateStr;
+    if (day.timeSpent > 0) {
+      title += ` · ${this._translateService.instant(T.G.HEATMAP_ACTIVITY_LEGEND)}: ${msToString(
+        day.timeSpent,
+      )}`;
     }
-    return `${day.dateStr}: ${this._translateService.instant(T.G.HEATMAP_ACTIVITY, {
-      count: day.taskCount,
-      time: msToString(day.timeSpent),
-    })}`;
+    return title;
   }
 }

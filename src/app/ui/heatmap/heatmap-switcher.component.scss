@@ -5,6 +5,10 @@
 
   &__toggle {
     align-self: center;
+    // Never let the centered pill exceed / clip against the container edge (e.g.
+    // a narrow surface) — keep its rounded right edge fully visible.
+    max-width: 100%;
+    flex-shrink: 0;
     // Material system token — sizes the toggle text without piercing component
     // internals (no .mat-* override, per the styling rules).
     --mat-button-toggle-label-text-size: 12px;

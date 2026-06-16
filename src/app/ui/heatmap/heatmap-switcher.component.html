@@ -20,12 +20,19 @@
       [rangeEnd]="rangeEnd()"
       [legendMode]="legendMode()"
       [interactive]="interactive()"
+      [interactiveMenus]="interactiveMenus()"
+      [weekdayHeaderGlyphs]="weekdayHeaderGlyphs()"
+      [limitedMonths]="limitedMonths()"
       [boundless]="monthBoundless()"
       [showWeekends]="showWeekends()"
       [showActivity]="showActivity()"
+      [focusDate]="focusDate()"
       (viewMonthChange)="monthViewChange.emit($event)"
       (dayClick)="dayClick.emit($event)"
       (dayDblClick)="dayDblClick.emit($event)"
+      (dayMenu)="dayMenu.emit($event)"
+      (weekdayHeaderMenu)="weekdayHeaderMenu.emit($event)"
+      (monthLabelMenu)="monthLabelMenu.emit($event)"
     />
   } @else if (data(); as d) {
     <heatmap
@@ -35,12 +42,18 @@
       [canNavPrev]="canNavPrev()"
       [canNavNext]="canNavNext()"
       [interactive]="interactive()"
+      [interactiveMenus]="interactiveMenus()"
+      [limitedMonths]="limitedMonths()"
       [showWeekends]="showWeekends()"
       [showActivity]="showActivity()"
+      [focusDate]="focusDate()"
       (navPrev)="navPrev.emit()"
       (navNext)="navNext.emit()"
       (dayClick)="dayClick.emit($event)"
       (dayDblClick)="dayDblClick.emit($event)"
+      (dayMenu)="dayMenu.emit($event)"
+      (weekdayHeaderMenu)="weekdayHeaderMenu.emit($event)"
+      (monthLabelMenu)="monthLabelMenu.emit($event)"
     />
   }
 </div>

@@ -9,11 +9,7 @@ describe('RruleBuilderComponent', () => {
   let fixture: ComponentFixture<RruleBuilderComponent>;
   let component: RruleBuilderComponent;
 
-  const setup = async (
-    rrule = '',
-    startDate = '2024-06-03',
-    repeatFromCompletion = false,
-  ): Promise<void> => {
+  const setup = async (rrule = '', startDate = '2024-06-03'): Promise<void> => {
     await TestBed.configureTestingModule({
       imports: [RruleBuilderComponent, TranslateModule.forRoot(), NoopAnimationsModule],
       providers: [{ provide: SnackService, useValue: { open: () => undefined } }],
@@ -22,7 +18,6 @@ describe('RruleBuilderComponent', () => {
     component = fixture.componentInstance;
     fixture.componentRef.setInput('rrule', rrule);
     fixture.componentRef.setInput('startDate', startDate);
-    fixture.componentRef.setInput('repeatFromCompletion', repeatFromCompletion);
     fixture.detectChanges();
   };
 
@@ -31,6 +26,25 @@ describe('RruleBuilderComponent', () => {
     expect(component.model().freq).toBe('MONTHLY');
     expect(component.model().monthlyMode).toBe('NTH_WEEKDAY');
     expect(component.model().nthDays).toEqual([{ pos: 2, days: ['TU'] }]);
+  });
+
+  it('re-syncs the model when the rrule INPUT changes externally (calendar edit)', async () => {
+    await setup('FREQ=DAILY');
+    expect(component.model().freq).toBe('DAILY');
+    // The calendar mutates the shared rule via the dialog → the input changes.
+    fixture.componentRef.setInput('rrule', 'FREQ=WEEKLY;BYDAY=MO,WE');
+    fixture.detectChanges();
+    expect(component.model().freq).toBe('WEEKLY');
+    expect(component.model().byDay).toEqual(['MO', 'WE']);
+  });
+
+  it('ignores its own emission round-tripping back (no churn)', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=2MO');
+    const before = component.model();
+    // Same rule structurally → the re-sync guard skips, model reference unchanged.
+    fixture.componentRef.setInput('rrule', 'FREQ=MONTHLY;BYDAY=2MO');
+    fixture.detectChanges();
+    expect(component.model()).toBe(before);
   });
 
   it('adds a second nth-weekday row and emits combined BYDAY (3MO,4SU)', async () => {
@@ -138,6 +152,10 @@ describe('RruleBuilderComponent', () => {
     // own $index (the weekday index) shadowed the outer row index, so clicking
     // anything but the first weekday targeted a wrong/non-existent row.
     await setup('FREQ=MONTHLY;BYDAY=3MO');
+    // The "On …" selection now lives inside the (collapsed-by-default) Advanced
+    // section — expand it so its weekday buttons are in the DOM.
+    component.setShowAdvanced(true);
+    fixture.detectChanges();
     const emitted: string[] = [];
     component.rruleChange.subscribe((r) => emitted.push(r));
 
@@ -186,8 +204,10 @@ describe('RruleBuilderComponent', () => {
     component.rruleChange.subscribe((r) => emitted.push(r));
     component.setFreq('YEARLY');
     expect(component.model().byMonth).toEqual([6]);
-    // default yearly mode = on date → must carry BYMONTH to mean "once a year"
-    expect(emitted[emitted.length - 1]).toBe('FREQ=YEARLY;BYMONTH=6;BYMONTHDAY=3');
+    // The day selection resets to none on a frequency switch, but the seeded
+    // BYMONTH still pins the rule to June (once a year on the DTSTART day) rather
+    // than letting a bare yearly rule expand across every month.
+    expect(emitted[emitted.length - 1]).toBe('FREQ=YEARLY;BYMONTH=6');
   });
 
   it('switching to YEARLY keeps an existing month selection', async () => {
@@ -225,6 +245,34 @@ describe('RruleBuilderComponent', () => {
     expect(component.model().bySetPos).toBe('2');
     component.setFreq('YEARLY');
     expect(component.model().bySetPos).toBe('');
+  });
+
+  it('changing frequency clears the previous frequency’s day selection', async () => {
+    // A byDay left over from WEEKLY would survive into MONTHLY (where the
+    // weekday-set sub-mode shows it as picked) — a stale, invisible selection.
+    await setup('FREQ=WEEKLY;BYDAY=MO,WE');
+    expect(component.model().byDay).toEqual(['MO', 'WE']);
+    const emitted: string[] = [];
+    component.rruleChange.subscribe((r) => emitted.push(r));
+    component.setFreq('MONTHLY');
+    expect(component.model().byDay).toEqual([]);
+    expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY');
+  });
+
+  it('switching monthly mode clears the previous mode’s day selection', async () => {
+    await setup('FREQ=MONTHLY;BYMONTHDAY=15');
+    expect(component.model().monthDays).toEqual([15]);
+    component.setMonthlyMode('WEEKDAYS');
+    // The day-of-month 15 must not linger into the weekday-set mode.
+    expect(component.model().monthDays).toEqual([]);
+    expect(component.model().byDay).toEqual([]);
+  });
+
+  it('switching monthly mode away from nth clears the nth rows', async () => {
+    await setup('FREQ=MONTHLY;BYDAY=2MO');
+    expect(component.model().monthlyMode).toBe('NTH_WEEKDAY');
+    component.setMonthlyMode('DAY_OF_MONTH');
+    expect(component.model().nthDays).toEqual([]);
   });
 
   it('a predefined set-position toggle closes the explicitly opened custom input', async () => {
@@ -309,35 +357,20 @@ describe('RruleBuilderComponent', () => {
     expect(emitted[emitted.length - 1]).toBe('FREQ=MONTHLY;BYMONTHDAY=1,15,-5');
   });
 
-  it('initializes the schedule-type toggle from the repeatFromCompletion input', async () => {
-    await setup('FREQ=DAILY;INTERVAL=3', '2024-06-03', true);
-    expect(component.fromCompletion()).toBe(true);
-  });
+  // NOTE: Ends + Schedule type moved to the dialog level (they apply to presets
+  // too) — those behaviours are covered in the dialog spec now.
 
-  it('emits repeatFromCompletionChange when the schedule type is toggled', async () => {
-    await setup('FREQ=DAILY;INTERVAL=3');
-    expect(component.fromCompletion()).toBe(false);
-    const emitted: boolean[] = [];
-    component.repeatFromCompletionChange.subscribe((v) => emitted.push(v));
-    component.setRepeatFromCompletion(true);
-    expect(component.fromCompletion()).toBe(true);
-    expect(emitted[emitted.length - 1]).toBe(true);
-  });
-
-  it('shows the engine-off notice and hint swaps while the flag is off', async () => {
+  it('shows the engine-off notice while the flag is off', async () => {
     setRRuleEngineEnabled(false);
     await setup('FREQ=DAILY;COUNT=3');
     expect(fixture.nativeElement.querySelector('.rb-engine-off')).toBeTruthy();
-    // COUNT end condition has no legacy equivalent — its hint must warn.
-    expect(fixture.nativeElement.querySelector('.rb-hint--engine-off')).toBeTruthy();
   });
 
-  it('hides the engine-off messaging when the flag is on', async () => {
+  it('hides the engine-off notice when the flag is on', async () => {
     setRRuleEngineEnabled(true);
     try {
       await setup('FREQ=DAILY;COUNT=3');
       expect(fixture.nativeElement.querySelector('.rb-engine-off')).toBeFalsy();
-      expect(fixture.nativeElement.querySelector('.rb-hint--engine-off')).toBeFalsy();
     } finally {
       setRRuleEngineEnabled(false);
     }

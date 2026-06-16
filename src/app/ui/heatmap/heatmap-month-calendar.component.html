@@ -20,7 +20,17 @@
     >
       <mat-icon>chevron_left</mat-icon>
     </button>
-    <div class="month-cal__title">{{ monthLabel() }}</div>
+    <div
+      class="month-cal__title"
+      [class.is-clickable]="interactiveMenus()"
+      [class.is-limited]="isViewMonthLimited()"
+      (click)="onTitleClick($event)"
+    >
+      {{ monthLabel() }}
+      @if (isViewMonthLimited()) {
+        <span class="month-cal__limit-chip"></span>
+      }
+    </div>
     <button
       mat-icon-button
       type="button"
@@ -32,8 +42,21 @@
   </div>
 
   <div class="month-cal__weekdays">
-    @for (wd of weekdayLabels(); track $index) {
-      <div class="month-cal__weekday">{{ wd }}</div>
+    @for (col of weekdayCols(); track col.weekdayIdx) {
+      <div
+        class="month-cal__weekday"
+        [class.is-clickable]="interactiveMenus()"
+        (click)="onHeaderClick(col.weekdayIdx, $event)"
+      >
+        <span class="month-cal__weekday-label">{{ col.label }}</span>
+        @if (weekdayHeaderGlyphs()?.get(col.weekdayIdx); as g) {
+          <span class="month-cal__weekday-ann">
+            <span class="month-cal__ann-slot">{{ g.top }}</span>
+            <span class="month-cal__ann-slot">{{ g.mid }}</span>
+            <span class="month-cal__ann-slot">{{ g.bottom }}</span>
+          </span>
+        }
+      </div>
     }
   </div>
 
@@ -49,7 +72,7 @@
           (mouseleave)="hideTip()"
           (focus)="showTip(cell, $event)"
           (blur)="hideTip()"
-          (click)="onCellClick(cell)"
+          (click)="onCellClick(cell, $event)"
           (dblclick)="onCellDblClick(cell)"
           (keydown.enter)="isCellInteractive(cell) && onCellKeydown($event, cell)"
           (keydown.space)="isCellInteractive(cell) && onCellKeydown($event, cell)"
@@ -83,6 +106,9 @@
         >
         <span class="month-cal__legend-item"
           ><i class="sw next"></i>{{ T.G.HEATMAP_NEXT | translate }}</span
+        >
+        <span class="month-cal__legend-item"
+          ><i class="sw end"></i>{{ T.G.HEATMAP_END_DAY | translate }}</span
         >
         @if (showActivity()) {
           <span class="month-cal__legend-item">

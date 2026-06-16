@@ -6,6 +6,7 @@ import {
   inject,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { Task, TaskReminderOptionId } from '../../tasks/task.model';
 import {
@@ -86,6 +87,23 @@ import {
   buildProjectionDayMap,
   heatmapOccurrenceTotal,
 } from '../../../ui/heatmap/build-heatmap-data.util';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import {
+  clearMonths,
+  setEnd as setEndInRRule,
+  setUntil as setUntilInRRule,
+  setYearDay,
+  toggleByDay,
+  toggleByMonth,
+  toggleMonthDay,
+  toggleNthDay,
+  weekdayAnnotations,
+} from '../util/rrule-calendar-ops.util';
+import { rruleToFormModel, RRULE_WEEKDAYS, RRuleWeekday } from '../util/rrule-form.util';
+import {
+  SegmentedButtonGroupComponent,
+  SegmentedButtonOption,
+} from '../../../ui/segmented-button-group/segmented-button-group.component';
 
 // Fields whose change requires offering "Update all task instances?" — covers
 // what propagates to existing tasks (vs. schedule fields, which only affect
@@ -126,6 +144,10 @@ type RepeatCfgWorking = Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg;
     RepeatFreqPickerComponent,
     DatePipe,
     NgTemplateOutlet,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+    SegmentedButtonGroupComponent,
   ],
 })
 export class DialogEditTaskRepeatCfgComponent {
@@ -387,51 +409,303 @@ export class DialogEditTaskRepeatCfgComponent {
   clearSimulation(): void {
     this.simulatedCompletion.set(null);
   }
-  // A pending single-click start-move, held briefly so a double-click (simulate
-  // completion) can cancel it before it fires.
-  private _setStartTimer: ReturnType<typeof setTimeout> | null = null;
 
-  onPreviewDayClick(day: DayData): void {
-    if (!day?.dateStr) {
-      return;
-    }
-    // Single click SETS the recurrence start/anchor (the merged picker), and the
-    // projection re-renders around it. Deferred ~220ms so a double-click can
-    // cancel it (a dblclick also fires two single-clicks).
-    if (this._setStartTimer) {
-      clearTimeout(this._setStartTimer);
-    }
-    const dateStr = day.dateStr;
-    this._setStartTimer = setTimeout(() => {
-      this._setStartTimer = null;
-      // Floor at today (new-cfg rule) and skip a no-op re-pick.
-      if (dateStr < getDbDateStr(new Date()) || dateStr === this.repeatCfg().startDate) {
-        return;
-      }
-      // startDate is the single source of truth: updating it re-feeds the formly
-      // date field ([model]="repeatCfg()") AND re-projects the calendar.
-      this.repeatCfg.update((cfg) => ({ ...cfg, startDate: dateStr }));
-    }, 220);
+  // ---- Calendar context menus (direct-manipulation rule editing) ----
+  // A click on a day / weekday header / month label opens a contextual MatMenu
+  // (hidden trigger positioned at the pointer) whose actions edit the SAME rule
+  // the builder edits, via the pure rrule-calendar-ops helpers + onRRuleChange.
+  readonly menuDay = signal<DayData | null>(null);
+  readonly menuWeekdayIdx = signal<number | null>(null);
+  /** Which frequency the (shared) nth-weekday submenu currently targets — set when
+   *  its trigger opens, so the 1st/2nd/…/Last items apply to the right freq. */
+  readonly menuNthFreq = signal<'MONTHLY' | 'YEARLY'>('MONTHLY');
+  readonly menuPos = signal<{ x: string; y: string }>({ x: '0px', y: '0px' });
+  /** The month (0=Jan … 11=Dec) the month-label menu targets — set from the click
+   *  (the month view's title, or a year-view month block). */
+  readonly menuMonthIdx = signal<number>(new Date().getMonth());
+
+  private readonly _dayMenuTrigger = viewChild('dayMenuTrigger', {
+    read: MatMenuTrigger,
+  });
+  private readonly _weekdayMenuTrigger = viewChild('weekdayMenuTrigger', {
+    read: MatMenuTrigger,
+  });
+  private readonly _monthMenuTrigger = viewChild('monthMenuTrigger', {
+    read: MatMenuTrigger,
+  });
+
+  // The live structured model parsed from the working rule — drives menu-item
+  // visibility (freq/mode) and the weekday-header annotation glyphs.
+  private readonly _previewModel = computed(() =>
+    rruleToFormModel(this.repeatCfg().rrule, this._previewRefDate()),
+  );
+  readonly isMonthlyRule = computed(() => this._previewModel().freq === 'MONTHLY');
+  readonly isYearlyRule = computed(() => this._previewModel().freq === 'YEARLY');
+  // Menu items are shown in EVERY mode; ones that would change the frequency get
+  // a grey "(switches to …)" hint. Empty string → no hint (already that freq).
+  readonly dayOfMonthHint = computed(() =>
+    this.isMonthlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY,
+  );
+  readonly dayOfYearHint = computed(() =>
+    this.isYearlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY,
+  );
+  // The weekday menu lists EVERY weekday-targeting rule (weekly / monthly / yearly,
+  // plain + nth) so all are reachable from one click; same label, the grey hint is
+  // the differentiator. Empty hint → that entry is already the current frequency.
+  readonly selectedWeeklyHint = computed(() =>
+    this._previewModel().freq === 'WEEKLY'
+      ? ''
+      : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_WEEKLY,
+  );
+  readonly selectedMonthlyHint = computed(() =>
+    this.isMonthlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_MONTHLY,
+  );
+  readonly selectedYearlyHint = computed(() =>
+    this.isYearlyRule() ? '' : T.F.TASK_REPEAT.F.CAL_MENU_SWITCHES_YEARLY,
+  );
+  // Per-weekday header glyphs (Mon=0 … Sun=6): nth ordinal (top), selected-day
+  // dot (mid), in-months grid (bottom) — the generic shape the calendar renders.
+  readonly weekdayHeaderGlyphs = computed(() => {
+    const ann = weekdayAnnotations(this._previewModel());
+    const out = new Map<number, { top?: string; mid?: string; bottom?: string }>();
+    ann.forEach((a, idx) => {
+      out.set(idx, {
+        top: a.nth.length ? a.nth.join(',') : undefined,
+        mid: a.selected ? '●' : undefined,
+        bottom: a.inMonths ? '▦' : undefined,
+      });
+    });
+    return out;
+  });
+
+  private _previewRefDate(): Date {
+    const sd = this.repeatCfg().startDate as string | Date | undefined;
+    if (sd instanceof Date) return sd;
+    if (sd) return dateStrToUtcDate(sd);
+    return new Date();
+  }
+  private _setMenuPos(event: MouseEvent): void {
+    this.menuPos.set({ x: event.clientX + 'px', y: event.clientY + 'px' });
   }
 
-  onPreviewDayDblClick(day: DayData): void {
-    if (!day?.dateStr) {
+  onPreviewDayMenu({ data, event }: { data: DayData; event: MouseEvent }): void {
+    if (!data?.dateStr) {
       return;
     }
-    // Cancel the pending single-click start-move — a double-click means "simulate
-    // completing here", not "move the start".
-    if (this._setStartTimer) {
-      clearTimeout(this._setStartTimer);
-      this._setStartTimer = null;
-    }
-    // Only a "repeat from completion" schedule re-anchors on completion, so the
-    // what-if is meaningless otherwise. Toggle the simulation on the clicked day.
-    if (!this.repeatCfg().repeatFromCompletionDate) {
+    event.preventDefault();
+    this.menuDay.set(data);
+    this._setMenuPos(event);
+    this._dayMenuTrigger()?.openMenu();
+  }
+  onWeekdayHeaderMenu({
+    weekdayIdx,
+    event,
+  }: {
+    weekdayIdx: number;
+    event: MouseEvent;
+  }): void {
+    event.preventDefault();
+    this.menuWeekdayIdx.set(weekdayIdx);
+    this._setMenuPos(event);
+    this._weekdayMenuTrigger()?.openMenu();
+  }
+  onMonthLabelMenu({ month, event }: { month: number; event: MouseEvent }): void {
+    event.preventDefault();
+    this.menuMonthIdx.set(month);
+    this._setMenuPos(event);
+    this._monthMenuTrigger()?.openMenu();
+  }
+
+  // --- day-menu actions ---
+  /** True when the clicked day is strictly after the start (so "ends on" applies). */
+  readonly menuDayAfterStart = computed(() => {
+    const d = this.menuDay()?.dateStr;
+    const s = this.repeatCfg().startDate as string | undefined;
+    return !!d && !!s && d > s;
+  });
+  menuSetStart(): void {
+    const d = this.menuDay()?.dateStr;
+    // Floor at today (new-cfg rule) and skip a no-op re-pick.
+    if (!d || d < getDbDateStr(new Date()) || d === this.repeatCfg().startDate) {
       return;
     }
-    this.simulatedCompletion.set(
-      day.dateStr === this.simulatedCompletion() ? null : day.dateStr,
+    this._applyStartDate(d);
+  }
+  /** Apply an explicit start-date pick (M/D/Y fields or the "Set start" menu).
+   *  A "repeat from completion" schedule that has already run anchors its
+   *  preview and next-occurrence on `lastTaskCreationDay`; an explicit start
+   *  edit re-defines that anchor, so the stale runtime marker is dropped — else
+   *  the new start has no visible (or real) effect. Fixed schedules ignore it. */
+  private _applyStartDate(dateStr: string): void {
+    this.repeatCfg.update((cfg) => ({
+      ...cfg,
+      startDate: dateStr,
+      ...(cfg.repeatFromCompletionDate && cfg.lastTaskCreationDay
+        ? { lastTaskCreationDay: undefined }
+        : {}),
+    }));
+    this._clearEndIfBeforeStart(dateStr);
+    this.focusStart.set(dateStr);
+  }
+  menuEndsOn(): void {
+    const d = this.menuDay()?.dateStr;
+    if (!d) {
+      return;
+    }
+    this.onRRuleChange(
+      setUntilInRRule(this.repeatCfg().rrule, this._previewRefDate(), d),
     );
+  }
+  menuToggleMonthDay(): void {
+    const d = this.menuDay()?.date;
+    if (!d) {
+      return;
+    }
+    this.onRRuleChange(
+      toggleMonthDay(this.repeatCfg().rrule, this._previewRefDate(), d.getDate()),
+    );
+  }
+  menuSetYearDay(): void {
+    const d = this.menuDay()?.date;
+    if (!d) {
+      return;
+    }
+    this.onRRuleChange(
+      setYearDay(
+        this.repeatCfg().rrule,
+        this._previewRefDate(),
+        d.getMonth() + 1,
+        d.getDate(),
+      ),
+    );
+  }
+  menuSimulate(): void {
+    const d = this.menuDay()?.dateStr;
+    if (!d) {
+      return;
+    }
+    this.simulatedCompletion.set(d === this.simulatedCompletion() ? null : d);
+  }
+
+  // --- weekday-header-menu actions ---
+  private _menuWeekday(): RRuleWeekday | null {
+    const i = this.menuWeekdayIdx();
+    return i == null ? null : (RRULE_WEEKDAYS[i] ?? null);
+  }
+  menuToggleNth(ordinal: number, freq: 'MONTHLY' | 'YEARLY'): void {
+    const wd = this._menuWeekday();
+    if (!wd) {
+      return;
+    }
+    this.onRRuleChange(
+      toggleNthDay(this.repeatCfg().rrule, this._previewRefDate(), wd, ordinal, freq),
+    );
+  }
+  // "Selected days of the week" targets BYDAY in an EXPLICIT frequency — the menu
+  // offers a weekly / monthly / yearly variant of the same label, each switching
+  // to that freq (grey hint shown when it differs from the current rule).
+  menuToggleSelectedDay(freq: 'WEEKLY' | 'MONTHLY' | 'YEARLY'): void {
+    const wd = this._menuWeekday();
+    if (!wd) {
+      return;
+    }
+    this.onRRuleChange(
+      toggleByDay(this.repeatCfg().rrule, this._previewRefDate(), wd, freq),
+    );
+  }
+
+  // --- month-label-menu action ---
+  readonly menuMonth = computed(() => this.menuMonthIdx() + 1); // 1..12
+  readonly menuMonthName = computed(
+    () => (this._dateAdapter.getMonthNames('long') as string[])[this.menuMonthIdx()],
+  );
+  readonly menuMonthActive = computed(() =>
+    this._previewModel().byMonth.includes(this.menuMonth()),
+  );
+  menuToggleMonth(): void {
+    this.onRRuleChange(
+      toggleByMonth(this.repeatCfg().rrule, this._previewRefDate(), this.menuMonth()),
+    );
+  }
+  /** Months (0=Jan … 11=Dec) currently limited via BYMONTH — fed to the calendar
+   *  so it can chip the limited month(s). */
+  readonly limitedMonths = computed(() => this._previewModel().byMonth.map((m) => m - 1));
+  readonly hasMonthLimits = computed(() => this._previewModel().byMonth.length > 0);
+  /** Short names of the limited months, e.g. "Jan, Jun" — shown in the
+   *  "remove all month limits" item. */
+  readonly limitedMonthNames = computed(() => {
+    const names = this._dateAdapter.getMonthNames('short') as string[];
+    return this._previewModel()
+      .byMonth.map((m) => names[m - 1])
+      .join(', ');
+  });
+  menuClearMonthLimits(): void {
+    this.onRRuleChange(clearMonths(this.repeatCfg().rrule, this._previewRefDate()));
+  }
+
+  // ---- Ends + Schedule type (dialog-level — apply to presets AND custom, not
+  // just the builder; extracted from rrule-builder). Ends edits the rrule via
+  // setEnd; Schedule type is the separate repeatFromCompletionDate flag. ----
+  readonly endOptions: readonly SegmentedButtonOption[] = [
+    { id: 'NEVER', labelKey: T.F.TASK_REPEAT.F.RRULE_END_NEVER },
+    { id: 'UNTIL', labelKey: T.F.TASK_REPEAT.F.RRULE_END_UNTIL },
+    { id: 'COUNT', labelKey: T.F.TASK_REPEAT.F.RRULE_END_COUNT },
+  ];
+  readonly scheduleTypeOptions: readonly SegmentedButtonOption[] = [
+    { id: 'START', labelKey: T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START },
+    { id: 'COMPLETION', labelKey: T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION },
+  ];
+  readonly endType = computed(() => this._previewModel().endType); // NEVER|COUNT|UNTIL
+  readonly endCount = computed(() => this._previewModel().count);
+  readonly endUntil = computed(() => this._previewModel().until);
+  readonly scheduleSelectedId = computed(() =>
+    this.repeatCfg().repeatFromCompletionDate ? 'COMPLETION' : 'START',
+  );
+  /** A year past the start — the default UNTIL when switching to "On date" with no
+   *  date yet, so the rule gets a real UNTIL (empty wouldn't round-trip → NEVER). */
+  private _defaultUntil(): string {
+    const u = this._previewRefDate();
+    const d = new Date(u);
+    d.setFullYear(d.getFullYear() + 1);
+    return getDbDateStr(d);
+  }
+  onEndTypeChange(id: string | number): void {
+    const t = String(id) as 'NEVER' | 'COUNT' | 'UNTIL';
+    const value =
+      t === 'COUNT'
+        ? this.endCount() || 10
+        : t === 'UNTIL'
+          ? this.endUntil() || this._defaultUntil()
+          : undefined;
+    this.onRRuleChange(
+      setEndInRRule(this.repeatCfg().rrule, this._previewRefDate(), t, value),
+    );
+  }
+  setEndCount(v: string): void {
+    this.onRRuleChange(
+      setEndInRRule(this.repeatCfg().rrule, this._previewRefDate(), 'COUNT', v),
+    );
+  }
+  setEndUntil(v: string): void {
+    if (!v) {
+      return;
+    }
+    this.onRRuleChange(
+      setEndInRRule(this.repeatCfg().rrule, this._previewRefDate(), 'UNTIL', v),
+    );
+  }
+  onScheduleTypeChange(id: string | number): void {
+    this.onRepeatFromCompletionChange(id === 'COMPLETION');
+  }
+  /** A start moved on/after the end (UNTIL) leaves the series empty — drop the end
+   *  back to "Never" so the rule still fires. Call AFTER the startDate update. */
+  private _clearEndIfBeforeStart(startDate: string): void {
+    const until = this.endUntil();
+    if (until && until <= startDate) {
+      this.onRRuleChange(
+        setEndInRRule(this.repeatCfg().rrule, this._previewRefDate(), 'NEVER'),
+      );
+    }
   }
   // Only the schedule-relevant slice of the working cfg, with value equality —
   // formly emits a CLONED model on every keystroke in ANY field (title, notes,
@@ -571,6 +845,15 @@ export class DialogEditTaskRepeatCfgComponent {
     if (startDay) {
       startDay.isStart = true;
     }
+    // Mark the end (UNTIL) day specially when the rule has one and it falls in
+    // the window — so "Ends on this date" reads as a distinct boundary marker.
+    const until = safeParseRRuleOptions(rrule)?.until;
+    if (until instanceof Date) {
+      const endDay = dayMap.get(getDbDateStr(until));
+      if (endDay) {
+        endDay.isEnd = true;
+      }
+    }
     // Activity overlay (GREEN) — merge the saved series' tracked time into the
     // same window when enabled. Levels are relative to the busiest tracked day in
     // view, mirroring the standalone Activity heatmap this replaces.
@@ -635,6 +918,11 @@ export class DialogEditTaskRepeatCfgComponent {
   // picker — Option A); these three fields, shown above the calendar, are the
   // precise alternative to clicking a day. Both write the same
   // `repeatCfg().startDate`, so the calendar and the fields stay in sync.
+  // Set to the new start date whenever the user DELIBERATELY picks one (the M/D/Y
+  // fields or the "Set start" menu) so the calendar jumps/scrolls to it. A plain
+  // mirror of startDate would also fire on unrelated rebuilds and on open; this
+  // only changes on an explicit pick, leaving the default view alone otherwise.
+  readonly focusStart = signal<string | null>(null);
   readonly startParts = computed<{ y: number; m: number; d: number } | null>(() => {
     const sd = this.repeatCfg().startDate as string | Date | undefined;
     if (!sd) {
@@ -684,7 +972,7 @@ export class DialogEditTaskRepeatCfgComponent {
     if (dateStr === this.repeatCfg().startDate) {
       return;
     }
-    this.repeatCfg.update((cfg) => ({ ...cfg, startDate: dateStr }));
+    this._applyStartDate(dateStr);
   }
 
   // Rhythm summary shown above the open calendar: how many occurrences are in the
@@ -870,6 +1158,10 @@ export class DialogEditTaskRepeatCfgComponent {
     this.repeatCfg.update((cfg) => ({
       ...cfg,
       rrule,
+      // Editing the rule (builder OR calendar menus) makes it a custom rule —
+      // switch the quick-setting to RRULE so the builder shows and a preset label
+      // no longer misrepresents the now-edited schedule.
+      quickSetting: 'RRULE' as RepeatQuickSetting,
       // Keep the legacy schedule fields (cycle / interval / weekday flags /
       // monthly anchors) in sync so older sync clients — which ignore `rrule` —
       // fall back to a faithful recurrence. Pass startDate so a BYDAY-less

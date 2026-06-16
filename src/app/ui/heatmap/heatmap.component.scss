@@ -109,6 +109,31 @@
   &__label {
     font-size: 12px;
     color: var(--text-color-muted);
+
+    &.is-clickable {
+      cursor: pointer;
+
+      &:hover {
+        color: var(--c-primary);
+      }
+    }
+
+    // Limited via BYMONTH — accented + a chip so it's clear this month is one of
+    // the few the rule is restricted to.
+    &.is-limited {
+      color: var(--c-primary);
+      font-weight: 600;
+    }
+  }
+
+  &__limit-chip {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-left: 3px;
+    vertical-align: middle;
+    background: var(--c-accent, var(--c-primary));
   }
 
   &__total {
@@ -133,6 +158,14 @@
     height: 12px;
     line-height: 12px;
     flex-shrink: 0;
+
+    &.is-clickable {
+      cursor: pointer;
+
+      &:hover {
+        color: var(--c-primary);
+      }
+    }
   }
 
   // Month-block variant: the mini-grids start at the very top (labels/totals
@@ -209,11 +242,19 @@
     outline-offset: -1px;
   }
 
-  // Simulated "completed here" day: solid primary with a ring.
+  // Simulated "completed here" day: solid ACCENT (distinct from the primary-blue
+  // start/projection so the what-if completion reads apart).
   &.completed {
-    background: var(--c-primary);
-    outline: 2px solid var(--c-primary);
+    background: var(--c-accent);
+    outline: 2px solid var(--c-accent);
     outline-offset: 1px;
+  }
+
+  // Recurrence end (UNTIL) day: a warn-coloured ring — the series stops here.
+  &.end {
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 0 0 1.5px var(--c-warn, var(--c-accent));
   }
 
   // Today: a white square ring (white + faint dark edge for cross-theme
@@ -312,6 +353,24 @@
     margin: 0 var(--s-half);
   }
 
+  // Projection legend: wrap BETWEEN swatch+label pairs (each pair is nowrap), so
+  // a narrow year strip flows onto two clean lines instead of splitting labels.
+  &--wrap {
+    flex-wrap: wrap;
+    row-gap: var(--s-quarter, 4px);
+
+    .legend-pair {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+
+      span {
+        margin: 0;
+      }
+    }
+  }
+
   // Tracked-time range: 4 green swatches packed flush into a gradient bar.
   .legend-ramp {
     display: inline-flex;
@@ -358,6 +417,12 @@
     &.next {
       background: transparent;
       box-shadow: inset 0 0 0 2px var(--c-accent);
+    }
+
+    // Recurrence end (UNTIL) day: a warn ring.
+    &.end {
+      background: transparent;
+      box-shadow: inset 0 0 0 2px var(--c-warn, var(--c-accent));
     }
 
     &.start {

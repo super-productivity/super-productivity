@@ -59,391 +59,10 @@
     </div>
   </div>
 
-  <!-- WEEKLY: weekday circles -->
-  @if (model().freq === 'WEEKLY') {
-    <div class="rb-field">
-      <label>{{ T.F.TASK_REPEAT.F.RRULE_BYDAY | translate }}</label>
-      <div class="rb-toggles rb-weekrow">
-        @for (w of weekdays; track w.value) {
-          <button
-            type="button"
-            class="rb-tgl"
-            [class.active]="model().byDay.includes(w.value)"
-            [attr.aria-pressed]="model().byDay.includes(w.value)"
-            [title]="w.full"
-            (click)="toggleDay(w.value)"
-          >
-            {{ w.short }}
-          </button>
-        }
-      </div>
-    </div>
-  }
-
-  <!-- MONTHLY -->
-  @if (model().freq === 'MONTHLY') {
-    <div class="rb-row">
-      <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate }}</span>
-      <select
-        #mMode
-        class="rb-sel"
-        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate"
-        (change)="setMonthlyMode(mMode.value)"
-      >
-        @for (o of monthlyModeOpts; track o.value) {
-          <option
-            [value]="o.value"
-            [selected]="o.value === model().monthlyMode"
-          >
-            {{ o.label | translate }}
-          </option>
-        }
-      </select>
-    </div>
-
-    @if (model().monthlyMode === 'DAY_OF_MONTH') {
-      <div class="rb-field">
-        <div class="rb-toggles rb-toggles--days">
-          @for (d of dayGrid; track d) {
-            <button
-              type="button"
-              class="rb-tgl"
-              [class.active]="model().monthDays.includes(d)"
-              [attr.aria-pressed]="model().monthDays.includes(d)"
-              (click)="toggleMonthDay(d)"
-            >
-              {{ d }}
-            </button>
-          }
-        </div>
-        <div class="rb-toggles rb-day-extras">
-          @for (nd of negativeDays; track nd.value) {
-            <button
-              type="button"
-              class="rb-tgl rb-tgl--wide"
-              [class.active]="model().monthDays.includes(nd.value)"
-              [attr.aria-pressed]="model().monthDays.includes(nd.value)"
-              (click)="toggleMonthDay(nd.value)"
-            >
-              {{ nd.label | translate }}
-            </button>
-          }
-        </div>
-        <button
-          type="button"
-          class="rb-tgl rb-tgl--wide rb-custom-toggle"
-          [class.active]="showCustomDays()"
-          [attr.aria-expanded]="showCustomDays()"
-          (click)="toggleCustomDays()"
-        >
-          {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-        </button>
-        @if (showCustomDays()) {
-          <input
-            class="rb-text"
-            type="text"
-            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
-            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
-            [value]="model().monthDays.join(',')"
-            (change)="setMonthDays($any($event.target).value)"
-          />
-          <div class="rb-hint">
-            {{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_DESCRIPTION | translate }}
-          </div>
-        }
-      </div>
-    }
-    @if (model().monthlyMode === 'WEEKDAYS') {
-      <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
-    }
-  }
-
-  <!-- YEARLY -->
-  @if (model().freq === 'YEARLY') {
-    <div class="rb-row">
-      <span class="rb-lbl">{{ T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate }}</span>
-      <select
-        #yMode
-        class="rb-sel"
-        [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate"
-        (change)="setYearlyMode(yMode.value)"
-      >
-        @for (o of yearlyModeOpts; track o.value) {
-          <option
-            [value]="o.value"
-            [selected]="o.value === model().yearlyMode"
-          >
-            {{ o.label | translate }}
-          </option>
-        }
-      </select>
-    </div>
-    @if (model().yearlyMode === 'DAY_OF_MONTH') {
-      <div class="rb-field">
-        <div class="rb-toggles rb-toggles--days">
-          @for (d of dayGrid; track d) {
-            <button
-              type="button"
-              class="rb-tgl"
-              [class.active]="model().monthDays.includes(d)"
-              [attr.aria-pressed]="model().monthDays.includes(d)"
-              (click)="toggleMonthDay(d)"
-            >
-              {{ d }}
-            </button>
-          }
-        </div>
-        <div class="rb-toggles rb-day-extras">
-          @for (nd of negativeDays; track nd.value) {
-            <button
-              type="button"
-              class="rb-tgl rb-tgl--wide"
-              [class.active]="model().monthDays.includes(nd.value)"
-              [attr.aria-pressed]="model().monthDays.includes(nd.value)"
-              (click)="toggleMonthDay(nd.value)"
-            >
-              {{ nd.label | translate }}
-            </button>
-          }
-        </div>
-        <button
-          type="button"
-          class="rb-tgl rb-tgl--wide rb-custom-toggle"
-          [class.active]="showCustomDays()"
-          [attr.aria-expanded]="showCustomDays()"
-          (click)="toggleCustomDays()"
-        >
-          {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-        </button>
-        @if (showCustomDays()) {
-          <input
-            class="rb-text"
-            type="text"
-            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
-            [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
-            [value]="model().monthDays.join(',')"
-            (change)="setMonthDays($any($event.target).value)"
-          />
-        }
-      </div>
-    }
-    @if (model().yearlyMode === 'WEEKDAYS') {
-      <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
-    }
-  }
-
-  <!-- Weekday set + "which occurrence" (BYSETPOS) toggles — shared by the
-       monthly and yearly WEEKDAYS modes (all bindings are frequency-agnostic). -->
-  <ng-template #weekdaySetBlock>
-    <div class="rb-field">
-      <div class="rb-toggles">
-        <button
-          type="button"
-          class="rb-tgl rb-tgl--wide"
-          [class.active]="isSetPosEvery()"
-          [attr.aria-pressed]="isSetPosEvery()"
-          (click)="clearSetPos()"
-        >
-          {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
-        </button>
-        @for (o of ordinalOpts; track o.value) {
-          <button
-            type="button"
-            class="rb-tgl rb-tgl--wide"
-            [class.active]="isSetPosActive(o.value)"
-            [attr.aria-pressed]="isSetPosActive(o.value)"
-            (click)="toggleSetPos(o.value)"
-          >
-            {{ o.label | translate }}
-          </button>
-        }
-        <button
-          type="button"
-          class="rb-tgl rb-tgl--wide"
-          [class.active]="isSetPosCustom()"
-          [attr.aria-pressed]="isSetPosCustom()"
-          (click)="toggleSetPosCustomMode()"
-        >
-          {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-        </button>
-      </div>
-      @if (isSetPosCustom()) {
-        <input
-          #customWhich
-          class="rb-text rb-text--inline"
-          type="text"
-          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS | translate"
-          [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS_PLACEHOLDER | translate"
-          [value]="model().bySetPos"
-          (change)="setCustomBySetPos(customWhich.value)"
-        />
-      }
-      <div class="rb-toggles rb-weekrow">
-        @for (w of weekdays; track w.value) {
-          <button
-            type="button"
-            class="rb-tgl"
-            [class.active]="model().byDay.includes(w.value)"
-            [attr.aria-pressed]="model().byDay.includes(w.value)"
-            [title]="w.full"
-            (click)="toggleDay(w.value)"
-          >
-            {{ w.short }}
-          </button>
-        }
-      </div>
-      <div class="rb-hint">
-        {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
-      </div>
-    </div>
-  </ng-template>
-
-  <!-- nth-weekday rows (monthly + yearly): per-weekday ordinals, e.g. the 3rd
-       Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line. -->
-  @if (isNthMode()) {
-    <div class="rb-field">
-      <label>{{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate }}</label>
-      @for (nd of model().nthDays; track $index; let rowIdx = $index) {
-        <div class="rb-row">
-          <select
-            #pos
-            class="rb-sel"
-            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate"
-            (change)="setNthDayPos(rowIdx, pos.value)"
-          >
-            @for (o of availableOrdinalOpts(rowIdx); track o.value) {
-              <option
-                [value]="o.value"
-                [selected]="!isNthRowCustom(rowIdx) && o.value === nd.pos"
-              >
-                {{ o.label | translate }}
-              </option>
-            }
-            <option
-              [value]="ORD_CUSTOM"
-              [selected]="isNthRowCustom(rowIdx)"
-            >
-              {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
-            </option>
-          </select>
-          @if (isNthRowCustom(rowIdx)) {
-            <input
-              #customPos
-              class="rb-num"
-              type="number"
-              [min]="-nthPosBound()"
-              [max]="nthPosBound()"
-              [value]="nd.pos"
-              [title]="T.F.TASK_REPEAT.F.ORD_CUSTOM_DESCRIPTION | translate"
-              (change)="setNthDayCustomPos(rowIdx, customPos.value)"
-            />
-          }
-          <div class="rb-toggles rb-weekrow">
-            @for (w of weekdays; track w.value) {
-              <button
-                type="button"
-                class="rb-tgl"
-                [class.active]="nd.days.includes(w.value)"
-                [attr.aria-pressed]="nd.days.includes(w.value)"
-                [title]="w.full"
-                (click)="toggleNthDayWeekday(rowIdx, w.value)"
-              >
-                {{ w.short }}
-              </button>
-            }
-          </div>
-          @if (model().nthDays.length > 1) {
-            <button
-              type="button"
-              class="rb-tgl"
-              [title]="T.G.DELETE | translate"
-              (click)="removeNthDay(rowIdx)"
-            >
-              &times;
-            </button>
-          }
-        </div>
-      }
-      @if (canAddNthDay()) {
-        <button
-          type="button"
-          class="rb-tgl rb-tgl--wide"
-          (click)="addNthDay()"
-        >
-          + {{ T.F.TASK_REPEAT.F.RRULE_ADD_NTH | translate }}
-        </button>
-      }
-      <div class="rb-hint">
-        {{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY_DESCRIPTION | translate }}
-      </div>
-    </div>
-  }
-
-  <!-- Projection slot: the dialog drops the occurrence calendar HERE, between
-       the On (frequency) sections above and the Ends / Schedule-type sections
-       below — so the calendar previews the rhythm before the end conditions. -->
+  <!-- Projection slot: the dialog drops the occurrence calendar HERE, directly under
+       the "repeat every" line. The frequency-specific day selection ("On …") lives
+       inside Advanced below — the calendar is the primary day-picking surface. -->
   <ng-content></ng-content>
-
-  <!-- Ends (segmented) — label + the three options on one line -->
-  <div class="rb-field rb-field--inline">
-    <label>{{ T.F.TASK_REPEAT.F.RRULE_END | translate }}</label>
-    <div class="rb-ends">
-      <segmented-button-group
-        class="rb-segmented"
-        [options]="endOptions"
-        [selectedId]="model().endType"
-        [ariaLabel]="T.F.TASK_REPEAT.F.RRULE_END | translate"
-        size="md"
-        (selectionChange)="onEndTypeChange($event)"
-      ></segmented-button-group>
-      @if (model().endType === 'COUNT') {
-        <input
-          #countIn
-          class="rb-num"
-          type="number"
-          min="1"
-          max="1000"
-          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_COUNT | translate"
-          [value]="model().count"
-          (input)="setCount(countIn.value)"
-        />
-      }
-      @if (model().endType === 'UNTIL') {
-        <input
-          #untilIn
-          class="rb-date"
-          type="date"
-          [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_END_UNTIL | translate"
-          [value]="model().until"
-          (input)="setUntil(untilIn.value)"
-        />
-      }
-    </div>
-  </div>
-  @if (engineOff() && model().endType !== 'NEVER') {
-    <div class="rb-hint rb-hint--engine-off">
-      {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_END | translate }}
-    </div>
-  }
-
-  <!-- Schedule type: fixed calendar dates vs. count the interval from completion —
-       label + the two options on one line -->
-  <div class="rb-field rb-field--inline">
-    <label>{{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate }}</label>
-    <div class="rb-ends">
-      <segmented-button-group
-        class="rb-segmented"
-        [options]="scheduleTypeOptions"
-        [selectedId]="fromCompletion() ? 'COMPLETION' : 'START'"
-        [ariaLabel]="T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE | translate"
-        size="md"
-        (selectionChange)="onScheduleTypeChange($event)"
-      ></segmented-button-group>
-    </div>
-  </div>
-  <div class="rb-hint">
-    {{ T.F.TASK_REPEAT.F.RRULE_SCHEDULE_TYPE_DESCRIPTION | translate }}
-  </div>
 
   <!-- Advanced -->
   <collapsible
@@ -452,6 +71,339 @@
     (isExpandedChange)="setShowAdvanced($event)"
   >
     <div class="rb-adv">
+      <!-- "On …" — frequency-specific day selection. Lives at the TOP of Advanced;
+           the calendar above is the quick way, this is the precise way. -->
+
+      <!-- WEEKLY: weekday circles -->
+      @if (model().freq === 'WEEKLY') {
+        <div class="rb-field">
+          <label>{{ T.F.TASK_REPEAT.F.RRULE_BYDAY | translate }}</label>
+          <div class="rb-toggles rb-weekrow">
+            @for (w of weekdays; track w.value) {
+              <button
+                type="button"
+                class="rb-tgl"
+                [class.active]="model().byDay.includes(w.value)"
+                [attr.aria-pressed]="model().byDay.includes(w.value)"
+                [title]="w.full"
+                (click)="toggleDay(w.value)"
+              >
+                {{ w.short }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- MONTHLY -->
+      @if (model().freq === 'MONTHLY') {
+        <div class="rb-row">
+          <span class="rb-lbl">{{
+            T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate
+          }}</span>
+          <select
+            #mMode
+            class="rb-sel"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_MONTHLY_MODE | translate"
+            (change)="setMonthlyMode(mMode.value)"
+          >
+            @for (o of monthlyModeOpts; track o.value) {
+              <option
+                [value]="o.value"
+                [selected]="o.value === model().monthlyMode"
+              >
+                {{ o.label | translate }}
+              </option>
+            }
+          </select>
+        </div>
+
+        @if (model().monthlyMode === 'DAY_OF_MONTH') {
+          <div class="rb-field">
+            <div class="rb-toggles rb-toggles--days">
+              @for (d of dayGrid; track d) {
+                <button
+                  type="button"
+                  class="rb-tgl"
+                  [class.active]="model().monthDays.includes(d)"
+                  [attr.aria-pressed]="model().monthDays.includes(d)"
+                  (click)="toggleMonthDay(d)"
+                >
+                  {{ d }}
+                </button>
+              }
+            </div>
+            <div class="rb-toggles rb-day-extras">
+              @for (nd of negativeDays; track nd.value) {
+                <button
+                  type="button"
+                  class="rb-tgl rb-tgl--wide"
+                  [class.active]="model().monthDays.includes(nd.value)"
+                  [attr.aria-pressed]="model().monthDays.includes(nd.value)"
+                  (click)="toggleMonthDay(nd.value)"
+                >
+                  {{ nd.label | translate }}
+                </button>
+              }
+            </div>
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide rb-custom-toggle"
+              [class.active]="showCustomDays()"
+              [attr.aria-expanded]="showCustomDays()"
+              (click)="toggleCustomDays()"
+            >
+              {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+            </button>
+            @if (showCustomDays()) {
+              <input
+                class="rb-text"
+                type="text"
+                [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
+                [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
+                [value]="model().monthDays.join(',')"
+                (change)="setMonthDays($any($event.target).value)"
+              />
+              <div class="rb-hint">
+                {{ T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_DESCRIPTION | translate }}
+              </div>
+            }
+          </div>
+        }
+        @if (model().monthlyMode === 'WEEKDAYS') {
+          <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
+        }
+      }
+
+      <!-- YEARLY -->
+      @if (model().freq === 'YEARLY') {
+        <div class="rb-row">
+          <span class="rb-lbl">{{
+            T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate
+          }}</span>
+          <select
+            #yMode
+            class="rb-sel"
+            [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_YEARLY_MODE | translate"
+            (change)="setYearlyMode(yMode.value)"
+          >
+            @for (o of yearlyModeOpts; track o.value) {
+              <option
+                [value]="o.value"
+                [selected]="o.value === model().yearlyMode"
+              >
+                {{ o.label | translate }}
+              </option>
+            }
+          </select>
+        </div>
+        @if (model().yearlyMode === 'DAY_OF_MONTH') {
+          <div class="rb-field">
+            <div class="rb-toggles rb-toggles--days">
+              @for (d of dayGrid; track d) {
+                <button
+                  type="button"
+                  class="rb-tgl"
+                  [class.active]="model().monthDays.includes(d)"
+                  [attr.aria-pressed]="model().monthDays.includes(d)"
+                  (click)="toggleMonthDay(d)"
+                >
+                  {{ d }}
+                </button>
+              }
+            </div>
+            <div class="rb-toggles rb-day-extras">
+              @for (nd of negativeDays; track nd.value) {
+                <button
+                  type="button"
+                  class="rb-tgl rb-tgl--wide"
+                  [class.active]="model().monthDays.includes(nd.value)"
+                  [attr.aria-pressed]="model().monthDays.includes(nd.value)"
+                  (click)="toggleMonthDay(nd.value)"
+                >
+                  {{ nd.label | translate }}
+                </button>
+              }
+            </div>
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide rb-custom-toggle"
+              [class.active]="showCustomDays()"
+              [attr.aria-expanded]="showCustomDays()"
+              (click)="toggleCustomDays()"
+            >
+              {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+            </button>
+            @if (showCustomDays()) {
+              <input
+                class="rb-text"
+                type="text"
+                [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY | translate"
+                [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYMONTHDAY_PLACEHOLDER | translate"
+                [value]="model().monthDays.join(',')"
+                (change)="setMonthDays($any($event.target).value)"
+              />
+            }
+          </div>
+        }
+        @if (model().yearlyMode === 'WEEKDAYS') {
+          <ng-container *ngTemplateOutlet="weekdaySetBlock"></ng-container>
+        }
+      }
+
+      <!-- Weekday set + "which occurrence" (BYSETPOS) toggles — shared by the
+           monthly and yearly WEEKDAYS modes (all bindings are frequency-agnostic). -->
+      <ng-template #weekdaySetBlock>
+        <div class="rb-field">
+          <div class="rb-toggles">
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide"
+              [class.active]="isSetPosEvery()"
+              [attr.aria-pressed]="isSetPosEvery()"
+              (click)="clearSetPos()"
+            >
+              {{ T.F.TASK_REPEAT.F.RRULE_SETPOS_EVERY | translate }}
+            </button>
+            @for (o of ordinalOpts; track o.value) {
+              <button
+                type="button"
+                class="rb-tgl rb-tgl--wide"
+                [class.active]="isSetPosActive(o.value)"
+                [attr.aria-pressed]="isSetPosActive(o.value)"
+                (click)="toggleSetPos(o.value)"
+              >
+                {{ o.label | translate }}
+              </button>
+            }
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide"
+              [class.active]="isSetPosCustom()"
+              [attr.aria-pressed]="isSetPosCustom()"
+              (click)="toggleSetPosCustomMode()"
+            >
+              {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+            </button>
+          </div>
+          @if (isSetPosCustom()) {
+            <input
+              #customWhich
+              class="rb-text rb-text--inline"
+              type="text"
+              [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS | translate"
+              [placeholder]="T.F.TASK_REPEAT.F.RRULE_BYSETPOS_PLACEHOLDER | translate"
+              [value]="model().bySetPos"
+              (change)="setCustomBySetPos(customWhich.value)"
+            />
+          }
+          <div class="rb-toggles rb-weekrow">
+            @for (w of weekdays; track w.value) {
+              <button
+                type="button"
+                class="rb-tgl"
+                [class.active]="model().byDay.includes(w.value)"
+                [attr.aria-pressed]="model().byDay.includes(w.value)"
+                [title]="w.full"
+                (click)="toggleDay(w.value)"
+              >
+                {{ w.short }}
+              </button>
+            }
+          </div>
+          <div class="rb-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_BYSETPOS_DESCRIPTION | translate }}
+          </div>
+        </div>
+      </ng-template>
+
+      <!-- nth-weekday rows (monthly + yearly): per-weekday ordinals, e.g. the 3rd
+           Monday and 4th Sunday → BYDAY=3MO,4SU. One ordinal+weekday per line. -->
+      @if (isNthMode()) {
+        <div class="rb-field">
+          <label>{{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate }}</label>
+          @for (nd of model().nthDays; track $index; let rowIdx = $index) {
+            <div class="rb-row">
+              <select
+                #pos
+                class="rb-sel"
+                [attr.aria-label]="T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY | translate"
+                (change)="setNthDayPos(rowIdx, pos.value)"
+              >
+                @for (o of availableOrdinalOpts(rowIdx); track o.value) {
+                  <option
+                    [value]="o.value"
+                    [selected]="!isNthRowCustom(rowIdx) && o.value === nd.pos"
+                  >
+                    {{ o.label | translate }}
+                  </option>
+                }
+                <option
+                  [value]="ORD_CUSTOM"
+                  [selected]="isNthRowCustom(rowIdx)"
+                >
+                  {{ T.F.TASK_REPEAT.F.ORD_CUSTOM | translate }}
+                </option>
+              </select>
+              @if (isNthRowCustom(rowIdx)) {
+                <input
+                  #customPos
+                  class="rb-num"
+                  type="number"
+                  [min]="-nthPosBound()"
+                  [max]="nthPosBound()"
+                  [value]="nd.pos"
+                  [title]="T.F.TASK_REPEAT.F.ORD_CUSTOM_DESCRIPTION | translate"
+                  (change)="setNthDayCustomPos(rowIdx, customPos.value)"
+                />
+              }
+              <div class="rb-toggles rb-weekrow">
+                @for (w of weekdays; track w.value) {
+                  <button
+                    type="button"
+                    class="rb-tgl"
+                    [class.active]="nd.days.includes(w.value)"
+                    [attr.aria-pressed]="nd.days.includes(w.value)"
+                    [title]="w.full"
+                    (click)="toggleNthDayWeekday(rowIdx, w.value)"
+                  >
+                    {{ w.short }}
+                  </button>
+                }
+              </div>
+              @if (model().nthDays.length > 1) {
+                <button
+                  type="button"
+                  class="rb-tgl"
+                  [title]="T.G.DELETE | translate"
+                  (click)="removeNthDay(rowIdx)"
+                >
+                  &times;
+                </button>
+              }
+            </div>
+          }
+          @if (canAddNthDay()) {
+            <button
+              type="button"
+              class="rb-tgl rb-tgl--wide"
+              (click)="addNthDay()"
+            >
+              + {{ T.F.TASK_REPEAT.F.RRULE_ADD_NTH | translate }}
+            </button>
+          }
+          <div class="rb-hint">
+            {{ T.F.TASK_REPEAT.F.RRULE_NTH_WEEKDAY_DESCRIPTION | translate }}
+          </div>
+        </div>
+      }
+
+      <div class="rb-adv__sep"></div>
+
+      <!-- The dialog projects Ends + Schedule type here (Custom-only schedule
+           settings), under the "On …" selection. -->
+      <ng-content select="[recurrenceOptions]"></ng-content>
+      <div class="rb-adv__sep"></div>
       @if (engineOff()) {
         <div class="rb-hint rb-hint--engine-off">
           {{ T.F.TASK_REPEAT.F.RRULE_ENGINE_OFF_ADVANCED | translate }}

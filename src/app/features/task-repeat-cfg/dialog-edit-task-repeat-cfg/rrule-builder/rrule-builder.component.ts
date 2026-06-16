@@ -3,21 +3,19 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   OnInit,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { CollapsibleComponent } from '../../../../ui/collapsible/collapsible.component';
-import {
-  SegmentedButtonGroupComponent,
-  SegmentedButtonOption,
-} from '../../../../ui/segmented-button-group/segmented-button-group.component';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { RRuleFeatureFlagService } from '../../../config/rrule-feature-flag.service';
 import { T } from '../../../../t.const';
@@ -91,7 +89,6 @@ const MONTH_T_KEYS = [
     NgTemplateOutlet,
     MatIcon,
     MatIconButton,
-    SegmentedButtonGroupComponent,
   ],
 })
 export class RruleBuilderComponent implements OnInit {
@@ -106,9 +103,7 @@ export class RruleBuilderComponent implements OnInit {
 
   rrule = input<string>('');
   startDate = input<string | undefined>(undefined);
-  repeatFromCompletion = input<boolean>(false);
   rruleChange = output<string>();
-  repeatFromCompletionChange = output<boolean>();
 
   private _model = signal<RRuleFormModel>(defaultRRuleFormModel());
   model = this._model.asReadonly();
@@ -125,10 +120,6 @@ export class RruleBuilderComponent implements OnInit {
       // visible and selectable, so there is nothing heavier worth doing here.
     }
   }
-  // Orthogonal to the rrule string: re-anchors the interval to the completion
-  // day. Owned here (not in the rrule body) and surfaced to the dialog via output.
-  private _fromCompletion = signal(false);
-  fromCompletion = this._fromCompletion.asReadonly();
 
   // Toggle data — short label for the button, full name for the tooltip.
   weekdays = RRULE_WEEKDAYS.map((value, i) => {
@@ -190,18 +181,8 @@ export class RruleBuilderComponent implements OnInit {
   ];
   /** Sentinel select value for the per-row custom ordinal input. */
   readonly ORD_CUSTOM = 'CUSTOM';
-  // Single-select segmented controls rendered via the shared
-  // segmented-button-group (id = the model value; labelKey is translated by the
-  // component). The schedule-type ids map to the boolean repeatFromCompletion.
-  readonly endOptions: readonly SegmentedButtonOption[] = [
-    { id: 'NEVER', labelKey: T.F.TASK_REPEAT.F.RRULE_END_NEVER },
-    { id: 'UNTIL', labelKey: T.F.TASK_REPEAT.F.RRULE_END_UNTIL },
-    { id: 'COUNT', labelKey: T.F.TASK_REPEAT.F.RRULE_END_COUNT },
-  ];
-  readonly scheduleTypeOptions: readonly SegmentedButtonOption[] = [
-    { id: 'START', labelKey: T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_START },
-    { id: 'COMPLETION', labelKey: T.F.TASK_REPEAT.F.RRULE_SCHEDULE_FROM_COMPLETION },
-  ];
+  // Ends + Schedule type now live at the DIALOG level (they apply to presets
+  // too, not just the custom builder) — see dialog-edit-task-repeat-cfg.
   weekdaySelectOpts: SelectOpt<RRuleWeekday>[] = this.weekdays.map((w) => ({
     value: w.value,
     label: w.full,
@@ -212,6 +193,31 @@ export class RruleBuilderComponent implements OnInit {
     // no change-after-checked) so a fresh builder gives the dialog a valid rrule
     // even before the user touches anything.
     afterNextRender(() => this.rruleChange.emit(formModelToRRule(this._model())));
+
+    // Re-sync from the `rrule` INPUT when it changes externally (the calendar now
+    // edits the same rule — see rrule-calendar-ops.util). Only `rrule()` is
+    // tracked; the body is untracked so internal model edits don't re-enter.
+    // Skip when the incoming rule is STRUCTURALLY what the builder already shows
+    // (its own emission round-tripping back) — that's the feedback-loop guard.
+    effect(() => {
+      const incoming = this.rrule();
+      untracked(() => {
+        const ref = this.startDate()
+          ? dateStrToUtcDate(this.startDate() as string)
+          : new Date();
+        const incomingModel = rruleToFormModel(incoming, ref);
+        if (formModelToRRule(incomingModel) === formModelToRRule(this._model())) {
+          return;
+        }
+        // Adopt the external rule. UI-only reveal state is re-derived from the new
+        // model; `showAdvanced` is kept open if it was (the user expanded it).
+        this._model.set({
+          ...incomingModel,
+          showAdvanced: this._model().showAdvanced || incomingModel.showAdvanced,
+        });
+        this.showCustomDays.set(this._hasOffGridDays(incomingModel.monthDays));
+      });
+    });
   }
 
   // Start month (1..12) — seeds BYMONTH when switching to YEARLY (see setFreq).
@@ -223,7 +229,6 @@ export class RruleBuilderComponent implements OnInit {
       : new Date();
     this._refMonth = ref.getMonth() + 1;
     this._model.set(rruleToFormModel(this.rrule(), ref));
-    this._fromCompletion.set(this.repeatFromCompletion());
     // Keep an existing custom day list visible (the grid can't represent it).
     this.showCustomDays.set(this._hasOffGridDays(this._model().monthDays));
   }
@@ -244,16 +249,29 @@ export class RruleBuilderComponent implements OnInit {
     return sd ? dateStrToUtcDate(sd).getMonth() + 1 : this._refMonth;
   }
 
+  // A blank "On …" day selection — every day-pattern field zeroed. Returns fresh
+  // arrays each call so no two models ever share a reference.
+  private _blankOnSelection(): Partial<RRuleFormModel> {
+    return { byDay: [], monthDays: [], nthDays: [], bySetPos: '' };
+  }
+  // The view-only state that mirrors a day selection (custom inputs, expanded
+  // rows) — reset alongside the model so nothing stale lingers after a switch.
+  private _resetOnSelectionViewState(): void {
+    this._customSetPos.set(false);
+    this._customNthRows.set(new Set());
+    this.showCustomDays.set(false);
+  }
+
   // --- field setters (kept out of the template for type-safety) ---
   setFreq(v: string): void {
     const freq = v as RRuleFormModel['freq'];
     const prev = this._model().freq;
     if (freq === prev) return;
-    // Frequency switch starts the occurrence narrowing clean — a BYSETPOS left
-    // over from another frequency's weekday-set mode would silently narrow the
-    // new rule with no UI to see or clear it.
-    this._customSetPos.set(false);
-    const patch: Partial<RRuleFormModel> = { freq, bySetPos: '' };
+    // A frequency switch starts the day selection clean: a byDay / monthDays /
+    // nthDays / BYSETPOS left over from the previous frequency would silently
+    // narrow (or dead-end) the new rule with no matching control to surface it.
+    this._resetOnSelectionViewState();
+    const patch: Partial<RRuleFormModel> = { freq, ...this._blankOnSelection() };
     if (freq === 'YEARLY' && !this._model().byMonth.length) {
       // YEARLY date/weekday modes need BYMONTH: per RFC 5545, FREQ=YEARLY with
       // a bare BYMONTHDAY expands across every month — i.e. fires monthly.
@@ -270,17 +288,6 @@ export class RruleBuilderComponent implements OnInit {
       }
       this._seededMonth = null;
     }
-    if (freq === 'MONTHLY') {
-      // Monthly nth ordinals only reach ±5 — clamp custom poses set in YEARLY.
-      const cur = this._model().nthDays;
-      const clamped = cur.map((d) => ({
-        ...d,
-        pos: Math.max(-5, Math.min(5, d.pos)),
-      }));
-      if (clamped.some((d, idx) => d.pos !== cur[idx].pos)) {
-        patch.nthDays = clamped;
-      }
-    }
     this._patch(patch);
   }
   setInterval(v: string): void {
@@ -295,16 +302,22 @@ export class RruleBuilderComponent implements OnInit {
     const cur = this._model().byMonth;
     this._patch({ byMonth: cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m] });
   }
-  // Mode switches start the occurrence narrowing clean: a BYSETPOS left over
-  // from the weekday-set mode would silently narrow a day-of-month rule (e.g.
-  // BYMONTHDAY=15;BYSETPOS=2 = never fires) with no UI to see or clear it.
+  // Mode switches start the day selection clean: the previous sub-mode's days
+  // (a BYMONTHDAY=15, a weekday set, an nth row, a leftover BYSETPOS) don't
+  // belong to the new mode and would silently narrow or dead-end it.
   setMonthlyMode(v: string): void {
-    this._customSetPos.set(false);
-    this._patch({ monthlyMode: v as RRuleFormModel['monthlyMode'], bySetPos: '' });
+    this._resetOnSelectionViewState();
+    this._patch({
+      monthlyMode: v as RRuleFormModel['monthlyMode'],
+      ...this._blankOnSelection(),
+    });
   }
   setYearlyMode(v: string): void {
-    this._customSetPos.set(false);
-    this._patch({ yearlyMode: v as RRuleFormModel['yearlyMode'], bySetPos: '' });
+    this._resetOnSelectionViewState();
+    this._patch({
+      yearlyMode: v as RRuleFormModel['yearlyMode'],
+      ...this._blankOnSelection(),
+    });
   }
   // --- nth-weekday rows (per-weekday ordinals → BYDAY=3MO,4SU) ---
   /** True while either the monthly or yearly nth-weekday mode is active. */
@@ -423,19 +436,6 @@ export class RruleBuilderComponent implements OnInit {
     const chipVals = new Set(this.negativeDays.map((n) => n.value));
     return days.some((d) => !((d >= 1 && d <= 31) || chipVals.has(d)));
   }
-  setEndType(v: string): void {
-    this._patch({ endType: v as RRuleFormModel['endType'] });
-  }
-  /** segmented-button-group emits `string | number`; the end ids are strings. */
-  onEndTypeChange(id: string | number): void {
-    this.setEndType(String(id));
-  }
-  setCount(v: string): void {
-    this._patch({ count: Math.max(1, Math.floor(+v) || 1) });
-  }
-  setUntil(v: string): void {
-    this._patch({ until: v });
-  }
   setShowAdvanced(v: boolean): void {
     this._patch({ showAdvanced: v });
   }
@@ -505,13 +505,5 @@ export class RruleBuilderComponent implements OnInit {
   }
   setRawOverride(v: string): void {
     this._patch({ rawOverride: v });
-  }
-  setRepeatFromCompletion(v: boolean): void {
-    this._fromCompletion.set(v);
-    this.repeatFromCompletionChange.emit(v);
-  }
-  /** Schedule-type segmented control: id 'COMPLETION' → repeat-from-completion. */
-  onScheduleTypeChange(id: string | number): void {
-    this.setRepeatFromCompletion(id === 'COMPLETION');
   }
 }

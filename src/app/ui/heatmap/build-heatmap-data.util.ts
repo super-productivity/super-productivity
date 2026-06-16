@@ -139,7 +139,7 @@ export const buildHeatmapMonths = (
         ? `${monthNames[month]} ${year}`
         : monthNames[month];
     labeledYear = year;
-    blocks.push({ label, total: formatTotal(monthDays), weeks });
+    blocks.push({ label, total: formatTotal(monthDays), weeks, monthIndex: month });
     cursor.setMonth(cursor.getMonth() + 1);
   }
   return blocks;

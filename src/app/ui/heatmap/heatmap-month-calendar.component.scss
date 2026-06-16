@@ -23,6 +23,30 @@
     font-weight: bold;
     min-width: 9em;
     text-align: center;
+
+    &.is-clickable {
+      cursor: pointer;
+      border-radius: var(--card-border-radius);
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    // Limited via BYMONTH — accented so the restriction reads at a glance.
+    &.is-limited {
+      color: var(--c-primary);
+    }
+  }
+
+  &__limit-chip {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-left: 4px;
+    vertical-align: middle;
+    background: var(--c-accent, var(--c-primary));
   }
 
   &__weekdays,
@@ -33,9 +57,42 @@
   }
 
   &__weekday {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     font-size: 11px;
     color: var(--text-color-muted);
+
+    &.is-clickable {
+      cursor: pointer;
+      border-radius: var(--card-border-radius);
+
+      &:hover {
+        background: var(--bg-lightest, rgba(127, 127, 127, 0.12));
+      }
+    }
+  }
+
+  // Per-weekday annotation glyphs (nth ordinal / selected-day / in-months), a
+  // tiny 3-slot column pinned to the right edge of the header.
+  &__weekday-ann {
+    position: absolute;
+    right: 1px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    font-size: 8px;
+    line-height: 1.1;
+    color: var(--c-primary);
+    pointer-events: none;
+  }
+
+  &__ann-slot {
+    min-height: 8px;
   }
 
   &__legend {
@@ -82,6 +139,11 @@
   &.next {
     background: transparent;
     box-shadow: inset 0 0 0 2px var(--c-accent);
+  }
+  // Recurrence end (UNTIL) day: a warn ring.
+  &.end {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--c-warn, var(--c-accent));
   }
   &.start {
     background: var(--c-primary);
@@ -178,11 +240,20 @@
     outline: 2px dotted var(--c-primary);
     outline-offset: -2px;
   }
+  // Simulated "completed here" day: solid ACCENT (distinct from the primary-blue
+  // start/projection).
   &.completed {
-    background: var(--c-primary);
+    background: var(--c-accent);
     color: var(--c-contrast);
-    outline: 2px solid var(--c-primary);
+    outline: 2px solid var(--c-accent);
     outline-offset: 1px;
+  }
+
+  // Recurrence end (UNTIL) day: a warn-coloured ring — the series stops here.
+  &.end {
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 0 0 2px var(--c-warn, var(--c-accent));
   }
 
   // Today: a white square ring (white edge with a faint dark edge so it stays

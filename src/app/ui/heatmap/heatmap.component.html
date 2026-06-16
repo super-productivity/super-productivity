@@ -42,8 +42,14 @@
       }
       <div class="heatmap-month-row">
         <div class="day-labels day-labels--blocks">
-          @for (label of dayLabels(); track $index) {
-            <div class="day-label">{{ label }}</div>
+          @for (row of dayLabelRows(); track row.weekdayIdx) {
+            <div
+              class="day-label"
+              [class.is-clickable]="interactiveMenus()"
+              (click)="onYearWeekdayClick(row.weekdayIdx, $event)"
+            >
+              {{ row.label }}
+            </div>
           }
         </div>
         <div
@@ -70,7 +76,7 @@
                         (mouseleave)="hideTip()"
                         (focus)="showTip(day, $event)"
                         (blur)="hideTip()"
-                        (click)="onDayClick(day)"
+                        (click)="onDayClick(day, $event)"
                         (dblclick)="interactive() && day && dayDblClick.emit(day)"
                         (keydown.enter)="interactive() && onDayKeydown($event, day)"
                         (keydown.space)="interactive() && onDayKeydown($event, day)"
@@ -79,7 +85,17 @@
                   </div>
                 }
               </div>
-              <div class="heatmap-month__label">{{ m.label }}</div>
+              <div
+                class="heatmap-month__label"
+                [class.is-clickable]="interactiveMenus()"
+                [class.is-limited]="isMonthLimited(m.monthIndex)"
+                (click)="onYearMonthClick(m.monthIndex, $event)"
+              >
+                {{ m.label }}
+                @if (isMonthLimited(m.monthIndex)) {
+                  <span class="heatmap-month__limit-chip"></span>
+                }
+              </div>
               @if (m.total) {
                 <div class="heatmap-month__total">{{ m.total }}</div>
               }
@@ -103,22 +119,34 @@
           <span>{{ T.G.HEATMAP_HIGH | translate }}</span>
         </div>
       } @else if (legendMode() === 'projection') {
-        <div class="heatmap-legend">
-          <div class="legend-item start"></div>
-          <span>{{ T.G.HEATMAP_START_DAY | translate }}</span>
-          <div class="legend-item today"></div>
-          <span>{{ T.G.HEATMAP_TODAY | translate }}</span>
-          <div class="legend-item projected"></div>
-          <span>{{ T.G.HEATMAP_PROJECTED | translate }}</span>
-          <div class="legend-item next"></div>
-          <span>{{ T.G.HEATMAP_NEXT | translate }}</span>
+        <!-- Each swatch + its label is one nowrap unit; the legend wraps BETWEEN
+             units (not mid-label) so a narrow strip flows cleanly onto 2 lines. -->
+        <div class="heatmap-legend heatmap-legend--wrap">
+          <span class="legend-pair">
+            <span class="legend-item start"></span>{{ T.G.HEATMAP_START_DAY | translate }}
+          </span>
+          <span class="legend-pair">
+            <span class="legend-item today"></span>{{ T.G.HEATMAP_TODAY | translate }}
+          </span>
+          <span class="legend-pair">
+            <span class="legend-item projected"></span
+            >{{ T.G.HEATMAP_PROJECTED | translate }}
+          </span>
+          <span class="legend-pair">
+            <span class="legend-item next"></span>{{ T.G.HEATMAP_NEXT | translate }}
+          </span>
+          <span class="legend-pair">
+            <span class="legend-item end"></span>{{ T.G.HEATMAP_END_DAY | translate }}
+          </span>
           @if (showActivity()) {
-            <span>{{ T.G.HEATMAP_ACTIVITY_LEGEND | translate }}</span>
-            <span class="legend-ramp">
-              <span class="legend-item activity-1"></span>
-              <span class="legend-item activity-2"></span>
-              <span class="legend-item activity-3"></span>
-              <span class="legend-item activity-4"></span>
+            <span class="legend-pair">
+              <span class="legend-ramp">
+                <span class="legend-item activity-1"></span>
+                <span class="legend-item activity-2"></span>
+                <span class="legend-item activity-3"></span>
+                <span class="legend-item activity-4"></span>
+              </span>
+              {{ T.G.HEATMAP_ACTIVITY_LEGEND | translate }}
             </span>
           }
         </div>
