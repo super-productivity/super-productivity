@@ -13,6 +13,7 @@ import {
 import { DateAdapter } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { DayData } from './heatmap.component';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { msToString } from '../duration/ms-to-string.pipe';
@@ -38,7 +39,7 @@ interface CalCell {
   styleUrls: ['./heatmap-month-calendar.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [MatIcon, MatIconButton, TranslatePipe],
+  imports: [MatIcon, MatIconButton, MatTooltip, TranslatePipe],
 })
 export class HeatmapMonthCalendarComponent {
   readonly T = T;
@@ -101,6 +102,11 @@ export class HeatmapMonthCalendarComponent {
     number,
     { top?: string; mid?: string; bottom?: string }
   > | null>(null);
+  /** Per-weekday (Mon=0 … Sun=6) hover tooltip text spelling out what's set on
+   *  that weekday; the header shows it on hover. */
+  readonly weekdayHeaderTooltips = input<Map<number, string> | null>(null);
+  /** Tooltip for the month title (e.g. the BYMONTH limit list). */
+  readonly monthTooltip = input<string>('');
   /** Day-cell click in `interactiveMenus` mode — carries the DOM event so the
    *  consumer can anchor a menu at the pointer. */
   readonly dayMenu = output<{ data: DayData; event: MouseEvent }>();

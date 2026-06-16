@@ -469,6 +469,45 @@ export class DialogEditTaskRepeatCfgComponent {
     });
     return out;
   });
+  // Human-readable per-weekday tooltip (Mon=0 … Sun=6) spelling out what the
+  // glyphs mean — shown on hover over a weekday header that has something set.
+  readonly weekdayHeaderTooltips = computed(() => {
+    const ann = weekdayAnnotations(this._previewModel());
+    const inst = (k: string): string => this._translateService.instant(k) as string;
+    const ord = new Map<string, string>([
+      ['1', T.F.TASK_REPEAT.F.ORD_FIRST],
+      ['2', T.F.TASK_REPEAT.F.ORD_SECOND],
+      ['3', T.F.TASK_REPEAT.F.ORD_THIRD],
+      ['4', T.F.TASK_REPEAT.F.ORD_FOURTH],
+      ['L', T.F.TASK_REPEAT.F.ORD_LAST],
+    ]);
+    const out = new Map<number, string>();
+    ann.forEach((a, idx) => {
+      const parts: string[] = [];
+      if (a.nth.length) {
+        const ords = a.nth.map((g) => (ord.has(g) ? inst(ord.get(g)!) : g)).join(', ');
+        parts.push(`${inst(T.F.TASK_REPEAT.F.RRULE_MODE_NTH_WEEKDAY)}: ${ords}`);
+      }
+      if (a.selected) {
+        parts.push(inst(T.F.TASK_REPEAT.F.CAL_MENU_SELECTED_DAYS));
+      }
+      if (a.inMonths) {
+        parts.push(inst(T.F.TASK_REPEAT.F.CAL_TIP_IN_MONTHS));
+      }
+      if (parts.length) {
+        out.set(idx, parts.join(' · '));
+      }
+    });
+    return out;
+  });
+  // Tooltip for the month label/title when BYMONTH limits the rule — lists them.
+  readonly monthTooltip = computed(() =>
+    this.hasMonthLimits()
+      ? (this._translateService.instant(T.F.TASK_REPEAT.F.CAL_TIP_LIMITED_MONTHS, {
+          months: this.limitedMonthNames(),
+        }) as string)
+      : '',
+  );
 
   private _previewRefDate(): Date {
     const sd = this.repeatCfg().startDate as string | Date | undefined;

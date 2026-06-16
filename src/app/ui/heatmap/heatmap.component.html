@@ -46,6 +46,8 @@
             <div
               class="day-label"
               [class.is-clickable]="interactiveMenus()"
+              [matTooltip]="weekdayHeaderTooltips()?.get(row.weekdayIdx) || ''"
+              [matTooltipDisabled]="!weekdayHeaderTooltips()?.get(row.weekdayIdx)"
               (click)="onYearWeekdayClick(row.weekdayIdx, $event)"
             >
               {{ row.label }}
@@ -89,6 +91,8 @@
                 class="heatmap-month__label"
                 [class.is-clickable]="interactiveMenus()"
                 [class.is-limited]="isMonthLimited(m.monthIndex)"
+                [matTooltip]="monthTooltip()"
+                [matTooltipDisabled]="!monthTooltip() || !isMonthLimited(m.monthIndex)"
                 (click)="onYearMonthClick(m.monthIndex, $event)"
               >
                 {{ m.label }}

@@ -24,6 +24,8 @@
       class="month-cal__title"
       [class.is-clickable]="interactiveMenus()"
       [class.is-limited]="isViewMonthLimited()"
+      [matTooltip]="monthTooltip()"
+      [matTooltipDisabled]="!monthTooltip()"
       (click)="onTitleClick($event)"
     >
       {{ monthLabel() }}
@@ -46,6 +48,8 @@
       <div
         class="month-cal__weekday"
         [class.is-clickable]="interactiveMenus()"
+        [matTooltip]="weekdayHeaderTooltips()?.get(col.weekdayIdx) || ''"
+        [matTooltipDisabled]="!weekdayHeaderTooltips()?.get(col.weekdayIdx)"
         (click)="onHeaderClick(col.weekdayIdx, $event)"
       >
         <span class="month-cal__weekday-label">{{ col.label }}</span>

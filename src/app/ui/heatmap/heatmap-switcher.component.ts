@@ -77,6 +77,10 @@ export class HeatmapSwitcherComponent {
   > | null>(null);
   /** Months (0=Jan … 11=Dec) limited via BYMONTH — shown with a chip in both views. */
   readonly limitedMonths = input<number[] | null>(null);
+  /** Per-weekday (Mon=0 … Sun=6) hover tooltip text, passed to both views. */
+  readonly weekdayHeaderTooltips = input<Map<number, string> | null>(null);
+  /** Tooltip for a limited month label/title, passed to both views. */
+  readonly monthTooltip = input<string>('');
   readonly dayMenu = output<{ data: DayData; event: MouseEvent }>();
   readonly weekdayHeaderMenu = output<{ weekdayIdx: number; event: MouseEvent }>();
   readonly monthLabelMenu = output<{ month: number; event: MouseEvent }>();

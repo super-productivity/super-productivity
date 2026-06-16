@@ -13,6 +13,7 @@ import {
 import { DateAdapter } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { msToString } from '../duration/ms-to-string.pipe';
 import { T } from '../../t.const';
@@ -70,7 +71,7 @@ export interface HeatmapViewData extends HeatmapData {
   styleUrls: ['./heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [TranslatePipe, MatIcon, MatIconButton],
+  imports: [TranslatePipe, MatIcon, MatIconButton, MatTooltip],
 })
 export class HeatmapComponent {
   readonly T = T;
@@ -164,6 +165,10 @@ export class HeatmapComponent {
   readonly monthLabelMenu = output<{ month: number; event: MouseEvent }>();
   /** Months (0=Jan … 11=Dec) currently limited via BYMONTH — shown with a chip. */
   readonly limitedMonths = input<number[] | null>(null);
+  /** Per-weekday (Mon=0 … Sun=6) hover tooltip spelling out what's set on it. */
+  readonly weekdayHeaderTooltips = input<Map<number, string> | null>(null);
+  /** Tooltip for a limited month label (the BYMONTH limit list). */
+  readonly monthTooltip = input<string>('');
   /** When true, day cells become keyboard-reachable buttons (for consumers that
    *  act on `dayClick`, e.g. click-to-simulate). Display-only heatmaps keep
    *  plain, non-focusable cells. */

@@ -1998,6 +1998,8 @@
         "CAL_MENU_SELECTED_DAYS": "Selected days of the week",
         "CAL_MENU_REMOVE_SELECTED_DAYS": "Remove from selected days",
         "CAL_MENU_REMOVE_NTH": "Remove {{ordinal}}",
+        "CAL_TIP_IN_MONTHS": "Days of the week in months",
+        "CAL_TIP_LIMITED_MONTHS": "Limited to {{months}}",
         "CAL_MENU_SWITCHES_WEEKLY": "Switch to weekly",
         "CAL_MENU_SWITCHES_MONTHLY": "Switch to monthly",
         "CAL_MENU_SWITCHES_YEARLY": "Switch to yearly",
