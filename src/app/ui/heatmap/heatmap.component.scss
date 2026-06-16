@@ -309,12 +309,15 @@
     }
   }
 
-  // Recurrence start / anchor day — solid primary fill (with a halo) so it reads
-  // as the "selected" day. Click-to-set in the dialog preview (Option A).
+  // Recurrence start / anchor day — solid primary fill + a contrasting INK ring
+  // (not a same-colour halo) so it stays distinct from the green tracked-time
+  // cells even when the theme's primary is close to that green.
   &.start {
     background: var(--c-primary);
     z-index: 2;
-    box-shadow: 0 0 0 2px var(--c-primary);
+    box-shadow:
+      0 0 0 1px var(--heatmap-container-bg, var(--c-dark-10)),
+      0 0 0 2px var(--ink, currentColor);
   }
 }
 
@@ -348,7 +351,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .day.next::after {
+  .day.next::after,
+  .heatmap-legend .legend-item.next {
     animation: none;
   }
 }
@@ -426,10 +430,11 @@
       outline-offset: -1px;
     }
 
-    // Next upcoming occurrence: the pulsing accent ring, shown static here.
+    // Next upcoming occurrence: the accent ring, PULSING like the cell marker.
     &.next {
       background: transparent;
       box-shadow: inset 0 0 0 2px var(--c-accent);
+      animation: heatmap-next-pulse 1.8s ease-in-out infinite;
     }
 
     // Recurrence end (UNTIL) day: a SOLID error block (vs the hollow `.next` ring).

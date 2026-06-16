@@ -421,6 +421,14 @@ export class DialogEditTaskRepeatCfgComponent {
   /** Which frequency the (shared) nth-weekday submenu currently targets — set when
    *  its trigger opens, so the 1st/2nd/…/Last items apply to the right freq. */
   readonly menuNthFreq = signal<'MONTHLY' | 'YEARLY'>('MONTHLY');
+  /** Which "switch to …" frequency the bottom icon row has expanded INLINE inside
+   *  the current menu (null = collapsed). Click an icon to open it, click the same
+   *  icon again to close — a plain toggle, not a hover-opened sub-menu. Reset every
+   *  time a menu opens. */
+  readonly expandedSwitch = signal<'WEEKLY' | 'MONTHLY' | 'YEARLY' | null>(null);
+  toggleSwitchExpand(freq: 'WEEKLY' | 'MONTHLY' | 'YEARLY'): void {
+    this.expandedSwitch.update((cur) => (cur === freq ? null : freq));
+  }
   readonly menuPos = signal<{ x: string; y: string }>({ x: '0px', y: '0px' });
   /** The month (0=Jan … 11=Dec) the month-label menu targets — set from the click
    *  (the month view's title, or a year-view month block). */
@@ -478,6 +486,7 @@ export class DialogEditTaskRepeatCfgComponent {
     }
     event.preventDefault();
     this.menuDay.set(data);
+    this.expandedSwitch.set(null);
     this._setMenuPos(event);
     this._dayMenuTrigger()?.openMenu();
   }
@@ -490,6 +499,7 @@ export class DialogEditTaskRepeatCfgComponent {
   }): void {
     event.preventDefault();
     this.menuWeekdayIdx.set(weekdayIdx);
+    this.expandedSwitch.set(null);
     this._setMenuPos(event);
     this._weekdayMenuTrigger()?.openMenu();
   }

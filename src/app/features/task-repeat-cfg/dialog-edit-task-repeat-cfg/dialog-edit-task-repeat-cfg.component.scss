@@ -308,11 +308,10 @@ repeat-freq-picker {
     border-top: none;
   }
 
-  // The switch triggers are mat-menu-items (so the nested sub-menu opens and the
-  // parent stays open — a plain icon-button trigger closes the menu instead), but
-  // restyled to read as round icon buttons matching the rest of the app: square
-  // 40px, circular hover/ripple, centred icon. mat-menu-item already provides the
-  // themed hover state-layer and ripple, so the look comes for free once round.
+  // The switch icons are mat-icon-buttons (NOT mat-menu-items): clicking one
+  // toggles its options open/closed INLINE — no hover-opened sub-menu, and a
+  // plain icon-button isn't auto-focused so the menu never paints a stray
+  // focus circle on it.
   .cal-menu-switch__btn {
     min-width: 0;
     min-height: 0;
@@ -325,15 +324,18 @@ repeat-freq-picker {
     border-radius: 50%;
     overflow: hidden; // clip the ripple / hover state-layer to the circle
 
-    // mat-menu-item appends a trailing submenu chevron — drop it; the icon row is
-    // already a clear affordance and the chevron would bloat each cell.
-    .mat-mdc-menu-submenu-icon {
-      display: none;
-    }
-
     mat-icon {
       margin: 0;
       color: var(--text-color-muted, currentColor);
+    }
+
+    // Expanded → highlighted so it's clear which frequency's options are showing.
+    &.is-active {
+      background: color-mix(in srgb, var(--c-accent) 20%, transparent);
+
+      mat-icon {
+        color: var(--c-accent);
+      }
     }
   }
 }
