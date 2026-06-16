@@ -19,15 +19,8 @@ export const buildRepeatQuickSettingOptions = (
   // undefined and translate's `instant(undefined)` throws, crashing the whole
   // dialog (#7945). Fall back to "today" so options still render.
   const safeRefDate = isNaN(refDate.getTime()) ? new Date() : refDate;
-  const refWeekdayStr = safeRefDate.toLocaleDateString(locale, { weekday: 'long' });
-  const refDayStr = safeRefDate.toLocaleDateString(locale, { day: 'numeric' });
-  const refDayAndMonthStr = safeRefDate.toLocaleDateString(locale, {
-    day: 'numeric',
-    month: 'numeric',
-  });
   // Compact forms for the concise preset labels ("Weekly (Mon)", "Monthly
-  // (15th)", "Yearly (Jun 15)"). Each option passes its own params, so these
-  // don't affect the verbose presets that still use the long/numeric forms.
+  // (15th)", "Yearly (Jun 15)", "Every 3 months (15th)", …).
   const refWeekdayShortStr = safeRefDate.toLocaleDateString(locale, { weekday: 'short' });
   const refMonthDayShortStr = safeRefDate.toLocaleDateString(locale, {
     month: 'short',
@@ -79,7 +72,7 @@ export const buildRepeatQuickSettingOptions = (
     {
       value: 'BIWEEKLY_CURRENT_WEEKDAY',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_BIWEEKLY_CURRENT_WEEKDAY, {
-        weekdayStr: refWeekdayStr,
+        weekdayStr: refWeekdayShortStr,
       }),
     },
     {
@@ -100,25 +93,25 @@ export const buildRepeatQuickSettingOptions = (
       value: 'MONTHLY_NTH_WEEKDAY',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_MONTHLY_NTH_WEEKDAY, {
         ordinalStr,
-        weekdayStr: refWeekdayStr,
+        weekdayStr: refWeekdayShortStr,
       }),
     },
     {
       value: 'MONTHLY_LAST_WEEKDAY',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_MONTHLY_LAST_WEEKDAY, {
-        weekdayStr: refWeekdayStr,
+        weekdayStr: refWeekdayShortStr,
       }),
     },
     {
       value: 'QUARTERLY_CURRENT_DATE',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_QUARTERLY_CURRENT_DATE, {
-        dateDayStr: refDayStr,
+        dateDayStr: refDayOrdinalStr,
       }),
     },
     {
       value: 'SEMIANNUALLY_CURRENT_DATE',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_SEMIANNUALLY_CURRENT_DATE, {
-        dateDayStr: refDayStr,
+        dateDayStr: refDayOrdinalStr,
       }),
     },
     {
@@ -130,7 +123,7 @@ export const buildRepeatQuickSettingOptions = (
     {
       value: 'EVERY_OTHER_YEAR_CURRENT_DATE',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_EVERY_OTHER_YEAR_CURRENT_DATE, {
-        dayAndMonthStr: refDayAndMonthStr,
+        dayAndMonthStr: refMonthDayShortStr,
       }),
     },
   ];
