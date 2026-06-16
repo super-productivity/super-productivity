@@ -28,6 +28,13 @@ import { T } from '../../../t.const';
 import { SnackService } from '../../../core/snack/snack.service';
 import { setRRuleEngineEnabled } from '../../config/rrule-engine-flag';
 
+// Mirrors the ordinal-day format the option builder now passes for the concise
+// "Monthly (15th)" label.
+const ordinalDay = (n: number): string => {
+  const suffix: Record<string, string> = { one: 'st', two: 'nd', few: 'rd', other: 'th' };
+  return `${n}${suffix[new Intl.PluralRules('en-US', { type: 'ordinal' }).select(n)] ?? 'th'}`;
+};
+
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
   let mockTaskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
@@ -267,12 +274,13 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         (c) => c.key === T.F.TASK_REPEAT.F.Q_YEARLY_CURRENT_DATE,
       );
 
-      // Due date is May 1st — day should be "1", month/day should contain "5" and "1"
+      // Due date is May 1st — concise labels use the ordinal day ("1st") and the
+      // short month + day ("May 1").
       const dueDate = new Date(2026, 4, 1); // May 1st
-      const expectedDayStr = dueDate.toLocaleDateString('en-US', { day: 'numeric' });
+      const expectedDayStr = ordinalDay(dueDate.getDate());
       const expectedDayAndMonthStr = dueDate.toLocaleDateString('en-US', {
         day: 'numeric',
-        month: 'numeric',
+        month: 'short',
       });
 
       expect(monthlyCall).toBeDefined();
@@ -303,7 +311,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       );
 
       const today = new Date();
-      const todayDayStr = today.toLocaleDateString('en-US', { day: 'numeric' });
+      const todayDayStr = ordinalDay(today.getDate());
 
       expect(monthlyCall).toBeDefined();
       expect(monthlyCall!.params.dateDayStr).toBe(todayDayStr);
@@ -333,9 +341,9 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
       );
 
-      // startDate is March 15 — day should be "15"
+      // startDate is March 15 — concise label uses the ordinal day ("15th").
       const startDate = new Date(2026, 2, 15); // March 15
-      const expectedDayStr = startDate.toLocaleDateString('en-US', { day: 'numeric' });
+      const expectedDayStr = ordinalDay(startDate.getDate());
 
       expect(monthlyCall).toBeDefined();
       expect(monthlyCall!.params.dateDayStr).toBe(expectedDayStr);
