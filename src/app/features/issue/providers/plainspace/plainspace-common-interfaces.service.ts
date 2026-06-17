@@ -7,6 +7,7 @@ import { IssueData, IssueDataReduced, SearchResultItem } from '../../issue.model
 import { PLAINSPACE_POLL_INTERVAL } from './plainspace.const';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceApiService } from './plainspace-api.service';
+import { PlainspaceSyncAdapterService } from './plainspace-sync-adapter.service';
 import { PlainspaceIssue } from './plainspace-issue.model';
 
 @Injectable({
@@ -14,6 +15,7 @@ import { PlainspaceIssue } from './plainspace-issue.model';
 })
 export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<PlainspaceCfg> {
   private readonly _plainspaceApiService = inject(PlainspaceApiService);
+  private readonly _syncAdapter = inject(PlainspaceSyncAdapterService);
 
   readonly providerKey = 'PLAINSPACE' as const;
   readonly pollInterval: number = PLAINSPACE_POLL_INTERVAL;
@@ -50,6 +52,13 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
       isDone: issue.isDone,
       issueWasUpdated: false,
       issueLastUpdated: new Date(issue.updatedAt).getTime(),
+      // Seed the two-way-sync baseline (last-known remote values) so push-only
+      // fields — done and scheduled time — can detect a change. Without it
+      // computePushDecisions skips every push as 'no-baseline' and nothing is
+      // ever written back. Mirrors the CalDAV provider.
+      issueLastSyncedValues: this._syncAdapter.extractSyncValues(
+        issue as unknown as Record<string, unknown>,
+      ),
     };
   }
 
