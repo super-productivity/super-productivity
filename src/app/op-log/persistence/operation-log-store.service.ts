@@ -875,18 +875,22 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
 
     const excludeIdSet = new Set(excludeIds);
-    const meta = await this._getFullStateOpsMetaOrRebuild();
-    const refsToDelete = meta.refs.filter((ref) => !excludeIdSet.has(ref.opId));
-    if (refsToDelete.length === 0) {
-      return 0;
-    }
-
     let deletedCount = 0;
-    const opIdsToDelete = new Set(refsToDelete.map((ref) => ref.opId));
     await this._adapter.transaction(
       [STORE_NAMES.OPS, STORE_NAMES.META],
       'readwrite',
       async (tx) => {
+        // Read meta INSIDE the tx so a full-state append committed between the
+        // read and the write can't be clobbered by a stale snapshot. The
+        // OPS deletes and the META update then stay atomic, matching
+        // deleteOpsWhere — no reliance on the OPERATION_LOG lock for safety.
+        const meta = await this._getFullStateOpsMetaInTxOrRebuild(tx);
+        const refsToDelete = meta.refs.filter((ref) => !excludeIdSet.has(ref.opId));
+        if (refsToDelete.length === 0) {
+          return;
+        }
+
+        const opIdsToDelete = new Set(refsToDelete.map((ref) => ref.opId));
         for (const ref of refsToDelete) {
           const stored = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, ref.seq);
           if (
@@ -1485,7 +1489,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         await tx.clear(STORE_NAMES.OPS);
         await tx.put(
           STORE_NAMES.META,
-          { refs: [] } satisfies FullStateOpsMetaEntry,
+          buildFullStateOpsMeta([]),
           FULL_STATE_OPS_META_KEY,
         );
       },
@@ -1824,12 +1828,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           STORE_NAMES.OPS,
           this._buildStoredEntry(syncImportOp, 'local'),
         );
+        // syncImportOp is always a full-state op (both callers pass SYNC_IMPORT);
+        // OPS was just cleared, so the pointer is exactly this one op. Use the
+        // shared builder so `latest` is derived, never hand-asserted.
         await tx.put(
           STORE_NAMES.META,
-          {
-            refs: [{ opId: syncImportOp.id, seq }],
-            latest: { opId: syncImportOp.id, seq },
-          } satisfies FullStateOpsMetaEntry,
+          buildFullStateOpsMeta([{ opId: syncImportOp.id, seq }]),
           FULL_STATE_OPS_META_KEY,
         );
 
