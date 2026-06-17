@@ -41,6 +41,7 @@ type TagServiceSignals = {
   tagsNoMyDayAndNoListSorted$: Observable<any[]>;
   tagsSortedForUI$: Observable<any[]>;
   tagsSorted$: Observable<any[]>;
+  tagsNoMyDayAndNoList: Signal<any[]>;
   tagsNoMyDayAndNoListSorted: Signal<any[]>;
   tagsSorted: Signal<any[]>;
   tagsSortedForUI: Signal<any[]>;
@@ -137,17 +138,19 @@ describe('AddTaskBarComponent', () => {
     };
   };
 
-  const createTagSignals = (tags: any[]): TagServiceSignals => {
+  const createTagSignals = (tags: any[], sortedTags: any[] = tags): TagServiceSignals => {
     const tags$ = of(tags);
+    const sortedTags$ = of(sortedTags);
     return {
       tags$,
       tagsNoMyDayAndNoList$: tags$,
-      tagsNoMyDayAndNoListSorted$: tags$,
-      tagsSortedForUI$: tags$,
-      tagsSorted$: tags$,
-      tagsNoMyDayAndNoListSorted: signal(tags),
-      tagsSorted: signal(tags),
-      tagsSortedForUI: signal(tags),
+      tagsNoMyDayAndNoListSorted$: sortedTags$,
+      tagsSortedForUI$: sortedTags$,
+      tagsSorted$: sortedTags$,
+      tagsNoMyDayAndNoList: signal(tags),
+      tagsNoMyDayAndNoListSorted: signal(sortedTags),
+      tagsSorted: signal(sortedTags),
+      tagsSortedForUI: signal(sortedTags),
     };
   };
 
@@ -175,14 +178,30 @@ describe('AddTaskBarComponent', () => {
     mockTagService = jasmine.createSpyObj(
       'TagService',
       [],
-      createTagSignals([
-        {
-          id: 'tag-1',
-          title: 'Test Tag',
-          theme: { primary: '#2196f3' },
-          icon: 'label',
-        },
-      ]),
+      createTagSignals(
+        [
+          {
+            id: 'tag-ux',
+            title: 'UX',
+            theme: { primary: '#673ab7' },
+            icon: 'label',
+          },
+          {
+            id: 'tag-1',
+            title: 'Test Tag',
+            theme: { primary: '#2196f3' },
+            icon: 'label',
+          },
+        ],
+        [
+          {
+            id: 'tag-1',
+            title: 'Test Tag',
+            theme: { primary: '#2196f3' },
+            icon: 'label',
+          },
+        ],
+      ),
     );
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: signal({
@@ -191,7 +210,12 @@ describe('AddTaskBarComponent', () => {
       lang$: new BehaviorSubject<LocalizationConfig>(mockLocalizationConfig),
       misc$: new BehaviorSubject<MiscConfig>(mockMiscConfig),
       tasks$: new BehaviorSubject({ defaultProjectId: null }),
-      shortSyntax$: of({}),
+      shortSyntax$: of({
+        isEnableProject: true,
+        isEnableDue: true,
+        isEnableTag: true,
+        urlBehavior: 'keep',
+      }),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
     });
     mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
@@ -253,6 +277,22 @@ describe('AddTaskBarComponent', () => {
 
     fixture = TestBed.createComponent(AddTaskBarComponent);
     component = fixture.componentInstance;
+  });
+
+  describe('tagMentions$', () => {
+    it('should resolve short-syntax tag chips from the sidebar-order tag source', (done) => {
+      component.stateService.updateInputTxt('#UX');
+
+      component.tagMentions$.subscribe((tags) => {
+        if (!tags.length) {
+          return;
+        }
+
+        expect(tags[0].id).toBe('tag-ux');
+        expect(tags[0].title).toBe('UX');
+        done();
+      });
+    });
   });
 
   describe('onTaskSuggestionSelected', () => {

@@ -455,6 +455,25 @@ describe('TaskViewCustomizerService', () => {
     expect(grouped['Tag B'][1].id).toBe('Third Task(Tag A, Tag B)');
   });
 
+  it('should expose precomputed groups for grouped customized tasks', (done) => {
+    service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+
+    const result$ = TestBed.runInInjectionContext(() =>
+      service.customizeUndoneTasks(of(mockTasks)),
+    );
+
+    requestAnimationFrame(() => {
+      result$.subscribe((result) => {
+        expect(result.groups).toEqual([
+          { key: 'Tag A', tasks: [mockTasks[0], mockTasks[2]] },
+          { key: 'Tag B', tasks: [mockTasks[1], mockTasks[2]] },
+          { key: 'No tag', tasks: [mockTasks[3]] },
+        ]);
+        done();
+      });
+    });
+  });
+
   it('should group by scheduledDate using dueDay', () => {
     const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.scheduledDate);
     expect(Object.keys(grouped)).toContain(todayStr);

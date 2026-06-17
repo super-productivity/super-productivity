@@ -89,7 +89,7 @@ export class TagEditComponent {
   tagSuggestions = computed(() =>
     this.isShowMyDayTag()
       ? this._tagService.tagsSortedForUI()
-      : this._tagService.tagsNoMyDayAndNoListSorted(),
+      : this._tagService.tagsNoMyDayAndNoList(),
   );
 
   constructor() {

@@ -59,6 +59,11 @@ describe('AddTaskBarActionsComponent', () => {
       primary: '#ff0000',
     },
   } as Tag;
+  const sidebarOrderTags: Tag[] = [
+    { ...mockTag, id: 'tag-ux', title: 'UX' },
+    { ...mockTag, id: 'tag-dev', title: 'Development' },
+  ] as Tag[];
+  const alphabeticalTags: Tag[] = [...sidebarOrderTags].reverse();
 
   const mockState = {
     projectId: mockProject.id, // Use mock project id by default
@@ -147,8 +152,9 @@ describe('AddTaskBarActionsComponent', () => {
 
     mockTagService = jasmine.createSpyObj('TagService', [], {
       tags$: of([mockTag]),
-      tagsNoMyDayAndNoList$: of([mockTag]),
-      tagsNoMyDayAndNoListSorted: signal([mockTag]),
+      tagsNoMyDayAndNoList$: of(sidebarOrderTags),
+      tagsNoMyDayAndNoList: signal(sidebarOrderTags),
+      tagsNoMyDayAndNoListSorted: signal(alphabeticalTags),
     });
 
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['afterClosed']);
@@ -215,7 +221,7 @@ describe('AddTaskBarActionsComponent', () => {
   describe('Component Creation', () => {
     it('should initialize with correct signals', () => {
       expect(component.allProjects()).toEqual([mockProject]);
-      expect(component.allTags()).toEqual([mockTag]);
+      expect(component.allTags()).toEqual(sidebarOrderTags);
     });
 
     it('should handle input properties', () => {

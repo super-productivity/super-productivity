@@ -162,7 +162,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   isMentionListShown = signal(false);
   isScheduleDialogOpen = signal(false);
 
-  // Computed signals for projects and tags (sorted for consistency)
+  // Computed signals for projects and tags (tags follow sidebar order)
   projects = this._projectService.listSortedForUI;
   // Observable version for compatibility with existing code
   projects$ = toObservable(this.projects);
@@ -248,7 +248,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   tagMentions$: Observable<ShortSyntaxTag[]> = this.stateService.inputTxt$.pipe(
     filter((val) => typeof val === 'string'),
     withLatestFrom(
-      this._tagService.tagsNoMyDayAndNoListSorted$,
+      this._tagService.tagsNoMyDayAndNoList$,
       this._projectService.listSorted$,
       this._workContextService.activeWorkContext$,
       this._globalConfigService.shortSyntax$,

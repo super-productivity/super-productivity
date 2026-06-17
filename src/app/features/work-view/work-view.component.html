@@ -131,20 +131,19 @@
             </div>
           }
           @if (customizedUndoneTasks(); as customized) {
-            @if (customized.grouped) {
-              @for (
-                groupKey of customizerService.getOrderedGroupKeys(customized.grouped);
-                track groupKey
-              ) {
+            @if (customized.groups) {
+              @for (group of customized.groups; track group.key) {
                 <collapsible
-                  [title]="groupKey | scheduledDateGroup"
+                  [title]="group.key | scheduledDateGroup"
                   [isIconBefore]="true"
-                  [isExpanded]="!customizerService.collapsedGroupIds().includes(groupKey)"
-                  (isExpandedChange)="customizerService.toggleGroupExpansion(groupKey)"
+                  [isExpanded]="
+                    !customizerService.collapsedGroupIds().includes(group.key)
+                  "
+                  (isExpandedChange)="customizerService.toggleGroupExpansion(group.key)"
                   [isGroup]="true"
                 >
                   <task-list
-                    [tasks]="customized.grouped[groupKey]"
+                    [tasks]="group.tasks"
                     listId="PARENT"
                     listModelId="UNDONE"
                   ></task-list>
