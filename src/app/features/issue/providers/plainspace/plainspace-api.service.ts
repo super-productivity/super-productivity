@@ -107,13 +107,14 @@ export class PlainspaceApiService {
   }
 
   /**
-   * Pushes a field change back to Plainspace — done state and/or scheduled time
-   * (`scheduledAt`) — in a single PATCH; null on failure. `scheduledAt` is an ISO
-   * instant, or null to unschedule. Used by the two-way-sync adapter.
+   * Pushes a field change back to Plainspace — done state, title, and/or
+   * scheduled time (`scheduledAt`) — in a single PATCH; null on failure.
+   * `scheduledAt` is an ISO instant, or null to unschedule. Used by the
+   * two-way-sync adapter.
    */
   patchTask$(
     id: string,
-    fields: { done?: boolean; scheduledAt?: string | null },
+    fields: { done?: boolean; title?: string; scheduledAt?: string | null },
     cfg: PlainspaceCfg,
   ): Observable<PlainspaceIssue | null> {
     return this._http

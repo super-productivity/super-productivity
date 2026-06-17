@@ -42,13 +42,18 @@ describe('PlainspaceCommonInterfacesService', () => {
     expect(data.isDone).toBe(true);
     expect(data.issueLastSyncedValues).toEqual({
       isDone: true,
+      title: 'Buy milk',
       scheduledAt: '2026-01-02T09:00:00.000Z',
     });
   });
 
   it('getAddTaskData baseline carries a null scheduledAt for unscheduled tasks', () => {
     const data = service.getAddTaskData(issue(null));
-    expect(data.issueLastSyncedValues).toEqual({ isDone: false, scheduledAt: null });
+    expect(data.issueLastSyncedValues).toEqual({
+      isDone: false,
+      title: 'Buy milk',
+      scheduledAt: null,
+    });
   });
 
   it('getAddTaskData imports scheduledAt as dueWithTime (schedule shows in the app)', () => {

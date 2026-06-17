@@ -27,14 +27,16 @@ describe('PlainspaceSyncAdapterService', () => {
     adapter = TestBed.inject(PlainspaceSyncAdapterService);
   });
 
-  it('maps isDone and dueWithTime, both push-only', () => {
+  it('maps isDone, title and dueWithTime, all push-only', () => {
     expect(adapter.getSyncConfig(cfg)).toEqual({
       isDone: 'pushOnly',
+      title: 'pushOnly',
       dueWithTime: 'pushOnly',
     });
     const mappings = adapter.getFieldMappings();
     expect(mappings.map((m) => [m.taskField, m.issueField])).toEqual([
       ['isDone', 'isDone'],
+      ['title', 'title'],
       ['dueWithTime', 'scheduledAt'],
     ]);
     expect(mappings.every((m) => m.defaultDirection === 'pushOnly')).toBe(true);
@@ -54,6 +56,12 @@ describe('PlainspaceSyncAdapterService', () => {
     api.patchTask$.and.returnValue(of(null));
     await adapter.pushChanges('t1', { isDone: true }, cfg);
     expect(api.patchTask$).toHaveBeenCalledWith('t1', { done: true }, cfg);
+  });
+
+  it('pushChanges PATCHes a renamed title', async () => {
+    api.patchTask$.and.returnValue(of(null));
+    await adapter.pushChanges('t1', { title: 'New name' }, cfg);
+    expect(api.patchTask$).toHaveBeenCalledWith('t1', { title: 'New name' }, cfg);
   });
 
   it('pushChanges PATCHes scheduledAt, including null to unschedule', async () => {
@@ -85,7 +93,7 @@ describe('PlainspaceSyncAdapterService', () => {
   });
 
   it('pushChanges does nothing when no mapped field is in the changes', async () => {
-    await adapter.pushChanges('t1', { title: 'x' }, cfg);
+    await adapter.pushChanges('t1', { notes: 'x' }, cfg);
     expect(api.patchTask$).not.toHaveBeenCalled();
   });
 
@@ -110,14 +118,15 @@ describe('PlainspaceSyncAdapterService', () => {
     expect(await adapter.fetchIssue('missing', cfg)).toEqual({});
   });
 
-  it('extractSyncValues exposes isDone and scheduledAt (baseline for both)', () => {
+  it('extractSyncValues exposes isDone, title and scheduledAt (baseline)', () => {
     expect(
       adapter.extractSyncValues({
         isDone: true,
-        scheduledAt: '2026-01-02T09:00:00.000Z',
         title: 'x',
+        scheduledAt: '2026-01-02T09:00:00.000Z',
+        url: 'ignored',
       }),
-    ).toEqual({ isDone: true, scheduledAt: '2026-01-02T09:00:00.000Z' });
+    ).toEqual({ isDone: true, title: 'x', scheduledAt: '2026-01-02T09:00:00.000Z' });
   });
 
   it('getIssueLastUpdated parses updatedAt, or 0 when absent', () => {

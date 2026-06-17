@@ -6,17 +6,22 @@ import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceApiService } from './plainspace-api.service';
 
 /**
- * Push-only fields, written via PATCH /tasks/:id:
+ * Push fields, written via PATCH /tasks/:id:
  * - `isDone` → `done`
+ * - `title` → `title` (SP rename → Plainspace item text)
  * - `dueWithTime` → `scheduledAt` (SP scheduled time → Plainspace). SP stores an
  *   epoch-ms number; Plainspace wants an ISO instant, or null to unschedule.
  *   Plainspace's own reminder sweep then fires it for the team.
  *
+ * Direction is `pushOnly` for all three: the reverse direction (Plainspace → SP)
+ * is handled by issue-update polling (getFreshDataForIssueTask applies
+ * getAddTaskData, which already carries title/isDone/scheduledAt), not this
+ * adapter.
+ *
  * `dueDay` (date-only scheduling, no time) is intentionally NOT mapped: Plainspace
  * `scheduledAt` always carries a time, so mapping a day-only task would fabricate
  * a time-of-day. There is no separate day field on Plainspace to clear, so no
- * `mutuallyExclusive` entry is needed. Changes the other way (Plainspace → SP) go
- * through issue-update polling (getFreshDataForIssueTask), not this adapter.
+ * `mutuallyExclusive` entry is needed.
  */
 const PLAINSPACE_FIELD_MAPPINGS: FieldMapping[] = [
   {
@@ -25,6 +30,13 @@ const PLAINSPACE_FIELD_MAPPINGS: FieldMapping[] = [
     defaultDirection: 'pushOnly',
     toIssueValue: (taskValue: unknown): boolean => !!taskValue,
     toTaskValue: (issueValue: unknown): boolean => !!issueValue,
+  },
+  {
+    taskField: 'title',
+    issueField: 'title',
+    defaultDirection: 'pushOnly',
+    toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
+    toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
   },
   {
     taskField: 'dueWithTime',
@@ -52,7 +64,7 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
   }
 
   getSyncConfig(_cfg: PlainspaceCfg): FieldSyncConfig {
-    return { isDone: 'pushOnly', dueWithTime: 'pushOnly' };
+    return { isDone: 'pushOnly', title: 'pushOnly', dueWithTime: 'pushOnly' };
   }
 
   async fetchIssue(
@@ -70,9 +82,12 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
   ): Promise<void> {
     // `changes` is keyed by issue field (toPush from the effect). Collapse done
     // and scheduled-time changes into a single PATCH.
-    const fields: { done?: boolean; scheduledAt?: string | null } = {};
+    const fields: { done?: boolean; title?: string; scheduledAt?: string | null } = {};
     if ('isDone' in changes) {
       fields.done = !!changes['isDone'];
+    }
+    if ('title' in changes) {
+      fields.title = (changes['title'] ?? '') as string;
     }
     if ('scheduledAt' in changes) {
       fields.scheduledAt = (changes['scheduledAt'] ?? null) as string | null;
@@ -84,9 +99,13 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
   }
 
   extractSyncValues(issue: Record<string, unknown>): Record<string, unknown> {
-    // Both push-only fields need a baseline here, else computePushDecisions skips
-    // them as 'no-baseline' and nothing ever pushes.
-    return { isDone: issue['isDone'], scheduledAt: issue['scheduledAt'] };
+    // Every push field needs a baseline here, else computePushDecisions skips it
+    // as 'no-baseline' and nothing ever pushes.
+    return {
+      isDone: issue['isDone'],
+      title: issue['title'],
+      scheduledAt: issue['scheduledAt'],
+    };
   }
 
   getIssueLastUpdated(issue: Record<string, unknown>): number {
