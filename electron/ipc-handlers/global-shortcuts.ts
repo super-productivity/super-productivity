@@ -3,7 +3,7 @@ import { IPC } from '../shared-with-frontend/ipc-events.const';
 import {
   KeyboardConfig,
   GLOBAL_KEY_CFG_KEYS,
-} from '../../src/app/features/config/keyboard-config.model';
+} from '../shared-with-frontend/keyboard-config.model';
 import { getWin, setWasMaximizedBeforeHide } from '../main-window';
 import { toggleTaskWidgetVisibility } from '../task-widget/task-widget';
 import { showOrFocus } from '../various-shared';

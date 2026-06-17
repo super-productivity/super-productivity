@@ -46,7 +46,7 @@ import { ProjectService } from '../../../project/project.service';
 import { _MISSING_PROJECT_, DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
-import { KeyboardConfig } from '../../../config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-time-estimate.component';

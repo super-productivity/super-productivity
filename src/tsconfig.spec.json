@@ -24,7 +24,8 @@
         "packages/sync-providers/src/provider-types.ts"
       ],
       "@sp/sync-providers/log": ["packages/sync-providers/src/log.ts"],
-      "@sp/sync-providers/onedrive": ["packages/sync-providers/src/onedrive.ts"]
+      "@sp/sync-providers/onedrive": ["packages/sync-providers/src/onedrive.ts"],
+      "@sp/keyboard-config": ["electron/shared-with-frontend/keyboard-config.model.ts"]
     }
   },
   "files": ["test.ts", "polyfills.ts"],

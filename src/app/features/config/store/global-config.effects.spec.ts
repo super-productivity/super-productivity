@@ -21,7 +21,7 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
-import { KeyboardConfig } from '../keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';

@@ -66,7 +66,7 @@ import { DateService } from '../../../core/date/date.service';
 import { isTouchActive } from '../../../util/input-intent';
 import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
-import { KeyboardConfig } from '../../config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { PlannerService } from '../../planner/planner.service';

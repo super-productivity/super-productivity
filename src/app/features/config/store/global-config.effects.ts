@@ -23,7 +23,7 @@ import { DateService } from '../../../core/date/date.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
-import { KeyboardConfig } from '../keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { updateGlobalConfigSection } from './global-config.actions';
 import {
   selectConfigFeatureState,

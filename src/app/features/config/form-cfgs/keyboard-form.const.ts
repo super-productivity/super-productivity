@@ -1,11 +1,11 @@
 import { ConfigFormSection, LimitedFormlyFieldConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 import { IS_ELECTRON } from '../../../app.constants';
-import { KeyboardConfig } from '../keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 
 /** Builds a single keyboard-shortcut form field (the dominant, repeated shape). */
 const kbField = (
-  key: keyof KeyboardConfig,
+  key: keyof KeyboardConfig & (string | number),
   label: string,
 ): LimitedFormlyFieldConfig<KeyboardConfig> => ({
   key,

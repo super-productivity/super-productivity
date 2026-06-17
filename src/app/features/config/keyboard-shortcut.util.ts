@@ -1,5 +1,5 @@
 import { KeyboardLayout } from '../../core/keyboard-layout/keyboard-layout.service';
-import { GLOBAL_KEY_CFG_KEYS, KeyboardConfig } from './keyboard-config.model';
+import { GLOBAL_KEY_CFG_KEYS, KeyboardConfig } from '@sp/keyboard-config';
 
 const QWERTY_CODE_MAP: Record<string, string> = {
   Minus: '-',
