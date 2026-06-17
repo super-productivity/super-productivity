@@ -52,22 +52,22 @@ const _generateBase62 = (length: number): string => {
 };
 
 /**
- * Generates a compact client ID: {platform}_{4-char-base62}, e.g. "B_a7Kx".
+ * Generates a compact client ID: {platform}_{6-char-base62}, e.g. "B_a7Kx9Z".
  */
 export const generateClientId = (): string => {
-  return `${_getEnvironmentId()}_${_generateBase62(4)}`;
+  return `${_getEnvironmentId()}_${_generateBase62(6)}`;
 };
 
 /**
  * Type guard: true if `id` matches a known valid client-ID format.
  * - Legacy format: any string of length >= 10 (legacy IDs).
- * - New format: {platform}_{4-char-base62}, e.g. "B_a7Kx".
+ * - New format: {platform}_{6-char-base62}, e.g. "B_a7Kx9Z".
  *
  * Used to narrow `unknown` values read from IndexedDB. An invalid format is
  * treated as "absent" rather than fatal — see issue #6197.
  */
 export const isValidClientIdFormat = (id: unknown): id is string => {
   return (
-    typeof id === 'string' && (id.length >= 10 || /^[BEAI]_[a-zA-Z0-9]{4}$/.test(id))
+    typeof id === 'string' && (id.length >= 10 || /^[BEAI]_[a-zA-Z0-9]{6}$/.test(id))
   );
 };

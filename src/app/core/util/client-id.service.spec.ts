@@ -82,15 +82,15 @@ describe('ClientIdService', () => {
 
   describe('resolution from SUP_OPS', () => {
     it('returns a populated SUP_OPS id directly without opening pf', async () => {
-      await seedSupOps('B_H8AR');
+      await seedSupOps('B_H8AR42');
       const pfSpy = spyOn(service as any, '_readPf').and.callThrough();
 
-      expect(await service.loadClientId()).toBe('B_H8AR');
+      expect(await service.loadClientId()).toBe('B_H8AR42');
       expect(pfSpy).not.toHaveBeenCalled();
     });
 
     it('caches the id after the first load', async () => {
-      await seedSupOps('B_H8AR');
+      await seedSupOps('B_H8AR42');
       const first = await service.loadClientId();
       // Remove the stored value — a second load must still return the cache.
       await clearSupOps();
@@ -100,10 +100,10 @@ describe('ClientIdService', () => {
 
   describe('one-time migration from legacy pf', () => {
     it('migrates pf.__client_id_ into SUP_OPS, unchanged', async () => {
-      await seedPf(PF_CLIENT_ID_KEY, 'B_H8AR');
+      await seedPf(PF_CLIENT_ID_KEY, 'B_H8AR42');
 
-      expect(await service.loadClientId()).toBe('B_H8AR');
-      expect(await readSupOps()).toBe('B_H8AR');
+      expect(await service.loadClientId()).toBe('B_H8AR42');
+      expect(await readSupOps()).toBe('B_H8AR42');
     });
 
     it('migrates pf.CLIENT_ID when __client_id_ is absent (bridge-ordering gap)', async () => {
@@ -114,19 +114,19 @@ describe('ClientIdService', () => {
     });
 
     it('prefers __client_id_ over CLIENT_ID when both pf keys are valid', async () => {
-      await seedPf(PF_CLIENT_ID_KEY, 'B_aaaa');
+      await seedPf(PF_CLIENT_ID_KEY, 'B_aaaaaa');
       await seedPf(PF_LEGACY_CLIENT_ID_KEY, 'LegacyId123456');
 
-      expect(await service.loadClientId()).toBe('B_aaaa');
-      expect(await readSupOps()).toBe('B_aaaa');
+      expect(await service.loadClientId()).toBe('B_aaaaaa');
+      expect(await readSupOps()).toBe('B_aaaaaa');
     });
 
     it('lets a valid pf id win over an invalid-format SUP_OPS value', async () => {
       await seedSupOps('BAD');
-      await seedPf(PF_CLIENT_ID_KEY, 'B_good');
+      await seedPf(PF_CLIENT_ID_KEY, 'B_goodid');
 
-      expect(await service.loadClientId()).toBe('B_good');
-      expect(await readSupOps()).toBe('B_good');
+      expect(await service.loadClientId()).toBe('B_goodid');
+      expect(await readSupOps()).toBe('B_goodid');
     });
   });
 
@@ -137,7 +137,7 @@ describe('ClientIdService', () => {
 
     it('getOrGenerateClientId() generates and persists a fresh id', async () => {
       const id = await service.getOrGenerateClientId();
-      expect(/^[BEAI]_[a-zA-Z0-9]{4}$/.test(id)).toBeTrue();
+      expect(/^[BEAI]_[a-zA-Z0-9]{6}$/.test(id)).toBeTrue();
       expect(await readSupOps()).toBe(id);
 
       // Persisted: a fresh service instance resolves to the same id.
@@ -193,14 +193,14 @@ describe('ClientIdService', () => {
     });
 
     it('copy-forward write fails: returns the valid pf id, no throw, no generation', async () => {
-      await seedPf(PF_CLIENT_ID_KEY, 'B_good');
+      await seedPf(PF_CLIENT_ID_KEY, 'B_goodid');
       spyOn(service as any, '_putClientIdIfAbsent').and.returnValue(
         Promise.reject(new DOMException('quota', 'QuotaExceededError')),
       );
 
-      expect(await service.loadClientId()).toBe('B_good');
+      expect(await service.loadClientId()).toBe('B_goodid');
       service.clearCache();
-      expect(await service.getOrGenerateClientId()).toBe('B_good');
+      expect(await service.getOrGenerateClientId()).toBe('B_goodid');
       // The failed copy means SUP_OPS stays empty — a later launch retries it.
       expect(await readSupOps()).toBeUndefined();
     });
@@ -208,27 +208,27 @@ describe('ClientIdService', () => {
 
   describe('getOrGenerateClientId()', () => {
     it('returns an existing valid SUP_OPS id without generating', async () => {
-      await seedSupOps('B_H8AR');
-      expect(await service.getOrGenerateClientId()).toBe('B_H8AR');
+      await seedSupOps('B_H8AR42');
+      expect(await service.getOrGenerateClientId()).toBe('B_H8AR42');
     });
 
     it('generates when the stored value is an invalid format', async () => {
       await seedSupOps('BAD');
       const id = await service.getOrGenerateClientId();
-      expect(/^[BEAI]_[a-zA-Z0-9]{4}$/.test(id)).toBeTrue();
+      expect(/^[BEAI]_[a-zA-Z0-9]{6}$/.test(id)).toBeTrue();
     });
   });
 
   describe('persistClientId()', () => {
     it('writes the id into SUP_OPS and sets the cache', async () => {
-      await service.persistClientId('E_abcd');
-      expect(await readSupOps()).toBe('E_abcd');
+      await service.persistClientId('E_abcd66');
+      expect(await readSupOps()).toBe('E_abcd66');
       // Cache is set — loadClientId() returns it without re-reading.
-      expect(await service.loadClientId()).toBe('E_abcd');
+      expect(await service.loadClientId()).toBe('E_abcd66');
     });
 
     it('writes unconditionally, overwriting an existing SUP_OPS id', async () => {
-      await seedSupOps('B_old1');
+      await seedSupOps('B_old111');
       await service.persistClientId('LegacyId123456');
       expect(await readSupOps()).toBe('LegacyId123456');
     });
