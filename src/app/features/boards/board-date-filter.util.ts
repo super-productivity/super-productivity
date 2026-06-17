@@ -3,9 +3,12 @@ import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 
 const VALID_TIMEFRAME_TYPES: ReadonlySet<BoardDateTimeframeType> = new Set([
+  'all',
   'today',
   'tomorrow',
   'next7Days',
+  'nextNDays',
+  'atLeastNDaysFuture',
   'nextWeek',
   'nextMonth',
   'customDate',
@@ -16,8 +19,8 @@ const isBoardDateTimeframeType = (value: unknown): value is BoardDateTimeframeTy
   typeof value === 'string' && VALID_TIMEFRAME_TYPES.has(value as BoardDateTimeframeType);
 
 export interface BoardDateTimeframeRange {
-  start: string;
-  end: string;
+  start?: string;
+  end?: string;
 }
 
 export interface BoardDateTimeframeRangeInput {
@@ -29,6 +32,10 @@ export interface BoardDateTimeframeMatchInput extends BoardDateTimeframeRangeInp
   dateOnly?: string | null;
   timestamp?: number | null;
   startOfNextDayDiffMs: number;
+}
+
+export interface BoardDateTimeframeAdjustInput extends BoardDateTimeframeRangeInput {
+  currentDate?: string | null;
 }
 
 const isValidDbDateStr = (value: unknown): value is string => {
@@ -48,6 +55,9 @@ const addDays = (dateStr: string, days: number): string => {
   date.setDate(date.getDate() + days);
   return getDbDateStr(date);
 };
+
+const isValidPositiveInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0;
 
 const getNextIsoWeekRange = (todayStr: string): BoardDateTimeframeRange => {
   const today = dateStrToUtcDate(todayStr);
@@ -83,6 +93,8 @@ export const resolveBoardDateTimeframeRange = ({
   }
 
   switch (timeframe.type) {
+    case 'all':
+      return {};
     case 'today':
       return { start: todayStr, end: todayStr };
     case 'tomorrow': {
@@ -91,6 +103,14 @@ export const resolveBoardDateTimeframeRange = ({
     }
     case 'next7Days':
       return { start: todayStr, end: addDays(todayStr, 6) };
+    case 'nextNDays':
+      return isValidPositiveInteger(timeframe.days)
+        ? { start: todayStr, end: addDays(todayStr, timeframe.days - 1) }
+        : null;
+    case 'atLeastNDaysFuture':
+      return isValidPositiveInteger(timeframe.days)
+        ? { start: addDays(todayStr, timeframe.days) }
+        : null;
     case 'nextWeek':
       return getNextIsoWeekRange(todayStr);
     case 'nextMonth':
@@ -100,11 +120,26 @@ export const resolveBoardDateTimeframeRange = ({
         ? { start: timeframe.customDate, end: timeframe.customDate }
         : null;
     case 'customRange':
-      return isValidDbDateStr(timeframe.customStart) &&
-        isValidDbDateStr(timeframe.customEnd) &&
-        timeframe.customStart <= timeframe.customEnd
-        ? { start: timeframe.customStart, end: timeframe.customEnd }
-        : null;
+      if (
+        timeframe.customStart !== undefined &&
+        !isValidDbDateStr(timeframe.customStart)
+      ) {
+        return null;
+      }
+      if (timeframe.customEnd !== undefined && !isValidDbDateStr(timeframe.customEnd)) {
+        return null;
+      }
+      if (!timeframe.customStart && !timeframe.customEnd) {
+        return null;
+      }
+      if (
+        timeframe.customStart &&
+        timeframe.customEnd &&
+        timeframe.customStart > timeframe.customEnd
+      ) {
+        return null;
+      }
+      return { start: timeframe.customStart, end: timeframe.customEnd };
   }
 };
 
@@ -125,7 +160,35 @@ export const matchesBoardDateTimeframe = ({
       ? getDbDateStr(new Date(timestamp - startOfNextDayDiffMs))
       : dateOnly;
 
-  return isValidDbDateStr(taskDate) && taskDate >= range.start && taskDate <= range.end;
+  return (
+    isValidDbDateStr(taskDate) &&
+    (!range.start || taskDate >= range.start) &&
+    (!range.end || taskDate <= range.end)
+  );
+};
+
+export const adjustDateToBoardTimeframe = ({
+  timeframe,
+  currentDate,
+  todayStr,
+}: BoardDateTimeframeAdjustInput): string | null => {
+  const range = resolveBoardDateTimeframeRange({ timeframe, todayStr });
+  if (!range) {
+    return null;
+  }
+
+  const sourceDate = isValidDbDateStr(currentDate) ? currentDate : todayStr;
+  if (!isValidDbDateStr(sourceDate)) {
+    return null;
+  }
+
+  if (range.start && sourceDate < range.start) {
+    return range.start;
+  }
+  if (range.end && sourceDate > range.end) {
+    return range.end;
+  }
+  return sourceDate;
 };
 
 export const sanitizeBoardDateTimeframeCfg = (
@@ -141,20 +204,31 @@ export const sanitizeBoardDateTimeframeCfg = (
   }
 
   switch (type) {
+    case 'nextNDays':
+    case 'atLeastNDaysFuture':
+      return isValidPositiveInteger(cfg.days) ? { type, days: cfg.days } : undefined;
     case 'customDate':
       return isValidDbDateStr(cfg.customDate)
         ? { type, customDate: cfg.customDate }
         : undefined;
     case 'customRange':
-      return isValidDbDateStr(cfg.customStart) &&
-        isValidDbDateStr(cfg.customEnd) &&
-        cfg.customStart <= cfg.customEnd
-        ? {
-            type,
-            customStart: cfg.customStart,
-            customEnd: cfg.customEnd,
-          }
-        : undefined;
+      if (cfg.customStart !== undefined && !isValidDbDateStr(cfg.customStart)) {
+        return undefined;
+      }
+      if (cfg.customEnd !== undefined && !isValidDbDateStr(cfg.customEnd)) {
+        return undefined;
+      }
+      if (!cfg.customStart && !cfg.customEnd) {
+        return undefined;
+      }
+      if (cfg.customStart && cfg.customEnd && cfg.customStart > cfg.customEnd) {
+        return undefined;
+      }
+      return {
+        type,
+        ...(cfg.customStart ? { customStart: cfg.customStart } : {}),
+        ...(cfg.customEnd ? { customEnd: cfg.customEnd } : {}),
+      };
     default:
       return { type };
   }

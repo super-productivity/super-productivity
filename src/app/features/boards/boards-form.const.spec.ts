@@ -38,6 +38,7 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
     'tag-select',
     'project-select',
     'repeat',
+    'date-btn',
   ].map((name) => ({ name, component: NoopFormlyFieldComponent }));
 
   let builder: FormlyFormBuilder;
@@ -75,6 +76,9 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
     fields: FormlyFieldConfig[],
     key: keyof BoardPanelCfg,
   ): FormlyFieldConfig => fields.find((f) => f.key === key)!;
+
+  const childFieldByKey = (field: FormlyFieldConfig, key: string): FormlyFieldConfig =>
+    field.fieldGroup!.find((f) => f.key === key)!;
 
   it('uses translation keys for board modal labels (#8070)', () => {
     const fields = panelFieldGroup();
@@ -155,5 +159,49 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
 
     expect(model.includedTagsMatch).toBe('all');
     expect(form.valid).toBe(true);
+  });
+
+  it('uses nested timeframe selects with extended options', () => {
+    const fields = panelFieldGroup();
+    const scheduledTimeframe = fieldByKey(fields, 'scheduledTimeframe');
+    const deadlineTimeframe = fieldByKey(fields, 'deadlineTimeframe');
+    const scheduledType = childFieldByKey(scheduledTimeframe, 'type');
+    const deadlineType = childFieldByKey(deadlineTimeframe, 'type');
+
+    expect(scheduledTimeframe.defaultValue).toEqual({ type: 'all' });
+    expect(deadlineTimeframe.defaultValue).toEqual({ type: 'all' });
+    expect((scheduledType.props?.options as { value: string }[]).map((o) => o.value))
+      .withContext('scheduled options')
+      .toEqual([
+        'all',
+        'today',
+        'tomorrow',
+        'next7Days',
+        'nextNDays',
+        'atLeastNDaysFuture',
+        'nextWeek',
+        'nextMonth',
+        'customDate',
+        'customRange',
+      ]);
+    expect((deadlineType.props?.options as { value: string }[]).map((o) => o.value))
+      .withContext('deadline options')
+      .toEqual((scheduledType.props?.options as { value: string }[]).map((o) => o.value));
+  });
+
+  it('uses number and date button controls for timeframe details', () => {
+    const fields = panelFieldGroup();
+    const scheduledTimeframe = fieldByKey(fields, 'scheduledTimeframe');
+
+    expect(childFieldByKey(scheduledTimeframe, 'days').type).toBe('input');
+    expect(childFieldByKey(scheduledTimeframe, 'customDate').type).toBe('date-btn');
+    expect(childFieldByKey(scheduledTimeframe, 'customStart').type).toBe('date-btn');
+    expect(childFieldByKey(scheduledTimeframe, 'customEnd').type).toBe('date-btn');
+    expect(childFieldByKey(scheduledTimeframe, 'customStart').props?.maxDateKey).toBe(
+      'customEnd',
+    );
+    expect(childFieldByKey(scheduledTimeframe, 'customEnd').props?.minDateKey).toBe(
+      'customStart',
+    );
   });
 });

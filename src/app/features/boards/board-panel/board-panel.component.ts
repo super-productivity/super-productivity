@@ -9,6 +9,7 @@ import {
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import {
+  BoardDateTimeframeCfg,
   BoardPanelCfg,
   BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
@@ -39,7 +40,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
@@ -56,7 +57,39 @@ import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
-import { matchesBoardDateTimeframe } from '../board-date-filter.util';
+import {
+  adjustDateToBoardTimeframe,
+  matchesBoardDateTimeframe,
+} from '../board-date-filter.util';
+import { PlannerActions } from '../../planner/store/planner.actions';
+import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
+import { SnackService } from '../../../core/snack/snack.service';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { truncate } from '../../../util/truncate';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
+
+const ALL_TIMEFRAME: BoardDateTimeframeCfg = { type: 'all' };
+
+const getTaskScheduledDateStr = (
+  task: TaskCopy,
+  startOfNextDayDiffMs: number,
+): string | null => {
+  if (task.dueWithTime) {
+    return getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs));
+  }
+  return task.dueDay || null;
+};
+
+const getTaskDeadlineDateStr = (
+  task: TaskCopy,
+  startOfNextDayDiffMs: number,
+): string | null => {
+  if (task.deadlineWithTime) {
+    return getDbDateStr(new Date(task.deadlineWithTime - startOfNextDayDiffMs));
+  }
+  return task.deadlineDay || null;
+};
 
 @Component({
   selector: 'board-panel',
@@ -76,6 +109,7 @@ import { matchesBoardDateTimeframe } from '../board-date-filter.util';
   templateUrl: './board-panel.component.html',
   styleUrl: './board-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [LocaleDatePipe],
 })
 export class BoardPanelComponent {
   T = T;
@@ -87,6 +121,9 @@ export class BoardPanelComponent {
   store = inject(Store);
   taskService = inject(TaskService);
   _matDialog = inject(MatDialog);
+  private _snackService = inject(SnackService);
+  private _localeDatePipe = inject(LocaleDatePipe);
+  private _translateService = inject(TranslateService);
 
   allTasks$ = this.store.select(selectAllTasksInActiveProjects);
   allTasks = toSignal(this.allTasks$, {
@@ -347,8 +384,9 @@ export class BoardPanelComponent {
       }),
     );
 
-    this._checkToScheduledTask(panelCfg, task.id);
-    this._checkBacklogState(panelCfg, task.id);
+    await this._checkToScheduledTask(panelCfg, task.id);
+    await this._checkDeadlineState(panelCfg, task.id);
+    await this._checkBacklogState(panelCfg, task.id);
   }
 
   async afterTaskAdd({
@@ -368,8 +406,9 @@ export class BoardPanelComponent {
       }),
     );
 
-    this._checkToScheduledTask(panelCfg, taskId);
-    this._checkBacklogState(panelCfg, taskId);
+    await this._checkToScheduledTask(panelCfg, taskId);
+    await this._checkDeadlineState(panelCfg, taskId);
+    await this._checkBacklogState(panelCfg, taskId);
   }
 
   scheduleTask(task: TaskCopy, ev?: MouseEvent): void {
@@ -381,27 +420,146 @@ export class BoardPanelComponent {
     });
   }
 
+  editDeadline(task: TaskCopy, ev?: MouseEvent): void {
+    ev?.preventDefault();
+    ev?.stopPropagation();
+    this._matDialog.open(DialogDeadlineComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
+  }
+
   private async _checkToScheduledTask(
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
+    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.All) {
+      return;
+    }
+    const task = await this.store
+      .select(selectTaskById, { id: taskId })
+      .pipe(first())
+      .toPromise();
+    if (!task) {
+      return;
+    }
+
     if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task.dueDay && !task.dueWithTime) {
-        this.scheduleTask(task);
+      const currentVal = getTaskScheduledDateStr(task, this.startOfNextDayDiffMs());
+      const timeframe = panelCfg.scheduledTimeframe || ALL_TIMEFRAME;
+      if (timeframe.type === 'all') {
+        if (!currentVal) {
+          this.scheduleTask(task);
+        }
+        return;
+      }
+
+      const closestDate = adjustDateToBoardTimeframe({
+        timeframe,
+        currentDate: currentVal,
+        todayStr: this.todayStr(),
+      });
+      if (closestDate && closestDate !== currentVal) {
+        this._showDateChangeSnack(task, closestDate);
+        this.store.dispatch(
+          PlannerActions.planTaskForDay({
+            task,
+            day: closestDate,
+          }),
+        );
       }
     }
     if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
-      this.store.dispatch(
-        TaskSharedActions.unscheduleTask({
-          id: taskId,
-          isSkipToast: false,
-        }),
-      );
+      if (task.dueDay || task.dueWithTime) {
+        this.store.dispatch(
+          TaskSharedActions.unscheduleTask({
+            id: taskId,
+            isSkipToast: false,
+          }),
+        );
+      }
     }
+  }
+
+  private async _checkDeadlineState(
+    panelCfg: BoardPanelCfg,
+    taskId: string,
+  ): Promise<void> {
+    if (
+      !panelCfg.deadlineState ||
+      panelCfg.deadlineState === BoardPanelCfgDeadlineState.All
+    ) {
+      return;
+    }
+
+    const task = await this.store
+      .select(selectTaskById, { id: taskId })
+      .pipe(first())
+      .toPromise();
+    if (!task) {
+      return;
+    }
+
+    const todayStr = this.todayStr();
+    const startOfNextDayDiffMs = this.startOfNextDayDiffMs();
+    const currentVal = getTaskDeadlineDateStr(task, startOfNextDayDiffMs);
+
+    if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
+      const timeframe = panelCfg.deadlineTimeframe || ALL_TIMEFRAME;
+      if (timeframe.type === 'all') {
+        if (!currentVal) {
+          this.editDeadline(task);
+        }
+        return;
+      }
+
+      const closestDate = adjustDateToBoardTimeframe({
+        timeframe,
+        currentDate: currentVal,
+        todayStr,
+      });
+      if (closestDate && closestDate !== currentVal) {
+        this._showDateChangeSnack(task, closestDate, true);
+        this.store.dispatch(
+          TaskSharedActions.setDeadline({
+            taskId: task.id,
+            deadlineDay: closestDate,
+            ...getDeadlineAutoPlanFields(
+              {
+                todayStr: () => todayStr,
+                getStartOfNextDayDiffMs: () => startOfNextDayDiffMs,
+              },
+              closestDate,
+            ),
+            isSkipToast: true,
+          }),
+        );
+      }
+    } else if (panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline) {
+      if (currentVal) {
+        this.store.dispatch(TaskSharedActions.removeDeadline({ taskId }));
+      }
+    }
+  }
+
+  private _showDateChangeSnack(
+    task: TaskCopy,
+    newDate: string,
+    isDeadline: boolean = false,
+  ): void {
+    const formattedDate =
+      newDate === this.todayStr()
+        ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
+        : (this._localeDatePipe.transform(newDate, 'shortDate') as string);
+
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: isDeadline ? T.F.TASK.S.DEADLINE_ADJUSTED : T.F.TASK.S.SCHEDULED_DATE_ADJUSTED,
+      translateParams: {
+        title: truncate(task.title, 20),
+        date: formattedDate,
+      },
+    });
   }
 
   private async _checkBacklogState(

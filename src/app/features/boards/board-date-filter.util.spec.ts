@@ -1,4 +1,5 @@
 import {
+  adjustDateToBoardTimeframe,
   matchesBoardDateTimeframe,
   resolveBoardDateTimeframeRange,
 } from './board-date-filter.util';
@@ -42,6 +43,30 @@ describe('board date timeframe filtering', () => {
     expect(matches({ type: 'next7Days' }, { day: '2026-03-25' })).toBeFalse();
   });
 
+  it('matches all timeframe for any task with a date value', () => {
+    expect(matches({ type: 'all' }, { day: '2026-03-18' })).toBeTrue();
+    expect(matches({ type: 'all' }, { day: '2028-01-01' })).toBeTrue();
+    expect(matches({ type: 'all' }, {})).toBeFalse();
+  });
+
+  it('matches next N days from today through today plus N minus 1 days', () => {
+    expect(matches({ type: 'nextNDays', days: 3 }, { day: '2026-03-18' })).toBeTrue();
+    expect(matches({ type: 'nextNDays', days: 3 }, { day: '2026-03-20' })).toBeTrue();
+    expect(matches({ type: 'nextNDays', days: 3 }, { day: '2026-03-21' })).toBeFalse();
+  });
+
+  it('matches tasks at least N days in the future', () => {
+    expect(
+      matches({ type: 'atLeastNDaysFuture', days: 3 }, { day: '2026-03-20' }),
+    ).toBeFalse();
+    expect(
+      matches({ type: 'atLeastNDaysFuture', days: 3 }, { day: '2026-03-21' }),
+    ).toBeTrue();
+    expect(
+      matches({ type: 'atLeastNDaysFuture', days: 3 }, { day: '2027-01-01' }),
+    ).toBeTrue();
+  });
+
   it('resolves next week as the next ISO calendar week', () => {
     expect(
       resolveBoardDateTimeframeRange({
@@ -78,6 +103,21 @@ describe('board date timeframe filtering', () => {
     ).toBeFalse();
   });
 
+  it('matches half-bounded custom range values', () => {
+    expect(
+      matches({ type: 'customRange', customStart: '2026-04-02' }, { day: '2026-04-01' }),
+    ).toBeFalse();
+    expect(
+      matches({ type: 'customRange', customStart: '2026-04-02' }, { day: '2026-04-02' }),
+    ).toBeTrue();
+    expect(
+      matches({ type: 'customRange', customEnd: '2026-04-05' }, { day: '2026-04-05' }),
+    ).toBeTrue();
+    expect(
+      matches({ type: 'customRange', customEnd: '2026-04-05' }, { day: '2026-04-06' }),
+    ).toBeFalse();
+  });
+
   it('does not resolve invalid custom date and custom range values', () => {
     expect(
       resolveBoardDateTimeframeRange({
@@ -95,6 +135,52 @@ describe('board date timeframe filtering', () => {
         todayStr,
       }),
     ).toBeNull();
+    expect(
+      resolveBoardDateTimeframeRange({
+        timeframe: { type: 'customRange' },
+        todayStr,
+      }),
+    ).toBeNull();
+    expect(
+      resolveBoardDateTimeframeRange({
+        timeframe: { type: 'nextNDays', days: 0 },
+        todayStr,
+      }),
+    ).toBeNull();
+  });
+
+  it('adjusts dates to the nearest valid timeframe date', () => {
+    expect(
+      adjustDateToBoardTimeframe({
+        timeframe: { type: 'nextNDays', days: 3 },
+        currentDate: '2026-03-17',
+        todayStr,
+      }),
+    ).toBe('2026-03-18');
+    expect(
+      adjustDateToBoardTimeframe({
+        timeframe: { type: 'nextNDays', days: 3 },
+        currentDate: '2026-03-19',
+        todayStr,
+      }),
+    ).toBe('2026-03-19');
+    expect(
+      adjustDateToBoardTimeframe({
+        timeframe: { type: 'nextNDays', days: 3 },
+        currentDate: '2026-03-25',
+        todayStr,
+      }),
+    ).toBe('2026-03-20');
+  });
+
+  it('uses today as the auto-adjust source date when the task has no date yet', () => {
+    expect(
+      adjustDateToBoardTimeframe({
+        timeframe: { type: 'atLeastNDaysFuture', days: 3 },
+        currentDate: null,
+        todayStr,
+      }),
+    ).toBe('2026-03-21');
   });
 
   it('uses the logical-day offset for timestamp values', () => {

@@ -80,9 +80,12 @@ export class DateTimePickerComponent implements AfterViewInit {
   selectedReminderCfgId = input<TaskReminderOptionId>(TaskReminderOptionId.DoNotRemind);
   reminderOptions = input<TaskReminderOption[]>(TASK_REMINDER_OPTIONS);
   minDate = input<Date | null>(null);
+  maxDate = input<Date | null>(null);
   timeLabel = input<string>('Time');
   reminderLabel = input<string>(T.F.TASK.D_SCHEDULE_TASK.REMIND_AT);
   showQuickAccess = input<boolean>(true);
+  showTime = input<boolean>(true);
+  showReminder = input<boolean>(true);
   quickAccessTranslationPrefix = input<string>('F.TASK.D_SCHEDULE_TASK');
 
   // Outputs

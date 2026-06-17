@@ -25,9 +25,12 @@ export enum BoardPanelCfgDeadlineState {
 export type BoardSortField = 'dueDate' | 'created' | 'title' | 'timeEstimate';
 export type BoardMatchMode = 'all' | 'any';
 export type BoardDateTimeframeType =
+  | 'all'
   | 'today'
   | 'tomorrow'
   | 'next7Days'
+  | 'nextNDays'
+  | 'atLeastNDaysFuture'
   | 'nextWeek'
   | 'nextMonth'
   | 'customDate'
@@ -35,6 +38,7 @@ export type BoardDateTimeframeType =
 
 export interface BoardDateTimeframeCfg {
   type: BoardDateTimeframeType;
+  days?: number;
   customDate?: string;
   customStart?: string;
   customEnd?: string;

@@ -94,9 +94,9 @@ describe('sanitizePanelCfg', () => {
     const out = sanitizePanelCfg({
       ...basePanel,
       scheduledState: BoardPanelCfgScheduledState.Scheduled,
-      scheduledTimeframe: { type: 'customDate', customDate: 'not-a-date' },
+      scheduledTimeframe: { type: 'nextNDays', days: 0 },
       deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
-      deadlineTimeframe: { type: 'customRange', customStart: '2026-04-03' },
+      deadlineTimeframe: { type: 'customRange' },
     } as any);
 
     expect('scheduledTimeframe' in out).toBe(false);
@@ -140,6 +140,25 @@ describe('sanitizePanelCfg', () => {
     expect(out.deadlineTimeframe).toEqual({
       type: 'customRange',
       customStart: '2026-04-01',
+      customEnd: '2026-04-30',
+    });
+  });
+
+  it('preserves valid dynamic and half-bounded timeframe fields', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'nextNDays', days: 14 },
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: {
+        type: 'customRange',
+        customEnd: '2026-04-30',
+      },
+    } as any);
+
+    expect(out.scheduledTimeframe).toEqual({ type: 'nextNDays', days: 14 });
+    expect(out.deadlineTimeframe).toEqual({
+      type: 'customRange',
       customEnd: '2026-04-30',
     });
   });

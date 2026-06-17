@@ -27,6 +27,7 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
 import { StartPageSelectComponent } from '../features/config/start-page-select/start-page-select.component';
 import { FormlySlideToggleComponent } from './formly-slide-toggle/formly-slide-toggle.component';
 import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-picker.component';
+import { FormlyDateBtnComponent } from './formly-date-btn/formly-date-btn.component';
 
 /**
  * Root-only module. Import ONLY in main.ts via importProvidersFrom().
@@ -118,6 +119,10 @@ import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-pick
         {
           name: 'date',
           component: FormlyDatePickerComponent,
+        },
+        {
+          name: 'date-btn',
+          component: FormlyDateBtnComponent,
         },
       ],
       extras: {

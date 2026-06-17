@@ -21,7 +21,10 @@ import { provideMockActions } from '@ngrx/effects/testing';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
 import { selectUnarchivedProjects } from '../../project/store/project.selectors';
-import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
+import {
+  selectAllTasksInActiveProjects,
+  selectTaskById,
+} from '../../tasks/store/task.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
@@ -30,6 +33,11 @@ import {
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { PlannerActions } from '../../planner/store/planner.actions';
+import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
+import { SnackService } from '../../../core/snack/snack.service';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 describe('BoardPanelComponent - Backlog Feature', () => {
   let component: BoardPanelComponent;
@@ -122,6 +130,8 @@ describe('BoardPanelComponent - Backlog Feature', () => {
         { provide: Store, useValue: storeMock },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
         { provide: WorkContextService, useValue: workContextServiceMock },
         { provide: ProjectService, useValue: projectServiceMock },
       ],
@@ -285,6 +295,8 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
         { provide: Store, useValue: storeMock },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],
@@ -379,6 +391,8 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         { provide: Store, useValue: storeMock },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],
@@ -725,6 +739,7 @@ describe('BoardPanelComponent - date and deadline filters', () => {
   let component: BoardPanelComponent;
   let fixture: ComponentFixture<BoardPanelComponent>;
   let storeMock: { select: jasmine.Spy; pipe: jasmine.Spy; dispatch: jasmine.Spy };
+  let matDialogOpenSpy: jasmine.Spy;
   let actions$: ReplaySubject<unknown>;
 
   const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
@@ -764,24 +779,30 @@ describe('BoardPanelComponent - date and deadline filters', () => {
   ): Promise<void> => {
     actions$ = new ReplaySubject(1);
     storeMock = {
-      select: jasmine.createSpy('select').and.callFake((selectorFn: unknown) => {
-        if (selectorFn === selectUnarchivedProjects) {
-          return of([{ id: 'p1', backlogTaskIds: [] }]);
-        }
-        if (selectorFn === selectAllTasksInActiveProjects) {
-          return of(tasks);
-        }
-        if (selectorFn === selectTodayStr) {
-          return of(todayStr);
-        }
-        if (selectorFn === selectStartOfNextDayDiffMs) {
-          return of(startOfNextDayDiffMs);
-        }
-        return of([]);
-      }),
+      select: jasmine
+        .createSpy('select')
+        .and.callFake((selectorFn: unknown, props?: { id: string }) => {
+          if (selectorFn === selectUnarchivedProjects) {
+            return of([{ id: 'p1', backlogTaskIds: [] }]);
+          }
+          if (selectorFn === selectAllTasksInActiveProjects) {
+            return of(tasks);
+          }
+          if (selectorFn === selectTaskById) {
+            return of(tasks.find((task) => task.id === props?.id));
+          }
+          if (selectorFn === selectTodayStr) {
+            return of(todayStr);
+          }
+          if (selectorFn === selectStartOfNextDayDiffMs) {
+            return of(startOfNextDayDiffMs);
+          }
+          return of([]);
+        }),
       pipe: jasmine.createSpy('pipe').and.returnValue(of({})),
       dispatch: jasmine.createSpy('dispatch'),
     };
+    matDialogOpenSpy = jasmine.createSpy('open');
 
     await TestBed.configureTestingModule({
       imports: [
@@ -801,7 +822,9 @@ describe('BoardPanelComponent - date and deadline filters', () => {
             updateTags: jasmine.createSpy('updateTags'),
           },
         },
-        { provide: MatDialog, useValue: { open: jasmine.createSpy('open') } },
+        { provide: MatDialog, useValue: { open: matDialogOpenSpy } },
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],
@@ -872,12 +895,128 @@ describe('BoardPanelComponent - date and deadline filters', () => {
     expect(component.tasks().map((task) => task.id)).toEqual(['without-deadline']);
   });
 
-  it('does not set or remove deadlines when dropping onto a deadline-filtered panel', async () => {
+  it('replans a task to the nearest scheduled timeframe date on drop', async () => {
+    const task = mkTask({ id: 'dropped', dueDay: '2026-04-01' });
+    const panelCfg = {
+      ...basePanel(),
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'nextNDays', days: 3 },
+    };
+    await setup([task]);
+
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop({
+      previousContainer: { id: 'source' },
+      container: { id: 'target', data: panelCfg },
+      item: { data: task },
+      previousIndex: 0,
+      currentIndex: 0,
+    } as any);
+
+    const planAction = storeMock.dispatch.calls
+      .allArgs()
+      .map(([action]) => action)
+      .find((action) => action.type === PlannerActions.planTaskForDay.type);
+    expect(planAction).toEqual(
+      jasmine.objectContaining({
+        task,
+        day: '2026-03-20',
+      }),
+    );
+  });
+
+  it('opens the schedule dialog for scheduled all-timeframe drops without schedule', async () => {
+    const task = mkTask({ id: 'dropped' });
+    const panelCfg = {
+      ...basePanel(),
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'all' },
+    };
+    await setup([task]);
+
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop({
+      previousContainer: { id: 'source' },
+      container: { id: 'target', data: panelCfg },
+      item: { data: task },
+      previousIndex: 0,
+      currentIndex: 0,
+    } as any);
+
+    expect(matDialogOpenSpy).toHaveBeenCalledWith(DialogScheduleTaskComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
+  });
+
+  it('sets the nearest valid deadline date when dropping onto a deadline timeframe panel', async () => {
     const task = mkTask({ id: 'dropped' });
     const panelCfg = {
       ...basePanel(),
       deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
-      deadlineTimeframe: { type: 'today' },
+      deadlineTimeframe: { type: 'nextNDays', days: 3 },
+    };
+    await setup([task]);
+
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop({
+      previousContainer: { id: 'source' },
+      container: { id: 'target', data: panelCfg },
+      item: { data: task },
+      previousIndex: 0,
+      currentIndex: 0,
+    } as any);
+
+    const deadlineAction = storeMock.dispatch.calls
+      .allArgs()
+      .map(([action]) => action)
+      .find((action) => action.type === TaskSharedActions.setDeadline.type);
+    expect(deadlineAction).toEqual(
+      jasmine.objectContaining({
+        taskId: 'dropped',
+        deadlineDay: '2026-03-18',
+        isSkipToast: true,
+      }),
+    );
+  });
+
+  it('opens the deadline dialog for deadline all-timeframe drops without deadline', async () => {
+    const task = mkTask({ id: 'dropped' });
+    const panelCfg = {
+      ...basePanel(),
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: { type: 'all' },
+    };
+    await setup([task]);
+
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop({
+      previousContainer: { id: 'source' },
+      container: { id: 'target', data: panelCfg },
+      item: { data: task },
+      previousIndex: 0,
+      currentIndex: 0,
+    } as any);
+
+    expect(matDialogOpenSpy).toHaveBeenCalledWith(DialogDeadlineComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
+  });
+
+  it('removes deadlines when dropping onto a NoDeadline panel', async () => {
+    const task = mkTask({ id: 'dropped', deadlineDay: '2026-03-18' });
+    const panelCfg = {
+      ...basePanel(),
+      deadlineState: BoardPanelCfgDeadlineState.NoDeadline,
     };
     await setup([task]);
 
@@ -895,8 +1034,32 @@ describe('BoardPanelComponent - date and deadline filters', () => {
     const dispatchedTypes = storeMock.dispatch.calls
       .allArgs()
       .map(([action]) => action.type);
-    expect(dispatchedTypes).not.toContain(TaskSharedActions.setDeadline.type);
-    expect(dispatchedTypes).not.toContain(TaskSharedActions.removeDeadline.type);
+    expect(dispatchedTypes).toContain(TaskSharedActions.removeDeadline.type);
+  });
+
+  it('unschedules tasks when dropping onto a NotScheduled panel', async () => {
+    const task = mkTask({ id: 'dropped', dueDay: '2026-03-18' });
+    const panelCfg = {
+      ...basePanel(),
+      scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+    };
+    await setup([task]);
+
+    fixture.componentRef.setInput('panelCfg', panelCfg);
+    fixture.detectChanges();
+
+    await component.drop({
+      previousContainer: { id: 'source' },
+      container: { id: 'target', data: panelCfg },
+      item: { data: task },
+      previousIndex: 0,
+      currentIndex: 0,
+    } as any);
+
+    const dispatchedTypes = storeMock.dispatch.calls
+      .allArgs()
+      .map(([action]) => action.type);
+    expect(dispatchedTypes).toContain(TaskSharedActions.unscheduleTask.type);
   });
 });
 
@@ -981,6 +1144,8 @@ describe('BoardPanelComponent - drop()', () => {
           },
         },
         { provide: MatDialog, useValue: {} },
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],

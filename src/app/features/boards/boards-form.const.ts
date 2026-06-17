@@ -1,6 +1,7 @@
 import { LimitedFormlyFieldConfig } from '../config/global-config.model';
 import {
   BoardCfg,
+  BoardDateTimeframeCfg,
   BoardDateTimeframeType,
   BoardPanelCfg,
   BoardPanelCfgDeadlineState,
@@ -21,13 +22,79 @@ const TIMEFRAME_OPTIONS: {
   value: BoardDateTimeframeType;
   label: string;
 }[] = [
+  { value: 'all', label: T.F.BOARDS.FORM.TIMEFRAME_ALL },
   { value: 'today', label: T.F.BOARDS.FORM.TIMEFRAME_TODAY },
   { value: 'tomorrow', label: T.F.BOARDS.FORM.TIMEFRAME_TOMORROW },
   { value: 'next7Days', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_7_DAYS },
+  { value: 'nextNDays', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_N_DAYS },
+  {
+    value: 'atLeastNDaysFuture',
+    label: T.F.BOARDS.FORM.TIMEFRAME_AT_LEAST_N_DAYS_FUTURE,
+  },
   { value: 'nextWeek', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
   { value: 'nextMonth', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
   { value: 'customDate', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE },
   { value: 'customRange', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
+];
+
+const buildTimeframeFieldGroup = (
+  label: string,
+): LimitedFormlyFieldConfig<BoardDateTimeframeCfg>[] => [
+  {
+    key: 'type',
+    type: 'select',
+    props: {
+      label,
+      required: true,
+      options: TIMEFRAME_OPTIONS,
+    },
+  },
+  {
+    key: 'days',
+    type: 'input',
+    expressions: {
+      hide: 'model?.type !== "nextNDays" && model?.type !== "atLeastNDaysFuture"',
+    },
+    defaultValue: 7,
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_DAYS_VALUE,
+      type: 'number',
+      min: 1,
+      required: true,
+    },
+  },
+  {
+    key: 'customDate',
+    type: 'date-btn',
+    expressions: {
+      hide: 'model?.type !== "customDate"',
+    },
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE_VALUE,
+    },
+  },
+  {
+    key: 'customStart',
+    type: 'date-btn',
+    expressions: {
+      hide: 'model?.type !== "customRange"',
+    },
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_START,
+      maxDateKey: 'customEnd',
+    },
+  },
+  {
+    key: 'customEnd',
+    type: 'date-btn',
+    expressions: {
+      hide: 'model?.type !== "customRange"',
+    },
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_END,
+      minDateKey: 'customStart',
+    },
+  },
 ];
 
 export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
@@ -184,51 +251,8 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
             hide: `model?.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled}`,
           },
           resetOnHide: true,
-          defaultValue: { type: 'today' },
-          fieldGroup: [
-            {
-              key: 'type',
-              type: 'select',
-              props: {
-                label: T.F.BOARDS.FORM.SCHEDULED_TIMEFRAME,
-                required: true,
-                options: TIMEFRAME_OPTIONS,
-              },
-            },
-            {
-              key: 'customDate',
-              type: 'input',
-              expressions: {
-                hide: 'model?.type !== "customDate"',
-              },
-              props: {
-                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE_VALUE,
-                type: 'date',
-              },
-            },
-            {
-              key: 'customStart',
-              type: 'input',
-              expressions: {
-                hide: 'model?.type !== "customRange"',
-              },
-              props: {
-                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_START,
-                type: 'date',
-              },
-            },
-            {
-              key: 'customEnd',
-              type: 'input',
-              expressions: {
-                hide: 'model?.type !== "customRange"',
-              },
-              props: {
-                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_END,
-                type: 'date',
-              },
-            },
-          ],
+          defaultValue: { type: 'all' },
+          fieldGroup: buildTimeframeFieldGroup(T.F.BOARDS.FORM.SCHEDULED_TIMEFRAME),
         },
         {
           key: 'deadlineState',
@@ -259,51 +283,8 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
             hide: `model?.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline}`,
           },
           resetOnHide: true,
-          defaultValue: { type: 'today' },
-          fieldGroup: [
-            {
-              key: 'type',
-              type: 'select',
-              props: {
-                label: T.F.BOARDS.FORM.DEADLINE_TIMEFRAME,
-                required: true,
-                options: TIMEFRAME_OPTIONS,
-              },
-            },
-            {
-              key: 'customDate',
-              type: 'input',
-              expressions: {
-                hide: 'model?.type !== "customDate"',
-              },
-              props: {
-                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE_VALUE,
-                type: 'date',
-              },
-            },
-            {
-              key: 'customStart',
-              type: 'input',
-              expressions: {
-                hide: 'model?.type !== "customRange"',
-              },
-              props: {
-                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_START,
-                type: 'date',
-              },
-            },
-            {
-              key: 'customEnd',
-              type: 'input',
-              expressions: {
-                hide: 'model?.type !== "customRange"',
-              },
-              props: {
-                label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_END,
-                type: 'date',
-              },
-            },
-          ],
+          defaultValue: { type: 'all' },
+          fieldGroup: buildTimeframeFieldGroup(T.F.BOARDS.FORM.DEADLINE_TIMEFRAME),
         },
         {
           key: 'sortBy',

@@ -372,6 +372,39 @@ describe('TaskReminderEffects', () => {
     });
   });
 
+  describe('setDeadlineSnack$', () => {
+    it('should show snack when deadline is set', () => {
+      const action = TaskSharedActions.setDeadline({
+        taskId: 'task-1',
+        deadlineDay: '2026-03-18',
+      });
+      datePipe.transform.and.returnValue('3/18/2026');
+      actions$ = of(action);
+
+      effects.setDeadlineSnack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        translateParams: { date: '3/18/2026' },
+        msg: T.F.TASK.S.DEADLINE_SET,
+        ico: 'flag',
+      });
+    });
+
+    it('should not show snack when isSkipToast is true', () => {
+      const action = TaskSharedActions.setDeadline({
+        taskId: 'task-1',
+        deadlineDay: '2026-03-18',
+        isSkipToast: true,
+      });
+      actions$ = of(action);
+
+      effects.setDeadlineSnack$.subscribe();
+
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+  });
+
   describe('dismissReminderSnack$', () => {
     it('should show snack when reminder is dismissed', () => {
       const action = TaskSharedActions.dismissReminderOnly({ id: 'task-1' });
