@@ -12,11 +12,6 @@ import {
 } from '../provider.interface';
 import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
-import { CompactOperation } from '../../../core/persistence/operation-log/compact/compact-operation.types';
-import {
-  encodeOperation,
-  decodeOperation,
-} from '../../../core/persistence/operation-log/compact/operation-codec.service';
 import {
   Operation,
   VectorClock,
@@ -42,6 +37,11 @@ import { mergeVectorClocks } from '../../../core/util/vector-clock';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../../features/config/local-only-sync-settings.util';
+import { CompactOperation } from '../../persistence/compact/compact-operation.types';
+import {
+  encodeOperation,
+  decodeOperation,
+} from '../../persistence/compact/operation-codec.service';
 
 /**
  * Adapter that enables file-based sync providers (WebDAV, Dropbox, LocalFile)

@@ -7,12 +7,13 @@ import {
   isCompactOperation,
   isCompactOperationLogEntry,
 } from './operation-codec.service';
+
 import {
+  ActionType,
   Operation,
   OperationLogEntry,
   OpType,
-  ActionType,
-} from '../../../../op-log/core/operation.types';
+} from '../../core/operation.types';
 
 describe('operation-codec.service', () => {
   const mockOperation: Operation = {

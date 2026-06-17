@@ -1,8 +1,8 @@
-import { ActionType } from './action-types.enum';
 import {
   ACTION_TYPE_TO_CODE,
   CODE_TO_ACTION_TYPE,
-} from '../../core/persistence/operation-log/compact/action-type-codes';
+} from '../persistence/compact/action-type-codes';
+import { ActionType } from './action-types.enum';
 
 /**
  * These tests verify that the ActionType enum values are stable and match
