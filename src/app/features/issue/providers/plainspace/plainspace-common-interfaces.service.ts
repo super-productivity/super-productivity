@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
-import { TaskCopy } from '../../../tasks/task.model';
+import { Task, TaskCopy } from '../../../tasks/task.model';
 import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
 import { IssueData, IssueDataReduced, SearchResultItem } from '../../issue.model';
 import { PLAINSPACE_POLL_INTERVAL } from './plainspace.const';
@@ -50,8 +50,7 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
     // Import Plainspace's `scheduledAt` as the SP task's scheduled time so it
     // shows in the app. A provider-supplied `dueWithTime` is routed by the import
     // pipeline through `addAndSchedule` (sets the time + a reminder + Today
-    // membership). Only set on initial import: the base poll path drops
-    // dueWithTime so a later reschedule in SP is never clobbered.
+    // membership). Poll updates keep it in sync via the override below.
     const dueWithTime = issue.scheduledAt
       ? new Date(issue.scheduledAt).getTime()
       : undefined;
@@ -68,6 +67,44 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
       issueLastSyncedValues: this._syncAdapter.extractSyncValues(
         issue as unknown as Record<string, unknown>,
       ),
+    };
+  }
+
+  /**
+   * Plainspace owns the schedule for shared tasks, so — unlike the base, which
+   * drops `dueWithTime` on poll to protect user-set schedules — we pull
+   * `scheduledAt` into `dueWithTime` here. This schedules already-imported tasks
+   * once they next change remotely and keeps recurring items in sync as the
+   * server advances `scheduledAt` to the next occurrence. User reschedules in SP
+   * push back via the two-way-sync adapter, so the values stay consistent.
+   * Mirrors the CalDAV provider's date-on-poll override.
+   */
+  override async getFreshDataForIssueTask(task: Task): Promise<{
+    taskChanges: Partial<Task>;
+    issue: IssueData;
+    issueTitle: string;
+  } | null> {
+    if (!task.issueProviderId || !task.issueId) {
+      return null;
+    }
+    const cfg = await firstValueFrom(this._getCfgOnce$(task.issueProviderId));
+    const issue = await firstValueFrom(
+      this._plainspaceApiService.getById$(task.issueId, cfg),
+    );
+    if (!issue || new Date(issue.updatedAt).getTime() === task.issueLastUpdated) {
+      return null;
+    }
+    return {
+      taskChanges: {
+        ...this.getAddTaskData(issue),
+        // Explicit (incl. undefined to unschedule) — the base deletes this.
+        dueWithTime: issue.scheduledAt
+          ? new Date(issue.scheduledAt).getTime()
+          : undefined,
+        issueWasUpdated: true,
+      },
+      issue: issue as unknown as IssueData,
+      issueTitle: issue.title,
     };
   }
 
