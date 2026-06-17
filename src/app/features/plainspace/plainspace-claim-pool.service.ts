@@ -83,6 +83,7 @@ export class PlainspaceClaimPoolService {
             isDone: issue.isDone,
             assignee: null,
             url: issue.url,
+            isRecurring: issue.isRecurring,
           }),
         ),
       ),

@@ -2,6 +2,13 @@
   @for (task of tasks(); track task.id) {
     <div class="claim-task">
       <span class="title">{{ task.title }}</span>
+      @if (task.isRecurring) {
+        <mat-icon
+          class="recurring-icon"
+          [matTooltip]="T.PLAINSPACE.RECURRING | translate"
+          >repeat</mat-icon
+        >
+      }
       @if (task.url) {
         <a
           class="open-link"

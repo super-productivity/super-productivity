@@ -26,4 +26,7 @@ export interface PlainspaceSharedTask {
   assignee: PlainspaceMember | null; // null = unassigned
   /** Absolute link to open the task in the Plainspace web UI. */
   url?: string | null;
+  /** Repeats in Plainspace — flagged in the pool so claiming a recurring
+   * commitment is visible up front. The cadence stays Plainspace-side. */
+  isRecurring: boolean;
 }

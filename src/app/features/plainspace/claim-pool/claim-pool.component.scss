@@ -28,6 +28,15 @@
   }
 }
 
+.recurring-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  opacity: 0.6;
+  color: var(--text-color-muted);
+}
+
 .no-tasks {
   padding: var(--s);
   color: var(--text-color-muted);
