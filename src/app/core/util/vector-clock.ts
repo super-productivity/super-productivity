@@ -32,11 +32,12 @@ import { Subject } from 'rxjs';
  * Maps client IDs to their respective clock values
  */
 export type VectorClock = SharedVectorClock;
-export { VectorClockComparison } from '@sp/sync-core';
+
 /**
- * Result of comparing two vector clocks.
- * Uses enum for client-side ergonomics, values match shared string literals.
+ * Result of comparing two vector clocks (EQUAL | LESS_THAN | GREATER_THAN | CONCURRENT).
+ * Re-exported from @sp/sync-core so client and server share one definition.
  */
+export { VectorClockComparison } from '@sp/sync-core';
 
 /**
  * Initialize a new vector clock for a client
