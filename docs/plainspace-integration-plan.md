@@ -138,10 +138,21 @@ New folder `src/app/features/issue/providers/plainspace/`. Config interface (mir
 export interface PlainspaceCfg extends BaseIssueProviderCfg {
   host: string | null; // plainspace.org or self-hosted base URL
   spaceId: string | null; // the Plainspace "space" this provider is bound to
-  // auth token is NOT stored here; it lives with the account (see 3.3) so a
-  // single login covers all spaces. host+spaceId identify the remote project.
+  token?: string | null; // PAT (pat_…) authorizing this provider's API calls
 }
 ```
+
+> **Where the token lives (as built).** The PAT is stored on `PlainspaceCfg.token`
+> and authorizes every `PlainspaceApiService` call — exactly like Jira's
+> `password` or CalDAV's `password`, and like them it is part of synced
+> issue-provider state and is included in plaintext backups/exports. This is a
+> deliberate parity choice (a provider works on a fresh device after sync without
+> re-pasting), and is the accepted secret-handling posture for issue providers.
+> The account store (§3.3, local-only `localStorage`) holds a token **too**, but
+> only to bootstrap the "Share on Plainspace" flow, which needs a token *before*
+> any provider exists; the provider runtime reads only `cfg.token`. An earlier
+> draft said the token was not stored in the cfg — that was never the case in the
+> shipped code.
 
 ### 3.2 Plainspace issue/task shapes (assumed — single source to fix later)
 
@@ -417,15 +428,30 @@ the real backend:
 
 ## 12. Risks
 
+- **Cross-client forward-compat (rollout-gating).** Adding `'PLAINSPACE'` to the
+  built-in `IssueProviderKey` union widens a **synced, typia-validated** type
+  (`issueProvider` state, and `task.issueType`). A client built before this change
+  has an AOT-baked validator that does not know the `'PLAINSPACE'` literal, so
+  when a newer client creates a Plainspace provider and syncs it, the older client
+  will reject the incoming model as corrupt (the documented "typia rejects unknown
+  union members" failure → false data-corruption dialog / rejected sync). This is
+  inherent to adding any new built-in provider key, and the mitigation is
+  **release sequencing**: the validator-aware build must reach the fleet **before**
+  any client can emit a `PLAINSPACE` provider. Do not back-port the ability to
+  create a Plainspace provider to a client that can't validate the key. (The
+  alternative — modelling Plainspace as a `plugin:`-style opaque key, which the
+  validator already accepts — is forward-compatible but is a larger change and is
+  the wrong shape for a built-in provider; revisit only if simultaneous rollout
+  can't be guaranteed.)
 - **Sync correctness**: keep shared data **out** of the op-log; never route
   Plainspace fetches through NgRx persisted actions. Imported "my" tasks follow
   the existing, already-correct issue-task path.
-- **Hot path**: the "assigned to others" list is a new lightweight component, not
+- **Hot path**: the claim pool is a new lightweight component, not
   `task.component`; verify against large lists.
 - **API assumptions**: all isolated in `PlainspaceApiService` +
   `plainspace-issue.model.ts` so the real contract changes one layer.
-- **Privacy**: tokens stored locally like other provider secrets; no analytics;
-  log only ids (`Log.log({ id })`).
+- **Privacy**: the PAT is stored in synced provider cfg like other provider
+  secrets (see §3.1); no analytics; log only ids (`Log.log({ id })`).
 
 ```
 
