@@ -1,3 +1,11 @@
+<mat-checkbox
+  [checked]="includeImages"
+  (change)="includeImages = $event.checked"
+  [matTooltip]="T.FILE_IMEX.INCLUDE_IMAGES_IN_EXPORT_DESCRIPTION | translate"
+>
+  {{ T.FILE_IMEX.INCLUDE_IMAGES_IN_EXPORT | translate }}
+</mat-checkbox>
+
 <button
   (click)="downloadBackup()"
   color="primary"
