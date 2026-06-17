@@ -89,7 +89,7 @@ export const OP_TYPES = SUPER_SYNC_OP_TYPES;
 
 export type OpType = SuperSyncOpType;
 
-// VectorClock, VectorClockComparison, and compareVectorClocks are imported from @sp/shared-schema
+// VectorClock, VectorClockComparison, and compareVectorClocks are imported from @sp/sync-core
 // and re-exported above. This ensures client and server use identical implementations.
 
 /**
@@ -161,7 +161,7 @@ export const sanitizeVectorClock = (
   return { valid: true, clock: sanitized };
 };
 
-// compareVectorClocks is imported from @sp/shared-schema (see imports at top of file)
+// compareVectorClocks is imported from @sp/sync-core (see imports at top of file)
 
 export interface Operation {
   id: string;

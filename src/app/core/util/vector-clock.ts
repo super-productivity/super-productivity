@@ -23,7 +23,7 @@ import { Subject } from 'rxjs';
  * - GREATER_THAN: B happened before A
  * - CONCURRENT: Neither happened before the other (true conflict)
  *
- * IMPORTANT: Core comparison logic is shared with the server via @sp/shared-schema.
+ * IMPORTANT: Core comparison logic is shared with the server via @sp/sync-core.
  * This file wraps the shared logic with null handling for client-side use.
  */
 
@@ -120,7 +120,7 @@ export const sanitizeVectorClock = (clock: any): VectorClock => {
 /**
  * Compare two vector clocks to determine their relationship.
  *
- * Uses the shared implementation from @sp/shared-schema to ensure
+ * Uses the shared implementation from @sp/sync-core to ensure
  * client and server produce identical results. This wrapper adds
  * null/undefined handling for client-side convenience.
  *
@@ -196,7 +196,7 @@ export const incrementVectorClock = (
 /**
  * Merge two vector clocks by taking the maximum value for each component.
  *
- * Uses the shared implementation from @sp/shared-schema to ensure
+ * Uses the shared implementation from @sp/sync-core to ensure
  * client and server produce identical results. This wrapper adds
  * null/undefined handling for client-side convenience.
  *
@@ -291,7 +291,7 @@ export const vectorClockPruned$ = new Subject<{
 
 /**
  * Limits the size of a vector clock by keeping only the most active clients.
- * Wraps the shared implementation from @sp/shared-schema with client-side logging.
+ * Wraps the shared implementation from @sp/sync-core with client-side logging.
  *
  * @param clock The vector clock to limit
  * @param currentClientId The current client's ID (always preserved)
