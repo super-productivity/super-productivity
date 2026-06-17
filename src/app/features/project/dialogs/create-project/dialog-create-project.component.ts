@@ -18,7 +18,10 @@ import { FormlyFieldConfig, FormlyFormOptions, FormlyModule } from '@ngx-formly/
 import { ProjectService } from '../../project.service';
 import { DEFAULT_PROJECT } from '../../project.const';
 import { JiraCfg } from '../../../issue/providers/jira/jira.model';
-import { CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG } from '../../project-form-cfg.const';
+import {
+  CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG,
+  CreateProjectFormModel,
+} from '../../project-form-cfg.const';
 import { SS } from '../../../../core/persistence/storage-keys.const';
 import { Subscription } from 'rxjs';
 import {
@@ -121,8 +124,7 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
           ...this.projectData,
         };
         // Never persist the transient share flag (not part of the Project model).
-        delete (projectDataToSave as { isShareOnPlainspace?: boolean })
-          .isShareOnPlainspace;
+        delete (projectDataToSave as Partial<CreateProjectFormModel>).isShareOnPlainspace;
         if (this._isSaveTmpProject) {
           saveToSessionStorage(SS.PROJECT_TMP, projectDataToSave);
         }
@@ -152,10 +154,9 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
     };
     // `isShareOnPlainspace` is a transient form-only flag — read it, then strip
     // it so it is never persisted onto the Project entity.
-    const isShareOnPlainspace = !!(
-      projectDataToSave as Partial<Project> & { isShareOnPlainspace?: boolean }
-    ).isShareOnPlainspace;
-    delete (projectDataToSave as { isShareOnPlainspace?: boolean }).isShareOnPlainspace;
+    const isShareOnPlainspace = !!(projectDataToSave as Partial<CreateProjectFormModel>)
+      .isShareOnPlainspace;
+    delete (projectDataToSave as Partial<CreateProjectFormModel>).isShareOnPlainspace;
 
     let newProjectId: string | undefined;
     if (projectDataToSave.id) {
