@@ -111,18 +111,34 @@ export class ClipboardImageService {
               const filePath = window.ea.getPathForFile(file);
 
               if (filePath) {
-                // Don't copy the file, just use the original path directly
-                const imageUrl = pathToFileUrl(filePath);
-                const fileName = file.name || 'image';
-                const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
-                const markdownText = `![${fileNameWithoutExt}](${imageUrl})`;
+                // Copy to clipboard-images dir so the URL lands in our controlled
+                // directory and can be resolved to a blob: URL before rendering.
+                // Using the original path directly produces a file:/// URL that
+                // Angular's DomSanitizer strips from <img src> bindings.
+                const basePath = await this._getElectronImagePath();
+                const copyResult = await window.ea.copyClipboardImageFile(
+                  basePath,
+                  filePath,
+                );
+                if (copyResult) {
+                  const savedFilePath = await window.ea.getClipboardImagePath(
+                    basePath,
+                    copyResult.id,
+                  );
+                  if (savedFilePath) {
+                    const imageUrl = pathToFileUrl(savedFilePath);
+                    const fileName = file.name || 'image';
+                    const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
+                    const markdownText = `![${fileNameWithoutExt}](${imageUrl})`;
 
-                this._snackService.open({
-                  type: 'SUCCESS',
-                  msg: T.F.CLIPBOARD_IMAGE.PASTE_SUCCESS,
-                });
+                    this._snackService.open({
+                      type: 'SUCCESS',
+                      msg: T.F.CLIPBOARD_IMAGE.PASTE_SUCCESS,
+                    });
 
-                return { success: true, imageUrl, markdownText };
+                    return { success: true, imageUrl, markdownText };
+                  }
+                }
               }
             } catch (error) {
               Log.err('[CLIPBOARD] Error getting file path:', error);
@@ -284,27 +300,82 @@ export class ClipboardImageService {
    * Call this before rendering markdown to ensure images display correctly.
    */
   async resolveMarkdownImages(markdown: string): Promise<string> {
-    const urlPattern = /indexeddb:\/\/clipboard-images\/[^)\s=]+/g;
-    const matches = markdown.match(urlPattern);
-    if (!matches) return markdown;
-
-    const uniqueUrls = [...new Set(matches)];
-    const resolved = new Map<string, string>();
-
-    await Promise.all(
-      uniqueUrls.map(async (url) => {
-        const blobUrl = await this.resolveIndexedDbUrl(url);
-        if (blobUrl) {
-          resolved.set(url, blobUrl);
-        }
-      }),
-    );
-
     let result = markdown;
-    for (const [original, replacement] of resolved) {
-      result = result.split(original).join(replacement);
+
+    // Resolve indexeddb:// URLs (web mode and Electron)
+    const indexedDbMatches = markdown.match(/indexeddb:\/\/clipboard-images\/[^)\s=]+/g);
+    if (indexedDbMatches) {
+      const uniqueUrls = [...new Set(indexedDbMatches)];
+      const resolved = new Map<string, string>();
+      await Promise.all(
+        uniqueUrls.map(async (url) => {
+          const blobUrl = await this.resolveIndexedDbUrl(url);
+          if (blobUrl) resolved.set(url, blobUrl);
+        }),
+      );
+      for (const [original, replacement] of resolved) {
+        result = result.split(original).join(replacement);
+      }
     }
+
+    // Electron: Angular's DomSanitizer strips file: scheme from <img src>, so
+    // file:/// clipboard-image paths must be converted to blob: URLs before rendering.
+    if (IS_ELECTRON) {
+      const fileClipPattern =
+        /file:\/\/\/[^)\s"]*\/clipboard-images\/[^)\s"/]+\.[a-z]{2,5}/g;
+      const fileMatches = new Map<string, string>();
+      let m: RegExpExecArray | null;
+      while ((m = fileClipPattern.exec(result)) !== null) {
+        const url = m[0];
+        const filename = url.split('/').pop() ?? '';
+        const id = filename.replace(/\.[^.]+$/, '');
+        if (id) fileMatches.set(url, id);
+      }
+      if (fileMatches.size > 0) {
+        await Promise.all(
+          [...fileMatches.entries()].map(async ([url, id]) => {
+            const cacheKey = `electron-file:${id}`;
+            const cached = this._blobUrlCache.get(cacheKey);
+            if (cached) {
+              result = result.split(url).join(cached);
+            } else {
+              const blob = await this._getImageElectron(id);
+              if (blob) {
+                const blobUrl = URL.createObjectURL(blob);
+                this._blobUrlCache.set(cacheKey, blobUrl);
+                result = result.split(url).join(blobUrl);
+              }
+            }
+          }),
+        );
+      }
+    }
+
     return result;
+  }
+
+  /**
+   * Resolves any clipboard image URL to a blob: URL safe for use in Angular [src] bindings.
+   * Handles both indexeddb:// (web) and file:/// clipboard-image paths (Electron).
+   */
+  async resolveClipboardImageUrl(url: string): Promise<string | null> {
+    if (this.isIndexedDbUrl(url)) {
+      return this.resolveIndexedDbUrl(url);
+    }
+    if (IS_ELECTRON && url.startsWith('file:///') && url.includes('/clipboard-images/')) {
+      const filename = url.split('/').pop() ?? '';
+      const id = filename.replace(/\.[^.]+$/, '');
+      if (!id) return null;
+      const cacheKey = `electron-file:${id}`;
+      const cached = this._blobUrlCache.get(cacheKey);
+      if (cached) return cached;
+      const blob = await this._getImageElectron(id);
+      if (!blob) return null;
+      const blobUrl = URL.createObjectURL(blob);
+      this._blobUrlCache.set(cacheKey, blobUrl);
+      return blobUrl;
+    }
+    return null;
   }
 
   async resolveIndexedDbUrl(indexedDbUrl: string): Promise<string | null> {

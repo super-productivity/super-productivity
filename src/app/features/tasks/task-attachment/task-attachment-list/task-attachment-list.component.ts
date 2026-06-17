@@ -63,14 +63,16 @@ export class TaskAttachmentListComponent {
     if (!attachments) return [];
 
     return attachments.map((att) => {
-      const resolvedPath = att.path?.startsWith('indexeddb://clipboard-images/')
-        ? urlMap.get(att.path) || att.path
-        : att.path;
+      const resolvedPath =
+        att.path && this._isResolvableClipboardUrl(att.path)
+          ? urlMap.get(att.path) || att.path
+          : att.path;
 
       const imgPath = att.originalImgPath || att.path;
-      const rawOriginalPath = imgPath?.startsWith('indexeddb://clipboard-images/')
-        ? urlMap.get(imgPath) || imgPath
-        : imgPath;
+      const rawOriginalPath =
+        imgPath && this._isResolvableClipboardUrl(imgPath)
+          ? urlMap.get(imgPath) || imgPath
+          : imgPath;
       // The <img> src auto-loads on render (no click), so a synced remote
       // file://host / UNC path would silently leak the user's NTLM hash. Drop
       // such srcs so they never reach the binding. See GHSA-hr87-735w-hfq3.
@@ -79,7 +81,8 @@ export class TaskAttachmentListComponent {
         : undefined;
 
       const isLoading =
-        att.path?.startsWith('indexeddb://clipboard-images/') &&
+        !!att.path &&
+        this._isResolvableClipboardUrl(att.path) &&
         !urlMap.has(att.path) &&
         loadingUrls.has(att.path);
 
@@ -105,13 +108,14 @@ export class TaskAttachmentListComponent {
         try {
           const urlsToResolve: string[] = [];
 
-          if (att.path?.startsWith('indexeddb://clipboard-images/')) {
-            urlsToResolve.push(att.path);
+          if (this._isResolvableClipboardUrl(att.path)) {
+            urlsToResolve.push(att.path!);
           }
 
           const imgPath = att.originalImgPath || att.path;
           if (
-            imgPath?.startsWith('indexeddb://clipboard-images/') &&
+            imgPath &&
+            this._isResolvableClipboardUrl(imgPath) &&
             imgPath !== att.path
           ) {
             urlsToResolve.push(imgPath);
@@ -125,7 +129,8 @@ export class TaskAttachmentListComponent {
               return newSet;
             });
 
-            const resolved = await this._clipboardImageService.resolveIndexedDbUrl(url);
+            const resolved =
+              await this._clipboardImageService.resolveClipboardImageUrl(url);
             if (resolved) {
               this._resolvedUrlsMap.update((map) => {
                 const newMap = new Map(map);
@@ -146,6 +151,14 @@ export class TaskAttachmentListComponent {
         }
       });
     });
+  }
+
+  private _isResolvableClipboardUrl(url: string | undefined): boolean {
+    if (!url) return false;
+    return (
+      url.startsWith('indexeddb://clipboard-images/') ||
+      (url.startsWith('file:///') && url.includes('/clipboard-images/'))
+    );
   }
 
   openEditDialog(attachment?: TaskAttachment): void {

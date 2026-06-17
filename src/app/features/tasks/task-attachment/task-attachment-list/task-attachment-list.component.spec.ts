@@ -23,7 +23,8 @@ describe('TaskAttachmentListComponent', () => {
     ]);
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const clipboardImageServiceSpy = jasmine.createSpyObj('ClipboardImageService', [
-      'resolveUrl',
+      'resolveIndexedDbUrl',
+      'resolveClipboardImageUrl',
     ]);
 
     await TestBed.configureTestingModule({
@@ -73,6 +74,21 @@ describe('TaskAttachmentListComponent', () => {
         fixture.componentRef.setInput('attachments', [imgAttachment(path)]);
         expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBe(path);
       });
+    });
+
+    it('treats clipboard-images file:/// paths as resolvable (returns raw path until async resolved)', () => {
+      const path =
+        'file:///C:/Users/user/AppData/Roaming/superProductivity/clipboard-images/abc123.png';
+      fixture.componentRef.setInput('attachments', [imgAttachment(path)]);
+      // Before async resolution the raw path is returned; isPathSafeToOpen passes it through
+      expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBe(path);
+    });
+
+    it('treats indexeddb:// clipboard-images paths as resolvable (returns raw url until async resolved)', () => {
+      const path = 'indexeddb://clipboard-images/abc123';
+      fixture.componentRef.setInput('attachments', [imgAttachment(path)]);
+      // resolvedOriginalPath is the raw indexeddb url until the effect resolves it
+      expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBe(path);
     });
   });
 
