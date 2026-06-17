@@ -45,4 +45,15 @@ describe('PlainspaceCommonInterfacesService', () => {
     const data = service.getAddTaskData(issue(null));
     expect(data.issueLastSyncedValues).toEqual({ isDone: false, remindAt: null });
   });
+
+  it('getAddTaskData imports remindAt as dueWithTime (schedule shows in the app)', () => {
+    const iso = '2026-01-02T09:00:00.000Z';
+    const data = service.getAddTaskData(issue(iso));
+    expect(data.dueWithTime).toBe(new Date(iso).getTime());
+  });
+
+  it('getAddTaskData leaves dueWithTime unset for unscheduled tasks', () => {
+    const data = service.getAddTaskData(issue(null));
+    expect('dueWithTime' in data).toBe(false);
+  });
 });
