@@ -9,6 +9,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { T } from '../../t.const';
 import { _MISSING_PROJECT_ } from '../project/project.const';
 import { TaskService } from './task.service';
+import { TaskLog } from '../../core/log';
 
 @Injectable({
   providedIn: 'root',
@@ -40,6 +41,15 @@ export class TaskBatchOperationService {
         this._taskService.getArchiveTasksForRepeatCfgId(task.repeatCfgId),
         firstValueFrom(this._projectService.getByIdOnce$(projectId)),
       ]);
+
+    TaskLog.log('[TaskBatchOperationService] recurring move to project', {
+      taskId: task.id,
+      repeatCfgId: repeatCfg.id,
+      projectId,
+      nonArchiveTaskIds: nonArchiveInstancesWithSubTasks.map((t) => t.id),
+      archiveTaskIds: archiveInstances.map((t) => t.id),
+      archiveSubTaskIds: archiveInstances.flatMap((t) => t.subTaskIds),
+    });
 
     if (nonArchiveInstancesWithSubTasks.length === 1 && archiveInstances.length === 0) {
       this._taskRepeatCfgService.updateTaskRepeatCfg(repeatCfg.id, { projectId });

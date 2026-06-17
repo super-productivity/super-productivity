@@ -18,11 +18,12 @@
         class="title-and-left-btns-wrapper"
         (click)="titleBarClick($event)"
       >
-        @if (isSelectionMode()) {
+        @if (isSelectionMode() && isMultiSelectionAvailable()) {
           <mat-checkbox
             class="selection-checkbox"
             color="primary"
             [checked]="isMultiSelected()"
+            [attr.aria-label]="T.F.TASK.TASK_SELECTION.SELECT_TASK | translate"
             (click)="toggleSelection($event)"
           ></mat-checkbox>
         }

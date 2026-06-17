@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { computed, effect, Injectable, inject, signal } from '@angular/core';
+import { computed, DestroyRef, effect, Injectable, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { WorkContextService } from '../work-context/work-context.service';
 
@@ -8,6 +8,7 @@ import { WorkContextService } from '../work-context/work-context.service';
 })
 export class TaskSelectionService {
   private readonly _document = inject(DOCUMENT);
+  private readonly _destroyRef = inject(DestroyRef);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _activeWorkContextChange = toSignal(
     this._workContextService.onWorkContextChange$,
@@ -35,6 +36,9 @@ export class TaskSelectionService {
 
   constructor() {
     this._document.addEventListener('keydown', this._onDocumentKeydown);
+    this._destroyRef.onDestroy(() => {
+      this._document.removeEventListener('keydown', this._onDocumentKeydown);
+    });
 
     effect(() => {
       this._activeWorkContextChange();

@@ -982,6 +982,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   toggleSelection(event?: MouseEvent): void {
+    if (!this.isMultiSelectionAvailable()) {
+      return;
+    }
     if (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -989,7 +992,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._taskSelectionService.toggle(this.task().id);
   }
 
+  isMultiSelectionAvailable(): boolean {
+    return !this._elementRef.nativeElement.closest('task-detail-panel');
+  }
+
   private _handleSelectionClick(event: MouseEvent): boolean {
+    if (!this.isMultiSelectionAvailable()) {
+      return false;
+    }
+
     if (event.shiftKey && this._taskSelectionService.isSelectionMode()) {
       event.preventDefault();
       event.stopPropagation();
@@ -1015,6 +1026,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   private _shouldCaptureSelectionClick(event: MouseEvent): boolean {
+    if (!this.isMultiSelectionAvailable()) {
+      return false;
+    }
+
     if (event.ctrlKey || event.metaKey) {
       return true;
     }

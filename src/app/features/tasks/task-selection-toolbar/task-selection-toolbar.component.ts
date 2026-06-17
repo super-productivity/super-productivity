@@ -2,45 +2,56 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { MatDialog } from '@angular/material/dialog';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { TranslateModule } from '@ngx-translate/core';
+import { MatTooltip } from '@angular/material/tooltip';
+import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
-import { Update } from '@ngrx/entity';
-import { Store } from '@ngrx/store';
 import { TaskSelectionService } from '../task-selection.service';
 import { TaskService } from '../task.service';
 import { ProjectService } from '../../project/project.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../../t.const';
-import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { TaskBatchOperationService } from '../task-batch-operation.service';
-import { Task, TaskWithSubTasks } from '../task.model';
+import { TaskWithSubTasks } from '../task.model';
 import { DialogSelectProjectComponent } from '../dialog-select-project/dialog-select-project.component';
 import { Project } from '../../project/project.model';
+import { getPluralKey } from '../../../util/get-plural-key';
+
+const yieldAfterBulkDispatch = (): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, 0));
 
 @Component({
   selector: 'task-selection-toolbar',
   templateUrl: './task-selection-toolbar.component.html',
   styleUrl: './task-selection-toolbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIcon, MatButton, MatIconButton, TranslateModule],
+  imports: [MatIcon, MatButton, MatIconButton, MatTooltip, TranslateModule],
 })
 export class TaskSelectionToolbarComponent {
   private readonly _selectionService = inject(TaskSelectionService);
   private readonly _taskService = inject(TaskService);
   private readonly _projectService = inject(ProjectService);
   private readonly _matDialog = inject(MatDialog);
-  private readonly _store = inject(Store);
   private readonly _taskBatchOperationService = inject(TaskBatchOperationService);
+  private readonly _translateService = inject(TranslateService);
+  private readonly _translateStore = inject(TranslateStore);
 
   protected readonly selectedCount = this._selectionService.selectedCount;
   protected readonly T = T;
+  protected readonly selectedCountMsg = computed(() =>
+    getPluralKey(
+      this._translateService,
+      this._translateStore,
+      this.selectedCount(),
+      T.F.TASK.TASK_SELECTION.COUNT,
+    ),
+  );
 
   private readonly _selectedTasks = computed(() => {
     const ids = this._selectionService.selectedIds();
     const entities = this._taskService.taskEntities();
     return ids
       .map((id) => entities[id])
-      .filter((task): task is TaskWithSubTasks => !!task) as TaskWithSubTasks[];
+      .filter((task): task is TaskWithSubTasks => !!task);
   });
 
   private readonly _availableTargetProjects = computed<Project[]>(() => {
@@ -75,7 +86,7 @@ export class TaskSelectionToolbarComponent {
         .open(DialogConfirmComponent, {
           data: {
             okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
-            message: T.F.TASK.TASK_SELECTION.D_CONFIRM_DELETE.MSG,
+            message: this._deleteConfirmMsg(),
             translateParams: { count: selectedIds.length },
           },
         })
@@ -89,16 +100,17 @@ export class TaskSelectionToolbarComponent {
     this._selectionService.clearSelection();
   }
 
-  markAsDone(): void {
-    const updates: Update<Task>[] = this._selectedTasks()
-      .filter((task) => !task.isDone)
-      .map((task) => ({ id: task.id, changes: { isDone: true } }));
+  async markAsDone(): Promise<void> {
+    const tasksToMarkDone = this._selectedTasks().filter((task) => !task.isDone);
 
-    if (!updates.length) {
+    if (!tasksToMarkDone.length) {
       return;
     }
 
-    this._store.dispatch(TaskSharedActions.updateTasks({ tasks: updates }));
+    for (const task of tasksToMarkDone) {
+      this._taskService.setDone(task.id);
+    }
+    await yieldAfterBulkDispatch();
     this._selectionService.clearSelection();
   }
 
@@ -141,11 +153,12 @@ export class TaskSelectionToolbarComponent {
       }
     }
 
-    await Promise.all(
-      nonRecurringTasks.map((task) =>
-        this._taskBatchOperationService.moveToProject(task, pickedProjectId),
-      ),
-    );
+    for (const task of nonRecurringTasks) {
+      await this._taskBatchOperationService.moveToProject(task, pickedProjectId);
+    }
+    if (nonRecurringTasks.length) {
+      await yieldAfterBulkDispatch();
+    }
 
     for (const task of recurringTasks) {
       await this._taskBatchOperationService.moveToProject(task, pickedProjectId);
@@ -155,5 +168,14 @@ export class TaskSelectionToolbarComponent {
 
   clearSelection(): void {
     this._selectionService.clearSelection();
+  }
+
+  private _deleteConfirmMsg(): string {
+    return getPluralKey(
+      this._translateService,
+      this._translateStore,
+      this.selectedCount(),
+      T.F.TASK.TASK_SELECTION.D_CONFIRM_DELETE.MSG,
+    );
   }
 }
