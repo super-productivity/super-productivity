@@ -29,6 +29,11 @@ import {
   ProfileDataStoreEntry,
 } from './db-keys.const';
 import {
+  buildFullStateOpsMeta,
+  FullStateOpRef,
+  FullStateOpsMetaEntry,
+} from './full-state-ops-meta';
+import {
   DUPLICATE_OPERATION_ERROR_MSG,
   OPERATION_LOG_STORE_NOT_INITIALIZED,
   isLockRelatedIdbOpenError,
@@ -87,16 +92,6 @@ interface StoredOperationLogEntry {
   rejectedAt?: number;
   applicationStatus?: 'pending' | 'applied' | 'failed';
   retryCount?: number;
-}
-
-interface FullStateOpRef {
-  opId: string;
-  seq: number;
-}
-
-interface FullStateOpsMetaEntry {
-  refs: FullStateOpRef[];
-  latest?: FullStateOpRef;
 }
 
 /**
@@ -444,18 +439,6 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       : undefined;
   }
 
-  private _getLatestFullStateRef(refs: FullStateOpRef[]): FullStateOpRef | undefined {
-    return refs.reduce<FullStateOpRef | undefined>(
-      (latest, ref) => (!latest || ref.opId > latest.opId ? ref : latest),
-      undefined,
-    );
-  }
-
-  private _buildFullStateOpsMeta(refs: FullStateOpRef[]): FullStateOpsMetaEntry {
-    const latest = this._getLatestFullStateRef(refs);
-    return latest ? { refs, latest } : { refs };
-  }
-
   private _normalizeFullStateOpsMeta(meta: unknown): FullStateOpsMetaEntry | undefined {
     if (typeof meta !== 'object' || meta === null || !('refs' in meta)) {
       return undefined;
@@ -482,7 +465,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       normalizedRefs.push({ opId, seq });
     }
 
-    return this._buildFullStateOpsMeta(normalizedRefs);
+    return buildFullStateOpsMeta(normalizedRefs);
   }
 
   private _withFullStateRef(
@@ -490,7 +473,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     ref: FullStateOpRef,
   ): FullStateOpsMetaEntry {
     const refs = [...(meta?.refs ?? []).filter((r) => r.opId !== ref.opId), ref];
-    return this._buildFullStateOpsMeta(refs);
+    return buildFullStateOpsMeta(refs);
   }
 
   private _withoutFullStateRefs(
@@ -498,7 +481,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     opIdsToRemove: Set<string>,
   ): FullStateOpsMetaEntry {
     const refs = (meta?.refs ?? []).filter((ref) => !opIdsToRemove.has(ref.opId));
-    return this._buildFullStateOpsMeta(refs);
+    return buildFullStateOpsMeta(refs);
   }
 
   private async _rebuildFullStateOpsMetaInTx(
@@ -513,7 +496,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       return 'continue';
     });
 
-    const meta = this._buildFullStateOpsMeta(refs);
+    const meta = buildFullStateOpsMeta(refs);
     await tx.put(STORE_NAMES.META, meta, FULL_STATE_OPS_META_KEY);
     return meta;
   }
@@ -559,7 +542,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       },
     );
 
-    const meta = this._buildFullStateOpsMeta(refs);
+    const meta = buildFullStateOpsMeta(refs);
     await this._adapter.put(STORE_NAMES.META, meta, FULL_STATE_OPS_META_KEY);
     return meta;
   }

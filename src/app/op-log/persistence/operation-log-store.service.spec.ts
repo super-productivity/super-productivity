@@ -20,6 +20,8 @@ import { limitVectorClockSize, MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
 import { OpLogDbAdapter } from './op-log-db-adapter';
+import { SqliteOpLogAdapter } from './sqlite-op-log-adapter';
+import { createSqlJsDb } from './sql-js-db.test-helper';
 import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
@@ -729,6 +731,111 @@ describe('OperationLogStoreService', () => {
         keepImport.id,
       ]);
       expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+  });
+
+  // The full-state metadata pointer is adapter-agnostic, but the rest of this
+  // suite drives it through the IndexedDB adapter. These tests pin the SAME
+  // behavior through the SQLite adapter (Android default, #8389) against a real
+  // engine (sql.js) — including the rebuild-on-read fallback, which is what
+  // keeps the pointer correct on SQLite (the IndexedDB-only populate-on-upgrade
+  // seed in db-upgrade.ts never runs there).
+  describe('full-state metadata over the SQLite backend', () => {
+    const freshSqliteService = async (): Promise<{
+      svc: OperationLogStoreService;
+      adapter: OpLogDbAdapter;
+    }> => {
+      const adapter = new SqliteOpLogAdapter(await createSqlJsDb());
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+          { provide: OP_LOG_DB_ADAPTER_FACTORY, useValue: () => adapter },
+        ],
+      });
+      const svc = TestBed.inject(OperationLogStoreService);
+      await svc.init();
+      return { svc, adapter };
+    };
+
+    it('tracks the latest full-state op by UUIDv7 without scanning', async () => {
+      const { svc, adapter } = await freshSqliteService();
+      await svc.append(
+        createTestOperation({
+          id: '01900000-0000-7000-8000-000000000001',
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+        }),
+      );
+      await svc.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000002' }),
+      );
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000003',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await svc.append(latestImport, 'remote');
+
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+
+      const latestEntry = await svc.getLatestFullStateOpEntry();
+      expect(latestEntry?.op.id).toBe(latestImport.id);
+      expect(latestEntry?.source).toBe('remote');
+      expect(iterateSpy).not.toHaveBeenCalled();
+    });
+
+    it('rebuilds the pointer on read when the meta row is absent', async () => {
+      const { svc, adapter } = await freshSqliteService();
+      await svc.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000012' }),
+      );
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000013',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await svc.append(latestImport);
+
+      // Simulate the SQLite/migration state where the pointer was never seeded
+      // (the IndexedDB-only upgrade populate doesn't run on this backend).
+      await adapter.delete(STORE_NAMES.META, FULL_STATE_OPS_META_KEY);
+
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+      expect((await svc.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(iterateSpy).toHaveBeenCalledTimes(1);
+
+      // The rebuild persisted the pointer → the second read does not scan again.
+      expect((await svc.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(iterateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears full-state ops through the metadata pointer', async () => {
+      const { svc, adapter } = await freshSqliteService();
+      await svc.append(
+        createTestOperation({
+          id: '01900000-0000-7000-8000-000000000021',
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+        }),
+      );
+      await svc.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000022' }),
+      );
+
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+
+      expect(await svc.clearFullStateOps()).toBe(1);
+      expect(await svc.getLatestFullStateOpEntry()).toBeUndefined();
+      expect((await svc.getOpsAfterSeq(0)).map((entry) => entry.op.id)).toEqual([
+        '01900000-0000-7000-8000-000000000022',
+      ]);
+      expect(iterateSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -11,16 +11,7 @@
 import { IDBPDatabase, IDBPTransaction, unwrap } from 'idb';
 import { FULL_STATE_OPS_META_KEY, STORE_NAMES, OPS_INDEXES } from './db-keys.const';
 import { isFullStateOpType } from '../core/operation.types';
-
-interface FullStateOpRef {
-  opId: string;
-  seq: number;
-}
-
-interface FullStateOpsMetaEntry {
-  refs: FullStateOpRef[];
-  latest?: FullStateOpRef;
-}
+import { buildFullStateOpsMeta, FullStateOpRef } from './full-state-ops-meta';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -44,14 +35,6 @@ const getStoredOpType = (op: unknown): string | undefined => {
   return typeof fullType === 'string' ? fullType : undefined;
 };
 
-const getLatestFullStateRef = (
-  refs: ReadonlyArray<FullStateOpRef>,
-): FullStateOpRef | undefined =>
-  refs.reduce<FullStateOpRef | undefined>(
-    (latest, ref) => (!latest || ref.opId > latest.opId ? ref : latest),
-    undefined,
-  );
-
 const getFullStateRefFromStoredEntry = (
   storedEntry: unknown,
   seq: number,
@@ -63,13 +46,6 @@ const getFullStateRefFromStoredEntry = (
   const opId = getStoredOpId(op);
   const opType = getStoredOpType(op);
   return opId && opType && isFullStateOpType(opType) ? { opId, seq } : undefined;
-};
-
-const buildFullStateOpsMeta = (
-  refs: ReadonlyArray<FullStateOpRef>,
-): FullStateOpsMetaEntry => {
-  const latest = getLatestFullStateRef(refs);
-  return latest ? { refs: [...refs], latest } : { refs: [...refs] };
 };
 
 const populateFullStateOpsMetaDuringUpgrade = (
