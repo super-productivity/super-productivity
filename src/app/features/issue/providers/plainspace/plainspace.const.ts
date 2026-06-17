@@ -5,4 +5,3 @@ export {
 } from './plainspace-cfg-form.const';
 
 export const PLAINSPACE_POLL_INTERVAL = 5 * 60 * 1000;
-export const PLAINSPACE_INITIAL_POLL_DELAY = 8 * 1000;

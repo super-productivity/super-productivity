@@ -91,6 +91,51 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
     const issue = await firstValueFrom(
       this._plainspaceApiService.getById$(task.issueId, cfg),
     );
+    return this._toFreshData(task, issue);
+  }
+
+  /**
+   * Poll all of a provider's imported tasks at once. `GET /tasks` already returns
+   * every task assigned to me in one call, so we fetch it once per provider and
+   * diff locally — instead of the base's one `getById` HTTP request per task
+   * (which is N redundant calls of the same data). A task that is no longer
+   * assigned to me simply isn't in the response and is left untouched this cycle.
+   */
+  override async getFreshDataForIssueTasks(
+    tasks: Task[],
+  ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: IssueData }[]> {
+    const tasksByProviderId = new Map<string, Task[]>();
+    for (const task of tasks) {
+      if (!task.issueProviderId || !task.issueId) {
+        continue;
+      }
+      const group = tasksByProviderId.get(task.issueProviderId) ?? [];
+      group.push(task);
+      tasksByProviderId.set(task.issueProviderId, group);
+    }
+
+    const updates: { task: Task; taskChanges: Partial<Task>; issue: IssueData }[] = [];
+    for (const [providerId, providerTasks] of tasksByProviderId) {
+      const cfg = await firstValueFrom(this._getCfgOnce$(providerId));
+      const issuesById = new Map(
+        (await firstValueFrom(this._plainspaceApiService.getMyTasks$(cfg))).map(
+          (issue) => [issue.id, issue] as const,
+        ),
+      );
+      for (const task of providerTasks) {
+        const fresh = this._toFreshData(task, issuesById.get(task.issueId!) ?? null);
+        if (fresh) {
+          updates.push({ task, taskChanges: fresh.taskChanges, issue: fresh.issue });
+        }
+      }
+    }
+    return updates;
+  }
+
+  private _toFreshData(
+    task: Task,
+    issue: PlainspaceIssue | null,
+  ): { taskChanges: Partial<Task>; issue: IssueData; issueTitle: string } | null {
     if (!issue || new Date(issue.updatedAt).getTime() === task.issueLastUpdated) {
       return null;
     }

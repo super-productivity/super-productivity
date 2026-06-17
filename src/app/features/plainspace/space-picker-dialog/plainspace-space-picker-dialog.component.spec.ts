@@ -83,6 +83,15 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
     expect(dialogRef.close).toHaveBeenCalledWith();
   });
 
+  it('shows the error state (not empty) when the spaces request fails', async () => {
+    apiStub.getSpaces$.and.returnValue(of(null));
+    createComponent();
+    await fixture.whenStable();
+    expect(component.hasError()).toBe(true);
+    expect(component.isLoading()).toBe(false);
+    expect(component.spaces()).toEqual([]);
+  });
+
   it('closes immediately when no account is connected', async () => {
     accountStub.account.and.returnValue(null);
     createComponent();

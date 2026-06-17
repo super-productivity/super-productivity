@@ -3,6 +3,8 @@
 <mat-dialog-content>
   @if (isLoading()) {
     <p>{{ T.PLAINSPACE.SPACE_PICKER.LOADING | translate }}</p>
+  } @else if (hasError()) {
+    <p class="error">{{ T.PLAINSPACE.SPACE_PICKER.ERROR | translate }}</p>
   } @else if (spaces().length) {
     <p class="intro">{{ T.PLAINSPACE.SPACE_PICKER.INTRO | translate }}</p>
 
@@ -28,6 +30,7 @@
   </button>
   <button
     mat-stroked-button
+    [disabled]="hasError()"
     (click)="createNew()"
   >
     {{ T.PLAINSPACE.SPACE_PICKER.CREATE_NEW | translate }}

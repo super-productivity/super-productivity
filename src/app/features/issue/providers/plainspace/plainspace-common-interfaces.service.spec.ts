@@ -108,4 +108,44 @@ describe('PlainspaceCommonInterfacesService', () => {
       expect(await service.getFreshDataForIssueTask(task)).toBeNull();
     });
   });
+
+  describe('getFreshDataForIssueTasks (bulk poll = one fetch per provider)', () => {
+    it('fetches all tasks once via getMyTasks$, not one getById per task', async () => {
+      spyOn(
+        service as unknown as { _getCfgOnce$: (id: string) => unknown },
+        '_getCfgOnce$',
+      ).and.returnValue(of({}));
+      const t1 = { ...issue('2026-01-02T09:00:00.000Z'), id: 't1' };
+      const t2 = { ...issue('2026-01-03T09:00:00.000Z'), id: 't2' };
+      const getMyTasks$ = jasmine.createSpy('getMyTasks$').and.returnValue(of([t1, t2]));
+      const getById$ = jasmine.createSpy('getById$');
+      (api as unknown as { getMyTasks$: unknown }).getMyTasks$ = getMyTasks$;
+      (api as unknown as { getById$: unknown }).getById$ = getById$;
+
+      const tasks = [
+        { issueProviderId: 'p1', issueId: 't1', issueLastUpdated: 0 },
+        { issueProviderId: 'p1', issueId: 't2', issueLastUpdated: 0 },
+      ] as Task[];
+      const updates = await service.getFreshDataForIssueTasks(tasks);
+
+      expect(getMyTasks$).toHaveBeenCalledTimes(1);
+      expect(getById$).not.toHaveBeenCalled();
+      expect(updates.map((u) => u.task.issueId)).toEqual(['t1', 't2']);
+    });
+
+    it('skips tasks that are no longer returned (e.g. unassigned from me)', async () => {
+      spyOn(
+        service as unknown as { _getCfgOnce$: (id: string) => unknown },
+        '_getCfgOnce$',
+      ).and.returnValue(of({}));
+      (api as unknown as { getMyTasks$: unknown }).getMyTasks$ = () =>
+        of([{ ...issue('2026-01-02T09:00:00.000Z'), id: 't1' }]);
+      const tasks = [
+        { issueProviderId: 'p1', issueId: 't1', issueLastUpdated: 0 },
+        { issueProviderId: 'p1', issueId: 'gone', issueLastUpdated: 0 },
+      ] as Task[];
+      const updates = await service.getFreshDataForIssueTasks(tasks);
+      expect(updates.map((u) => u.task.issueId)).toEqual(['t1']);
+    });
+  });
 });

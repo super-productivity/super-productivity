@@ -3,7 +3,7 @@ import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { WorkViewComponent } from '../../features/work-view/work-view.component';
 import { ProjectService } from '../../features/project/project.service';
@@ -26,12 +26,17 @@ export class ProjectTaskPageComponent {
   readonly T = T;
 
   // Unclaimed Plainspace tasks (only for projects shared on Plainspace); fed
-  // into the work view's read-only "claim pool" panel.
+  // into the work view's read-only "claim pool" panel. `currentProject$` re-emits
+  // on every task add/complete/reorder (the project entity carries taskIds), so
+  // distinct on the id first — otherwise the pool re-fetches `/claimable-tasks`
+  // on every task change.
   readonly unclaimedTasks = toSignal(
     this._projectService.currentProject$.pipe(
-      switchMap((project) =>
-        project
-          ? this._plainspaceClaimPoolService.unclaimedTasksForProject$(project.id)
+      map((project) => project?.id ?? null),
+      distinctUntilChanged(),
+      switchMap((projectId) =>
+        projectId
+          ? this._plainspaceClaimPoolService.unclaimedTasksForProject$(projectId)
           : of([] as PlainspaceSharedTask[]),
       ),
     ),

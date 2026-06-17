@@ -34,12 +34,14 @@ export class PlainspaceApiService {
 
   /**
    * The spaces (Plainspace projects) the token can access — used to let the user
-   * link an existing space instead of creating a new one. Empty list on failure.
+   * link an existing space instead of creating a new one. Returns `null` when the
+   * request fails (offline / invalid token) so callers can tell a genuine "no
+   * spaces yet" (empty list) apart from an error.
    */
-  getSpaces$(cfg: PlainspaceCfg): Observable<PlainspaceSpace[]> {
+  getSpaces$(cfg: PlainspaceCfg): Observable<PlainspaceSpace[] | null> {
     return this.getMe$(cfg).pipe(
       map((me) =>
-        (me?.projects ?? []).map((p) => ({ id: p.id, name: p.name, slug: p.slug })),
+        me ? me.projects.map((p) => ({ id: p.id, name: p.name, slug: p.slug })) : null,
       ),
     );
   }
@@ -222,6 +224,11 @@ const mapSPTaskToIssue = (t: SPTask): PlainspaceIssue => ({
   updatedAt: t.updatedAt,
   url: t.url,
   projectId: t.projectId,
-  scheduledAt: t.scheduledAt ?? null,
+  // Normalize to a canonical UTC ISO instant on read. The two-way-sync baseline
+  // and push both compare `scheduledAt` by exact string, and the push side emits
+  // `new Date(ms).toISOString()` — so an equivalent-but-differently-formatted
+  // server value (offset vs Z, ms precision) would otherwise read as a remote
+  // change and silently drop the user's reschedule.
+  scheduledAt: t.scheduledAt ? new Date(t.scheduledAt).toISOString() : null,
   isRecurring: !!t.isRecurring,
 });

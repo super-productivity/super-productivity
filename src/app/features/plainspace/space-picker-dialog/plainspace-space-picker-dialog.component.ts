@@ -60,6 +60,7 @@ export class PlainspaceSpacePickerDialogComponent {
   readonly T = T;
   readonly spaces = signal<PlainspaceSpace[]>([]);
   readonly isLoading = signal(true);
+  readonly hasError = signal(false);
   selectedSpaceId: string | null = null;
 
   constructor() {
@@ -95,8 +96,13 @@ export class PlainspaceSpacePickerDialogComponent {
         token: account.token,
       }),
     );
-    this.spaces.set(spaces ?? []);
-    this.selectedSpaceId = this.spaces()[0]?.id ?? null;
+    // null = the request failed (vs an empty list = genuinely no spaces yet).
+    if (spaces === null) {
+      this.hasError.set(true);
+    } else {
+      this.spaces.set(spaces);
+      this.selectedSpaceId = spaces[0]?.id ?? null;
+    }
     this.isLoading.set(false);
   }
 }

@@ -50,8 +50,7 @@ export const PLAINSPACE_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderPlain
     },
     {
       type: 'collapsible',
-      // todo translate
-      props: { label: 'Advanced Config' },
+      props: { label: T.G.ADVANCED_CFG },
       fieldGroup: [...ISSUE_PROVIDER_COMMON_FORM_FIELDS],
     },
   ];

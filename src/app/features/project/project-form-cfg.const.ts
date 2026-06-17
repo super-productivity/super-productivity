@@ -51,9 +51,12 @@ export const CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG: ConfigFormSection<CreatePr
         // Transient form-only field (not persisted on the Project). When checked
         // on create, the dialog provisions a Plainspace space + bound issue
         // provider. See docs/plainspace-integration-plan.md §6.
+        // Create-only: editing an existing project (model has an id) can't
+        // provision sharing here, so hide it rather than show a dead control.
         key: 'isShareOnPlainspace',
         type: 'checkbox',
         defaultValue: false,
+        hideExpression: '!!model.id',
         templateOptions: {
           label: T.PLAINSPACE.SHARE_LABEL,
           description: T.PLAINSPACE.SHARE_DESCRIPTION,

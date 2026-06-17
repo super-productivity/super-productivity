@@ -7,6 +7,7 @@ import { PlainspaceIssue } from '../issue/providers/plainspace/plainspace-issue.
 import { selectEnabledIssueProviders } from '../issue/store/issue-provider.selectors';
 import { IssueService } from '../issue/issue.service';
 import { IssueProviderPlainspace } from '../issue/issue.model';
+import { SnackService } from '../../core/snack/snack.service';
 
 const PLAINSPACE_PROVIDER = {
   id: 'p1',
@@ -34,6 +35,7 @@ describe('PlainspaceClaimPoolService', () => {
   let store: MockStore;
   let apiSpy: jasmine.SpyObj<PlainspaceApiService>;
   let addTaskFromIssueSpy: jasmine.Spy;
+  let snackSpy: jasmine.SpyObj<SnackService>;
 
   beforeEach(() => {
     apiSpy = jasmine.createSpyObj<PlainspaceApiService>('PlainspaceApiService', [
@@ -43,6 +45,7 @@ describe('PlainspaceClaimPoolService', () => {
     apiSpy.getUnclaimedTasks$.and.returnValue(of([issue('ps-102'), issue('ps-105')]));
     apiSpy.claimTask$.and.returnValue(of(issue('ps-102')));
     addTaskFromIssueSpy = jasmine.createSpy('addTaskFromIssue').and.resolveTo('t1');
+    snackSpy = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -50,6 +53,7 @@ describe('PlainspaceClaimPoolService', () => {
         provideMockStore(),
         { provide: PlainspaceApiService, useValue: apiSpy },
         { provide: IssueService, useValue: { addTaskFromIssue: addTaskFromIssueSpy } },
+        { provide: SnackService, useValue: snackSpy },
       ],
     });
     service = TestBed.inject(PlainspaceClaimPoolService);
@@ -76,5 +80,21 @@ describe('PlainspaceClaimPoolService', () => {
     const arg = addTaskFromIssueSpy.calls.mostRecent().args[0];
     expect(arg.issueProviderKey).toBe('PLAINSPACE');
     expect(arg.issueDataReduced.id).toBe('ps-102');
+  });
+
+  it('shows a success snack on a successful claim', async () => {
+    await service.claim('proj-1', 'ps-102');
+    expect(snackSpy.open).toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: 'SUCCESS' }),
+    );
+  });
+
+  it('shows an error snack and does not import when the claim fails', async () => {
+    apiSpy.claimTask$.and.returnValue(of(null));
+    await service.claim('proj-1', 'ps-102');
+    expect(addTaskFromIssueSpy).not.toHaveBeenCalled();
+    expect(snackSpy.open).toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: 'ERROR' }),
+    );
   });
 });

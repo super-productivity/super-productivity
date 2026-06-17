@@ -1,11 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { Observable, Subject, firstValueFrom, of } from 'rxjs';
-import { map, startWith, switchMap } from 'rxjs/operators';
+import { Observable, Subject, combineLatest, firstValueFrom, of } from 'rxjs';
+import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import { selectEnabledIssueProviders } from '../issue/store/issue-provider.selectors';
 import { IssueProvider, IssueProviderPlainspace } from '../issue/issue.model';
 import { PlainspaceApiService } from '../issue/providers/plainspace/plainspace-api.service';
 import { IssueService } from '../issue/issue.service';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 import { PlainspaceSharedTask } from './plainspace-shared-task.model';
 
 /**
@@ -20,16 +22,24 @@ export class PlainspaceClaimPoolService {
   private _store = inject(Store);
   private _plainspaceApiService = inject(PlainspaceApiService);
   private _issueService = inject(IssueService);
+  private _snackService = inject(SnackService);
 
-  // Pings the pool to re-fetch after a claim (mock space data changes in place).
+  // Pings the pool to re-fetch after a claim so the claimed task leaves the pool.
   private readonly _refresh$ = new Subject<void>();
 
   unclaimedTasksForProject$(projectId: string): Observable<PlainspaceSharedTask[]> {
-    return this._refresh$.pipe(
-      startWith(undefined),
-      switchMap(() => this._store.select(selectEnabledIssueProviders)),
+    // Editing any issue provider re-emits the list; collapse to this project's
+    // bound provider and only re-fetch when its identity actually changes...
+    const provider$ = this._store.select(selectEnabledIssueProviders).pipe(
       map((providers) => this._findProvider(providers, projectId)),
-      switchMap((provider) =>
+      distinctUntilChanged(
+        (a, b) => a?.id === b?.id && a?.token === b?.token && a?.spaceId === b?.spaceId,
+      ),
+    );
+    // ...or on an explicit refresh (after a claim), so the claimed task leaves
+    // the pool even though the provider itself is unchanged.
+    return combineLatest([provider$, this._refresh$.pipe(startWith(undefined))]).pipe(
+      switchMap(([provider]) =>
         provider ? this._unclaimedForProvider$(provider) : of([]),
       ),
     );
@@ -57,6 +67,14 @@ export class PlainspaceClaimPoolService {
         issueProviderKey: 'PLAINSPACE',
         isAddToBacklog: true,
       });
+      this._snackService.open({ type: 'SUCCESS', msg: T.PLAINSPACE.CLAIM_SUCCESS });
+    } else {
+      // `claimTask$` fails soft to null — most often the race where someone else
+      // claimed first (or an outage). One friendly message covers both; the
+      // refresh below drops a now-claimed task from the pool.
+      // shortcut: generic message — distinguish 409 "taken" from offline once the
+      // server contract pins the status code.
+      this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.CLAIM_FAILED });
     }
     this._refresh$.next();
   }
@@ -81,7 +99,6 @@ export class PlainspaceClaimPoolService {
             id: issue.id,
             title: issue.title,
             isDone: issue.isDone,
-            assignee: null,
             url: issue.url,
             isRecurring: issue.isRecurring,
           }),

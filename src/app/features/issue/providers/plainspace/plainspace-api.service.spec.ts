@@ -137,12 +137,12 @@ describe('PlainspaceApiService', () => {
     ]);
   });
 
-  it('getSpaces$ fails soft to [] on error', async () => {
+  it('getSpaces$ returns null on error (so callers can tell error from empty)', async () => {
     const p = firstValueFrom(service.getSpaces$(cfg));
     httpMock
       .expectOne(`${BASE}/me`)
       .flush('boom', { status: 500, statusText: 'Server Error' });
-    expect(await p).toEqual([]);
+    expect(await p).toBeNull();
   });
 
   it('createSpace$ returns the new project id', async () => {

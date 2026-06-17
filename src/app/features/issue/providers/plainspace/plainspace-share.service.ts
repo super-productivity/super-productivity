@@ -88,6 +88,7 @@ export class PlainspaceShareService {
         spaceId,
       };
       this._store.dispatch(IssueProviderActions.addIssueProvider({ issueProvider }));
+      this._snackService.open({ type: 'SUCCESS', msg: T.PLAINSPACE.SHARE_SUCCESS });
       return spaceId;
     } catch {
       // Log ids only — never user content (project title).
