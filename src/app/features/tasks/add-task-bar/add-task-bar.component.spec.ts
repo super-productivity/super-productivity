@@ -23,6 +23,8 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskCopy } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { TODAY_TAG } from '../../tag/tag.const';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -99,7 +101,7 @@ describe('AddTaskBarComponent', () => {
   } as WorkContext;
 
   const mockTagWorkContext: WorkContext = {
-    id: 'TODAY',
+    id: TODAY_TAG.id,
     title: 'Today',
     type: WorkContextType.TAG,
   } as WorkContext;
@@ -183,7 +185,10 @@ describe('AddTaskBarComponent', () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       lang$: new BehaviorSubject<LocalizationConfig>(mockLocalizationConfig),
       misc$: new BehaviorSubject<MiscConfig>(mockMiscConfig),
-      tasks$: new BehaviorSubject({ defaultProjectId: null }),
+      tasks$: new BehaviorSubject({
+        defaultProjectId: null,
+        isSetDefaultDayForTodayTasks: true,
+      }),
       shortSyntax$: of({}),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
       cfg: signal({
@@ -468,6 +473,56 @@ describe('AddTaskBarComponent', () => {
       const defaultProject = await component.defaultProject$.pipe(first()).toPromise();
 
       expect(defaultProject?.id).toBe('default-project');
+    });
+  });
+
+  describe('defaultDateAndTime$ observable', () => {
+    it('should use today as default date in Today context when setting is true', () => {
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      component.defaultDateAndTime$.pipe(first()).subscribe((defaultDateAndTime) => {
+        expect(defaultDateAndTime).toEqual({
+          date: getDbDateStr(),
+          time: undefined,
+        });
+      });
+    });
+
+    it('should use today as default date in Today context when setting is missing', () => {
+      (mockGlobalConfigService.tasks$ as BehaviorSubject<any>).next({
+        defaultProjectId: null,
+      });
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      component.defaultDateAndTime$.pipe(first()).subscribe((defaultDateAndTime) => {
+        expect(defaultDateAndTime).toEqual({
+          date: getDbDateStr(),
+          time: undefined,
+        });
+      });
+    });
+
+    it('should react when Today default date setting changes without work context change', () => {
+      const emittedDefaultDates: Array<string | undefined> = [];
+      const subscription = component.defaultDateAndTime$.subscribe((defaultDateAndTime) =>
+        emittedDefaultDates.push(defaultDateAndTime.date),
+      );
+
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+      (mockGlobalConfigService.tasks$ as BehaviorSubject<any>).next({
+        defaultProjectId: null,
+        isSetDefaultDayForTodayTasks: false,
+      });
+
+      expect(emittedDefaultDates).toEqual([undefined, getDbDateStr(), undefined]);
+
+      subscription.unsubscribe();
     });
   });
 

@@ -1311,7 +1311,7 @@ export class TaskService {
       !additional.parentId &&
       !additional.dueWithTime &&
       !('dueDay' in additional) &&
-      this._globalConfigService.cfg()?.tasks?.isSetDefaultDayForTodayTasks
+      this._globalConfigService.cfg()?.tasks?.isSetDefaultDayForTodayTasks !== false
         ? { dueDay: getDbDateStr() }
         : {}),
 

@@ -87,6 +87,9 @@ describe('GlobalConfigReducer', () => {
       expect(result.tasks.isMarkdownFormattingInNotesEnabled).toBe(
         DEFAULT_GLOBAL_CONFIG.tasks.isMarkdownFormattingInNotesEnabled,
       );
+      expect(result.tasks.isSetDefaultDayForTodayTasks).toBe(
+        DEFAULT_GLOBAL_CONFIG.tasks.isSetDefaultDayForTodayTasks,
+      );
       expect(result.tasks.notesTemplate).toBe(DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate);
     });
 

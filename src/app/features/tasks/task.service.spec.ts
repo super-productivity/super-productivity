@@ -35,7 +35,10 @@ describe('TaskService', () => {
   let deletedTaskIssueSidecar: DeletedTaskIssueSidecarService;
   let tickSubject: Subject<{ duration: number; date: string }>;
   let globalCfgSignal: WritableSignal<{
-    tasks: { defaultProjectId: null | string; isSetDefaultDayForTodayTasks: boolean };
+    tasks: {
+      defaultProjectId: null | string;
+      isSetDefaultDayForTodayTasks?: boolean;
+    };
     reminder: { defaultTaskRemindOption: string };
     appFeatures: { isTimeTrackingEnabled: boolean };
   }>;
@@ -593,6 +596,22 @@ describe('TaskService', () => {
     });
 
     it('should set dueDay for TODAY tag context', () => {
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        workContextType: WorkContextType.TAG,
+        workContextId: TODAY_TAG.id,
+      });
+
+      expect(task.dueDay).toBeTruthy();
+    });
+
+    it('should set dueDay for TODAY tag context when isSetDefaultDayForTodayTasks is missing', () => {
+      globalCfgSignal.set({
+        tasks: { defaultProjectId: null },
+        reminder: { defaultTaskRemindOption: 'AT_START' },
+        appFeatures: { isTimeTrackingEnabled: true },
+      });
+
       const task = service.createNewTaskWithDefaults({
         title: 'Test',
         workContextType: WorkContextType.TAG,

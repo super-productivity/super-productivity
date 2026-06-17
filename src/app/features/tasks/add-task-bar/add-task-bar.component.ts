@@ -199,8 +199,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }),
   );
 
-  defaultDateAndTime$ = this._workContextService.activeWorkContext$.pipe(
-    map((workContext) => {
+  defaultDateAndTime$ = combineLatest([
+    this._workContextService.activeWorkContext$,
+    this._globalConfigService.tasks$,
+  ]).pipe(
+    map(([workContext, tasksConfig]) => {
       if (!this.isNoDefaults()) {
         if (this.planForDay()) {
           return {
@@ -209,8 +212,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           };
         } else if (
           workContext?.type === WorkContextType.TAG &&
-          workContext?.id === 'TODAY' &&
-          this._globalConfigService.cfg()?.tasks?.isSetDefaultDayForTodayTasks
+          workContext?.id === TODAY_TAG.id &&
+          tasksConfig.isSetDefaultDayForTodayTasks !== false
         ) {
           return {
             date: getDbDateStr(),
