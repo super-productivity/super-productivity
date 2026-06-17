@@ -518,7 +518,10 @@ export class TaskViewCustomizerService {
     this._allTags.forEach((tag) => {
       const tagTasks = groupedByTagId.get(tag.id);
       if (tagTasks?.length) {
-        grouped[tag.title] = tagTasks;
+        // Distinct tags can share a title; merge their tasks into the same
+        // title-keyed bucket instead of overwriting, matching the previous
+        // grouping behavior and _getTagTitleOrderMap's single-slot contract.
+        grouped[tag.title] = (grouped[tag.title] ?? []).concat(tagTasks);
       }
     });
     if (unknownTagTasks.length) {

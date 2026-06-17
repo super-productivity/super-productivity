@@ -537,6 +537,25 @@ describe('TaskViewCustomizerService', () => {
     expect(grouped['Tag B'][1].id).toBe('Third Task(Tag A, Tag B)');
   });
 
+  it('should merge distinct tags that share a title into a single group', () => {
+    // Two different tag entities can carry the same title; their tasks must all
+    // land in the single title-keyed bucket instead of one tag overwriting the
+    // other (regression: the second tag used to clobber the first's tasks).
+    (service as unknown as { _allTags: Tag[] })._allTags = [
+      { id: 'work-1', title: 'Work' } as Tag,
+      { id: 'work-2', title: 'Work' } as Tag,
+    ];
+    const tasks = [
+      { ...mockTasks[0], id: 'task-work-1', tagIds: ['work-1'] },
+      { ...mockTasks[0], id: 'task-work-2', tagIds: ['work-2'] },
+    ] as TaskWithSubTasks[];
+
+    const grouped = service['applyGrouping'](tasks, GROUP_OPTION_TYPE.tag);
+
+    expect(Object.keys(grouped)).toEqual(['Work']);
+    expect(grouped['Work'].map((t) => t.id)).toEqual(['task-work-1', 'task-work-2']);
+  });
+
   it('should group by scheduledDate using dueDay', () => {
     const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.scheduledDate);
     expect(Object.keys(grouped)).toContain(todayStr);
