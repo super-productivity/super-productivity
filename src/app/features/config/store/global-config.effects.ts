@@ -38,6 +38,8 @@ import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { Log } from '../../../core/log';
 
+const LAYOUT_DETECTION_TIMEOUT_MS = 1000;
+
 @Injectable()
 export class GlobalConfigEffects {
   private _actions$ = inject(LOCAL_ACTIONS);
@@ -106,9 +108,17 @@ export class GlobalConfigEffects {
           if (this._isMac) {
             layout = await Promise.race([
               this._keyboardLayoutService.layoutReady,
-              new Promise<KeyboardLayout>((resolve) =>
-                setTimeout(() => resolve(new Map()), 1000),
-              ),
+              new Promise<KeyboardLayout>((resolve) => {
+                const timeoutId = setTimeout(() => {
+                  Log.log(
+                    `Layout detection timed out after ${LAYOUT_DETECTION_TIMEOUT_MS}ms. Falling back to empty layout.`,
+                  );
+                  resolve(new Map());
+                }, LAYOUT_DETECTION_TIMEOUT_MS);
+                void this._keyboardLayoutService.layoutReady.then(() =>
+                  clearTimeout(timeoutId),
+                );
+              }),
             ]);
           }
           return { keyboardCfg, layout };

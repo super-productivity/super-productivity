@@ -1,13 +1,13 @@
+import { InjectionToken } from '@angular/core';
 import { IS_ANDROID_WEB_VIEW } from './util/is-android-web-view';
 
 export const IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
 
 /**
  * Injection token for IS_ELECTRON to enable testing.
- * Use this in effects/services that need to be unit tested.
+ * New DI-tested effects/services should prefer this token over the IS_ELECTRON
+ * constant to ensure testability and prevent logic drift.
  */
-import { InjectionToken } from '@angular/core';
-
 export const IS_ELECTRON_TOKEN = new InjectionToken<boolean>('IS_ELECTRON', {
   providedIn: 'root',
   factory: () => IS_ELECTRON,

@@ -315,7 +315,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     // Connect the service to the utility functions
     setKeyboardLayoutService(this._keyboardLayoutService);
     // Defer keyboard layout detection to idle time for better initial load performance,
-    // EXCEPT on Electron where it is needed eagerly for the initial global shortcut registration on macOS.
+    // EXCEPT on macOS Electron where it is needed eagerly for the initial global shortcut registration.
     if (IS_ELECTRON && IS_MAC) {
       void this._keyboardLayoutService.saveUserLayout();
     } else if (typeof requestIdleCallback === 'function') {
