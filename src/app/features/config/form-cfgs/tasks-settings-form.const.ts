@@ -20,6 +20,13 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
       },
     },
     {
+      key: 'isSetDefaultDayForTodayTasks',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.TASKS.IS_SET_DEFAULT_DAY_FOR_TODAY_TASKS,
+      },
+    },
+    {
       key: 'isAutoMarkParentAsDone',
       type: 'checkbox',
       templateOptions: {
