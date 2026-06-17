@@ -6,7 +6,6 @@ import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceIssue } from './plainspace-issue.model';
 import { mapPlainspaceIssueToSearchResult } from './plainspace-issue-map.util';
-import { IssueLog } from '../../../../core/log';
 
 /**
  * HTTP access to the real Plainspace integration API (plainspace.org /
@@ -51,25 +50,11 @@ export class PlainspaceApiService {
       .get<SPTasksResponse>(`${this._base(cfg)}/tasks`, { headers: this._headers(cfg) })
       .pipe(
         // /tasks spans all my spaces; keep only this provider's space.
-        map((res) => {
-          const tasks = Array.isArray(res?.tasks) ? res.tasks : [];
-          const matched = tasks.filter((t) => matchesSpace(t, cfg.spaceId));
-          // Diagnostic: ids/slugs/field-names only (never task content). When
-          // `matched` is 0 but `total` is not, `projectIds`/`projectSlugs`/
-          // `sampleKeys` disambiguate why the space filter dropped everything —
-          // a stored `spaceId` that matches no task's space, vs. a server DTO
-          // that doesn't expose `projectId`/`projectSlug` (sampleKeys would then
-          // lack those names). Remove once Plainspace import is confirmed.
-          IssueLog.log('Plainspace getMyTasks$', {
-            total: tasks.length,
-            matched: matched.length,
-            spaceId: cfg.spaceId,
-            projectIds: [...new Set(tasks.map((t) => t.projectId))],
-            projectSlugs: [...new Set(tasks.map((t) => t.projectSlug))],
-            sampleKeys: tasks[0] ? Object.keys(tasks[0]) : [],
-          });
-          return matched.map(mapSPTaskToIssue);
-        }),
+        map((res) =>
+          (Array.isArray(res?.tasks) ? res.tasks : [])
+            .filter((t) => matchesSpace(t, cfg.spaceId))
+            .map(mapSPTaskToIssue),
+        ),
         catchError(() => of([])),
       );
   }
