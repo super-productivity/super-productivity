@@ -7,6 +7,13 @@ import { getDefaultClipboardImagesPath } from '../../util/get-default-clipboard-
 import { MIME_TYPE_EXTENSIONS } from '../../../../electron/shared-with-frontend/mime-type-mapping.const';
 import { Log } from '../log';
 
+// Windows paths (e.g. C:/...) have no leading slash, so file:// + C:/... yields
+// file://C:/... which fails the canonical file:///  check. Always emit file:///<path>.
+const pathToFileUrl = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, '/');
+  return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`;
+};
+
 const DB_NAME = 'sp-clipboard-images';
 const DB_VERSION = 1;
 const STORE_NAME = 'images';
@@ -105,7 +112,7 @@ export class ClipboardImageService {
 
               if (filePath) {
                 // Don't copy the file, just use the original path directly
-                const imageUrl = `file://${filePath.replace(/\\/g, '/')}`;
+                const imageUrl = pathToFileUrl(filePath);
                 const fileName = file.name || 'image';
                 const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
                 const markdownText = `![${fileNameWithoutExt}](${imageUrl})`;
@@ -132,7 +139,7 @@ export class ClipboardImageService {
         // Get the saved file path and generate file:// URL
         const savedFilePath = await window.ea.getClipboardImagePath(basePath, result.id);
         if (savedFilePath) {
-          const imageUrl = `file://${savedFilePath.replace(/\\/g, '/')}`;
+          const imageUrl = pathToFileUrl(savedFilePath);
           const markdownText = `![pasted image](${imageUrl})`;
 
           this._snackService.open({
@@ -192,7 +199,7 @@ export class ClipboardImageService {
             result.id,
           );
           if (savedFilePath) {
-            const imageUrl = `file://${savedFilePath.replace(/\\/g, '/')}`;
+            const imageUrl = pathToFileUrl(savedFilePath);
             const markdownText = `![pasted image](${imageUrl})`;
 
             this._snackService.open({
@@ -223,7 +230,7 @@ export class ClipboardImageService {
         return null;
       }
 
-      const imageUrl = `file://${savedFilePath.replace(/\\/g, '/')}`;
+      const imageUrl = pathToFileUrl(savedFilePath);
       const fileName = filePath.split(/[\\/]/).pop() || 'image';
       const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
       const markdownText = `![${fileNameWithoutExt}](${imageUrl})`;
@@ -526,8 +533,9 @@ export class ClipboardImageService {
       mimeType,
     );
 
-    // Return file:// URL directly for Electron
-    const fileUrl = `file://${savedPath.replace(/\\/g, '/')}`;
+    // Return file:/// URL for Electron (file:/// is canonical; file:// + Windows path
+    // yields file://C:/... which fails the local-file security check)
+    const fileUrl = pathToFileUrl(savedPath);
     return fileUrl;
   }
 
