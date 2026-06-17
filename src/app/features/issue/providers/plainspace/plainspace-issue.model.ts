@@ -17,4 +17,10 @@ export type PlainspaceIssue = Readonly<{
   url: string | null;
   /** Remote Plainspace project/space id — used to scope tasks to a provider. */
   projectId: string;
+  /**
+   * ISO instant the task is scheduled for (Plainspace `remindAt`), or null when
+   * unscheduled. Maps to SP's `task.dueWithTime`. For recurring Plainspace items
+   * this is the *next* occurrence — the server advances it, so SP just tracks it.
+   */
+  remindAt: string | null;
 }>;

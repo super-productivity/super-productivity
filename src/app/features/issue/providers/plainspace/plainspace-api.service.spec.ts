@@ -22,7 +22,12 @@ describe('PlainspaceApiService', () => {
   };
   const BASE = 'https://plainspace.org/api/integration';
 
-  const spTask = (id: string, projectId: string, done = false): SPTaskLike => ({
+  const spTask = (
+    id: string,
+    projectId: string,
+    done = false,
+    remindAt: string | null = null,
+  ): SPTaskLike => ({
     id,
     title: `Task ${id}`,
     done,
@@ -33,6 +38,7 @@ describe('PlainspaceApiService', () => {
     url: `https://plainspace.org/p/item/${id}`,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-02T00:00:00.000Z',
+    remindAt,
   });
 
   beforeEach(() => {
@@ -93,13 +99,20 @@ describe('PlainspaceApiService', () => {
     expect(await p).toBeNull();
   });
 
-  it('setTaskDone$ PATCHes the done flag', async () => {
-    const p = firstValueFrom(service.setTaskDone$('a', true, cfg));
+  it('patchTask$ PATCHes the given fields and maps remindAt back', async () => {
+    const p = firstValueFrom(
+      service.patchTask$('a', { done: true, remindAt: '2026-01-02T09:00:00.000Z' }, cfg),
+    );
     const req = httpMock.expectOne(`${BASE}/tasks/a`);
     expect(req.request.method).toBe('PATCH');
-    expect(req.request.body).toEqual({ done: true });
-    req.flush({ task: spTask('a', 'space-1', true) });
-    expect((await p)?.isDone).toBe(true);
+    expect(req.request.body).toEqual({
+      done: true,
+      remindAt: '2026-01-02T09:00:00.000Z',
+    });
+    req.flush({ task: spTask('a', 'space-1', true, '2026-01-02T09:00:00.000Z') });
+    const issue = await p;
+    expect(issue?.isDone).toBe(true);
+    expect(issue?.remindAt).toBe('2026-01-02T09:00:00.000Z');
   });
 
   it('getSpaces$ maps the account spaces from /me', async () => {
@@ -165,4 +178,5 @@ interface SPTaskLike {
   url: string;
   createdAt: string;
   updatedAt: string;
+  remindAt: string | null;
 }

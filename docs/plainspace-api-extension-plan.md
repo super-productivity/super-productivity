@@ -19,16 +19,18 @@ enhancement. No breaking changes; all additive.
 
 ## 1. What the SP client needs, and what exists today
 
-| SP feature | SP API call (client) | Real endpoint today | Gap |
-| --- | --- | --- | --- |
-| Verify token / identity | `getMe$` | `GET /api/integration/me` | ✅ exists |
-| Import my assigned tasks | `getMyTasks$` | `GET /api/integration/tasks` | ✅ exists (filter client-side by space) |
-| Refresh one task | `getById$` | `GET /api/integration/tasks/:id` | ✅ exists |
-| Push completion back | done write-back | `PATCH /api/integration/tasks/:id` | ✅ exists |
-| **Claim pool (list unclaimed)** | `getUnclaimedTasks$` | — | ❌ **new endpoint** |
-| **Claim a task (self-assign)** | `claimTask$` | — | ❌ **new endpoint** |
-| **Share on Plainspace (create space)** | `createSpace$` | — | ❌ **new endpoint** |
-| Efficient polling | poll loop | full refetch only | ⚠️ optional: `?updatedSince=` |
+| SP feature                             | SP API call (client)                  | Real endpoint today                | Gap                                     |
+| -------------------------------------- | ------------------------------------- | ---------------------------------- | --------------------------------------- |
+| Verify token / identity                | `getMe$`                              | `GET /api/integration/me`          | ✅ exists                               |
+| Import my assigned tasks               | `getMyTasks$`                         | `GET /api/integration/tasks`       | ✅ exists (filter client-side by space) |
+| Refresh one task                       | `getById$`                            | `GET /api/integration/tasks/:id`   | ✅ exists                               |
+| Push completion back                   | done write-back                       | `PATCH /api/integration/tasks/:id` | ✅ exists                               |
+| **Push scheduled time**                | `patchTask$ { remindAt }`             | `PATCH /api/integration/tasks/:id` | ⚠️ **extend** (accept `remindAt`)       |
+| **Read scheduled time**                | `getMyTasks$`/`getById$` → `remindAt` | `serializeSPTask`                  | ⚠️ **extend** (expose `remindAt`)       |
+| **Claim pool (list unclaimed)**        | `getUnclaimedTasks$`                  | —                                  | ❌ **new endpoint**                     |
+| **Claim a task (self-assign)**         | `claimTask$`                          | —                                  | ❌ **new endpoint**                     |
+| **Share on Plainspace (create space)** | `createSpace$`                        | —                                  | ❌ **new endpoint**                     |
+| Efficient polling                      | poll loop                             | full refetch only                  | ⚠️ optional: `?updatedSince=`           |
 
 All three new endpoints reuse the existing `apiTokenMiddleware`, the
 `loadIntegrationScope()` helper, and the `SPTask` DTO already defined in
@@ -72,21 +74,23 @@ the existing `PATCH /api/integration/tasks/:taskId`.
    const [claimed] = await tx
      .update(items)
      .set({ assignedTo: member.id })
-     .where(and(
-       eq(items.id, taskId),
-       eq(items.projectId, item.projectId),
-       isNull(items.assignedTo),   // only if still unclaimed
-       isNull(items.deletedAt),
-     ))
+     .where(
+       and(
+         eq(items.id, taskId),
+         eq(items.projectId, item.projectId),
+         isNull(items.assignedTo), // only if still unclaimed
+         isNull(items.deletedAt),
+       ),
+     )
      .returning();
    if (!claimed) return c.json({ error: 'Task already claimed' }, 409); // lost the race / already assigned
    ```
 
 5. `recordActivity(tx, { action: 'item.assigned', targetType: 'item',
-   targetId: taskId, memberId: member.id, meta: { text: item.text,
-   assignedTo: member.id, source: 'sp' } })`.
+targetId: taskId, memberId: member.id, meta: { text: item.text,
+assignedTo: member.id, source: 'sp' } })`.
 6. After commit: `sseManager.broadcast(projectId, 'item.updated',
-   { item: serializeItem(claimed), memberId: member.id })` and the `activity`
+{ item: serializeItem(claimed), memberId: member.id })` and the `activity`
    broadcast — exactly like the PATCH handler, so open web clients see the claim
    live.
 7. **Do not** enqueue an `assignmentNotifications` row: claiming is a
@@ -94,7 +98,7 @@ the existing `PATCH /api/integration/tasks/:taskId`.
    (see the comment on `assignmentNotifications` and the `assignee !== member.id`
    guard in `items.ts`). Pinging yourself about a task you just claimed is noise.
 8. Return `{ task: serializeSPTask(claimed, list, proj, origin) }` (fetch `list`
-   + `proj` as the PATCH handler does, or inside the tx).
+   - `proj` as the PATCH handler does, or inside the tx).
 
 **Status codes:** `200` claimed · `409` already assigned (to anyone, incl. you) ·
 `404` unknown task / not a member / deleted · `401` bad token.
@@ -128,8 +132,8 @@ if (scope.memberRows.length === 0) return c.json({ tasks: [] });
 const rows = await db.query.items.findMany({
   where: and(
     inArray(items.projectId, projectIdFilter ?? scope.projectIds),
-    isNull(items.assignedTo),   // unclaimed
-    eq(items.checked, false),   // not done
+    isNull(items.assignedTo), // unclaimed
+    eq(items.checked, false), // not done
     isNull(items.deletedAt),
   ),
 });
@@ -178,20 +182,26 @@ email-code gate.
 3. Transaction (mirrors `projects.ts`):
    ```ts
    const slug = nanoid(SLUG_LENGTH);
-   const [project] = await tx.insert(projects).values({ slug, name, purpose }).returning();
-   const [member] = await tx.insert(members).values({
-     projectId: project.id,
-     tokenHash: hashToken(nanoid(TOKEN_LENGTH)), // web-session token; unused by SP, see note
-     displayName,
-     ...encryptedEmailFields(memberEmail),
-     emailVerified: true,            // the PAT already proves email ownership
-     color: MEMBER_COLORS[0],
-     avatarIndex: 0,
-     isCreator: true,
-     role: 'admin',
-     tosVersion: TOS_VERSION,
-     tosAcceptedAt: new Date(),
-   }).returning();
+   const [project] = await tx
+     .insert(projects)
+     .values({ slug, name, purpose })
+     .returning();
+   const [member] = await tx
+     .insert(members)
+     .values({
+       projectId: project.id,
+       tokenHash: hashToken(nanoid(TOKEN_LENGTH)), // web-session token; unused by SP, see note
+       displayName,
+       ...encryptedEmailFields(memberEmail),
+       emailVerified: true, // the PAT already proves email ownership
+       color: MEMBER_COLORS[0],
+       avatarIndex: 0,
+       isCreator: true,
+       role: 'admin',
+       tosVersion: TOS_VERSION,
+       tosAcceptedAt: new Date(),
+     })
+     .returning();
    await ensureProjectDefaults(tx, { projectId: project.id, memberId: member.id });
    ```
 4. Return `201 { project: serializeProject(project), memberId: member.id }`.
@@ -219,6 +229,76 @@ hour).
 
 **Status codes:** `201` created · `422` validation · `429` rate-limited ·
 `401` bad token.
+
+---
+
+## 4b. Scheduled time — expose & accept `remindAt`
+
+SP can sync a task's **scheduled time** (`task.dueWithTime`) to a Plainspace
+item's existing `remindAt`. This is **not a new endpoint** — it extends the
+`SPTask` DTO (read) and the existing `PATCH /tasks/:id` (write). No new tables;
+`items.remindAt` and the whole reminder/repeat machinery already exist.
+
+### Read — add `remindAt` to `serializeSPTask`
+
+```ts
+return {
+  // …existing fields…
+  remindAt: item.remindAt ? item.remindAt.toISOString() : null,
+};
+```
+
+So `getMyTasks$`/`getById$`/`claimable-tasks` all carry it. (Optional but nice:
+also expose `repeat` so SP can show a "recurring" hint — see the recurrence note
+below. Not required for the time sync itself.)
+
+### Write — accept `remindAt` on `PATCH /tasks/:id`
+
+Today the integration PATCH only accepts `{ done: boolean }`. Widen its body
+schema to also accept `remindAt`:
+
+```
+PATCH /api/integration/tasks/:taskId
+Body: { done?: boolean, remindAt?: string | null }   // ISO instant, or null to unschedule
+```
+
+- Route it through the **same `reconcileRepeat()` / `items.ts` update path** the
+  in-app PATCH uses, so the `remindAt`/`repeat`/`anchor` invariants hold
+  (clearing `remindAt` → `repeat:null`; re-scheduling a repeating item re-anchors
+  it). SP never sends `repeat`, so for a repeating item a `remindAt`-only PATCH
+  hits exactly the "re-anchor existing rule" branch already in `reconcileRepeat`.
+- Still **member-scoped**: the PAT can only patch items in `scope.projectIds`,
+  and only ever its own caller's item — same guard as the done write-back. SP
+  setting `remindAt` is self-scoped scheduling, not assignment.
+- Validation: reject a `remindAt` that isn't a valid ISO instant (`422`).
+
+### Recurrence — server stays authoritative, SP just tracks `remindAt`
+
+Deliberately **no rule translation** between Plainspace `RepeatRule` and SP's
+`TaskRepeatCfg` (different execution models — Plainspace = one persistent row the
+sweep advances; SP = a template that spawns instances — and SP's recurrence is
+mid-refactor). Instead:
+
+- **Plainspace → SP:** a repeating item imports as a single ordinary SP task with
+  `dueWithTime = remindAt` (the next occurrence). When the sweep advances
+  `remindAt`, SP's poll re-pulls it and reschedules the same task. SP needs zero
+  knowledge of the rule; the server does all recurrence math.
+- **SP → Plainspace:** SP only ever PATCHes a concrete `remindAt` (never a
+  `repeat`). An SP-recurring task pushes each occurrence as a one-off; Plainspace
+  keeps owning any rule it created.
+
+> Behavior to expect (not a bug): completing an imported **recurring** task in SP
+> write-backs `done`, the sweep then advances + un-checks the item, and SP's next
+> poll reopens it at the new time. Correct for a recurring item; the
+> done-write-back ↔ remindAt-re-pull interaction wants an idempotency test.
+
+### Client scope in PR #8424
+
+The SP side ships **push-only** first (`dueWithTime → remindAt`, including `null`
+on unschedule), mirroring the done write-back. Pull (display the time SP-side) and
+the recurrence-tracking poll extension are documented follow-ups. `dueDay`
+(date-only SP scheduling) is intentionally **not** synced — `remindAt` always
+carries a time, so mapping a day-only task would fabricate one.
 
 ---
 
@@ -264,7 +344,9 @@ assigned set each interval. Defer until the read volume justifies it.
 
 ```ts
 // response of POST /api/integration/tasks/:id/claim
-export interface SPClaimTaskResponse { task: SPTask; }
+export interface SPClaimTaskResponse {
+  task: SPTask;
+}
 
 // response of GET /api/integration/claimable-tasks  (can reuse SPTasksResponse)
 export type SPClaimableTasksResponse = SPTasksResponse;
@@ -296,6 +378,7 @@ export const CreateSpaceViaTokenSchema = z.object({
 Add, in the same style:
 
 **claim**
+
 - claims an unassigned task → `200`, row `assignedTo === myMember`, `item.assigned`
   activity row written, SSE `item.updated` emitted.
 - claiming an already-assigned task → `409`, row unchanged.
@@ -304,11 +387,13 @@ Add, in the same style:
 - self-assignment does **not** insert an `assignmentNotifications` row.
 
 **claimable-tasks**
+
 - returns only `assignedTo IS NULL AND checked = false AND deletedAt IS NULL`
   within my projects; excludes mine/others'/done/deleted.
 - `?projectId=` outside my scope returns `[]` (no foreign-project probe).
 
 **create-space**
+
 - `201`; `projects` + creator `members` + default `lists`/`scratchpads` rows
   exist; **the same PAT** can immediately `GET /tasks` scoped to the new project.
 - validation failure → `422`; over-limit → `429`.
@@ -320,15 +405,16 @@ Add, in the same style:
 All isolated in SP's `PlainspaceApiService` (one file) — see
 `docs/plainspace-integration-plan.md`:
 
-| SP method | Endpoint | Notes |
-| --- | --- | --- |
-| `getMe$` / `testConnection` | `GET /me` | identity + space list |
-| `getMyTasks$` | `GET /tasks` | client-filters `task.projectId === cfg.spaceId` |
-| `getById$` / poll | `GET /tasks/:id` | freshness for imported tasks |
-| done write-back | `PATCH /tasks/:id { done }` | on SP task complete/reopen |
-| `getUnclaimedTasks$` | `GET /claimable-tasks?projectId=cfg.spaceId` | claim pool feed |
-| `claimTask$` | `POST /tasks/:id/claim` | then `addTaskFromIssue` imports it |
-| `createSpace$` | `POST /spaces` | bind provider `spaceId = project.id` |
+| SP method                   | Endpoint                                     | Notes                                           |
+| --------------------------- | -------------------------------------------- | ----------------------------------------------- |
+| `getMe$` / `testConnection` | `GET /me`                                    | identity + space list                           |
+| `getMyTasks$`               | `GET /tasks`                                 | client-filters `task.projectId === cfg.spaceId` |
+| `getById$` / poll           | `GET /tasks/:id`                             | freshness for imported tasks                    |
+| done write-back             | `PATCH /tasks/:id { done }`                  | on SP task complete/reopen                      |
+| scheduled-time write-back   | `PATCH /tasks/:id { remindAt }`              | `dueWithTime → remindAt` (push-only; §4b)       |
+| `getUnclaimedTasks$`        | `GET /claimable-tasks?projectId=cfg.spaceId` | claim pool feed                                 |
+| `claimTask$`                | `POST /tasks/:id/claim`                      | then `addTaskFromIssue` imports it              |
+| `createSpace$`              | `POST /spaces`                               | bind provider `spaceId = project.id`            |
 
 Two **client-side** fixes SP must make when going real (server unaffected, noting
 for completeness): send `Authorization: Bearer <PAT>` on every call (the PAT
@@ -355,7 +441,10 @@ link is `itemUrl` = `{origin}/{slug}/item/{id}`).
 2. `GET /api/integration/claimable-tasks` (§3) — **required** for the claim pool.
 3. `POST /api/integration/spaces` (§4) — **required** for "Share on Plainspace"
    (additional Spaces; first-Space onboarding waits on device-code, §5).
-4. `?updatedSince=` + `items.updatedAt` (§6) — **optional**, polling efficiency.
+4. `remindAt` on `serializeSPTask` + `PATCH /tasks/:id` (§4b) — **required** for
+   scheduled-time sync. No new endpoint/table; extends the existing read DTO +
+   PATCH via the in-app `reconcileRepeat` path.
+5. `?updatedSince=` + `items.updatedAt` (§6) — **optional**, polling efficiency.
 
 All three required endpoints are ~1 handler each, reuse `apiTokenMiddleware` /
 `loadIntegrationScope` / `serializeSPTask` / `recordActivity` / `sseManager`, and

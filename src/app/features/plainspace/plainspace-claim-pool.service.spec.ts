@@ -25,6 +25,7 @@ const issue = (id: string): PlainspaceIssue => ({
   updatedAt: '2026-01-01T00:00:00.000Z',
   url: `https://plainspace.org/p/item/${id}`,
   projectId: 'space-1',
+  remindAt: null,
 });
 
 describe('PlainspaceClaimPoolService', () => {

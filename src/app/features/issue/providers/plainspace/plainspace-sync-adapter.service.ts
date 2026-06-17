@@ -6,10 +6,17 @@ import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceApiService } from './plainspace-api.service';
 
 /**
- * Only the done state is writable through the Plainspace integration API
- * (PATCH /tasks/:id { done }), so `isDone` is the single pushed field. Title and
- * done changes coming the other way (Plainspace -> SP) are handled by the normal
- * issue-update polling (getFreshDataForIssueTask), not this adapter.
+ * Push-only fields, written via PATCH /tasks/:id:
+ * - `isDone` → `done`
+ * - `dueWithTime` → `remindAt` (SP scheduled time → Plainspace reminder). SP
+ *   stores an epoch-ms number; Plainspace wants an ISO instant, or null to
+ *   unschedule. Plainspace's own reminder sweep then fires it for the team.
+ *
+ * `dueDay` (date-only scheduling, no time) is intentionally NOT mapped: Plainspace
+ * `remindAt` always carries a time, so mapping a day-only task would fabricate a
+ * time-of-day. There is no separate day field on Plainspace to clear, so no
+ * `mutuallyExclusive` entry is needed. Changes the other way (Plainspace → SP) go
+ * through issue-update polling (getFreshDataForIssueTask), not this adapter.
  */
 const PLAINSPACE_FIELD_MAPPINGS: FieldMapping[] = [
   {
@@ -19,12 +26,22 @@ const PLAINSPACE_FIELD_MAPPINGS: FieldMapping[] = [
     toIssueValue: (taskValue: unknown): boolean => !!taskValue,
     toTaskValue: (issueValue: unknown): boolean => !!issueValue,
   },
+  {
+    taskField: 'dueWithTime',
+    issueField: 'remindAt',
+    defaultDirection: 'pushOnly',
+    toIssueValue: (taskValue: unknown): string | null =>
+      typeof taskValue === 'number' ? new Date(taskValue).toISOString() : null,
+    toTaskValue: (issueValue: unknown): number | undefined =>
+      typeof issueValue === 'string' ? new Date(issueValue).getTime() : undefined,
+  },
 ];
 
 /**
- * Two-way sync adapter for Plainspace: pushes a task's done state back to
- * Plainspace when it is completed/reopened in Super Productivity. Registered for
- * the `PLAINSPACE` issue type in IssueTwoWaySyncEffects.
+ * Two-way sync adapter for Plainspace: pushes a task's done state and scheduled
+ * time back to Plainspace when it is completed/reopened or (re)scheduled in Super
+ * Productivity. Registered for the `PLAINSPACE` issue type in
+ * IssueTwoWaySyncEffects.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceSyncAdapterService implements IssueSyncAdapter<PlainspaceCfg> {
@@ -35,7 +52,7 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
   }
 
   getSyncConfig(_cfg: PlainspaceCfg): FieldSyncConfig {
-    return { isDone: 'pushOnly' };
+    return { isDone: 'pushOnly', dueWithTime: 'pushOnly' };
   }
 
   async fetchIssue(
@@ -51,13 +68,25 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
     changes: Record<string, unknown>,
     cfg: PlainspaceCfg,
   ): Promise<void> {
+    // `changes` is keyed by issue field (toPush from the effect). Collapse done
+    // and scheduled-time changes into a single PATCH.
+    const fields: { done?: boolean; remindAt?: string | null } = {};
     if ('isDone' in changes) {
-      await firstValueFrom(this._api.setTaskDone$(issueId, !!changes['isDone'], cfg));
+      fields.done = !!changes['isDone'];
     }
+    if ('remindAt' in changes) {
+      fields.remindAt = (changes['remindAt'] ?? null) as string | null;
+    }
+    if (Object.keys(fields).length === 0) {
+      return;
+    }
+    await firstValueFrom(this._api.patchTask$(issueId, fields, cfg));
   }
 
   extractSyncValues(issue: Record<string, unknown>): Record<string, unknown> {
-    return { isDone: issue['isDone'] };
+    // Both push-only fields need a baseline here, else computePushDecisions skips
+    // them as 'no-baseline' and nothing ever pushes.
+    return { isDone: issue['isDone'], remindAt: issue['remindAt'] };
   }
 
   getIssueLastUpdated(issue: Record<string, unknown>): number {
