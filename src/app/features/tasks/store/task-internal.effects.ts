@@ -63,6 +63,7 @@ export class TaskInternalEffects {
             id: (state.entities[action.task.id] as Task).parentId as string,
             changes: { isDone: true },
           },
+          isSkipDoneSnack: true,
         }),
       ),
     ),

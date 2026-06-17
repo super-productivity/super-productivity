@@ -45,6 +45,12 @@ import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.opera
 import { DateService } from '../../../core/date/date.service';
 import { isBlankTask } from '../util/is-blank-task';
 
+type UpdateTaskAction = ReturnType<typeof TaskSharedActions.updateTask>;
+type DoneSnackPayload = {
+  task: UpdateTaskAction['task'];
+  fullTask: Task;
+};
+
 @Injectable()
 export class TaskUiEffects {
   private _actions$ = inject(LOCAL_ACTIONS);
@@ -146,15 +152,15 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => task.changes.isDone === true),
+        filter(({ task, isSkipDoneSnack }) => {
+          return task.changes.isDone === true && !isSkipDoneSnack;
+        }),
         withLatestFrom(this._store$.pipe(select(selectTaskFeatureState))),
         map(([{ task }, taskState]) => ({
           task,
           fullTask: taskState.entities[task.id as string],
         })),
-        filter(
-          ({ fullTask }): fullTask is Task => !!fullTask,
-        ),
+        filter((v): v is DoneSnackPayload => !!v.fullTask),
         tap(({ task, fullTask }) => {
           this._snackService.open({
             translateParams: {

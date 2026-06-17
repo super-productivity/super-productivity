@@ -22,8 +22,12 @@ import { Action } from '@ngrx/store';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateService } from '../../../core/date/date.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
-import { selectUnplannedDeadlineTasksForToday } from './task.selectors';
+import {
+  selectTaskFeatureState,
+  selectUnplannedDeadlineTasksForToday,
+} from './task.selectors';
 import { Banner } from '../../../core/banner/banner.model';
+import { TaskState } from '../task.model';
 
 describe('TaskUiEffects', () => {
   let effects: TaskUiEffects;
@@ -72,6 +76,29 @@ describe('TaskUiEffects', () => {
       isAddToBacklog: false,
       isAddToBottom: false,
     });
+
+  const createTaskState = (
+    tasks: Task[],
+    currentTaskId: string | null = null,
+  ): TaskState => {
+    const entities: { [id: string]: Task } = {};
+    const ids: string[] = [];
+
+    for (const task of tasks) {
+      entities[task.id] = task;
+      ids.push(task.id);
+    }
+
+    return {
+      ids,
+      entities,
+      currentTaskId,
+      selectedTaskId: null,
+      taskDetailTargetPanel: null,
+      lastCurrentTaskId: null,
+      isDataLoaded: true,
+    };
+  };
 
   // overrideSelector pins values on the module-level selector via setResult().
   // Reset after each test so the override doesn't leak into other spec files.
@@ -373,6 +400,164 @@ describe('TaskUiEffects', () => {
 
       expect(snackServiceMock.open).toHaveBeenCalled();
       sub.unsubscribe();
+    });
+  });
+
+  describe('snackDone$', () => {
+    let store: MockStore;
+
+    beforeEach(() => {
+      actions$ = new Subject<Action>();
+      snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
+      taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
+      navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
+        'navigate',
+      ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskUiEffects,
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+          provideMockStore({
+            initialState: {},
+            selectors: [
+              { selector: selectProjectById, value: null },
+              {
+                selector: selectTaskFeatureState,
+                value: createTaskState([
+                  createMockTask({
+                    id: 'done-task',
+                    title: 'Done task',
+                    isDone: true,
+                  }),
+                ]),
+              },
+            ],
+          }),
+          { provide: SnackService, useValue: snackServiceMock },
+          { provide: TaskService, useValue: taskServiceMock },
+          { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
+          { provide: WorkContextService, useValue: { mainListTaskIds$: of([]) } },
+          {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notify']),
+          },
+          {
+            provide: BannerService,
+            useValue: jasmine.createSpyObj('BannerService', ['open', 'dismiss']),
+          },
+          {
+            provide: GlobalConfigService,
+            useValue: { sound$: of({ doneSound: null }) },
+          },
+          { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
+        ],
+      });
+
+      effects = TestBed.inject(TaskUiEffects);
+      store = TestBed.inject(MockStore);
+      spyOn(store, 'dispatch');
+    });
+
+    it('should show an undo snack when a task is marked done', () => {
+      const sub = effects.snackDone$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'done-task', changes: { isDone: true } },
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
+      const snackParams = snackServiceMock.open.calls.mostRecent().args[0] as SnackParams;
+      expect(snackParams.msg).toBe(T.F.TASK.S.TASK_DONE);
+      expect(snackParams.translateParams).toEqual({
+        title: 'Done task',
+      });
+      expect(snackParams.ico).toBe('check_circle');
+      expect(snackParams.config).toEqual({ duration: 10000 });
+      expect(snackParams.actionStr).toBe(T.G.UNDO);
+      expect(snackParams.actionFn).toBeDefined();
+      sub.unsubscribe();
+    });
+
+    it('should dispatch an undone update when undo is clicked', () => {
+      const sub = effects.snackDone$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'done-task', changes: { isDone: true } },
+        }),
+      );
+
+      const snackParams = snackServiceMock.open.calls.mostRecent().args[0] as SnackParams;
+      snackParams.actionFn!();
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'done-task', changes: { isDone: false } },
+        }),
+      );
+      sub.unsubscribe();
+    });
+
+    it('should NOT show a snack for non-done task updates', (done) => {
+      const sub = effects.snackDone$.subscribe(() => {
+        fail('snackDone$ should not emit for non-done updates');
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'done-task', changes: { title: 'Updated title' } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(snackServiceMock.open).not.toHaveBeenCalled();
+        sub.unsubscribe();
+        done();
+      }, 10);
+    });
+
+    it('should NOT show a snack when the task entity is missing', (done) => {
+      store.overrideSelector(selectTaskFeatureState, createTaskState([]));
+      store.refreshState();
+      const sub = effects.snackDone$.subscribe(() => {
+        fail('snackDone$ should not emit for missing task entities');
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'missing-task', changes: { isDone: true } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(snackServiceMock.open).not.toHaveBeenCalled();
+        sub.unsubscribe();
+        done();
+      }, 10);
+    });
+
+    it('should NOT show a snack for internal done updates with skip flag', (done) => {
+      const sub = effects.snackDone$.subscribe(() => {
+        fail('snackDone$ should not emit when done snack is skipped');
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'done-task', changes: { isDone: true } },
+          isSkipDoneSnack: true,
+        }),
+      );
+
+      setTimeout(() => {
+        expect(snackServiceMock.open).not.toHaveBeenCalled();
+        sub.unsubscribe();
+        done();
+      }, 10);
     });
   });
 

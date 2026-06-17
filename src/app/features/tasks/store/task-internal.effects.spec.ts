@@ -153,6 +153,7 @@ describe('TaskInternalEffects', () => {
         expect(action.type).toBe(TaskSharedActions.updateTask.type);
         expect((action as any).task.id).toBe('parent');
         expect((action as any).task.changes.isDone).toBe(true);
+        expect((action as any).isSkipDoneSnack).toBe(true);
         done();
       });
 

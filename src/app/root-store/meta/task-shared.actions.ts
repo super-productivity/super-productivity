@@ -250,7 +250,11 @@ export const TaskSharedActions = createActionGroup({
     }),
 
     // Task Updates
-    updateTask: (taskProps: { task: Update<Task>; isIgnoreShortSyntax?: boolean }) => ({
+    updateTask: (taskProps: {
+      task: Update<Task>;
+      isIgnoreShortSyntax?: boolean;
+      isSkipDoneSnack?: boolean;
+    }) => ({
       ...taskProps,
       meta: {
         isPersistent: true,
