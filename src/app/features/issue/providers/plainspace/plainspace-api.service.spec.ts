@@ -26,7 +26,8 @@ describe('PlainspaceApiService', () => {
     id: string,
     projectId: string,
     done = false,
-    remindAt: string | null = null,
+    scheduledAt: string | null = null,
+    isRecurring = false,
   ): SPTaskLike => ({
     id,
     title: `Task ${id}`,
@@ -38,7 +39,8 @@ describe('PlainspaceApiService', () => {
     url: `https://plainspace.org/p/item/${id}`,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-02T00:00:00.000Z',
-    remindAt,
+    scheduledAt,
+    isRecurring,
   });
 
   beforeEach(() => {
@@ -99,20 +101,24 @@ describe('PlainspaceApiService', () => {
     expect(await p).toBeNull();
   });
 
-  it('patchTask$ PATCHes the given fields and maps remindAt back', async () => {
+  it('patchTask$ PATCHes the given fields and maps scheduledAt back', async () => {
     const p = firstValueFrom(
-      service.patchTask$('a', { done: true, remindAt: '2026-01-02T09:00:00.000Z' }, cfg),
+      service.patchTask$(
+        'a',
+        { done: true, scheduledAt: '2026-01-02T09:00:00.000Z' },
+        cfg,
+      ),
     );
     const req = httpMock.expectOne(`${BASE}/tasks/a`);
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({
       done: true,
-      remindAt: '2026-01-02T09:00:00.000Z',
+      scheduledAt: '2026-01-02T09:00:00.000Z',
     });
     req.flush({ task: spTask('a', 'space-1', true, '2026-01-02T09:00:00.000Z') });
     const issue = await p;
     expect(issue?.isDone).toBe(true);
-    expect(issue?.remindAt).toBe('2026-01-02T09:00:00.000Z');
+    expect(issue?.scheduledAt).toBe('2026-01-02T09:00:00.000Z');
   });
 
   it('getSpaces$ maps the account spaces from /me', async () => {
@@ -178,5 +184,6 @@ interface SPTaskLike {
   url: string;
   createdAt: string;
   updatedAt: string;
-  remindAt: string | null;
+  scheduledAt: string | null;
+  isRecurring: boolean;
 }

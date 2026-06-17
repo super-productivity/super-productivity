@@ -108,12 +108,12 @@ export class PlainspaceApiService {
 
   /**
    * Pushes a field change back to Plainspace — done state and/or scheduled time
-   * (`remindAt`) — in a single PATCH; null on failure. `remindAt` is an ISO
+   * (`scheduledAt`) — in a single PATCH; null on failure. `scheduledAt` is an ISO
    * instant, or null to unschedule. Used by the two-way-sync adapter.
    */
   patchTask$(
     id: string,
-    fields: { done?: boolean; remindAt?: string | null },
+    fields: { done?: boolean; scheduledAt?: string | null },
     cfg: PlainspaceCfg,
   ): Observable<PlainspaceIssue | null> {
     return this._http
@@ -181,7 +181,9 @@ interface SPTask {
   // ISO instant the task is scheduled for, or null when unscheduled. For
   // recurring items this is the next occurrence (server-advanced). See
   // docs/plainspace-api-extension-plan.md §scheduling.
-  remindAt: string | null;
+  scheduledAt: string | null;
+  // Whether the task repeats in Plainspace (the cadence stays server-side).
+  isRecurring: boolean;
 }
 
 interface SPTaskResponse {
@@ -219,5 +221,6 @@ const mapSPTaskToIssue = (t: SPTask): PlainspaceIssue => ({
   updatedAt: t.updatedAt,
   url: t.url,
   projectId: t.projectId,
-  remindAt: t.remindAt ?? null,
+  scheduledAt: t.scheduledAt ?? null,
+  isRecurring: !!t.isRecurring,
 });

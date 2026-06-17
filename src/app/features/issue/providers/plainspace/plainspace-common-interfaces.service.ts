@@ -47,12 +47,14 @@ export class PlainspaceCommonInterfacesService extends BaseIssueProviderService<
   getAddTaskData(
     issue: PlainspaceIssue,
   ): Partial<Readonly<TaskCopy>> & { title: string } {
-    // Import Plainspace's `remindAt` as the SP task's scheduled time so it shows
-    // in the app. A provider-supplied `dueWithTime` is routed by the import
+    // Import Plainspace's `scheduledAt` as the SP task's scheduled time so it
+    // shows in the app. A provider-supplied `dueWithTime` is routed by the import
     // pipeline through `addAndSchedule` (sets the time + a reminder + Today
     // membership). Only set on initial import: the base poll path drops
     // dueWithTime so a later reschedule in SP is never clobbered.
-    const dueWithTime = issue.remindAt ? new Date(issue.remindAt).getTime() : undefined;
+    const dueWithTime = issue.scheduledAt
+      ? new Date(issue.scheduledAt).getTime()
+      : undefined;
     return {
       title: issue.title,
       isDone: issue.isDone,

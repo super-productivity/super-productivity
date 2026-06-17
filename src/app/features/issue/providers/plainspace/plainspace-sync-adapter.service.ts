@@ -8,13 +8,13 @@ import { PlainspaceApiService } from './plainspace-api.service';
 /**
  * Push-only fields, written via PATCH /tasks/:id:
  * - `isDone` → `done`
- * - `dueWithTime` → `remindAt` (SP scheduled time → Plainspace reminder). SP
- *   stores an epoch-ms number; Plainspace wants an ISO instant, or null to
- *   unschedule. Plainspace's own reminder sweep then fires it for the team.
+ * - `dueWithTime` → `scheduledAt` (SP scheduled time → Plainspace). SP stores an
+ *   epoch-ms number; Plainspace wants an ISO instant, or null to unschedule.
+ *   Plainspace's own reminder sweep then fires it for the team.
  *
  * `dueDay` (date-only scheduling, no time) is intentionally NOT mapped: Plainspace
- * `remindAt` always carries a time, so mapping a day-only task would fabricate a
- * time-of-day. There is no separate day field on Plainspace to clear, so no
+ * `scheduledAt` always carries a time, so mapping a day-only task would fabricate
+ * a time-of-day. There is no separate day field on Plainspace to clear, so no
  * `mutuallyExclusive` entry is needed. Changes the other way (Plainspace → SP) go
  * through issue-update polling (getFreshDataForIssueTask), not this adapter.
  */
@@ -28,7 +28,7 @@ const PLAINSPACE_FIELD_MAPPINGS: FieldMapping[] = [
   },
   {
     taskField: 'dueWithTime',
-    issueField: 'remindAt',
+    issueField: 'scheduledAt',
     defaultDirection: 'pushOnly',
     toIssueValue: (taskValue: unknown): string | null =>
       typeof taskValue === 'number' ? new Date(taskValue).toISOString() : null,
@@ -70,12 +70,12 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
   ): Promise<void> {
     // `changes` is keyed by issue field (toPush from the effect). Collapse done
     // and scheduled-time changes into a single PATCH.
-    const fields: { done?: boolean; remindAt?: string | null } = {};
+    const fields: { done?: boolean; scheduledAt?: string | null } = {};
     if ('isDone' in changes) {
       fields.done = !!changes['isDone'];
     }
-    if ('remindAt' in changes) {
-      fields.remindAt = (changes['remindAt'] ?? null) as string | null;
+    if ('scheduledAt' in changes) {
+      fields.scheduledAt = (changes['scheduledAt'] ?? null) as string | null;
     }
     if (Object.keys(fields).length === 0) {
       return;
@@ -86,7 +86,7 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
   extractSyncValues(issue: Record<string, unknown>): Record<string, unknown> {
     // Both push-only fields need a baseline here, else computePushDecisions skips
     // them as 'no-baseline' and nothing ever pushes.
-    return { isDone: issue['isDone'], remindAt: issue['remindAt'] };
+    return { isDone: issue['isDone'], scheduledAt: issue['scheduledAt'] };
   }
 
   getIssueLastUpdated(issue: Record<string, unknown>): number {
