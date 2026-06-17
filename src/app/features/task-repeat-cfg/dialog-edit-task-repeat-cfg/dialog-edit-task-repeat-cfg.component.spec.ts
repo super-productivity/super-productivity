@@ -690,25 +690,37 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(c.simulatedCompletion()).toBeNull();
     });
 
-    it('simulating a completion turns the from-completion schedule on', async () => {
-      // A simulated completion only re-anchors a from-completion series, so the
-      // action flips that mode on — otherwise the what-if wouldn't shift anything.
+    it('does not offer simulate for a start-anchored schedule, and never mutates the flag', async () => {
+      // Simulation is a pure preview of from-completion re-anchoring; a
+      // start-anchored series stays fixed when an occurrence is completed, so the
+      // what-if is not offered there — and calling it (defensive) must NOT
+      // silently convert the schedule to from-completion.
       const fixture = await setupTestBed({ repeatCfg: rruleCfg });
       const c = fixture.componentInstance;
       expect(c.repeatCfg().repeatFromCompletionDate).toBeFalsy();
       c.menuDay.set({ dateStr: '2099-01-06' } as DayData);
+      expect(c.menuDaySimAllowed()).toBe(false);
       c.menuSimulate();
-      // Flush the sim-watcher effect: flipping the schedule type changes the
-      // schedule slice, which would normally clear the sim — but the sim must
-      // SURVIVE here because it is the reason the flip happened.
       fixture.detectChanges();
-      expect(c.simulatedCompletion()).toBe('2099-01-06');
-      expect(c.repeatCfg().repeatFromCompletionDate).toBe(true);
+      expect(c.simulatedCompletion()).toBeNull();
+      expect(c.repeatCfg().repeatFromCompletionDate).toBeFalsy();
     });
 
-    it('offers simulate only on/after the start date', async () => {
+    it('does not offer simulate for a COUNT rule (completion + COUNT is unsupported)', async () => {
+      // from-completion + COUNT never terminates and the save path rejects it,
+      // so simulate — which would re-anchor the COUNT window from the sim day —
+      // is withheld even on a from-completion cfg.
       const fixture = await setupTestBed({
-        repeatCfg: { ...rruleCfg, startDate: '2099-01-05' },
+        repeatCfg: { ...completionCfg, rrule: 'FREQ=WEEKLY;BYDAY=MO;COUNT=5' },
+      });
+      const c = fixture.componentInstance;
+      c.menuDay.set({ dateStr: '2099-01-06' } as DayData);
+      expect(c.menuDaySimAllowed()).toBe(false);
+    });
+
+    it('offers simulate only on/after the start date (from-completion schedule)', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: { ...completionCfg, startDate: '2099-01-05' },
       });
       const c = fixture.componentInstance;
       c.menuDay.set({ dateStr: '2099-01-04' } as DayData); // before start

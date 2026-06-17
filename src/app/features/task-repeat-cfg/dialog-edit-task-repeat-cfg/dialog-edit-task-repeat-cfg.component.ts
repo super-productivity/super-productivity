@@ -591,12 +591,22 @@ export class DialogEditTaskRepeatCfgComponent {
     const d = this.menuDay()?.dateStr;
     return !!d && d === this.simulatedCompletion();
   });
-  /** A completion can't happen before the rule starts, so "simulate completing
-   *  here" is only offered on/after the start date. */
+  /** "Simulate completing here" only makes sense for a repeat-from-completion
+   *  schedule — that's the only kind whose later occurrences re-anchor when you
+   *  finish one (a start-anchored series stays fixed to the calendar, so a
+   *  completion shifts nothing). So it's offered only on/after the start of such
+   *  a schedule (a completion can't precede the rule's start), and never for a
+   *  COUNT rule — completion + COUNT is the unsupported, never-terminating
+   *  combination the save path rejects, and re-anchoring it would render up to
+   *  ~2×COUNT marks. Presets are always start-anchored, so this also keeps
+   *  simulate out of the preset (non-RRULE) calendar entirely. */
   readonly menuDaySimAllowed = computed(() => {
+    const cfg = this.repeatCfg();
     const d = this.menuDay()?.dateStr;
-    const s = this.repeatCfg().startDate as string | undefined;
-    return !!d && !!s && d >= s;
+    const s = cfg.startDate as string | undefined;
+    return (
+      !!d && !!s && d >= s && !!cfg.repeatFromCompletionDate && this.endType() !== 'COUNT'
+    );
   });
   menuSetStart(): void {
     const d = this.menuDay()?.dateStr;
@@ -677,18 +687,16 @@ export class DialogEditTaskRepeatCfgComponent {
       return;
     }
     const turningOn = d !== this.simulatedCompletion();
-    this.simulatedCompletion.set(turningOn ? d : null);
-    // A simulated completion only re-anchors a "from completion" schedule, so
-    // turning one on flips that mode on (if it wasn't already) — otherwise the
-    // preview wouldn't actually shift and the what-if would do nothing.
-    if (turningOn && !this.repeatCfg().repeatFromCompletionDate) {
-      this.repeatCfg.update((cfg) => ({ ...cfg, repeatFromCompletionDate: true }));
-      // That flip changes the schedule slice, which the sim-watcher effect would
-      // normally treat as an edit and clear the sim. But here the sim IS why we
-      // flipped, so advance the tracker in lockstep: the watcher then sees no net
-      // change and the freshly-set sim survives.
-      this._lastScheduleSlice = this._previewScheduleCfg();
+    // Defensive guard mirroring the template's `@if`: a sim can only be SET where
+    // it's offered (on/after the start of a from-completion, non-COUNT schedule);
+    // turning the active one OFF is always allowed. Simulation is a pure preview —
+    // it never mutates the persisted schedule type. The cfg here is already
+    // from-completion (the guard guarantees it), so resultHeatmapData re-anchors
+    // off the existing flag; there is nothing to flip.
+    if (turningOn && !this.menuDaySimAllowed()) {
+      return;
     }
+    this.simulatedCompletion.set(turningOn ? d : null);
   }
 
   // --- weekday-header-menu actions ---
@@ -1176,9 +1184,9 @@ export class DialogEditTaskRepeatCfgComponent {
   });
 
   // Last schedule slice the sim-watcher effect saw. A field (not an effect-local
-  // `let`) so `menuSimulate` can advance it in lockstep when it flips the
-  // schedule type ON for the sim itself — otherwise that flip's slice change
-  // would trip the watcher and wipe the sim we just set.
+  // `let`) so `_applyStartDate` can advance it in lockstep when an explicit
+  // start-date pick keeps a still-valid sim — otherwise that start change's slice
+  // change would trip the watcher and wipe the sim we mean to keep.
   private _lastScheduleSlice!: ReturnType<
     DialogEditTaskRepeatCfgComponent['_previewScheduleCfg']
   >;
