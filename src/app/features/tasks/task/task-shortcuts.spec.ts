@@ -97,7 +97,7 @@ describe('TaskComponent shortcut handling', () => {
     );
     addSubtaskInputServiceSpy = jasmine.createSpyObj<AddSubtaskInputService>(
       'AddSubtaskInputService',
-      ['requestOpen'],
+      ['requestOpen', 'consume'],
       {
         openRequest: signal(null),
       },

@@ -5,18 +5,21 @@ import { AddSubtaskInputService } from './add-subtask-input.service';
 import { TaskService } from '../task.service';
 
 describe('AddSubtaskInputService', () => {
-  it('publishes a new open request for a parent task', () => {
+  it('publishes the parent id to open for', () => {
+    const service = new AddSubtaskInputService();
+
+    expect(service.openRequest()).toBeNull();
+    service.requestOpen('parent-1');
+    expect(service.openRequest()).toBe('parent-1');
+  });
+
+  it('clears the request once consumed so it is not replayed', () => {
     const service = new AddSubtaskInputService();
 
     service.requestOpen('parent-1');
-    const firstRequest = service.openRequest();
-    service.requestOpen('parent-1');
+    service.consume();
 
-    expect(firstRequest?.parentId).toBe('parent-1');
-    expect(service.openRequest()?.parentId).toBe('parent-1');
-    expect(service.openRequest()?.requestId).toBeGreaterThan(
-      firstRequest?.requestId ?? 0,
-    );
+    expect(service.openRequest()).toBeNull();
   });
 });
 

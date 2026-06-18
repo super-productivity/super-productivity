@@ -70,10 +70,10 @@ export class AddSubtaskInputComponent {
     this._close();
   }
 
-  private _commit(): boolean {
+  private _commit(): void {
     const title = this.titleDraft().trim();
     if (!title) {
-      return false;
+      return;
     }
 
     this._taskService.addSubTaskTo(this.parentId(), { title });
@@ -87,8 +87,6 @@ export class AddSubtaskInputComponent {
       },
       { injector: this._injector },
     );
-
-    return true;
   }
 
   private _close(): void {

@@ -343,13 +343,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly isAddSubtaskInputVisible = signal(false);
 
   private readonly _addSubtaskInputRequestEffect = effect(() => {
-    const request = this._addSubtaskInputService.openRequest();
-    const task = untracked(() => this.task());
-    if (!request || request.parentId !== task.id) {
+    const requestedParentId = this._addSubtaskInputService.openRequest();
+    if (requestedParentId === null || requestedParentId !== untracked(this.task).id) {
       return;
     }
 
     window.setTimeout(() => {
+      // Consume the request so it isn't replayed (stealing focus) the next time
+      // this row is re-created with the same id, e.g. navigating away and back.
+      this._addSubtaskInputService.consume();
       const currentTask = this.task();
       if (currentTask._hideSubTasksMode === HideSubTasksMode.HideAll) {
         this._taskService.showSubTasks(currentTask.id);

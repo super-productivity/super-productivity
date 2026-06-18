@@ -4,6 +4,7 @@
   [ngModel]="titleDraft()"
   (ngModelChange)="titleDraft.set($event)"
   [placeholder]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
+  [attr.aria-label]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
   (blur)="onBlur()"
   (keydown)="onKeydown($event)"
   matInput
