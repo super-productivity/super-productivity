@@ -183,6 +183,7 @@ export class MobileSidePanelMenuComponent {
   readonly customizerMenuTrigger = viewChild('customizerMenuTrigger', {
     read: MatMenuTrigger,
   });
+  private _lastHandledOpenTaskViewCustomizerTrigger = 0;
 
   // Computed signal for active panel
   readonly hasActivePanel = computed(() => {
@@ -197,9 +198,16 @@ export class MobileSidePanelMenuComponent {
   constructor() {
     effect(() => {
       const trigger = this.layoutService.openTaskViewCustomizerTrigger();
-      if (trigger > 0 && this.isWorkViewPage()) {
+      if (trigger <= this._lastHandledOpenTaskViewCustomizerTrigger) {
+        return;
+      }
+
+      this._lastHandledOpenTaskViewCustomizerTrigger = trigger;
+      if (this.isWorkViewPage()) {
         this.isShowMobileMenu.set(true);
-        this.customizerMenuTrigger()?.openMenu();
+        window.setTimeout(() => {
+          this.customizerMenuTrigger()?.openMenu();
+        });
       }
     });
   }

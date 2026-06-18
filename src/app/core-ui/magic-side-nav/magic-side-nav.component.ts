@@ -175,9 +175,15 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
     });
 
+    let lastHandledToggleSideNavModeTrigger = 0;
     effect(() => {
       const trigger = this._layoutService.toggleSideNavModeTrigger();
-      if (trigger > 0 && !this.isMobile()) {
+      if (trigger <= lastHandledToggleSideNavModeTrigger) {
+        return;
+      }
+
+      lastHandledToggleSideNavModeTrigger = trigger;
+      if (!this.isMobile()) {
         this.toggleSideNavMode();
       }
     });

@@ -866,12 +866,9 @@ export class TaskService {
 
   private _isVisible(el: HTMLElement): boolean {
     const styles = window.getComputedStyle(el);
-    return (
-      styles.display !== 'none' &&
-      styles.visibility !== 'hidden' &&
-      styles.opacity !== '0' &&
-      el.getClientRects().length > 0
-    );
+    const opacity = Number.parseFloat(styles.opacity);
+
+    return styles.display !== 'none' && styles.visibility !== 'hidden' && opacity > 0;
   }
 
   async moveToArchive(tasks: TaskWithSubTasks | TaskWithSubTasks[]): Promise<void> {

@@ -45,6 +45,7 @@ import { DateService } from '../../core/date/date.service';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
+import { MobileSidePanelMenuComponent } from './mobile-side-panel-menu/mobile-side-panel-menu.component';
 
 @Component({
   selector: 'main-header',
@@ -66,6 +67,7 @@ import { UserProfileService } from '../../features/user-profile/user-profile.ser
     DesktopPanelButtonsComponent,
     UserProfileButtonComponent,
     FocusButtonComponent,
+    MobileSidePanelMenuComponent,
   ],
 })
 export class MainHeaderComponent implements OnDestroy {

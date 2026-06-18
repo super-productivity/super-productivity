@@ -183,6 +183,7 @@ export class PageTitleComponent {
   private readonly _configService = inject(GlobalConfigService);
   private _translateService = inject(TranslateService);
   private readonly _layoutService = inject(LayoutService);
+  private _lastHandledOpenTaskViewCustomizerTrigger = 0;
   readonly customizerMenuTrigger = viewChild('customizerMenuTrigger', {
     read: MatMenuTrigger,
   });
@@ -192,7 +193,12 @@ export class PageTitleComponent {
   constructor() {
     effect(() => {
       const trigger = this._layoutService.openTaskViewCustomizerTrigger();
-      if (trigger > 0 && this.isWorkViewPage()) {
+      if (trigger <= this._lastHandledOpenTaskViewCustomizerTrigger) {
+        return;
+      }
+
+      this._lastHandledOpenTaskViewCustomizerTrigger = trigger;
+      if (this.isWorkViewPage() && !this._layoutService.isXs()) {
         this.customizerMenuTrigger()?.openMenu();
       }
     });

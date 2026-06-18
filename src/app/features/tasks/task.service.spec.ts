@@ -869,6 +869,29 @@ describe('TaskService', () => {
 
       expect(overdueTask.focus).toHaveBeenCalled();
     });
+
+    it('should skip hidden undone tasks and focus the first visible fallback task', () => {
+      const undoneList = document.createElement('task-list');
+      undoneList.setAttribute('data-task-focus-scope', 'undone');
+      const hiddenUndoneTask = document.createElement('task');
+      hiddenUndoneTask.style.display = 'none';
+      const fallbackTask = document.createElement('task');
+      spyOn(fallbackTask, 'getClientRects').and.returnValue({
+        length: 0,
+      } as DOMRectList);
+
+      spyOn(hiddenUndoneTask, 'focus');
+      spyOn(fallbackTask, 'focus');
+
+      undoneList.appendChild(hiddenUndoneTask);
+      document.body.appendChild(undoneList);
+      document.body.appendChild(fallbackTask);
+
+      service.focusFirstTaskIfVisible();
+
+      expect(hiddenUndoneTask.focus).not.toHaveBeenCalled();
+      expect(fallbackTask.focus).toHaveBeenCalled();
+    });
   });
 
   // Note: convertToMainTask requires complex selector mocking that doesn't work well

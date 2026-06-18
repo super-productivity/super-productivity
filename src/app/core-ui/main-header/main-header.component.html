@@ -120,6 +120,10 @@
         ></desktop-panel-buttons>
       }
 
+      @if (isXs()) {
+        <mobile-side-panel-menu></mobile-side-panel-menu>
+      }
+
       <!-- Simple Counter Dropdown (mobile only) -->
       @if (isXs()) {
         @if (enabledSimpleCounters().length) {
