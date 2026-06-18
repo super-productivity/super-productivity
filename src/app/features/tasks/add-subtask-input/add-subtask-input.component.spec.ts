@@ -87,7 +87,7 @@ describe('AddSubtaskInputComponent', () => {
 
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
     expect(component.titleDraft()).toBe('');
-    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(closeSpy).toHaveBeenCalledOnceWith('escape');
   });
 
   it('does not commit when Escape is followed by blur', () => {
@@ -113,7 +113,7 @@ describe('AddSubtaskInputComponent', () => {
 
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
     expect(component.titleDraft()).toBe('');
-    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(closeSpy).toHaveBeenCalledOnceWith('blur');
   });
 
   it('closes without creating a subtask on blur when empty', () => {

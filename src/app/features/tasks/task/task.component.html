@@ -313,7 +313,7 @@
           <add-subtask-input
             [@expandFade]
             [parentId]="t.id"
-            (closed)="isAddSubtaskInputVisible.set(false)"
+            (closed)="onAddSubtaskInputClosed($event)"
           ></add-subtask-input>
         }
       </div>

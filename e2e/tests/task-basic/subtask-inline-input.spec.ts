@@ -69,6 +69,8 @@ test.describe('Subtask inline input', () => {
     await expect(parentTask.locator('.e2e-add-subtask-input')).toHaveCount(0);
     await expect(parentTask.locator('.sub-tasks task')).toHaveCount(0);
     await expect(parentTask).not.toContainText('Canceled subtask');
+    // Escape returns focus to the task row so keyboard navigation continues.
+    await expect(parentTask).toBeFocused();
   });
 
   test('does not create a subtask when a typed draft loses focus', async ({

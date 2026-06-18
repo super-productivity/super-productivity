@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
@@ -520,5 +520,29 @@ describe('TaskComponent shortcut handling', () => {
         }),
       );
     });
+  });
+
+  describe('add-subtask input close', () => {
+    it('returns focus to the task row when cancelled via Escape', fakeAsync(() => {
+      const focusSelfSpy = spyOn(component, 'focusSelf');
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('escape');
+      tick();
+
+      expect(component.isAddSubtaskInputVisible()).toBe(false);
+      expect(focusSelfSpy).toHaveBeenCalled();
+    }));
+
+    it('does not refocus the task row when closed via blur', fakeAsync(() => {
+      const focusSelfSpy = spyOn(component, 'focusSelf');
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('blur');
+      tick();
+
+      expect(component.isAddSubtaskInputVisible()).toBe(false);
+      expect(focusSelfSpy).not.toHaveBeenCalled();
+    }));
   });
 });

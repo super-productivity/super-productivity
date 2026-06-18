@@ -108,7 +108,10 @@ import { millisecondsDiffToRemindOption } from '../util/remind-option-to-millise
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { SnackService } from '../../../core/snack/snack.service';
-import { AddSubtaskInputComponent } from '../add-subtask-input/add-subtask-input.component';
+import {
+  AddSubtaskInputComponent,
+  AddSubtaskInputCloseReason,
+} from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 
 @Component({
@@ -911,6 +914,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       this._taskService.showSubTasks(task.id);
     }
     this._addSubtaskInputService.requestOpen(parentId);
+  }
+
+  onAddSubtaskInputClosed(reason: AddSubtaskInputCloseReason): void {
+    this.isAddSubtaskInputVisible.set(false);
+    if (reason === 'escape') {
+      // Return focus to this task row so keyboard navigation continues from
+      // here after cancelling. focusSelf() is a no-op on touch. Deferred so it
+      // runs after the input's removal settles.
+      window.setTimeout(() => this.focusSelf());
+    }
   }
 
   @throttle(200, { leading: true, trailing: false })

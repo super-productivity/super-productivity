@@ -16,6 +16,13 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TaskService } from '../task.service';
 
+/**
+ * Why the inline draft input closed. `escape` is a keyboard cancel, so the
+ * host should return focus to the task row; `blur` means focus already moved
+ * elsewhere and must not be stolen back.
+ */
+export type AddSubtaskInputCloseReason = 'escape' | 'blur';
+
 @Component({
   selector: 'add-subtask-input',
   templateUrl: './add-subtask-input.component.html',
@@ -31,7 +38,7 @@ export class AddSubtaskInputComponent {
 
   readonly T = T;
   readonly parentId = input.required<string>();
-  readonly closed = output<void>();
+  readonly closed = output<AddSubtaskInputCloseReason>();
   readonly titleDraft = signal('');
   readonly inputEl = viewChild<ElementRef<HTMLInputElement>>('inputEl');
 
@@ -44,7 +51,7 @@ export class AddSubtaskInputComponent {
 
     if (ev.key === 'Escape') {
       ev.preventDefault();
-      this._close();
+      this._close('escape');
       return;
     }
 
@@ -67,7 +74,7 @@ export class AddSubtaskInputComponent {
       return;
     }
 
-    this._close();
+    this._close('blur');
   }
 
   private _commit(): void {
@@ -89,12 +96,12 @@ export class AddSubtaskInputComponent {
     );
   }
 
-  private _close(): void {
+  private _close(reason: AddSubtaskInputCloseReason): void {
     if (this._isClosedWithoutSubmit) {
       return;
     }
     this._isClosedWithoutSubmit = true;
     this.titleDraft.set('');
-    this.closed.emit();
+    this.closed.emit(reason);
   }
 }
