@@ -10,6 +10,7 @@ export enum BannerId {
   CalendarEvent = 'CalendarEvent',
   ReminderCountdown = 'ReminderCountdown',
   SimpleCounterCountdownComplete = 'SimpleCounterCountdownComplete',
+  FocusModeSessionDone = 'FocusModeSessionDone',
   StartupNote = 'StartupNote',
   DeadlinesToday = 'DeadlinesToday',
 }
@@ -18,6 +19,7 @@ export const BANNER_SORT_PRIO_MAP = {
   [BannerId.TakeABreak]: 6,
   [BannerId.CalendarEvent]: 5,
   [BannerId.SimpleCounterCountdownComplete]: 5,
+  [BannerId.FocusModeSessionDone]: 5,
   [BannerId.ReminderCountdown]: 4,
   [BannerId.JiraUnblock]: 4,
   [BannerId.DeadlinesToday]: 3,

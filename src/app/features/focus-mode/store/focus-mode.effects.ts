@@ -37,6 +37,12 @@ import { FocusModeMode, FocusScreen, getBreakCycle } from '../focus-mode.model';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
+import { NotifyService } from '../../../core/notify/notify.service';
+import { msToString } from '../../../ui/duration/ms-to-string.pipe';
+import { T } from '../../../t.const';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { BannerService } from '../../../core/banner/banner.service';
+import { BannerId } from '../../../core/banner/banner.model';
 
 const SESSION_DONE_SOUND = 'positive.mp3';
 const TICK_SOUND = 'tick.mp3';
@@ -53,6 +59,9 @@ export class FocusModeEffects {
   private metricService = inject(MetricService);
   private storageService = inject(FocusModeStorageService);
   private takeABreakService = inject(TakeABreakService);
+  private notifyService = inject(NotifyService);
+  private bannerService = inject(BannerService);
+  private isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
   //
@@ -466,6 +475,64 @@ export class FocusModeEffects {
       this.actions$.pipe(
         ofType(actions.completeFocusSession),
         tap(() => this._notifyUser()),
+      ),
+    { dispatch: false },
+  );
+
+  // Effect 4b: Don't let a Countdown session end silently. Countdown is the only
+  // mode that auto-stops with no follow-up: Pomodoro transitions straight into a
+  // break (its own surfaced screen) and Flowtime only ever stops on an explicit
+  // user action — neither is a silent stop. Manual end (isManual) is excluded.
+  //
+  // The reducer already routes completeFocusSession to the SessionDone screen, so
+  // if the overlay is open the user sees it. We only intervene when the overlay
+  // is hidden (user working elsewhere): rather than seize the whole screen, we
+  // surface a non-modal banner that points back to the SessionDone screen and
+  // self-dismisses once the overlay opens. We also raise an OS notification, but
+  // only when it adds something — skipped while the app is focused (the surfaced
+  // banner/overlay + desktop window flash are alert enough, and it would fire
+  // spuriously on idle-resume) and on Android, where the native foreground
+  // service already posts its own completion notification (see
+  // FocusModeForegroundService.onTimerComplete), so this would duplicate.
+  surfaceSessionDoneOnCompletion$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(actions.completeFocusSession),
+        withLatestFrom(
+          this.store.select(selectors.selectMode),
+          this.store.select(selectors.selectLastSessionDuration),
+          this.store.select(selectors.selectIsOverlayShown),
+        ),
+        filter(([action, mode]) => mode === FocusModeMode.Countdown && !action.isManual),
+        tap(([_action, _mode, duration, isOverlayShown]) => {
+          if (!document.hasFocus() && !this.isAndroidWebView) {
+            this.notifyService.notify({
+              title: T.F.FOCUS_MODE.SESSION_COMPLETED,
+              body: T.F.FOCUS_MODE.SESSION_COMPLETED_NOTIFICATION_BODY,
+              translateParams: { duration: msToString(duration, true) },
+            });
+          }
+          if (!isOverlayShown) {
+            this.bannerService.open({
+              id: BannerId.FocusModeSessionDone,
+              ico: 'celebration',
+              msg: T.F.FOCUS_MODE.SESSION_COMPLETED_BANNER,
+              translateParams: { duration: msToString(duration, true) },
+              action: {
+                // Opens the overlay onto the SessionDone screen (where the user
+                // picks start-next vs back-to-planning) — it does not itself
+                // start a session, so the label must not promise that.
+                label: T.F.FOCUS_MODE.SESSION_COMPLETED_BANNER_ACTION,
+                fn: () => this.store.dispatch(actions.showFocusOverlay()),
+              },
+              // Self-dismiss once the overlay opens (via the action above, the
+              // idle-resume flow, or the user opening focus mode manually).
+              hideWhen$: this.store
+                .select(selectors.selectIsOverlayShown)
+                .pipe(filter((isShown) => isShown)),
+            });
+          }
+        }),
       ),
     { dispatch: false },
   );
