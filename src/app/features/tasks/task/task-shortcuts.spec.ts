@@ -523,26 +523,38 @@ describe('TaskComponent shortcut handling', () => {
   });
 
   describe('add-subtask input close', () => {
-    it('returns focus to the task row when cancelled via Escape', fakeAsync(() => {
-      const focusSelfSpy = spyOn(component, 'focusSelf');
+    it('returns focus to the originating task when cancelled via Escape', fakeAsync(() => {
+      const focusByIdSpy = spyOn<any>(component, '_focusTaskById');
+      component['_subtaskInputOriginTaskId'] = 'origin-1';
       component.isAddSubtaskInputVisible.set(true);
 
       component.onAddSubtaskInputClosed('escape');
       tick();
 
       expect(component.isAddSubtaskInputVisible()).toBe(false);
-      expect(focusSelfSpy).toHaveBeenCalled();
+      expect(focusByIdSpy).toHaveBeenCalledWith('origin-1');
     }));
 
-    it('does not refocus the task row when closed via blur', fakeAsync(() => {
-      const focusSelfSpy = spyOn(component, 'focusSelf');
+    it('falls back to this row when no origin task was captured', fakeAsync(() => {
+      const focusByIdSpy = spyOn<any>(component, '_focusTaskById');
+      component['_subtaskInputOriginTaskId'] = null;
+
+      component.onAddSubtaskInputClosed('escape');
+      tick();
+
+      expect(focusByIdSpy).toHaveBeenCalledWith(component.task().id);
+    }));
+
+    it('does not refocus any task when closed via blur', fakeAsync(() => {
+      const focusByIdSpy = spyOn<any>(component, '_focusTaskById');
+      component['_subtaskInputOriginTaskId'] = 'origin-1';
       component.isAddSubtaskInputVisible.set(true);
 
       component.onAddSubtaskInputClosed('blur');
       tick();
 
       expect(component.isAddSubtaskInputVisible()).toBe(false);
-      expect(focusSelfSpy).not.toHaveBeenCalled();
+      expect(focusByIdSpy).not.toHaveBeenCalled();
     }));
   });
 });

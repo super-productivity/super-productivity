@@ -73,6 +73,40 @@ test.describe('Subtask inline input', () => {
     await expect(parentTask).toBeFocused();
   });
 
+  test('returns focus to the originating subtask on Escape', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Parent task');
+
+    const parentTask = taskPage.getTaskByText('Parent task');
+    await expect(parentTask).toBeVisible();
+
+    // Create one subtask, then close the draft input.
+    await parentTask.focus();
+    await page.keyboard.press('a');
+    const draftInput = parentTask.locator('.e2e-add-subtask-input');
+    await draftInput.fill('First subtask');
+    await page.keyboard.press('Enter');
+    await expect(parentTask.locator('.sub-tasks task')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(parentTask.locator('.e2e-add-subtask-input')).toHaveCount(0);
+
+    // Now open the draft from the subtask, then cancel: focus must return to the
+    // subtask it was opened from, not the parent row.
+    const subTask = parentTask.locator('.sub-tasks task').first();
+    await subTask.focus();
+    await page.keyboard.press('a');
+    await expect(parentTask.locator('.e2e-add-subtask-input')).toBeFocused();
+
+    await page.keyboard.press('Escape');
+
+    await expect(parentTask.locator('.e2e-add-subtask-input')).toHaveCount(0);
+    await expect(subTask).toBeFocused();
+  });
+
   test('does not create a subtask when a typed draft loses focus', async ({
     page,
     workViewPage,

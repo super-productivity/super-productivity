@@ -344,6 +344,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   });
   readonly addSubtaskInput = viewChild(AddSubtaskInputComponent);
   readonly isAddSubtaskInputVisible = signal(false);
+  // Task the draft was opened from (may be a subtask), captured before focus
+  // moves into the input, so Escape can return focus there. See onAddSubtaskInputClosed.
+  private _subtaskInputOriginTaskId: string | null = null;
 
   private readonly _addSubtaskInputRequestEffect = effect(() => {
     const requestedParentId = this._addSubtaskInputService.openRequest();
@@ -355,6 +358,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       // Consume the request so it isn't replayed (stealing focus) the next time
       // this row is re-created with the same id, e.g. navigating away and back.
       this._addSubtaskInputService.consume();
+      // Focus is still on the originating task here (the input isn't shown yet),
+      // so capture it now — once the input is focused, the parent row claims it.
+      this._subtaskInputOriginTaskId =
+        this._taskFocusService.focusedTaskId() ??
+        this._taskFocusService.lastFocusedTaskComponent()?.task().id ??
+        this.task().id;
       const currentTask = this.task();
       if (currentTask._hideSubTasksMode === HideSubTasksMode.HideAll) {
         this._taskService.showSubTasks(currentTask.id);
@@ -918,12 +927,30 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   onAddSubtaskInputClosed(reason: AddSubtaskInputCloseReason): void {
     this.isAddSubtaskInputVisible.set(false);
+    const originTaskId = this._subtaskInputOriginTaskId;
+    this._subtaskInputOriginTaskId = null;
     if (reason === 'escape') {
-      // Return focus to this task row so keyboard navigation continues from
-      // here after cancelling. focusSelf() is a no-op on touch. Deferred so it
-      // runs after the input's removal settles.
-      window.setTimeout(() => this.focusSelf());
+      // Return focus to the task the draft was opened from (which may be a
+      // subtask) so keyboard navigation continues from there after cancelling.
+      this._refocusTaskAfterDraftCancel(originTaskId);
     }
+  }
+
+  private _refocusTaskAfterDraftCancel(taskId: string | null): void {
+    if (isTouchActive()) {
+      return;
+    }
+    const targetId = taskId ?? this.task().id;
+    // Deferred so focus lands after the input's removal settles.
+    window.setTimeout(() => this._focusTaskById(targetId));
+  }
+
+  private _focusTaskById(taskId: string): void {
+    // A task can render in two places at once (main list + detail side panel);
+    // prefer the last instance — the side-panel one — mirroring the inline-edit
+    // focus resolution above.
+    const els = document.querySelectorAll<HTMLElement>('#t-' + CSS.escape(taskId));
+    els[els.length - 1]?.focus();
   }
 
   @throttle(200, { leading: true, trailing: false })
