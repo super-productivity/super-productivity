@@ -45,6 +45,14 @@ describe('IssueSyncAdapterResolverService', () => {
     expect(pluginRegistry.getProvider).not.toHaveBeenCalled();
   });
 
+  it('returns the registered BASECAMP adapter without consulting plugin providers', () => {
+    adapterRegistry.register('BASECAMP', existingAdapter);
+
+    expect(service.getAdapter('BASECAMP')).toBe(existingAdapter);
+    expect(pluginRegistry.getProvider).not.toHaveBeenCalled();
+  });
+
+
   it('lazily creates and registers plugin adapters for writable providers', () => {
     pluginRegistry.getProvider.and.returnValue({
       allowPrivateNetwork: true,

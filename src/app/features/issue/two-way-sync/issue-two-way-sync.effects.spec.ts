@@ -158,6 +158,10 @@ describe('IssueTwoWaySyncEffects', () => {
     store.resetSelectors();
   });
 
+  it('registers the Basecamp sync adapter under BASECAMP', () => {
+    expect(adapterRegistry.has('BASECAMP')).toBeTrue();
+  });
+
   describe('pushFieldsOnTaskUpdate$', () => {
     it('should push isDone change to remote issue', fakeAsync(() => {
       const adapter = createMockAdapter({
