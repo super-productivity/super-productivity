@@ -386,8 +386,8 @@ export class TaskShortcutService {
       // Close context menu if open before executing the shortcut
       this._closeContextMenuIfOpen(taskComponent);
 
-      const result = (taskComponent[method] as (...args: unknown[]) => unknown)(...args);
-      return typeof result === 'boolean' ? result : true;
+      (taskComponent[method] as (...args: unknown[]) => unknown)(...args);
+      return true;
     } else {
       Log.warn(`Method ${method} not found on task component`, taskComponent);
       return false;

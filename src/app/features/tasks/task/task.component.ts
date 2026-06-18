@@ -1318,26 +1318,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return nextEl;
   }
 
-  private _getPreviousTaskEl(): HTMLElement | undefined {
-    const currentTaskEl = this._elementRef.nativeElement as HTMLElement;
-    const enclosingListEl = currentTaskEl.closest('task-list');
-    const taskEls = Array.from(
-      (enclosingListEl ?? document).querySelectorAll('task'),
-    ) as HTMLElement[];
-    const currentIndex = taskEls.findIndex((el) => el === currentTaskEl);
-    return currentIndex > 0 ? taskEls[currentIndex - 1] : undefined;
-  }
-
-  private _focusTaskHost(taskEl?: HTMLElement): void {
-    if (!taskEl || isTouchActive()) {
-      return;
-    }
-    // Defer to next tick so focus survives blur/delete related DOM updates.
-    window.setTimeout(() => {
-      taskEl.focus();
-    });
-  }
-
   get kb(): KeyboardConfig {
     if (isTouchActive()) {
       return {} as KeyboardConfig;

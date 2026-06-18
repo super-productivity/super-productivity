@@ -1,11 +1,10 @@
 <input
   #inputEl
   class="add-subtask-input e2e-add-subtask-input"
-  [placeholder]="placeholder"
-  [value]="titleDraft()"
+  [ngModel]="titleDraft()"
+  (ngModelChange)="titleDraft.set($event)"
+  [placeholder]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
   (blur)="onBlur()"
-  (focus)="onFocus()"
-  (input)="onInput($event)"
   (keydown)="onKeydown($event)"
   matInput
   spellcheck="false"

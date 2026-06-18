@@ -369,23 +369,6 @@ describe('TaskShortcutService', () => {
       expect(mockTaskComponent.openContextMenu).not.toHaveBeenCalled();
     });
 
-    it('should not consume Escape for a focused task', () => {
-      const mockTaskComponent = {
-        task: () => ({ id: 'focused-task-1' }),
-        taskContextMenu: () => undefined,
-      };
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
-      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
-
-      const event = createKeyboardEvent('Escape');
-      spyOn(event, 'preventDefault');
-
-      const result = service.handleTaskShortcuts(event);
-
-      expect(result).toBe(false);
-      expect(event.preventDefault).not.toHaveBeenCalled();
-    });
-
     it('should return false for non-togglePlay shortcuts when no focused task', () => {
       // Arrange
       mockTaskFocusService.focusedTaskId.set(null);

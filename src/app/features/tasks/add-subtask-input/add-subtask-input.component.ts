@@ -1,15 +1,18 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
   inject,
+  Injector,
   input,
   output,
   signal,
   viewChild,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TaskService } from '../task.service';
 
@@ -18,41 +21,22 @@ import { TaskService } from '../task.service';
   templateUrl: './add-subtask-input.component.html',
   styleUrl: './add-subtask-input.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatInput],
+  imports: [FormsModule, MatInput, TranslatePipe],
 })
 export class AddSubtaskInputComponent {
   private readonly _taskService = inject(TaskService);
-  private readonly _translateService = inject(TranslateService);
+  private readonly _injector = inject(Injector);
   private _isKeepingOpenAfterSubmit = false;
   private _isClosedWithoutSubmit = false;
-  private _removeDocumentKeydownListener?: () => void;
 
+  readonly T = T;
   readonly parentId = input.required<string>();
   readonly closed = output<void>();
   readonly titleDraft = signal('');
-  readonly placeholder = this._translateService.instant(
-    T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER,
-  );
   readonly inputEl = viewChild<ElementRef<HTMLInputElement>>('inputEl');
 
   focus(): void {
-    window.setTimeout(() => this.inputEl()?.nativeElement.focus());
-  }
-
-  onInput(ev: Event): void {
-    this.titleDraft.set((ev.target as HTMLInputElement).value);
-  }
-
-  onFocus(): void {
-    if (this._removeDocumentKeydownListener) {
-      return;
-    }
-
-    document.addEventListener('keydown', this._onDocumentKeydown, true);
-    this._removeDocumentKeydownListener = () => {
-      document.removeEventListener('keydown', this._onDocumentKeydown, true);
-      this._removeDocumentKeydownListener = undefined;
-    };
+    this.inputEl()?.nativeElement.focus();
   }
 
   onKeydown(ev: KeyboardEvent): void {
@@ -80,11 +64,9 @@ export class AddSubtaskInputComponent {
 
   onBlur(): void {
     if (this._isKeepingOpenAfterSubmit || this._isClosedWithoutSubmit) {
-      this._removeDocumentKeydownListener?.();
       return;
     }
 
-    this._removeDocumentKeydownListener?.();
     this._close();
   }
 
@@ -98,13 +80,13 @@ export class AddSubtaskInputComponent {
     this.titleDraft.set('');
 
     this._isKeepingOpenAfterSubmit = true;
-    this.focus();
-    window.setTimeout(() => {
-      this.focus();
-    }, 100);
-    window.setTimeout(() => {
-      this._isKeepingOpenAfterSubmit = false;
-    }, 150);
+    afterNextRender(
+      () => {
+        this.focus();
+        this._isKeepingOpenAfterSubmit = false;
+      },
+      { injector: this._injector },
+    );
 
     return true;
   }
@@ -114,18 +96,7 @@ export class AddSubtaskInputComponent {
       return;
     }
     this._isClosedWithoutSubmit = true;
-    this._removeDocumentKeydownListener?.();
     this.titleDraft.set('');
     this.closed.emit();
   }
-
-  private readonly _onDocumentKeydown = (ev: KeyboardEvent): void => {
-    if (ev.key !== 'Escape' || document.activeElement !== this.inputEl()?.nativeElement) {
-      return;
-    }
-
-    ev.preventDefault();
-    ev.stopPropagation();
-    this._close();
-  };
 }

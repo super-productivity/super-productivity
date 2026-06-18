@@ -209,9 +209,6 @@ describe('TaskComponent shortcut handling', () => {
     fixture.componentRef.setInput('task', createSubTask(''));
     fixture.componentRef.setInput('isInSubTaskList', true);
     fixture.componentRef.setInput('isBacklog', false);
-
-    spyOn<any>(component, '_getPreviousTaskEl').and.returnValue(undefined);
-    spyOn<any>(component, '_focusTaskHost').and.stub();
   });
 
   it('does not delete an empty subtask on Escape', () => {
