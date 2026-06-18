@@ -56,7 +56,8 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { throttle } from '../../../util/decorators';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
-import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
+import { openFullscreenMarkdownDialog } from '../../../ui/dialog-fullscreen-markdown/open-fullscreen-markdown-dialog';
+import { Location } from '@angular/common';
 import { Update } from '@ngrx/entity';
 import { DateAdapter } from '@angular/material/core';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
@@ -67,7 +68,7 @@ import { DateService } from '../../../core/date/date.service';
 import { isTouchActive } from '../../../util/input-intent';
 import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
-import { KeyboardConfig } from '../../config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { PlannerService } from '../../planner/planner.service';
@@ -157,6 +158,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskService = inject(TaskService);
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _location = inject(Location);
   private readonly _configService = inject(GlobalConfigService);
   private readonly _attachmentService = inject(TaskAttachmentService);
   private readonly _elementRef = inject(ElementRef);
@@ -808,7 +810,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._loadedProjectListForProjectId = currentProjectId;
 
     this._moveToProjectListSub = this._projectService
-      .getProjectsWithoutId$(currentProjectId)
+      .getProjectsWithoutIdInTreeOrder$(currentProjectId)
       .subscribe((projects) => {
         this.moveToProjectList.set(projects);
       });
@@ -852,15 +854,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   openNotesFullscreen(): void {
     const task = this.task();
-    const dialogRef = this._matDialog.open(DialogFullscreenMarkdownComponent, {
-      minWidth: '100vw',
-      height: '100vh',
-      restoreFocus: true,
-      autoFocus: 'textarea',
-      data: {
-        content: task.notes || '',
-        taskId: task.id,
-      },
+    // Saves-and-closes on a navigation (resize across the mobile breakpoint,
+    // Android back) instead of dropping the edit — see openFullscreenMarkdownDialog
+    // (#8434).
+    const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
+      content: task.notes || '',
+      taskId: task.id,
     });
 
     dialogRef.afterClosed().subscribe((result) => {

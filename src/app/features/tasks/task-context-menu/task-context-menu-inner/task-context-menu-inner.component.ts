@@ -46,7 +46,7 @@ import { ProjectService } from '../../../project/project.service';
 import { _MISSING_PROJECT_, DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
-import { KeyboardConfig } from '../../../config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-time-estimate.component';
@@ -169,13 +169,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   moveToProjectList$: Observable<Project[]> = this._task$.pipe(
     map((t) => t.projectId),
     distinctUntilChanged(),
-    switchMap((pid) => this._projectService.getProjectsWithoutIdSorted$(pid || null)),
+    switchMap((pid) =>
+      this._projectService.getProjectsWithoutIdInTreeOrder$(pid || null),
+    ),
   );
-  // Order tags by the sidebar (menu-tree) order so this matches the inline
-  // tag-toggle menu and grouping/sorting instead of going alphabetical. (#8400)
-  toggleTagList = computed(() =>
-    this._menuTreeService.flattenTagViewTree(this._tagService.tagsNoMyDayAndNoList()),
-  );
+  toggleTagList = this._tagService.tagsNoMyDayAndNoListInTreeOrder;
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 

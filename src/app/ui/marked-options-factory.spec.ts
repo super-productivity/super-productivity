@@ -381,9 +381,16 @@ describe('markedOptionsFactory', () => {
         });
       });
 
-      it('still renders allowed schemes (mailto:, file:) as anchors', () => {
+      it('still renders allowed schemes (mailto:, file:, app deep-links) as anchors', () => {
         const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
-        ['mailto:a@b.com', 'file:///tmp/x', 'https://example.com'].forEach((href) => {
+        [
+          'mailto:a@b.com',
+          'file:///tmp/x',
+          'https://example.com',
+          // #8429: app deep-links must stay clickable
+          'obsidian://open?vault=Notes',
+          'vscode://file/home/user/x.ts',
+        ].forEach((href) => {
           const result = linkRenderer({
             href,
             title: '',

@@ -442,11 +442,25 @@ export class LocalBackupService {
   // Returns true when a backup was actually written, false when the A3 guard
   // skipped it or the write failed.
   private async _backupIOS(data: AppDataComplete): Promise<boolean> {
+    // Read the existing primary slot in a way that distinguishes "no backup yet"
+    // from "unreadable" (#8414): on the write path a read failure is ambiguous —
+    // we can't tell "no backup" from "couldn't read it" — so we must not overwrite
+    // the primary on uncertainty. Bail instead, preserving both ring slots; the
+    // next cycle retries. Mirrors _backupAndroid.
+    let existing: string | null;
     try {
-      const existing = await this._readIOSFileOrNull(IOS_BACKUP_FILENAME);
-      if (this._guardNearEmptyOverwrite(data, existing, 'iOS')) {
-        return false;
-      }
+      existing = await this._readIOSExistingSlotOrThrow(IOS_BACKUP_FILENAME);
+    } catch (e) {
+      Log.err(
+        'LocalBackupService: skipping iOS backup — could not read existing slot',
+        e,
+      );
+      return false;
+    }
+    if (this._guardNearEmptyOverwrite(data, existing, 'iOS')) {
+      return false;
+    }
+    try {
       if (existing) {
         await this._writeIOSFile(IOS_BACKUP_PREV_FILENAME, existing);
       }
@@ -468,17 +482,49 @@ export class LocalBackupService {
     });
   }
 
+  private async _readIOSFileRaw(path: string): Promise<string> {
+    const result = await Filesystem.readFile({
+      path,
+      directory: Directory.Data,
+      encoding: Encoding.UTF8,
+    });
+    return result.data as string;
+  }
+
+  /**
+   * Read-path helper: swallows ALL errors and returns null. Safe for
+   * loadBackupIOS (fire-and-forget startup restore), where a missing-vs-unreadable
+   * distinction can't cause data loss and a throw would surface as an unhandled
+   * rejection. NOT for the write path — see _readIOSExistingSlotOrThrow.
+   */
   private async _readIOSFileOrNull(path: string): Promise<string | null> {
     try {
-      const result = await Filesystem.readFile({
-        path,
-        directory: Directory.Data,
-        encoding: Encoding.UTF8,
-      });
-      return result.data as string;
+      return await this._readIOSFileRaw(path);
     } catch {
-      // File doesn't exist
+      // File doesn't exist (or is unreadable — irrelevant on the read path).
       return null;
+    }
+  }
+
+  /**
+   * Write-path helper (#8414): returns null only when the slot is *confirmed
+   * absent* (a legitimate first backup, where the write should proceed), and
+   * rethrows on a transient read failure so the caller bails WITHOUT overwriting,
+   * preserving both ring slots. Capacitor signals a missing file with a thrown
+   * error — the same way it signals a transient failure — so on error we re-probe
+   * with stat(): only a still-absent file reads as "no backup"; anything else is
+   * treated as uncertain and rethrown. Mirrors _backupAndroid's guard.
+   */
+  private async _readIOSExistingSlotOrThrow(path: string): Promise<string | null> {
+    try {
+      return await this._readIOSFileRaw(path);
+    } catch (e) {
+      if (!(await this._iosFileExists(path))) {
+        // Confirmed absent → no existing backup, let the write proceed.
+        return null;
+      }
+      // File is present but unreadable → transient. Don't overwrite on uncertainty.
+      throw e;
     }
   }
 

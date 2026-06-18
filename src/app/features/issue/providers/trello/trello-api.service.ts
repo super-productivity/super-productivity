@@ -21,6 +21,16 @@ import { getErrorTxt } from '../../../../util/get-error-text';
 import { IssueLog } from '../../../../core/log';
 
 const BASE_URL = 'https://api.trello.com/1';
+
+// Trello passes `key` (apiKey) and `token` as URL query params, so they show up
+// in `HttpErrorResponse.message`/`.url`. The log history is exportable and the
+// error text is also surfaced in snackbars/thrown errors, so strip the
+// credential params everywhere the raw error text is used.
+export const redactTrelloUrlCreds = (txt: string): string =>
+  txt.replace(/([?&](?:key|token)=)[^&\s'"]+/gi, '$1REDACTED');
+
+const getSafeTrelloErrorTxt = (err: unknown): string =>
+  redactTrelloUrlCreds(getErrorTxt(err));
 const DEFAULT_CARD_FIELDS = [
   'id',
   'idShort',
@@ -195,9 +205,9 @@ export class TrelloApiService {
         return res.id;
       }),
       catchError((error) => {
-        const errorMsg = `Trello failed to resolve username "${username}": ${getErrorTxt(error)}`;
+        const errorMsg = `Trello failed to resolve username "${username}": ${getSafeTrelloErrorTxt(error)}`;
         // errorMsg embeds the username (user content) — keep it out of the exportable log
-        IssueLog.err('Trello failed to resolve username:', getErrorTxt(error));
+        IssueLog.err('Trello failed to resolve username:', getSafeTrelloErrorTxt(error));
         this._snackService.open({
           type: 'ERROR',
           msg: errorMsg,
@@ -349,7 +359,7 @@ export class TrelloApiService {
 
   private _handleError$(error: HttpErrorResponse): Observable<never> {
     const issueProviderName = ISSUE_PROVIDER_HUMANIZED[TRELLO_TYPE];
-    const errorTxt = getErrorTxt(error);
+    const errorTxt = getSafeTrelloErrorTxt(error);
     const normalizedError = errorTxt.toLowerCase();
     let displayMessage = `${issueProviderName}: ${errorTxt}`;
 

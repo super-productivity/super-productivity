@@ -2460,6 +2460,7 @@
     "WEB_DAV_UPLOAD": "WebDAV : 데이터 업로드 중 ..."
   },
   "MH": {
+    "HISTORY": "기록",
     "ADD_NEW_TASK": "새 작업 추가",
     "ALL_PLANNED_LIST": "반복/예약",
     "BOARDS": "보드",

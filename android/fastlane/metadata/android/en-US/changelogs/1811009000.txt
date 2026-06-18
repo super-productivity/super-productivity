@@ -1,0 +1,3 @@
+New: add notes from the add-task bar, use the Plainspace theme, and get tree-ordered project/tag menus. Focus Mode is now enabled in the time-tracker onboarding preset.
+
+Fixed: more reliable sync and backups, persistent fullscreen note edits, desktop plugins, Windows tray icons, macOS shortcuts, Android keyboard/layout and battery use, app deep links, Daily Summary opening, and several visual and translation issues.

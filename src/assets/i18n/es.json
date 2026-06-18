@@ -2479,6 +2479,7 @@
     "WEB_DAV_UPLOAD": "WebDAV: Subiendo datos..."
   },
   "MH": {
+    "HISTORY": "Historial",
     "ADD_NEW_TASK": "Añadir nueva Tarea",
     "ALL_PLANNED_LIST": "Planificado / Recurrente",
     "BOARDS": "Tableros",

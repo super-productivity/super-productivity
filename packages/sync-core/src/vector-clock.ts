@@ -27,7 +27,15 @@ export interface VectorClock {
 /**
  * Result of comparing two vector clocks.
  */
-export type VectorClockComparison = 'EQUAL' | 'LESS_THAN' | 'GREATER_THAN' | 'CONCURRENT';
+export const VectorClockComparison = {
+  EQUAL: 'EQUAL',
+  LESS_THAN: 'LESS_THAN',
+  GREATER_THAN: 'GREATER_THAN',
+  CONCURRENT: 'CONCURRENT',
+} as const;
+
+export type VectorClockComparison =
+  (typeof VectorClockComparison)[keyof typeof VectorClockComparison];
 
 /**
  * Maximum number of entries in a vector clock.

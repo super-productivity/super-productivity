@@ -153,11 +153,9 @@ class FullscreenActivity : AppCompatActivity() {
             if (keypadHeight > screenHeight * 0.15) {
                 // keyboard is opened
                 callJSInterfaceFunctionIfExists("next", "isKeyboardShown$", "true")
-                callJSInterfaceFunctionIfExists("next", "keyboardHeightPx$", keypadHeight.toString())
             } else {
                 // keyboard is closed
                 callJSInterfaceFunctionIfExists("next", "isKeyboardShown$", "false")
-                callJSInterfaceFunctionIfExists("next", "keyboardHeightPx$", "0")
             }
         }
     }

@@ -5,7 +5,8 @@ import {
   mergeVectorClocks as sharedMergeVectorClocks,
   limitVectorClockSize as sharedLimitVectorClockSize,
   MAX_VECTOR_CLOCK_SIZE,
-} from '@sp/shared-schema';
+  VectorClockComparison,
+} from '@sp/sync-core';
 import { MIN_CLIENT_ID_LENGTH } from '../../op-log/core/operation-log.const';
 import { Subject } from 'rxjs';
 
@@ -22,7 +23,7 @@ import { Subject } from 'rxjs';
  * - GREATER_THAN: B happened before A
  * - CONCURRENT: Neither happened before the other (true conflict)
  *
- * IMPORTANT: Core comparison logic is shared with the server via @sp/shared-schema.
+ * IMPORTANT: Core comparison logic is shared with the server via @sp/sync-core.
  * This file wraps the shared logic with null handling for client-side use.
  */
 
@@ -33,15 +34,10 @@ import { Subject } from 'rxjs';
 export type VectorClock = SharedVectorClock;
 
 /**
- * Result of comparing two vector clocks.
- * Uses enum for client-side ergonomics, values match shared string literals.
+ * Result of comparing two vector clocks (EQUAL | LESS_THAN | GREATER_THAN | CONCURRENT).
+ * Re-exported from @sp/sync-core so client and server share one definition.
  */
-export enum VectorClockComparison {
-  EQUAL = 'EQUAL',
-  LESS_THAN = 'LESS_THAN',
-  GREATER_THAN = 'GREATER_THAN',
-  CONCURRENT = 'CONCURRENT',
-}
+export { VectorClockComparison } from '@sp/sync-core';
 
 /**
  * Initialize a new vector clock for a client
@@ -125,7 +121,7 @@ export const sanitizeVectorClock = (clock: any): VectorClock => {
 /**
  * Compare two vector clocks to determine their relationship.
  *
- * Uses the shared implementation from @sp/shared-schema to ensure
+ * Uses the shared implementation from @sp/sync-core to ensure
  * client and server produce identical results. This wrapper adds
  * null/undefined handling for client-side convenience.
  *
@@ -140,7 +136,7 @@ export const compareVectorClocks = (
   // Coerce null/undefined to {} and delegate to shared implementation.
   // This ensures parity: shared treats missing keys as 0, so {} and {a:0} are EQUAL.
   const result = sharedCompareVectorClocks(a ?? {}, b ?? {});
-  return result as VectorClockComparison;
+  return result;
 };
 
 /**
@@ -201,7 +197,7 @@ export const incrementVectorClock = (
 /**
  * Merge two vector clocks by taking the maximum value for each component.
  *
- * Uses the shared implementation from @sp/shared-schema to ensure
+ * Uses the shared implementation from @sp/sync-core to ensure
  * client and server produce identical results. This wrapper adds
  * null/undefined handling for client-side convenience.
  *
@@ -296,7 +292,7 @@ export const vectorClockPruned$ = new Subject<{
 
 /**
  * Limits the size of a vector clock by keeping only the most active clients.
- * Wraps the shared implementation from @sp/shared-schema with client-side logging.
+ * Wraps the shared implementation from @sp/sync-core with client-side logging.
  *
  * @param clock The vector clock to limit
  * @param currentClientId The current client's ID (always preserved)

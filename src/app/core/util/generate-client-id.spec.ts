@@ -2,12 +2,12 @@ import { generateClientId, isValidClientIdFormat } from './generate-client-id';
 
 describe('generate-client-id', () => {
   describe('generateClientId()', () => {
-    it('produces an id matching the new {platform}_{4-char} format', () => {
-      expect(/^[BEAI]_[a-zA-Z0-9]{4}$/.test(generateClientId())).toBeTrue();
+    it('produces an id matching the new {platform}_{6-char} format', () => {
+      expect(/^[BEAI]_[a-zA-Z0-9]{6}$/.test(generateClientId())).toBeTrue();
     });
 
     it('produces a distinct id on each call', () => {
-      // 50 random 4-char base62 ids — a collision is astronomically unlikely.
+      // 50 random 6-char base62 ids — a collision is astronomically unlikely.
       const ids = new Set(Array.from({ length: 50 }, () => generateClientId()));
       expect(ids.size).toBe(50);
     });
@@ -21,9 +21,9 @@ describe('generate-client-id', () => {
 
   describe('isValidClientIdFormat()', () => {
     it('accepts the new compact format', () => {
-      expect(isValidClientIdFormat('B_a7Kx')).toBeTrue();
-      expect(isValidClientIdFormat('E_0000')).toBeTrue();
-      expect(isValidClientIdFormat('I_ZzZz')).toBeTrue();
+      expect(isValidClientIdFormat('B_a7Kx9Z')).toBeTrue();
+      expect(isValidClientIdFormat('E_000000')).toBeTrue();
+      expect(isValidClientIdFormat('I_ZzZzZz')).toBeTrue();
     });
 
     it('accepts legacy ids of length >= 10', () => {
@@ -34,8 +34,8 @@ describe('generate-client-id', () => {
     it('rejects short, non-conforming strings', () => {
       expect(isValidClientIdFormat('BAD')).toBeFalse();
       expect(isValidClientIdFormat('')).toBeFalse();
-      expect(isValidClientIdFormat('B_a7K')).toBeFalse(); // 3-char suffix
-      expect(isValidClientIdFormat('X_a7Kx')).toBeFalse(); // unknown platform
+      expect(isValidClientIdFormat('B_a7Kx9')).toBeFalse(); // 5-char suffix
+      expect(isValidClientIdFormat('X_a7Kx9Z')).toBeFalse(); // unknown platform
     });
 
     it('rejects non-string values', () => {

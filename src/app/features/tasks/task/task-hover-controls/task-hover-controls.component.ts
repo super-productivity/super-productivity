@@ -11,7 +11,7 @@ import { TaskWithSubTasks } from '../../task.model';
 import { T } from 'src/app/t.const';
 import { TaskComponent } from '../task.component';
 import { TranslateModule } from '@ngx-translate/core';
-import { KeyboardConfig } from '../../../config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { ICAL_TYPE } from '../../../issue/issue.const';
 import { MatIconButton } from '@angular/material/button';
 import { GlobalConfigService } from '../../../config/global-config.service';

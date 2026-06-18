@@ -14,19 +14,22 @@ import { uuidv7 } from '../../util/uuid-v7';
 import {
   compareVectorClocks,
   incrementVectorClock,
+  limitVectorClockSize,
   VectorClockComparison,
 } from '../../core/util/vector-clock';
-import { limitVectorClockSize, MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
 import { OpLogDbAdapter } from './op-log-db-adapter';
+import { SqliteOpLogAdapter } from './sqlite-op-log-adapter';
+import { createSqlJsDb } from './sql-js-db.test-helper';
 import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
+  MAX_VECTOR_CLOCK_SIZE,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-import { SINGLETON_KEY, STORE_NAMES } from './db-keys.const';
+import { FULL_STATE_OPS_META_KEY, SINGLETON_KEY, STORE_NAMES } from './db-keys.const';
 
 describe('OperationLogStoreService', () => {
   let service: OperationLogStoreService;
@@ -501,6 +504,35 @@ describe('OperationLogStoreService', () => {
       expect(remaining.length).toBe(1);
       expect(remaining[0].op.actionType).toBe('[Task] Update' as ActionType);
     });
+
+    it('should clear full-state metadata when deleting a full-state op', async () => {
+      const syncImportOp = createTestOperation({
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(syncImportOp);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(syncImportOp.id);
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      const transactionSpy = spyOn(adapter, 'transaction').and.callThrough();
+
+      await service.deleteOpsWhere((entry) => entry.op.id === syncImportOp.id);
+
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+      expect(transactionSpy).toHaveBeenCalledWith(
+        [STORE_NAMES.OPS, STORE_NAMES.META],
+        'readwrite',
+        jasmine.any(Function),
+      );
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
   });
 
   describe('getLastSeq', () => {
@@ -519,6 +551,292 @@ describe('OperationLogStoreService', () => {
       const allOps = await service.getOpsAfterSeq(0);
       const lastSeq = await service.getLastSeq();
       expect(lastSeq).toBe(allOps[allOps.length - 1].seq);
+    });
+  });
+
+  describe('getLatestFullStateOpEntry', () => {
+    it('should read latest full-state op via metadata without scanning ops', async () => {
+      const oldImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000001',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const regularOp = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000002',
+      });
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000003',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(oldImport);
+      await service.append(regularOp);
+      await service.append(latestImport, 'remote');
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      const latestEntry = await service.getLatestFullStateOpEntry();
+
+      expect(latestEntry?.op.id).toBe(latestImport.id);
+      expect(latestEntry?.source).toBe('remote');
+      expect(latestEntry?.syncedAt).toBeDefined();
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should rebuild missing metadata once and use it for subsequent reads', async () => {
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000011',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000010' }),
+      );
+      await service.append(latestImport);
+
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      await db.delete('meta', 'full_state_ops');
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(adapter.iterate).toHaveBeenCalledTimes(1);
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(adapter.iterate).toHaveBeenCalledTimes(1);
+    });
+
+    it('should rebuild missing metadata inside a full-state append before recording the new ref', async () => {
+      const latestExistingImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000032',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const lowerNewImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000031',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(latestExistingImport);
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      await db.delete(STORE_NAMES.META, FULL_STATE_OPS_META_KEY);
+
+      await service.append(lowerNewImport, 'remote');
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(
+        latestExistingImport.id,
+      );
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should rebuild malformed metadata instead of throwing', async () => {
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000041',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(latestImport);
+
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      await db.put(STORE_NAMES.META, { refs: 'not-an-array' }, FULL_STATE_OPS_META_KEY);
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      await expectAsync(service.getLatestFullStateOpEntry()).toBeResolved();
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(adapter.iterate).toHaveBeenCalledTimes(1);
+    });
+
+    it('should delete stale full-state ops via metadata and keep the excluded op', async () => {
+      const staleImportA = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000021',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const staleImportB = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000022',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const keepImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000023',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(staleImportA);
+      await service.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000024' }),
+      );
+      await service.append(staleImportB);
+      await service.append(keepImport);
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      const deletedCount = await service.clearFullStateOpsExcept([keepImport.id]);
+
+      expect(deletedCount).toBe(2);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(keepImport.id);
+      expect((await service.getOpsAfterSeq(0)).map((entry) => entry.op.id)).toEqual([
+        '01900000-0000-7000-8000-000000000024',
+        keepImport.id,
+      ]);
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+  });
+
+  // The full-state metadata pointer is adapter-agnostic, but the rest of this
+  // suite drives it through the IndexedDB adapter. These tests pin the SAME
+  // behavior through the SQLite adapter (Android default, #8389) against a real
+  // engine (sql.js) — including the rebuild-on-read fallback, which is what
+  // keeps the pointer correct on SQLite (the IndexedDB-only populate-on-upgrade
+  // seed in db-upgrade.ts never runs there).
+  describe('full-state metadata over the SQLite backend', () => {
+    const freshSqliteService = async (): Promise<{
+      svc: OperationLogStoreService;
+      adapter: OpLogDbAdapter;
+    }> => {
+      const adapter = new SqliteOpLogAdapter(await createSqlJsDb());
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+          { provide: OP_LOG_DB_ADAPTER_FACTORY, useValue: () => adapter },
+        ],
+      });
+      const svc = TestBed.inject(OperationLogStoreService);
+      await svc.init();
+      return { svc, adapter };
+    };
+
+    it('tracks the latest full-state op by UUIDv7 without scanning', async () => {
+      const { svc, adapter } = await freshSqliteService();
+      await svc.append(
+        createTestOperation({
+          id: '01900000-0000-7000-8000-000000000001',
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+        }),
+      );
+      await svc.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000002' }),
+      );
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000003',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await svc.append(latestImport, 'remote');
+
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+
+      const latestEntry = await svc.getLatestFullStateOpEntry();
+      expect(latestEntry?.op.id).toBe(latestImport.id);
+      expect(latestEntry?.source).toBe('remote');
+      expect(iterateSpy).not.toHaveBeenCalled();
+    });
+
+    it('rebuilds the pointer on read when the meta row is absent', async () => {
+      const { svc, adapter } = await freshSqliteService();
+      await svc.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000012' }),
+      );
+      const latestImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000013',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await svc.append(latestImport);
+
+      // Simulate the SQLite/migration state where the pointer was never seeded
+      // (the IndexedDB-only upgrade populate doesn't run on this backend).
+      await adapter.delete(STORE_NAMES.META, FULL_STATE_OPS_META_KEY);
+
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+      expect((await svc.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(iterateSpy).toHaveBeenCalledTimes(1);
+
+      // The rebuild persisted the pointer → the second read does not scan again.
+      expect((await svc.getLatestFullStateOpEntry())?.op.id).toBe(latestImport.id);
+      expect(iterateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears full-state ops through the metadata pointer', async () => {
+      const { svc, adapter } = await freshSqliteService();
+      await svc.append(
+        createTestOperation({
+          id: '01900000-0000-7000-8000-000000000021',
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+        }),
+      );
+      await svc.append(
+        createTestOperation({ id: '01900000-0000-7000-8000-000000000022' }),
+      );
+
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+
+      expect(await svc.clearFullStateOps()).toBe(1);
+      expect(await svc.getLatestFullStateOpEntry()).toBeUndefined();
+      expect((await svc.getOpsAfterSeq(0)).map((entry) => entry.op.id)).toEqual([
+        '01900000-0000-7000-8000-000000000022',
+      ]);
+      expect(iterateSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -1892,6 +2210,79 @@ describe('OperationLogStoreService', () => {
       expect(await db.get(STORE_NAMES.CLIENT_ID, SINGLETON_KEY)).toBe('priorClient');
       expect(clearCacheSpy).not.toHaveBeenCalled();
     });
+
+    it('should update full-state metadata for the replacement op', async () => {
+      const syncImportOp = createTestOperation({
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+        clientId: 'replacementClient',
+        vectorClock: { replacementClient: 1 },
+        payload: { task: { ids: [], entities: {} } },
+      });
+
+      await service.runDestructiveStateReplacement({
+        syncImportOp,
+        snapshotEntityKeys: [],
+      });
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(syncImportOp.id);
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should preserve full-state metadata when the destructive tx aborts', async () => {
+      const priorImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000031',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(priorImport);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
+
+      const db = (service as any).db;
+      const realTransaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake((stores: any, mode: any) => {
+        const tx = realTransaction(stores, mode);
+        if (Array.isArray(stores) && stores.includes(STORE_NAMES.OPS)) {
+          const opsStore = tx.objectStore(STORE_NAMES.OPS);
+          opsStore.add = async () => {
+            throw new Error('Simulated interrupt inside destructive tx');
+          };
+        }
+        return tx;
+      });
+
+      await expectAsync(
+        service.runDestructiveStateReplacement({
+          syncImportOp: createTestOperation({
+            id: '01900000-0000-7000-8000-000000000032',
+            opType: OpType.SyncImport,
+            entityType: 'ALL' as EntityType,
+            clientId: 'abortClient',
+            vectorClock: { abortClient: 1 },
+          }),
+          snapshotEntityKeys: [],
+        }),
+      ).toBeRejected();
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
+      expect(adapter.iterate).not.toHaveBeenCalled();
+    });
   });
 
   describe('appendWithVectorClockUpdate', () => {
@@ -2118,6 +2509,29 @@ describe('OperationLogStoreService', () => {
 
       const unsynced = await service.getUnsynced();
       expect(unsynced.length).toBe(0);
+    });
+
+    it('should clear full-state metadata after clearing operations', async () => {
+      await service.append(
+        createTestOperation({
+          opType: OpType.SyncImport,
+          entityType: 'ALL' as EntityType,
+          entityId: undefined,
+        }),
+      );
+      expect(await service.getLatestFullStateOpEntry()).toBeDefined();
+
+      await service.clearAllOperations();
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      spyOn(adapter, 'iterate').and.callThrough();
+
+      expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+      expect(adapter.iterate).not.toHaveBeenCalled();
     });
 
     it('should not affect state_cache', async () => {
@@ -2500,7 +2914,7 @@ describe('OperationLogStoreService', () => {
       const newOpClock = incrementVectorClock(storedClock, 'localClient');
 
       // Simulate server-side pruning (server prunes to MAX_VECTOR_CLOCK_SIZE)
-      const prunedClock = limitVectorClockSize(newOpClock, ['localClient']);
+      const prunedClock = limitVectorClockSize(newOpClock, 'localClient');
 
       // importClient must survive pruning
       expect(prunedClock['importClient']).toBe(1);

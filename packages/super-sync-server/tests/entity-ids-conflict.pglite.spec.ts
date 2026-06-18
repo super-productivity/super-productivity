@@ -15,6 +15,14 @@ import { PGlite } from '@electric-sql/pglite';
  * change the query shape there, update it here — the two are intentionally kept in sync
  * by hand (the source keeps the SQL inline so the conflict-detection.spec mock's
  * positional params stay stable).
+ *
+ * Load-bearing detail: the unnest folds the scalar `entity_id` INTO the `entity_ids`
+ * set with a UNION (`o.entity_ids || ...ARRAY[entity_id]`), NOT a mutually-exclusive
+ * `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id]`. The
+ * old CASE form dropped the scalar whenever entity_ids was non-empty, so an op whose
+ * scalar entity_id is NOT a member of its own entity_ids (the dedup-off-scalar case)
+ * was invisible — a later concurrent op touching that scalar was wrongly accepted
+ * (silent data loss). The 'divergent scalar' tests below pin this regression. (#8334)
  */
 describe('#8334 multi-entity conflict SQL (PGlite)', () => {
   let db: PGlite;
@@ -85,7 +93,7 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
           o.vector_clock AS "vectorClock"
        FROM operations o
        CROSS JOIN LATERAL unnest(
-         CASE WHEN cardinality(o.entity_ids) > 0 THEN o.entity_ids ELSE ARRAY[o.entity_id] END
+         o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
        ) AS eid
        WHERE o.user_id = 1
          AND o.entity_type = $1
@@ -140,7 +148,7 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
           o.vector_clock AS "vectorClock"
        FROM operations o
        CROSS JOIN LATERAL unnest(
-         CASE WHEN cardinality(o.entity_ids) > 0 THEN o.entity_ids ELSE ARRAY[o.entity_id] END
+         o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
        ) AS eid
        JOIN (VALUES ${valuesSql}) AS touched(entity_type, entity_id)
          ON touched.entity_type = o.entity_type
@@ -249,6 +257,26 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
       expect(rows[0].entityId).toBe('task-A');
     });
 
+    it('finds the op via its DIVERGENT scalar entity_id (not a member of entity_ids) — the #8334 silent-data-loss case', async () => {
+      // Same dedup-off-scalar op as above, but now query for the SCALAR task-Z, which is
+      // NOT a member of entity_ids (['task-A']). The old mutually-exclusive CASE form used
+      // entity_ids alone (cardinality > 0) and dropped the scalar, so task-Z found no prior
+      // writer and a stale concurrent write to it was wrongly accepted. The UNION fold keeps
+      // the scalar visible. This is the case the dedup-off-scalar test above does NOT cover.
+      await insertOp({
+        id: 'opD',
+        serverSeq: 1,
+        clientId: 'A',
+        entityId: 'task-Z',
+        entityIds: ['task-A'],
+      });
+
+      const rows = await detectForEntities('TASK', ['task-Z']);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ entityId: 'task-Z', clientId: 'A', serverSeq: 1 });
+    });
+
     it('resolves every requested id to its own latest op in one batch', async () => {
       await insertOp({
         id: 'opA',
@@ -324,6 +352,29 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
         rows.map((r) => [`${r.entityType}:${r.entityId}`, r.serverSeq]),
       );
       expect(byKey).toEqual({ 'TASK:task-2': 1, 'PROJECT:task-2': 2 });
+    });
+
+    it('matches a (type, divergent-scalar) pair not present in entity_ids — the #8334 silent-data-loss case', async () => {
+      // The prefetch path got the same scalar-UNION fix as detectConflictForEntities and
+      // can drift independently; pin the divergent scalar here too. task-Z is the scalar but
+      // not a member of entity_ids (['task-A']); the old CASE form dropped it.
+      await insertOp({
+        id: 'opD',
+        serverSeq: 1,
+        clientId: 'A',
+        entityType: 'TASK',
+        entityId: 'task-Z',
+        entityIds: ['task-A'],
+      });
+
+      const rows = await prefetchForPairs([{ entityType: 'TASK', entityId: 'task-Z' }]);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        entityType: 'TASK',
+        entityId: 'task-Z',
+        serverSeq: 1,
+      });
     });
   });
 });

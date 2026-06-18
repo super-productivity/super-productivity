@@ -863,7 +863,10 @@ export class JiraApiService {
 
       // resolve saved promise
       if (!res || res.error) {
-        IssueLog.err('JIRA_RESPONSE_ERROR', res, currentRequest);
+        // NOTE: never log `currentRequest` — it holds `jiraCfg` (plaintext
+        // password) and `requestInit.headers.authorization`. The log history
+        // is exportable, so credentials must never reach it.
+        IssueLog.err('JIRA_RESPONSE_ERROR', res?.error, res?.requestId);
         // let msg =
         const blocked =
           res?.error && isUnauthorizedError(res.error) ? this._blockAccess() : undefined;
@@ -876,9 +879,8 @@ export class JiraApiService {
           try {
             currentRequest.resolve(currentRequest.transform(res, currentRequest.jiraCfg));
           } catch (e) {
-            IssueLog.log(res);
-            IssueLog.log(currentRequest);
-            IssueLog.err(e);
+            // Do not log `currentRequest` (contains jiraCfg + auth header).
+            IssueLog.err('JIRA_TRANSFORM_ERROR', res?.requestId, e);
             this._snackService.open({
               type: 'ERROR',
               msg: T.F.JIRA.S.INVALID_RESPONSE,

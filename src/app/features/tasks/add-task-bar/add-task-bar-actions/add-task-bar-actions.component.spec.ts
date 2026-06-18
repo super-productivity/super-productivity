@@ -60,6 +60,12 @@ describe('AddTaskBarActionsComponent', () => {
     },
   } as Tag;
 
+  const earlierTreeTag: Tag = {
+    ...mockTag,
+    id: '0',
+    title: 'earlier tree tag',
+  };
+
   const mockState = {
     projectId: mockProject.id, // Use mock project id by default
     tagIds: [],
@@ -142,6 +148,7 @@ describe('AddTaskBarActionsComponent', () => {
     mockProjectService = jasmine.createSpyObj('ProjectService', [], {
       list$: of([mockProject]),
       listSortedForUI: mockProjectsSignal,
+      listInTreeOrderForUI: mockProjectsSignal,
       listSorted: mockProjectsSignal,
     });
 
@@ -149,6 +156,7 @@ describe('AddTaskBarActionsComponent', () => {
       tags$: of([mockTag]),
       tagsNoMyDayAndNoList$: of([mockTag]),
       tagsNoMyDayAndNoListSorted: signal([mockTag]),
+      tagsNoMyDayAndNoListInTreeOrder: signal([earlierTreeTag, mockTag]),
     });
 
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['afterClosed']);
@@ -215,7 +223,7 @@ describe('AddTaskBarActionsComponent', () => {
   describe('Component Creation', () => {
     it('should initialize with correct signals', () => {
       expect(component.allProjects()).toEqual([mockProject]);
-      expect(component.allTags()).toEqual([mockTag]);
+      expect(component.allTags()).toEqual([earlierTreeTag, mockTag]);
     });
 
     it('should handle input properties', () => {
@@ -954,7 +962,7 @@ describe('AddTaskBarActionsComponent', () => {
   describe('Integration', () => {
     it('should filter archived projects from allProjects signal', () => {
       const archivedProject = { ...mockProject, id: '2', isArchived: true };
-      mockProjectService.list$ = of([mockProject, archivedProject]);
+      mockProjectsSignal.set([mockProject]);
 
       // Recreate component to pick up new observable
       fixture = TestBed.createComponent(AddTaskBarActionsComponent);
@@ -967,7 +975,7 @@ describe('AddTaskBarActionsComponent', () => {
 
     it('should filter hidden projects from allProjects signal', () => {
       const hiddenProject = { ...mockProject, id: '2', isHiddenFromMenu: true };
-      mockProjectService.list$ = of([mockProject, hiddenProject]);
+      mockProjectsSignal.set([mockProject]);
 
       // Recreate component to pick up new observable
       fixture = TestBed.createComponent(AddTaskBarActionsComponent);

@@ -23,7 +23,7 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { NavigationEnd, Router } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { KeyboardConfig } from 'src/app/features/config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';

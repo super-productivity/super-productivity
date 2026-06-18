@@ -388,9 +388,12 @@ describe('handlePluginMessage()', () => {
     );
   });
 
-  it('keeps iframe plugins on an opaque sandbox origin', () => {
+  // allow-same-origin is required: an opaque-origin iframe does not paint on
+  // packaged file:// desktop builds and blanks every plugin UI (#8467). The
+  // durable fix that restores opaque-origin isolation is an app:// scheme.
+  it('runs iframe plugins with a same-origin sandbox so they render on file://', () => {
     expect(PLUGIN_IFRAME_SANDBOX).toContain('allow-scripts');
-    expect(PLUGIN_IFRAME_SANDBOX).not.toContain('allow-same-origin');
+    expect(PLUGIN_IFRAME_SANDBOX).toContain('allow-same-origin');
   });
 
   describe('buildPluginIframeHtml()', () => {

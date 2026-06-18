@@ -1,7 +1,18 @@
 /**
  * Rainbow Theme for Super Productivity
- * Colorful and playful theme with vibrant gradients and rainbow backgrounds
- * Designed for enhanced visual appeal and productivity engagement
+ * Colorful, playful theme — now with a full neon glow pass: glowing panel
+ * borders, buttons, active nav, current/selected tasks, chips, focus rings
+ * and scrollbar over a deep-space nebula background.
+ *
+ * Design notes:
+ *   - Neon needs a dark canvas, so this theme is dark-only (requiredMode:'dark'
+ *     in custom-theme.service.ts auto-applies dark mode when picked).
+ *   - All glows are STATIC box-shadows / gradients — no @keyframes on list
+ *     items. The task component is a hot path rendered once per row, so
+ *     continuous repaints are deliberately avoided.
+ *   - Each UI region leans on a different spectrum hue (violet sidenav, cyan
+ *     cards, pink banner, ...) so the whole app reads as a rainbow while any
+ *     single surface stays legible.
  */
 
 /* Smooth transitions */
@@ -16,8 +27,8 @@
 
 body {
   /* ===============================
- * RAINBOW COLOR PALETTE
- * ===============================*/
+   * RAINBOW COLOR PALETTE (playful base — kept for identity)
+   * ===============================*/
 
   --rainbow-primary: #0079bf; /* Trello blue - trust and productivity */
   --rainbow-accent: #ff6b6b; /* Coral - warm and approachable */
@@ -32,87 +43,558 @@ body {
   --rainbow-mint: #2ecc71; /* Mint - progress and balance */
   --rainbow-lavender: #af7ac5; /* Lavender - soft accent */
 
+  --task-border-radius: 16px;
+}
+
+/* ===================================================================
+ * NEON DARK THEME
+ * ===================================================================*/
+body.isDarkTheme {
+  /* ---- Neon spectrum (brighter, higher-saturation siblings of the base
+   * palette — these drive every glow) ---- */
+  --neon-violet: #b66bff;
+  --neon-blue: #5b8bff;
+  --neon-cyan: #2fe0e6;
+  --neon-teal: #2ee6c9;
+  --neon-green: #3ef2a1;
+  --neon-yellow: #ffd93d;
+  --neon-orange: #ff8a4c;
+  --neon-pink: #ff5cc8;
+  --neon-magenta: #e84df0;
+
+  /* Reusable rainbow gradient for borders / accents */
+  --rainbow-gradient: linear-gradient(
+    120deg,
+    var(--neon-violet),
+    var(--neon-blue),
+    var(--neon-cyan),
+    var(--neon-green),
+    var(--neon-yellow),
+    var(--neon-orange),
+    var(--neon-pink)
+  );
+
+  /* Glow presets (outer halos) */
+  --glow-violet: 0 0 20px color-mix(in srgb, var(--neon-violet) 60%, transparent);
+  --glow-cyan: 0 0 20px color-mix(in srgb, var(--neon-cyan) 60%, transparent);
+  --glow-pink: 0 0 20px color-mix(in srgb, var(--neon-pink) 60%, transparent);
+  --glow-green: 0 0 20px color-mix(in srgb, var(--neon-green) 60%, transparent);
+
+  /* ---- Frosted-pane material — translucent indigo + blur so the aurora
+   * shows through every panel as glass, plus a reusable outer glow. ---- */
+  --neon-blur: blur(16px) saturate(150%);
+  --neon-pane: linear-gradient(
+    165deg,
+    color-mix(in srgb, #211a44 78%, transparent) 0%,
+    color-mix(in srgb, #16112c 82%, transparent) 100%
+  );
+  --neon-pane-strong: linear-gradient(
+    165deg,
+    color-mix(in srgb, #251d4e 88%, transparent) 0%,
+    color-mix(in srgb, #181230 90%, transparent) 100%
+  );
+  --pane-glow:
+    0 0 0 1px color-mix(in srgb, var(--neon-violet) 35%, transparent),
+    0 0 28px color-mix(in srgb, var(--neon-violet) 26%, transparent),
+    0 12px 34px rgba(0, 0, 0, 0.55);
+  --pane-glow-cyan:
+    0 0 0 1px color-mix(in srgb, var(--neon-cyan) 35%, transparent),
+    0 0 28px color-mix(in srgb, var(--neon-cyan) 26%, transparent),
+    0 12px 34px rgba(0, 0, 0, 0.55);
+
   /* ===============================
- * ACCENT & THEME COLORS
- * ===============================*/
+   * BACKGROUND COLORS — deep indigo-black "space"
+   * ===============================*/
+  --bg: #0e0b1a;
+  --bg-darker: #070510;
+  --bg-slightly-lighter: #161227;
+  --bg-lighter: #1e1834;
+  --bg-lightest: #271f44;
+  --bg-super-light: #322856;
 
-  /* Primary accent (rainbow coral) */
-  --palette-accent-500: var(--rainbow-accent);
-  --c-accent: var(--rainbow-accent);
-  --palette-accent-100: #ffe3e3;
-  --palette-accent-200: #ffcfcf;
-  --palette-accent-300: #ffbbbb;
-  --palette-accent-400: #ff9393;
-  --palette-accent-600: #ff5757;
-  --palette-accent-700: #ff4343;
-  --palette-accent-800: #ff2f2f;
-  --palette-accent-900: #ff1b1b;
+  --card-bg: #15102a;
+  --sidenav-bg: #0a0716;
+  --selected-task-bg-color: #1c1638;
+  --banner-bg: #15102a;
 
-  /* Semantic colors using rainbow palette */
-  --c-success: var(--rainbow-success);
-  --c-warning: var(--rainbow-warning);
-  --c-error: var(--rainbow-error);
-  --c-info: var(--rainbow-info);
+  /* Task surfaces — translucent indigo so the aurora tints through each row
+   * like frosted glass. No backdrop-filter here on purpose: rows are the hot
+   * path (one per item in long lists) and they sit over a smooth gradient, so
+   * a translucent fill reads as frosted without a per-row blur pass on scroll
+   * (same approach velvet uses; blur is reserved for the few big panels). */
+  --task-c-bg: color-mix(in srgb, #211a44 74%, transparent);
+  --task-c-selected-bg: color-mix(in srgb, #2a2056 88%, transparent);
+  --sub-task-c-bg: color-mix(in srgb, #1a1438 70%, transparent);
+  --sub-task-c-bg-done: color-mix(in srgb, #120e26 70%, transparent);
+  --task-c-bg-done: color-mix(in srgb, #120e26 62%, transparent);
+  --task-c-current-bg: color-mix(in srgb, #2a1f52 86%, transparent);
+  --task-c-drag-drop-bg: color-mix(in srgb, #2a2056 90%, transparent);
+  --sub-task-c-bg-in-selected: color-mix(in srgb, #2f2560 82%, transparent);
+
+  /* Notes */
+  --standard-note-bg: #15102a;
+  --standard-note-bg-hovered: #1c1638;
+
+  /* Planner */
+  --planner-task-bg: #15102a;
+  --planner-days-bg: #0a0716;
+
+  /* ===============================
+   * TEXT COLORS
+   * ===============================*/
+  --text-color: #ece6ff;
+  --text-color-less-intense: color-mix(in srgb, #ece6ff 80%, transparent);
+  --text-color-muted: #9a8fc4;
+  --text-color-more-intense: #ffffff;
+  --text-color-most-intense: #ffffff;
+  --standard-note-fg: #ece6ff;
+  --task-detail-value-color: #c7bdf0;
+
+  /* Task detail panel items (right panel) — were falling back to neutral
+   * --dark8; give them the indigo surface + a glow so they match. */
+  --task-detail-bg: color-mix(in srgb, #1d1640 80%, transparent);
+  --task-detail-bg-hover: color-mix(in srgb, #261d50 88%, transparent);
+  --task-detail-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-violet) 28%, transparent),
+    0 0 16px color-mix(in srgb, var(--neon-violet) 20%, transparent),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+
+  /* ===============================
+   * BORDERS & SEPARATORS
+   * ===============================*/
+  --extra-border-color: color-mix(in srgb, var(--neon-violet) 22%, transparent);
+  --separator-color: color-mix(in srgb, var(--neon-violet) 28%, transparent);
+  --divider-color: color-mix(in srgb, var(--neon-violet) 20%, transparent);
+  --chip-outline-color: color-mix(in srgb, var(--neon-cyan) 55%, transparent);
+  --card-border: color-mix(in srgb, var(--neon-violet) 40%, transparent);
+
+  /* ===============================
+   * ACCENT & THEME COLORS
+   * ===============================*/
+
+  /* Primary = neon violet (buttons, focus, brand) */
+  --palette-primary-500: var(--neon-violet);
+  --c-primary: var(--neon-violet);
+  --brand: var(--neon-violet);
+
+  /* Accent = electric cyan (links, highlights) */
+  --palette-accent-500: var(--neon-cyan);
+  --c-accent: var(--neon-cyan);
+  --palette-accent-100: color-mix(in srgb, var(--neon-cyan) 20%, #ffffff);
+  --palette-accent-200: color-mix(in srgb, var(--neon-cyan) 40%, #ffffff);
+  --palette-accent-300: color-mix(in srgb, var(--neon-cyan) 60%, #ffffff);
+  --palette-accent-400: color-mix(in srgb, var(--neon-cyan) 80%, #ffffff);
+  --palette-accent-600: color-mix(in srgb, var(--neon-cyan) 80%, #000000);
+  --palette-accent-700: color-mix(in srgb, var(--neon-cyan) 60%, #000000);
+  --palette-accent-800: color-mix(in srgb, var(--neon-cyan) 40%, #000000);
+  --palette-accent-900: color-mix(in srgb, var(--neon-cyan) 20%, #000000);
+
+  /* Semantic */
+  --c-success: var(--neon-green);
+  --c-warning: var(--neon-yellow);
+  --c-error: #ff5d73;
+  --c-info: var(--neon-blue);
+  --color-success: var(--neon-green);
+  --color-warning: var(--neon-yellow);
+  --color-danger: #ff5d73;
 
   /* ===============================
    * UI ELEMENTS
    * ===============================*/
 
-  /* Scrollbar - colorful */
-  --scrollbar-thumb: var(--rainbow-primary);
-  --scrollbar-thumb-hover: var(--rainbow-accent);
-  --scrollbar-track: var(--bg);
+  /* Scrollbar */
+  --scrollbar-thumb: color-mix(in srgb, var(--neon-violet) 70%, transparent);
+  --scrollbar-thumb-hover: var(--neon-cyan);
+  --scrollbar-track: transparent;
 
-  --task-border-radius: 16px;
-}
+  /* Sidenav active item */
+  --sidenav-item-active-bg: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--neon-violet) 32%, transparent),
+    color-mix(in srgb, var(--neon-pink) 24%, transparent)
+  );
+  --sidenav-active-text: #ffffff;
 
-/* Rainbow theme variables */
-body.isDarkTheme {
   /* ===============================
-   * BACKGROUND COLORS
+   * SHADOWS — neon glows
    * ===============================*/
+  --shadow-key-umbra-opacity: 0.45;
+  --shadow-key-penumbra-opacity: 0.35;
+  --shadow-ambient-shadow-opacity: 0.3;
 
-  /* Main backgrounds with subtle colorful tints */
-  --bg: #1a1a1a;
-  --bg-darker: #0f0f0f;
-  --bg-slightly-lighter: #2d2d2d;
-  --bg-lighter: #3a3a3a;
-  --bg-lightest: #474747;
-  --bg-super-light: #545454;
+  --card-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-violet) 30%, transparent),
+    0 0 18px color-mix(in srgb, var(--neon-cyan) 22%, transparent),
+    0 8px 24px rgba(0, 0, 0, 0.5);
 
-  /* Component backgrounds */
-  --card-bg: #2d2d2d;
-  --sidenav-bg: #0f0f0f;
+  --task-current-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-pink) 55%, transparent),
+    0 0 18px color-mix(in srgb, var(--neon-pink) 45%, transparent),
+    0 2px 10px rgba(0, 0, 0, 0.5);
+  --task-selected-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-cyan) 45%, transparent),
+    0 0 12px color-mix(in srgb, var(--neon-cyan) 30%, transparent);
+
+  /* Hover controls */
+  --hover-controls-border: 1px solid color-mix(in srgb, var(--neon-cyan) 45%, transparent);
+  --hover-controls-border-opacity: 0.6;
+
+  /* Interaction states */
+  --hover-bg-opacity: 0.1;
+  --focus-bg-opacity: 0.14;
+  --pressed-bg-opacity: 0.18;
+  --disabled-opacity: 0.3;
 }
 
-body.isDarkTheme mat-sidenav-content {
-  background:
-    radial-gradient(circle at 20% 80%, rgba(0, 121, 191, 0.18) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.18) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(155, 89, 182, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 60% 60%, rgba(26, 188, 156, 0.15) 0%, transparent 50%),
+/* ===================================================================
+ * BACKGROUND — nebula / aurora
+ * Painted on .app-container (which sits above body + any wallpaper layer)
+ * with fixed attachment, so the radial blooms read as one steady aurora
+ * across the whole work area. Everything below .app-container is already
+ * transparent, so the gradient shows through header, route + right panel.
+ * (mat-sidenav-content is NOT the work-area wrapper in this app version.)
+ * ===================================================================*/
+body.isDarkTheme .app-container {
+  background-color: transparent !important;
+  background-image:
+    radial-gradient(
+      ellipse 60% 50% at 88% 2%,
+      color-mix(in srgb, var(--neon-cyan) 32%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 65% 60% at 4% 98%,
+      color-mix(in srgb, var(--neon-violet) 36%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 55% 48% at 82% 80%,
+      color-mix(in srgb, var(--neon-pink) 24%, transparent) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      circle at 48% 42%,
+      color-mix(in srgb, var(--neon-blue) 16%, transparent) 0%,
+      transparent 55%
+    ),
     linear-gradient(
       135deg,
-      rgba(0, 121, 191, 0.06) 0%,
-      rgba(255, 107, 107, 0.06) 25%,
-      rgba(155, 89, 182, 0.06) 50%,
-      rgba(26, 188, 156, 0.06) 75%,
-      rgba(241, 196, 15, 0.06) 100%
+      color-mix(in srgb, var(--neon-violet) 12%, transparent) 0%,
+      color-mix(in srgb, var(--neon-cyan) 9%, transparent) 40%,
+      color-mix(in srgb, var(--neon-pink) 11%, transparent) 100%
     ) !important;
+  background-attachment: fixed !important;
 }
 
-body mat-sidenav-content {
+/* Neutralize SP's flat body:before tint so the nebula is the only wash. */
+body.isDarkTheme::before {
+  display: none !important;
+}
+
+/* ===================================================================
+ * TYPOGRAPHY — subtle glow on headings & links (NOT body / task text,
+ * to keep dense lists crisp and cheap to paint)
+ * ===================================================================*/
+body.isDarkTheme {
+  background-color: var(--bg);
+  color: var(--text-color);
+}
+
+body.isDarkTheme .mat-h1,
+body.isDarkTheme .mat-h2,
+body.isDarkTheme .mat-h3,
+body.isDarkTheme h1,
+body.isDarkTheme h2,
+body.isDarkTheme h3,
+body.isDarkTheme [mat-dialog-title] {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--neon-violet) 45%, transparent);
+}
+
+body.isDarkTheme main-header .current-work-context-title {
+  text-shadow: 0 0 14px color-mix(in srgb, var(--neon-violet) 50%, transparent);
+}
+
+body.isDarkTheme a[href] {
+  color: var(--c-accent);
+  text-decoration: none;
+  transition:
+    color var(--transition-fast),
+    text-shadow var(--transition-fast);
+}
+
+body.isDarkTheme a[href]:hover {
+  color: #ffffff;
+  text-shadow: var(--glow-cyan);
+}
+
+/* ===================================================================
+ * SIDE NAV — frosted glowing pane with a violet bottom-glow
+ * Blur/tint go on the inner .nav-sidenav, never the host (a host backdrop-
+ * filter establishes a containing block that collapses the mobile drawer —
+ * see styling-guide). The host only carries border + box-shadow (safe).
+ * ===================================================================*/
+body.isDarkTheme magic-side-nav {
+  border-right: 1px solid color-mix(in srgb, var(--neon-violet) 40%, transparent);
+  box-shadow: 2px 0 34px color-mix(in srgb, var(--neon-violet) 26%, transparent);
+}
+
+body.isDarkTheme magic-side-nav .nav-sidenav {
   background:
-    radial-gradient(circle at 20% 80%, rgba(0, 121, 191, 0.18) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.18) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(155, 89, 182, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 60% 60%, rgba(26, 188, 156, 0.15) 0%, transparent 50%),
-    linear-gradient(
-      135deg,
-      rgba(0, 121, 191, 0.06) 0%,
-      rgba(255, 107, 107, 0.06) 25%,
-      rgba(155, 89, 182, 0.06) 50%,
-      rgba(26, 188, 156, 0.06) 75%,
-      rgba(241, 196, 15, 0.06) 100%
-    ) !important;
+    radial-gradient(
+      ellipse 130% 38% at 50% 112%,
+      color-mix(in srgb, var(--neon-violet) 34%, transparent) 0%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 120% 30% at 50% -8%,
+      color-mix(in srgb, var(--neon-cyan) 16%, transparent) 0%,
+      transparent 70%
+    ),
+    var(--neon-pane-strong) !important;
+  backdrop-filter: var(--neon-blur);
+  -webkit-backdrop-filter: var(--neon-blur);
+}
+
+body.isDarkTheme .nav-link.active {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-violet) 55%, transparent),
+    0 0 16px color-mix(in srgb, var(--neon-violet) 40%, transparent);
+}
+
+body.isDarkTheme .nav-link.active .nav-icon,
+body.isDarkTheme .nav-link.active mat-icon {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--neon-pink) 70%, transparent));
+}
+
+/* ===================================================================
+ * CARDS / PANELS — rainbow gradient border + outer glow
+ * The gradient-border trick (padding-box fill + border-box gradient) gives
+ * the ref's lit-edge panels; the box-shadow ring is the safe fallback if a
+ * Material container color wins the background.
+ * ===================================================================*/
+body.isDarkTheme .mat-mdc-card {
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background:
+    var(--neon-pane) padding-box,
+    linear-gradient(135deg, var(--neon-violet), var(--neon-cyan)) border-box;
+  backdrop-filter: var(--neon-blur);
+  -webkit-backdrop-filter: var(--neon-blur);
+  box-shadow:
+    0 0 26px color-mix(in srgb, var(--neon-cyan) 28%, transparent),
+    0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+/* Menus & dialogs — frosted violet glowing edge */
+body.isDarkTheme .mat-mdc-menu-panel,
+body.isDarkTheme .mat-mdc-dialog-surface {
+  border: 1px solid color-mix(in srgb, var(--neon-violet) 45%, transparent);
+  background: var(--neon-pane-strong) !important;
+  backdrop-filter: var(--neon-blur);
+  -webkit-backdrop-filter: var(--neon-blur);
+  box-shadow: var(--pane-glow);
+}
+
+/* Notes */
+body.isDarkTheme note .note,
+body.isDarkTheme .standard-note {
+  border: 1px solid color-mix(in srgb, var(--neon-teal) 40%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-teal) 24%, transparent),
+    0 0 22px color-mix(in srgb, var(--neon-teal) 24%, transparent);
+}
+
+/* ===================================================================
+ * BANNER — pink/magenta rainbow gradient border (singular, high impact)
+ * ===================================================================*/
+body.isDarkTheme banner .content-wrapper,
+body.isDarkTheme banner {
+  border-radius: 16px;
+}
+
+body.isDarkTheme banner .content-wrapper {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--banner-bg), var(--banner-bg)) padding-box,
+    linear-gradient(120deg, var(--neon-pink), var(--neon-violet), var(--neon-cyan))
+      border-box;
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--neon-pink) 28%, transparent),
+    0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+/* ===================================================================
+ * ADD-TASK BAR — cyan glow
+ * ===================================================================*/
+body.isDarkTheme add-task-bar.global .add-task-container {
+  border: 1px solid color-mix(in srgb, var(--neon-cyan) 50%, transparent);
+  background: var(--neon-pane-strong);
+  backdrop-filter: var(--neon-blur);
+  -webkit-backdrop-filter: var(--neon-blur);
+  box-shadow: var(--pane-glow-cyan);
+}
+
+/* ===================================================================
+ * RIGHT PANEL — frosted glass with a violet glow edge
+ * ===================================================================*/
+body.isDarkTheme right-panel .side {
+  background: var(--neon-pane-strong) !important;
+  backdrop-filter: var(--neon-blur);
+  -webkit-backdrop-filter: var(--neon-blur);
+  border-left: 1px solid color-mix(in srgb, var(--neon-violet) 45%, transparent) !important;
+  box-shadow:
+    -16px 0 48px rgba(0, 0, 0, 0.45),
+    -1px 0 30px color-mix(in srgb, var(--neon-violet) 30%, transparent);
+}
+
+/* ===================================================================
+ * TASK DETAIL ITEMS — the per-field rows in the right panel. They get
+ * their surface from --task-detail-bg/-shadow (set above); add a glowing
+ * border so each item reads as a lit panel like the reference.
+ * ===================================================================*/
+body.isDarkTheme task-detail-item .input-item,
+body.isDarkTheme task-detail-item .mat-expansion-panel {
+  border: 1px solid color-mix(in srgb, var(--neon-violet) 32%, transparent) !important;
+}
+
+body.isDarkTheme task-detail-item .mat-expansion-panel.mat-expanded {
+  border-color: color-mix(in srgb, var(--neon-cyan) 45%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-cyan) 40%, transparent),
+    0 0 22px color-mix(in srgb, var(--neon-cyan) 26%, transparent) !important;
+}
+
+/* ===================================================================
+ * MAIN HEADER — translucent bar with a glowing under-edge
+ * ===================================================================*/
+body.isDarkTheme main-header .wrapper {
+  border-bottom: 1px solid color-mix(in srgb, var(--neon-violet) 30%, transparent);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--neon-violet) 14%, transparent);
+}
+
+/* ===================================================================
+ * TASKS — static per-row glow, intensified on state
+ * (no animation; box-shadow only — cheap to composite on long lists)
+ * ===================================================================*/
+body.isDarkTheme task .box {
+  border: 1px solid color-mix(in srgb, var(--neon-violet) 14%, transparent);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+body.isDarkTheme task:hover .box,
+body.isDarkTheme task .box:hover {
+  border-color: color-mix(in srgb, var(--neon-cyan) 40%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--neon-cyan) 25%, transparent);
+}
+
+body.isDarkTheme task.isSelected .box {
+  border-color: color-mix(in srgb, var(--neon-cyan) 55%, transparent);
+  box-shadow: var(--task-selected-shadow);
+}
+
+body.isDarkTheme task.isCurrent .box {
+  border-color: color-mix(in srgb, var(--neon-pink) 60%, transparent);
+  box-shadow: var(--task-current-shadow);
+}
+
+/* Running-task done-toggle halo (the pink "live" tell) */
+body.isDarkTheme task.isCurrent done-toggle .ico-btn {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--neon-pink) 55%, transparent);
+}
+
+/* ===================================================================
+ * CHIPS / TAGS — cyan glowing pills
+ * ===================================================================*/
+body.isDarkTheme .mat-mdc-standard-chip {
+  border: 1px solid color-mix(in srgb, var(--neon-cyan) 45%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--neon-cyan) 22%, transparent);
+}
+
+body.isDarkTheme .mat-mdc-chip:hover {
+  box-shadow: var(--glow-cyan);
+}
+
+/* ===================================================================
+ * PRIMARY BUTTONS — violet→pink gradient fill + glow
+ * ===================================================================*/
+body.isDarkTheme button[mat-raised-button][color='primary'],
+body.isDarkTheme button[mat-flat-button][color='primary'],
+body.isDarkTheme .mat-mdc-raised-button.mat-primary,
+body.isDarkTheme .mat-mdc-unelevated-button.mat-primary {
+  background: linear-gradient(120deg, var(--neon-violet), var(--neon-pink)) !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 0 16px color-mix(in srgb, var(--neon-violet) 50%, transparent) !important;
+  transition:
+    box-shadow var(--transition-fast),
+    filter var(--transition-fast) !important;
+}
+
+body.isDarkTheme button[mat-raised-button][color='primary']:hover,
+body.isDarkTheme button[mat-flat-button][color='primary']:hover,
+body.isDarkTheme .mat-mdc-raised-button.mat-primary:hover,
+body.isDarkTheme .mat-mdc-unelevated-button.mat-primary:hover {
+  filter: brightness(1.08);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 0 26px color-mix(in srgb, var(--neon-pink) 55%, transparent) !important;
+}
+
+/* Mini-fab / fab accent glow */
+body.isDarkTheme .mat-mdc-fab,
+body.isDarkTheme .mat-mdc-mini-fab {
+  box-shadow: 0 0 18px color-mix(in srgb, var(--neon-violet) 45%, transparent) !important;
+}
+
+/* ===================================================================
+ * FOCUS — neon cyan ring with halo
+ * ===================================================================*/
+body.isDarkTheme *:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 2px;
+  box-shadow: var(--glow-cyan);
+}
+
+/* ===================================================================
+ * SCROLLBAR — violet→cyan gradient thumb with glow
+ * ===================================================================*/
+body.isDarkTheme ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+body.isDarkTheme ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body.isDarkTheme ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--neon-violet), var(--neon-cyan));
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--neon-violet) 50%, transparent);
+}
+
+body.isDarkTheme ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--neon-cyan), var(--neon-pink));
+  background-clip: padding-box;
+}
+
+/* ===================================================================
+ * CHECKBOX / SLIDE-TOGGLE — accent glow when checked
+ * ===================================================================*/
+body.isDarkTheme .mat-mdc-checkbox.mat-mdc-checkbox-checked .mdc-checkbox__background {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--neon-cyan) 55%, transparent);
+}
+
+body.isDarkTheme
+  .mat-mdc-slide-toggle.mat-mdc-slide-toggle-checked
+  .mdc-switch__handle::after {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--neon-cyan) 55%, transparent);
 }

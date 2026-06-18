@@ -2321,6 +2321,7 @@
     "WEB_DAV_UPLOAD": "WebDAV: Ladataan tietoja..."
   },
   "MH": {
+    "HISTORY": "Historia",
     "ADD_NEW_TASK": "Lisää uusi tehtävä",
     "ALL_PLANNED_LIST": "Suunniteltu / Toista",
     "BOARDS": "Taulut",

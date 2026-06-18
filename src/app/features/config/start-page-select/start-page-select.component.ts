@@ -32,7 +32,7 @@ export class StartPageSelectComponent extends FieldType<FormlyFieldConfig> {
   readonly DefaultStartPage = DefaultStartPage;
 
   // Signal-based (CLAUDE.md prefers signals over observables).
-  // listSortedForUI filters archived + hidden-from-menu projects.
-  readonly projects = this._projectService.listSortedForUI;
+  // listInTreeOrderForUI filters archived + hidden-from-menu projects.
+  readonly projects = this._projectService.listInTreeOrderForUI;
   readonly appFeatures = this._globalConfigService.appFeatures;
 }

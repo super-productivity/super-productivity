@@ -208,16 +208,19 @@
               mat-icon-button
             >
               <mat-icon>flag</mat-icon>
-              <div class="time-badge">
-                @if (t.deadlineWithTime) {
-                  {{ t.deadlineWithTime | shortPlannedAt }}
-                } @else if (t.deadlineDay) {
+              @if (t.deadlineWithTime) {
+                <div
+                  class="time-badge"
+                  [innerHTML]="t.deadlineWithTime | shortPlannedAt"
+                ></div>
+              } @else if (t.deadlineDay) {
+                <div class="time-badge">
                   {{
                     t.deadlineDay
                       | localDateStr: globalTrackingIntervalService.todayDateStr()
                   }}
-                }
-              </div>
+                </div>
+              }
             </button>
           }
 

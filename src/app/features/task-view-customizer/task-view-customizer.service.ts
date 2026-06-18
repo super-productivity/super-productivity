@@ -1,15 +1,13 @@
-import { Injectable, signal, inject, effect } from '@angular/core';
+import { computed, effect, Injectable, inject, signal } from '@angular/core';
 import { Observable, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
-import { selectAllTags } from './../tag/store/tag.reducer';
 import { Store } from '@ngrx/store';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { computed } from '@angular/core';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getWeekRange } from '../../util/get-week-range';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -148,8 +146,7 @@ export class TaskViewCustomizerService {
 
   private _initTags(): void {
     if (!this._tagsLoaded) {
-      this.store
-        .select(selectAllTags)
+      toObservable(this._tagService.tagsInTreeOrder)
         .pipe(takeUntilDestroyed())
         .subscribe((tags) => {
           this._allTags = tags;
@@ -312,42 +309,61 @@ export class TaskViewCustomizerService {
       return collator.compare(a, b) * multiplier;
     };
 
+    const tagsInSidebarOrder = this._tagsInSidebarOrder();
+    const tagOrderById = new Map(tagsInSidebarOrder.map((tag, index) => [tag.id, index]));
+    const tagById = new Map(this._allTags.map((tag) => [tag.id, tag]));
+    const unknownTagRank = tagsInSidebarOrder.length;
+    const noTagRank = unknownTagRank + 1;
+    const getPrimaryTagSortInfo = (
+      task: TaskWithSubTasks,
+    ): { rank: number; title: string | null } => {
+      if (!task.tagIds?.length) {
+        return { rank: noTagRank, title: null };
+      }
+
+      let best: { rank: number; title: string | null } | null = null;
+
+      task.tagIds.forEach((tagId) => {
+        const tag = tagById.get(tagId);
+        const rank = tagOrderById.get(tagId) ?? unknownTagRank;
+        const candidate = { rank, title: tag?.title ?? null };
+
+        if (
+          !best ||
+          candidate.rank < best.rank ||
+          (candidate.rank === best.rank &&
+            candidate.title !== null &&
+            best.title !== null &&
+            sortByTitle(candidate.title, best.title) < 0)
+        ) {
+          best = candidate;
+        }
+      });
+
+      return best ?? { rank: unknownTagRank, title: null };
+    };
+
+    const sortByTagTitle = (a: TaskWithSubTasks, b: TaskWithSubTasks): number => {
+      const aTag = getPrimaryTagSortInfo(a);
+      const bTag = getPrimaryTagSortInfo(b);
+
+      if (aTag.rank !== bTag.rank) {
+        return (aTag.rank - bTag.rank) * factor;
+      }
+
+      if (aTag.title && bTag.title && aTag.title !== bTag.title) {
+        return sortByTitle(aTag.title, bTag.title, factor);
+      }
+
+      return sortByTitle(a.title, b.title, factor);
+    };
+
     switch (sortType) {
       case SORT_OPTION_TYPE.name:
         return tasksCopy.sort((a, b) => sortByTitle(a.title, b.title, factor));
 
       case SORT_OPTION_TYPE.tag: {
-        // Order tasks by their tag's position in the sidebar (menu-tree) order so
-        // sorting matches the tag-toggle menu instead of going alphabetical. A
-        // task is placed by its highest-priority tag (lowest sidebar index). (#8400)
-        const tagOrderIndex = this._getTagOrderIndexMap();
-        const getPrimaryTagOrder = (t: TaskWithSubTasks): number | null => {
-          let min: number | null = null;
-          for (const id of t.tagIds) {
-            const idx = tagOrderIndex.get(id);
-            if (idx === undefined) continue;
-            if (min === null || idx < min) min = idx;
-          }
-          return min;
-        };
-
-        return tasksCopy.sort((a, b) => {
-          const aOrder = getPrimaryTagOrder(a);
-          const bOrder = getPrimaryTagOrder(b);
-
-          if (aOrder !== null && bOrder !== null) {
-            // Same primary tag - fall back to task title
-            if (aOrder === bOrder) return sortByTitle(a.title, b.title, factor);
-            return (aOrder - bOrder) * factor;
-          }
-
-          // Both untagged - sort by task title
-          if (aOrder === null && bOrder === null)
-            return sortByTitle(a.title, b.title, factor);
-
-          // Tagged tasks come before untagged ones
-          return aOrder !== null ? -1 * factor : 1 * factor;
-        });
+        return tasksCopy.sort(sortByTagTitle);
       }
 
       case SORT_OPTION_TYPE.creationDate:
@@ -390,21 +406,13 @@ export class TaskViewCustomizerService {
     tasks: TaskWithSubTasks[],
     groupType: GROUP_OPTION_TYPE | null,
   ): Record<string, TaskWithSubTasks[]> {
+    if (groupType === GROUP_OPTION_TYPE.tag) {
+      return this._groupByTag(tasks);
+    }
+
     return tasks.reduce(
       (acc, task) => {
-        if (groupType === GROUP_OPTION_TYPE.tag) {
-          if (task.tagIds && task.tagIds.length > 0) {
-            task.tagIds.forEach((tagId) => {
-              const tag = this._allTags.find((t) => t.id === tagId);
-              const key = tag ? tag.title : 'Unknown tag';
-              acc[key] = acc[key] || [];
-              acc[key].push(task);
-            });
-          } else {
-            acc['No tag'] = acc['No tag'] || [];
-            acc['No tag'].push(task);
-          }
-        } else if (groupType === GROUP_OPTION_TYPE.project) {
+        if (groupType === GROUP_OPTION_TYPE.project) {
           const project = this._allProjects.find((p) => p.id === task.projectId);
           const key = project ? project.title : 'No project';
           acc[key] = acc[key] || [];
@@ -463,15 +471,8 @@ export class TaskViewCustomizerService {
    * its trailing index can never leak into ordering (it's never a real task tag).
    */
   private _tagsInSidebarOrder(): Tag[] {
-    return this._menuTreeService.flattenTagViewTree(
+    return this._menuTreeService.buildTagListInTreeOrder(
       this._allTags.filter((t) => t.id !== TODAY_TAG.id),
-    );
-  }
-
-  /** Tag id → position in the sidebar (menu-tree) order. */
-  private _getTagOrderIndexMap(): Map<string, number> {
-    return new Map(
-      this._tagsInSidebarOrder().map((tag, index): [string, number] => [tag.id, index]),
     );
   }
 
@@ -488,6 +489,49 @@ export class TaskViewCustomizerService {
       }
     });
     return titleOrder;
+  }
+
+  private _groupByTag(tasks: TaskWithSubTasks[]): Record<string, TaskWithSubTasks[]> {
+    const tagById = new Map(this._allTags.map((tag) => [tag.id, tag]));
+    const groupedByTagId = new Map<string, TaskWithSubTasks[]>();
+    const unknownTagTasks: TaskWithSubTasks[] = [];
+    const noTagTasks: TaskWithSubTasks[] = [];
+
+    tasks.forEach((task) => {
+      if (!task.tagIds?.length) {
+        noTagTasks.push(task);
+        return;
+      }
+
+      task.tagIds.forEach((tagId) => {
+        if (tagById.has(tagId)) {
+          const tagTasks = groupedByTagId.get(tagId) ?? [];
+          tagTasks.push(task);
+          groupedByTagId.set(tagId, tagTasks);
+        } else {
+          unknownTagTasks.push(task);
+        }
+      });
+    });
+
+    const grouped: Record<string, TaskWithSubTasks[]> = {};
+    this._allTags.forEach((tag) => {
+      const tagTasks = groupedByTagId.get(tag.id);
+      if (tagTasks?.length) {
+        // Distinct tags can share a title; merge their tasks into the same
+        // title-keyed bucket instead of overwriting, matching the previous
+        // grouping behavior and _getTagTitleOrderMap's single-slot contract.
+        grouped[tag.title] = (grouped[tag.title] ?? []).concat(tagTasks);
+      }
+    });
+    if (unknownTagTasks.length) {
+      grouped['Unknown tag'] = unknownTagTasks;
+    }
+    if (noTagTasks.length) {
+      grouped['No tag'] = noTagTasks;
+    }
+
+    return grouped;
   }
 
   private _filterByDateFields(

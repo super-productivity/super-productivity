@@ -8,7 +8,7 @@ import { T } from '../../../t.const';
 import { FocusModeService } from '../../../features/focus-mode/focus-mode.service';
 import { MetricService } from '../../../features/metric/metric.service';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
-import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { DateService } from '../../../core/date/date.service';
 import { FocusModeMode } from '../../../features/focus-mode/focus-mode.model';
 import { ProgressCircleComponent } from '../../../ui/progress-circle/progress-circle.component';

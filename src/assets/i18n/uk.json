@@ -7,7 +7,8 @@
     },
     "B_OFFLINE": "Ви не підключені до інтернету. Синхронізація та запит даних з провайдера завдань не працюватимуть.",
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "Змінити фон"
+      "CHANGE_PROJECT_SETTINGS": "Змінити налаштування проекту",
+      "CHANGE_TAG_SETTINGS": "Змінити налаштування тегів"
     },
     "SKIP_SYNC_WAIT": "Пропустити очікування синхронізації",
     "UPDATE_WEB_APP": "Доступна нова версія. Завантажити нову версію?"
@@ -20,14 +21,33 @@
     "SHOW_NOTES": "Нотатки проєкту"
   },
   "CONFIRM": {
-    "AUTO_FIX": "Схоже, ваші дані пошкоджені (\"{{validityError}}\"). Бажаєте спробувати автоматично виправити їх? Це може призвести до часткової втрати даних.",
+    "DELETE_SECTION": "Ви впевнені, що хочете видалити цей розділ? Завдання в ньому будуть переміщені до списку завдань.",
     "RELOAD_AFTER_IDB_ERROR": "Неможливо отримати доступ до бази даних :( Можливі причини - оновлення програми у фоновому режимі або недостатньо місця на диску. Якщо ви встановили програму на Linux як snap, вам також потрібно включити функцію оновлення 'snap set core experimental.refresh-app-awareness=true', поки вони не виправлять цю проблему. Натисніть OK, щоб перезавантажити програму (на деяких платформах може знадобитися ручний перезапуск програми).",
     "RESTORE_FILE_BACKUP": "Схоже, ДАНИХ НЕМАЄ, але є резервні копії в \"{{dir}}\". Бажаєте відновити останню резервну копію від {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Схоже, ДАНИХ НЕМАЄ, але є резервна копія. Бажаєте завантажити її?",
+    "RESTORE_FILE_BACKUP_MOBILE": "На цьому пристрої не знайдено даних, але доступна резервна копія для відновлення (завдання: {{tasks}}, проекти: {{projects}}). Відновити?",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Відновити останню автоматичну резервну копію (завдання: {{tasks}}, проекти: {{projects}})? Це замінить усі поточні дані на цьому пристрої та, якщо ви використовуєте синхронізацію, перезапише дані на інших пристроях під час наступної синхронізації.",
     "RESTORE_STRAY_BACKUP": "Під час останньої синхронізації могла виникнути помилка. Бажаєте відновити останню резервну копію?"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Натисніть Enter ще раз, щоб зберегти"
+    "MONTH": "Місяць",
+    "NEXT_24_YEARS": "Наступні 24 роки",
+    "NEXT_MONTH": "Наступний місяць",
+    "NEXT_YEAR": "Наступний рік",
+    "PRESS_ENTER_AGAIN": "Натисніть Enter ще раз, щоб зберегти",
+    "PREVIOUS_24_YEARS": "Попередні 24 роки",
+    "PREVIOUS_MONTH": "Попередній місяць",
+    "PREVIOUS_YEAR": "Попередній рік",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Вибрати рік",
+    "SWITCH_TO_YEAR_VIEW": "Вибрати місяць"
+  },
+  "DIALOG_LOGS": {
+    "COPY": "Копіювати",
+    "HINT": "Журнали з цього сеансу. Використовуйте «Копіювати» для коротких журналів (вставити у звіт про помилку) або «Поділитися файлом», щоб надіслати повний файл.",
+    "S_COPY_FAILED": "Не вдалося скопіювати журнали в буфер обміну",
+    "S_SHARE_FAILED": "Не вдалося поділитися журналами",
+    "SHARE_FILE": "Поділитися файлом",
+    "TITLE": "Журнали"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "BY": "від",
@@ -60,13 +80,39 @@
     }
   },
   "F": {
+    "ANDROID": {
+      "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android заблокував постійне сповіщення про режим фокусування. Таймер продовжує працювати в додатку, але фонові сповіщення можуть бути недоступні. Перевірте дозвіл на сповіщення та обмеження щодо використання батареї/фону.",
+      "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android заблокував сповіщення про постійне відстеження часу. Час все ще відстежується в додатку, але фонове відновлення може бути недоступним. Перевірте дозвіл на сповіщення та обмеження щодо використання батареї/фонового режиму.",
+      "OPEN_NOTIFICATION_SETTINGS": "Відкрити налаштування"
+    },
+    "AZURE_DEVOPS": {
+      "FORM": {
+        "HOST": "Хост (URL-адреса організації або колекції)",
+        "HOST_DESCRIPTION": "Використовуйте повну URL-адресу Azure DevOps, наприклад https://dev.azure.com/your-org або https://server:8080/tfs/DefaultCollection.",
+        "AUTO_IMPORT_LIMIT": "Ліміт автоматичного імпорту",
+        "AUTO_IMPORT_LIMIT_DESCRIPTION": "Максимальна кількість робочих елементів Azure DevOps для автоматичного імпорту журналу обробки. Макс. {{max}}.",
+        "PROJECT": "Проект",
+        "SCOPE": "Область застосування (лише для автоматичного імпорту)",
+        "SCOPE_ALL": "Усі",
+        "SCOPE_ASSIGNED": "Призначено мені",
+        "SCOPE_CREATED": "Створено мною",
+        "TOKEN": "Персональний токен доступу"
+      }
+    },
     "ATTACHMENT": {
+      "LOCAL_FILE_UNAVAILABLE": "Цей вкладений файл доступний лише на тому пристрої, на який його було додано.",
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Додати вкладення",
         "EDIT_ATTACHMENT": "Редагувати вкладення",
         "LABELS": {
+          "FILE": "Шлях до файлу",
           "IMG": "Зображення",
           "LINK": "Посилання"
+        },
+        "PLACEHOLDERS": {
+          "FILE": "/path/to/file",
+          "IMG": "https://example.com/image.png",
+          "LINK": "https://example.com"
         },
         "SELECT_TYPE": "Виберіть тип",
         "TYPES": {
@@ -96,7 +142,29 @@
         "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Тільки беклог",
         "BACKLOG_TASK_FILTER_TYPE": "Завдання беклогу",
         "COLUMNS": "Стовпці",
+        "ONLY_PARENT_TASKS": "Тільки батьківські завдання",
+        "PROJECT": "Проект",
+        "PROJECT_ALL": "Всі проекти",
+        "SCHEDULED_STATE": "Запланований стан",
+        "SCHEDULED_STATE_ALL": "Усі",
+        "SCHEDULED_STATE_NOT_SCHEDULED": "Не заплановано",
+        "SCHEDULED_STATE_SCHEDULED": "Заплановано",
+        "SORT_BY": "Сортувати за",
+        "SORT_BY_CREATED": "Створено",
+        "SORT_BY_DUE": "Дата дедлайну",
+        "SORT_BY_MANUAL": "Вручну",
+        "SORT_BY_TIME_ESTIMATE": "Оцінка часу",
+        "SORT_BY_TITLE": "Назва",
+        "SORT_DIR": "Напрямок",
+        "SORT_DIR_ASC": "За зростанням",
+        "SORT_DIR_DESC": "За спаданням",
         "TAGS_EXCLUDED": "Виключені теги",
+        "TAGS_EXCLUDED_MATCH_ALL": "Виключити, лише якщо всі збігаються (І)",
+        "TAGS_EXCLUDED_MATCH_ANY": "Виключити, якщо є збіг (АБО)",
+        "TAGS_EXCLUDED_MATCH_MODE": "Excluded tag match",
+        "TAGS_MATCH_ALL": "Збіг всіх (І)",
+        "TAGS_MATCH_ANY": "Збіг будь-якого (АБО)",
+        "TAGS_MATCH_MODE": "Обов'язковий збіг тегів",
         "TAGS_REQUIRED": "Обов'язкові теги",
         "TASK_DONE_STATE": "Стан виконання завдання",
         "TASK_DONE_STATE_ALL": "Увесь",
@@ -106,10 +174,10 @@
       "V": {
         "ADD_NEW_BOARD": "Додати нову дошку",
         "CONFIRM_DELETE": "Невже ви хочете видалити цю дошку?",
-        "CREATE_NEW_TAGS_BTN": "Створення тегів",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} потрібно створити нові теги, щоб ця дошка працювала",
         "CREATE_NEW_TAG_BTN": "Створити тег",
         "CREATE_NEW_TAG_MSG": "Потрібно створити 1 новий тег, щоб ця дошка працювала",
+        "CREATE_NEW_TAGS_BTN": "Створення тегів",
+        "CREATE_NEW_TAGS_MSG": "{{nr}} потрібно створити нові теги, щоб ця дошка працювала",
         "EDIT_BOARD": "Редагувати дошку",
         "NO_PANELS_BTN": "Налаштуйте дошку",
         "NO_PANELS_MSG": "Ця дошка не має налаштованих панелей. Додайте до неї кілька панелей."
@@ -122,6 +190,8 @@
         "CALDAV_RESOURCE": "Назва ресурсу CalDav (календар)",
         "CALDAV_URL": "CalDav URL (базовий URL)",
         "CALDAV_USER": "Ваше ім'я користувача CalDav",
+        "IS_ADD_SUB_TASKS": "Також імпортувати підзавдання, коли додано завдання",
+        "POLL_INTERVAL_MINUTES": "Інтервал опитування (хвилини)",
         "TWO_WAY_SYNC_BOTH": "Обидва (двонаправлена)",
         "TWO_WAY_SYNC_NOTES": "Напрямок синхронізації нотаток / опису",
         "TWO_WAY_SYNC_OFF": "Вимкнено",
@@ -153,44 +223,43 @@
         "SHOW_TASK": "Показати завдання",
         "TXT": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подій заплановано)",
-          "ONE": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подія очікує)"
+          "ONE": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подія очікує)",
+          "OTHER": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подій заплановано)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> почалося о <strong>{{start}}</strong>!",
         "TXT_PAST_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> почалося о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подій заплановано)",
-          "ONE": "<strong>{{title}}</strong> почалася о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подія очікує)"
+          "ONE": "<strong>{{title}}</strong> почалася о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подія очікує)",
+          "OTHER": "<strong>{{title}}</strong> почалося о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} подій заплановано)"
         }
       },
       "EVENT_STRINGS": {
-        "EVENTS_STR": "події",
-        "EVENT_STR": "подія"
+        "EVENT_STR": "подія",
+        "EVENTS_STR": "події"
+      },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "Створити як завдання",
+        "OPEN_IN_CALENDAR": "Відкрити в календарі",
+        "RESCHEDULE": "Перенести",
+        "DELETE_EVENT": "Видалити подію"
       },
       "S": {
-        "CAL_PROVIDER_ERROR": "Помилка постачальника календаря: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Помилка постачальника календаря: {{errTxt}}",
+        "CAL_PROVIDER_NOT_ICAL": "URL-адреса Календаря не повернула дані iCal. Можливо, термін дії посилання для спільного доступу минув, воно було скасовано або вимагало входу. Спробуйте створити нову URL-адресу для спільного доступу.",
+        "EVENT_HIDDEN": "Подія календаря прихована",
+        "EVENT_MOVED": "Подія посунута",
+        "EVENT_RESCHEDULED": "Подія перенесена",
+        "EVENT_DELETED": "Подія видалена",
+        "TIME_BLOCK_ERROR": "Не вдалося синхронізувати часовий блок: {{errTxt}}"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "Зображення успішно вставлено",
+      "SIZE_EXCEEDED": "Розмір зображення ({{actualSize}}) перевищує максимально допустимий ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "Квоту сховища вичерпано. Звільніть місце або зменште розмір зображень."
     },
     "CONFIG": {
       "S": {
         "UPDATE_SECTION": "Оновлено налаштування для <strong>{{sectionKey}}</strong>"
-      }
-    },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "Повторює налаштовану фразу кожні X під час відстеження часу завдання.",
-        "L_INTERVAL": "Інтервал повторення фрази",
-        "L_TEXT": "Текст",
-        "L_TEXT_DESCRIPTION": "Наприклад: \"Працюй над ${currentTaskTitle}!\"",
-        "L_VOICE": "Виберіть голос",
-        "L_VOICE_DESCRIPTION": "Виберіть голос для озвучення",
-        "TITLE": "Голосове нагадування"
-      }
-    },
-    "DROPBOX": {
-      "S": {
-        "OFFLINE": "Dropbox: Неможливо синхронізувати, оскільки немає підключення",
-        "SYNC_ERROR": "Dropbox: Помилка під час синхронізації",
-        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Неможливо згенерувати PKCE-виклик."
       }
     },
     "D_RATE": {
@@ -211,9 +280,23 @@
       "TITLE": "Подобається Super Productivity?",
       "TXT": "Це <strong>безкоштовний проєкт з відкритим кодом</strong>, створений ентузіастами — без відстеження й реклами. Оцінка або коротке повідомлення допомагає більшій кількості людей знайти його."
     },
+    "DROPBOX": {
+      "S": {
+        "OFFLINE": "Dropbox: Неможливо синхронізувати, оскільки немає підключення",
+        "SYNC_ERROR": "Dropbox: Помилка під час синхронізації",
+        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Неможливо згенерувати PKCE-виклик."
+      }
+    },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "У вашому списку на сьогодні є {{nr}} виконаних завдань, які ще не перенесені в архів. Ви дійсно хочете вийти без завершення дня?"
+        "DONT_QUIT": "Не виходити",
+        "FINISH_DAY": "Завершити день",
+        "QUIT": "Вийти",
+        "TITLE": "Завершити день перед тим, як вийти?",
+        "UNARCHIVED_TASKS": {
+          "ONE": "1 виконане завдання зі списку «Сьогодні» ще не переміщено до архіву.",
+          "OTHER": "{{nr}} виконаних завдань у вашому списку «Сьогодні» ще не переміщено до архіву."
+        }
       }
     },
     "FOCUS_MODE": {
@@ -226,27 +309,31 @@
         "POMODORO_BREAK_RUNNING": "Перерва №{{cycleNr}} триває",
         "POMODORO_SESSION_RUNNING": "Сесія Помодоро №{{cycleNr}} триває",
         "RESUME": "Відновити",
+        "SESSION_OVERTIME": "Понаднормовий час сесії — зробіть перерву, коли будете готові",
         "SESSION_RUNNING": "Запущено сеанс зосередження",
         "START": "Старт",
         "TO_FOCUS_OVERLAY": "Накладання фокуса"
       },
       "BACK_TO_PLANNING": "Повернутись до планування",
       "BREAK_RELAX_MSG": "Знайдіть хвилинку, щоб розслабитися",
+      "BREAK_TITLE": "Перерва",
+      "BROWSER_TITLE_BREAK": "Перерва",
+      "BROWSER_TITLE_PAUSED": "Призупинено",
       "CLICK_TO_EDIT_DURATION": "Натисніть, щоб змінити тривалість",
       "COMPLETE_FOCUS_SESSION": "Завершити сеанс фокусування",
-      "CONTINUE_TO_NEXT_SESSION": "Продовжити до наступної сесії",
       "COUNTDOWN": "Відлік",
       "COUNTDOWN_HINT": "Фокусуйтеся, поки таймер не досягне нуля",
       "FINISH_TASK_AND_SELECT_NEXT": "Завершити завдання і вибрати наступне",
-      "FLOWTIME": "Час протікання",
+      "FLOWTIME": "Потік",
       "FLOWTIME_HINT": "Гнучкий темп без суворих таймерів",
       "FOCUS_TIME_TOOLTIP": "Час фокусування",
       "GET_READY": "Приготуйтеся до сеансу фокусування!",
-      "GOGOGO": "Вперед, вперед, вперед!!!",
       "GO_TO_PROCRASTINATION": "Отримати допомогу при прокрастинації",
+      "GOGOGO": "Вперед, вперед, вперед!!!",
       "LONG_BREAK": "Довга перерва",
       "LONG_BREAK_TITLE": "Довга перерва",
       "ON": "на",
+      "OVERTIME_MSG": "Час вийшов — зробіть перерву, коли будете готові",
       "OPEN_ISSUE_IN_BROWSER": "Відкрити завдання в браузері",
       "PAUSE_BREAK": "Призупинити перерву",
       "PAUSE_SESSION": "Призупинити сесію",
@@ -256,10 +343,24 @@
       "POMODORO_HINT": "Структуровані спринти з плановими перервами",
       "POMODORO_SESSION_COMPLETED": "Сесію Помодоро завершено!",
       "POMODORO_SETTINGS": "Налаштування Помодоро",
+      "FLOWTIME_SETTINGS": "Налаштування Потоку",
+      "FLOWTIME_ENABLE_BREAKS": "Увімкнути перерви Потоку",
+      "FLOWTIME_BREAK_MODE": "Режим розрахунку перерви",
+      "FLOWTIME_BREAK_MODE_RATIO": "На основі співвідношення",
+      "FLOWTIME_BREAK_MODE_RULE": "На основі правил",
+      "FLOWTIME_BREAK_PERCENTAGE": "Відсоток перерви",
+      "FLOWTIME_BREAK_PERCENTAGE_DESC": "Робіть перерву протягом цього відсотка тривалості робочого сеансу.",
+      "FLOWTIME_BREAK_RULES_DESC": "Правила оцінюються у порядку зростання. Якщо діапазони перетинаються, використовується перше відповідне правило.",
+      "FLOWTIME_ADD_BREAK_RULE": "Додати правило перерви",
+      "FLOWTIME_VALIDATION_MIN_MAX": "Максимальна тривалість має бути більшою або дорівнювати мінімальній тривалості",
+      "FLOWTIME_BREAK_RULE_MIN": "Мінімальна тривалість роботи (хв)",
+      "FLOWTIME_BREAK_RULE_MAX": "Максимальна тривалість роботи (хв)",
+      "FLOWTIME_BREAK_RULE_DURATION": "Тривалість перерви (хв)",
       "PREP_GET_MENTALLY_READY": "Підготуйтеся ментально бути зосередженим і продуктивним",
       "PREP_SIT_UPRIGHT": "Сядьте (або встаньте) прямо",
       "PREP_STRETCH": "Зробіть легку розтяжку",
       "REMOVE_TIME_MINUTE": "Видалити 1 хвилину",
+      "RESET_CYCLES": "Скинути лічильник сеансів",
       "RESUME_BREAK": "Відновити перерву",
       "RESUME_SESSION": "Відновити сесію",
       "SELECT_MODE": "Оберіть режим фокусування",
@@ -271,15 +372,17 @@
       "SHORT_BREAK_TITLE": "Коротка перерва",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Показати/приховати нотатки та вкладення завдання",
       "SKIP_BREAK": "Пропустити перерву",
-      "START_BREAK": "Почати перерву",
       "START_FOCUS_SESSION": "Розпочати сеанс фокусування",
       "START_NEXT_FOCUS_SESSION": "Розпочати наступний сеанс фокусування",
       "SWITCH_TASK": "Змінити завдання",
-      "WORKED_FOR": "Ви працювали протягом",
-      "RESET_CYCLES": "Скинути лічильник сеансів"
+      "WORKED_FOR": "Ви працювали протягом"
     },
     "GITEA": {
       "FORM": {
+        "EXCLUDE_LABELS": "Виключити мітки (необов'язково)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Список назв міток, розділених комами. Завдання з будь-якою з цих міток будуть виключені.",
+        "FILTER_LABELS": "Фільтрувати за мітками (необов'язково)",
+        "FILTER_LABELS_DESCRIPTION": "Список назв міток, розділених комами. Синхронізуватимуться лише завдання з усіма цими мітками. Залиште поле порожнім, щоб синхронізувати всі завдання, що відповідають області застосування.",
         "HOST": "Хост (наприклад: https://try.gitea.io)",
         "REPO_FULL_NAME": "Ім'я користувача або назва організації/проекту",
         "REPO_FULL_NAME_DESCRIPTION": "Можна знайти як частину URL-адреси при перегляді проекту в браузері.",
@@ -306,11 +409,11 @@
     "GITLAB": {
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "Заповнений час містить невідстежені дані з минулих днів.",
-        "TITLE": "Надіслати час, витрачений на завдання, до GitLab",
-        "TOTAL_MSG": "Ви надішлете <em>{{totalTimeToSubmit}}</em> робочого часу за сьогодні для <em>{{nrOfTasksToSubmit}}</em> різних завдань.",
         "T_ALREADY_TRACKED": "Вже відстежено",
         "T_TITLE": "Назва",
-        "T_TO_BE_SUBMITTED": "Буде надіслано"
+        "T_TO_BE_SUBMITTED": "Буде надіслано",
+        "TITLE": "Надіслати час, витрачений на завдання, до GitLab",
+        "TOTAL_MSG": "Ви надішлете <em>{{totalTimeToSubmit}}</em> робочого часу за сьогодні для <em>{{nrOfTasksToSubmit}}</em> різних завдань."
       },
       "FORM": {
         "FILTER": "Користувацький фільтр",
@@ -352,11 +455,21 @@
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Ця інтеграція, швидше за все, не буде працювати у вашому браузері. Завантажте версію Super Productivity для настільних комп'ютерів або Android!",
       "DEFAULT": {
-        "ISSUES_STR": "завдання",
-        "ISSUE_STR": "завдання"
+        "ISSUE_STR": "завдання",
+        "ISSUES_STR": "завдання"
       },
+      "DEFAULT_NOTE_LABEL": "Нотатка за замовчуванням для імпортованих завдань",
       "DEFAULT_PROJECT_DESCRIPTION": "Проект призначається завданням, створеним з проблем.",
       "DEFAULT_PROJECT_LABEL": "Суперпродуктивний проект за замовчуванням",
+      "DEFAULT_TAGS_LABEL": "Теги за замовчуванням для імпортованих завдань",
+      "FORM": {
+        "AUTO_ADD_TO_BACKLOG": "Автоматичний імпорт до проєкту за замовчуванням (потрібен проєкт за замовчуванням)",
+        "AUTO_POLL": "Перевіряти імпортовані на наявність змін та сповістити",
+        "POLLING_MODE": "Тригер перевірки",
+        "POLLING_MODE_DESCRIPTION": "Коли періодично перевіряти: лише тоді, коли відкритий відповідний проєкт або тег, або завжди у фоновому режимі",
+        "POLLING_MODE_WHEN_PROJECT_OPEN": "Коли відкритий контекст",
+        "POLLING_MODE_ALWAYS": "Завжди (у фоновому режимі)"
+      },
       "HOW_TO_GET_A_TOKEN": "Як отримати токен?",
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Виконавець",
@@ -385,6 +498,9 @@
         "WORKLOG": "Робочий журнал"
       },
       "S": {
+        "AUTO_CREATE_FAILED": "Автоматичне створення задачі не вдалося: {{errorMsg}}",
+        "CONNECTION_FAILED": "Помилка з'єднання",
+        "CONNECTION_SUCCESS": "З'єднання працює!",
         "ERR_GENERIC": "{{issueProviderName}} Помилка: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: Запит не вдався через мережеву помилку на стороні клієнта",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Неправильно налаштовано",
@@ -393,29 +509,51 @@
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: Оновлення не потрібне",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Оновлено дані для {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Оновлено дані для \"{{issueTitle}}\"",
+        "PLUGIN_NOT_INSTALLED": "Необхідний плагін \"{{pluginName}}\" не встановлено.",
         "POLLING_BACKLOG": "{{issueProviderName}}: Опитування нових {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Опитування змін для {{issuesStr}}",
-        "AUTO_CREATE_FAILED": "Автоматичне створення задачі не вдалося: {{errorMsg}}",
-        "CONNECTION_FAILED": "Помилка з'єднання",
-        "CONNECTION_SUCCESS": "З'єднання працює!",
-        "PLUGIN_NOT_INSTALLED": "Необхідний плагін \"{{pluginName}}\" не встановлено.",
+        "DELETE_REMOTE_FAILED": "Не вдалося видалити віддалене завдання",
+        "LOAD_OPTIONS_FAILED": "Не вдалося завантажити параметри для {{fieldKey}}",
+        "OAUTH_CONNECTED": "Обліковий запис OAuth успішно підключено.",
+        "OAUTH_DISCONNECTED": "Обліковий запис OAuth відключено.",
+        "OAUTH_FAILED": "Не вдалося виконати автентифікацію.",
+        "OAUTH_FAILED_WITH_DETAIL": "Помилка автентифікації: {{detail}}",
+        "REMOTE_ISSUE_DELETED": "Віддалене завдання видалено. Видалити пов’язане завдання \"{{taskTitle}}\"?",
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Віддалене завдання було видалено, але завдання \"{{taskTitle}}\" відстежує час. Видалити все одно?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Помилка двонаправленої синхронізації: {{errorMsg}}"
-      },
-      "DIALOG": {
-        "ADVANCED_CONFIG": "Розширені налаштування",
-        "DELETE_CONFIRM": "Ви впевнені, що хочете видалити цього постачальника задач? Видалення означає, що <strong>усі раніше імпортовані задачі втратять своє посилання</strong>. Цю дію не можна скасувати!"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Автоматично створювати задачі для нових завдань",
         "AUTO_CREATE_ISSUES_DESCRIPTION": "Автоматично створює задачу, коли ви додаєте нове завдання верхнього рівня до проєкту за замовчуванням. Потрібно встановити проєкт за замовчуванням.",
+        "AUTO_CREATE_TAGS": "Автоматичне створення тегів для синхронізованих міток",
+        "AUTO_CREATE_TAGS_DESCRIPTION": "Автоматично створює локальні теги, коли невідомі мітки отримуються з віддаленого постачальника.",
         "BOTH": "Обидва (двонаправлена)",
+        "DUE_DAY": "День виконання",
+        "DUE_WITH_TIME": "Дата/час виконання",
         "NOTES": "Напрямок синхронізації нотаток / опису",
         "OFF": "Вимкнено",
         "PULL_ONLY": "Тільки завантаження",
         "PUSH_ONLY": "Тільки вивантаження",
         "SECTION": "Двонаправлена синхронізація (експериментальна)",
         "STATUS": "Напрямок синхронізації статусу",
+        "TAGS": "Напрямок синхронізації тегів/категорій",
+        "TIME_ESTIMATE": "Оцінка часу",
         "TITLE": "Напрямок синхронізації назви"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Розширені налаштування",
+        "CONNECTED": "Підключено",
+        "DELETE_CONFIRM": "Ви впевнені, що хочете видалити цього постачальника задач? Видалення означає, що <strong>усі раніше імпортовані задачі втратять своє посилання</strong>. Цю дію не можна скасувати!",
+        "DISCONNECT": "Відключитися",
+        "EDIT_TITLE": "Редагувати конфігурацію {{title}}",
+        "LOAD_OPTIONS": "Параметри завантаження",
+        "LOAD_OPTIONS_FAILED": "Не вдалося завантажити параметри",
+        "LOADING_OPTIONS": "Завантаження параметрів...",
+        "OAUTH_UNAVAILABLE_WEB": "Доступно в настільних та мобільних додатках. Синхронізовані налаштування зберігаються, але дані в реальному часі не можна завантажити у веб-додаток.",
+        "OPTIONS_LOADED": "Завантажено параметри",
+        "RELOAD_OPTIONS": "Завантажити параметри знову",
+        "SETUP_TITLE": "Налаштувати {{title}} конфігурацію",
+        "TEST_CONNECTION": "Протестувати з'єднання"
       }
     },
     "ISSUE_PANEL": {
@@ -430,8 +568,8 @@
       },
       "CFG_CMP": {
         "ALWAYS_ASK": "Завжди відкривати діалог",
-        "DONE": "Статус для завершення завдання",
         "DO_NOT": "Не переходити",
+        "DONE": "Статус для завершення завдання",
         "ENABLE": "Увімкнути інтеграцію з Jira",
         "ENABLE_TRANSITIONS": "Увімкнути обробку переходів",
         "IN_PROGRESS": "Статус для початку завдання",
@@ -489,9 +627,11 @@
         "ALLOW_SELF_SIGNED": "Дозволити самопідписаний сертифікат",
         "HOST": "Хост (наприклад: http://my-host.de:1234)",
         "PASSWORD": "Токен / Пароль",
-        "USER_NAME": "Електронна пошта / Ім'я користувача",
         "USE_PAT": "Використовувати персональний токен доступу замість пароля",
-        "WONKY_COOKIE_MODE": "Режим Wonky Cookie для аутентифікації (лише для десктопної програми)"
+        "USER_NAME": "Електронна пошта / Ім'я користувача",
+        "WONKY_COOKIE_MODE": "Режим Wonky Cookie для аутентифікації (лише для десктопної програми)",
+        "ALLOW_FETCH_FALLBACK": "Завантажити Jira безпосередньо з браузера (в обхід розширення)",
+        "ALT_PUBLIC_LINK_HOST": "Альтернативний хост для посилань Jira (наприклад, публічна URL-адреса, коли хост API відрізняється; дозволено префікс шляху)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Розширені налаштування",
@@ -537,8 +677,8 @@
         "NO_VALID_TRANSITION": "Jira: Не налаштовано дійсний перехід",
         "TIMED_OUT": "Jira: Запит завершився з перевищенням часу очікування",
         "TRANSITION": "Jira: Встановлено завдання \"{{issueKey}}\" на \"{{name}}\"",
-        "TRANSITIONS_LOADED": "Jira: Переходи завантажено. Використовуйте вибір нижче, щоб призначити їх",
         "TRANSITION_SUCCESS": "Jira: Встановлено завдання {{issueKey}} на <strong>{{chosenTransition}}</strong>",
+        "TRANSITIONS_LOADED": "Jira: Переходи завантажено. Використовуйте вибір нижче, щоб призначити їх",
         "UNABLE_TO_REASSIGN": "Jira: Не вдалося перепризначити тікет на себе, оскільки ви не вказали ім'я користувача. Будь ласка, перейдіть до налаштувань."
       },
       "STEPPER": {
@@ -631,12 +771,39 @@
         "PLACEHOLDER_3": "Де фокус був втрачений — і як його захистити?",
         "PLACEHOLDER_4": "Яке завдання дало вам енергію? Яке виснажило?",
         "PLACEHOLDER_5": "Одну річ повторити. Одну річ змінити.",
+        "REMIND_LABEL": "Нагадати мені завтра про це",
         "REMINDER_CREATED": "Нагадування про рефлексію заплановано на завтра",
         "REMINDER_ERROR": "Не вдалося запланувати нагадування",
         "REMINDER_NEEDS_TEXT": "Напишіть рефлексію перед тим, як просити нагадування",
         "REMINDER_TASK_TITLE": "Повернутися до нотатки рефлексії",
-        "REMIND_LABEL": "Нагадати мені завтра про це",
         "TITLE": "Нотатка рефлексії"
+      }
+    },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "Базова URL-адреса Nextcloud",
+        "FILTER_BY_ASSIGNEE": "Імпортувати лише картки, призначені мені",
+        "IS_TRANSITION_ISSUES_ENABLED": "Синхронізувати стан завершення та назву назад у Nextcloud Deck",
+        "PASSWORD": "Пароль додатка Nextcloud",
+        "POLL_INTERVAL_MINUTES": "Інтервал опитування (хвилини)",
+        "TITLE_TEMPLATE": "Шаблон назви завдання",
+        "TITLE_TEMPLATE_DESCRIPTION": "Змінні: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Приклад: [{BOARD}: {COLUMN}] {CARD_TITLE}. Залиште порожнім для використання лише назви картки.",
+        "USERNAME": "Ваше ім'я користувача Nextcloud"
+      },
+      "FORM_SECTION": {
+        "HELP": "Налаштуйте інтеграцію Nextcloud Deck для імпорту карток як завдань. Для автентифікації використовуйте пароль додатка."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNED_USERS": "Призначені користувачі",
+        "DECK_DESCRIPTION": "Опис Deck",
+        "LABELS": "Мітки",
+        "STACK": "Стек"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Дошку не знайдено",
+        "CARD_NOT_FOUND": "Nextcloud Deck: Картку \"{{issueId}}\" видалено на сервері.",
+        "ERR_CREDENTIALS_MISSING": "Спочатку введіть URL-адресу Nextcloud, ім'я користувача та пароль.",
+        "ERR_LOAD_BOARDS": "Не вдалося завантажити дошки Deck. Перевірте свої облікові дані."
       }
     },
     "NOTE": {
@@ -656,20 +823,26 @@
           "NUMBERED_LIST": "Нумерований список",
           "QUOTE": "Цитата",
           "STRIKETHROUGH": "Закреслений",
-          "TASK_LIST": "Список завдань"
+          "TASK_LIST": "Список завдань",
+          "KEYBOARD_SHORTCUTS": "Сполучення клавіш"
+        },
+        "SHORTCUTS": {
+          "DIALOG_TITLE": "Комбінації клавіш Markdown",
+          "COLUMN_ACTION": "Дія",
+          "COLUMN_SHORTCUT": "Скорочення"
         },
         "VIEW_PARSED": "Переглянути як опрацьований (не редагований) markdown",
         "VIEW_SPLIT": "Переглянути опрацьований та неопрацьований markdown у розділеному вигляді",
         "VIEW_TEXT_ONLY": "Переглянути як неопрацьований текст"
       },
+      "NOTE_CMP": {
+        "DISABLE_PARSE": "Вимкнути обробку markdown для попереднього перегляду",
+        "ENABLE_PARSE": "Увімкнути обробку markdown"
+      },
       "NOTES_CMP": {
         "ADD_BTN": "Додати нову нотатку",
         "DROP_TO_ADD": "Перетягніть сюди, щоб додати нову нотатку",
         "NO_NOTES": "Наразі немає нотаток"
-      },
-      "NOTE_CMP": {
-        "DISABLE_PARSE": "Вимкнути обробку markdown для попереднього перегляду",
-        "ENABLE_PARSE": "Увімкнути обробку markdown"
       },
       "S": {
         "NOTE_ADDED": "Примітка збережена"
@@ -678,8 +851,8 @@
     "OPEN_PROJECT": {
       "CFG_CMP": {
         "ALWAYS_ASK": "Завжди відкривати діалог",
-        "DONE": "Статус для завершення завдання",
         "DO_NOT": "Не переходити",
+        "DONE": "Статус для завершення завдання",
         "ENABLE": "Увімкнути інтеграцію з Openproject",
         "ENABLE_TRANSITIONS": "Увімкнути обробку переходів",
         "IN_PROGRESS": "Статус для початку завдання",
@@ -734,16 +907,16 @@
         "UPLOAD_ATTACHMENT": "Завантажити в завдання"
       },
       "ISSUE_STRINGS": {
-        "ISSUES_STR": "робочі пакети",
-        "ISSUE_STR": "робочий пакет"
+        "ISSUE_STR": "робочий пакет",
+        "ISSUES_STR": "робочі пакети"
       },
       "S": {
         "ERR_NO_FILE": "Файл не вибрано",
         "ERR_UNKNOWN": "OpenProject: Невідома помилка {{statusCode}} {{errorMsg}}. Чи правильно налаштований CORS для сервера?",
         "POST_TIME_SUCCESS": "OpenProject: Успішно створено запис часу для {{issueTitle}}",
         "TRANSITION": "OpenProject: Встановлено завдання \"{{issueKey}}\" на \"{{name}}\"",
-        "TRANSITIONS_LOADED": "Переходи завантажено. Використовуйте вибір нижче, щоб призначити їх",
-        "TRANSITION_SUCCESS": "OpenProject: Встановлено завдання {{issueKey}} на <strong>{{chosenTransition}}</strong>"
+        "TRANSITION_SUCCESS": "OpenProject: Встановлено завдання {{issueKey}} на <strong>{{chosenTransition}}</strong>",
+        "TRANSITIONS_LOADED": "Переходи завантажено. Використовуйте вибір нижче, щоб призначити їх"
       }
     },
     "PLANNER": {
@@ -755,19 +928,23 @@
       "EDIT_REPEATED_TASK": "Редагувати повторюване завдання '{{taskName}}'",
       "NO_TASKS": "Немає завдань",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "Немає запланованих завдань",
-        "NO_DEADLINES": "Немає дедлайнів"
+        "NO_DEADLINES": "Немає дедлайнів",
+        "NO_SCHEDULED_ITEMS": "Немає запланованих завдань"
       },
       "S": {
         "REMOVED_PLAN_DATE": "Видалено дату плану для завдання '{{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "Завдання вже заплановано на {{date}}",
-        "TASK_PLANNED_FOR": "Завдання заплановано на {{date}}"
+        "TASK_PLANNED_FOR": "Завдання заплановано на <strong>{{date}}</strong>{{extra}}"
       }
     },
     "POMODORO": {
       "BREAK_IS_DONE": "Ваша перерва закінчилася!"
     },
     "PROJECT": {
+      "D_CONFIRM_ARCHIVE": {
+        "MSG": "Архівувати проєкт \"{{title}}\"? Завдання, налаштування повторень та нагадування призупинено, доки ви їх не відновите.",
+        "OK": "Архівувати"
+      },
       "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
         "CANCEL": "Скасувати",
         "MSG": "Цей проект великий і його дублювання може зайняти певний час. Бажаєте продовжити?",
@@ -781,6 +958,32 @@
       "D_DELETE": {
         "MSG": "Ви впевнені, що хочете видалити проект \"{{title}}\"?"
       },
+      "COMPLETE": {
+        "COMPLETED_ON": "Завершено {{date}}",
+        "REOPEN": "Знову відкрити",
+        "NOTICE": "Цей проєкт завершено.",
+        "ERROR": "Не вдалося завершити проєкт. Спробуйте ще раз.",
+        "RESOLVE": {
+          "MSG": "ще має {{nr}} незавершених завдань. Що з ними має статися?",
+          "MSG_ONE": "ще має {{nr}} незавершених завдань. Що з ними має статися?",
+          "MOVE_TO_INBOX": "Перемістити до Вхідні",
+          "MARK_DONE": "Позначити як виконано"
+        },
+        "CONFIRM": {
+          "TITLE": "Завершити проєкт?",
+          "MSG": "Завершити <strong>{{title}}</strong> та перемістити його до архівних проєктів?"
+        },
+        "CELEBRATION": {
+          "TITLE": "Проєкт завершено!",
+          "STARTED": "Розпочато",
+          "FINISHED": "Завершено",
+          "DURATION": "Завершено за {{nr}} днів",
+          "TASKS_DONE": "Виконані завдання",
+          "TIME_SPENT": "Відстежено часу",
+          "DAYS_WORKED": "Відпрацьовано днів",
+          "DONE_BTN": "Закрити"
+        }
+      },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Увімкнути беклог проекту",
         "L_IS_HIDDEN_FROM_MENU": "Приховати проект з меню",
@@ -788,9 +991,13 @@
         "TITLE": "Основні налаштування"
       },
       "FORM_THEME": {
+        "D_BACKGROUND_IMAGE_BLUR": "Відрегулюйте це значення, щоб розмити фонове зображення. Значення за замовчуванням — 0 пікселів.",
+        "D_BACKGROUND_OVERLAY_OPACITY": "Налаштуйте це значення, щоб зробити фон більш чи менш прозорим. Стандартне значення — 20%.",
         "HELP": "Налаштування теми для вашого проекту.",
+        "L_BACKGROUND_IMAGE_BLUR": "Розмиття фонового зображення",
         "L_BACKGROUND_IMAGE_DARK": "URL фонового зображення (темна тема)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL фонового зображення (світла тема)",
+        "L_BACKGROUND_OVERLAY_OPACITY": "Затемнити/освітлити фонове зображення для кращого контрасту",
         "L_COLOR_ACCENT": "Акцентний колір",
         "L_COLOR_PRIMARY": "Основний колір",
         "L_COLOR_WARN": "Колір попередження/помилки",
@@ -799,17 +1006,29 @@
         "L_HUE_WARN": "Поріг для темного тексту на фоні кольору попередження",
         "L_IS_AUTO_CONTRAST": "Автоматично встановлювати кольори тексту для кращої читабельності",
         "L_IS_DISABLE_BACKGROUND_TINT": "Вимкнути кольоровий фоновий градієнт",
+        "BTN_SELECT_IMAGE": "Виберіть",
+        "S_BACKGROUND_IMAGE_READ_ERROR": "Не вдалося прочитати вибраний файл зображення.",
+        "S_BACKGROUND_IMAGE_RESELECT_REQUIRED": "Після оновлення безпеки потрібно знову вибрати локальні файли фонових зображень.",
+        "S_BACKGROUND_IMAGE_TOO_LARGE": "Вибране зображення завелике. Будь ласка, виберіть файл розміром менше за {{maxSizeKb}} КБ.",
         "L_THEME_COLOR": "Колір теми",
-        "TITLE": "Тема",
-        "D_BACKGROUND_OVERLAY_OPACITY": "Налаштуйте це значення, щоб зробити фон більш чи менш прозорим. Стандартне значення — 20%.",
-        "L_BACKGROUND_OVERLAY_OPACITY": "Затемнити/освітлити фонове зображення для кращого контрасту"
+        "TITLE": "Тема"
       },
       "S": {
         "ARCHIVED": "Проект архівовано",
         "CREATED": "Створено проект <strong>{{title}}</strong>. Ви можете вибрати його з меню зверху зліва.",
         "DELETED": "Проект видалено",
+        "REOPENED": "Проєкт знову відкрито",
+        "SHOW_IN_MENU": "Показати на бічній панелі",
         "UNARCHIVED": "Проект розархівовано",
+        "UNARCHIVED_HIDDEN_FROM_MENU": "Проєкт відновлено, але все ще приховано на бічній панелі",
         "UPDATED": "Оновлено налаштування проекту"
+      },
+      "ARCHIVED_NOTICE": "Цей проєкт архівовано.",
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "Немає врх проектів.",
+        "LINK_LABEL": "Архівні проекти",
+        "SEARCH": "Пошук архівованих проектів",
+        "UNARCHIVE": "Відновити проєкт"
       }
     },
     "PROJECT_FOLDER": {
@@ -831,24 +1050,28 @@
       "TOOLTIP_CREATE": "Створити папку проекту",
       "TOOLTIP_VISIBILITY": "Показати/приховати проекти"
     },
-    "QUICK_HISTORY": {
-      "NO_DATA": "Немає даних за поточний рік",
-      "PAGE_TITLE": "Остання активність",
-      "WEEK_TITLE": "Тиждень {{nr}} ({{timeSpent}})"
-    },
     "REDMINE": {
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Діяльність",
+        "INVALID_DATE": "Введене значення не є датою!",
+        "POST_TIME": "Надіслати час",
+        "STARTED": "Розпочато",
+        "SUBMIT_TIME_FOR": "Надіслати час до Redmine для",
+        "TIME_SPENT": "Витрачений час",
+        "TITLE": "Redmine: Надіслати робочий запис"
+      },
       "FORM": {
         "API_KEY": "Ключ доступу API",
         "HOST": "Хост (наприклад: https://redmine.org)",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Показувати діалог обліку часу для звіту в Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Потрібно, щоб модуль обліку часу був увімкнений для проєкту Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Показувати діалог обліку часу при завершенні підзавдань",
         "PROJECT_ID": "Ідентифікатор проекту",
         "PROJECT_ID_DESCRIPTION": "Можна знайти як частину URL-адреси при перегляді проекту в браузері.",
         "SCOPE": "Скоуп",
         "SCOPE_ALL": "Усі",
         "SCOPE_ASSIGNED": "Призначені мені",
-        "SCOPE_CREATED": "Створені мною",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Показувати діалог обліку часу для звіту в Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Потрібно, щоб модуль обліку часу був увімкнений для проєкту Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Показувати діалог обліку часу при завершенні підзавдань"
+        "SCOPE_CREATED": "Створені мною"
       },
       "FORM_SECTION": {
         "HELP": "<p>Тут ви можете налаштувати SuperProductivity для відображення відкритих завдань Redmine (онлайн-версія або власна інстанція) для конкретного проекту в панелі створення завдань у вікні щоденного планування. Вони будуть показані як пропозиції та надаватимуть посилання на завдання, а також додаткову інформацію про нього.</p><p>Крім того, ви можете автоматично імпортувати всі відкриті завдання.</p>",
@@ -860,15 +1083,6 @@
         "MARK_AS_CHECKED": "Позначити оновлення як відмічені",
         "PRIORITY": "Пріоритет",
         "STATUS": "Статус"
-      },
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Діяльність",
-        "INVALID_DATE": "Введене значення не є датою!",
-        "POST_TIME": "Надіслати час",
-        "STARTED": "Розпочато",
-        "SUBMIT_TIME_FOR": "Надіслати час до Redmine для",
-        "TIME_SPENT": "Витрачений час",
-        "TITLE": "Redmine: Надіслати робочий запис"
       },
       "S": {
         "POST_TIME_SUCCESS": "Redmine: Запис часу успішно створено для {{issueTitle}}"
@@ -883,30 +1097,41 @@
         "START_NOW": "Почати зараз",
         "TXT": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} завдань заплановано)",
-          "ONE": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} завдання очікує)"
+          "ONE": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} завдання очікує)",
+          "OTHER": "<strong>{{title}}</strong> починається о <strong>{{start}}</strong>!<br> (і ще {{nrOfOtherBanners}} завдань заплановано)"
         }
       },
       "S_ACTIVE_TASK_DUE": "Завдання, над яким ви зараз працюєте, вже готове!<br/> ({{title}})",
       "S_REMINDER_ERR": "Помилка для інтерфейсу нагадувань"
     },
     "SCHEDULE": {
+      "CALENDAR_VISIBILITY": "Видимість календаря",
       "D_INITIAL": {
         "TEXT": "<p>Розклад повинен надати вам кращу картину того, як ваші заплановані завдання розгортаються в часі. Він автоматично генерується з ваших завдань і вимагає лише <strong>оцінок часу для них, щоб працювати</strong>.</p><p>Розрізняють два типи: <strong>Заплановані завдання</strong>, які показуються в їх запланований час, і <strong>Звичайні завдання</strong>, які повинні розташовуватися навколо цих фіксованих подій.</p><p>Якщо ви вказуєте час початку та закінчення роботи (рекомендовано), звичайні завдання ніколи не показуватимуться поза цими межами.</p>",
         "TITLE": "Розклад"
       },
       "END": "Кінець роботи",
+      "EXCESS_TASK_TOOLTIP": "Це завдання не вписується в цей день.",
+      "EXCESS_TASKS_DAY_TOOLTIP": "{{count}} завдань не вписуються у доступний час",
+      "EXCESS_TASKS_DAY_TOOLTIP_ONE": "1 завдання не вписується у доступний час",
       "INSERT_BEFORE": "Вставити перед",
       "LUNCH_BREAK": "Обідня перерва",
       "MONTH": "Місяць",
-      "NOW": "Зараз",
+      "NEXT_MONTH": "Наступний місяць",
+      "NEXT_WEEK": "Наступний тиждень",
+      "PREVIOUS_MONTH": "Попередній місяць",
+      "PREVIOUS_WEEK": "Попередній тиждень",
+      "VIEW_MONTH": "Переглянути місяць",
+      "VIEW_WEEK": "Переглянути тиждень",
       "NO_TASKS": "Наразі немає завдань. Будь ласка, додайте завдання за допомогою кнопки плюс (+) на верхній панелі.",
+      "NOW": "Зараз",
       "PLAN_END_DAY": "Запланувати в кінці дня",
       "PLAN_START_DAY": "Запланувати на початку дня",
       "SHIFT_KEY_INFO": "Утримуйте Shift, щоб переключити режим планування дня",
       "START": "Початок роботи"
     },
     "SEARCH_BAR": {
+      "INCLUDE_COMPLETED": "Включити виконані та архівовані завдання",
       "INFO": "Натисніть на іконку списку, щоб шукати архівовані завдання",
       "NO_RESULTS": "Не знайдено завдань, які б відповідали вашому пошуку",
       "PLACEHOLDER": "Шукати завдання або опис завдання"
@@ -928,25 +1153,21 @@
         "L_COUNTDOWN_DURATION": "Тривалість зворотного відліку",
         "L_DAILY_GOAL": "Щоденна мета для успішної серії",
         "L_ICON": "Іконка",
-        "L_IS_ENABLED": "Увімкнено",
-        "L_TITLE": "Назва",
-        "L_TRACK_STREAKS": "Відстежувати серії",
-        "L_TYPE": "Тип",
-        "L_WEEKDAYS": "Будні дні для перевірки на наявність смуги",
-        "TITLE": "Прості лічильники",
-        "TYPE_CLICK_COUNTER": "Лічильник кліків",
-        "TYPE_REPEATED_COUNTDOWN": "Повторний відлік",
-        "TYPE_STOPWATCH": "Секундомір",
         "L_ICON_ON": "Іконка при увімкненні",
+        "L_IS_ENABLED": "Увімкнено",
         "L_IS_HIDE_BUTTON": "Сховати кнопку на панелі інструментів",
         "L_STREAK_MODE": "Режим відстеження серії",
         "L_STREAK_MODE_SPECIFIC_DAYS": "Конкретні дні тижня",
         "L_STREAK_MODE_WEEKLY_FREQUENCY": "Тижнева частота (напр. 3 рази на тиждень)",
-        "L_WEEKLY_FREQUENCY": "Виконань на тиждень"
-      },
-      "S": {
-        "GOAL_REACHED_1": "Ви досягли своєї мети на сьогодні!",
-        "GOAL_REACHED_2": "Поточна тривалість смуги:"
+        "L_TITLE": "Назва",
+        "L_TRACK_STREAKS": "Відстежувати серії",
+        "L_TYPE": "Тип",
+        "L_WEEKDAYS": "Будні дні для перевірки на наявність смуги",
+        "L_WEEKLY_FREQUENCY": "Виконань на тиждень",
+        "TITLE": "Прості лічильники",
+        "TYPE_CLICK_COUNTER": "Лічильник кліків",
+        "TYPE_REPEATED_COUNTDOWN": "Повторний відлік",
+        "TYPE_STOPWATCH": "Секундомір"
       },
       "HABIT_TRACKER": {
         "ADD_HABIT": "Додати нову звичку",
@@ -954,22 +1175,28 @@
         "NEXT_WEEK": "Наступний тиждень",
         "PREV_WEEK": "Попередній тиждень",
         "TODAY": "Сьогодні"
+      },
+      "S": {
+        "GOAL_REACHED_1": "Ви досягли своєї мети на сьогодні!",
+        "GOAL_REACHED_2": "Поточна тривалість смуги:"
       }
     },
     "SYNC": {
       "A": {
         "REMOTE_MODEL_VERSION_NEWER": "Версія виносної моделі новіша за локальну. Будь ласка, оновіть свій локальний додаток до останньої версії!"
       },
-      "BTN_SYNC_NOW": "Синхронізувати зараз",
       "BTN_RESTORE_FROM_HISTORY": "Відновити з історії",
+      "BTN_SYNC_NOW": "Синхронізувати зараз",
       "C": {
-        "FORCE_UPLOAD": "Все одно завантажити локальні дані?"
+        "FORCE_UPLOAD": "Все одно завантажити локальні дані?",
+        "DECRYPT_OVERWRITE": "Це ЗАМІНИТЬ зашифровані дані на сервері локальною копією цього пристрою та повторно зашифрує їх за допомогою нового пароля. Усім іншим пристроям потрібно буде повторно ввести пароль та завантажити замінені дані. Будь-які несинхронізовані зміни на цих пристроях будуть втрачені назавжди. Продовжити?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Будь ласка, відкрийте наступне посилання і скопіюйте код авторизації, наданий там, у поле введення нижче.",
         "FOLLOW_LINK_MOBILE": "Будь ласка, натисніть кнопку нижче для авторизації. Вас буде автоматично перенаправлено назад у додаток.",
         "GET_AUTH_CODE": "Отримати код авторизації",
         "L_AUTH_CODE": "Введіть код авторизації",
+        "MANUAL_URL_HINT": "Браузер не відкрився? Скопіюйте цю URL-адресу вручну:",
         "TITLE": "Логін: {{provider}}",
         "WAITING_FOR_AUTH": "Очікування авторизації..."
       },
@@ -1001,36 +1228,93 @@
         "VECTOR_COMPARISON_LOCAL_GREATER": "Локальні > Віддалених",
         "VECTOR_COMPARISON_LOCAL_LESS": "Локальні < Віддалених"
       },
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "Ваші дані здаються пошкодженими. Бажаєте спробувати автоматичне відновлення? Це може призвести до незначної втрати даних.",
+        "TITLE": "Виявлено пошкодження даних"
+      },
+      "D_DATA_REPAIRED": {
+        "MSG": "Ваші дані потребували автоматичного відновлення (виправлено помилок: {{count}}). Зазвичай цього не повинно відбуватися. Якщо це трапляється неодноразово, будь ласка, повідомте про це.",
+        "TITLE": "Виконано відновлення даних",
+        "UNKNOWN_ERROR": "Невідома помилка синхронізації: {{err}}"
+      },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "Зміна та перезапис віддаленого пристрою",
         "CHANGE_PW_AND_DECRYPT": "Зміна та спроба розшифровки",
         "P1": "Ваші дані зашифровано, а розшифровці не вдалося. Будь ласка, введіть правильний пароль!",
-        "PASSWORD": "Пароль",
         "P2_FORGOT_PW": "Якщо ви <strong>забули пароль</strong>, введіть правильний пароль і натисніть \"Повторити розшифрування\".",
         "P3_PW_CHANGED": "Якщо ви <strong>змінили пароль на іншому пристрої</strong>, введіть новий пароль і натисніть \"Перезаписати віддалені дані\". Це завантажить ваші локальні дані на сервер.",
+        "PASSWORD": "Пароль",
         "TITLE": "Помилка розшифрування"
       },
       "D_ENTER_PASSWORD": {
-        "TITLE": "Потрібен пароль шифрування",
-        "MESSAGE": "Сервер синхронізації містить зашифровані дані, але на цьому пристрої не налаштовано пароль шифрування. Будь ласка, введіть свій пароль шифрування, щоб розшифрувати та синхронізувати ваші дані.",
-        "PASSWORD_LABEL": "Пароль шифрування",
+        "BTN_FORCE_OVERWRITE": "Примусово перезаписати сервер",
         "BTN_SAVE_AND_SYNC": "Зберегти та синхронізувати",
+        "FORCE_OVERWRITE_CONFIRM": "Це призведе до <strong>видалення всіх даних на сервері</strong> та завантаження ваших локальних даних з новим паролем. Несинхронізовані локальні зміни можуть бути втрачені. Продовжити?",
         "FORCE_OVERWRITE_INFO": "Якщо ви не знаєте старого пароля, ви можете перезаписати сервер своїми локальними даними та новим паролем.",
         "FORCE_OVERWRITE_TITLE": "Перезаписати дані сервера?",
-        "FORCE_OVERWRITE_CONFIRM": "Це призведе до <strong>видалення всіх даних на сервері</strong> та завантаження ваших локальних даних з новим паролем. Несинхронізовані локальні зміни можуть бути втрачені. Продовжити?",
-        "BTN_FORCE_OVERWRITE": "Примусово перезаписати сервер"
+        "MESSAGE": "Сервер синхронізації містить зашифровані дані, але на цьому пристрої не налаштовано пароль шифрування. Будь ласка, введіть свій пароль шифрування, щоб розшифрувати та синхронізувати ваші дані.",
+        "PASSWORD_LABEL": "Пароль шифрування",
+        "TITLE": "Потрібен пароль шифрування"
       },
       "D_FRESH_CLIENT_CONFIRM": {
         "MESSAGE": "Схоже, це нова установка. Знайдено віддалені дані з {{count}} змінами. Бажаєте завантажити та застосувати ці дані?",
         "OK": "Завантажити віддалені дані",
         "TITLE": "Початкова синхронізація"
       },
+      "D_INCOMPLETE_SYNC": {
+        "BTN_CLOSE_APP": "Закрити застосунок",
+        "BTN_DOWNLOAD_BACKUP": "Завантажити локальну резервну копію",
+        "BTN_FORCE_DOWNLOAD": "Примусово завантажити віддалені дані",
+        "BTN_FORCE_UPLOAD": "Примусово завантажити локальні",
+        "INCOHERENT_P1": "Дата ваших віддалених даних з майбутнього",
+        "INCOHERENT_P2": "Перевірте налаштування часу на своїх системах!",
+        "P1": "Дані віддаленої синхронізації незв'язні!",
+        "P2": "Модель, на яку вплинула:",
+        "T3": "У вас є 2 варіанти:",
+        "T4": "1. Перейдіть на інший пристрій і завершіть синхронізацію там.",
+        "T5": "2. Або ви можете перезаписати віддалені дані вашими локальними. Всі віддалені зміни\n    будуть втрачені!",
+        "T6": "Рекомендується створити резервну копію даних, які ви перезаписуєте!!!"
+      },
+      "D_INITIAL_CFG": {
+        "SAVE_AND_ENABLE": "Зберегти та увімкнути синхронізацію",
+        "TITLE": "Налаштуйте синхронізацію"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "У вас є {{count}} несинхронізованих локальних змін, які будуть замінені віддаленими даними. Бажаєте продовжити?",
+        "TITLE": "Замінити локальні дані?"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "Вимкнути синхронізацію",
+        "PERM_FILE": "Надати доступ",
+        "TEXT": "<p>Права доступу до файлової системи для локальної синхронізації були скасовані</p>",
+        "TITLE": "Синхронізація: Відмовлено в доступі до файлової системи"
+      },
+      "D_RESTORE": {
+        "BTN_RESTORE": "Відновити",
+        "CONFIRM_MSG": "Ви точно впевнені, що хочете відновити дані до стану на <strong>{{timestamp}}</strong>?<br><br>Це <strong>повністю замінить</strong> усі ваші поточні дані, і цю дію <strong>неможливо скасувати</strong>.",
+        "CONFIRM_TITLE": "Підтвердити відновлення",
+        "ERROR_LOADING": "Не вдалося завантажити точки відновлення",
+        "ERROR_RESTORE": "Не вдалося відновити дані",
+        "INTRO": "Виберіть момент часу для відновлення даних:",
+        "LOADING": "Завантаження точок відновлення...",
+        "NO_POINTS": "Немає доступних точок відновлення. Точки відновлення створюються під час синхронізації або імпорту даних.",
+        "TITLE": "Відновити з історії",
+        "TYPE_BACKUP_IMPORT": "Відновлення з резервної копії",
+        "TYPE_REPAIR": "Автоматичне виправлення",
+        "TYPE_SYNC_IMPORT": "Повний імпорт синхронізації",
+        "WARNING": "Це замінить УСІ ваші поточні дані вибраною резервною копією. Цю дію неможливо скасувати!"
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "CONFIRM": "Завантажити локальні дані",
+        "MESSAGE": "Цей сервер синхронізації вже містить дані. Бажаєте завантажити свої локальні дані для об'єднання? Якщо пропустити, деякі локальні зміни можуть не синхронізуватися.",
+        "SKIP": "Пропустити",
+        "TITLE": "Сервер вже має дані"
+      },
       "D_SYNC_IMPORT_CONFLICT": {
-        "TITLE": "Виявлено конфлікт синхронізації",
-        "IMPORT_DATE": "Дата імпорту",
         "FILTERED_CHANGES": "Відфільтровані зміни",
-        "USE_LOCAL": "Використовувати мої дані",
-        "USE_REMOTE": "Використовувати дані сервера",
+        "FIRST_SYNC_USE_LOCAL_CONFIRM": "Цей пристрій ніколи раніше не синхронізувався. Опція «Використовувати мої дані» назавжди замінить дані на сервері локальними даними цього пристрою. Цю дію неможливо скасувати. Продовжити?",
+        "FIRST_SYNC_WARNING": "Цей пристрій раніше не синхронізувався, тому опція «Використовувати мої дані» перезапише існуючі дані сервера даними цього пристрою.",
+        "IMPORT_DATE": "Дата імпорту",
         "MSG_INCOMING": "Ваші дані були повністю замінені на іншому пристрої. У вас є {{filteredOpCount}} локальних змін, які можуть не перенестися.",
         "MSG_INCOMING_NO_OPS": "Ваші дані були повністю замінені на іншому пристрої. Цей пристрій синхронізується з новим станом.",
         "MSG_LOCAL_FILTERS": "Ваші локальні дані були імпортовані/відновлені, але сервер має {{filteredOpCount}} змін з інших пристроїв, які не можна автоматично об'єднати.",
@@ -1041,188 +1325,174 @@
         "REASON_REPAIR": "Причина: Було виконано автоматичне відновлення даних.",
         "REASON_SERVER_MIGRATION": "Причина: Дані було перенесено на новий сервер синхронізації.",
         "REASON_UNKNOWN": "Причина: Було виконано повну заміну стану.",
-        "RECOMMEND_SERVER": "Рекомендовано: Прийміть дані сервера, щоб залишатися синхронізованим з іншим пристроєм."
-      },
-      "D_LOCAL_DATA_REPLACE_CONFIRM": {
-        "MESSAGE": "У вас є {{count}} несинхронізованих локальних змін, які будуть замінені віддаленими даними. Бажаєте продовжити?",
-        "TITLE": "Замінити локальні дані?"
-      },
-      "D_INCOMPLETE_SYNC": {
-        "BTN_CLOSE_APP": "Закрити застосунок",
-        "BTN_DOWNLOAD_BACKUP": "Завантажити локальну резервну копію",
-        "BTN_FORCE_UPLOAD": "Примусово завантажити локальні",
-        "P1": "Дані віддаленої синхронізації незв'язні!",
-        "P2": "Модель, на яку вплинула:",
-        "T3": "У вас є 2 варіанти:",
-        "T4": "1. Перейдіть на інший пристрій і завершіть синхронізацію там.",
-        "T5": "2. Або ви можете перезаписати віддалені дані вашими локальними. Всі віддалені зміни\n    будуть втрачені!",
-        "T6": "Рекомендується створити резервну копію даних, які ви перезаписуєте!!!",
-        "BTN_FORCE_DOWNLOAD": "Примусово завантажити віддалені дані",
-        "INCOHERENT_P1": "Дата ваших віддалених даних з майбутнього",
-        "INCOHERENT_P2": "Перевірте налаштування часу на своїх системах!"
-      },
-      "D_INITIAL_CFG": {
-        "SAVE_AND_ENABLE": "Зберегти та увімкнути синхронізацію",
-        "TITLE": "Налаштуйте синхронізацію"
-      },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "Вимкнути синхронізацію",
-        "PERM_FILE": "Надати доступ",
-        "TEXT": "<p>Права доступу до файлової системи для локальної синхронізації були скасовані</p>",
-        "TITLE": "Синхронізація: Відмовлено в доступі до файлової системи"
-      },
-      "D_RESTORE": {
-        "TITLE": "Відновити з історії",
-        "LOADING": "Завантаження точок відновлення...",
-        "NO_POINTS": "Немає доступних точок відновлення. Точки відновлення створюються під час синхронізації або імпорту даних.",
-        "INTRO": "Виберіть момент часу для відновлення даних:",
-        "WARNING": "Це замінить УСІ ваші поточні дані вибраною резервною копією. Цю дію неможливо скасувати!",
-        "BTN_RESTORE": "Відновити",
-        "TYPE_SYNC_IMPORT": "Повний імпорт синхронізації",
-        "TYPE_BACKUP_IMPORT": "Відновлення з резервної копії",
-        "TYPE_REPAIR": "Автоматичне виправлення",
-        "CONFIRM_TITLE": "Підтвердити відновлення",
-        "CONFIRM_MSG": "Ви точно впевнені, що хочете відновити дані до стану на <strong>{{timestamp}}</strong>?<br><br>Це <strong>повністю замінить</strong> усі ваші поточні дані, і цю дію <strong>неможливо скасувати</strong>.",
-        "ERROR_LOADING": "Не вдалося завантажити точки відновлення",
-        "ERROR_RESTORE": "Не вдалося відновити дані"
+        "RECOMMEND_SERVER": "Рекомендовано: Прийміть дані сервера, щоб залишатися синхронізованим з іншим пристроєм.",
+        "TITLE": "Виявлено конфлікт синхронізації",
+        "USE_LOCAL": "Використовувати мої дані",
+        "USE_REMOTE": "Використовувати дані сервера",
+        "USE_REMOTE_CONFIRM": "Це замінює дані цього пристрою даними сервера та відкидає {{count}} локальних змін. Продовжити?"
       },
       "FORM": {
+        "BTN_CHANGE_PASSWORD": "Змінити пароль",
+        "BTN_DISABLE_ENCRYPTION": "Вимкнути шифрування",
+        "BTN_REAUTHENTICATE": "Повторна автентифікація",
+        "REAUTH_SUCCESS": "Повторна автентифікація успішна! Облікові дані оновлено.",
         "DROPBOX": {
-          "L_ACCESS_TOKEN": "Токен доступу (згенерований з коду авторизації)",
           "AUTH_SUCCESS": "Автентифікацію Dropbox успішно завершено! Облікові дані збережено.",
           "BTN_AUTHENTICATE": "Автентифікуватися через Dropbox",
           "BTN_REAUTHENTICATE": "Повторно автентифікуватися через Dropbox",
           "INFO_TEXT": "Автентифікація Dropbox використовує OAuth. Натисніть кнопку нижче для автентифікації за допомогою вашого облікового запису Dropbox.",
+          "L_ACCESS_TOKEN": "Токен доступу (згенерований з коду авторизації)",
           "REAUTH_SUCCESS": "Повторну автентифікацію Dropbox успішно завершено! Облікові дані оновлено.",
           "STATUS_CONFIGURED": "Dropbox налаштовано та готово до синхронізації",
           "STATUS_NOT_CONFIGURED": "Не налаштовано — автентифікуйтеся для увімкнення синхронізації"
         },
+        "FILE_BASED": {
+          "BTN_CHANGE_PASSWORD": "Змінити пароль",
+          "BTN_DISABLE_ENCRYPTION": "Вимкнути шифрування",
+          "BTN_ENABLE_ENCRYPTION": "Увімкнути шифрування",
+          "BTN_REMOVE_ENCRYPTION": "Видалити шифрування",
+          "CHANGE_PASSWORD_SUCCESS": "Пароль шифрування успішно змінено",
+          "CHANGE_PASSWORD_WARNING": "УВАГА: Це призведе до повторного завантаження ваших даних з новим паролем. Всім іншим пристроям знадобиться новий пароль перед синхронізацією.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Ваші поточні дані будуть повторно завантажені без шифрування",
+          "DISABLE_ENCRYPTION_ITEM_2": "Усі інші пристрої будуть синхронізувати незашифровані дані",
+          "DISABLE_ENCRYPTION_ITEM_3": "Ви можете знову ввімкнути шифрування в будь-який час",
+          "DISABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Шифрування успішно вимкнено",
+          "DISABLE_ENCRYPTION_TITLE": "Вимкнути шифрування?",
+          "DISABLE_ENCRYPTION_WARNING": "УВАГА: Це призведе до повторного завантаження ваших даних без шифрування.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
+          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "Ця функція доступна лише для файлових провайдерів синхронізації.",
+          "ENABLE_ENCRYPTION_ITEM_1": "Ваші поточні дані будуть повторно завантажені з шифруванням",
+          "ENABLE_ENCRYPTION_ITEM_2": "Усім іншим пристроям знадобиться цей пароль шифрування",
+          "ENABLE_ENCRYPTION_ITEM_3": "Ви можете вимкнути шифрування в будь-який час",
+          "ENABLE_ENCRYPTION_NOT_READY": "Синхронізація не увімкнена або не налаштована.",
+          "ENABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Будь ласка, спочатку введіть пароль шифрування.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Шифрування успішно увімкнено",
+          "ENABLE_ENCRYPTION_TITLE": "Увімкнути шифрування?",
+          "ENABLE_ENCRYPTION_WARNING": "УВАГА: Це призведе до повторного завантаження ваших даних з шифруванням. Якщо ви забудете свій пароль шифрування, ваші дані неможливо буде відновити.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Змінити пароль шифрування",
+          "L_CONFIRM_PASSWORD": "Підтвердьте пароль",
+          "L_NEW_PASSWORD": "Новий пароль шифрування",
+          "L_REMOVE_ENCRYPTION": "Або видалити шифрування",
+          "PASSWORD_MIN_LENGTH": "Пароль повинен містити принаймні 8 символів",
+          "PASSWORDS_DONT_MATCH": "Паролі не збігаються",
+          "REMOVE_ENCRYPTION_WARNING": "Видалення шифрування призведе до повторного завантаження ваших даних без шифрування. Усі пристрої потребуватимуть переналаштування."
+        },
         "GOOGLE": {
           "L_SYNC_FILE_NAME": "Назва файлу синхронізації"
         },
-        "LOCAL_FILE": {
-          "INFO_TEXT": "Синхронізація з локальним файлом зберігає дані в папці на вашому пристрої. <strong>Важливо:</strong> Не використовуйте інструменти синхронізації файлів, такі як Syncthing, Resilio або подібні, для синхронізації цієї папки між пристроями — вони можуть спричинити конфлікти. Для синхронізації між декількома пристроями використовуйте WebDAV, Dropbox або SuperSync.",
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Потрібен дозвіл на доступ до файлів",
-          "L_SYNC_FOLDER_PATH": "Шлях до папки синхронізації"
-        },
-        "SUPER_SYNC": {
-          "INFO_TEXT": "SuperSync підтримує синхронізацію ваших завдань на всіх ваших пристроях у режимі реального часу. Ваші дані надійно зберігаються на сервері синхронізації. Примітка: SuperSync наразі перебуває на стадії бета-тестування.",
-          "L_SERVER_URL": "URL сервера",
-          "SERVER_URL_DESCRIPTION": "Залиште як є для офіційного сервера або введіть власну адресу URL сервера",
-          "LOGIN_INSTRUCTIONS": "Натисніть кнопку нижче, щоб відкрити сторінку входу на сервер. Після входу скопіюйте свій токен доступу та вставте його сюди.",
-          "BTN_GET_TOKEN": "Відкрити сервер і отримати токен",
-          "L_ACCESS_TOKEN": "Токен доступу",
-          "ACCESS_TOKEN_DESCRIPTION": "Вставте токен, який ви скопіювали зі сторінки входу на сервер",
-          "L_ENABLE_E2E_ENCRYPTION": "Увімкнути наскрізне шифрування",
-          "E2E_ENCRYPTION_DESCRIPTION": "Буде повільніше, але безпечніше",
-          "ENCRYPTION_WARNING": "УВАГА: Якщо ви забудете свій пароль шифрування, ваші дані неможливо буде відновити. Цей пароль відрізняється від вашого пароля для входу. Ви повинні використовувати той самий пароль на всіх пристроях.",
-          "L_CHANGE_ENCRYPTION_PASSWORD": "Змінити пароль шифрування",
-          "CHANGE_PASSWORD_WARNING": "УВАГА: Це назавжди видалить ВСЮ історію синхронізації та резервні копії на сервері. Попередні версії неможливо буде відновити. Ваші поточні дані будуть повторно завантажені з новим паролем. Всім іншим пристроям знадобиться новий пароль.",
-          "FORCE_OVERWRITE_INFO": "Якщо ви не можете синхронізуватися, бо не знаєте поточного пароля шифрування, ви можете перезаписати дані на сервері своїми локальними даними та новим паролем.",
-          "FORCE_OVERWRITE_TITLE": "Перезаписати дані на сервері?",
-          "FORCE_OVERWRITE_CONFIRM": "Це призведе до <strong>видалення всіх даних на сервері</strong> та завантаження ваших локальних даних з новим паролем. Несинхронізовані локальні зміни можуть бути втрачені. Продовжити?",
-          "CHANGE_PASSWORD_SUCCESS": "Пароль шифрування успішно змінено",
-          "L_NEW_PASSWORD": "Новий пароль шифрування",
-          "L_CONFIRM_PASSWORD": "Підтвердьте пароль",
-          "PASSWORDS_DONT_MATCH": "Паролі не збігаються",
-          "PASSWORD_MIN_LENGTH": "Пароль повинен містити принаймні 8 символів",
-          "BTN_CHANGE_PASSWORD": "Змінити пароль",
-          "BTN_FORCE_OVERWRITE": "Примусово перезаписати сервер",
-          "L_REMOVE_ENCRYPTION": "Або видалити шифрування",
-          "REMOVE_ENCRYPTION_WARNING": "Видалення шифрування призведе до видалення всіх даних із сервера та повторного завантаження ваших даних без шифрування. Усі пристрої потребуватимуть переналаштування.",
-          "DISABLE_ENCRYPTION_TITLE": "Вимкнути шифрування?",
-          "DISABLE_ENCRYPTION_WARNING": "УВАГА: Це назавжди видалить УСІ зашифровані дані синхронізації на сервері. Це необхідно, оскільки зашифровані операції не можуть змішуватися з незашифрованими.",
-          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
-          "DISABLE_ENCRYPTION_ITEM_1": "Уся історія синхронізації та резервні копії на сервері будуть видалені",
-          "DISABLE_ENCRYPTION_ITEM_2": "Ваші поточні дані будуть повторно завантажені без шифрування",
-          "DISABLE_ENCRYPTION_ITEM_3": "Усі інші пристрої будуть синхронізувати незашифровані дані",
-          "DISABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені. Ви можете знову ввімкнути шифрування в будь-який час.",
-          "BTN_DISABLE_ENCRYPTION": "Вимкнути шифрування",
-          "DISABLE_ENCRYPTION_SUCCESS": "Шифрування успішно вимкнено",
-          "DISABLE_ENCRYPTION_NOT_READY": "Синхронізація не увімкнена або не налаштована.",
-          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Ця функція доступна лише для SuperSync.",
-          "DISABLE_ENCRYPTION_ENABLE_FIRST": "Будь ласка, спочатку увімкніть синхронізацію та збережіть конфігурацію SuperSync, а потім спробуйте ще раз.",
-          "ENABLE_ENCRYPTION_TITLE": "Увімкнути шифрування?",
-          "ENABLE_ENCRYPTION_WARNING": "УВАГА: Це назавжди видалить УСІ незашифровані дані синхронізації на сервері. Це необхідно, оскільки зашифровані операції не можуть змішуватися з незашифрованими. Якщо ви забудете свій пароль шифрування, ваші дані неможливо буде відновити.",
-          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
-          "ENABLE_ENCRYPTION_ITEM_1": "Уся історія синхронізації та резервні копії на сервері будуть видалені",
-          "ENABLE_ENCRYPTION_ITEM_2": "Ваші поточні дані будуть повторно завантажені з шифруванням",
-          "ENABLE_ENCRYPTION_ITEM_3": "На всіх інших пристроях потрібно буде ввести цей пароль шифрування",
-          "ENABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені. Ви можете вимкнути шифрування в будь-який час.",
-          "BTN_ENABLE_ENCRYPTION": "Увімкнути шифрування",
-          "ENABLE_ENCRYPTION_SUCCESS": "Шифрування успішно увімкнено",
-          "ENABLE_ENCRYPTION_NOT_READY": "Синхронізація не увімкнена або не налаштована.",
-          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Ця функція доступна лише для SuperSync.",
-          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Будь ласка, спочатку введіть пароль шифрування.",
-          "ENCRYPTION_ENCOURAGED": "Для SuperSync потрібне шифрування. Увімкніть шифрування для захисту ваших даних.",
-          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync шифрує ваші дані паролем перед відправкою з вашого пристрою</strong>, що робить зловживання або витік ваших приватних даних практично неможливим.",
-          "SETUP_DISABLE_SUPERSYNC_BTN": "Вимкнути SuperSync",
-          "SETUP_ENCRYPTION_BTN": "Встановити пароль",
-          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Використовуйте один і той самий пароль на всіх пристроях. Забутий пароль можна скинути, перезаписавши віддалені дані.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Встановити пароль"
-        },
         "IMPORT_ENCRYPTION_WARNING": {
-          "TITLE": "Налаштування шифрування зміняться",
-          "WARNING_TEXT": "Резервна копія, яку ви імпортуєте, має інші налаштування шифрування. Зашифровані та незашифровані дані не можуть співіснувати на сервері, тому всі дані на сервері мають бути видалені.",
+          "BTN_CONTINUE": "Імпортувати та змінити шифрування",
           "CURRENT_STATE": "Ваша поточна конфігурація",
-          "IMPORTED_STATE": "Після імпорту",
-          "ENCRYPTION_ENABLED": "Зашифровано",
           "ENCRYPTION_DISABLED": "Не зашифровано",
-          "WHAT_HAPPENS": "Що станеться:",
+          "ENCRYPTION_ENABLED": "Зашифровано",
+          "IMPORTED_STATE": "Після імпорту",
           "ITEM_1": "Уся історія синхронізації та резервні копії на сервері будуть назавжди видалені",
           "ITEM_2": "Ваші імпортовані дані будуть завантажені з новими налаштуваннями шифрування",
           "ITEM_3": "Усі інші пристрої повинні синхронізувати та оновити свої налаштування шифрування відповідно",
-          "NOTE_ENABLING": "Важливо: Шифрування вимагає пароля. Якщо ви забудете цей пароль, ваші дані НЕМОЖЛИВО буде відновити!",
-          "NOTE_DISABLING": "Важливо: Без шифрування будь-хто, хто має доступ до вашого сервера синхронізації, може прочитати ваші дані.",
           "NOTE": "Ваші локальні дані будуть замінені імпортованими даними незалежно від цього вибору.",
-          "BTN_CONTINUE": "Імпортувати та змінити шифрування"
+          "NOTE_DISABLING": "Важливо: Без шифрування будь-хто, хто має доступ до вашого сервера синхронізації, може прочитати ваші дані.",
+          "NOTE_ENABLING": "Важливо: Шифрування вимагає пароля. Якщо ви забудете цей пароль, ваші дані НЕМОЖЛИВО буде відновити!",
+          "TITLE": "Налаштування шифрування зміняться",
+          "WARNING_TEXT": "Резервна копія, яку ви імпортуєте, має інші налаштування шифрування. Зашифровані та незашифровані дані не можуть співіснувати на сервері, тому всі дані на сервері мають бути видалені.",
+          "WHAT_HAPPENS": "Що станеться:"
         },
         "L_ENABLE_COMPRESSION": "Увімкнути стиснення (швидша передача даних)",
         "L_ENABLE_ENCRYPTION": "Увімкнути наскрізне шифрування (експериментально) – Зробіть ваші дані недоступними для вашого провайдера синхронізації",
         "L_ENABLE_SYNCING": "Увімкнути синхронізацію",
         "L_ENCRYPTION_NOTES": "ВАЖЛИВІ ПРИМІТКИ: Вам потрібно буде встановити той самий пароль на інших пристроях <strong>ПЕРЕД</strong> наступною синхронізацією, щоб все працювало. Будь ласка, виберіть пароль, який є безпечним. Також зауважте, що <strong>ви НЕ зможете отримати доступ до своїх даних, якщо забудете цей пароль. Відновлення НЕМОЖЛИВЕ</strong>, оскільки лише ви маєте ключ. Шифрування, ймовірно, буде достатньо хорошим, щоб відбити більшість атакуючих, але <strong>гарантій немає.</strong>",
         "L_ENCRYPTION_PASSWORD": "Пароль шифрування (НЕ ЗАБУДЬТЕ)",
-        "L_SYNC_INTERVAL": "Інтервал синхронізації",
         "L_MANUAL_SYNC_ONLY": "Лише синхронізація вручну (вимкнути автоматичну синхронізацію)",
+        "L_SYNC_INTERVAL": "Інтервал синхронізації",
         "L_SYNC_PROVIDER": "Провайдер синхронізації",
+        "LOCAL_FILE": {
+          "INFO_TEXT": "Синхронізація з локальним файлом зберігає дані в папці на вашому пристрої. <strong>Важливо:</strong> Не використовуйте інструменти синхронізації файлів, такі як Syncthing, Resilio або подібні, для синхронізації цієї папки між пристроями — вони можуть спричинити конфлікти. Для синхронізації між декількома пристроями використовуйте WebDAV, Dropbox або SuperSync.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Потрібен дозвіл на доступ до файлів",
+          "L_SYNC_FOLDER_PATH": "Шлях до папки синхронізації"
+        },
         "PASSWORD_SET_INFO": "🔒 Пароль шифрування встановлено.",
-        "BTN_CHANGE_PASSWORD": "Змінити пароль",
-        "BTN_DISABLE_ENCRYPTION": "Вимкнути шифрування",
-        "TITLE": "Синхронізація",
-        "FILE_BASED": {
-          "BTN_REMOVE_ENCRYPTION": "Видалити шифрування",
-          "BTN_ENABLE_ENCRYPTION": "Увімкнути шифрування",
+        "SUPER_SYNC": {
+          "ACCESS_TOKEN_DESCRIPTION": "Вставте токен, який ви скопіювали зі сторінки входу на сервер",
           "BTN_CHANGE_PASSWORD": "Змінити пароль",
           "BTN_DISABLE_ENCRYPTION": "Вимкнути шифрування",
-          "L_CHANGE_ENCRYPTION_PASSWORD": "Змінити пароль шифрування",
-          "CHANGE_PASSWORD_WARNING": "УВАГА: Це призведе до повторного завантаження ваших даних з новим паролем. Всім іншим пристроям знадобиться новий пароль перед синхронізацією.",
+          "BTN_ENABLE_ENCRYPTION": "Увімкнути шифрування",
+          "BTN_GET_TOKEN": "Відкрити сервер і отримати токен",
           "CHANGE_PASSWORD_SUCCESS": "Пароль шифрування успішно змінено",
-          "L_NEW_PASSWORD": "Новий пароль шифрування",
-          "L_CONFIRM_PASSWORD": "Підтвердьте пароль",
-          "PASSWORDS_DONT_MATCH": "Паролі не збігаються",
-          "PASSWORD_MIN_LENGTH": "Пароль повинен містити принаймні 8 символів",
-          "L_REMOVE_ENCRYPTION": "Або видалити шифрування",
-          "REMOVE_ENCRYPTION_WARNING": "Видалення шифрування призведе до повторного завантаження ваших даних без шифрування. Усі пристрої потребуватимуть переналаштування.",
-          "DISABLE_ENCRYPTION_TITLE": "Вимкнути шифрування?",
-          "DISABLE_ENCRYPTION_WARNING": "УВАГА: Це призведе до повторного завантаження ваших даних без шифрування.",
-          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
-          "DISABLE_ENCRYPTION_ITEM_1": "Ваші поточні дані будуть повторно завантажені без шифрування",
-          "DISABLE_ENCRYPTION_ITEM_2": "Усі інші пристрої будуть синхронізувати незашифровані дані",
-          "DISABLE_ENCRYPTION_ITEM_3": "Ви можете знову ввімкнути шифрування в будь-який час",
-          "DISABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені.",
+          "CHANGE_PASSWORD_WARNING": "УВАГА: Це назавжди видалить ВСЮ історію синхронізації та резервні копії на сервері. Попередні версії неможливо буде відновити. Ваші поточні дані будуть повторно завантажені з новим паролем. Всім іншим пристроям знадобиться новий пароль.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "Будь ласка, спочатку увімкніть синхронізацію та збережіть конфігурацію SuperSync, а потім спробуйте ще раз.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Уся історія синхронізації та резервні копії на сервері будуть видалені",
+          "DISABLE_ENCRYPTION_ITEM_2": "Ваші поточні дані будуть повторно завантажені без шифрування",
+          "DISABLE_ENCRYPTION_ITEM_3": "Усі інші пристрої будуть синхронізувати незашифровані дані",
+          "DISABLE_ENCRYPTION_NOT_READY": "Синхронізація не увімкнена або не налаштована.",
+          "DISABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені. Ви можете знову ввімкнути шифрування в будь-який час.",
           "DISABLE_ENCRYPTION_SUCCESS": "Шифрування успішно вимкнено",
-          "ENABLE_ENCRYPTION_TITLE": "Увімкнути шифрування?",
-          "ENABLE_ENCRYPTION_WARNING": "УВАГА: Це призведе до повторного завантаження ваших даних з шифруванням. Якщо ви забудете свій пароль шифрування, ваші дані неможливо буде відновити.",
-          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
-          "ENABLE_ENCRYPTION_ITEM_1": "Ваші поточні дані будуть повторно завантажені з шифруванням",
-          "ENABLE_ENCRYPTION_ITEM_2": "Усім іншим пристроям знадобиться цей пароль шифрування",
-          "ENABLE_ENCRYPTION_ITEM_3": "Ви можете вимкнути шифрування в будь-який час",
-          "ENABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені.",
-          "ENABLE_ENCRYPTION_SUCCESS": "Шифрування успішно увімкнено",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Ця функція доступна лише для SuperSync.",
+          "DISABLE_ENCRYPTION_TITLE": "Вимкнути шифрування?",
+          "DISABLE_ENCRYPTION_WARNING": "УВАГА: Це назавжди видалить УСІ зашифровані дані синхронізації на сервері. Це необхідно, оскільки зашифровані операції не можуть змішуватися з незашифрованими.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
+          "E2E_ENCRYPTION_DESCRIPTION": "Буде повільніше, але безпечніше",
+          "E2E_ENCRYPTION_INFO": "SuperSync використовує наскрізне шифрування. Ваші дані шифруються на цьому пристрої перед відправкою за допомогою пароля, який ви обираєте під час налаштування.",
+          "ENABLE_ENCRYPTION_ITEM_1": "Уся історія синхронізації та резервні копії на сервері будуть видалені",
+          "ENABLE_ENCRYPTION_ITEM_2": "Ваші поточні дані будуть повторно завантажені з шифруванням",
+          "ENABLE_ENCRYPTION_ITEM_3": "На всіх інших пристроях потрібно буде ввести цей пароль шифрування",
           "ENABLE_ENCRYPTION_NOT_READY": "Синхронізація не увімкнена або не налаштована.",
-          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "Ця функція доступна лише для файлових провайдерів синхронізації.",
-          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Будь ласка, спочатку введіть пароль шифрування."
+          "ENABLE_ENCRYPTION_NOTE": "Ваші локальні дані НЕ будуть видалені. Ви можете вимкнути шифрування в будь-який час.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Будь ласка, спочатку введіть пароль шифрування.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Шифрування успішно увімкнено",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Ця функція доступна лише для SuperSync.",
+          "ENABLE_ENCRYPTION_TITLE": "Увімкнути шифрування?",
+          "ENABLE_ENCRYPTION_WARNING": "УВАГА: Це назавжди видалить УСІ незашифровані дані синхронізації на сервері. Це необхідно, оскільки зашифровані операції не можуть змішуватися з незашифрованими. Якщо ви забудете свій пароль шифрування, ваші дані неможливо буде відновити.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Що станеться:",
+          "ENCRYPTION_ENCOURAGED": "Для SuperSync потрібне шифрування. Увімкніть шифрування для захисту ваших даних.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync шифрує ваші дані паролем перед відправкою з вашого пристрою</strong>, що робить зловживання або витік ваших приватних даних практично неможливим.",
+          "ENCRYPTION_WARNING": "УВАГА: Якщо ви забудете свій пароль шифрування, ваші дані неможливо буде відновити. Цей пароль відрізняється від вашого пароля для входу. Ви повинні використовувати той самий пароль на всіх пристроях.",
+          "FORCE_OVERWRITE_CONFIRM": "Це призведе до <strong>видалення всіх даних на сервері</strong> та завантаження ваших локальних даних з новим паролем. Несинхронізовані локальні зміни можуть бути втрачені. Продовжити?",
+          "FORCE_OVERWRITE_INFO": "Якщо ви не можете синхронізуватися, бо не знаєте поточного пароля шифрування, ви можете перезаписати дані на сервері своїми локальними даними та новим паролем.",
+          "FORCE_OVERWRITE_TITLE": "Перезаписати дані на сервері?",
+          "INFO_TEXT": "SuperSync підтримує синхронізацію ваших завдань на всіх ваших пристроях у режимі реального часу. Ваші дані надійно зберігаються на сервері синхронізації. Примітка: SuperSync наразі перебуває на стадії бета-тестування.",
+          "L_ACCESS_TOKEN": "Токен доступу",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Змінити пароль шифрування",
+          "L_CONFIRM_PASSWORD": "Підтвердьте пароль",
+          "L_ENABLE_E2E_ENCRYPTION": "Увімкнути наскрізне шифрування",
+          "L_NEW_PASSWORD": "Новий пароль шифрування",
+          "L_REMOVE_ENCRYPTION": "Або видалити шифрування",
+          "L_SERVER_URL": "URL сервера",
+          "LOGIN_INSTRUCTIONS": "Натисніть кнопку нижче, щоб відкрити сторінку входу на сервер. Після входу скопіюйте свій токен доступу та вставте його сюди.",
+          "PASSWORD_MIN_LENGTH": "Пароль повинен містити принаймні 8 символів",
+          "PASSWORDS_DONT_MATCH": "Паролі не збігаються",
+          "REMOVE_ENCRYPTION_WARNING": "Видалення шифрування призведе до видалення всіх даних із сервера та повторного завантаження ваших даних без шифрування. Усі пристрої потребуватимуть переналаштування.",
+          "SERVER_URL_DESCRIPTION": "Залиште як є для офіційного сервера або введіть власну адресу URL сервера",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "Вимкнути SuperSync",
+          "SETUP_ENCRYPTION_BTN": "Встановити пароль",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Використовуйте один і той самий пароль на всіх пристроях. Забутий пароль можна скинути, перезаписавши віддалені дані.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Встановити пароль"
         },
+        "NEXTCLOUD": {
+          "FILE_USER_NAME_DESCRIPTION": "Ім’я користувача вашого облікового запису Nextcloud. Зазвичай це ім’я в URL-адресі ваших файлів, а не ваша адреса електронної пошти.",
+          "L_FILE_USER_NAME": "Ім'я користувача",
+          "L_LOGIN_NAME": "Ім'я користувача / електронна пошта (необов'язково)",
+          "L_SERVER_URL": "URL-адреса сервера Nextcloud",
+          "LOGIN_NAME_DESCRIPTION": "Заповнюйте це поле, лише якщо ваш сервер вимагає ім'я користувача, відмінне від вказаного вище, наприклад, адресу електронної пошти.",
+          "SERVER_URL_DESCRIPTION": "наприклад, https://cloud.example.com чи https://example.com/nextcloud",
+          "L_APP_PASSWORD": "Пароль програми",
+          "APP_PASSWORD_DESCRIPTION": "Перейдіть до Nextcloud → Налаштування → Безпека → Паролі програм, щоб згенерувати свій."
+        },
+        "ONEDRIVE": {
+          "CLIENT_ID_DESCRIPTION": "Ідентифікатор програми (клієнта) з вашої реєстрації програми Microsoft Entra",
+          "INFO_TEXT": "Автентифікація Microsoft 365 використовує OAuth. Спочатку заповніть дані клієнта та клієнта, а потім проведіть автентифікацію.",
+          "L_CLIENT_ID": "Ідентифікатор програми (клієнта)",
+          "L_SYNC_FOLDER_PATH": "Шлях до папки синхронізації",
+          "L_TENANT_ID": "Tenant ID",
+          "L_USE_CUSTOM_APP": "Використати мою власну реєстрацію в додатку Microsoft Entra",
+          "OFFICIAL_MODE_INFO": "Використовується вбудований вхід до Microsoft 365 для цієї програми. Перемикайтеся в користувацький режим, лише якщо вам потрібна власна реєстрація в програмі Entra.",
+          "PLATFORM_INFO": "Синхронізація OneDrive доступна лише в настільних та мобільних програмах, а не у версії для браузера.",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "Зберігається у вашій папці програм OneDrive (наприклад, super-production)",
+          "TENANT_ID_DESCRIPTION": "Use 'common' for multi-tenant sign-in",
+          "USE_CUSTOM_APP_DESCRIPTION": "Увімкніть це, якщо ви хочете надати власний ідентифікатор програми (клієнта)"
+        },
+        "TITLE": "Синхронізація",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Щоб це працювало в браузері:</strong> Щоб це працювало в браузері, вам потрібно додати Super Productivity до білого списку для CORS-запитів для вашого екземпляра Nextcloud. Це може мати негативні наслідки для безпеки! Будь ласка, <a href='https://github.com/nextcloud/server/issues/3131'>зверніться до цієї теми для отримання додаткової інформації</a>. Один з підходів для роботи на мобільних пристроях - додавання \"https://app.super-productivity.com\" до білого списку через застосунок nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Використовуйте на свій страх і ризик!</p>",
           "D_SYNC_FOLDER_PATH": "Шлях відносно кореня сервера WebDAV, де будуть зберігатися файли синхронізації (наприклад, '/super-productivity' або '/'). Це НЕ внутрішній шлях до каталогу вашого сервера.",
@@ -1234,87 +1504,88 @@
           "L_USER_NAME": "Ім'я користувача",
           "S_FILL_ALL_FIELDS": "Будь ласка, спочатку заповніть усі поля WebDAV",
           "S_TEST_FAIL": "Помилка перевірки з'єднання: {{error}} - Цільовий URL: {{url}}",
-          "S_TEST_SUCCESS": "Перевірка з'єднання пройшла успішно! Цільовий URL: {{url}}",
-          "CONDITIONAL_HEADER_WARNING_TITLE": "Знижена безпека синхронізації",
-          "CONDITIONAL_HEADER_WARNING_MSG": "Ваш сервер WebDAV не підтримує умовні заголовки (If-Unmodified-Since). Це означає, що Super Productivity не може виявити одночасні зміни з інших пристроїв під час завантаження.<br><br>Синхронізація все одно працюватиме, але існує невеликий ризик конфліктів даних, якщо ви вносите зміни на кількох пристроях одночасно."
+          "S_TEST_SUCCESS": "Перевірка з'єднання пройшла успішно! Цільовий URL: {{url}}"
         }
       },
       "S": {
         "ALREADY_IN_SYNC": "Вже синхронізовано",
+        "ARCHIVE_OPERATION_FAILED": "Операція архівування не вдалася. Деяке очищення могло бути не завершене.",
+        "AUTH_SETUP_FAILED": "Не вдалося налаштувати автентифікацію. Якщо ви використовуєте веб-додаток, переконайтеся, що доступ здійснюється через HTTPS. Інакше спробуйте стабільну версію або повідомте про помилку.",
+        "AUTH_TOKEN_REJECTED": "Токен синхронізації відхилено сервером: {{reason}}. Отримайте новий токен.",
         "BTN_CONFIGURE": "Настроїти",
         "BTN_FORCE_OVERWRITE": "Примусовий перезапис",
+        "CHANGE_PASSWORD_FAILED": "Не вдалося змінити пароль: {{message}}",
         "CLOCK_DRIFT_WARNING": "Здається, годинник вашого пристрою зміщений на {{minutes}} хвилин. Це може спричинити проблеми із синхронізацією.",
         "COMPACTION_FAILED": "Помилка очищення бази даних. Додаток може працювати повільніше.",
-        "CONFLICT_RESOLUTION_FAILED": "Помилка вирішення конфлікту синхронізації. Будь ласка, перезавантажте.",
-        "DIALOG_RESULT_ERROR": "Сталася помилка під час обробки діалогу синхронізації. Будь ласка, спробуйте ще раз.",
         "CONFLICT_DIALOG_TIMEOUT": "Час очікування діалогу конфлікту синхронізації вичерпано, його було скасовано. Синхронізація повториться при наступному тригері.",
-        "OPERATION_PERMANENTLY_FAILED": "Деякі операції синхронізації не вдалися і не змогли бути застосовані. Дані можуть бути неповними.",
+        "CONFLICT_RESOLUTION_FAILED": "Помилка вирішення конфлікту синхронізації. Будь ласка, перезавантажте.",
         "DATA_REPAIRED": "Дані автоматично відновлено (виправлено помилок: {{count}})",
+        "DECRYPTION_FAILED": "Не вдалося розшифрувати синхронізовані дані. Будь ласка, перевірте пароль шифрування.",
+        "DEFERRED_ACTION_FAILED": "Деякі зміни, внесені під час синхронізації, не вдалося зберегти. Будь ласка, перезавантажте, щоб відновити роботу.",
+        "DIALOG_RESULT_ERROR": "Сталася помилка під час обробки діалогу синхронізації. Будь ласка, спробуйте ще раз.",
+        "DISABLE_ENCRYPTION_FAILED": "Не вдалося вимкнути шифрування: {{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "Не вдалося увімкнути шифрування: {{message}}",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Шифрування було вимкнено на іншому пристрої. Ваші налаштування синхронізації було оновлено.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "Отримано зашифровані дані, але пароль шифрування не налаштований. Будь ласка, встановіть пароль у налаштуваннях синхронізації.",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Для SuperSync потрібне шифрування. Встановіть пароль шифрування для продовження синхронізації.",
         "ERROR_CORS": "Помилка синхронізації WebDAV: мережевий запит не вдався.\n\nЦе може бути проблема CORS. Будь ласка, переконайтеся:\n• Ваш сервер WebDAV дозволяє крос-доменні запити (Cross-Origin)\n• URL-адреса сервера правильна та доступна\n• У вас є працююче інтернет-з'єднання",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "На даний момент ведеться запис віддалених даних",
+        "ERROR_PAYLOAD_TOO_LARGE": "Помилка синхронізації: Ваші дані занадто великі для завантаження.\n\nЦе трапляється, коли у вас багато архівованих завдань. Ваші дані НЕ були синхронізовані.\n\nБудь ласка, зверніться до служби підтримки за допомогою.",
         "ERROR_PERMISSION": "Доступ до файлу відхилено. Будь ласка, перевірте дозволи вашої файлової системи.",
         "ERROR_PERMISSION_FLATPAK": "Доступ до файлу відхилено. Надайте дозвіл на файлову систему через Flatseal або використовуйте шлях у межах ~/.var/app/",
         "ERROR_PERMISSION_SNAP": "Доступ до файлу відхилено. Виконайте команду 'snap connect super-productivity:home' або використовуйте шлях у межах ~/snap/super-productivity/common/",
+        "ERROR_REMOTE_FILE_CORRUPTED": "Дані віддаленої синхронізації нечитабельні (можливо, скорочені або пошкоджені). Ваші локальні дані в безпеці. Ви можете перезаписати віддалені дані своїми локальними даними.",
+        "ERROR_REMOTE_FILE_EMPTY": "Файл віддаленої синхронізації порожній. Це може статися після перерваної синхронізації. Перезаписати віддалені дані локальними даними?",
+        "ERROR_REMOTE_FILE_LOCKED": "Файл віддаленої синхронізації заблоковано сервером. Це може вирішитися під час наступної спроби синхронізації.",
+        "ERROR_SYNC_VERSION_MISMATCH": "Дані віддаленої синхронізації використовують несумісну версію формату. Переконайтеся, що на всіх пристроях встановлено однакову версію Super Productivity.",
+        "WARN_CLIENT_ID_REGENERATED": "Ідентифікатор пристрою синхронізації був недійсним і був створений повторно. Під час наступної синхронізації може виникнути конфлікт синхронізації.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Помилка під час синхронізації. Не вдалося прочитати віддалені дані. Можливо, ви ввімкнули шифрування, і ваш локальний пароль не збігається з тим, що використовувався для шифрування віддалених даних?",
+        "FINISH_DAY_SYNC_ERROR": "Помилка синхронізації під час завершення дня. Будь ласка, спробуйте ще раз.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "Початкову синхронізацію скасовано. Віддалені дані не застосовані.",
         "HYDRATION_FAILED": "Не вдалося завантажити дані. Будь ласка, перезапустіть додаток.",
-        "INTEGRITY_CHECK_FAILED": "Виявлено проблему цілісності даних. Спроба авто-відновлення. Якщо виникнуть проблеми, будь ласка, перезапустіть додаток.",
         "IMPORTING": "Імпорт даних",
         "INCOMPLETE_CFG": "Автентифікація для синхронізації не вдалася. Будь ласка, перевірте ваші налаштування!",
         "INCOMPLETE_OP_SYNC": "Синхронізація неповна: не вдалося завантажити файл(и) операцій ({{count}})",
-        "TOO_MANY_OPS_TO_DOWNLOAD": "Занадто багато операцій синхронізації для завантаження. Деякі зміни можуть бути відсутні.",
         "INITIAL_SYNC_ERROR": "Початкова синхронізація не вдалася",
+        "INTEGRITY_CHECK_FAILED": "Виявлено проблему цілісності даних. Спроба авто-відновлення. Якщо виникнуть проблеми, будь ласка, перезапустіть додаток.",
+        "INVALID_AUTH_CODE": "Код авторизації було відхилено. Спробуйте автентифікуватися знову та переконайтеся, що код скопійовано точно.",
         "INVALID_OPERATION_PAYLOAD": "Виявлено недійсну операцію. Зміни можуть бути не збережені — будь ласка, перезавантажте.",
-        "DECRYPTION_FAILED": "Не вдалося розшифрувати синхронізовані дані. Будь ласка, перевірте пароль шифрування.",
-        "ENCRYPTION_PASSWORD_REQUIRED": "Отримано зашифровані дані, але пароль шифрування не налаштований. Будь ласка, встановіть пароль у налаштуваннях синхронізації.",
-        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Шифрування було вимкнено на іншому пристрої. Ваші налаштування синхронізації було оновлено.",
-        "WEB_CRYPTO_NOT_AVAILABLE": "Шифрування недоступне на цьому пристрої. На Android шифрування вимагає безпечного контексту (HTTPS), який недоступний. Будь ласка, вимкніть шифрування в налаштуваннях або синхронізуйтеся з настільного браузера.",
+        "LEGACY_FORMAT_DETECTED": "Невідповідність формату синхронізації: дані у віддаленому сховищі востаннє записувалися старішою версією програми (v16.x або ранішою), яка використовує інший формат синхронізації.Будь ласка, оновіть програму на всіх своїх пристроях до однакової версії. Функція «Примусове перезаписування» розблоковує цей пристрій, записуючи файли нового формату разом зі старими файлами; використовуйте її лише тоді, коли жоден старіший пристрій більше не синхронізується з цим пультом дистанційного керування, інакше вони непомітно відійдуть від цього пристрою.",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} локальних змін відхилено — елементи були видалені на іншому пристрої",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} незбережених локальних змін відхилено — синхронізація завантажила новіші дані",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Синхронізацію скасовано. Ваші локальні дані збережено.",
+        "LOCAL_DATA_REPLACE_UNDO": "Ваші локальні дані було замінено даними сервера.",
+        "LOCK_TIMEOUT_ERROR": "Тайм-аут синхронізації під час очікування завершення попередньої операції. Спробуйте ще раз.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Конфлікти синхронізації вирішено автоматично: {{localWins}} локальних перемог, {{remoteWins}} віддалених перемог",
+        "LOCAL_FILE_RESELECT_REQUIRED": "Для локальної синхронізації файлів потрібно знову вибрати папку синхронізації після оновлення безпеки. Відкрийте налаштування синхронізації та виберіть папку ще раз.",
+        "MIGRATION_FAILED": "Деякі дані синхронізації не вдалося мігрувати і їх було пропущено. Це може вказувати на пошкодження даних або помилку.",
+        "NETWORK_ERROR": "Запит на синхронізацію не вдалося виконати через тимчасову проблему з мережею. Ваші зміни залишаються локальними, і спробу синхронізації буде повторено.",
+        "NEWER_VERSION_AVAILABLE": "Деякі зміни зроблені в новішій версії додатка. Розгляньте можливість оновлення для повної сумісності.",
+        "OAUTH_STATE_INVALID": "Невідповідність стану OAuth — URL-адреса зворотного виклику не відповідає запиту цього пристрою. Спробуйте автентифікацію ще раз.",
+        "OPERATION_PERMANENTLY_FAILED": "Деякі операції синхронізації не вдалися і не змогли бути застосовані. Дані можуть бути неповними.",
+        "OVERWRITE_SERVER_FAILED": "Не вдалося перезаписати дані на сервері: {{message}}",
+        "PARTIAL_APPLY_FAILURE": "Деякі операції синхронізації не вдалося застосувати. Дані було перевірено.",
         "PERSIST_FAILED": "Не вдалося зберегти зміни. Стан може бути несумісним — будь ласка, перезавантажте.",
-        "DEFERRED_ACTION_FAILED": "Деякі зміни, внесені під час синхронізації, не вдалося зберегти. Будь ласка, перезавантажте, щоб відновити роботу.",
         "REMOTE_DATA_TOO_OLD": "Віддалені дані занадто старі для обробки. Будь ласка, оновіть додаток на віддаленому пристрої.",
+        "REPLAY_LOCAL_OPS_FAILED": "Не вдалося відтворити локальні операції після імпорту. Деякі нещодавні зміни можуть бути втрачені. Дані було перевірено.",
+        "RESTORE_ENCRYPTED": "Відновлення з історії сервера недоступне, якщо ввімкнено наскрізне шифрування. Сервер не може зчитати ваші зашифровані дані, щоб відтворити попередню точку.",
+        "RESTORE_ERROR": "Не вдалося відновити дані",
+        "RESTORE_SUCCESS": "Дані успішно відновлено",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Не вдалося перенести дані на сервер — перевірка локальних даних не вдалася. Будь ласка, спробуйте імпортувати резервну копію.",
         "STORAGE_QUOTA_EXCEEDED": "Сховище сервера синхронізації заповнене. Ваші зміни НЕ синхронізуються. Будь ласка, архівуйте старі завдання або змініть тарифний план.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Місце в сховищі закінчувалося. Старі дані успішно очищено.",
-        "ERROR_PAYLOAD_TOO_LARGE": "Помилка синхронізації: Ваші дані занадто великі для завантаження.\n\nЦе трапляється, коли у вас багато архівованих завдань. Ваші дані НЕ були синхронізовані.\n\nБудь ласка, зверніться до служби підтримки за допомогою.",
         "SUCCESS_DOWNLOAD": "Синхронізація даних з віддаленого доступу",
         "SUCCESS_VIA_BUTTON": "Дані успішно синхронізовано",
+        "SYNC_VALIDATION_FAILED": "Перевірка стану не вдалася після синхронізації. Деякі дані можуть бути невідповідними.",
+        "TIMEOUT_ERROR": "Час очікування операції синхронізації вичерпано. {{suggestion}}",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "Занадто багато операцій синхронізації для завантаження. Деякі зміни можуть бути відсутні.",
         "UNKNOWN_ERROR": "Невідома помилка синхронізації: {{err}}",
         "UPLOAD_ERROR": "Невідома помилка завантаження (Налаштування правильні?): {{err}}",
         "UPLOAD_OPS_REJECTED": "Сервер остаточно відхилив {{count}} операцій, вони не будуть синхронізовані.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "Синхронізація відстежує {{originalSize}} пристроїв/браузерів, що перевищує ліміт {{maxSize}}. Неактивні записи пристроїв було видалено. Якщо виникають проблеми, розгляньте скидання синхронізації.",
         "VERSION_TOO_OLD": "Версія вашого додатка занадто стара для синхронізованих даних. Будь ласка, оновіться!",
         "VERSION_UNSUPPORTED": "Неможливо синхронізувати: дані потребують новішої версії додатка. Будь ласка, оновіться.",
-        "NEWER_VERSION_AVAILABLE": "Деякі зміни зроблені в новішій версії додатка. Розгляньте можливість оновлення для повної сумісності.",
-        "FRESH_CLIENT_SYNC_CANCELLED": "Початкову синхронізацію скасовано. Віддалені дані не застосовані.",
-        "LOCAL_DATA_REPLACE_CANCELLED": "Синхронізацію скасовано. Ваші локальні дані збережено.",
-        "RESTORE_SUCCESS": "Дані успішно відновлено",
-        "RESTORE_ERROR": "Не вдалося відновити дані",
-        "TIMEOUT_ERROR": "Час очікування операції синхронізації вичерпано. {{suggestion}}",
-        "PARTIAL_APPLY_FAILURE": "Деякі операції синхронізації не вдалося застосувати. Дані було перевірено.",
-        "REPLAY_LOCAL_OPS_FAILED": "Не вдалося відтворити локальні операції після імпорту. Деякі нещодавні зміни можуть бути втрачені. Дані було перевірено.",
-        "ARCHIVE_OPERATION_FAILED": "Операція архівування не вдалася. Деяке очищення могло бути не завершене.",
-        "LWW_CONFLICTS_AUTO_RESOLVED": "Конфлікти синхронізації вирішено автоматично: {{localWins}} локальних перемог, {{remoteWins}} віддалених перемог",
-        "LOCAL_CHANGES_DISCARDED": "{{count}} локальних змін відхилено — елементи були видалені на іншому пристрої",
-        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} незбережених локальних змін відхилено — синхронізація завантажила новіші дані",
-        "FINISH_DAY_SYNC_ERROR": "Помилка синхронізації під час завершення дня. Будь ласка, спробуйте ще раз.",
-        "SERVER_MIGRATION_VALIDATION_FAILED": "Не вдалося перенести дані на сервер — перевірка локальних даних не вдалася. Будь ласка, спробуйте імпортувати резервну копію.",
-        "AUTH_SETUP_FAILED": "Не вдалося налаштувати автентифікацію. Якщо ви використовуєте веб-додаток, переконайтеся, що доступ здійснюється через HTTPS. Інакше спробуйте стабільну версію або повідомте про помилку.",
-        "AUTH_TOKEN_REJECTED": "Токен синхронізації відхилено сервером: {{reason}}. Отримайте новий токен.",
-        "CHANGE_PASSWORD_FAILED": "Не вдалося змінити пароль: {{message}}",
-        "DISABLE_ENCRYPTION_FAILED": "Не вдалося вимкнути шифрування: {{message}}",
-        "ENABLE_ENCRYPTION_FAILED": "Не вдалося увімкнути шифрування: {{message}}",
-        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Для SuperSync потрібне шифрування. Встановіть пароль шифрування для продовження синхронізації.",
-        "INVALID_AUTH_CODE": "Код авторизації було відхилено. Спробуйте автентифікуватися знову та переконайтеся, що код скопійовано точно.",
-        "LOCK_TIMEOUT_ERROR": "Тайм-аут синхронізації під час очікування завершення попередньої операції. Спробуйте ще раз.",
-        "MIGRATION_FAILED": "Деякі дані синхронізації не вдалося мігрувати і їх було пропущено. Це може вказувати на пошкодження даних або помилку.",
-        "OVERWRITE_SERVER_FAILED": "Не вдалося перезаписати дані на сервері: {{message}}",
-        "VECTOR_CLOCK_LIMIT_REACHED": "Синхронізація відстежує {{originalSize}} пристроїв/браузерів, що перевищує ліміт {{maxSize}}. Неактивні записи пристроїв було видалено. Якщо виникають проблеми, розгляньте скидання синхронізації."
-      },
-      "D_DATA_REPAIRED": {
-        "TITLE": "Виконано відновлення даних",
-        "MSG": "Ваші дані потребували автоматичного відновлення (виправлено помилок: {{count}}). Зазвичай цього не повинно відбуватися. Якщо це трапляється неодноразово, будь ласка, повідомте про це.",
-        "UNKNOWN_ERROR": "Невідома помилка синхронізації: {{err}}"
-      },
-      "D_DATA_REPAIR_CONFIRM": {
-        "TITLE": "Виявлено пошкодження даних",
-        "MSG": "Ваші дані здаються пошкодженими. Бажаєте спробувати автоматичне відновлення? Це може призвести до незначної втрати даних."
+        "WEB_CRYPTO_NOT_AVAILABLE": "Шифрування недоступне на цьому пристрої. На Android шифрування вимагає безпечного контексту (HTTPS), який недоступний. Будь ласка, вимкніть шифрування в налаштуваннях або синхронізуйтеся з настільного браузера."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Очистити все",
@@ -1343,12 +1614,6 @@
         "TOOLTIP_DELETE": "Видалити цю резервну копію",
         "TOOLTIP_REFRESH": "Оновити список резервних копій",
         "TOOLTIP_RESTORE": "Відновити цю резервну копію (замінить усі поточні дані)"
-      },
-      "D_SERVER_MIGRATION_CONFIRM": {
-        "CONFIRM": "Завантажити локальні дані",
-        "MESSAGE": "Цей сервер синхронізації вже містить дані. Бажаєте завантажити свої локальні дані для об'єднання? Якщо пропустити, деякі локальні зміни можуть не синхронізуватися.",
-        "SKIP": "Пропустити",
-        "TITLE": "Сервер вже має дані"
       }
     },
     "TAG": {
@@ -1364,6 +1629,7 @@
         "LABEL": "Теги"
       },
       "FORM_BASIC": {
+        "D_COLOR": "Якщо не встановлено, за замовчуванням використовується колір тегу.",
         "L_COLOR": "Колір (якщо не визначено, використовується основний колір теми)",
         "L_ICON": "Іконка",
         "L_TITLE": "Назва тегу",
@@ -1396,35 +1662,16 @@
       "TOOLTIP_CREATE": "Створити папку тегів"
     },
     "TASK": {
-      "ADDITIONAL_INFO": {
-        "ADD_ATTACHMENT": "Додати вкладення",
-        "ADD_SUB_TASK": "Додати підзавдання",
-        "ATTACHMENTS": "Вкладення ({{nr}})",
-        "DUE": "Заплановано на",
-        "FROM_PARENT": "(від батьківського завдання)",
-        "LOCAL_ATTACHMENTS": "Локальні вкладення",
-        "NOTES": "Опис",
-        "PARENT": "Батьківське завдання",
-        "REMINDER": "Нагадування",
-        "REPEAT": "Повторення",
-        "SCHEDULE_TASK": "Запланувати завдання",
-        "SUB_TASKS": "Підзавдання ({{nr}})",
-        "TIME": "Час",
-        "TITLE_PLACEHOLDER": "Введіть назву",
-        "COMPLETED_ON": "Завершено",
-        "CREATED_ON": "Створено",
-        "DEADLINE": "Дедлайн",
-        "DEADLINE_DUE_BY": "Виконати до",
-        "DEADLINE_OVERDUE": "Прострочено!",
-        "ISSUE": "Посилання на задачу"
-      },
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Додати існуюче завдання \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Створити нові теги",
         "DUE_BUTTON": "Запланувати",
         "ESTIMATE_BUTTON": "Оцінити",
+        "NOTE_BUTTON": "Примітка",
+        "NOTE_PLACEHOLDER": "Додатки примітку… (Ctrl+Enter щоб додати завдання)",
         "PLACEHOLDER_CREATE": "Назва завдання #тег @16:00",
         "PLACEHOLDER_SEARCH": "Додати існуюче завдання або проблему...",
+        "REPEAT_BUTTON": "Повторення",
         "SEARCH_INFO_TEXT": "Шукайте та додавайте проблеми та завдання з архіву та інших проектів",
         "TAGS_BUTTON": "Теги",
         "TODAY": "Сьогодні",
@@ -1437,31 +1684,69 @@
         "TOOLTIP_ADD_TO_TODAY": "Додати до сьогодні",
         "TOOLTIP_ADD_TO_TOP": "Додати в початок (Ctrl+1)",
         "TOOLTIP_CLEAR_DATE": "Очистити дату",
+        "TOOLTIP_CLEAR_DEADLINE": "Очистити дедлайн",
         "TOOLTIP_CLEAR_ESTIMATE": "Очистити оцінку",
+        "TOOLTIP_CLEAR_REPEAT": "Очистити налаштування повторення",
         "TOOLTIP_CLEAR_TAGS": "Очистити теги",
         "TOOLTIP_DISABLE_SEARCH": "Вимкнути пошук проблем (Ctrl+2)",
         "TOOLTIP_ENABLE_SEARCH": "Увімкнути пошук проблем (Ctrl+2)",
-        "REPEAT_BUTTON": "Повторення",
-        "TOOLTIP_CLEAR_REPEAT": "Очистити налаштування повторення"
+        "TOOLTIP_NOTE": "Додати примітку (Ctrl+Enter)"
+      },
+      "ADDITIONAL_INFO": {
+        "ADD_ATTACHMENT": "Додати вкладення",
+        "ADD_CHECKLIST_ITEM": "Додати пункт контрольного списку",
+        "CHECKLIST_ACTIONS": "Дії контрольного списку",
+        "CHECK_ALL": "Перевірити все",
+        "CLEAR_COMPLETED": "Очистити завершені",
+        "NOTES_OR_CHECKLIST": "Нотатки / Контрольний список",
+        "UNCHECK_ALL": "Зняти всі прапорці",
+        "PASTE_IMAGE_HINT": "Ctrl+V для вставки зображення",
+        "PASTE_IMAGE_HINT_MAC": "Cmd+V для вставки зображення",
+        "PASTED_IMAGE_TITLE": "Вставлене зображення",
+        "ADD_SUB_TASK": "Додати підзавдання",
+        "ATTACHMENTS": "Вкладення ({{nr}})",
+        "COMPLETED_ON": "Завершено",
+        "CREATED_ON": "Створено",
+        "DEADLINE": "Дедлайн",
+        "DEADLINE_DUE_BY": "Виконати до",
+        "DEADLINE_OVERDUE": "Прострочено!",
+        "DUE": "Заплановано на",
+        "FROM_PARENT": "(від батьківського завдання)",
+        "ISSUE": "Посилання на задачу",
+        "LOCAL_ATTACHMENTS": "Локальні вкладення",
+        "NOTES": "Опис",
+        "PARENT": "Батьківське завдання",
+        "REMINDER": "Нагадування",
+        "REPEAT": "Повторення",
+        "SCHEDULE_TASK": "Запланувати завдання",
+        "SUB_TASKS": "Підзавдання ({{nr}})",
+        "TIME": "Час",
+        "TITLE_PLACEHOLDER": "Введіть назву"
       },
       "B": {
-        "ADD_HALF_HOUR": "Додати 1/2 години",
-        "ESTIMATE_EXCEEDED": "Перевищено оцінку часу для \"{{title}}\"",
         "ADD_ALL_TO_TODAY": "Додати все на сьогодні",
-        "DEADLINES_TODAY": "{{count}} завдань(я) з дедлайном сьогодні ще не заплановано"
+        "ADD_HALF_HOUR": "Додати 1/2 години",
+        "DEADLINES_TODAY": "{{count}} завдань(я) з дедлайном сьогодні ще не заплановано",
+        "ESTIMATE_EXCEEDED": "Перевищено оцінку часу для \"{{title}}\""
       },
       "CMP": {
         "ADD_SUB_TASK": "Додати підзавдання",
         "ADD_TO_MY_DAY": "Додати до Сьогодні",
         "ADD_TO_PROJECT": "Додати до проекту",
+        "CHECKLIST_PROGRESS": "Контрольний список: {{done}} з {{total}} виконано",
+        "CLEAR_ESTIMATE": "Очистити оцінку",
         "CONVERT_TO_PARENT_TASK": "Перетворити на батьківське завдання",
+        "CUSTOM_ESTIMATE": "Користувацький…",
         "DELETE": "Видалити завдання",
         "DELETE_REPEAT_INSTANCE": "Видалити екземпляр повторюваного завдання",
         "DROP_ATTACHMENT": "Перетягніть сюди, щоб прикріпити до \"{{title}}\"",
         "DUPLICATE": "Дублювати",
+        "EDIT_DEADLINE": "Редагувати дедлайн",
         "EDIT_SCHEDULED": "Перепланувати",
+        "ESTIMATE": "Оцінка",
         "FOCUS_SESSION": "Розпочати сеанс фокусування",
         "MARK_DONE": "Позначити як виконане",
+        "MARK_UNDONE": "Позначити як невиконане",
         "MOVE_TO_BACKLOG": "Перемістити до беклогу",
         "MOVE_TO_OTHER_PROJECT": "Перемістити до іншого проекту",
         "MOVE_TO_REGULAR": "Перемістити до Сьогодні",
@@ -1469,8 +1754,13 @@
         "OPEN_ATTACH": "Прикріпити файл або посилання",
         "OPEN_ISSUE": "Відкрити в браузері",
         "OPEN_TIME": "Відстеження часу",
+        "REMOVE_DEADLINE": "Видалити дедлайн",
         "REMOVE_FROM_MY_DAY": "Видалити з Сьогодні",
         "SCHEDULE": "Запланувати завдання",
+        "SET_DEADLINE": "Встановити дедлайн",
+        "SHOW_HIDDEN_DONE_SUB_TASKS": "+ {{nr}} виконаних підзавдань",
+        "SHOW_HIDDEN_SUB_TASKS": "+ {{nr}} підзавдань",
+        "TIME_CONFLICT": "Перетинається з іншим запланованим завданням",
         "TOGGLE_ATTACHMENTS": "Показати/Приховати вкладення",
         "TOGGLE_DETAIL_PANEL": "Показати/Приховати додаткову інформацію",
         "TOGGLE_DONE": "Позначити як виконане/невиконане",
@@ -1479,10 +1769,11 @@
         "TRACK_TIME": "Почати відстеження часу",
         "TRACK_TIME_STOP": "Призупинити відстеження часу",
         "UNSCHEDULE_TASK": "Завдання без розкладу",
-        "UPDATE_ISSUE_DATA": "Оновити дані завдання",
-        "EDIT_DEADLINE": "Редагувати дедлайн",
-        "REMOVE_DEADLINE": "Видалити дедлайн",
-        "SET_DEADLINE": "Встановити дедлайн"
+        "UPDATE_ISSUE_DATA": "Оновити дані завдання"
+      },
+      "D_CONFIRM_DELETE": {
+        "MSG": "Ви впевнені, що хочете видалити завдання \"{{title}}\"?",
+        "OK": "Видалити"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Бажаєте створити новий тег {{tagsTxt}}?",
@@ -1492,45 +1783,62 @@
         "MSG": "Бажаєте створити нові теги {{tagsTxt}}?",
         "OK": "Створити теги"
       },
-      "D_CONFIRM_DELETE": {
-        "MSG": "Ви впевнені, що хочете видалити завдання \"{{title}}\"?",
-        "OK": "Видалити"
+      "D_DEADLINE": {
+        "ADD_TIME": "Додати час",
+        "QA_NEXT_MONTH": "Наступний місяць",
+        "QA_NEXT_WEEK": "Наступний тиждень",
+        "QA_TODAY": "Сьогодні",
+        "QA_TOMORROW": "Завтра",
+        "REMIND_AT": "Нагадати о",
+        "REMOVE_DEADLINE": "Видалити дедлайн",
+        "RO_1H": "За 1 годину",
+        "RO_5M": "За 5 хвилин",
+        "RO_10M": "За 10 хвилин",
+        "RO_15M": "За 15 хвилин",
+        "RO_30M": "За 30 хвилин",
+        "RO_AT_DEADLINE": "У момент дедлайну",
+        "RO_NEVER": "Ніколи",
+        "SET_DEADLINE": "Встановити дедлайн"
       },
       "D_REMINDER_VIEW": {
-        "ADD_ALL_TO_TODAY": "Додати всі до Сьогодні",
         "ADD_TO_TODAY": "Додати до Сьогодні",
+        "CLEAR_ALL_REMINDERS": "Очистити всі нагадування",
+        "CLEAR_REMINDER": "Очистити нагадування",
         "COMPLETE": "Завершити",
-        "COMPLETE_ALL": "Завершити все",
+        "MARK_AS_DONE": "Позначити як виконане",
+        "OR_DIRECTLY_FOR_ALL": "Або безпосередньо для всіх:",
+        "SCHEDULE_FOR_TODAY": "Запланувати на сьогодні",
+        "DROP_TIME_KEEP_TODAY": "Прибрати час, залишитив в Сьогодні",
+        "DEADLINE_REMINDER": "Нагадування про дедлайн",
+        "DEADLINE_SECTION": "Дедлайни",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Відхилити всі нагадування (залишити в Сьогодні)",
         "DISMISS_REMINDER_KEEP_TODAY": "Відхилити нагадування (залишити в Сьогодні)",
         "DONE": "Виконано",
+        "DUE_SECTION": "Заплановані",
         "DUE_TASK": "Заплановане завдання",
         "DUE_TASKS": "Заплановані завдання",
         "RESCHEDULE_EDIT": "Редагувати (Перепланувати)",
         "RESCHEDULE_UNTIL_TOMORROW": "Перепланувати на завтра",
+        "SCHEDULED_FOR": "Заплановано на",
         "SNOOZE": "Відкласти",
-        "SNOOZE_ALL": "Відкласти всі",
         "START": "Почати",
+        "TASK_REMINDERS": "Нагадування про завдання",
         "UNSCHEDULE": "Поза графіком",
-        "UNSCHEDULE_ALL": "Скасувати всі",
-        "CLEAR_ALL_REMINDERS": "Очистити всі нагадування",
-        "CLEAR_REMINDER": "Очистити нагадування",
-        "DEADLINE_REMINDER": "Нагадування про дедлайн",
-        "DEADLINE_SECTION": "Дедлайни",
-        "DUE_SECTION": "Заплановані",
-        "TASK_REMINDERS": "Нагадування про завдання"
+        "UNSCHEDULE_ALL": "Скасувати всі"
       },
       "D_SCHEDULE_TASK": {
+        "INFO_OUTSIDE_WORK_HOURS": "Виходить за межі налаштованого вами робочого часу.",
+        "INFO_OVERLAP": "Перетинається з іншим запланованим завданням.",
         "QA_NEXT_MONTH": "Запланувати на наступний місяць",
         "QA_NEXT_WEEK": "Запланувати на наступний тиждень",
         "QA_TODAY": "Запланувати на сьогодні",
         "QA_TOMORROW": "Запланувати на завтра",
         "REMIND_AT": "Нагадати о",
+        "RO_1H": "за 1 годину до початку",
+        "RO_5M": "за 5 хвилин до початку",
         "RO_10M": "за 10 хвилин до початку",
         "RO_15M": "за 15 хвилин до початку",
-        "RO_1H": "за 1 годину до початку",
         "RO_30M": "за 30 хвилин до початку",
-        "RO_5M": "за 5 хвилин до початку",
         "RO_NEVER": "Ніколи",
         "RO_START": "коли починається",
         "SCHEDULE": "Запланувати",
@@ -1563,6 +1871,8 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Неможливо призначити проект через короткий синтаксис для повторюваних завдань!",
         "CREATED_FOR_PROJECT": "Перенесено завдання \"{{taskTitle}}\" на проект \"{{projectTitle}}\"",
+        "DEADLINE_REMOVED": "Дедлайн видалено",
+        "DEADLINE_SET": "Дедлайн встановлено на {{date}}",
         "DELETED": "Видалено завдання \"{{title}}\"",
         "FOUND_MOVE_FROM_BACKLOG": "Переміщено завдання <strong>{{title}}</strong> з беклогу до Сьогодні",
         "FOUND_MOVE_FROM_OTHER_LIST": "Додано завдання <strong>{{title}}</strong> з <strong>{{contextTitle}}</strong> до поточного списку",
@@ -1570,13 +1880,11 @@
         "GO_TO_TASK": "Перейти до завдання",
         "MOVED_TO_ARCHIVE": "Перенесено {{nr}} завдань в архів",
         "MOVED_TO_PROJECT": "Перенесено завдання \"{{taskTitle}}\" на проект \"{{projectTitle}}\"",
-        "REMINDER_ADDED": "Заплановано завдання \"{{title}}\"",
+        "REMINDER_ADDED": "Заплановано <strong>\"{{title}}\"</strong> на <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Видалено нагадування для завдання",
         "REMINDER_UPDATED": "Оновлено нагадування для завдання \"{{title}}\"",
         "TASK_ALREADY_EXISTS": "Завдання <strong>{{title}}</strong> вже існує",
-        "TASK_CREATED": "Створено завдання \"{{taskTitle}}\"",
-        "DEADLINE_REMOVED": "Дедлайн видалено",
-        "DEADLINE_SET": "Дедлайн встановлено на {{date}}"
+        "TASK_CREATED": "Створено завдання \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Виберіть або створіть завдання",
       "SUMMARY_TABLE": {
@@ -1585,23 +1893,6 @@
         "SPENT_TOTAL": "Витрачено всього",
         "TASK": "Завдання",
         "TOGGLE_DONE": "Відмітити як (не)виконане"
-      },
-      "D_DEADLINE": {
-        "ADD_TIME": "Додати час",
-        "QA_NEXT_MONTH": "Наступний місяць",
-        "QA_NEXT_WEEK": "Наступний тиждень",
-        "QA_TODAY": "Сьогодні",
-        "QA_TOMORROW": "Завтра",
-        "REMIND_AT": "Нагадати о",
-        "REMOVE_DEADLINE": "Видалити дедлайн",
-        "RO_1H": "За 1 годину",
-        "RO_5M": "За 5 хвилин",
-        "RO_10M": "За 10 хвилин",
-        "RO_15M": "За 15 хвилин",
-        "RO_30M": "За 30 хвилин",
-        "RO_AT_DEADLINE": "У момент дедлайну",
-        "RO_NEVER": "Ніколи",
-        "SET_DEADLINE": "Встановити дедлайн"
       }
     },
     "TASK_REPEAT": {
@@ -1622,6 +1913,10 @@
         "MONDAY_TO_FRIDAY_AND_TIME": "Пн-Пт, {{timeStr}}",
         "MONTHLY_CURRENT_DATE": "Щомісяця {{dateDayStr}}-го числа",
         "MONTHLY_CURRENT_DATE_AND_TIME": "Щомісяця {{dateDayStr}}-го числа, {{timeStr}}",
+        "MONTHLY_LAST_DAY": "Щомісяця, в останній день",
+        "MONTHLY_LAST_DAY_AND_TIME": "Щомісяця, в останній день, {{timeStr}}",
+        "MONTHLY_NTH_WEEKDAY": "Щомісяця у {{ordinalStr}} {{weekdayStr}}",
+        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Щомісяця у {{ordinalStr}} {{weekdayStr}}, {{timeStr}}",
         "WEEKLY_CURRENT_WEEKDAY": "Щотижня в {{weekdayStr}}",
         "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "Щотижня в {{weekdayStr}}, {{timeStr}}",
         "YEARLY_CURRENT_DATE": "Щороку {{dayAndMonthStr}}",
@@ -1640,16 +1935,16 @@
         "MSG": "Є {{tasksNr}} екземплярів, створених для цього повторюваного завдання. Бажаєте оновити їх всі з новими налаштуваннями чи лише майбутні завдання?",
         "OK": "Оновити всі екземпляри"
       },
-      "D_DELETE_INSTANCE": {
-        "MSG": "Видалити екземпляр повторюваного завдання на {{date}}? Це запобіжить створенню завдання лише на цю дату.",
-        "OK": "Видалити екземпляр"
+      "D_SKIP_INSTANCE": {
+        "MSG": "Пропустити повторюване завдання {{date}}? Це запобіжить створенню завдання лише в цю дату.",
+        "OK": "Пропустити"
       },
       "D_EDIT": {
         "ADD": "Додати конфігурацію повторюваного завдання",
         "ADVANCED_CFG": "Розширена конфігурація",
         "EDIT": "Редагувати конфігурацію повторюваного завдання",
-        "TAG_LABEL": "Теги для додавання",
         "HEATMAP_LABEL": "Активність",
+        "TAG_LABEL": "Теги для додавання",
         "TIME_SPENT_THIS_MONTH": "Цього місяця",
         "TIME_SPENT_THIS_WEEK": "Цього тижня",
         "TIME_SPENT_TOTAL": "Всього"
@@ -1666,22 +1961,38 @@
         "INHERIT_SUBTASKS": "Успадковувати підзавдання",
         "INHERIT_SUBTASKS_DESCRIPTION": "Якщо увімкнено, підзавдання з останнього екземпляра завдання будуть відтворюватися разом із повторюваним завданням",
         "MONDAY": "Понеділок",
+        "MONTHLY_MODE_DAY_OF_MONTH": "День місяця",
         "NOTES": "Стандартні нотатки",
-        "QUICK_SETTING": "Конфігурація повторення",
+        "ORD_FIRST": "перший",
+        "ORD_FIRST_NTH": "перший",
+        "ORD_FOURTH": "четвертий",
+        "ORD_FOURTH_NTH": "четвертий",
+        "ORD_LAST": "останній",
+        "ORD_LAST_NTH": "останній",
+        "ORD_SECOND": "другий",
+        "ORD_SECOND_NTH": "другий",
+        "ORD_THIRD": "третій",
+        "ORD_THIRD_NTH": "третій",
         "Q_CUSTOM": "Користувацька конфігурація повторення",
         "Q_DAILY": "Щодня",
         "Q_MONDAY_TO_FRIDAY": "Щопонеділка до п'ятниці",
         "Q_MONTHLY_CURRENT_DATE": "Щомісяця {{dateDayStr}}-го числа",
+        "Q_MONTHLY_FIRST_DAY": "Щомісяця першого числа",
+        "Q_MONTHLY_LAST_DAY": "Щомісяця останнього числа",
+        "Q_MONTHLY_NTH_WEEKDAY": "Щомісяця у {{ordinalStr}} {{weekdayStr}}",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Щотижня в {{weekdayStr}}",
         "Q_YEARLY_CURRENT_DATE": "Щороку {{dayAndMonthStr}}",
+        "QUICK_SETTING": "Конфігурація повторення",
         "REMIND_AT": "Нагадати о",
         "REMIND_AT_PLACEHOLDER": "Виберіть, коли нагадати",
-        "REMOVE_FOR_DATE": "Видалити для {{date}}",
-        "REMOVE_INSTANCE": "Видалити сьогодні",
+        "SKIP_FOR_DATE": "Пропустити на {{date}}",
+        "SKIP_INSTANCE": "Пропустити на сьогодні",
         "REPEAT_CYCLE": "Цикл повторення",
         "REPEAT_EVERY": "Повторювати кожні",
         "SATURDAY": "Субота",
         "SCHEDULE_TYPE_LABEL": "Тип розкладу",
+        "SKIP_OVERDUE": "Пропускати прострочені екземпляри",
+        "SKIP_OVERDUE_DESCRIPTION": "Коли увімкнено, якщо додаток відкривається після пропуску запланованого повторення (напр. щотижневе завдання, де сьогодні не є запланованим днем), пропущений екземпляр буде тихо пропущено замість створення простроченого завдання",
         "START_DATE": "Дата початку",
         "START_TIME": "Запланований час початку",
         "START_TIME_DESCRIPTION": "Наприклад, 15:00. Залиште порожнім для завдання на весь день",
@@ -1689,20 +2000,28 @@
         "THURSDAY": "Четвер",
         "TITLE": "Назва завдання",
         "TUESDAY": "Вівторок",
+        "WAIT_FOR_COMPLETION": "Створювати наступне завдання лише після його завершення",
+        "WAIT_FOR_COMPLETION_DESCRIPTION": "Запобігає накопиченню кількох повторюваних завдань, що очікують виконання. Наступний екземпляр буде створено лише після завершення поточного завдання.",
         "WEDNESDAY": "Середа",
-        "Q_MONTHLY_FIRST_DAY": "Щомісяця першого числа",
-        "Q_MONTHLY_LAST_DAY": "Щомісяця останнього числа",
-        "SKIP_OVERDUE": "Пропускати прострочені екземпляри",
-        "SKIP_OVERDUE_DESCRIPTION": "Коли увімкнено, якщо додаток відкривається після пропуску запланованого повторення (напр. щотижневе завдання, де сьогодні не є запланованим днем), пропущений екземпляр буде тихо пропущено замість створення простроченого завдання"
+        "WEEK_OF_MONTH": "Тиждень місяця",
+        "WEEKDAY": "Будній день",
+        "WEEKDAY_REQUIRED": "Виберіть принаймні один день буднього дня"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Не вдалося відкрити діалог налаштування повторення. Ви можете налаштувати його з меню завдання."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
+        "DEADLINE_NEXT_MONTH": "Термін виконання наступного місяця",
+        "DEADLINE_NEXT_WEEK": "Термін виконання наступного тижня",
+        "DEADLINE_THIS_MONTH": "Термін виконання цього місяця",
+        "DEADLINE_THIS_WEEK": "Термін виконання цього тиждня",
+        "DEADLINE_TODAY": "Термін виконання сьогодні",
+        "DEADLINE_TOMORROW": "Термін виконання завтра",
         "ENTER_PROJECT": "Увійти в проект",
         "ENTER_TAG": "Введіть тег",
         "ESTIMATED_TIME": "Орієнтовний час",
         "FILTER_BY": "Фільтрувати за",
+        "FILTER_DEADLINE": "Дедлайн",
         "FILTER_DEFAULT": "Без фільтра",
         "FILTER_ESTIMATED_TIME": "Орієнтовний час",
         "FILTER_NOT_SPECIFIED": "Не вказано",
@@ -1711,33 +2030,37 @@
         "FILTER_TAG": "Тег",
         "FILTER_TIME_SPENT": "Витрачений час",
         "GROUP_BY": "Групувати за",
+        "GROUP_DEADLINE": "Дедлайн",
+        "GROUP_DEADLINE_NONE": "Без дедлайну",
         "GROUP_DEFAULT": "Без групи",
         "GROUP_PROJECT": "Проект",
         "GROUP_SCHEDULED_DATE": "Запланована дата",
         "GROUP_TAG": "Тег",
         "RESET_ALL": "Скинути все",
+        "SAVE_SORT": "Зберегти за замовчуванням",
         "SCHEDULED_NEXT_MONTH": "Наступний місяць",
         "SCHEDULED_NEXT_WEEK": "Наступного тижня",
         "SCHEDULED_THIS_MONTH": "Цього місяця",
         "SCHEDULED_THIS_WEEK": "Цього тижня",
         "SCHEDULED_TODAY": "Сьогодні",
         "SCHEDULED_TOMORROW": "Завтра",
+        "SORT": "Сортування",
         "SORT_CREATION_DATE": "Дата створення",
+        "SORT_DEADLINE": "Дедлайн",
         "SORT_DEFAULT": "За промовчанням",
         "SORT_NAME": "Ім'я",
-        "SAVE_SORT": "Зберегти за замовчуванням",
         "SORT_SCHEDULED_DATE": "Запланована дата",
-        "SORT": "Сортування",
-        "TIME_10MIN": "> 10 хвилин",
         "TIME_1HOUR": "> 1 годину",
         "TIME_2HOUR": "> 2 години",
+        "TIME_10MIN": "> 10 хвилин",
         "TIME_30MIN": "> 30 хвилин",
         "TIME_SPENT": "Витрачений час"
       }
     },
     "TIME_TRACKING": {
       "B": {
-        "ALREADY_DID": "Я вже зробив",
+        "BREAK_SNACK": "Насолоджуйтесь своєю перервою!",
+        "PAUSE_AND_BREAK": "Зробіть паузу та перерву",
         "SNOOZE": "Відкласти на {{time}}"
       },
       "B_TTR": {
@@ -1745,23 +2068,48 @@
         "MSG": "Ви не відстежували час протягом {{time}}",
         "MSG_WITHOUT_TIME": "Ви не відстежували час"
       },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "Стиснути архів",
+        "CONFIRM_MSG": "Ви впевнені, що хочете стиснути архів? Це назавжди видалить перелічені вище дані!",
+        "CONFIRM_TITLE": "Підтвердити стиснення архіву",
+        "ESTIMATED_SAVINGS": "Орієнтовна економія місця",
+        "INTRO": "Це стисне ваші архівовані завдання шляхом видалення старих даних. Ця операція синхронізується на всіх пристроях.",
+        "ISSUE_FIELDS_TO_CLEAR": "Поля проблем для очищення",
+        "LOADING": "Аналіз архіву...",
+        "NO_DATA": "Немає даних для стиснення. Ваш архів уже оптимізовано.",
+        "NOTES_TO_CLEAR": "Нотатки завдань для очищення (старіші за 1 рік)",
+        "SUBTASKS_TO_DELETE": "Підзавдання для видалення (час об'єднано з батьківським)",
+        "TITLE": "Стиснути архів",
+        "WARNING": "Цю операцію неможливо скасувати. Переконайтеся, що у вас є резервна копія перед продовженням!"
+      },
       "D_IDLE": {
         "ADD_ENTRY": "Додати запис для відстеження",
+        "ALL_TIME_ASSIGNED": "Весь час простою призначено",
         "BREAK": "Перерва",
-        "CREATE_AND_TRACK": "<em>Створити</em> і відстежувати для",
+        "BREAK_SUMMARY": "{{time}} will be added to your break time.",
+        "CONFIRM_BREAK": "Відстежувати як перерву",
+        "CONFIRM_CREATE_TASK": "Створити завдання та відстежити",
+        "CONFIRM_SPLIT": "Відстежувати все",
+        "CONFIRM_TASK": "Відстеження до завдання",
+        "CONFIRM_TRACK": "Відстежити час",
+        "DONT_TRACK": "Не відстежувати",
         "IDLE_FOR": "Ви були неактивні протягом:",
+        "MODE_BREAK": "Роблячи перерву",
+        "MODE_SPLIT": "Трохи від обох",
+        "MODE_TASK": "Робота над завданням",
         "RESET_BREAK_REMINDER_TIMER": "Скинути таймер нагадування про перерву",
         "SIMPLE_CONFIRM_COUNTER_CANCEL": "Пропустити",
         "SIMPLE_CONFIRM_COUNTER_OK": "Відстежувати",
         "SIMPLE_COUNTER_CONFIRM_TXT": "Ви вибрали пропустити, але активували {{nr}} простих лічильників. Бажаєте відстежити час простою для них?",
         "SIMPLE_COUNTER_TOOLTIP": "Натисніть, щоб відстежувати для {{title}}",
         "SIMPLE_COUNTER_TOOLTIP_DISABLE": "Натисніть, щоб НЕ відстежувати для {{title}}",
-        "SKIP": "Пропустити",
-        "SPLIT_TIME": "Розділити час на кілька завдань та перерв",
         "TASK": "Завдання",
-        "TRACK_TO": "Відстежувати для",
+        "TIME_OVER_ASSIGNED": "{{time}} more than your idle time",
+        "TIME_UNASSIGNED": "{{time}} not assigned yet",
+        "USE_REMAINING_TIME": "Assign remaining time",
         "WARN_SIMPLE_COUNTER": "Час буде зараховано до активованих кнопок простих лічильників.",
-        "WARN_SIMPLE_COUNTER_BREAK": "Час ВСЕ ОДНО буде зараховано до активованих кнопок простих лічильників."
+        "WARN_SIMPLE_COUNTER_BREAK": "Час ВСЕ ОДНО буде зараховано до активованих кнопок простих лічильників.",
+        "WHAT_WERE_YOU_DOING": "What were you doing?"
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>Створити</em> і відстежувати для",
@@ -1769,33 +2117,23 @@
         "TASK": "Завдання",
         "TRACK_TO": "Відстежувати для:",
         "UNTRACKED_TIME": "Невідстежений час:"
-      },
-      "D_ARCHIVE_COMPRESS": {
-        "TITLE": "Стиснути архів",
-        "LOADING": "Аналіз архіву...",
-        "INTRO": "Це стисне ваші архівовані завдання шляхом видалення старих даних. Ця операція синхронізується на всіх пристроях.",
-        "SUBTASKS_TO_DELETE": "Підзавдання для видалення (час об'єднано з батьківським)",
-        "NOTES_TO_CLEAR": "Нотатки завдань для очищення (старіші за 1 рік)",
-        "ISSUE_FIELDS_TO_CLEAR": "Поля проблем для очищення",
-        "ESTIMATED_SAVINGS": "Орієнтовна економія місця",
-        "WARNING": "Цю операцію неможливо скасувати. Переконайтеся, що у вас є резервна копія перед продовженням!",
-        "CONFIRM_TITLE": "Підтвердити стиснення архіву",
-        "CONFIRM_MSG": "Ви впевнені, що хочете стиснути архів? Це назавжди видалить перелічені вище дані!",
-        "BTN_COMPRESS": "Стиснути архів",
-        "NO_DATA": "Немає даних для стиснення. Ваш архів уже оптимізовано."
       }
     },
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Днів відпрацьовано:",
+        "EXPORT_DATA": "Export data",
         "MONTH_WORKED": "Місяць відпрацьовано:",
         "REPEATING_TASK": "Повторюване завдання",
         "RESTORE_TASK_FROM_ARCHIVE": "Відновити завдання з архіву",
         "TASKS": "Завдання",
         "TOTAL_TIME": "Загальний витрачений час:",
+        "VIEW_TASK_DETAILS": "Переглянути деталі завдання",
         "WEEK_NR": "Тиждень {{nr}}",
+        "WEEK_NR_SHORT": "W{{nr}}",
+        "WEEK_RANGE_TOOLTIP": "{{start}}.–{{end}}., days: {{days}}, time: {{time}}",
         "WORKED": "Відпрацьовано",
-        "VIEW_TASK_DETAILS": "Переглянути деталі завдання"
+        "WORK_TIMES": "Working times"
       },
       "D_CONFIRM_RESTORE": "Ви впевнені, що хочете перемістити завдання <strong>\"{{title}}\"</strong> до Сьогодні?",
       "D_EXPORT_TITLE": "Експорт робочого журналу {{start}}–{{end}}",
@@ -1842,41 +2180,10 @@
         "NO_DATA": "Поки що немає завдань цього тижня.",
         "TITLE": "Назва"
       }
-    },
-    "CLIPBOARD_IMAGE": {
-      "PASTE_SUCCESS": "Зображення успішно вставлено",
-      "SIZE_EXCEEDED": "Розмір зображення ({{actualSize}}) перевищує максимально допустимий ({{maxSize}})",
-      "STORAGE_QUOTA_EXCEEDED": "Квоту сховища вичерпано. Звільніть місце або зменште розмір зображень."
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Базова URL-адреса Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Імпортувати лише картки, призначені мені",
-        "IS_TRANSITION_ISSUES_ENABLED": "Синхронізувати стан завершення та назву назад у Nextcloud Deck",
-        "PASSWORD": "Пароль додатка Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Інтервал опитування (хвилини)",
-        "TITLE_TEMPLATE": "Шаблон назви завдання",
-        "TITLE_TEMPLATE_DESCRIPTION": "Змінні: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Приклад: [{BOARD}: {COLUMN}] {CARD_TITLE}. Залиште порожнім для використання лише назви картки.",
-        "USERNAME": "Ваше ім'я користувача Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Налаштуйте інтеграцію Nextcloud Deck для імпорту карток як завдань. Для автентифікації використовуйте пароль додатка."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Призначені користувачі",
-        "DECK_DESCRIPTION": "Опис Deck",
-        "LABELS": "Мітки",
-        "STACK": "Стек"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Дошку не знайдено",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Картку \"{{issueId}}\" видалено на сервері.",
-        "ERR_CREDENTIALS_MISSING": "Спочатку введіть URL-адресу Nextcloud, ім'я користувача та пароль.",
-        "ERR_LOAD_BOARDS": "Не вдалося завантажити дошки Deck. Перевірте свої облікові дані."
-      }
     }
   },
   "FILE_IMEX": {
+    "BTN_COMPRESS_ARCHIVE": "Стиснути архів",
     "DIALOG_CONFIRM_URL_IMPORT": {
       "INITIATED_MSG": "Автоматичний імпорт даних розпочато.",
       "SOURCE_URL_DOMAIN": "Домен джерела",
@@ -1898,35 +2205,23 @@
     "S_ERR_INVALID_URL": "Помилка імпорту: вказано недійсний URL",
     "S_ERR_NETWORK": "Помилка імпорту: помилка мережі під час отримання даних з URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Помилка: не вдалося декодувати параметр URL для імпорту. Переконайтеся, що він правильно відформатований.",
-    "URL_PLACEHOLDER": "Введіть URL для імпорту",
-    "BTN_COMPRESS_ARCHIVE": "Стиснути архів"
-  },
-  "MIGRATE": {
-    "C_DOWNLOAD_BACKUP": "Бажаєте завантажити резервну копію застарілих даних (можна використовувати зі старішими версіями Super Productivity)?",
-    "DETECTED_LEGACY": "Виявлені застарілі дані. Ми перенесемо його для вас!",
-    "E_MIGRATION_FAILED": "Міграція не вдалася! з помилкою:",
-    "E_RESTART_FAILED": "Не вдалося виконати автоматичний перезапуск. Будь ласка, перезапустіть програму вручну!",
-    "SUCCESS": "Міграцію завершено! Перезапуск програми...",
-    "DIALOG_MESSAGE": "Ми оновлюємо спосіб зберігання ваших даних для покращення надійності синхронізації. Резервну копію буде завантажено автоматично.",
-    "DIALOG_TITLE": "Міграція ваших даних",
-    "STATUS_BACKUP": "Створення резервної копії ваших даних...",
-    "STATUS_COMPLETE": "Міграцію завершено!",
-    "STATUS_MIGRATING": "Міграція даних...",
-    "STATUS_PREPARING": "Підготовка міграції..."
+    "URL_PLACEHOLDER": "Введіть URL для імпорту"
   },
   "G": {
     "ADD": "Додати",
     "ADVANCED_CFG": "Розширена конфігурація",
     "APPLY": "Застосувати",
     "CANCEL": "Скасувати",
+    "CLEAR": "Clear",
     "CLOSE": "Закрити",
+    "COMMENT": "Comment",
     "COMPLETE": "Завершити",
     "CONFIRM": "Підтвердити",
     "CONTINUE": "Продовжити",
     "DELETE": "Видалити",
     "DISMISS": "Відхилити",
-    "DONT_SHOW_AGAIN": "Більше не показувати",
     "DO_IT": "Зробити це!",
+    "DONT_SHOW_AGAIN": "Більше не показувати",
     "DUPLICATE": "Дублювати",
     "DURATION_DESCRIPTION": "наприклад, \"5h 23m\", що означає 5 годин і 23 хвилини",
     "EDIT": "Редагувати",
@@ -1943,68 +2238,126 @@
     "NO_CON": "Ви наразі від'єднані від Інтернету. Синхронізація та запит даних від провайдера завдань не працюватимуть.",
     "NONE": "Немає",
     "OK": "Гаразд",
+    "OPEN_IN_BROWSER": "Open in browser",
     "OVERDUE": "Прострочені",
+    "PASSWORD_STRENGTH_FAIR": "Прийнятний",
+    "PASSWORD_STRENGTH_STRONG": "Надійний",
+    "PASSWORD_STRENGTH_WEAK": "Слабкий",
+    "PROCESSING": "Обробка",
     "REMOVE": "Видалити",
     "SAVE": "Зберегти",
     "SHARE": "Поділитися",
     "SUBMIT": "Надіслати",
     "TITLE": "Назва",
     "TODAY_TAG_TITLE": "Сьогодні",
+    "TOGGLE_PASSWORD_VISIBILITY": "Перемкнути видимість пароля",
     "UNDO": "Скасувати",
     "WITHOUT_PROJECT": "Без проекту",
-    "YESTERDAY": "Вчора",
-    "PASSWORD_STRENGTH_FAIR": "Прийнятний",
-    "PASSWORD_STRENGTH_STRONG": "Надійний",
-    "PASSWORD_STRENGTH_WEAK": "Слабкий",
-    "PROCESSING": "Обробка",
-    "TOGGLE_PASSWORD_VISIBILITY": "Перемкнути видимість пароля"
+    "YESTERDAY": "Вчора"
   },
   "GCF": {
     "APP_FEATURES": {
       "BOARDS": "Дошки",
       "DONATE_PAGE": "Сторінка донатів",
+      "FINISH_DAY": "Завершення дня",
       "FOCUS_MODE": "Режим фокусування",
+      "HABITS": "Звички",
       "HELP": "Увімкнути або вимкнути певні функції програми в інтерфейсі.",
-      "ISSUES_PANEL": "Панель проблем",
+      "ISSUES_PANEL": "Панель завдань",
       "PLANNER": "Планувальник",
       "PROJECT_NOTES": "Нотатки проекту",
       "SCHEDULE": "Розклад",
       "SCHEDULE_DAY_PANEL": "Панель розкладу дня",
+      "SEARCH": "Пошук",
       "SYNC_BUTTON": "Кнопка синхронізації",
       "TIME_TRACKING": "Відстеження часу секундоміром",
       "TITLE": "Функції програми",
       "USER_PROFILES": "Профілі користувачів (експериментально)",
       "USER_PROFILES_HINT": "Дозволяє створювати та перемикатися між різними профілями користувачів, кожен з яких має окремі налаштування, завдання та конфігурації синхронізації. Кнопка керування профілем з'явиться у верхньому правому куті після увімкнення. Примітка: вимкнення цієї функції приховає інтерфейс, але збереже дані вашого профілю. (Експериментальна функція, без гарантій. Переконайтеся, що у вас є резервна копія!)",
-      "HABITS": "Звички",
-      "SEARCH": "Пошук",
-      "USER_PROFILES_WARNING": "<strong>Експериментальна функція:</strong> Ця функція ще в розробці та може бути видалена або значно змінена в майбутньому оновленні. Використовуйте на свій ризик і обов'язково зберігайте резервні копії своїх даних."
+      "USER_PROFILES_WARNING": "<strong>Експериментальна функція:</strong> Ця функція ще в розробці та може бути видалена або значно змінена в майбутньому оновленні. Використовуйте на свій ризик і обов'язково зберігайте резервні копії своїх даних.",
+      "EXPERIMENTAL_WARNING_TITLE": "Експериментальна функція",
+      "EXPERIMENTAL_WARNING_MSG": "Ця функція є експериментальною. Вона може містити помилки, суттєво змінитися або бути видалена в майбутньому оновленні. Обов’язково створіть резервні копії своїх даних.<br/><br/>Ви хочете її ввімкнути?"
     },
     "AUTO_BACKUPS": {
       "HELP": "Автоматично зберігати всі дані до вашої папки додатку, щоб мати їх готовими на випадок, якщо щось піде не так.",
       "LABEL_IS_ENABLED": "Увімкнути автоматичні резервні копії",
+      "LAST_BACKUP_INFO": "Остання резервна копія: {{date}}",
       "LOCATION_INFO": "Резервні копії зберігаються в:",
+      "MAX_BACKUP_FILES": "Максимальна кількість файлів резервного копіювання",
+      "MAX_BACKUP_FILES_DESCRIPTION": "Тільки для комп’ютерів. Старіші файли автоматичного резервного копіювання видаляються після перевищення цього ліміту.",
+      "RESTORE_LATEST": "Відновити останню автоматичну резервну копію",
+      "S_AUTO_RESTORED": "Відновлено {{tasks}} завдань та {{projects}} проектів з резервної копії на пристрої.",
+      "S_NO_BACKUP_AVAILABLE": "Автоматичне резервне копіювання недоступне.",
+      "S_RESTORE_SUCCESS": "Резервну копію успішно відновлено.",
       "TITLE": "Автоматичні резервні копії"
     },
     "CALENDARS": {
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "Auto import events as tasks for current day",
       "BROWSER_WARNING": "<b>Це, ймовірно, НЕ працюватиме з версією браузера Super Productivity.<br /> Будь ласка, <a href=\"https://super-productivity.com/download/\">завантажте десктопну версію</a>, щоб використовувати цю функцію!</b>",
+      "CAL_COLOR": "Колір календаря",
       "CAL_PATH": "URL джерела iCal",
       "CHECK_UPDATES": "Перевіряти віддалені оновлення кожні X",
+      "DISABLE_FOR_WEB_APP": "Вимкнути у веб-застосунку або додатку для Android",
+      "FILTER_EXCLUDE_REGEX": "Виключити події, що відповідають регулярному виразу (необов'язково)",
+      "FILTER_EXCLUDE_REGEX_DESCRIPTION": "Події, назва яких відповідає цьому регулярному виразу, будуть приховані. Застосовується після фільтра включення. Приклад: Обід|Щоденно|Блокувальник",
+      "FILTER_INCLUDE_REGEX": "Включити події, що відповідають регулярному виразу (необов'язково)",
+      "FILTER_INCLUDE_REGEX_DESCRIPTION": "Будуть відображатися лише події, назва яких відповідає цьому регулярному виразу. Залиште поле порожнім, щоб включити всі події. Наприклад: зустріч|стендап",
+      "INVALID_REGEX": "Недійсний регулярний вираз",
       "HELP": "Ви можете інтегрувати календарі, щоб отримувати нагадування та додавати їх як завдання в Super Productivity. Інтеграція працює за допомогою формату iCal. Для цього ваші календарі повинні бути доступні або через Інтернет, або через файлову систему.",
+      "REFERENCE_CALENDAR": "Довідковий календар (лише відображення, без створення завдань)",
       "SHOW_BANNER_THRESHOLD": "Показувати сповіщення за X до події (порожнє для вимкнення)"
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "Видалити зображення",
+      "DELETE_ALL": "Видалити все",
+      "DELETE_ALL_SUCCESS": "Усі зображення з буфера обміну успішно видалено",
+      "DELETE_SUCCESS": "Зображення з буфера обміну успішно видалено",
+      "ERROR_DELETING": "Не вдалося видалити зображення з буфера обміну",
+      "ERROR_DELETING_ALL": "Не вдалося видалити всі зображення з буфера обміну",
+      "ERROR_LOADING": "Не вдалося завантажити зображення з буфера обміну",
+      "HELP": "Керуйте зображеннями, вставленими з буфера обміну. У версії для браузера зображення зберігаються в IndexedDB. Для настільної версії налаштуйте шлях зберігання.",
+      "LOADING": "Завантаження зображень...",
+      "MANAGE_DESCRIPTION": "Перегляд та видалення зображень, збережених при вставці в поля markdown",
+      "MANAGE_TITLE": "Керування збереженими зображеннями",
+      "MANAGER_TITLE": "Зображення з буфера обміну",
+      "NO_IMAGES": "Немає збережених зображень з буфера обміну",
+      "OPEN_MANAGER": "Керувати зображеннями",
+      "PATH_DESCRIPTION": "Налаштуйте, де на файловій системі зберігаються зображення з буфера обміну (залиште порожнім для стандартного розташування)",
+      "PATH_LABEL": "Шлях зберігання зображень",
+      "PATH_PLACEHOLDER": "Залиште порожнім для стандартного розташування",
+      "PATH_TITLE": "Розташування сховища",
+      "SELECT_PATH": "Вибрати папку",
+      "SELECT_PATH_TITLE": "Виберіть папку для зображень з буфера обміну",
+      "SORT_BY": "Сортувати за",
+      "SORT_LARGEST": "Найбільші спочатку",
+      "SORT_NEWEST": "Найновіші спочатку",
+      "SORT_OLDEST": "Найстаріші спочатку",
+      "SORT_SMALLEST": "Найменші спочатку",
+      "TITLE": "Зображення з буфера обміну",
+      "TOTAL_IMAGES": "Усього зображень",
+      "TOTAL_SIZE": "Загальний розмір"
     },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "Приховати лист оцінки в щоденному підсумку",
       "TITLE": "Оцінка та метрики"
     },
     "FOCUS_MODE": {
+      "FOCUS_MODE_SOUND_OFF": "Вимкнено",
+      "FOCUS_MODE_SOUND_TICK": "Цокання",
+      "FOCUS_MODE_SOUND_WHITE_NOISE": "Білий шум",
       "HELP": "Режим фокусування відкриває екран без відволікаючих факторів, щоб допомогти вам зосередитися на поточному завданні.",
-      "L_IS_PLAY_TICK": "Відтворювати звук цокання під час сесій фокусування",
+      "L_AUTO_START_FOCUS_ON_PLAY": "Починати сеанс фокусування, коли я починаю відстежувати завдання",
+      "L_FOCUS_MODE_SOUND": "Навколишній звук під час сеансів концентрації",
       "L_MANUAL_BREAK_START": "Запускати перерви вручну (Помодоро)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Призупиняти відстеження завдання під час перерв",
       "L_SKIP_PREPARATION_SCREEN": "Пропустити екран підготовки (розтяжка тощо)",
-      "L_START_IN_BACKGROUND": "Запускати сесії фокусування лише з банером (без оверлею)",
-      "L_SYNC_SESSION_WITH_TRACKING": "Синхронізувати сесії фокусування з відстеженням часу",
       "TITLE": "Режим фокусування"
+    },
+    "TASK_WIDGET": {
+      "TITLE": "Віджет завдань",
+      "IS_ENABLED": "Увімкнути віджет завдань",
+      "IS_ALWAYS_SHOW": "Завжди показувати віджет завдання (навіть коли видно головне вікно)",
+      "OPACITY": "Непрозорість віджета завдань"
     },
     "IDLE": {
       "HELP": "<div><p>Коли увімкнено обробку часу простою, діалог відкриється після вказаного проміжку часу, щоб перевірити, чи хочете ви відстежувати свій час і на якому завданні, коли ви були неактивні.</p></div>",
@@ -2028,6 +2381,7 @@
       "GLOBAL_ADD_TASK": "Додати нове завдання",
       "GLOBAL_SHOW_HIDE": "Показати/Приховати Super Productivity",
       "GLOBAL_TOGGLE_TASK_START": "Перемкнути відстеження часу для останнього активного завдання",
+      "GLOBAL_TOGGLE_TASK_WIDGET": "Показати/приховати віджет завдання",
       "GO_TO_DAILY_AGENDA": "Перейти до порядку денного",
       "GO_TO_FOCUS_MODE": "Увійти в режим фокусування",
       "GO_TO_SCHEDULE": "Перейти до розкладу",
@@ -2040,10 +2394,8 @@
       "MOVE_TASK_TO_TOP": "Перемістити завдання на початок списку",
       "MOVE_TASK_UP": "Перемістити завдання вгору у списку",
       "MOVE_TO_BACKLOG": "Перемістити завдання до беклогу завдань",
-      "MOVE_TO_REGULARS_TASKS": "Перемістити завдання до Сьогодні",
       "OPEN_PROJECT_NOTES": "Показати/Приховати нотатки",
       "PLUGIN_SHORTCUTS": "Скорочення плагінів",
-      "SAVE_NOTE": "Зберегти нотатку",
       "SELECT_NEXT_TASK": "Вибрати наступне завдання",
       "SELECT_PREVIOUS_TASK": "Вибрати попереднє завдання",
       "SHOW_SEARCH_BAR": "Показати рядок пошуку",
@@ -2057,16 +2409,24 @@
       "TASK_OPEN_CONTEXT_MENU": "Відкрити контекстне меню завдання",
       "TASK_OPEN_ESTIMATION_DIALOG": "Редагувати запланований / витрачений час",
       "TASK_SCHEDULE": "Запланувати завдання",
-      "TASK_UNSCHEDULE": "Скасувати розклад завдання",
+      "TASK_SCHEDULE_TODAY": "Запланувати завдання на сьогодні",
+      "TASK_SCHEDULE_TOMORROW": "Запланувати завдання на завтра",
+      "TASK_SCHEDULE_NEXT_WEEK": "Запланувати завдання на наступний тиждень",
+      "TASK_SCHEDULE_NEXT_MONTH": "Запланувати завдання на наступний місяць",
+      "TASK_SCHEDULE_DEADLINE": "Встановити термін виконання завдання",
       "TASK_SHORTCUTS": "Завдання",
       "TASK_SHORTCUTS_INFO": "Наступні скорочення застосовуються для поточно вибраного завдання (вибраного за допомогою табуляції або миші).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Показати/Приховати додаткову інформацію про завдання",
+      "TASK_OPEN_NOTES_PANEL": "Відкрити нотатку/контрольний список на панелі завдань",
+      "TASK_OPEN_NOTES_FULLSCREEN": "Відкрити нотатку/контрольний список у повноекранному режимі",
       "TASK_TOGGLE_DONE": "Перемкнути виконання",
+      "TASK_UNSCHEDULE": "Скасувати розклад завдання",
       "TITLE": "Клавіатурні скорочення",
       "TOGGLE_BACKLOG": "Показати/Приховати беклог завдань",
-      "TOGGLE_ISSUE_PANEL": "Показати/приховати панель проблем",
+      "TOGGLE_ISSUE_PANEL": "Показати/приховати панель постачальника завдань",
       "TOGGLE_PLAY": "Почати/Зупинити завдання",
       "TOGGLE_SIDE_NAV": "Показати і сфокусувати/Приховати бічну навігацію",
+      "TOGGLE_SIDE_NAV_MODE": "Перемикання компактного/повного режиму бічної панелі",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Перемкнути панель «Фільтр/Група/Сортування»",
       "TRIGGER_SYNC": "Запустити синхронізацію (якщо налаштовано)",
       "ZOOM_DEFAULT": "Масштаб за замовчуванням (тільки для десктопної версії)",
@@ -2093,36 +2453,38 @@
       "PL": "Польська",
       "PT": "ПОРТУГАЛЬСЬКА",
       "PT_BR": "Português (Бразилія)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
       "RU": "Російська мова",
       "SK": "Словацька",
       "SV": "Svenska",
+      "TIME_LOCALE": "Формат дати та часу",
       "TIME_LOCALE_AUTO": "За замовчуванням",
-      "TIME_LOCALE_DE_DE": "Німецька: 24-годинний, ДД.ММ.РРРР",
+      "TIME_LOCALE_CS_CZ": "Чеський: 24-годинний, ДД. ММ. РРРР.",
+      "TIME_LOCALE_DE_DE": "Німецький: 24-годинний, ДД.ММ.РРРР",
       "TIME_LOCALE_DESCRIPTION": "УВАГА: Ця опція не може змінити вхідний формат (12 або 24 годинний), бо вхідний формат контролює ваша операційна система",
-      "TIME_LOCALE_EN_GB": "English (UK): 24-годинний, ДД/ММ/РРРР",
-      "TIME_LOCALE_EN_US": "English (US): 12-годинний ДП/ПП, ММ/ДД/РРРР",
-      "TIME_LOCALE_ES_ES": "Spanish: 24-годинний, ДД/ММ/РРРР",
-      "TIME_LOCALE_FR_FR": "French: 24-годинний, ДД/ММ/РРРР",
-      "TIME_LOCALE_IT_IT": "Italian: 24-годинний, ДД/ММ/РРРР",
-      "TIME_LOCALE_JA_JP": "Japanese: 24-годинний, РРРР/ММ/ДД",
-      "TIME_LOCALE_KO_KR": "Korean: 12-годинний ДП/ПП, РРРР. ММ. ДД",
-      "TIME_LOCALE_PT_BR": "Portuguese (Brazil): 24-годинний, ДД/ММ/РРРР",
-      "TIME_LOCALE_RU_RU": "Russian: 24-годинний, ДД.ММ.РРРР",
-      "TIME_LOCALE_TR_TR": "Turkish: 24-годинний, ДД.ММ.РРРР",
-      "TIME_LOCALE_ZH_CN": "Китайська (спрощена): 24-годинний, РРРР/ММ/ДД",
-      "TIME_LOCALE_CS_CZ": "Чеська: 24-годинний, ДД. ММ. РРРР.",
-      "TIME_LOCALE_SK_SK": "Словацька: 24-годинний, ДД. ММ. РРРР.",
+      "TIME_LOCALE_EN_GB": "Англійський (Великобританія): 24-годинний, ДД/ММ/РРРР",
+      "TIME_LOCALE_EN_US": "Англійський (США): 12-годинний ДП/ПП, ММ/ДД/РРРР",
+      "TIME_LOCALE_ES_ES": "Іспаньский: 24-годинний, ДД/ММ/РРРР",
+      "TIME_LOCALE_FR_FR": "Французький: 24-годинний, ДД/ММ/РРРР",
+      "TIME_LOCALE_IT_IT": "Італійський: 24-годинний, ДД/ММ/РРРР",
+      "TIME_LOCALE_JA_JP": "Японський: 24-годинний, РРРР/ММ/ДД",
+      "TIME_LOCALE_KO_KR": "Корейський: 12-годинний ДП/ПП, РРРР. ММ. ДД",
+      "TIME_LOCALE_PL_PL": "Польський: 24-годинний, ДД.ММ.РРРР",
+      "TIME_LOCALE_PT_BR": "Португальський (Бразилія): 24-годинний, ДД/ММ/РРРР",
+      "TIME_LOCALE_RO_MD": "Румунський (Молдова): 24-годинний, ДД.ММ.РРРР",
+      "TIME_LOCALE_RO_RO": "Румунський: 24-годинний, ДД.ММ.РРРР",
+      "TIME_LOCALE_RU_RU": "Російський: 24-годинний, ДД.ММ.РРРР",
+      "TIME_LOCALE_SK_SK": "Словацький: 24-годинний, ДД. ММ. РРРР.",
+      "TIME_LOCALE_TR_TR": "Турецький: 24-годинний, ДД.ММ.РРРР",
+      "TIME_LOCALE_UK_UA": "Український: 24-годинний, ДД.ММ.РРРР",
+      "TIME_LOCALE_ZH_CN": "Китайський (спрощений): 24-годинний, РРРР/ММ/ДД",
       "TITLE": "Мова",
       "TR": "Türkçe",
       "UK": "Українська",
+      "VI": "В'єтнамська",
       "ZH": "КИТАЙСЬКА(简体)",
-      "ZH_TW": "КИТАЙСЬКА (繁體)",
-      "RO": "Română",
-      "RO_MD": "Română (Moldova)",
-      "TIME_LOCALE": "Формат дати та часу",
-      "TIME_LOCALE_RO_MD": "Румунська (Молдова): 24-годинний, ДД.ММ.РРРР",
-      "TIME_LOCALE_RO_RO": "Румунська: 24-годинний, ДД.ММ.РРРР",
-      "TIME_LOCALE_UK_UA": "Українська: 24-годинний, ДД.ММ.РРРР"
+      "ZH_TW": "КИТАЙСЬКА (繁體)"
     },
     "MISC": {
       "DARK_MODE": "Темний режим",
@@ -2138,28 +2500,27 @@
       "IS_DARK_MODE": "Темний режим",
       "IS_DISABLE_ANIMATIONS": "Вимкнути всі анімації",
       "IS_DISABLE_CELEBRATION": "Вимкнути святкування у щоденному зведенні",
+      "IS_LOCAL_REST_API_ENABLED": "Увімкнути локальний REST API (лише для десктопу)",
+      "IS_LOCAL_REST_API_ENABLED_HINT": "Дозволяє локальним скриптам керувати запущеною програмою через http://127.0.0.1:3876. Будь-яка програма, що працює на цьому комп’ютері, зможе читати та змінювати ваші завдання.",
       "IS_MINIMIZE_TO_TRAY": "Згортати до системного трею (тільки для десктопної версії)",
-      "IS_OVERLAY_INDICATOR_ENABLED": "Увімкнути вікно індикатора накладання (тільки для десктопного Linux/GNOME)",
       "IS_SHOW_TIP_LONGER": "Показувати поради щодо продуктивності на початку програми трохи довше",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Показувати поточний зворотний відлік у треї / меню статусу (лише для настільного комп'ютера Mac)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Використовувати власний заголовок вікна (тільки Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Потребує перезапуску для застосування змін",
+      "IS_VERTICAL_ACTION_BAR": "Вертикальна панель дій збоку (експериментальна)",
+      "IS_VERTICAL_ACTION_BAR_HINT": "Переміщує кнопки дій заголовка у вертикальну смугу на правому краю вікна. Тільки для десктопу.",
       "START_OF_NEXT_DAY": "Час початку наступного дня",
       "START_OF_NEXT_DAY_HINT": "з якого часу (в годинах) ви хочете вважати, що почався наступний день. За замовчуванням це опівніч, тобто 0.",
       "THEME": "Тема",
       "THEME_EXPERIMENTAL": "Тема (експериментальна)",
+      "THEME_INSTALL_BUTTON": "Встановити тему…",
+      "THEME_INSTALL_TOOLTIP": "Завантажте файл теми CSS. Теми змінюють лише візуальні елементи — ніколи не запускають код — але вони все ще можуть впливати на те, як відображаються ваші дані. Встановлюйте теми лише з джерел, яким ви довіряєте.",
+      "THEME_INSTALLED_WITH_WARNINGS": "Тему встановлено. Бракує токенів: {{tokens}}",
+      "THEME_INVALID_CSS_FILE": "Не вдалося встановити тему: недійсний або небезпечний CSS-файл.",
+      "THEME_REMOVE_BUTTON": "Видалити тему",
+      "THEME_REMOVED_TOAST": "Тему видалено; повернуто до стандартної.",
       "THEME_SELECT_LABEL": "Оберіть тему",
       "TITLE": "Інші налаштування"
-    },
-    "TASKS": {
-      "DEFAULT_PROJECT": "Проект за замовчуванням для нових завдань",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Автоматично додавати працюючі завдання до сьогодні",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Автоматично позначати батьківське завдання як виконане, коли всі підзавдання виконані",
-      "IS_CONFIRM_BEFORE_DELETE": "Підтверджувати перед видаленням завдань",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Увімкнути форматування Markdown у нотатках завдань",
-      "IS_TRAY_SHOW_CURRENT": "Показувати поточне завдання в системному треї / меню статусу (тільки для десктопної версії Mac/Windows)",
-      "NOTES_TEMPLATE": "Шаблон нотаток для нових завдань",
-      "TITLE": "Завдання"
     },
     "POMODORO": {
       "BREAK_DURATION": "Тривалість коротких перерв",
@@ -2171,24 +2532,24 @@
       "COUNTDOWN_DURATION": "Показувати банер за X до фактичного нагадування",
       "DEFAULT_TASK_REMIND_OPTION": "Опція нагадування за замовчуванням при створенні завдань",
       "DISABLE_REMINDERS": "Вимкнути всі нагадування",
-      "IS_COUNTDOWN_BANNER_ENABLED": "Показувати банер зворотного відліку перед нагадуваннями",
-      "IS_FOCUS_WINDOW": "Фокусувати вікно програми при спрацьовуванні нагадування",
-      "TITLE": "Нагадування",
-      "USE_ALARM_STYLE_REMINDERS": "Використовувати сповіщення у стилі будильника (тільки Android)",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Якщо увімкнено, нагадування використовують гучніші звуки будильника та більш нав'язливі сповіщення. Рекомендовано для критично важливих нагадувань.",
       "DUE_DATE_NOTIFICATION_HOUR": "Година для показу сповіщень про терміни (0–23)",
       "HELP": "<p><strong>Важливо:</strong> Нагадування використовують <strong>локальні сповіщення</strong>, а не push-сповіщення. Це означає, що додаток має бути відкритий хоча б раз на вашому пристрої, щоб нагадування були заплановані. Нагадування, встановлені на іншому пристрої, з'являться лише після синхронізації додатка на цільовому пристрої.</p><p>На <strong>iOS</strong> переконайтеся, що сповіщення для Super Productivity увімкнені в налаштуваннях пристрою в 'Налаштування' > 'Сповіщення'.</p>",
-      "NOTIFY_ON_DUE_DATE": "Показувати сповіщення для завдань з дедлайном сьогодні"
+      "IS_COUNTDOWN_BANNER_ENABLED": "Показувати банер зворотного відліку перед нагадуваннями",
+      "IS_FOCUS_WINDOW": "Фокусувати вікно програми при спрацьовуванні нагадування",
+      "NOTIFY_ON_DUE_DATE": "Показувати сповіщення для завдань з дедлайном сьогодні",
+      "TITLE": "Нагадування",
+      "USE_ALARM_STYLE_REMINDERS": "Використовувати сповіщення у стилі будильника (тільки Android)",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Якщо увімкнено, нагадування використовують гучніші звуки будильника та більш нав'язливі сповіщення. Рекомендовано для критично важливих нагадувань."
     },
     "SCHEDULE": {
       "HELP": "Функція розкладу повинна надати вам швидкий огляд того, як ваші заплановані завдання розподіляються в часі. Ви можете знайти її в лівому меню під назвою <a href='#/schedule'>'Розклад'</a>. ",
-      "LUNCH_BREAK_START_END_DESCRIPTION": "наприклад, 13:00",
       "L_IS_LUNCH_BREAK_ENABLED": "Увімкнути обідню перерву",
       "L_IS_WORK_START_END_ENABLED": "Обмежити потік незапланованих завдань конкретним робочим часом",
       "L_LUNCH_BREAK_END": "Кінець обідньої перерви",
       "L_LUNCH_BREAK_START": "Початок обідньої перерви",
       "L_WORK_END": "Кінець робочого дня",
       "L_WORK_START": "Початок робочого дня",
+      "LUNCH_BREAK_START_END_DESCRIPTION": "наприклад, 13:00",
       "MONTH": "Місяць",
       "TITLE": "Розклад",
       "WORK_START_END_DESCRIPTION": "наприклад, 17:00"
@@ -2227,6 +2588,16 @@
       "SNOOZE_TIME": "Час відкладання при нагадуванні про перерву",
       "TITLE": "Нагадування про перерву"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Проект за замовчуванням для нових завдань",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Автоматично додавати працюючі завдання до сьогодні",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Автоматично позначати батьківське завдання як виконане, коли всі підзавдання виконані",
+      "IS_CONFIRM_BEFORE_DELETE": "Підтверджувати перед видаленням завдань",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Увімкнути форматування Markdown у нотатках завдань",
+      "IS_TRAY_SHOW_CURRENT": "Показувати поточне завдання в системному треї / меню статусу (тільки для десктопної версії Mac/Windows)",
+      "NOTES_TEMPLATE": "Шаблон нотаток для нових завдань",
+      "TITLE": "Завдання"
+    },
     "TIME_TRACKING": {
       "HELP": "Нагадування про відстеження часу - це банер, який з'являється, якщо ви забули почати відстеження часу.",
       "L_DEFAULT_ESTIMATE": "Стандартна оцінка часу для нових завдань",
@@ -2239,36 +2610,6 @@
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Показувати нагадування про відстеження часу на мобільному додатку",
       "L_TRACKING_REMINDER_MIN_TIME": "Час очікування перед показом банера нагадування про відстеження",
       "TITLE": "Відстеження часу"
-    },
-    "CLIPBOARD_IMAGES": {
-      "DELETE": "Видалити зображення",
-      "DELETE_ALL": "Видалити все",
-      "DELETE_ALL_SUCCESS": "Усі зображення з буфера обміну успішно видалено",
-      "DELETE_SUCCESS": "Зображення з буфера обміну успішно видалено",
-      "ERROR_DELETING": "Не вдалося видалити зображення з буфера обміну",
-      "ERROR_DELETING_ALL": "Не вдалося видалити всі зображення з буфера обміну",
-      "ERROR_LOADING": "Не вдалося завантажити зображення з буфера обміну",
-      "HELP": "Керуйте зображеннями, вставленими з буфера обміну. У версії для браузера зображення зберігаються в IndexedDB. Для настільної версії налаштуйте шлях зберігання.",
-      "LOADING": "Завантаження зображень...",
-      "MANAGE_DESCRIPTION": "Перегляд та видалення зображень, збережених при вставці в поля markdown",
-      "MANAGE_TITLE": "Керування збереженими зображеннями",
-      "MANAGER_TITLE": "Зображення з буфера обміну",
-      "NO_IMAGES": "Немає збережених зображень з буфера обміну",
-      "OPEN_MANAGER": "Керувати зображеннями",
-      "PATH_DESCRIPTION": "Налаштуйте, де на файловій системі зберігаються зображення з буфера обміну (залиште порожнім для стандартного розташування)",
-      "PATH_LABEL": "Шлях зберігання зображень",
-      "PATH_PLACEHOLDER": "Залиште порожнім для стандартного розташування",
-      "PATH_TITLE": "Розташування сховища",
-      "SELECT_PATH": "Вибрати папку",
-      "SELECT_PATH_TITLE": "Виберіть папку для зображень з буфера обміну",
-      "SORT_BY": "Сортувати за",
-      "SORT_LARGEST": "Найбільші спочатку",
-      "SORT_NEWEST": "Найновіші спочатку",
-      "SORT_OLDEST": "Найстаріші спочатку",
-      "SORT_SMALLEST": "Найменші спочатку",
-      "TITLE": "Зображення з буфера обміну",
-      "TOTAL_IMAGES": "Усього зображень",
-      "TOTAL_SIZE": "Загальний розмір"
     }
   },
   "GLOBAL": {
@@ -2276,11 +2617,11 @@
   },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
-      "AN_HOUR": "за годину",
       "A_DAY": "за добу",
       "A_MINUTE": "за хвилину",
       "A_MONTH": "за місяць",
       "A_YEAR": "за рік",
+      "AN_HOUR": "за годину",
       "DAYS": "за {{count}} днів",
       "FEW_SECONDS": "за кілька секунд",
       "HOURS": "за {{count}} годин",
@@ -2289,11 +2630,11 @@
       "YEARS": "за {{count}} років"
     },
     "PAST": {
-      "AN_HOUR": "годину тому",
       "A_DAY": "добу тому",
       "A_MINUTE": "хвилину тому",
       "A_MONTH": "місяць тому",
       "A_YEAR": "рік тому",
+      "AN_HOUR": "годину тому",
       "DAYS": "{{count}} днів тому",
       "FEW_SECONDS": "кілька секунд тому",
       "HOURS": "{{count}} годин тому",
@@ -2311,6 +2652,7 @@
     "NAVIGATE_TO_TASK_ERR": "Не вдалося сфокусуватися на завданні. Ви його видалили?",
     "NO_TASKS_TO_COPY": "Немає завдань для копіювання",
     "NO_TASKS_TO_UNPLAN": "Немає завдань для скасування планування",
+    "OPEN_SETTINGS_ERROR": "Не вдалося відкрити налаштування",
     "PERSISTENCE_DISALLOWED": "Дані не будуть зберігатися постійно. Зверніть увагу, що це може призвести до втрати даних!!",
     "PERSISTENCE_ERROR": "Помилка при запиті на збереження даних: {{err}}",
     "RUNNING_X": "Виконується \"{{str}}\".",
@@ -2318,38 +2660,37 @@
     "SHARE_FAILED": "Помилка спільного доступу. Будь ласка, скопіюйте вручну.",
     "SHARE_FAILED_FALLBACK": "Помилка спільного доступу. Замість цього скопійовано в буфер обміну.",
     "SHARE_UNAVAILABLE_FALLBACK": "Скопійовано в буфер обміну.",
-    "UNPLANNED_TODAY_TASKS": "Скасовано планування всіх завдань на сьогодні",
-    "OPEN_SETTINGS_ERROR": "Не вдалося відкрити налаштування"
+    "UNPLANNED_TODAY_TASKS": "Скасовано планування всіх завдань на сьогодні"
   },
   "GPB": {
-    "ASSETS": "Завантаження ресурсів...",
-    "DBX_DOWNLOAD": "Dropbox: Завантаження файлу...",
-    "DBX_GEN_TOKEN": "Dropbox: Генерація токену...",
-    "DBX_META": "Dropbox: Отримання метаданих файлу...",
-    "DBX_UPLOAD": "Dropbox: Завантаження файлу...",
     "JIRA_LOAD_ISSUE": "Jira: Завантаження даних завдання...",
-    "SYNC": "Синхронізація даних...",
-    "UNKNOWN": "Завантаження віддалених даних",
-    "WEB_DAV_DOWNLOAD": "WebDAV: Завантаження даних...",
-    "WEB_DAV_UPLOAD": "WebDAV: Вивантаження даних..."
+    "UNKNOWN": "Завантаження віддалених даних"
   },
   "MH": {
+    "HISTORY": "Історія",
     "ADD_NEW_TASK": "Додати нове завдання",
+    "ADD_SECTION": "Додати розділ",
     "ALL_PLANNED_LIST": "Повторення/Заплановані",
     "BOARDS": "Дошки",
     "COPY_TASK_LIST_MARKDOWN": "Копіювати в буфер обміну",
     "CREATE_PROJECT": "Створити проект",
     "CREATE_TAG": "Створити тег",
+    "ARCHIVE_PROJECT": "Архівувати проект",
+    "COMPLETE_PROJECT": "Завершити проєкт",
     "DELETE_PROJECT": "Видалити проект",
     "DELETE_TAG": "Видалити тег",
+    "DISABLE_FEATURE": "Вимкнути функцію",
     "DONATE": "Підтримати нас",
     "DUPLICATE_PROJECT": "Дублювати",
     "ENTER_FOCUS_MODE": "Увійдіть у режим фокусування",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" вимкнено. Увімкніть знову в налаштуваннях функцій додатка.",
     "GO_TO_TASK_LIST": "Перейти до списку завдань",
+    "HABITS": "Звички",
     "HELP": "Допомога",
     "HM": {
       "CALENDARS": "Як підключити календарі",
       "CONTRIBUTE": "Зробити внесок",
+      "CREATE_TASK": "Як створити завдання",
       "GET_HELP_ONLINE": "Отримати допомогу онлайн",
       "KEYBOARD": "Як використовувати розширені клавіатурні команди",
       "REDDIT_COMMUNITY": "Спільнота Reddit",
@@ -2357,47 +2698,66 @@
       "START_WELCOME": "Почати ознайомчий тур",
       "SYNC": "Як налаштувати синхронізацію"
     },
+    "HISTORY": "Історія",
     "METRICS": "Метрики",
+    "NO_PROJECT_INFO": "Немає доступних проектів. Ви можете створити новий проект, натиснувши кнопку 'Створити проект'.",
+    "NO_TAG_INFO": "Наразі тегів немає. Ви можете додати теги, ввівши `#назваТегу` при додаванні або редагуванні завдань.",
     "NO_TASKS_TO_TRACK": "Спочатку додайте завдання, щоб почати відстеження часу",
     "NOTES": "Нотатки",
     "NOTES_PANEL_INFO": "Нотатки можна переглянути лише у розкладі та звичайному списку завдань.",
-    "NO_PROJECT_INFO": "Немає доступних проектів. Ви можете створити новий проект, натиснувши кнопку 'Створити проект'.",
-    "NO_TAG_INFO": "Наразі тегів немає. Ви можете додати теги, ввівши `#назваТегу` при додаванні або редагуванні завдань.",
+    "OPEN_APP_FEATURES": "Відкрити налаштування",
     "PLANNER": "Планувальник",
     "PROCRASTINATE": "Відкласти",
     "PROJECT_MENU": "Меню проекту",
     "PROJECT_SETTINGS": "Налаштування проекту",
     "PROJECTS": "Проекти",
-    "QUICK_HISTORY": "Швидка історія",
     "SCHEDULE": "Розклад",
     "SEARCH": "Шукати",
     "SETTINGS": "Налаштування",
     "SHARE_TASK_LIST_MARKDOWN": "Поділитися списком завдань",
+    "SHOW_TRACKED_TASK": "Показати відстежуване завдання",
     "SIDE_PANEL_MENU": "Меню бічної панелі",
+    "SYNC_STATE": {
+      "ERROR": "Проблема синхронізації — натисніть, щоб повторити спробу",
+      "IN_SYNC": "Синхронізується — натисніть, щоб синхронізувати зараз",
+      "OFFLINE": "Ви офлайн — синхронізація відновиться після повторного підключення",
+      "SYNCING": "Синхронізація…"
+    },
     "TAGS": "Теги",
-    "TASKS": "Завдання",
     "TASK_LIST": "Список завдань",
+    "TASKS": "Завдання",
     "TOGGLE_SHOW_BOOKMARKS": "Показати/приховати закладки",
-    "TOGGLE_SHOW_ISSUE_PANEL": "Показати/приховати панель проблем",
+    "TOGGLE_SHOW_ISSUE_PANEL": "Показати/приховати панель постачальника завдань",
     "TOGGLE_SHOW_NOTES": "Показати/Приховати нотатки проекту",
     "TOGGLE_TRACK_TIME": "Почати/Зупинити відстеження часу",
     "TRIGGER_SYNC": "Запустити синхронізацію вручну",
     "UNPLAN_ALL_TASKS": "Скасувати планування всіх завдань",
-    "WORKLOG": "Робочий журнал",
-    "DISABLE_FEATURE": "Вимкнути функцію",
-    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" вимкнено. Увімкніть знову в налаштуваннях функцій додатка.",
-    "HABITS": "Звички",
-    "OPEN_APP_FEATURES": "Відкрити налаштування",
-    "SHOW_TRACKED_TASK": "Показати відстежуване завдання"
+    "ARCHIVED_PROJECTS": "Архівні проекти"
   },
-  "PRE_MIGRATION": {
-    "DIALOG_TITLE": "Оновлення системи",
-    "DIALOG_MESSAGE": "Ми оновлюємо спосіб зберігання ваших даних для підвищення надійності синхронізації.<br><br>Резервна копія ваших даних буде завантажена автоматично. Ви можете використовувати цю копію для відновлення даних за потреби (Файл > Імпорт)."
+  "MIGRATE": {
+    "C_DOWNLOAD_BACKUP": "Бажаєте завантажити резервну копію застарілих даних (можна використовувати зі старішими версіями Super Productivity)?",
+    "DETECTED_LEGACY": "Виявлені застарілі дані. Ми перенесемо його для вас!",
+    "DIALOG_MESSAGE": "Ми оновлюємо спосіб зберігання ваших даних для покращення надійності синхронізації. Резервну копію буде завантажено автоматично.",
+    "DIALOG_TITLE": "Міграція ваших даних",
+    "E_MIGRATION_FAILED": "Міграція не вдалася! з помилкою:",
+    "E_RESTART_FAILED": "Не вдалося виконати автоматичний перезапуск. Будь ласка, перезапустіть програму вручну!",
+    "STATUS_BACKUP": "Створення резервної копії ваших даних...",
+    "STATUS_COMPLETE": "Міграцію завершено!",
+    "STATUS_MIGRATING": "Міграція даних...",
+    "STATUS_PREPARING": "Підготовка міграції...",
+    "SUCCESS": "Міграцію завершено! Перезапуск програми..."
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "Дозвіл на точний будильник відхилено. Нагадування можуть затримуватися до 15 хвилин.",
+    "TASK_ALREADY_COMPLETED": "Завдання вже завершено",
+    "TASK_MARKED_DONE": "Завдання позначено як виконане"
   },
   "ONBOARDING": {
     "TITLE": "Як ви хочете використовувати Super Productivity?",
     "SUBTITLE": "Виберіть налаштування, що відповідає вашому робочому процесу. Ви завжди можете змінити це пізніше в Налаштуваннях.",
     "PRIVACY_HINT": "Ваші дані надійно зберігаються на вашому пристрої. Нічого не надсилається на сервер.",
+    "SYNC_CTA": "Вже використовуєте Super Productivity на іншому пристрої?",
+    "SYNC_CTA_LINK": "Налаштувати синхронізацію",
     "PRESETS": {
       "SIMPLE_TODO": {
         "TITLE": "Простий список завдань",
@@ -2446,15 +2806,15 @@
     "NO_TASKS": "Немає завдань на цей день",
     "PLAN_TOMORROW": "Запланувати",
     "REVIEW_TASKS": "Переглянути",
+    "ROUND_5M": "Округлити всі завдання до 5 хвилин",
     "ROUND_15M": "Округлити всі завдання до 15 хвилин",
     "ROUND_30M": "Округлити всі завдання до 30 хвилин",
-    "ROUND_5M": "Округлити всі завдання до 5 хвилин",
     "ROUND_TIME_SPENT": "Округлити витрачений час",
     "ROUND_TIME_SPENT_TITLE": "Округлити витрачений час на всіх завданнях. Будьте обережні! Ви не зможете скасувати цю дію!",
     "ROUND_TIME_WARNING": "!!! Будьте обережні, це неможливо скасувати !!!",
+    "ROUND_UP_5M": "Округлити ВГОРУ всі завдання до 5 хвилин",
     "ROUND_UP_15M": "Округлити ВГОРУ всі завдання до 15 хвилин",
     "ROUND_UP_30M": "Округлити ВГОРУ всі завдання до 30 хвилин",
-    "ROUND_UP_5M": "Округлити ВГОРУ всі завдання до 5 хвилин",
     "SAVE_AND_GO_HOME": "Завершити день",
     "SAVE_AND_GO_HOME_TOOLTIP": "Перемістити всі виконані завдання до архіву (робочого журналу) і за бажанням синхронізувати всі дані та закрити застосунок.",
     "START_END": "Початок – Кінець",
@@ -2468,17 +2828,13 @@
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Тип дії \"{{type}}\" не дозволений",
     "ALREADY_INITIALIZED": "Плагін уже ініціалізовано",
-    "CANCEL": "Скасувати",
-    "CAPABILITIES": {
-      "ACCESS_FILES": "Доступ до файлів у вашій системі та їх зміна",
-      "RUN_COMMANDS": "Виконання системних команд",
-      "USE_NODE_APIS": "Використання Node.js API та модулів"
-    },
+    "AUTHORED_BY": "by {{author}}",
     "CHOOSE_PLUGIN_FILE": "Обрати файл плагіна",
     "CLEAR_PLUGIN_CACHE": "Очистити кеш плагіна",
     "CODE_TOO_LARGE": "Код плагіна занадто великий (макс. {{maxSize}} МБ)",
     "CONFIGURATION": "Конфігурація",
     "CONFIGURE": "Налаштувати",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Цей плагін забезпечує інтеграцію задач, яка зараз використовується ({{count}} постачальник(и) задач). Вимкнення тимчасово порушить синхронізацію задач для цих постачальників, поки плагін не буде знову увімкнено. Ви впевнені, що хочете вимкнути \"{{name}}\"?",
     "CONFIRM_REMOVE": "Ви впевнені, що хочете видалити плагін \"{{name}}\"?",
     "ELECTRON_API_NOT_AVAILABLE": "Electron API недоступний",
     "ERROR": "Помилка",
@@ -2489,18 +2845,20 @@
     "FAILED_TO_EXTRACT_ZIP": "Не вдалося розпакувати ZIP-файл плагіна",
     "FAILED_TO_INSTALL": "Не вдалося встановити плагін",
     "FAILED_TO_LOAD": "Не вдалося завантажити плагін",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Не вдалося завантажити список плагінів спільноти",
     "FAILED_TO_LOAD_CONFIG": "Не вдалося завантажити конфігурацію плагіна",
     "FAILED_TO_REMOVE": "Не вдалося видалити плагін",
     "FAILED_TO_SAVE_CONFIG": "Не вдалося зберегти конфігурацію плагіна",
     "FILE_TOO_LARGE": "Файл занадто великий ({{fileSize}} МБ). Максимальний розмір — {{maxSize}} МБ",
     "GO_BACK": "Назад",
-    "GRANT_PERMISSION": "Надати дозвіл",
     "HOOKS": "Хуки",
     "ID": "ID:",
+    "ICON_TOO_LARGE": "Plugin icon is too large (max {{maxSize}}KB)",
     "INDEX_HTML_NOT_LOADED": "index.html плагіна не завантажено",
-    "INSTALLING": "Встановлення...",
+    "INDEX_HTML_TOO_LARGE": "Plugin index.html is too large (max {{maxSize}}KB)",
     "INSTALL_PLUGIN": "Встановити плагін",
     "INSTALL_WARNING": "Перед встановленням плагіна переконайтеся, що ви довіряєте його джерелу та розумієте дозволи, які він запитує.",
+    "INSTALLING": "Встановлення...",
     "LANGUAGES": "Мови:",
     "LOADING_INTERFACE": "Завантаження інтерфейсу плагіна...",
     "LOADING_PLUGIN": "Завантаження...",
@@ -2510,22 +2868,24 @@
     "MENU_ENTRY_LABEL_REQUIRED": "Назва пункту меню обов'язкова",
     "MENU_ENTRY_ONCLICK_REQUIRED": "Обробник onClick для пункту меню обов'язковий",
     "MIN_VERSION": "Мін. версія:",
-    "NODE_EXECUTION_REQUIRED": "Цей плагін потребує виконання Node.js, що доступно лише у десктопному додатку.",
-    "NODE_ONLY_DESKTOP": "Виконання Node.js доступне лише в десктопному додатку",
     "NO_ADDITIONAL_INFO": "Додаткова інформація відсутня",
     "NO_CONTENT_PROVIDED": "Вміст не надано",
     "NO_PLUGIN_MANIFEST_NODE": "Маніфест плагіна не включає модуль Node.js",
+    "NODE_EXECUTION_PERMISSION_DENIED": "Node.js execution permission was not granted",
+    "NODE_EXECUTION_REQUIRED": "Цей плагін потребує виконання Node.js, що доступно лише у десктопному додатку.",
+    "NODE_EXECUTION_BUILT_IN_ONLY": "Node.js execution is currently only available to built-in desktop plugins.",
+    "NODE_ONLY_DESKTOP": "Виконання Node.js доступне лише в десктопному додатку",
     "OK": "OK",
     "PARENT_TASK_DOES_NOT_EXIST": "Батьківське завдання не існує",
     "PARENT_TASK_NOT_FOUND": "Батьківське завдання не знайдено в контексті \"{{contextId}}\"",
     "PERMISSIONS": "Дозволи",
     "PLEASE_SELECT_ZIP_FILE": "Будь ласка, оберіть ZIP-файл",
     "PLUGIN_DIALOG_TITLE": "Повідомлення плагіна",
+    "PLUGIN_ID_RESERVED": "Plugin ID \"{{pluginId}}\" is reserved for a built-in plugin",
     "PLUGIN_JS_NOT_FOUND": "JavaScript-файл плагіна (plugin.js) не знайдено в ZIP-файлі",
     "PROJECT_DOES_NOT_EXIST": "Проект не існує",
     "PROJECT_NOT_FOUND": "Проект \"{{contextId}}\" не знайдено",
     "RECOMMENDATION": "Встановлюйте плагіни тільки з надійних джерел і, за можливості, перевіряйте їхній код. Завжди робіть резервну копію даних перед встановленням нових плагінів!",
-    "REMEMBER_CHOICE": "Запам'ятати мій вибір для цього плагіна",
     "REMOVE": "Видалити",
     "RISK_DATA_ACCESS": "Плагіни можуть читати, змінювати та видаляти ВСІ ваші завдання, проекти та особисті дані",
     "RISK_MALICIOUS_CODE": "Шкідливі плагіни можуть викрасти конфіденційну інформацію або пошкодити ваші дані",
@@ -2534,43 +2894,52 @@
     "SECURITY_WARNING": "Плагіни мають значний доступ до ваших даних і системи. Встановлення ненадійних плагінів несе серйозні ризики для безпеки:",
     "SIDE_PANEL_LABEL_REQUIRED": "Мітка кнопки бічної панелі обов'язкова",
     "SIDE_PANEL_ONCLICK_REQUIRED": "Обробник onClick для кнопки бічної панелі обов'язковий",
-    "SYSTEM_ACCESS_REQUEST_DESC": "Цей плагін запитує дозвіл на виконання коду Node.js у вашій системі. Це дозволить йому:",
-    "SYSTEM_ACCESS_REQUEST_TITLE": "Запит на доступ до системи",
     "TAGS_DO_NOT_EXIST": "Один або кілька тегів не існують",
+    "TASK_NOT_FOUND": "Завдання з ID \"{{taskId}}\" не знайдено",
     "TASKS_NOT_IN_PROJECT": "Одне або кілька завдань не належать до проекту \"{{contextId}}\"",
     "TASKS_NOT_SUBTASKS": "Одне або кілька завдань не є підзавданнями \"{{contextId}}\"",
-    "TASK_NOT_FOUND": "Завдання з ID \"{{taskId}}\" не знайдено",
     "TOGGLE_PLUGIN": "Перемкнути {{pluginName}}",
-    "TRUST_WARNING": "Надавайте дозвіл тільки якщо ви довіряєте цьому плагіну",
     "TYPE": "Тип: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Не вдалося зберегти дані у сховище плагіна",
     "UNKNOWN_ERROR": "Сталася невідома помилка",
     "UPLOAD_PLUGIN_INSTRUCTION": "Завантажте ZIP-файл плагіна для його встановлення:",
     "VALIDATION_FAILED": "Перевірка не вдалася",
-    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Цей плагін забезпечує інтеграцію задач, яка зараз використовується ({{count}} постачальник(и) задач). Вимкнення тимчасово порушить синхронізацію задач для цих постачальників, поки плагін не буде знову увімкнено. Ви впевнені, що хочете вимкнути \"{{name}}\"?",
-    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Не вдалося завантажити список плагінів спільноти"
+    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
+    "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}"
   },
   "PM": {
-    "TITLE": "Метрики проекту",
-    "ALL_TASKS_TITLE": "Метрики (всі завдання)"
+    "ALL_TASKS_TITLE": "Метрики (всі завдання)",
+    "TITLE": "Метрики проекту"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "Ми оновлюємо спосіб зберігання ваших даних для підвищення надійності синхронізації.<br><br>Резервна копія ваших даних буде завантажена автоматично. Ви можете використовувати цю копію для відновлення даних за потреби (Файл > Імпорт).",
+    "DIALOG_TITLE": "Оновлення системи"
   },
   "PS": {
+    "CLICK_TO_COPY_VERSION": "Натисніть, щоб скопіювати версію",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "Не вдалося скопіювати в буфер обміну",
     "GLOBAL_SETTINGS": "Глобальні налаштування",
     "NO_PLUGINS_INSTALLED": "Наразі не встановлено жодного плагіна",
     "PLUGINS": "Плагіни",
     "PRIVACY_POLICY": "Політика конфіденційності",
-    "FAILED_TO_COPY_TO_CLIPBOARD": "Не вдалося скопіювати в буфер обміну",
     "PROJECT_SETTINGS": "Налаштування конкретного проекту",
     "PROVIDE_FEEDBACK": "Надати відгук",
     "RELOAD": "Перезавантажити",
+    "SYNC": {
+      "CONFIGURE": "Налаштувати",
+      "EMPTY_STATE_HINT": "Синхронізуйте свої дані з Dropbox, WebDAV, Nextcloud або локальним файлом.",
+      "ENCRYPTED": "Зашифровано",
+      "NEEDS_AUTH": "Потрібна автентифікація",
+      "SET_UP_SYNC": "Налаштувати синхронізацію"
+    },
     "SYNC_EXPORT": "Синхронізація та експорт",
     "TABS": {
       "GENERAL": "Загальні",
-      "TASKS": "Завдання",
-      "TIME_TRACKING": "Час та відстеження",
-      "PRODUCTIVITY": "Продуктивність",
       "PLUGINS": "Плагіни",
-      "SYNC_BACKUP": "Синхронізація та бекап"
+      "PRODUCTIVITY": "Продуктивність",
+      "SYNC_BACKUP": "Синхронізація та бекап",
+      "TASKS": "Завдання",
+      "TIME_TRACKING": "Час та відстеження"
     },
     "TAG_SETTINGS": "Налаштування конкретного тегу",
     "TOGGLE_DARK_MODE": "Перемкнути темний режим",
@@ -2579,18 +2948,19 @@
   "SCHEDULE": {
     "LAST": "Останній:",
     "NEXT": "Наступний",
+    "NO_DEADLINES": "Наразі немає завдань з дедлайнами. Ви можете встановити дедлайн через контекстне меню завдання або панель деталей.",
     "NO_REPEATABLE_TASKS": "Наразі немає повторюваних завдань. Ви можете запланувати завдання, вибравши \"Повторити завдання\" на бічній панелі завдання. Щоб відкрити її, клацніть на крайній правій іконці, яка з'являється при наведенні на завдання (або просто натисніть на завдання на мобільному пристрої).",
     "NO_SCHEDULED": "Наразі немає запланованих завдань. Ви можете запланувати завдання, вибравши \"Запланувати завдання\" в контекстному меню завдання. Щоб відкрити його, клацніть правою кнопкою миші (довге натискання на мобільному пристрої) на завданні.",
+    "NO_SCHEDULED_FOR_DAY": "Поки що немає запланованих завдань на конкретні дні. Клацніть завдання правою кнопкою миші та виберіть \"Запланувати\", щоб запланувати його на день.",
+    "NO_SCHEDULED_WITH_TIME": "Поки що немає запланованих завдань із часом початку. Клацніть завдання правою кнопкою миші та виберіть \"Запланувати\", щоб встановити конкретний час.",
     "NO_SCHEDULED_TITLE": "Заплановані завдання на день",
     "REPEATED_TASKS": "Повторювані завдання",
     "SCHEDULED_TASKS": "Заплановані завдання",
     "SCHEDULED_TASKS_WITH_TIME": "Заплановані завдання з нагадуванням",
     "START_TASK": "Запустити завдання та видалити нагадування",
-    "NO_DEADLINES": "Наразі немає завдань з дедлайнами. Ви можете встановити дедлайн через контекстне меню завдання або панель деталей.",
     "TASKS_WITH_DEADLINES": "Завдання з дедлайнами"
   },
   "THEMES": {
-    "SELECT_THEME": "Оберіть тему",
     "amber": "бурштиновий",
     "blue": "синій",
     "blue-grey": "синьо-сірий",
@@ -2604,18 +2974,20 @@
     "lime": "лаймовий",
     "pink": "рожевий",
     "purple": "фіолетовий",
+    "SCHEDULED_TASKS_WITH_TIME": "Заплановані завдання з часом початку",
+    "SELECT_THEME": "Оберіть тему",
     "teal": "бірюзовий",
-    "yellow": "жовтий",
-    "SCHEDULED_TASKS_WITH_TIME": "Заплановані завдання з часом початку"
+    "yellow": "жовтий"
   },
   "USER_PROFILES": {
     "ACTIVE": "Активний",
     "CANCEL": "Скасувати",
     "CLOSE": "Закрити",
     "CREATE": "Створити",
-    "CREATED": "Створено:",
     "CREATE_NEW_PROFILE": "Створити новий профіль",
+    "CREATED": "Створено:",
     "DELETE_PROFILE": "Видалити профіль",
+    "DEPRECATION_WARNING": "The experimental User Profiles feature will be removed in a future update. Please export your profile data as a backup.",
     "DIALOG_TITLE": "Керувати профілями користувачів",
     "EXISTING_PROFILES": "Існуючі профілі",
     "EXPORT_PROFILE": "Експортувати профіль",
@@ -2637,7 +3009,8 @@
   "WW": {
     "ADD_MORE": "Додати ще",
     "ADD_SCHEDULED_FOR_TOMORROW": "Додати завдання, заплановані на завтра ({{nr}})",
-    "ADD_SOME_TASKS": "Додайте кілька завдань, щоб спланувати свій день!",
+    "ADD_SECTION_TITLE": "Додати розділ",
+    "SECTION_OPTIONS": "Налаштування розділу",
     "DONE_TASKS": "Виконані завдання",
     "DONE_TASKS_IN_ARCHIVE": "Наразі тут немає виконаних завдань, але деякі вже заархівовані.",
     "ESTIMATE_REMAINING": "Залишилось за оцінкою:",
@@ -2646,20 +3019,15 @@
     "LATER_TODAY": "Пізніше сьогодні",
     "MOVE_DONE_TO_ARCHIVE": "Перенести в архів",
     "NO_DONE_TASKS": "Наразі немає виконаних завдань",
-    "NO_PLANNED_TASKS": "Немає запланованих завдань",
     "NO_PLANNED_TASK_ALL_DONE": "Всі поставлені завдання виконані",
-    "READY_TO_WORK": "Готові до роботи!",
+    "NO_PLANNED_TASKS": "Немає запланованих завдань",
+    "NO_TASKS_IN_MAIN_LIST": "Усі завдання організовані в розділи",
+    "RECURRING_TASKS": "Повторювані завдання",
     "RESET_BREAK_TIMER": "Скинути без таймера перерви",
     "TIME_ESTIMATED": "Оцінений час:",
     "TODAY_REMAINING": "Сьогодні залишилось:",
     "WITHOUT_BREAK": "Без перерви:",
     "WORKING_TODAY": "Працюємо сьогодні:",
-    "WORKING_TODAY_ARCHIVED": "Час, відпрацьований сьогодні на архівованих завданнях",
-    "RECURRING_TASKS": "Повторювані завдання"
-  },
-  "NOTIFICATION": {
-    "EXACT_ALARM_DENIED": "Дозвіл на точний будильник відхилено. Нагадування можуть затримуватися до 15 хвилин.",
-    "TASK_ALREADY_COMPLETED": "Завдання вже завершено",
-    "TASK_MARKED_DONE": "Завдання позначено як виконане"
+    "WORKING_TODAY_ARCHIVED": "Час, відпрацьований сьогодні на архівованих завданнях"
   }
 }

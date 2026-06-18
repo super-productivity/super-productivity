@@ -1,5 +1,6 @@
 import { hasMeaningfulStateData } from '../../op-log/validation/has-meaningful-state-data.util';
 import { INBOX_PROJECT } from '../../features/project/project.const';
+import type { SyncConfig } from '../../features/config/global-config.model';
 
 const entityCount = (val: unknown): number => {
   const ids = (val as { ids?: unknown })?.ids;
@@ -122,8 +123,11 @@ export const backupStrHasSyncEnabled = (str: string | null | undefined): boolean
     return false;
   }
   try {
+    // Keyed off SyncConfig so a rename of these fields breaks the build here
+    // instead of silently weakening this guard (a moved field would make a
+    // synced backup look non-synced and auto-restore it).
     const s = JSON.parse(str) as {
-      globalConfig?: { sync?: { isEnabled?: unknown; syncProvider?: unknown } };
+      globalConfig?: { sync?: Partial<Pick<SyncConfig, 'isEnabled' | 'syncProvider'>> };
     };
     const sync = s.globalConfig?.sync;
     if (!sync) {

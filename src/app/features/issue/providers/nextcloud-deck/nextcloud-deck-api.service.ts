@@ -29,7 +29,8 @@ interface DeckCardResponse {
   duedate: string | null;
   lastModified: number;
   archived: boolean;
-  done: boolean;
+  // Deck API returns a completion timestamp (or null), not a boolean
+  done: string | null;
   order: number;
   labels: DeckLabel[];
   assignedUsers: DeckAssignedUser[];
@@ -218,7 +219,7 @@ export class NextcloudDeckApiService {
           stackId: stack.id,
           stackTitle: stack.title,
           lastModified: card.lastModified,
-          done: card.done,
+          done: !!card.done,
           labels: card.labels || [],
         });
       }
@@ -238,7 +239,7 @@ export class NextcloudDeckApiService {
       description: card.description || '',
       duedate: card.duedate,
       lastModified: card.lastModified,
-      done: card.done,
+      done: !!card.done,
       order: card.order,
       labels: card.labels || [],
       assignedUsers: card.assignedUsers || [],

@@ -20,6 +20,13 @@ import { T } from '../../t.const';
 import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { NoteState } from '../note/note.model';
 import { DateService } from '../../core/date/date.service';
+import {
+  selectUnarchivedProjects,
+  selectUnarchivedProjectsWithoutCurrent,
+} from './store/project.selectors';
+import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selectors';
+import { MenuTreeKind } from '../menu-tree/store/menu-tree.model';
+import { menuTreeFeatureKey } from '../menu-tree/store/menu-tree.reducer';
 
 describe('ProjectService', () => {
   let service: ProjectService;
@@ -131,6 +138,10 @@ describe('ProjectService', () => {
                 /* eslint-enable @typescript-eslint/naming-convention */
               },
             },
+            [menuTreeFeatureKey]: {
+              projectTree: [],
+              tagTree: [],
+            },
           },
         }),
         provideMockActions(() => EMPTY),
@@ -185,6 +196,76 @@ describe('ProjectService', () => {
   afterEach(() => {
     // Reset selector mocks to prevent interference with other test files
     store.resetSelectors();
+  });
+
+  describe('tree order lists', () => {
+    it('should expose visible projects in menu tree order', (done) => {
+      const projects = [
+        createProject({ id: 'project-1', title: 'Project 1' }),
+        createProject({ id: 'project-2', title: 'Project 2' }),
+        createProject({ id: 'project-3', title: 'Project 3', isHiddenFromMenu: true }),
+        createProject({ id: 'project-4', title: 'Project 4' }),
+      ];
+      store.overrideSelector(selectUnarchivedProjects, projects);
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 1',
+          children: [
+            {
+              id: 'project-2',
+              k: MenuTreeKind.PROJECT,
+            },
+            {
+              id: 'project-3',
+              k: MenuTreeKind.PROJECT,
+            },
+          ],
+        },
+        {
+          id: 'project-1',
+          k: MenuTreeKind.PROJECT,
+        },
+      ]);
+      store.refreshState();
+
+      expect(service.listInTreeOrderForUI().map((project) => project.id)).toEqual([
+        'project-2',
+        'project-1',
+        'project-4',
+      ]);
+      done();
+    });
+
+    it('should expose move candidates in menu tree order while excluding the current project', (done) => {
+      const projects = [
+        createProject({ id: 'project-1', title: 'Project 1' }),
+        createProject({ id: 'project-2', title: 'Project 2' }),
+        createProject({ id: 'project-4', title: 'Project 4' }),
+      ];
+      store.overrideSelector(selectUnarchivedProjectsWithoutCurrent, projects);
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        {
+          id: 'project-2',
+          k: MenuTreeKind.PROJECT,
+        },
+        {
+          id: 'project-1',
+          k: MenuTreeKind.PROJECT,
+        },
+      ]);
+      store.refreshState();
+
+      service.getProjectsWithoutIdInTreeOrder$('project-3').subscribe((result) => {
+        expect(result.map((project) => project.id)).toEqual([
+          'project-2',
+          'project-1',
+          'project-4',
+        ]);
+        done();
+      });
+    });
   });
 
   describe('duplicateProject', () => {

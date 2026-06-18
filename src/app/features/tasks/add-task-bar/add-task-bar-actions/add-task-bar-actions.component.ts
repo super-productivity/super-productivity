@@ -95,13 +95,13 @@ export class AddTaskBarActionsComponent {
   hasNewTags = computed(() => this.state().newTagTitles.length > 0);
   isAutoDetected = computed(() => this.stateService.isAutoDetected());
 
-  // Signals for projects and tags (sorted for consistency)
-  allProjects = this._projectService.listSortedForUI;
+  // Signals for projects and tags
+  allProjects = this._projectService.listInTreeOrderForUI;
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   selectedProject = computed(() =>
     this.allProjects().find((p) => p.id === this.state().projectId),
   );
-  allTags = this._tagService.tagsNoMyDayAndNoListSorted;
+  allTags = this._tagService.tagsNoMyDayAndNoListInTreeOrder;
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
   selectedTags = computed(() =>
     this.allTags().filter(

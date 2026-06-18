@@ -1,5 +1,4 @@
-import { ActionType } from '../../../../op-log/core/action-types.enum';
-
+import { ActionType } from '../../core/action-types.enum';
 /**
  * Short codes for action types in the compact operation format.
  *

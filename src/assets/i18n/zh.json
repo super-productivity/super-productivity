@@ -2492,6 +2492,7 @@
     "WEB_DAV_UPLOAD": "WebDAV: 正在上传数据..."
   },
   "MH": {
+    "HISTORY": "历史记录",
     "ADD_NEW_TASK": "添加新任务",
     "ALL_PLANNED_LIST": "已计划/重复",
     "BOARDS": "看板",

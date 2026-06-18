@@ -2471,6 +2471,7 @@
     "WEB_DAV_UPLOAD": "WebDAV：データのアップロード中..."
   },
   "MH": {
+    "HISTORY": "履歴",
     "ADD_NEW_TASK": "新しいタスクを追加する",
     "ALL_PLANNED_LIST": "リピート／予定",
     "BOARDS": "ポート",

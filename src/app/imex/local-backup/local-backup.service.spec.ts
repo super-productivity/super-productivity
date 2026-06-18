@@ -296,7 +296,10 @@ describe('LocalBackupService', () => {
     const PREV = 'super-productivity-backup.prev.json';
 
     type LocalBackupServiceWithIosRing = {
+      _readIOSExistingSlotOrThrow: (path: string) => Promise<string | null>;
       _readIOSFileOrNull: (path: string) => Promise<string | null>;
+      _readIOSFileRaw: (path: string) => Promise<string>;
+      _iosFileExists: (path: string) => Promise<boolean>;
       _writeIOSFile: (path: string, data: string) => Promise<void>;
     };
 
@@ -312,7 +315,7 @@ describe('LocalBackupService', () => {
       const existing = JSON.stringify({ task: { ids: ['existing'] } });
       spyOn(
         service as unknown as LocalBackupServiceWithIosRing,
-        '_readIOSFileOrNull',
+        '_readIOSExistingSlotOrThrow',
       ).and.resolveTo(existing);
       const writeSpy = spyOn(
         service as unknown as LocalBackupServiceWithIosRing,
@@ -330,7 +333,7 @@ describe('LocalBackupService', () => {
     it('skips promotion when there is no existing backup yet', async () => {
       spyOn(
         service as unknown as LocalBackupServiceWithIosRing,
-        '_readIOSFileOrNull',
+        '_readIOSExistingSlotOrThrow',
       ).and.resolveTo(null);
       const writeSpy = spyOn(
         service as unknown as LocalBackupServiceWithIosRing,
@@ -343,6 +346,50 @@ describe('LocalBackupService', () => {
       expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
     });
 
+    it('bails without writing when the existing slot read fails transiently (#8414)', async () => {
+      // A transient read failure must NOT be mistaken for "no backup yet": the
+      // primary stays untouched (no prev promotion, no overwrite), preserving both
+      // ring slots so the next cycle can retry. Mirrors the Android guard.
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSExistingSlotOrThrow',
+      ).and.rejectWith(new Error('transient read failure'));
+      const writeSpy = spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_writeIOSFile',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(writeSpy).not.toHaveBeenCalled();
+    });
+
+    it('still writes the primary on the first-ever backup when the raw read throws (#8414)', async () => {
+      // Capacitor signals a missing file by THROWING (same as a transient
+      // failure), so the absent re-probe must let the write proceed end-to-end —
+      // the overwrite guard must not over-correct and block a legitimate first
+      // backup. Exercises _readIOSExistingSlotOrThrow's raw-throw + confirmed-absent
+      // branch through _backup().
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_readIOSFileRaw',
+      ).and.rejectWith(new Error('File does not exist'));
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_iosFileExists',
+      ).and.resolveTo(false);
+      const writeSpy = spyOn(
+        service as unknown as LocalBackupServiceWithIosRing,
+        '_writeIOSFile',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      // No prev promotion (nothing to promote) — just the single primary write.
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+      expect(writeSpy.calls.mostRecent().args[0]).toBe(PRIMARY);
+    });
+
     it('loadBackupIOS resolves to "" (never throws) when no usable backup exists', async () => {
       // Guards the fire-and-forget startup path from an unhandled rejection.
       spyOn(
@@ -351,6 +398,65 @@ describe('LocalBackupService', () => {
       ).and.resolveTo(null);
 
       await expectAsync(service.loadBackupIOS()).toBeResolvedTo('');
+    });
+  });
+
+  describe('_readIOSExistingSlotOrThrow (write-path read, #8414)', () => {
+    type LocalBackupServiceWithIosSlotRead = {
+      _readIOSExistingSlotOrThrow: (path: string) => Promise<string | null>;
+      _readIOSFileRaw: (path: string) => Promise<string>;
+      _iosFileExists: (path: string) => Promise<boolean>;
+    };
+
+    it('returns the file contents when the read succeeds', async () => {
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosSlotRead,
+        '_readIOSFileRaw',
+      ).and.resolveTo('the-backup');
+
+      const result = await (
+        service as unknown as LocalBackupServiceWithIosSlotRead
+      )._readIOSExistingSlotOrThrow('some-path');
+
+      expect(result).toBe('the-backup');
+    });
+
+    it('returns null when the read fails AND the file is confirmed absent', async () => {
+      // First-ever backup: no file exists. The write must be allowed to proceed.
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosSlotRead,
+        '_readIOSFileRaw',
+      ).and.rejectWith(new Error('File does not exist'));
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosSlotRead,
+        '_iosFileExists',
+      ).and.resolveTo(false);
+
+      const result = await (
+        service as unknown as LocalBackupServiceWithIosSlotRead
+      )._readIOSExistingSlotOrThrow('some-path');
+
+      expect(result).toBeNull();
+    });
+
+    it('rethrows when the read fails but the file still exists (transient failure)', async () => {
+      // The slot is there but momentarily unreadable: we must NOT treat this as
+      // "no backup" — rethrow so the caller bails without overwriting.
+      const readErr = new Error('transient read failure');
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosSlotRead,
+        '_readIOSFileRaw',
+      ).and.rejectWith(readErr);
+      spyOn(
+        service as unknown as LocalBackupServiceWithIosSlotRead,
+        '_iosFileExists',
+      ).and.resolveTo(true);
+
+      await expectAsync(
+        (
+          service as unknown as LocalBackupServiceWithIosSlotRead
+        )._readIOSExistingSlotOrThrow('some-path'),
+      ).toBeRejectedWith(readErr);
     });
   });
 
@@ -407,7 +513,7 @@ describe('LocalBackupService', () => {
     };
 
     type LocalBackupServiceWithIosRing = {
-      _readIOSFileOrNull: (path: string) => Promise<string | null>;
+      _readIOSExistingSlotOrThrow: (path: string) => Promise<string | null>;
       _writeIOSFile: (path: string, data: string) => Promise<void>;
     };
 
@@ -493,7 +599,7 @@ describe('LocalBackupService', () => {
         );
         spyOn(
           service as unknown as LocalBackupServiceWithIosRing,
-          '_readIOSFileOrNull',
+          '_readIOSExistingSlotOrThrow',
         ).and.resolveTo(makeStoredBackup(20));
         const writeSpy = spyOn(
           service as unknown as LocalBackupServiceWithIosRing,
@@ -513,7 +619,7 @@ describe('LocalBackupService', () => {
         );
         spyOn(
           service as unknown as LocalBackupServiceWithIosRing,
-          '_readIOSFileOrNull',
+          '_readIOSExistingSlotOrThrow',
         ).and.resolveTo(makeStoredBackup(20));
         const writeSpy = spyOn(
           service as unknown as LocalBackupServiceWithIosRing,

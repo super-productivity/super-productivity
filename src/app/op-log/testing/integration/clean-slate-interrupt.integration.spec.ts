@@ -89,7 +89,7 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
         STORE_NAMES.CLIENT_ID,
         SINGLETON_KEY,
       );
-      expect(rotatedId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(rotatedId).toMatch(/^[BEAI]_[a-zA-Z0-9]{6}$/);
     });
   });
 

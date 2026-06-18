@@ -230,6 +230,19 @@ body.isNativeMobile .project-complete-fullscreen-dialog {
     box-shadow: 0 0 0 1px var(--input-border-color-focus) !important;
   }
 
+  // Specialized focus treatment for toggle fields:
+  // Remove the border change and enhance the focus ring (outline) instead
+  &:has(mat-slide-toggle) {
+    &.mat-focused .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+      border-color: var(--input-border-color) !important;
+      box-shadow: none !important;
+    }
+    &:has(:focus-visible) .mdc-text-field--filled:not(.mdc-text-field--disabled) {
+      outline: var(--focus-ring-width) solid var(--focus-ring-color);
+      outline-offset: var(--focus-ring-offset);
+    }
+  }
+
   // Error / Invalid state
   &.mat-form-field-invalid .mdc-text-field--filled:not(.mdc-text-field--disabled) {
     border-color: var(--input-border-color-invalid) !important;
@@ -544,4 +557,30 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
     > .mat-calendar-body-cell-content:not(.mat-calendar-body-selected) {
     background-color: var(--calendar-hover-bg) !important;
   }
+}
+
+// SLIDE TOGGLE
+// ------------
+.mat-mdc-slide-toggle {
+  // Inherit all unchecked state ripple configurations (both colors and opacities)
+  // for the checked state to ensure they match exactly in color and strength.
+  --mat-slide-toggle-selected-hover-state-layer-color: var(
+    --mat-slide-toggle-unselected-hover-state-layer-color
+  ) !important;
+  --mat-slide-toggle-selected-focus-state-layer-color: var(
+    --mat-slide-toggle-unselected-focus-state-layer-color
+  ) !important;
+  --mat-slide-toggle-selected-pressed-state-layer-color: var(
+    --mat-slide-toggle-unselected-pressed-state-layer-color
+  ) !important;
+
+  --mat-slide-toggle-selected-hover-state-layer-opacity: var(
+    --mat-slide-toggle-unselected-hover-state-layer-opacity
+  ) !important;
+  --mat-slide-toggle-selected-focus-state-layer-opacity: var(
+    --mat-slide-toggle-unselected-focus-state-layer-opacity
+  ) !important;
+  --mat-slide-toggle-selected-pressed-state-layer-opacity: var(
+    --mat-slide-toggle-unselected-pressed-state-layer-opacity
+  ) !important;
 }

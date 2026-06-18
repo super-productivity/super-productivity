@@ -15,7 +15,6 @@ import {
   MatMenuTrigger,
 } from '@angular/material/menu';
 import { TaskCopy } from '../../tasks/task.model';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { TagService } from '../tag.service';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogPromptComponent } from '../../../ui/dialog-prompt/dialog-prompt.component';
@@ -53,15 +52,8 @@ export class TagToggleMenuListComponent {
   afterClose = output<void>();
   addNewTag = output<string>();
 
-  private _tagList = toSignal(this._tagService.tagsNoMyDayAndNoList$, {
-    initialValue: [],
-  });
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
-
-  // Flatten the menu tree so tags appear in sidebar order
-  toggleTagList = computed(() =>
-    this._menuTreeService.flattenTagViewTree(this._tagList()),
-  );
+  toggleTagList = this._tagService.tagsNoMyDayAndNoListInTreeOrder;
   menuEl = viewChild('menuEl', {
     // read: MatMenu,
   });

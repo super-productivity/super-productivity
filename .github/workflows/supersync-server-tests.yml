@@ -1,0 +1,43 @@
+# super-sync-server unit tests (vitest), gated on PRs that touch server code.
+# Previously these ran only nightly / on push to master via e2e-scheduled.yml, so
+# server fixes were never gated by a PR check. The workflow-level `paths` filter keeps
+# this off PRs that don't touch the server or its workspace deps.
+name: SuperSync Server Tests
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'packages/super-sync-server/**'
+      - 'packages/shared-schema/**' # @sp/shared-schema is a direct dep
+      - 'packages/sync-core/**' # transitive dep via @sp/shared-schema
+      - '.github/workflows/supersync-server-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  supersync-server-tests:
+    name: SuperSync Server Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+          cache: 'npm'
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+      - name: Install npm Packages
+        run: npm i
+      - name: Run SuperSync Server Tests
+        run: cd packages/super-sync-server && npm test

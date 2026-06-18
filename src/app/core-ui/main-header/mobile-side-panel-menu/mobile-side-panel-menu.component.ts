@@ -14,7 +14,7 @@ import { LayoutService } from '../../layout/layout.service';
 import { TaskViewCustomizerService } from '../../../features/task-view-customizer/task-view-customizer.service';
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
 import { T } from '../../../t.const';
-import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { Store } from '@ngrx/store';
 import {

@@ -11,7 +11,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { LayoutService } from '../../layout/layout.service';
 import { T } from '../../../t.const';
-import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 
 @Component({

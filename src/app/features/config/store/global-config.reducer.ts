@@ -13,7 +13,7 @@ import {
   MiscConfig,
   SyncConfig,
 } from '../global-config.model';
-import type { KeyboardConfig } from '../keyboard-config.model';
+import type { KeyboardConfig } from '@sp/keyboard-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
