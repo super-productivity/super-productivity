@@ -399,19 +399,19 @@ export class WorkContextService {
   flatDoneTodayNr$: Observable<number> = this.isTodayList$.pipe(
     switchMap((isToday) =>
       isToday
-        ? this._store$.select(selectAllTasksWithSubTasks).pipe(
-            map((tasks) => flattenTasks(tasks)),
-            map(
-              (tasks) =>
-                tasks.filter(
-                  (task) =>
-                    task.isDone && task.doneOn && this._dateService.isToday(task.doneOn),
-                ).length,
-            ),
-          )
+        ? // `selectAllTasks` is already flat (parents + subtasks) — no flattenTasks needed
+          this._store$
+            .select(selectAllTasks)
+            .pipe(
+              map(
+                (tasks) =>
+                  tasks.filter(
+                    (t) => t.isDone && t.doneOn && this._dateService.isToday(t.doneOn),
+                  ).length,
+              ),
+            )
         : this.mainListTasks$.pipe(
-            map((tasks) => flattenTasks(tasks)),
-            map((tasks) => tasks.filter((task) => task.isDone).length),
+            map((tasks) => flattenTasks(tasks).filter((t) => t.isDone).length),
           ),
     ),
     distinctUntilChanged(), // Only emit when count actually changes
