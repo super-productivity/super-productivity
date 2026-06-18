@@ -47,7 +47,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.8.5",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^9.0.0",
+    "nodemailer": "^9.0.1",
     "uuidv7": "^1.1.0",
     "zod": "^4.4.3"
   },
