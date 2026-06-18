@@ -89,13 +89,18 @@ export class OperationLogSnapshotService {
    * seq, silently skipping the op forever.
    *
    * Additionally, lastSeq is read BEFORE the state snapshot so the worst
-   * interleaving degrades to harmless re-replay (applying an already-applied
-   * op is idempotent) rather than a missed op.
+   * interleaving degrades to re-replay rather than a missed op. Most op types
+   * are idempotent on re-replay (entity-adapter CRUD/move/reorder), but
+   * syncTimeSpent is additive (task.reducer.ts line 261) — a re-replay would
+   * inflate that day's tracked time by one interval. In practice this edge is
+   * unlikely (save runs only during hydration) and strictly better than op-loss.
    */
   async saveCurrentStateAsSnapshot(): Promise<void> {
     try {
       await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
         // Read lastSeq BEFORE state snapshot — see JSDoc above.
+        // NOTE: compaction reads in the opposite order (state, then lastSeq);
+        // its failure mode if the lock is bypassed is missed-op data loss.
         const lastSeq = await this.opLogStore.getLastSeq();
         const currentState = this.stateSnapshotService.getStateSnapshot();
 
