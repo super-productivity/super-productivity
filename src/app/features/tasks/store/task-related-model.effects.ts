@@ -56,12 +56,13 @@ export class TaskRelatedModelEffects {
     ),
   );
 
-  // NOTE: Completion-dating gating lives in `getMarkDoneTaskChanges`, applied by
-  // every "mark as done" producer (TaskService.setDone + the effects below). The
-  // reducer (`updateDoneOnForTask`) stamps the completion day; producers pass an
-  // explicit `dueDay: null` to suppress it when the user disabled auto-add. There
-  // is intentionally no effect here re-deriving the gate from synced config —
-  // that would diverge on replay (ops apply in causal arrival order).
+  // NOTE: Completion-dating lives in `getMarkDoneTaskChanges`, applied by every
+  // "mark as done" producer (TaskService.setDone + the effects below). It freezes
+  // the completion day into the op (`dueDay: todayStr`, or `null` when the user
+  // disabled auto-add); the reducer's own synthesis is only a fallback for legacy
+  // ops. There is intentionally no effect here re-deriving the day/gate from
+  // synced config or `doneOn` — that would diverge on replay (ops apply in causal
+  // arrival order, and `doneOn` is offset-blind).
 
   // EXTERNAL ===> TASKS
   // -------------------
@@ -101,7 +102,11 @@ export class TaskRelatedModelEffects {
           task: {
             id: taskId,
             changes: task
-              ? getMarkDoneTaskChanges(task, tasksCfg.isAutoAddWorkedOnToToday)
+              ? getMarkDoneTaskChanges(
+                  task,
+                  tasksCfg.isAutoAddWorkedOnToToday,
+                  this._dateService.todayStr(),
+                )
               : { isDone: true },
           },
         });

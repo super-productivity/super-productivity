@@ -4,27 +4,32 @@ import { Task } from '../task.model';
  * Builds the task update for marking a task as done while honoring the
  * "automatically add worked-on tasks to today" setting.
  *
- * For an unscheduled top-level task, `updateDoneOnForTask` stamps the completion
- * day as `dueDay` so finished work lands on today. When the user disabled
- * auto-add, we suppress that stamp by passing an explicit `dueDay: null`: the
- * reducer treats any `dueDay` present in the update as an explicit schedule
- * change and skips the synthesis (`hasScheduleInUpdate`). `null` (not
- * `undefined`) is used so the decision is carried inside the operation and
- * survives serialization — replay then reproduces it deterministically instead
- * of re-deriving it from the (independently-ordered) synced config.
+ * For an unscheduled top-level task the completion day is frozen into the
+ * operation here, at completion time, rather than being synthesized later by the
+ * reducer (`updateDoneOnForTask`):
+ *  - auto-add on  → `dueDay: todayStr` (the offset-adjusted logical day)
+ *  - auto-add off → `dueDay: null`
  *
- * Scheduled tasks and subtasks are never auto-stamped, so they need no
- * suppression regardless of the setting.
+ * Freezing the decision keeps replay deterministic: the reducer applies the
+ * explicit value (its `hasScheduleInUpdate` guard skips synthesis) instead of
+ * re-deriving an offset-blind day from `doneOn`, and the value can't drift with
+ * the (independently-ordered) synced config across devices. `null` (not
+ * `undefined`) is used so the opt-out survives serialization. The reducer's own
+ * synthesis remains as a fallback only for legacy ops that carry no `dueDay`.
+ *
+ * Scheduled tasks and subtasks are never auto-stamped, so their schedule is left
+ * untouched regardless of the setting.
  */
 export const getMarkDoneTaskChanges = (
   task: Task,
   isAutoAddWorkedOnToToday: boolean,
+  todayStr: string,
 ): Partial<Task> => {
   const hasSchedule =
     typeof task.dueDay === 'string' || typeof task.dueWithTime === 'number';
-  const wouldStampCompletionDay = !task.parentId && !hasSchedule;
+  if (task.parentId || hasSchedule) {
+    return { isDone: true };
+  }
 
-  return wouldStampCompletionDay && !isAutoAddWorkedOnToToday
-    ? { isDone: true, dueDay: null }
-    : { isDone: true };
+  return { isDone: true, dueDay: isAutoAddWorkedOnToToday ? todayStr : null };
 };

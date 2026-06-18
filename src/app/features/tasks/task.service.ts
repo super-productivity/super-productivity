@@ -1121,7 +1121,14 @@ export class TaskService {
     }
     const isAutoAddWorkedOnToToday =
       this._globalConfigService.tasks()?.isAutoAddWorkedOnToToday ?? true;
-    this.update(id, getMarkDoneTaskChanges(task, isAutoAddWorkedOnToToday));
+    this.update(
+      id,
+      getMarkDoneTaskChanges(
+        task,
+        isAutoAddWorkedOnToToday,
+        this._dateService.todayStr(),
+      ),
+    );
   }
 
   markIssueUpdatesAsRead(id: string): void {

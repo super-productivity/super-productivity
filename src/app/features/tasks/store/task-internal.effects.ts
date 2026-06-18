@@ -67,6 +67,7 @@ export class TaskInternalEffects {
             changes: getMarkDoneTaskChanges(
               parent,
               tasksCfg?.isAutoAddWorkedOnToToday ?? true,
+              this._dateService.todayStr(),
             ),
           },
         });
