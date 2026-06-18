@@ -22,6 +22,7 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { bulkApplyOperations } from '../apply/bulk-hydration.action';
+import { getFailedOpIdsFromBatch } from '../apply/failed-op-ids.util';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import { AppDataComplete } from '../model/model-config';
@@ -570,36 +571,44 @@ export class OperationLogHydratorService {
       `OperationLogHydratorService: Retrying ${failedOps.length} previously failed remote ops...`,
     );
 
-    const appliedOpIds: string[] = [];
-    const stillFailedOpIds: string[] = [];
+    // Retry as ONE seq-ordered batch, not one op at a time. A per-op retry turns
+    // every applyOperations() call into a single-op batch, and the same-batch
+    // archive pre-scan (collectArchivingOrDeletingEntityIdsFromBatch) returns an
+    // empty set for single-op batches — silently weakening the #7330
+    // orphan-resurrection guard. Batching restores that protection and matches
+    // how the primary remote-apply path (applyRemoteOperations) applies ops.
+    // getFailedRemoteOps() reads from an index whose result order isn't part of
+    // its contract, so sort by seq explicitly to keep causal order. See #8305.
+    const orderedFailedOps = [...failedOps].sort((a, b) => a.seq - b.seq);
+    const opsToApply = orderedFailedOps.map((e) => e.op);
+    const opIdToSeq = new Map(orderedFailedOps.map((e) => [e.op.id, e.seq]));
 
-    for (const entry of failedOps) {
-      const result = await this.operationApplierService.applyOperations([entry.op]);
-      if (result.failedOp) {
-        OpLog.warn(
-          `OperationLogHydratorService: Failed to retry op ${entry.op.id}`,
-          result.failedOp.error,
-        );
-        stillFailedOpIds.push(entry.op.id);
-      } else {
-        // Operation succeeded
-        appliedOpIds.push(entry.op.id);
-      }
-    }
+    const result = await this.operationApplierService.applyOperations(opsToApply);
 
-    // Mark successfully applied ops
-    if (appliedOpIds.length > 0) {
-      const appliedSeqs = failedOps
-        .filter((e) => appliedOpIds.includes(e.op.id))
-        .map((e) => e.seq);
+    // Mark successfully applied ops.
+    const appliedSeqs = result.appliedOps
+      .map((op) => opIdToSeq.get(op.id))
+      .filter((seq): seq is number => seq !== undefined);
+    if (appliedSeqs.length > 0) {
       await this.opLogStore.markApplied(appliedSeqs);
       OpLog.normal(
-        `OperationLogHydratorService: Successfully retried ${appliedOpIds.length} failed ops`,
+        `OperationLogHydratorService: Successfully retried ${appliedSeqs.length} failed ops`,
       );
     }
 
-    // Update retry count for still-failed ops (may reject them if max retries reached)
-    if (stillFailedOpIds.length > 0) {
+    // On a partial failure the batch applier stops at the first op whose archive
+    // side effect throws and returns it; that op and every op after it in seq
+    // order stay unapplied (slice-from-failure, shared with the primary path).
+    // markFailed bumps the retry count (rejecting ops past
+    // MAX_CONFLICT_RETRY_ATTEMPTS), so a permanently-failing op can't be retried
+    // forever.
+    if (result.failedOp) {
+      const stillFailedOpIds = getFailedOpIdsFromBatch(opsToApply, result.failedOp.op);
+
+      OpLog.warn(
+        `OperationLogHydratorService: Failed to retry op ${result.failedOp.op.id}`,
+        result.failedOp.error,
+      );
       await this.opLogStore.markFailed(stillFailedOpIds, MAX_CONFLICT_RETRY_ATTEMPTS);
       OpLog.warn(
         `OperationLogHydratorService: ${stillFailedOpIds.length} ops still failing after retry`,

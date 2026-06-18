@@ -1,5 +1,6 @@
 import { TaskContextMenuInnerComponent } from './task-context-menu-inner.component';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { TaskService } from '../../task.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
@@ -18,6 +19,26 @@ import { of } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { addSubTask } from '../../store/task.actions';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { Project } from '../../../project/project.model';
+import { Tag } from '../../../tag/tag.model';
+import { DEFAULT_TASK, Task } from '../../task.model';
+
+const projectInTreeOrder = (id: string, title: string): Project =>
+  ({
+    id,
+    title,
+    taskIds: [],
+    backlogTaskIds: [],
+    noteIds: [],
+  }) as unknown as Project;
+
+const tagInTreeOrder = (id: string, title: string): Tag =>
+  ({
+    id,
+    title,
+    taskIds: [],
+    theme: { primary: '#999999' },
+  }) as unknown as Tag;
 
 describe('TaskContextMenuInnerComponent', () => {
   let component: TaskContextMenuInnerComponent;
@@ -55,7 +76,11 @@ describe('TaskContextMenuInnerComponent', () => {
         {
           provide: ProjectService,
           useValue: {
-            getProjectsWithoutIdSorted$: () => of([]),
+            getProjectsWithoutIdInTreeOrder$: () =>
+              of([
+                projectInTreeOrder('project-b', 'Project B'),
+                projectInTreeOrder('project-a', 'Project A'),
+              ]),
             getByIdOnce$: () => of({}),
           },
         },
@@ -66,7 +91,15 @@ describe('TaskContextMenuInnerComponent', () => {
             cfg: () => ({ reminder: {}, tasks: {} }),
           },
         },
-        { provide: TagService, useValue: { tagsNoMyDayAndNoList: () => [] } },
+        {
+          provide: TagService,
+          useValue: {
+            tagsNoMyDayAndNoListInTreeOrder: signal([
+              tagInTreeOrder('tag-b', 'Tag B'),
+              tagInTreeOrder('tag-a', 'Tag A'),
+            ]),
+          },
+        },
         { provide: WorkContextService, useValue: { activeWorkContext$: of({}) } },
         {
           provide: TaskFocusService,
@@ -79,12 +112,40 @@ describe('TaskContextMenuInnerComponent', () => {
 
     fixture = TestBed.createComponent(TaskContextMenuInnerComponent);
     component = fixture.componentInstance;
+    component.task = {
+      ...DEFAULT_TASK,
+      id: 'task-default',
+      title: 'Default Task',
+      projectId: 'project-current',
+    } as Task;
     store = TestBed.inject(MockStore);
   });
 
   afterEach(() => {
     selectTaskByIdWithSubTaskData.release();
     store.resetSelectors();
+  });
+
+  describe('tree ordered dropdown data', () => {
+    it('should expose move projects in the order provided by ProjectService', (done) => {
+      component.taskSet = {
+        ...DEFAULT_TASK,
+        id: 'task-1',
+        title: 'Task 1',
+        projectId: 'project-current',
+        tagIds: [],
+        subTaskIds: [],
+      } as unknown as Task;
+
+      component.moveToProjectList$.subscribe((projects) => {
+        expect(projects.map((project) => project.id)).toEqual(['project-b', 'project-a']);
+        done();
+      });
+    });
+
+    it('should expose toggle tags in the order provided by TagService', () => {
+      expect(component.toggleTagList().map((tag) => tag.id)).toEqual(['tag-b', 'tag-a']);
+    });
   });
 
   describe('duplicate()', () => {

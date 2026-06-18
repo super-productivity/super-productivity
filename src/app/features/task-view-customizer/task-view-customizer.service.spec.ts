@@ -1,11 +1,11 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { TaskViewCustomizerService } from './task-view-customizer.service';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { provideMockStore } from '@ngrx/store/testing';
 import { selectAllProjects } from '../project/store/project.selectors';
-import { selectAllTags } from '../tag/store/tag.reducer';
 import { getTomorrow } from '../../util/get-tomorrow';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { BehaviorSubject, Observable, of } from 'rxjs';
@@ -165,16 +165,16 @@ describe('TaskViewCustomizerService', () => {
         { provide: DateAdapter, useValue: dateAdapter },
         { provide: WorkContextService, useValue: mockWorkContextService },
         { provide: ProjectService, useValue: { update: projectUpdateSpy } },
-        { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+        {
+          provide: TagService,
+          useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+        },
         {
           provide: MenuTreeService,
-          useValue: { flattenTagViewTree: (tags: Tag[]) => menuTreeFlattenFn(tags) },
+          useValue: { buildTagListInTreeOrder: (tags: Tag[]) => menuTreeFlattenFn(tags) },
         },
         provideMockStore({
-          selectors: [
-            { selector: selectAllProjects, value: mockProjects },
-            { selector: selectAllTags, value: mockTags },
-          ],
+          selectors: [{ selector: selectAllProjects, value: mockProjects }],
         }),
       ],
     });
@@ -358,6 +358,10 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should sort by tag using the primary tag (sidebar order), with untagged last', () => {
+    (service as unknown as { _allTags: Tag[] })._allTags = [
+      { id: 'Tag B', title: 'Tag B' } as Tag,
+      { id: 'Tag A', title: 'Tag A' } as Tag,
+    ];
     const extra: TaskWithSubTasks[] = [
       {
         id: 'Aardvark(-)',
@@ -382,15 +386,90 @@ describe('TaskViewCustomizerService', () => {
     };
 
     const resultAsc = [
-      'Alpha(Tag A)',
-      'Third Task(Tag A, Tag B)',
       'Beta(Tag B)',
+      'Third Task(Tag A, Tag B)',
+      'Alpha(Tag A)',
       'Aardvark(-)',
       'Zebra(-)',
     ];
+    const resultDesc = [...resultAsc].reverse();
 
     expect(sorted.asc.map((t) => t.id)).toEqual(resultAsc);
-    expect(sorted.desc.map((t) => t.id)).toEqual(resultAsc.reverse());
+    expect(sorted.desc.map((t) => t.id)).toEqual(resultDesc);
+  });
+
+  it('should sort tasks with unknown tag ids after known tree-ordered tags', () => {
+    (service as unknown as { _allTags: Tag[] })._allTags = [
+      { id: 'Tag B', title: 'Tag B' } as Tag,
+      { id: 'Tag A', title: 'Tag A' } as Tag,
+    ];
+    const tasks: TaskWithSubTasks[] = [
+      {
+        id: 'unknown-tag',
+        title: 'Unknown tag task',
+        tagIds: ['missing-tag'],
+        projectId: 'Project A',
+        created: 1,
+        subTasks: [],
+        subTaskIds: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        timeSpentOnDay: {},
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'known-a',
+        title: 'Known A task',
+        tagIds: ['Tag A'],
+        projectId: 'Project A',
+        created: 2,
+        subTasks: [],
+        subTaskIds: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        timeSpentOnDay: {},
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'known-b',
+        title: 'Known B task',
+        tagIds: ['Tag B'],
+        projectId: 'Project A',
+        created: 3,
+        subTasks: [],
+        subTaskIds: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        timeSpentOnDay: {},
+        isDone: false,
+        attachments: [],
+      },
+      {
+        id: 'no-tag',
+        title: 'No tag task',
+        tagIds: [],
+        projectId: 'Project A',
+        created: 4,
+        subTasks: [],
+        subTaskIds: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        timeSpentOnDay: {},
+        isDone: false,
+        attachments: [],
+      },
+    ];
+
+    const sorted = service['applySort'](tasks, SORT_OPTION_TYPE.tag, SORT_ORDER.ASC);
+
+    expect(sorted.map((t) => t.id)).toEqual([
+      'known-b',
+      'known-a',
+      'unknown-tag',
+      'no-tag',
+    ]);
   });
 
   it('should sort by title for tasks with the same primary tag', () => {
@@ -430,9 +509,12 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should group by tag', () => {
+    (service as unknown as { _allTags: Tag[] })._allTags = [
+      { id: 'Tag B', title: 'Tag B' } as Tag,
+      { id: 'Tag A', title: 'Tag A' } as Tag,
+    ];
     const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
-    expect(Object.keys(grouped)).toContain('Tag A');
-    expect(Object.keys(grouped)).toContain('Tag B');
+    expect(Object.keys(grouped)).toEqual(['Tag B', 'Tag A', 'No tag']);
     expect(grouped['Tag A'][0].id).toBe('Alpha(Tag A)');
     expect(grouped['Tag B'][0].id).toBe('Beta(Tag B)');
   });
@@ -453,6 +535,25 @@ describe('TaskViewCustomizerService', () => {
     expect(grouped['Tag A'][1].id).toBe('Third Task(Tag A, Tag B)');
     expect(grouped['Tag B'][0].id).toBe('Beta(Tag B)');
     expect(grouped['Tag B'][1].id).toBe('Third Task(Tag A, Tag B)');
+  });
+
+  it('should merge distinct tags that share a title into a single group', () => {
+    // Two different tag entities can carry the same title; their tasks must all
+    // land in the single title-keyed bucket instead of one tag overwriting the
+    // other (regression: the second tag used to clobber the first's tasks).
+    (service as unknown as { _allTags: Tag[] })._allTags = [
+      { id: 'work-1', title: 'Work' } as Tag,
+      { id: 'work-2', title: 'Work' } as Tag,
+    ];
+    const tasks = [
+      { ...mockTasks[0], id: 'task-work-1', tagIds: ['work-1'] },
+      { ...mockTasks[0], id: 'task-work-2', tagIds: ['work-2'] },
+    ] as TaskWithSubTasks[];
+
+    const grouped = service['applyGrouping'](tasks, GROUP_OPTION_TYPE.tag);
+
+    expect(Object.keys(grouped)).toEqual(['Work']);
+    expect(grouped['Work'].map((t) => t.id)).toEqual(['task-work-1', 'task-work-2']);
   });
 
   it('should group by scheduledDate using dueDay', () => {
@@ -1101,16 +1202,16 @@ describe('TaskViewCustomizerService', () => {
             },
           },
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
-          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          {
+            provide: TagService,
+            useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+          },
           {
             provide: MenuTreeService,
-            useValue: { flattenTagViewTree: (tags: Tag[]) => tags },
+            useValue: { buildTagListInTreeOrder: (tags: Tag[]) => tags },
           },
           provideMockStore({
-            selectors: [
-              { selector: selectAllProjects, value: mockProjects },
-              { selector: selectAllTags, value: mockTags },
-            ],
+            selectors: [{ selector: selectAllProjects, value: mockProjects }],
           }),
         ],
       });
@@ -1285,15 +1386,17 @@ describe('TaskViewCustomizerService', () => {
           { provide: DateAdapter, useValue: dateAdapter },
           { provide: WorkContextService, useValue: mockWorkContextService },
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
-          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          {
+            provide: TagService,
+            useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+          },
           {
             provide: MenuTreeService,
-            useValue: { flattenTagViewTree: (tags: Tag[]) => tags },
+            useValue: { buildTagListInTreeOrder: (tags: Tag[]) => tags },
           },
           provideMockStore({
             selectors: [
               { selector: selectAllProjects, value: allProjects },
-              { selector: selectAllTags, value: mockTags },
               {
                 selector: selectAllTasksWithSubTasks,
                 value: [projectATask, projectBTask],

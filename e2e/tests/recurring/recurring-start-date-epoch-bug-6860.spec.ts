@@ -10,6 +10,13 @@ import { saveRecurDialog, setRecurStartDate } from '../../utils/recurring-task-h
  * causing validateDate() to reject all dates via Invalid Date comparison,
  * which the formly parser then converted to '1970-01-01'.
  */
+
+// Pin today so the hardcoded start date below stays in the future: the
+// datepicker disables past days, so without a fixed clock the helper-based
+// test breaks once the wall clock passes the hardcoded date (e.g. a scheduled
+// run on 2026-06-16 could no longer click the disabled 2026-06-15 cell).
+const FIXED_TODAY = new Date('2026-05-01T10:00:00');
+
 test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
   test('should preserve start date when configuring recurring task via calendar', async ({
     page,
@@ -94,6 +101,10 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     taskPage,
     testPrefix,
   }) => {
+    // Fix today to May 1, 2026 so the hardcoded 15/06/2026 start date stays a
+    // selectable (enabled) future day in the datepicker.
+    await page.clock.setFixedTime(FIXED_TODAY);
+    await page.reload();
     await workViewPage.waitForTaskList();
 
     // 1. Create a task

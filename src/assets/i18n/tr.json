@@ -2516,6 +2516,7 @@
     "WEB_DAV_UPLOAD": "WebDAV: Veriler yükleniyor ..."
   },
   "MH": {
+    "HISTORY": "Geçmiş",
     "ADD_NEW_TASK": "Yeni Görev ekle",
     "ADD_SECTION": "Bölüm ekle",
     "ALL_PLANNED_LIST": "Tekrar/Planlanmış",

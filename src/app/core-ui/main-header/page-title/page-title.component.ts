@@ -15,7 +15,7 @@ import { WorkContextService } from '../../../features/work-context/work-context.
 import { TaskViewCustomizerService } from '../../../features/task-view-customizer/task-view-customizer.service';
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
-import { KeyboardConfig } from '../../../features/config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 
 @Component({
   selector: 'page-title',

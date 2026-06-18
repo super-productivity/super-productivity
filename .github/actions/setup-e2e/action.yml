@@ -27,9 +27,15 @@ runs:
         restore-keys: |
           ${{ runner.os }}-node22-
 
+    # npm i runs Prisma's postinstall, which downloads engine binaries from a
+    # CDN; a transient ECONNRESET there fails the whole job. Retry to absorb it.
     - name: Install npm Packages
-      shell: bash
-      run: npm i
+      uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+      with:
+        timeout_minutes: 10
+        max_attempts: 3
+        retry_wait_seconds: 20
+        command: npm i
 
     - name: Cache Playwright Browsers
       uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5

@@ -1,7 +1,7 @@
 import { LimitedFormlyFieldConfig } from '../global-config.model';
 import { PluginShortcutCfg } from '../../../plugins/plugin-api.model';
 import { T } from '../../../t.const';
-import { KeyboardConfig } from '../keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 
 export const createPluginShortcutFormItems = (
   shortcuts: PluginShortcutCfg[],

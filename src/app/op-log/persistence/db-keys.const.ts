@@ -12,7 +12,7 @@ import { CompleteBackup } from '../sync-exports';
 export const DB_NAME = 'SUP_OPS';
 
 /** Current database schema version */
-export const DB_VERSION = 6;
+export const DB_VERSION = 7;
 
 /** Object store names */
 export const STORE_NAMES = {
@@ -32,6 +32,8 @@ export const STORE_NAMES = {
   PROFILE_DATA: 'profile_data' as const,
   /** Client ID - sync device identity (singleton, key = SINGLETON_KEY) */
   CLIENT_ID: 'client_id' as const,
+  /** Small persistence metadata records derived from ops */
+  META: 'meta' as const,
 } as const;
 
 /** Common key used for singleton entries */
@@ -39,6 +41,9 @@ export const SINGLETON_KEY = 'current' as const;
 
 /** Backup key for state cache backup */
 export const BACKUP_KEY = 'backup' as const;
+
+/** Meta key for derived full-state operation refs */
+export const FULL_STATE_OPS_META_KEY = 'full_state_ops' as const;
 
 /** Index names for ops object store */
 export const OPS_INDEXES = {

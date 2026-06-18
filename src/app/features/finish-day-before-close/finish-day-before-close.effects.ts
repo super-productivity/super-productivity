@@ -103,7 +103,13 @@ export class FinishDayBeforeCloseEffects {
     if (choice === 'quit') {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
     } else if (choice === 'finish-day') {
-      this._router.navigateByUrl('/daily-summary');
+      // There is no top-level `/daily-summary` route — the daily summary only
+      // exists under the active work context (tag/project). `/active/...` is
+      // resolved by ActiveWorkContextGuard to the current context, same as the
+      // in-app Finish Day button. A bare `/daily-summary` falls through to the
+      // `**` wildcard and redirects to the start page, so the summary never
+      // opens (issue #8449).
+      this._router.navigateByUrl('/active/daily-summary');
     }
   }
 

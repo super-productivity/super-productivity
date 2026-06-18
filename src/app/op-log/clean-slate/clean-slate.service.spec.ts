@@ -81,7 +81,7 @@ describe('CleanSlateService', () => {
       expect(appendedOp.payload).toBe(mockState);
       // The clientId is freshly minted (generateClientId) — new compact format.
       // runDestructiveStateReplacement persists it inside its atomic tx.
-      expect(appendedOp.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(appendedOp.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{6}$/);
       expect(appendedOp.vectorClock).toEqual({ [appendedOp.clientId]: 1 });
       expect(appendedOp.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     });

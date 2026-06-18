@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Log } from '../log';
 
 export interface NavigatorWithKeyboard {
   keyboard?: NavigatorKeyboard;
@@ -29,6 +30,10 @@ export type KeyboardLayout = Map<string, string>;
 })
 export class KeyboardLayoutService {
   private _layout: KeyboardLayout = new Map();
+  private _resolveLayoutReady!: (layout: KeyboardLayout) => void;
+  readonly layoutReady: Promise<KeyboardLayout> = new Promise((resolve) => {
+    this._resolveLayoutReady = resolve;
+  });
 
   /**
    * Gets the current keyboard layout map.
@@ -46,14 +51,25 @@ export class KeyboardLayoutService {
    */
   async saveUserLayout(): Promise<void> {
     // If browser doesn't support keyboard API
-    if (!('keyboard' in navigator)) return;
+    if (!('keyboard' in navigator)) {
+      this._resolveLayoutReady(new Map(this._layout));
+      return;
+    }
 
     const keyboard = (navigator as NavigatorWithKeyboard).keyboard;
-    if (!keyboard) return;
+    if (!keyboard) {
+      this._resolveLayoutReady(new Map(this._layout));
+      return;
+    }
 
-    const kbLayout = await keyboard.getLayoutMap();
-    this._layout.clear();
-    kbLayout.forEach((value, key) => this._layout.set(key, value));
+    try {
+      const kbLayout = await keyboard.getLayoutMap();
+      this._layout.clear();
+      kbLayout.forEach((value, key) => this._layout.set(key, value));
+    } catch (e) {
+      Log.err(e);
+    }
+    this._resolveLayoutReady(new Map(this._layout));
   }
 
   /**
@@ -71,5 +87,6 @@ export class KeyboardLayoutService {
   setLayout(layout: KeyboardLayout): void {
     this._layout.clear();
     layout.forEach((value, key) => this._layout.set(key, value));
+    this._resolveLayoutReady(new Map(this._layout));
   }
 }

@@ -213,7 +213,7 @@ Windows binaries are signed. Free code signing is provided by [SignPath.io](http
 
 ## Documentation: Manual versus Automated
 
-There are two wikis: the official one hosted in by GitHub autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
+There are two wikis: the official one hosted in by GitHub and the autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
 
 <div style="display: flex; gap: 10px; align-items: flex-start;">
 

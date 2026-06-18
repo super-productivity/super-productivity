@@ -19,9 +19,19 @@ export class AddTaskBarStateService {
   readonly state = this._taskInputState.asReadonly();
   readonly isAutoDetected = signal(false);
 
+  // Free-form note/description entered alongside the task. Kept separate from
+  // the parsed `inputTxt` state since it is prose, not short-syntax tokens.
+  // Persisted like `inputTxt` so a draft note survives closing/reopening the
+  // bar (e.g. an Escape in the title input) and a reload, instead of being lost.
+  readonly noteTxt = signal(sessionStorage.getItem(SS.ADD_TASK_BAR_NOTE) || '');
+  readonly isNoteExpanded = signal(false);
+
   constructor() {
     effect(() => {
       sessionStorage.setItem(SS.ADD_TASK_BAR_TXT, this.inputTxt());
+    });
+    effect(() => {
+      sessionStorage.setItem(SS.ADD_TASK_BAR_NOTE, this.noteTxt());
     });
   }
 
@@ -188,6 +198,9 @@ export class AddTaskBarStateService {
       deadlineRemindOption: null,
     }));
     this.inputTxt.set('');
+    // Clear the note text but keep the panel expanded so consecutive
+    // note-tasks stay convenient (mirrors how project/date are preserved).
+    this.noteTxt.set('');
     // Keep isAutoDetected as is to preserve project selection
   }
 

@@ -9,6 +9,8 @@ import {
 } from './store/menu-tree.selectors';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { selectAllTags } from '../tag/store/tag.reducer';
+import { Project } from '../project/project.model';
+import { Tag } from '../tag/tag.model';
 
 describe('MenuTreeService', () => {
   let service: MenuTreeService;
@@ -41,6 +43,120 @@ describe('MenuTreeService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  describe('buildProjectListInTreeOrder', () => {
+    const createProject = (id: string, title: string): Project =>
+      ({
+        id,
+        title,
+        taskIds: [],
+        backlogTaskIds: [],
+        noteIds: [],
+      }) as unknown as Project;
+
+    it('should flatten projects depth-first in menu tree order and append missing projects', () => {
+      const mockProjectTree: MenuTreeTreeNode[] = [
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 1',
+          children: [
+            {
+              id: 'project-2',
+              k: MenuTreeKind.PROJECT,
+            },
+            {
+              id: 'folder-2',
+              k: MenuTreeKind.FOLDER,
+              name: 'Folder 2',
+              children: [
+                {
+                  id: 'project-4',
+                  k: MenuTreeKind.PROJECT,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'project-1',
+          k: MenuTreeKind.PROJECT,
+        },
+      ];
+      store.overrideSelector(selectMenuTreeProjectTree, mockProjectTree);
+      store.refreshState();
+
+      const projects = [
+        createProject('project-1', 'Project 1'),
+        createProject('project-2', 'Project 2'),
+        createProject('project-3', 'Project 3'),
+        createProject('project-4', 'Project 4'),
+      ];
+
+      expect(service.buildProjectListInTreeOrder(projects).map((p) => p.id)).toEqual([
+        'project-2',
+        'project-4',
+        'project-1',
+        'project-3',
+      ]);
+    });
+  });
+
+  describe('buildTagListInTreeOrder', () => {
+    const createTag = (id: string, title: string): Tag =>
+      ({
+        id,
+        title,
+        taskIds: [],
+      }) as unknown as Tag;
+
+    it('should flatten tags depth-first in menu tree order and append missing tags', () => {
+      const mockTagTree: MenuTreeTreeNode[] = [
+        {
+          id: 'tag-2',
+          k: MenuTreeKind.TAG,
+        },
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 1',
+          children: [
+            {
+              id: 'tag-4',
+              k: MenuTreeKind.TAG,
+            },
+            {
+              id: 'folder-2',
+              k: MenuTreeKind.FOLDER,
+              name: 'Folder 2',
+              children: [
+                {
+                  id: 'tag-1',
+                  k: MenuTreeKind.TAG,
+                },
+              ],
+            },
+          ],
+        },
+      ];
+      store.overrideSelector(selectMenuTreeTagTree, mockTagTree);
+      store.refreshState();
+
+      const tags = [
+        createTag('tag-1', 'Tag 1'),
+        createTag('tag-2', 'Tag 2'),
+        createTag('tag-3', 'Tag 3'),
+        createTag('tag-4', 'Tag 4'),
+      ];
+
+      expect(service.buildTagListInTreeOrder(tags).map((t) => t.id)).toEqual([
+        'tag-2',
+        'tag-4',
+        'tag-1',
+        'tag-3',
+      ]);
+    });
   });
 
   describe('projectFolderMap', () => {
@@ -162,7 +278,7 @@ describe('MenuTreeService', () => {
     });
   });
 
-  describe('flattenTagViewTree', () => {
+  describe('buildTagListInTreeOrder', () => {
     it('should return tags in sidebar (tree) order, descending into folders', () => {
       const tags = [
         { id: 'tag-1', title: 'Tag 1' },
@@ -183,7 +299,7 @@ describe('MenuTreeService', () => {
       store.overrideSelector(selectMenuTreeTagTree, tree);
       store.refreshState();
 
-      expect(service.flattenTagViewTree(tags).map((t) => t.id)).toEqual([
+      expect(service.buildTagListInTreeOrder(tags).map((t) => t.id)).toEqual([
         'tag-3',
         'tag-1',
         'tag-2',
@@ -199,7 +315,7 @@ describe('MenuTreeService', () => {
       store.overrideSelector(selectMenuTreeTagTree, tree);
       store.refreshState();
 
-      expect(service.flattenTagViewTree(tags).map((t) => t.id)).toEqual([
+      expect(service.buildTagListInTreeOrder(tags).map((t) => t.id)).toEqual([
         'tag-2',
         'tag-1',
       ]);

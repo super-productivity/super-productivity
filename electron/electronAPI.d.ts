@@ -4,7 +4,7 @@ import {
   TakeABreakConfig,
   TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
-import { KeyboardConfig } from '../src/app/features/config/keyboard-config.model';
+import { KeyboardConfig } from './shared-with-frontend/keyboard-config.model';
 import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import { Task } from '../src/app/features/tasks/task.model';

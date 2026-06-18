@@ -98,6 +98,7 @@ export class NextcloudDeckCommonInterfacesService extends BaseIssueProviderServi
         taskChanges: {
           ...this.getAddTaskData(issue, cfg),
           issueWasUpdated: true,
+          // normalized to a boolean in NextcloudDeckApiService mapping (issue #8436)
           isDone: issue.done,
         },
         issue,
@@ -138,6 +139,7 @@ export class NextcloudDeckCommonInterfacesService extends BaseIssueProviderServi
           taskChanges: {
             ...this.getAddTaskData(card, cfg),
             issueWasUpdated: true,
+            // normalized to a boolean in NextcloudDeckApiService mapping (issue #8436)
             isDone: card.done,
           },
           issue: card as NextcloudDeckIssue,

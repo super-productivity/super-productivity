@@ -6,6 +6,7 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
   COMPACTION_RETENTION_MS,
+  MAX_VECTOR_CLOCK_SIZE,
   SLOW_COMPACTION_THRESHOLD_MS,
 } from '../core/operation-log.const';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
@@ -13,7 +14,6 @@ import { OperationLogEntry } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { MODEL_CONFIGS } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

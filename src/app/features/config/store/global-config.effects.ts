@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
+  concatMap,
   distinctUntilChanged,
   filter,
   map,
@@ -10,19 +11,25 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { Action, Store } from '@ngrx/store';
-import { IS_ELECTRON } from '../../../app.constants';
+import { IS_MAC_TOKEN } from '../../../util/is-mac';
+import {
+  KeyboardLayout,
+  KeyboardLayoutService,
+} from '../../../core/keyboard-layout/keyboard-layout.service';
+import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { LanguageService } from '../../../core/language/language.service';
 import { DateService } from '../../../core/date/date.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
-import { KeyboardConfig } from '../keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { updateGlobalConfigSection } from './global-config.actions';
 import {
   selectConfigFeatureState,
   selectLocalizationConfig,
 } from './global-config.reducer';
+import { mapKeyboardConfigToQwerty } from '../keyboard-shortcut.util';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
@@ -30,6 +37,8 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { Log } from '../../../core/log';
+
+const LAYOUT_DETECTION_TIMEOUT_MS = 1000;
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -39,6 +48,9 @@ export class GlobalConfigEffects {
   private _snackService = inject(SnackService);
   private _store = inject(Store);
   private _userProfileService = inject(UserProfileService);
+  private _keyboardLayoutService = inject(KeyboardLayoutService);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
+  private _isMac = inject(IS_MAC_TOKEN);
 
   snackUpdate$ = createEffect(
     () =>
@@ -65,9 +77,17 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
-        filter(({ sectionKey, sectionCfg }) => IS_ELECTRON && sectionKey === 'keyboard'),
+        filter(
+          ({ sectionKey, sectionCfg }) => this._isElectron && sectionKey === 'keyboard',
+        ),
         tap(({ sectionKey, sectionCfg }) => {
-          const keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
+          let keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
+          if (this._isMac) {
+            keyboardCfg = mapKeyboardConfigToQwerty(
+              keyboardCfg,
+              this._keyboardLayoutService.layout,
+            );
+          }
           window.ea.registerGlobalShortcuts(keyboardCfg);
         }),
       ),
@@ -78,13 +98,37 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(loadAllData),
-        filter(() => IS_ELECTRON),
-        tap((action) => {
+        filter(() => this._isElectron),
+        concatMap(async (action) => {
           const appDataComplete = action.appDataComplete;
           const keyboardCfg: KeyboardConfig = (
             appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG
           ).keyboard;
-          window.ea.registerGlobalShortcuts(keyboardCfg);
+          let layout: KeyboardLayout = new Map();
+          if (this._isMac) {
+            layout = await Promise.race([
+              this._keyboardLayoutService.layoutReady,
+              new Promise<KeyboardLayout>((resolve) => {
+                const timeoutId = setTimeout(() => {
+                  Log.log(
+                    `Layout detection timed out after ${LAYOUT_DETECTION_TIMEOUT_MS}ms. Falling back to empty layout.`,
+                  );
+                  resolve(new Map());
+                }, LAYOUT_DETECTION_TIMEOUT_MS);
+                void this._keyboardLayoutService.layoutReady.then(() =>
+                  clearTimeout(timeoutId),
+                );
+              }),
+            ]);
+          }
+          return { keyboardCfg, layout };
+        }),
+        tap(({ keyboardCfg, layout }) => {
+          let cfg = keyboardCfg;
+          if (this._isMac) {
+            cfg = mapKeyboardConfigToQwerty(keyboardCfg, layout);
+          }
+          window.ea.registerGlobalShortcuts(cfg);
         }),
       ),
     { dispatch: false },
@@ -176,35 +220,33 @@ export class GlobalConfigEffects {
     ),
   );
 
-  notifyElectronAboutCfgChange =
-    IS_ELECTRON &&
-    createEffect(
-      () =>
-        this._actions$.pipe(
-          ofType(updateGlobalConfigSection),
-          withLatestFrom(this._store.select(selectConfigFeatureState)),
-          tap(([action, globalConfig]) => {
-            // Send the entire settings object to electron for overlay initialization
-            window.ea.sendSettingsUpdate(globalConfig);
-          }),
-        ),
-      { dispatch: false },
-    );
+  notifyElectronAboutCfgChange = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(updateGlobalConfigSection),
+        filter(() => this._isElectron),
+        withLatestFrom(this._store.select(selectConfigFeatureState)),
+        tap(([action, globalConfig]) => {
+          // Send the entire settings object to electron for overlay initialization
+          window.ea.sendSettingsUpdate(globalConfig);
+        }),
+      ),
+    { dispatch: false },
+  );
 
-  notifyElectronAboutCfgChangeInitially =
-    IS_ELECTRON &&
-    createEffect(
-      () =>
-        this._actions$.pipe(
-          ofType(loadAllData),
-          tap(({ appDataComplete }) => {
-            const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
-            // Send initial settings to electron for overlay initialization
-            window.ea.sendSettingsUpdate(cfg);
-          }),
-        ),
-      { dispatch: false },
-    );
+  notifyElectronAboutCfgChangeInitially = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(loadAllData),
+        filter(() => this._isElectron),
+        tap(({ appDataComplete }) => {
+          const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
+          // Send initial settings to electron for overlay initialization
+          window.ea.sendSettingsUpdate(cfg);
+        }),
+      ),
+    { dispatch: false },
+  );
 
   // Handle user profiles being enabled/disabled
   handleUserProfilesToggle = createEffect(

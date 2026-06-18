@@ -65,7 +65,7 @@ export class SelectProjectComponent
   _translateService = inject(TranslateService);
   _destroyRef = inject(DestroyRef);
   _menuTreeService = inject(MenuTreeService);
-  projects = toSignal(this.projectService.list$, { initialValue: [] });
+  projects = toSignal(this.projectService.listInTreeOrder$, { initialValue: [] });
 
   T: typeof T = T;
   DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;

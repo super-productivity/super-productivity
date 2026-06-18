@@ -99,12 +99,14 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
       expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
 
-    it('navigates to /daily-summary and does NOT close when user picks "finish-day"', async () => {
+    it('navigates to /active/daily-summary and does NOT close when user picks "finish-day"', async () => {
       showDialogSpy.and.returnValue(Promise.resolve('finish-day'));
 
       await effects._handleCloseDecision([doneTask, undoneTask]);
 
-      expect(router.navigateByUrl).toHaveBeenCalledWith('/daily-summary');
+      // Must target the context-resolved route (issue #8449); a bare
+      // `/daily-summary` has no matching route and redirects to the start page.
+      expect(router.navigateByUrl).toHaveBeenCalledWith('/active/daily-summary');
       expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
     });
   });

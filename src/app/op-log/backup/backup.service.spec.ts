@@ -389,7 +389,7 @@ describe('BackupService', () => {
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
       // The clientId is freshly minted (generateClientId) — new compact format.
       const op = args.syncImportOp;
-      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{6}$/);
       expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
     });
 
@@ -401,7 +401,7 @@ describe('BackupService', () => {
       const args = mockOpLogStore.runDestructiveStateReplacement.calls.mostRecent()
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
       const op = args.syncImportOp;
-      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{4}$/);
+      expect(op.clientId).toMatch(/^[BEAI]_[a-zA-Z0-9]{6}$/);
       expect(op.vectorClock).toEqual({ [op.clientId]: 1 });
     });
 

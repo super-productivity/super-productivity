@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { computed, Injectable, inject } from '@angular/core';
 import { Action, select, Store } from '@ngrx/store';
 import {
   selectAllTags,
@@ -22,6 +22,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { sortByTitle } from '../../util/sort-by-title';
 import { getRandomWorkContextColor } from '../work-context/work-context-color';
 import { DeletedTagTitlesSidecarService } from '../issue/two-way-sync/deleted-tag-titles-sidecar.service';
+import { MenuTreeService } from '../menu-tree/menu-tree.service';
 
 @Injectable({
   providedIn: 'root',
@@ -29,9 +30,13 @@ import { DeletedTagTitlesSidecarService } from '../issue/two-way-sync/deleted-ta
 export class TagService {
   private _store$ = inject<Store<TagState>>(Store);
   private _deletedTagTitlesSidecar = inject(DeletedTagTitlesSidecarService);
+  private _menuTreeService = inject(MenuTreeService);
 
   tags$: Observable<Tag[]> = this._store$.pipe(select(selectAllTags));
   tags = toSignal(this.tags$, { initialValue: [] });
+  tagsInTreeOrder = computed(() =>
+    this._menuTreeService.buildTagListInTreeOrder(this.tags()),
+  );
   tagsSortedForUI$: Observable<Tag[]> = this.tags$.pipe(map((tags) => sortByTitle(tags)));
   tagsSortedForUI = toSignal(this.tagsSortedForUI$, { initialValue: [] });
 
@@ -39,6 +44,9 @@ export class TagService {
     select(selectAllTagsWithoutMyDay),
   );
   tagsNoMyDayAndNoList = toSignal(this.tagsNoMyDayAndNoList$, { initialValue: [] });
+  tagsNoMyDayAndNoListInTreeOrder = computed(() =>
+    this._menuTreeService.buildTagListInTreeOrder(this.tagsNoMyDayAndNoList()),
+  );
   tagsNoMyDayAndNoListSorted$: Observable<Tag[]> = this.tagsNoMyDayAndNoList$.pipe(
     map((tags) => sortByTitle(tags)),
   );

@@ -15,6 +15,22 @@ test.describe('Daily Summary', () => {
     await expect(doneHeadline).toContainText('Take a moment to celebrate');
   });
 
+  // Regression guard for #8449: the before-close "Finish Day" dialog navigates
+  // via the context-resolved `/active/daily-summary` route. A bare
+  // `/daily-summary` has no matching route and silently redirects to the start
+  // page, so the summary never opens. Assert the `/active/...` route actually
+  // resolves to the daily summary instead of falling through to the wildcard.
+  test('the /active/daily-summary route resolves to the daily summary', async ({
+    page,
+  }) => {
+    await page.goto('/#/active/daily-summary');
+
+    // ActiveWorkContextGuard rewrites it to the active context (TODAY tag).
+    await page.waitForURL(/daily-summary/);
+    await expect(page.locator('daily-summary')).toBeVisible();
+    await page.waitForSelector('.done-headline', { state: 'visible' });
+  });
+
   test('show any added task in table', async ({ page, workViewPage }) => {
     // First navigate to work view to add task
     await page.goto('/');

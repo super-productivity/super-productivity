@@ -14,6 +14,14 @@ describe('isExternalUrlSchemeAllowed', () => {
       'mailto:someone@example.com',
       'file:///home/user/notes.txt',
       '  https://example.com  ', // surrounding whitespace tolerated
+      'tel:+123456789',
+      'sms:+123456789',
+      // App deep-links (#8429): launch a registered app, not an OS handler.
+      'obsidian://open?vault=Notes&file=Today',
+      'vscode://file/home/user/project/main.ts',
+      'vscode-insiders://file/home/user/x.ts',
+      'zotero://select/items/0_ABCD1234',
+      'logseq://graph/Notes?page=Today',
     ];
     allowed.forEach((url) => {
       it(`allows "${url}"`, () => {
@@ -27,6 +35,13 @@ describe('isExternalUrlSchemeAllowed', () => {
         'https:',
         'mailto:',
         'file:',
+        'tel:',
+        'sms:',
+        'obsidian:',
+        'vscode:',
+        'vscode-insiders:',
+        'zotero:',
+        'logseq:',
       ]);
     });
   });
@@ -42,7 +57,6 @@ describe('isExternalUrlSchemeAllowed', () => {
       'vbscript:msgbox(1)',
       'ftp://example.com',
       'ssh://example.com',
-      'tel:+123456789',
       '\\\\192.168.1.100\\share', // UNC / SMB — NTLM hash capture
       '/\\192.168.1.100\\share',
       // file: with a remote authority is the same SMB / NTLM-leak vector and

@@ -111,8 +111,24 @@
       [isHideTagBtn]="!!planForDay()"
       [isHideDueBtn]="!!planForDay()"
       (refocus)="focusInput()"
+      (toggleNote)="toggleNote()"
       (scheduleDialogOpenChange)="onScheduleDialogOpenChange($event)"
     ></add-task-bar-actions>
+
+    @if (stateService.isNoteExpanded()) {
+      <div class="note-input-section">
+        <textarea
+          #noteEl
+          class="note-input"
+          cdkTextareaAutosize
+          cdkAutosizeMinRows="3"
+          cdkAutosizeMaxRows="8"
+          [(ngModel)]="stateService.noteTxt"
+          [placeholder]="T.F.TASK.ADD_TASK_BAR.NOTE_PLACEHOLDER | translate"
+          (keydown)="onNoteKeydown($event)"
+        ></textarea>
+      </div>
+    }
   }
 </div>
 

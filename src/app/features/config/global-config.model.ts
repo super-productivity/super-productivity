@@ -3,7 +3,7 @@ import { FormlyFieldConfig } from '@ngx-formly/core';
 import { LanguageCode, DateTimeLocale } from '../../core/locale.constants';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { ProjectCfgFormKey } from '../project/project.model';
-import { KeyboardConfig } from './keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { TaskReminderOptionId } from '../tasks/task.model';
 
 export type AppFeaturesConfig = Readonly<{
@@ -356,7 +356,7 @@ export interface LimitedFormlyFieldConfig<FormModel> extends Omit<
   FormlyFieldConfig,
   'key'
 > {
-  key?: keyof FormModel;
+  key?: keyof FormModel & (string | number);
 }
 
 export type CustomCfgSection =

@@ -157,24 +157,20 @@ export class MenuTreeService {
     });
   }
 
-  /**
-   * Flatten the tag view tree into the order tags appear in the sidebar
-   * (depth-first, folders expanded). Shared by the tag-toggle menu and the
-   * task-view customizer so tag grouping/sorting matches the sidebar. (#8400)
-   */
-  flattenTagViewTree(tags: Tag[]): Tag[] {
-    const result: Tag[] = [];
-    const walk = (nodes: MenuTreeViewNode[]): void => {
-      for (const node of nodes) {
-        if (node.k === MenuTreeKind.TAG) {
-          result.push(node.tag);
-        } else if (node.k === MenuTreeKind.FOLDER) {
-          walk(node.children);
-        }
-      }
-    };
-    walk(this.buildTagViewTree(tags));
-    return result;
+  buildProjectListInTreeOrder(projects: Project[]): Project[] {
+    return this._buildListInTreeOrder({
+      storedTree: this.projectTree(),
+      items: projects,
+      itemType: MenuTreeKind.PROJECT,
+    });
+  }
+
+  buildTagListInTreeOrder(tags: Tag[]): Tag[] {
+    return this._buildListInTreeOrder({
+      storedTree: this.tagTree(),
+      items: tags,
+      itemType: MenuTreeKind.TAG,
+    });
   }
 
   setProjectTree(tree: MenuTreeTreeNode[]): void {
@@ -346,6 +342,44 @@ export class MenuTreeService {
     return nodes
       .map((node) => mapNode(node))
       .filter((node): node is MenuTreeTreeNode => node !== null);
+  }
+
+  private _buildListInTreeOrder<T extends { id: string }>(options: {
+    storedTree: MenuTreeTreeNode[];
+    items: T[];
+    itemType: MenuTreeKind.PROJECT | MenuTreeKind.TAG;
+  }): T[] {
+    const { storedTree, items, itemType } = options;
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const usedIds = new Set<string>();
+    const result: T[] = [];
+
+    const walk = (nodes: MenuTreeTreeNode[]): void => {
+      for (const node of nodes) {
+        if (node.k === MenuTreeKind.FOLDER) {
+          walk(node.children);
+          continue;
+        }
+
+        if (node.k === itemType) {
+          const item = itemMap.get(node.id);
+          if (item && !usedIds.has(node.id)) {
+            result.push(item);
+            usedIds.add(node.id);
+          }
+        }
+      }
+    };
+
+    walk(storedTree);
+
+    for (const item of items) {
+      if (!usedIds.has(item.id)) {
+        result.push(item);
+      }
+    }
+
+    return result;
   }
 
   private _collectFolders(

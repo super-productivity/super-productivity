@@ -9,7 +9,7 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { GlobalConfigState } from '../config/global-config.model';
 import { promiseTimeout } from '../../util/promise-timeout';
 import { hideAddTaskBar } from '../../core-ui/layout/store/layout.actions';
-import { KeyboardConfig } from '../config/keyboard-config.model';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ShepherdService } from './shepherd.service';
 import { Observable } from 'rxjs';

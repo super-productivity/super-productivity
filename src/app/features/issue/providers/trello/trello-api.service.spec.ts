@@ -4,7 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { TrelloApiService } from './trello-api.service';
+import { TrelloApiService, redactTrelloUrlCreds } from './trello-api.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { TrelloCfg } from './trello.model';
 
@@ -43,6 +43,31 @@ describe('TrelloApiService', () => {
 
   afterEach(() => {
     httpMock.verify();
+  });
+
+  describe('redactTrelloUrlCreds', () => {
+    it('should redact key and token query params', () => {
+      const input =
+        'Http failure response for https://api.trello.com/1/members/me?key=SECRET_KEY&token=SECRET_TOKEN: 401 Unauthorized';
+      const result = redactTrelloUrlCreds(input);
+      expect(result).not.toContain('SECRET_KEY');
+      expect(result).not.toContain('SECRET_TOKEN');
+      expect(result).toContain('key=REDACTED');
+      expect(result).toContain('token=REDACTED');
+      // keeps the rest of the message intact
+      expect(result).toContain('401 Unauthorized');
+      expect(result).toContain('api.trello.com');
+    });
+
+    it('should redact token when it is the first query param', () => {
+      const result = redactTrelloUrlCreds('...?token=abc123&key=def456&fields=id');
+      expect(result).toBe('...?token=REDACTED&key=REDACTED&fields=id');
+    });
+
+    it('should leave text without credentials untouched', () => {
+      const input = 'Some unrelated error message';
+      expect(redactTrelloUrlCreds(input)).toBe(input);
+    });
   });
 
   describe('testConnection$', () => {

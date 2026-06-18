@@ -1,8 +1,10 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MatDialog } from '@angular/material/dialog';
+import { Location } from '@angular/common';
+import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
+import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { DateAdapter } from '@angular/material/core';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
@@ -139,7 +141,7 @@ describe('TaskComponent shortcut handling', () => {
         {
           provide: ProjectService,
           useValue: jasmine.createSpyObj('ProjectService', [
-            'getProjectsWithoutId$',
+            'getProjectsWithoutIdInTreeOrder$',
             'moveTaskToBacklog',
             'moveTaskToTodayList',
             'getByIdOnce$',
@@ -212,6 +214,31 @@ describe('TaskComponent shortcut handling', () => {
     });
 
     expect(taskServiceSpy.remove).toHaveBeenCalledWith(component.task());
+  });
+
+  // Guards against a future revert to a direct _matDialog.open that would
+  // reintroduce the resize/back data loss (#8434): the helper always disables
+  // closeOnNavigation.
+  it('opens the fullscreen notes editor through the nav-persisting helper', () => {
+    // The helper subscribes to the real Location to close-on-navigation; with
+    // the suite's `destroyAfterEach: false` an un-torn-down subscription would
+    // outlive this spec and fire on a later test's popstate (#8434). Stub
+    // `subscribe` so no global listener leaks past this spec.
+    spyOn(TestBed.inject(Location), 'subscribe').and.returnValue({
+      unsubscribe: () => {},
+    } as never);
+    const matDialog = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
+    matDialog.open.and.returnValue({
+      afterClosed: () => of(),
+      getState: () => MatDialogState.OPEN,
+      componentInstance: { close: () => {} },
+    } as never);
+
+    component.openNotesFullscreen();
+
+    const [comp, config] = matDialog.open.calls.mostRecent().args;
+    expect(comp).toBe(DialogFullscreenMarkdownComponent);
+    expect(config?.closeOnNavigation).toBe(false);
   });
 
   it('does NOT delete on Escape for existing subtask with cleared title', () => {

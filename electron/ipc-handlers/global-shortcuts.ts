@@ -1,6 +1,9 @@
 import { globalShortcut, ipcMain } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
-import { KeyboardConfig } from '../../src/app/features/config/keyboard-config.model';
+import {
+  KeyboardConfig,
+  GLOBAL_KEY_CFG_KEYS,
+} from '../shared-with-frontend/keyboard-config.model';
 import { getWin, setWasMaximizedBeforeHide } from '../main-window';
 import { toggleTaskWidgetVisibility } from '../task-widget/task-widget';
 import { showOrFocus } from '../various-shared';
@@ -18,13 +21,6 @@ export const initGlobalShortcutsIpc = (): void => {
 const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
   // unregister all previous
   globalShortcut.unregisterAll();
-  const GLOBAL_KEY_CFG_KEYS: (keyof KeyboardConfig)[] = [
-    'globalShowHide',
-    'globalToggleTaskStart',
-    'globalAddNote',
-    'globalAddTask',
-    'globalToggleTaskWidget',
-  ];
 
   if (cfg) {
     const mainWin = getWin();

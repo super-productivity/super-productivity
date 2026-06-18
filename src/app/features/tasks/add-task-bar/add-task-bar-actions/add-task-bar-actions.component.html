@@ -28,6 +28,19 @@
     }
   </button>
 
+  <button
+    mat-button
+    class="action-btn"
+    data-test="add-task-bar-note-btn"
+    (click)="toggleNote.emit()"
+    [class.has-value]="!!stateService.noteTxt()"
+    [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_NOTE | translate"
+    matTooltipPosition="above"
+  >
+    <mat-icon>{{ stateService.noteTxt() ? 'chat' : 'chat_bubble_outline' }}</mat-icon>
+    <span>{{ T.F.TASK.ADD_TASK_BAR.NOTE_BUTTON | translate }}</span>
+  </button>
+
   @if (!isHideDueBtn()) {
     <button
       mat-button

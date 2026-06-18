@@ -194,4 +194,60 @@ describe('KeyboardLayoutService', () => {
       expect(service.layout.has('KeyX')).toBe(false);
     });
   });
+
+  describe('layoutReady promise', () => {
+    const originalNavigator = globalThis.navigator;
+
+    afterEach(() => {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it('should resolve when layout is saved', async () => {
+      const mockLayoutMap = new Map([['KeyA', 'a']]);
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {
+          keyboard: {
+            getLayoutMap: () => Promise.resolve(mockLayoutMap),
+          },
+        } as NavigatorWithKeyboard,
+        writable: true,
+        configurable: true,
+      });
+
+      const promise = service.layoutReady;
+      await service.saveUserLayout();
+      const layout = await promise;
+
+      expect(layout.size).toBe(1);
+      expect(layout.get('KeyA')).toBe('a');
+    });
+
+    it('should resolve when layout is set directly', async () => {
+      const promise = service.layoutReady;
+      service.setLayout(new Map([['KeyB', 'b']]));
+      const layout = await promise;
+
+      expect(layout.size).toBe(1);
+      expect(layout.get('KeyB')).toBe('b');
+    });
+
+    it('should resolve with a copy of the layout map', async () => {
+      const promise = service.layoutReady;
+      service.setLayout(new Map([['KeyB', 'b']]));
+      const layout = await promise;
+
+      expect(layout.size).toBe(1);
+      expect(layout.get('KeyB')).toBe('b');
+
+      // Modifying service layout shouldn't affect the resolved copy
+      service.setLayout(new Map([['KeyC', 'c']]));
+      expect(layout.size).toBe(1);
+      expect(layout.get('KeyB')).toBe('b');
+      expect(layout.get('KeyC')).toBeUndefined();
+    });
+  });
 });

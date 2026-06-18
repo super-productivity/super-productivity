@@ -20,11 +20,14 @@ import { FieldType, FormlyFieldConfig } from '@ngx-formly/core';
         (change)="onChange($event)"
       >
         {{ props.label }}
-        <input
-          matInput
-          hidden
-        />
       </mat-slide-toggle>
+      <input
+        aria-hidden="true"
+        matInput
+        tabindex="-1"
+        readonly
+        style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;"
+      />
       @if (props.icon) {
         <mat-icon>{{ props.icon }}</mat-icon>
       } @else if (props.svgIcon) {
