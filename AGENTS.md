@@ -1,1 +1,1 @@
-Please read CLAUDE.md!!
+Please read [@CLAUDE.md](CLAUDE.md)!!
