@@ -62,30 +62,27 @@ const IS_MAC = process.platform === 'darwin';
 const IS_LINUX = process.platform === 'linux';
 const IS_WINDOWS = process.platform === 'win32';
 
-// Stable GUIDs per Windows distribution type.
-// Windows ties tray icon GUIDs to the executable path (when unsigned).
-// Different distribution types have different exe paths, so they need
-// separate GUIDs to avoid silent tray creation failures.
-// WARNING: These GUIDs must never change once deployed per distribution type.
-// Changing a GUID makes Windows treat it as a new icon, resetting it to the
-// overflow area. Users would have to manually re-show it on the taskbar.
-// See: https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataa
-const WINDOWS_TRAY_GUIDS = {
-  portable: 'f7c06d50-4d3e-4f8d-b9a0-2c8e7f5a1b3d',
-  nsis: 'a2512177-8bee-4b70-a0a8-f3d18e0eab90',
-  store: '19b9d3fe-aa50-4792-917e-60ada97f3088',
-} as const;
+// Stable GUID for the NSIS (installer) build only.
+// Per Electron's Tray docs, a tray-icon GUID binds to the code-signing
+// signature only when that signature carries an organization in its subject;
+// otherwise it binds to the executable's full path, and changing the path
+// breaks tray-icon creation until a new GUID is used. The GitHub NSIS build is
+// signed and installs to a fixed path, so its GUID stays valid. The Store
+// (MSIX) and portable/scoop builds run from versioned directories whose path
+// changes on every update, so the GUID goes stale and Shell_NotifyIcon(NIM_ADD)
+// fails silently (Electron raises no JS error) — leaving an invisible tray icon
+// and an unreachable window (#7282). Those builds therefore create the tray
+// without a GUID, so Windows identifies it by window handle and it stays visible.
+// WARNING: This GUID must never change once deployed; Windows would treat a new
+// value as a new icon and reset it to the overflow area.
+// Retired GUIDs (shipped in v18.10.0, now GUID-less — never reuse for a new icon):
+//   portable f7c06d50-4d3e-4f8d-b9a0-2c8e7f5a1b3d, store 19b9d3fe-aa50-4792-917e-60ada97f3088
+// See https://www.electronjs.org/docs/latest/api/tray (guid) and
+//   https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataa
+const WINDOWS_TRAY_NSIS_GUID = 'a2512177-8bee-4b70-a0a8-f3d18e0eab90';
 
-const getWindowsTrayGuid = (): string => {
-  const channel = getDistChannel();
-  if (channel === 'win-portable') {
-    return WINDOWS_TRAY_GUIDS.portable;
-  }
-  if (channel === 'win-store') {
-    return WINDOWS_TRAY_GUIDS.store;
-  }
-  return WINDOWS_TRAY_GUIDS.nsis;
-};
+const getWindowsTrayGuid = (): string | undefined =>
+  getDistChannel() === 'win-nsis' ? WINDOWS_TRAY_NSIS_GUID : undefined;
 
 export const initIndicator = ({
   showApp,
@@ -155,13 +152,23 @@ const createTray = (): Tray => {
   let nextTray: Tray;
   if (IS_WINDOWS) {
     const guid = getWindowsTrayGuid();
-    try {
-      nextTray = new Tray(trayIcon, guid);
-      log('Tray created on Windows with GUID:', guid);
-    } catch (e) {
-      log('Tray creation with GUID failed, retrying without GUID:', e);
+    if (guid) {
+      try {
+        nextTray = new Tray(trayIcon, guid);
+        log('Tray created on Windows with GUID:', guid);
+      } catch (e) {
+        // Log only the message, not the full error: log history is exportable
+        // and the error/stack can embed the install path (e.g. C:\Users\<name>\).
+        log(
+          'Tray creation with GUID failed, retrying without GUID:',
+          e instanceof Error ? e.message : e,
+        );
+        nextTray = new Tray(trayIcon);
+        log('Tray created on Windows without GUID');
+      }
+    } else {
       nextTray = new Tray(trayIcon);
-      log('Tray created on Windows without GUID');
+      log('Tray created on Windows without GUID (versioned install path)');
     }
   } else {
     nextTray = new Tray(trayIcon);
