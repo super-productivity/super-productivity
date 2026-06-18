@@ -9,8 +9,6 @@ import { moveProjectTaskToRegularList } from '../../project/store/project.action
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 import { Store } from '@ngrx/store';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
-import { selectTaskEntities } from './task.selectors';
-import { getMarkDoneTaskChanges } from './get-mark-done-task-changes.util';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DateService } from '../../../core/date/date.service';
@@ -56,13 +54,11 @@ export class TaskRelatedModelEffects {
     ),
   );
 
-  // NOTE: Completion-dating lives in `getMarkDoneTaskChanges`, applied by every
-  // "mark as done" producer (TaskService.setDone + the effects below). It freezes
-  // the completion day into the op (`dueDay: todayStr`, or `null` when the user
-  // disabled auto-add); the reducer's own synthesis is only a fallback for legacy
-  // ops. There is intentionally no effect here re-deriving the day/gate from
-  // synced config or `doneOn` — that would diverge on replay (ops apply in causal
-  // arrival order, and `doneOn` is offset-blind).
+  // NOTE: Completing a task no longer auto-dates it. Completion records only
+  // `doneOn`; it never synthesizes or freezes a `dueDay`. The Today "Done" list
+  // is driven by `isDone`/`doneOn`, so completed tasks still show there without a
+  // schedule. The `isAutoAddWorkedOnToToday` setting now gates ONLY the
+  // time-tracking auto-add path above (`autoAddTodayTagOnTracking`).
 
   // EXTERNAL ===> TASKS
   // -------------------
@@ -92,25 +88,16 @@ export class TaskRelatedModelEffects {
       filter(
         ({ src, target }) => (src === 'UNDONE' || src === 'BACKLOG') && target === 'DONE',
       ),
-      withLatestFrom(
-        this._store.select(selectTaskEntities),
-        this._globalConfigService.tasks$,
-      ),
-      map(([{ taskId }, taskEntities, tasksCfg]) => {
-        const task = taskEntities[taskId];
-        return TaskSharedActions.updateTask({
+      map(({ taskId }) =>
+        TaskSharedActions.updateTask({
           task: {
             id: taskId,
-            changes: task
-              ? getMarkDoneTaskChanges(
-                  task,
-                  tasksCfg.isAutoAddWorkedOnToToday,
-                  this._dateService.todayStr(),
-                )
-              : { isDone: true },
+            changes: {
+              isDone: true,
+            },
           },
-        });
-      }),
+        }),
+      ),
     ),
   );
 

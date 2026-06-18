@@ -488,7 +488,16 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     const t = this.task();
     if (!t) return;
 
-    this._taskService.setDone(t.id);
+    this._store.dispatch(
+      TaskSharedActions.updateTask({
+        task: {
+          id: t.id,
+          changes: {
+            isDone: true,
+          },
+        },
+      }),
+    );
   }
 
   markAsUnDone(): void {

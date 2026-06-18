@@ -23,6 +23,7 @@ import {
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
 import { selectPausedTaskId } from '../store/focus-mode.selectors';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -157,7 +158,11 @@ export class FocusModeBreakComponent {
     this._store.dispatch(completeTask());
     const t = this.currentTask();
     if (t) {
-      this._taskService.setDone(t.id);
+      this._store.dispatch(
+        TaskSharedActions.updateTask({
+          task: { id: t.id, changes: { isDone: true, doneOn: Date.now() } },
+        }),
+      );
     }
     this.openTaskSelector();
   }

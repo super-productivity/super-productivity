@@ -371,26 +371,12 @@ describe('TaskService', () => {
   });
 
   describe('setDone', () => {
-    it('marks done and stamps todays date when auto-add-to-today is on', () => {
+    it('should update task with isDone: true', () => {
       service.setDone('task-1');
 
       expect(store.dispatch).toHaveBeenCalledWith(
         TaskSharedActions.updateTask({
-          task: { id: 'task-1', changes: { isDone: true, dueDay: '2026-01-05' } },
-        }),
-      );
-    });
-
-    it('marks done without stamping a date when auto-add-to-today is off (#8463)', () => {
-      (TestBed.inject(GlobalConfigService) as any).tasks.set({
-        isAutoAddWorkedOnToToday: false,
-      });
-
-      service.setDone('task-1');
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-1', changes: { isDone: true, dueDay: null } },
+          task: { id: 'task-1', changes: { isDone: true } },
         }),
       );
     });

@@ -199,7 +199,7 @@ describe('done task operation replay', () => {
     TestBed.resetTestingModule();
   });
 
-  it('replays completed tasks with the operation date instead of the replay date', () => {
+  it('records only doneOn (never a dueDay) when replaying an unscheduled completion', () => {
     const op: Operation = {
       id: 'op-done-yesterday',
       actionType: ActionType.TASK_SHARED_UPDATE,
@@ -223,8 +223,9 @@ describe('done task operation replay', () => {
 
     expect(task.isDone).toBe(true);
     expect(task.doneOn).toBe(DONE_TIMESTAMP);
-    expect(task.dueDay).toBe(ACTION_TODAY);
-    expect(task.dueDay).not.toBe(REPLAY_TODAY);
+    // Completion never synthesizes a dueDay: dueDay stays a pure planning field,
+    // so local apply and replay both yield no dueDay for an unscheduled completion.
+    expect(task.dueDay).toBeUndefined();
   });
 
   it('does not move an already scheduled task to the completion day during replay', () => {
@@ -269,7 +270,7 @@ describe('done task operation replay', () => {
     expect(task.dueDay).toBe(scheduledDay);
   });
 
-  it('replays doneOn-only completed unscheduled tasks with the completion day', () => {
+  it('replays a doneOn-carrying unscheduled completion without synthesizing a dueDay', () => {
     const op: Operation = {
       id: 'op-done-on-only',
       actionType: ActionType.TASK_SHARED_UPDATE,
@@ -293,8 +294,7 @@ describe('done task operation replay', () => {
 
     expect(task.isDone).toBe(true);
     expect(task.doneOn).toBe(DONE_TIMESTAMP);
-    expect(task.dueDay).toBe(ACTION_TODAY);
-    expect(task.dueDay).not.toBe(REPLAY_TODAY);
+    expect(task.dueDay).toBeUndefined();
   });
 
   it('ignores legacy synthetic completion dueDay when replaying onto a scheduled task', () => {

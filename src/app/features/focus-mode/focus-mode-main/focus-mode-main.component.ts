@@ -34,6 +34,7 @@ import {
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
 import { selectPausedTaskId } from '../store/focus-mode.selectors';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { SimpleCounterService } from '../../simple-counter/simple-counter.service';
 import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import { ICAL_TYPE } from '../../issue/issue.const';
@@ -389,7 +390,17 @@ export class FocusModeMainComponent {
     const t = this.currentTask();
     const id = t && t.id;
     if (id) {
-      this.taskService.setDone(id);
+      this._store.dispatch(
+        TaskSharedActions.updateTask({
+          task: {
+            id,
+            changes: {
+              isDone: true,
+              doneOn: Date.now(),
+            },
+          },
+        }),
+      );
     }
 
     if (sessionRunning) {

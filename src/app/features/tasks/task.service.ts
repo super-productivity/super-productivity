@@ -34,7 +34,6 @@ import {
   unsetCurrentTask,
   updateTaskUi,
 } from './store/task.actions';
-import { getMarkDoneTaskChanges } from './store/get-mark-done-task-changes.util';
 import { IssueProviderKey } from '../issue/issue.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
@@ -1114,21 +1113,7 @@ export class TaskService {
   }
 
   setDone(id: string): void {
-    const task = this._taskEntities()[id];
-    if (!task) {
-      this.update(id, { isDone: true });
-      return;
-    }
-    const isAutoAddWorkedOnToToday =
-      this._globalConfigService.tasks()?.isAutoAddWorkedOnToToday ?? true;
-    this.update(
-      id,
-      getMarkDoneTaskChanges(
-        task,
-        isAutoAddWorkedOnToToday,
-        this._dateService.todayStr(),
-      ),
-    );
+    this.update(id, { isDone: true });
   }
 
   markIssueUpdatesAsRead(id: string): void {

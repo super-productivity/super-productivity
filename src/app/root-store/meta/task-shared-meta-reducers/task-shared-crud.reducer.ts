@@ -683,7 +683,7 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
     ? updateTimeSpentForTask(taskId, timeSpentOnDay, taskState)
     : taskState;
   taskState = updateTimeEstimateForTask(cleanedTaskUpdate, timeEstimate, taskState);
-  taskState = updateDoneOnForTask(cleanedTaskUpdate, taskState, todayStr);
+  taskState = updateDoneOnForTask(cleanedTaskUpdate, taskState);
   taskState = taskAdapter.updateOne(
     {
       ...cleanedTaskUpdate,

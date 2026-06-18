@@ -10,6 +10,7 @@ import {
   unPauseFocusSession,
   cancelFocusSession,
 } from '../store/focus-mode.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import {
   EnvironmentInjector,
   runInInjectionContext,
@@ -51,7 +52,7 @@ describe('FocusModeBreakComponent', () => {
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(null);
     mockTaskService = jasmine.createSpyObj(
       'TaskService',
-      ['currentTaskId', 'setCurrentId', 'update', 'setDone'],
+      ['currentTaskId', 'setCurrentId', 'update'],
       { currentTask$: currentTaskSubject.asObservable() },
     );
     mockTaskService.currentTaskId.and.returnValue(mockCurrentTaskId);
@@ -195,7 +196,9 @@ describe('FocusModeBreakComponent', () => {
       component.finishCurrentTask();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(completeTask());
-      expect(mockTaskService.setDone).toHaveBeenCalledWith(mockTask.id);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: TaskSharedActions.updateTask.type }),
+      );
       expect(component.isTaskSelectorOpen()).toBe(true);
     });
 

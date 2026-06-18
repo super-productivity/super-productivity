@@ -16,6 +16,7 @@ import { FocusMainUIState, FocusModeMode } from '../focus-mode.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import * as actions from '../store/focus-mode.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { EffectsModule } from '@ngrx/effects';
 import { Component, EventEmitter, Output, signal, WritableSignal } from '@angular/core';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
@@ -75,7 +76,7 @@ describe('FocusModeMainComponent', () => {
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
     const taskServiceSpy = jasmine.createSpyObj(
       'TaskService',
-      ['currentTaskId', 'update', 'setDone'],
+      ['currentTaskId', 'update'],
       {
         currentTask$: currentTaskSubject.asObservable(),
       },
@@ -377,25 +378,44 @@ describe('FocusModeMainComponent', () => {
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(actions.completeTask());
       expect(mockStore.dispatch).toHaveBeenCalledWith(actions.selectFocusTask());
-      // Completion routes through TaskService.setDone so the auto-add-to-today
-      // setting is honored (discussion #8463), instead of dispatching updateTask
-      // directly.
-      expect(mockTaskService.setDone).toHaveBeenCalledWith(mockTask.id);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: {
+            id: mockTask.id,
+            changes: {
+              isDone: true,
+              doneOn: jasmine.any(Number) as any,
+            },
+          },
+        }),
+      );
     });
 
-    it('should mark the current task done via setDone', () => {
+    it('should set doneOn to current timestamp', () => {
       component.finishCurrentTask();
 
-      const actionTypes = (mockStore.dispatch as jasmine.Spy).calls
-        .all()
-        .map((c: any) => c.args[0].type);
+      const calls = (mockStore.dispatch as jasmine.Spy).calls.all();
+      const actionTypes = calls.map((c: any) => c.args[0].type);
 
-      // updateTask is no longer dispatched here; setDone owns the completion.
+      // Verify exact actions dispatched
       expect(actionTypes).toEqual([
         '[FocusMode] Complete Task',
+        '[Task Shared] updateTask',
         '[FocusMode] Select Task',
       ]);
-      expect(mockTaskService.setDone).toHaveBeenCalledWith(mockTask.id);
+
+      // Get all calls and verify the UpdateTask action details
+      const hasUpdateTaskAction = calls.some((call: any) => {
+        const action = call.args[0];
+        return (
+          action.task &&
+          action.task.id === mockTask.id &&
+          action.task.changes.isDone === true &&
+          typeof action.task.changes.doneOn === 'number'
+        );
+      });
+
+      expect(hasUpdateTaskAction).toBe(true);
     });
 
     it('should open task selector and NOT dispatch selectFocusTask when session is running', () => {
@@ -405,7 +425,17 @@ describe('FocusModeMainComponent', () => {
       expect(mockStore.dispatch).toHaveBeenCalledWith(actions.completeTask());
       expect(mockStore.dispatch).not.toHaveBeenCalledWith(actions.selectFocusTask());
       expect(component.isTaskSelectorOpen()).toBe(true);
-      expect(mockTaskService.setDone).toHaveBeenCalledWith(mockTask.id);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: {
+            id: mockTask.id,
+            changes: {
+              isDone: true,
+              doneOn: jasmine.any(Number) as any,
+            },
+          },
+        }),
+      );
     });
   });
 
@@ -869,7 +899,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
     const taskServiceSpy = jasmine.createSpyObj(
       'TaskService',
-      ['update', 'setCurrentId', 'setDone'],
+      ['update', 'setCurrentId'],
       {
         currentTask$: currentTaskSubject.asObservable(),
         currentTaskId: jasmine.createSpy().and.returnValue(null),
