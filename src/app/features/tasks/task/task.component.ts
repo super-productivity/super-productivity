@@ -27,7 +27,7 @@ import {
 import { MatDialog } from '@angular/material/dialog';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import {
-  expandFadeInOnlyAnimation,
+  expandFadeAnimation,
   expandInOnlyAnimation,
 } from '../../../ui/animations/expand.ani';
 import {
@@ -116,7 +116,7 @@ import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.s
   templateUrl: './task.component.html',
   styleUrls: ['./task.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [expandInOnlyAnimation, expandFadeInOnlyAnimation],
+  animations: [expandInOnlyAnimation, expandFadeAnimation],
   /* eslint-disable @typescript-eslint/naming-convention*/
   host: {
     '[id]': 'taskIdWithPrefix()',
