@@ -637,11 +637,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         }),
       );
       if (target === 'DONE') {
-        this._store.dispatch(
-          TaskSharedActions.updateTask({
-            task: { id: taskId, changes: { isDone: true } },
-          }),
-        );
+        this._taskService.setDone(taskId);
       }
     } else if (src === 'BACKLOG' && target === 'BACKLOG') {
       // move inside backlog

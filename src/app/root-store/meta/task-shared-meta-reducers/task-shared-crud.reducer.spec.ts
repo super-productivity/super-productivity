@@ -1547,6 +1547,26 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    // Regression (discussion #8463): when "automatically add worked-on tasks to
+    // today" is off, completion producers pass an explicit `dueDay: null` so the
+    // reducer skips the completion-day synthesis. Verify the suppression works
+    // instead of stamping today's date on an unscheduled task.
+    it('should NOT stamp the completion day when an explicit null dueDay is provided', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      const action = createUpdateTaskAction('task1', {
+        isDone: true,
+        dueDay: null,
+      });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
+      const updatedTask = resultState[TASK_FEATURE_NAME].entities['task1'] as Task;
+      expect(updatedTask.isDone).toBe(true);
+      expect(updatedTask.doneOn).toEqual(jasmine.any(Number));
+      expect(updatedTask.dueDay).not.toBe(getDbDateStr());
+      expect(updatedTask.dueDay).toBeFalsy();
+    });
+
     it('should add completed task to TODAY_TAG.taskIds', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
       (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = getDbDateStr();

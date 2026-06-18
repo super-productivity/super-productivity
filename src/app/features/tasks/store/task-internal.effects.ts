@@ -16,6 +16,7 @@ import {
   selectTasksConfig,
 } from '../../config/store/global-config.reducer';
 import { Task, TaskState } from '../task.model';
+import { getMarkDoneTaskChanges } from './get-mark-done-task-changes.util';
 import { EMPTY, of } from 'rxjs';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
@@ -46,7 +47,7 @@ export class TaskInternalEffects {
           !!task.changes.isDone &&
           !!state.entities[task.id as string]?.parentId,
       ),
-      filter(([action, miscCfg, state]) => {
+      filter(([action, , state]) => {
         const task = state.entities[action.task.id];
         if (!task || !task.parentId) {
           return false;
@@ -57,14 +58,19 @@ export class TaskInternalEffects {
         );
         return undoneSubTasks.length === 0;
       }),
-      map(([action, miscCfg, state]) =>
-        TaskSharedActions.updateTask({
+      map(([action, tasksCfg, state]) => {
+        const parentId = (state.entities[action.task.id] as Task).parentId as string;
+        const parent = state.entities[parentId] as Task;
+        return TaskSharedActions.updateTask({
           task: {
-            id: (state.entities[action.task.id] as Task).parentId as string,
-            changes: { isDone: true },
+            id: parentId,
+            changes: getMarkDoneTaskChanges(
+              parent,
+              tasksCfg?.isAutoAddWorkedOnToToday ?? true,
+            ),
           },
-        }),
-      ),
+        });
+      }),
     ),
   );
 

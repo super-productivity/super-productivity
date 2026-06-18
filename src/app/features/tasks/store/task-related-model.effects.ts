@@ -1,16 +1,16 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { filter, map, mergeMap, switchMap, withLatestFrom } from 'rxjs/operators';
-import { Task } from '../task.model';
+import { filter, map, switchMap, withLatestFrom } from 'rxjs/operators';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { TaskService } from '../task.service';
 import { EMPTY, Observable } from 'rxjs';
 import { moveProjectTaskToRegularList } from '../../project/store/project.actions';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 import { Store } from '@ngrx/store';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { selectTaskEntities } from './task.selectors';
+import { getMarkDoneTaskChanges } from './get-mark-done-task-changes.util';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DateService } from '../../../core/date/date.service';
@@ -18,7 +18,6 @@ import { DateService } from '../../../core/date/date.service';
 @Injectable()
 export class TaskRelatedModelEffects {
   private _actions$ = inject(LOCAL_ACTIONS);
-  private _taskService = inject(TaskService);
   private _globalConfigService = inject(GlobalConfigService);
   private _store = inject(Store);
   private _hydrationState = inject(HydrationStateService);
@@ -57,36 +56,12 @@ export class TaskRelatedModelEffects {
     ),
   );
 
-  autoAddTodayTagOnMarkAsDone = createEffect(() =>
-    this.ifAutoAddTodayEnabled$(
-      this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter((a) => a.task.changes.isDone === true),
-        // PERF: Skip during hydration/sync to avoid service calls
-        filter(() => !this._hydrationState.isApplyingRemoteOps()),
-        // Use mergeMap instead of switchMap to ensure ALL mark-as-done actions
-        // trigger planTasksForToday, not just the last one. switchMap would cancel
-        // previous inner subscriptions when new actions arrive quickly.
-        mergeMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
-        // Only auto-plan unscheduled tasks. Completion records doneOn, but must not
-        // rewrite an existing dueDay/dueWithTime schedule.
-        filter(
-          (task: Task) =>
-            !!task &&
-            !task.parentId &&
-            !task.dueDay &&
-            typeof task.dueWithTime !== 'number',
-        ),
-        map((task) =>
-          TaskSharedActions.planTasksForToday({
-            taskIds: [task.id],
-            today: this._dateService.todayStr(),
-            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-          }),
-        ),
-      ),
-    ),
-  );
+  // NOTE: Completion-dating gating lives in `getMarkDoneTaskChanges`, applied by
+  // every "mark as done" producer (TaskService.setDone + the effects below). The
+  // reducer (`updateDoneOnForTask`) stamps the completion day; producers pass an
+  // explicit `dueDay: null` to suppress it when the user disabled auto-add. There
+  // is intentionally no effect here re-deriving the gate from synced config —
+  // that would diverge on replay (ops apply in causal arrival order).
 
   // EXTERNAL ===> TASKS
   // -------------------
@@ -116,16 +91,21 @@ export class TaskRelatedModelEffects {
       filter(
         ({ src, target }) => (src === 'UNDONE' || src === 'BACKLOG') && target === 'DONE',
       ),
-      map(({ taskId }) =>
-        TaskSharedActions.updateTask({
+      withLatestFrom(
+        this._store.select(selectTaskEntities),
+        this._globalConfigService.tasks$,
+      ),
+      map(([{ taskId }, taskEntities, tasksCfg]) => {
+        const task = taskEntities[taskId];
+        return TaskSharedActions.updateTask({
           task: {
             id: taskId,
-            changes: {
-              isDone: true,
-            },
+            changes: task
+              ? getMarkDoneTaskChanges(task, tasksCfg.isAutoAddWorkedOnToToday)
+              : { isDone: true },
           },
-        }),
-      ),
+        });
+      }),
     ),
   );
 
