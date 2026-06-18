@@ -12,6 +12,7 @@ import {
   input,
   OnDestroy,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
@@ -338,7 +339,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   private readonly _addSubtaskInputRequestEffect = effect(() => {
     const request = this._addSubtaskInputService.openRequest();
-    const task = this.task();
+    const task = untracked(() => this.task());
     if (!request || request.parentId !== task.id) {
       return;
     }
