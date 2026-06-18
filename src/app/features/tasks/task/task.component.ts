@@ -26,7 +26,10 @@ import {
 } from '../task.model';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
-import { expandInOnlyAnimation } from '../../../ui/animations/expand.ani';
+import {
+  expandFadeInOnlyAnimation,
+  expandInOnlyAnimation,
+} from '../../../ui/animations/expand.ani';
 import {
   ChecklistProgress,
   getChecklistProgress,
@@ -113,7 +116,7 @@ import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.s
   templateUrl: './task.component.html',
   styleUrls: ['./task.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [expandInOnlyAnimation],
+  animations: [expandInOnlyAnimation, expandFadeInOnlyAnimation],
   /* eslint-disable @typescript-eslint/naming-convention*/
   host: {
     '[id]': 'taskIdWithPrefix()',

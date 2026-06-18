@@ -311,6 +311,7 @@
         }
         @if (isAddSubtaskInputVisible()) {
           <add-subtask-input
+            [@expandFadeInOnly]
             [parentId]="t.id"
             (closed)="isAddSubtaskInputVisible.set(false)"
           ></add-subtask-input>
