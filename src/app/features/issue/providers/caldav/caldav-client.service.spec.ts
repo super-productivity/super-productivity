@@ -93,6 +93,61 @@ const makeIssue = (id: string): CaldavIssue => ({
   etag_hash: 1,
 });
 
+interface TestCalendarLike {
+  displayname?: string;
+  url: string;
+  calendarQuery: jasmine.Spy;
+}
+
+interface TestCalendarHomeLike {
+  displayname?: string;
+  url: string;
+  findAllCalendars: jasmine.Spy<() => Promise<TestCalendarLike[]>>;
+}
+
+interface TestClientCacheLike {
+  client: { calendarHomes: TestCalendarHomeLike[] };
+  calendars: Map<string, TestCalendarLike>;
+}
+
+interface TestGetClientTarget {
+  _get_client: (cfg: CaldavCfg) => Promise<TestClientCacheLike>;
+}
+
+interface TestGetCalendarTarget {
+  _getCalendar: (cfg: CaldavCfg) => Promise<TestCalendarLike>;
+}
+
+const makeCalendar = (
+  url: string,
+  displayname?: string,
+  canQuery = true,
+): TestCalendarLike => ({
+  url,
+  displayname,
+  calendarQuery: jasmine.createSpy('calendarQuery').and.resolveTo(canQuery ? [] : null),
+});
+
+const makeCalendarHome = (
+  url: string,
+  calendars: TestCalendarLike[],
+  displayname?: string,
+): TestCalendarHomeLike => ({
+  url,
+  displayname,
+  findAllCalendars: jasmine.createSpy('findAllCalendars').and.resolveTo(calendars),
+});
+
+const makeFailingCalendarHome = (
+  url: string,
+  error: Error,
+  displayname?: string,
+): TestCalendarHomeLike => ({
+  url,
+  displayname,
+  findAllCalendars: jasmine.createSpy('findAllCalendars').and.rejectWith(error),
+});
+
 /** Subclass that makes platform detection and native HTTP injectable for tests. */
 class TestableCaldavClientService extends CaldavClientService {
   private _isNativePlatformValue = false;
@@ -202,6 +257,184 @@ describe('CaldavClientService.getByIds$', () => {
     const result = await firstValueFrom(svc.getByIds$(['task-10', 'other'], MOCK_CFG));
 
     expect(result.map((issue) => issue.id)).toEqual(['task-10', 'other']);
+  });
+});
+
+describe('CaldavClientService._getCalendar', () => {
+  let svc: TestableCaldavClientService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CaldavClientService, useClass: TestableCaldavClientService },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+      ],
+    });
+    svc = TestBed.inject(CaldavClientService) as TestableCaldavClientService;
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('finds a calendar from later calendar homes when the first home has no match', async () => {
+    const laterCalendar = makeCalendar('/dav/projects/12/', 'Inbox');
+    const firstHome = makeCalendarHome('/dav/calendars/', [
+      makeCalendar('/dav/calendars/archive/', 'Archive'),
+    ]);
+    const secondHome = makeCalendarHome('/dav/projects/', [laterCalendar]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [firstHome, secondHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    const calendar = await (svc as unknown as TestGetCalendarTarget)._getCalendar({
+      ...MOCK_CFG,
+      resourceName: 'Inbox',
+    });
+
+    expect(calendar).toBe(laterCalendar);
+    expect(firstHome.findAllCalendars).toHaveBeenCalledTimes(1);
+    expect(secondHome.findAllCalendars).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves displayname precedence over matching URL segments', async () => {
+    const urlSegmentMatch = makeCalendar('/dav/projects/Personal/', 'Work');
+    const displayNameMatch = makeCalendar('/dav/projects/b123/', 'Personal');
+    const projectsHome = makeCalendarHome('/dav/projects/', [
+      urlSegmentMatch,
+      displayNameMatch,
+    ]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [projectsHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    const calendar = await (svc as unknown as TestGetCalendarTarget)._getCalendar({
+      ...MOCK_CFG,
+      resourceName: 'Personal',
+    });
+
+    expect(calendar).toBe(displayNameMatch);
+  });
+
+  it('does not select the Vikunja projects home when resourceName matches the home', async () => {
+    const projectsHomeCollection = makeCalendar('/dav/projects/', 'projects', false);
+    const projectsHome = makeCalendarHome('/dav/projects/', [projectsHomeCollection]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [projectsHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    await expectAsync(
+      (svc as unknown as TestGetCalendarTarget)._getCalendar({
+        ...MOCK_CFG,
+        caldavUrl: 'http://192.168.0.5:3456/dav/principals/loki/',
+        resourceName: 'projects',
+        username: 'loki',
+      }),
+    ).toBeRejectedWithError('CALENDAR NOT FOUND: projects');
+  });
+
+  it('does not silently map a home resource to the only concrete project', async () => {
+    const inboxProject = makeCalendar('/dav/projects/12/', 'Inbox');
+    const projectsHome = makeCalendarHome('/dav/projects/', [inboxProject]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [projectsHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    await expectAsync(
+      (svc as unknown as TestGetCalendarTarget)._getCalendar({
+        ...MOCK_CFG,
+        caldavUrl: 'http://192.168.0.5:3456/dav/principals/loki/',
+        resourceName: 'projects',
+        username: 'loki',
+      }),
+    ).toBeRejectedWithError('CALENDAR NOT FOUND: projects');
+  });
+
+  it('selects a concrete Vikunja project by display name while skipping the home collection', async () => {
+    const projectsHomeCollection = makeCalendar('/dav/projects/', 'projects', false);
+    const inboxProject = makeCalendar('/dav/projects/12/', 'Inbox');
+    const projectsHome = makeCalendarHome('/dav/projects/', [
+      projectsHomeCollection,
+      inboxProject,
+    ]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [projectsHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    const calendar = await (svc as unknown as TestGetCalendarTarget)._getCalendar({
+      ...MOCK_CFG,
+      caldavUrl: 'http://192.168.0.5:3456/dav/principals/loki/',
+      resourceName: 'Inbox',
+      username: 'loki',
+    });
+
+    expect(calendar).toBe(inboxProject);
+  });
+
+  it('selects a concrete Vikunja project by final URL segment while skipping the home collection', async () => {
+    const projectsHomeCollection = makeCalendar('/dav/projects/', 'projects', false);
+    const inboxProject = makeCalendar('/dav/projects/12/', 'Inbox');
+    const projectsHome = makeCalendarHome('/dav/projects/', [
+      projectsHomeCollection,
+      inboxProject,
+    ]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [projectsHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    const calendar = await (svc as unknown as TestGetCalendarTarget)._getCalendar({
+      ...MOCK_CFG,
+      caldavUrl: 'http://192.168.0.5:3456/dav/principals/loki/',
+      resourceName: '12',
+      username: 'loki',
+    });
+
+    expect(calendar).toBe(inboxProject);
+  });
+
+  it('continues to later calendar homes when an earlier home fails', async () => {
+    const firstHome = makeFailingCalendarHome(
+      '/dav/broken/',
+      new Error('temporary failure'),
+    );
+    const secondHomeCalendar = makeCalendar('/dav/projects/12/', 'Inbox');
+    const secondHome = makeCalendarHome('/dav/projects/', [secondHomeCalendar]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [firstHome, secondHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    const calendar = await (svc as unknown as TestGetCalendarTarget)._getCalendar({
+      ...MOCK_CFG,
+      resourceName: 'Inbox',
+    });
+
+    expect(calendar).toBe(secondHomeCalendar);
+    expect(firstHome.findAllCalendars).toHaveBeenCalledTimes(1);
+    expect(secondHome.findAllCalendars).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a network error when all calendar homes fail', async () => {
+    const firstHome = makeFailingCalendarHome('/dav/broken-1/', new Error('failure 1'));
+    const secondHome = makeFailingCalendarHome('/dav/broken-2/', new Error('failure 2'));
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [firstHome, secondHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    await expectAsync(
+      (svc as unknown as TestGetCalendarTarget)._getCalendar({
+        ...MOCK_CFG,
+        resourceName: 'Inbox',
+      }),
+    ).toBeRejectedWithError(/CALDAV NETWORK ERROR/);
   });
 });
 
