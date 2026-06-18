@@ -1,4 +1,5 @@
 import {
+  booleanAttribute,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
@@ -16,27 +17,46 @@ import {
 })
 export class ProgressBarComponent {
   private _elRef = inject(ElementRef);
+  private _progress: number = 0;
+  private _isAlwaysVisible: boolean = false;
 
   // TODO: Skipped for migration because:
   //  This input is used in combination with `@HostBinding` and migrating would
   //  break.
   @HostBinding('class') @Input() cssClass: string = 'bg-primary';
 
+  @HostBinding('class.isAlwaysVisible') get isAlwaysVisibleClass(): boolean {
+    return this._isAlwaysVisible;
+  }
+
+  @Input({ transform: booleanAttribute }) set isAlwaysVisible(value: boolean) {
+    this._isAlwaysVisible = value;
+    this._updateProgress();
+  }
+
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input() set progress(_value: number) {
-    let val;
-    if (_value > 100) {
-      val = 100;
-    } else {
-      val = _value;
-    }
+    this._progress = _value;
+    this._updateProgress();
+  }
 
+  private _updateProgress(): void {
+    const val = Number.isFinite(this._progress)
+      ? Math.min(Math.max(this._progress, 0), 100)
+      : 0;
+    const style = this._elRef.nativeElement.style;
+    if (this._isAlwaysVisible) {
+      style.visibility = 'visible';
+      style.width = '100%';
+      style.setProperty('--progress-bar-value', `${val}%`);
+      return;
+    }
     if (val > 1) {
-      this._elRef.nativeElement.style.visibility = 'visible';
-      this._elRef.nativeElement.style.width = `${val}%`;
+      style.visibility = 'visible';
+      style.width = `${val}%`;
     } else {
-      this._elRef.nativeElement.style.visibility = 'hidden';
+      style.visibility = 'hidden';
     }
   }
 }
