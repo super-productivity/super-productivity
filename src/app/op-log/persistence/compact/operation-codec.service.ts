@@ -1,13 +1,13 @@
+import { CompactOperation, CompactOperationLogEntry } from './compact-operation.types';
+import { encodeActionType, decodeActionType } from './action-type-codes';
 import {
+  ActionType,
+  EntityType,
   Operation,
   OperationLogEntry,
   OpType,
-  EntityType,
-  ActionType,
   SyncImportReason,
-} from '../../../../op-log/core/operation.types';
-import { CompactOperation, CompactOperationLogEntry } from './compact-operation.types';
-import { encodeActionType, decodeActionType } from './action-type-codes';
+} from '../../core/operation.types';
 
 /**
  * Encodes an Operation to CompactOperation format.

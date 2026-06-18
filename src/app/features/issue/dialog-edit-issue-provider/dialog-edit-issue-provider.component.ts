@@ -62,7 +62,7 @@ import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
-import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
+// Trello is now a plugin — board selection is a dynamic `loadOptions` select field
 // ClickUp is now a plugin — no built-in config component needed
 import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
 import { TaskService } from '../../tasks/task.service';
@@ -92,7 +92,6 @@ import { unique } from '../../../util/unique';
     MatButton,
     MatIcon,
     MatDialogTitle,
-    TrelloAdditionalCfgComponent, // added for custom trello board loading support
     NextcloudDeckAdditionalCfgComponent,
     ChipListInputComponent,
   ],

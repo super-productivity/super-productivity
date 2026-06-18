@@ -14,9 +14,9 @@ import { uuidv7 } from '../../util/uuid-v7';
 import {
   compareVectorClocks,
   incrementVectorClock,
+  limitVectorClockSize,
   VectorClockComparison,
 } from '../../core/util/vector-clock';
-import { limitVectorClockSize, MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
 import { OpLogDbAdapter } from './op-log-db-adapter';
@@ -26,6 +26,7 @@ import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
+  MAX_VECTOR_CLOCK_SIZE,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { FULL_STATE_OPS_META_KEY, SINGLETON_KEY, STORE_NAMES } from './db-keys.const';
@@ -2913,7 +2914,7 @@ describe('OperationLogStoreService', () => {
       const newOpClock = incrementVectorClock(storedClock, 'localClient');
 
       // Simulate server-side pruning (server prunes to MAX_VECTOR_CLOCK_SIZE)
-      const prunedClock = limitVectorClockSize(newOpClock, ['localClient']);
+      const prunedClock = limitVectorClockSize(newOpClock, 'localClient');
 
       // importClient must survive pruning
       expect(prunedClock['importClient']).toBe(1);

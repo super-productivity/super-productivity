@@ -11,7 +11,7 @@ import { CALDAV_ISSUE_CONTENT_CONFIG } from '../providers/caldav/caldav-issue-co
 // Gitea is now a plugin — content config lives in the plugin's issueDisplay
 import { REDMINE_ISSUE_CONTENT_CONFIG } from '../providers/redmine/redmine-issue-content.const';
 import { OPEN_PROJECT_ISSUE_CONTENT_CONFIG } from '../providers/open-project/open-project-issue-content.const';
-import { TRELLO_ISSUE_CONTENT_CONFIG } from '../providers/trello/trello-issue-content.const';
+// Trello is now a plugin — content config lives in the plugin's issueDisplay
 // Linear is now a plugin — content config lives in the plugin's issueDisplay
 import { AZURE_DEVOPS_ISSUE_CONTENT_CONFIG } from '../providers/azure-devops/azure-devops-issue/azure-devops-issue-content.const';
 import { NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG } from '../providers/nextcloud-deck/nextcloud-deck-issue-content.const';
@@ -29,7 +29,6 @@ export const ISSUE_CONTENT_CONFIGS: Record<
   CALDAV: CALDAV_ISSUE_CONTENT_CONFIG,
   REDMINE: REDMINE_ISSUE_CONTENT_CONFIG,
   OPEN_PROJECT: OPEN_PROJECT_ISSUE_CONTENT_CONFIG,
-  TRELLO: TRELLO_ISSUE_CONTENT_CONFIG,
   AZURE_DEVOPS: AZURE_DEVOPS_ISSUE_CONTENT_CONFIG,
   NEXTCLOUD_DECK: NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG,
   PLAINSPACE: PLAINSPACE_ISSUE_CONTENT_CONFIG,

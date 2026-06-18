@@ -589,6 +589,10 @@ const handleRestoreDeletedTask = (
   return updatedState;
 };
 
+// Legacy-op replay defense: current clients never emit a synthetic completion
+// `dueDay` (completion records only `doneOn`), but ops captured by OLDER clients
+// can carry `{ isDone: true, dueDay: <completionDay> }`. This strips that synthetic
+// day so replaying such an op can't overwrite an existing schedule.
 const sanitizeDoneScheduleChanges = (
   taskUpdate: Update<Task>,
   currentTask: Task,
@@ -683,7 +687,7 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
     ? updateTimeSpentForTask(taskId, timeSpentOnDay, taskState)
     : taskState;
   taskState = updateTimeEstimateForTask(cleanedTaskUpdate, timeEstimate, taskState);
-  taskState = updateDoneOnForTask(cleanedTaskUpdate, taskState, todayStr);
+  taskState = updateDoneOnForTask(cleanedTaskUpdate, taskState);
   taskState = taskAdapter.updateOne(
     {
       ...cleanedTaskUpdate,

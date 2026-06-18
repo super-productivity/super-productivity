@@ -233,14 +233,6 @@
           ></open-project-additional-cfg>
           <!-- -->
         }
-        @case ('TRELLO') {
-          <trello-additional-cfg
-            [section]="configFormSection"
-            [cfg]="model"
-            (modelChange)="customCfgCmpSave($event)"
-          ></trello-additional-cfg>
-          <!-- -->
-        }
         @case ('NEXTCLOUD_DECK') {
           <nextcloud-deck-additional-cfg
             [section]="configFormSection"

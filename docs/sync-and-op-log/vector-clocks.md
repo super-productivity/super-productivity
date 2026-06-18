@@ -26,7 +26,7 @@ At 6-char client IDs, a 20-entry clock is ~333 bytes — negligible bandwidth. A
 
 ## 2. Core Operations
 
-Three operations — compare, merge, and prune (`limitVectorClockSize`) — are implemented in the generic sync-core package (`packages/sync-core/src/vector-clock.ts`), used by both client and server. `packages/shared-schema/src/vector-clock.ts` re-exports those algorithms for existing shared-schema import paths. Two operations — initialize and increment — are client-only (`src/app/core/util/vector-clock.ts`), which also wraps the shared operations with null-handling and logging.
+Three operations — compare, merge, and prune (`limitVectorClockSize`) — are implemented in the generic sync-core package (`packages/sync-core/src/vector-clock.ts`), used by both client and server. Two operations — initialize and increment — are client-only (`src/app/core/util/vector-clock.ts`), which also wraps the shared operations with null-handling and logging.
 
 ### Create
 
@@ -142,7 +142,7 @@ Otherwise:
   3. Return clock with exactly MAX entries
 ```
 
-Implemented in `packages/sync-core/src/vector-clock.ts` and re-exported from `packages/shared-schema/src/vector-clock.ts`. The client wrapper in `src/app/core/util/vector-clock.ts` adds logging and passes `[currentClientId]` as the preserve list.
+Implemented in `packages/sync-core/src/vector-clock.ts`. The client wrapper in `src/app/core/util/vector-clock.ts` adds logging and passes `[currentClientId]` as the preserve list.
 
 ### When Pruning Happens (Exhaustive List)
 
@@ -345,7 +345,7 @@ Rules that must hold for the system to be correct. Use these to verify implement
 
 3. **Client does NOT prune during conflict resolution.** `SupersededOperationResolverService` sends full merged clocks; the server prunes after accepting.
 
-4. **`compareVectorClocks` produces identical results on client and server.** Both import from `@sp/shared-schema`. The client wrapper only adds null handling.
+4. **`compareVectorClocks` produces identical results on client and server.** Both import from `@sp/sync-core`. The client wrapper only adds null handling.
 
 5. **Full-state ops skip conflict detection on server.** `detectConflict()` returns `{ hasConflict: false }` for SYNC_IMPORT, BACKUP_IMPORT, and REPAIR.
 
@@ -362,7 +362,7 @@ Rules that must hold for the system to be correct. Use these to verify implement
 | Concept                                                     | File(s)                                                                      |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | Core algorithms (compare, merge, prune)                     | `packages/sync-core/src/vector-clock.ts`                                     |
-| Compatibility re-export for existing shared-schema imports  | `packages/shared-schema/src/vector-clock.ts`                                 |
+| Compatibility re-export for existing shared-schema imports  | (removed — imports now target `@sp/sync-core` directly)                      |
 | Client wrappers (null handling, logging, validation)        | `src/app/core/util/vector-clock.ts`                                          |
 | Global clock management, entity frontier                    | `src/app/op-log/sync/vector-clock.service.ts`                                |
 | Operation capture (no pruning, atomic clock update)         | `src/app/op-log/capture/operation-log.effects.ts`                            |

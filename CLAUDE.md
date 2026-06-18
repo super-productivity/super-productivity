@@ -40,6 +40,7 @@ For SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/CLAUDE.
 - **Strict TypeScript:** no `any` (use `unknown` if truly unknown).
 - **State:** never mutate NgRx state — return new objects in reducers. Prefer Signals to Observables.
 - **Tests:** add unit tests for new services and state logic.
+- **Code review:** when reviewing new features, always double-check the potential long-term costs and risks a change introduces — maintenance burden, hard-to-reverse choices (data shapes, public/plugin APIs, sync formats), locked-in dependencies/abstractions, and footguns that only surface at scale or across synced clients — not just whether the immediate diff is correct.
 - **Task component is a hot path:** every change to `src/app/features/tasks/task/task.component.*` (rendered once per task in long, scrollable lists) must be double-checked for negative performance impact — avoid function/getter calls in the template, extra change-detection work, and uncleaned subscriptions; verify against a large task list.
 
 ## Sync-correctness rules

@@ -9,8 +9,10 @@ import {
 import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
+import { MAX_VECTOR_CLOCK_SIZE } from '@sp/sync-core';
 
 // Meaningful state (contains a task) so saveCurrentStateAsSnapshot proceeds past
 // the empty-state guard (#7892). Tests that care only about clock pruning /
@@ -28,6 +30,7 @@ describe('OperationLogSnapshotService', () => {
   let mockSchemaMigrationService: jasmine.SpyObj<SchemaMigrationService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
   let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
+  let mockLockService: jasmine.SpyObj<LockService>;
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -55,6 +58,11 @@ describe('OperationLogSnapshotService', () => {
       isValid: true,
       typiaErrors: [],
     });
+    mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    // Default: execute the callback inline (mirrors real Web Locks behavior in Chrome)
+    mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
+      fn(),
+    );
 
     TestBed.configureTestingModule({
       providers: [
@@ -65,6 +73,7 @@ describe('OperationLogSnapshotService', () => {
         { provide: SchemaMigrationService, useValue: mockSchemaMigrationService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
         { provide: ValidateStateService, useValue: mockValidateStateService },
+        { provide: LockService, useValue: mockLockService },
       ],
     });
     service = TestBed.inject(OperationLogSnapshotService);
@@ -315,6 +324,72 @@ describe('OperationLogSnapshotService', () => {
       const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
       expect(savedCache.compactedAt).toBeGreaterThanOrEqual(beforeTime);
       expect(savedCache.compactedAt).toBeLessThanOrEqual(afterTime);
+    });
+  });
+
+  describe('saveCurrentStateAsSnapshot — lock regression', () => {
+    it('should acquire OPERATION_LOG lock before saving (#8308)', async () => {
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      expect(mockLockService.request).toHaveBeenCalledWith(
+        LOCK_NAMES.OPERATION_LOG,
+        jasmine.any(Function),
+      );
+    });
+
+    it('should read lastSeq BEFORE getStateSnapshot inside the lock', async () => {
+      const callOrder: string[] = [];
+
+      mockLockService.request.and.callFake(
+        async <T>(_name: string, fn: () => Promise<T>) => {
+          callOrder.push('lock-start');
+          const r = await fn();
+          callOrder.push('lock-end');
+          return r;
+        },
+      );
+
+      mockOpLogStore.getLastSeq.and.callFake(async () => {
+        callOrder.push('getLastSeq');
+        return 1;
+      });
+
+      mockStateSnapshotService.getStateSnapshot.and.callFake((() => {
+        callOrder.push('getStateSnapshot');
+        return MEANINGFUL_SNAPSHOT_STATE;
+      }) as any);
+
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      // All operations should happen between lock-start and lock-end
+      const lockStartIndex = callOrder.indexOf('lock-start');
+      const lockEndIndex = callOrder.indexOf('lock-end');
+      expect(callOrder.indexOf('getLastSeq')).toBeGreaterThan(lockStartIndex);
+      expect(callOrder.indexOf('getLastSeq')).toBeLessThan(lockEndIndex);
+      expect(callOrder.indexOf('getStateSnapshot')).toBeGreaterThan(lockStartIndex);
+      expect(callOrder.indexOf('getStateSnapshot')).toBeLessThan(lockEndIndex);
+
+      // Key invariant: lastSeq is read BEFORE state snapshot
+      expect(callOrder.indexOf('getLastSeq')).toBeLessThan(
+        callOrder.indexOf('getStateSnapshot'),
+      );
+    });
+
+    it('should catch lock errors without throwing (hydration must not fail)', async () => {
+      mockLockService.request.and.rejectWith(new Error('Lock timeout'));
+
+      // Should not throw — errors are caught internally
+      await expectAsync(service.saveCurrentStateAsSnapshot()).toBeResolved();
     });
   });
 

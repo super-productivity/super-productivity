@@ -23,7 +23,6 @@ import {
   DEFAULT_ISSUE_STRS,
   JIRA_TYPE,
   OPEN_PROJECT_TYPE,
-  TRELLO_TYPE,
   REDMINE_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
@@ -33,7 +32,7 @@ import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { IssueServiceInterface } from './issue-service-interface';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { TrelloCommonInterfacesService } from './providers/trello/trello-common-interfaces.service';
+// Trello is now a plugin — no built-in service needed
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { IssueLog } from '../../core/log';
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
@@ -75,7 +74,6 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 export class IssueService {
   private _taskService = inject(TaskService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
-  private _trelloCommonInterfacesService = inject(TrelloCommonInterfacesService);
   private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
@@ -108,9 +106,6 @@ export class IssueService {
     [AZURE_DEVOPS_TYPE]: this._azureDevOpsCommonInterfaceService,
     [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
     [PLAINSPACE_TYPE]: this._plainspaceCommonInterfaceService,
-
-    // trello
-    [TRELLO_TYPE]: this._trelloCommonInterfacesService,
   };
 
   ISSUE_REFRESH_MAP: {
@@ -663,7 +658,7 @@ export class IssueService {
         const subTaskData = this._getAddTaskData(issueProviderKey, subtask);
         const { title: subTaskTitle, ...subTaskAdditional } = subTaskData;
 
-        await this._taskService.addSubTaskTo(parentTaskId, {
+        this._taskService.addSubTaskTo(parentTaskId, {
           title: subTaskTitle,
           issueType: issueProviderKey,
           issueProviderId: issueProviderId,
@@ -712,7 +707,7 @@ export class IssueService {
     // sub-task (has a parentId), attach to its root parent so the new task
     // becomes a sibling of the parent rather than a grandchild.
     const effectiveParentId = parentTask.task.parentId || parentTask.task.id;
-    const taskId = await this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
+    const taskId = this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
     return { taskId, parentTaskId: effectiveParentId };
   }
 

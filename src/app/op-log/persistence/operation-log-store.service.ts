@@ -12,12 +12,6 @@ import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import {
-  encodeOperation,
-  decodeOperation,
-  isCompactOperation,
-} from '../../core/persistence/operation-log/compact/operation-codec.service';
-import { CompactOperation } from '../../core/persistence/operation-log/compact/compact-operation.types';
-import {
   DB_NAME,
   DB_VERSION,
   STORE_NAMES,
@@ -50,6 +44,12 @@ import {
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { CompactOperation } from './compact/compact-operation.types';
+import {
+  isCompactOperation,
+  decodeOperation,
+  encodeOperation,
+} from './compact/operation-codec.service';
 
 /**
  * Vector clock entry stored in the vector_clock object store.

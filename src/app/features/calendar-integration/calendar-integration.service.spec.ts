@@ -1178,6 +1178,28 @@ END:VCALENDAR`;
       // prior behaviour via `throw new Error(err)`) would fail this check.
       expect(caughtError).toBeInstanceOf(NotIcalResponseError);
     }));
+
+    it('should not leak the tokenized iCal URL in the error snack', fakeAsync(() => {
+      const mockProvider = createMockProvider({
+        icalUrl: 'https://calendar.google.com/calendar/ical/SECRET_TOKEN/basic.ics',
+      });
+      mockSnackService.open.calls.reset();
+
+      const sub = service.requestEvents$(mockProvider).subscribe();
+      subscriptions.push(sub);
+
+      const req = httpMock.expectOne(mockProvider.icalUrl);
+      req.flush('nope', { status: 401, statusText: 'Unauthorized' });
+
+      flush();
+      const snackArg = mockSnackService.open.calls.mostRecent().args[0] as {
+        msg: string;
+        translateParams?: { errTxt?: string };
+      };
+      expect(snackArg.msg).toBe('F.CALENDARS.S.CAL_PROVIDER_ERROR');
+      expect(snackArg.translateParams?.errTxt).not.toContain('SECRET_TOKEN');
+      expect(JSON.stringify(snackArg)).not.toContain('SECRET_TOKEN');
+    }));
   });
 
   describe('_getCombinedRefreshInterval', () => {

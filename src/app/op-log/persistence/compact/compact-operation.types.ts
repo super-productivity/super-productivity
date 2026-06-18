@@ -1,4 +1,4 @@
-import { VectorClock } from '../../../util/vector-clock';
+import { VectorClock } from 'src/app/core/util/vector-clock';
 
 /**
  * Compact operation format for storage and network transfer.

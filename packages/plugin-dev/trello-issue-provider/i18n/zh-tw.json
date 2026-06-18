@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "API_KEY": "Trello API key",
+    "API_KEY_DESC": "Insert the Trello API key here.",
+    "TOKEN": "Trello API token",
+    "TOKEN_DESC": "Insert the Trello API token here.",
+    "BOARD": "Trello board",
+    "BOARD_DESC": "Select the board to search and import cards from. Enter your API key and token first, then the list loads.",
+    "FILTER_USERNAME": "Filter by Trello username",
+    "FILTER_USERNAME_DESC": "If provided, only imports cards assigned to this Trello username.",
+    "HOW_TO_GET_TOKEN": "如何取得權杖？"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "STATUS": "狀態",
+    "DUE_DATE": "截止日期",
+    "LABELS": "標籤",
+    "ASSIGNEE": "指派人",
+    "ATTACHMENTS": "附件",
+    "DESCRIPTION": "描述"
+  },
+  "FORM_HELP": "<p>Configure Super Productivity to list and import cards from a Trello board in the task creation panel. Generate an API key and token at <a href=\"https://trello.com/power-ups/admin\">trello.com/power-ups/admin</a>, then load and select your board. See the <a href=\"https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/\">Trello REST API docs</a> for details.</p>"
+}

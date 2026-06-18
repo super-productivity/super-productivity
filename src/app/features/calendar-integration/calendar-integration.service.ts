@@ -62,6 +62,7 @@ import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { passesCalendarEventRegexFilter } from './calendar-event-regex-filter';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
+import { sanitizeIcalUrlForDisplay } from '../issue/mapping-helper/get-issue-provider-tooltip';
 import { isCalendarProviderDisabledOnCurrentPlatform } from '../issue/providers/calendar/is-calendar-provider-disabled-on-current-platform.util';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
@@ -447,18 +448,35 @@ export class CalendarIntegrationService {
           })),
         ),
         catchError((err) => {
-          Log.err(err);
+          // iCal feed URLs frequently embed a secret token (Google/Outlook
+          // private feeds). HttpErrorResponse puts the full URL in `.url` and
+          // `.message`, and the log history is exportable — so log only the
+          // sanitized host plus the error name/status, never the raw error.
+          Log.err('CAL_PROVIDER_REQUEST_ERROR', {
+            icalHost: sanitizeIcalUrlForDisplay(calProvider.icalUrl),
+            name: (err as Error)?.name,
+            status: (err as { status?: number })?.status,
+          });
           if (err instanceof NotIcalResponseError) {
             this._snackService.open({
               type: 'ERROR',
               msg: T.F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL,
             });
           } else {
+            // Replace the raw iCal URL (which may embed a secret token) with
+            // the sanitized host so the user-visible snackbar can't leak it
+            // via screenshot/screenshare.
+            const rawErrTxt = getErrorTxt(err);
+            const errTxt = calProvider.icalUrl
+              ? rawErrTxt
+                  .split(calProvider.icalUrl)
+                  .join(sanitizeIcalUrlForDisplay(calProvider.icalUrl))
+              : rawErrTxt;
             this._snackService.open({
               type: 'ERROR',
               msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
               translateParams: {
-                errTxt: getErrorTxt(err),
+                errTxt,
               },
             });
           }

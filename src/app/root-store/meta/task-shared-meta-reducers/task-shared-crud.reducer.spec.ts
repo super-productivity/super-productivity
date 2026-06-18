@@ -1530,7 +1530,7 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
-    it('should handle isDone updates and set doneOn timestamp and completion dueDay for unscheduled tasks', () => {
+    it('sets doneOn but no dueDay when completing an unscheduled task', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
       const action = createUpdateTaskAction('task1', {
         isDone: true,
@@ -1541,10 +1541,13 @@ describe('taskSharedCrudMetaReducer', () => {
       const updatedTask = resultState[TASK_FEATURE_NAME].entities['task1'] as Task;
       expect(updatedTask.isDone).toBe(true);
       expect(updatedTask.doneOn).toEqual(jasmine.any(Number));
-      expect(updatedTask.dueDay).toBe(getDbDateStr());
-      expect((resultState[TAG_FEATURE_NAME].entities['TODAY'] as Tag).taskIds).toContain(
-        'task1',
-      );
+      // Completion records only doneOn; it never synthesizes a dueDay, so the task
+      // is not added to TODAY_TAG via completion (the Today "Done" list is driven by
+      // isDone/doneOn, not dueDay).
+      expect(updatedTask.dueDay).toBeUndefined();
+      expect(
+        (resultState[TAG_FEATURE_NAME].entities['TODAY'] as Tag).taskIds,
+      ).not.toContain('task1');
     });
 
     it('should add completed task to TODAY_TAG.taskIds', () => {

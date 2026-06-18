@@ -309,7 +309,9 @@ describe('TaskArchiveService', () => {
 
       expect(updatedTask.isDone).toBe(true);
       expect(updatedTask.doneOn).toBeGreaterThan(0);
-      expect(updatedTask.dueDay).toBeDefined();
+      // #8463: completion records only doneOn and never stamps a dueDay (the
+      // archive path runs the same meta-reducer as live tasks).
+      expect(updatedTask.dueDay).toBeUndefined();
 
       // Mark as undone
       archiveDbAdapterMock.loadArchiveYoung.and.returnValue(

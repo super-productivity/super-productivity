@@ -19,8 +19,9 @@ src/app
 src/app
   -> @sp/sync-core
 
-packages/shared-schema
+packages/super-sync-server
   -> @sp/sync-core
+  -> @sp/shared-schema
 ```
 
 Rules:
@@ -33,16 +34,10 @@ Rules:
 - The app may import both packages and is responsible for Angular dependency
   injection, NgRx, Electron/Capacitor bridges, config UI, OAuth routing, and
   Super Productivity-specific model wiring.
-- `packages/shared-schema` depends on `@sp/sync-core` only for compatibility
-  re-exports of generic vector-clock algorithms.
-
-The `packages/shared-schema -> @sp/sync-core` edge is deliberate compatibility
-coupling. Vector-clock compare/merge/prune algorithms moved to `@sp/sync-core`
-so sync-core, client wrappers, and server/shared consumers use one
-implementation. `packages/shared-schema` re-exports those algorithms to preserve
-legacy import paths while consumers migrate; do not add new sync-engine logic to
-`@sp/shared-schema`, and remove the compatibility edge once no consumers need
-it.
+- `packages/shared-schema` owns schema contracts and validators shared between
+  app and server. It has no dependency on `@sp/sync-core`.
+- `packages/super-sync-server` depends on both `@sp/shared-schema` (HTTP contract
+  types and validation schemas) and `@sp/sync-core` (vector-clock algorithms).
 
 ## Ownership
 

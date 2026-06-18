@@ -392,12 +392,28 @@ export class WorkContextService {
   //   ]))
   // );
 
-  flatDoneTodayNr$: Observable<number> = this.mainListTasks$.pipe(
-    map((tasks) => flattenTasks(tasks)),
-    map((tasks) => {
-      const done = tasks.filter((task) => task.isDone);
-      return done.length;
-    }),
+  // Counts tasks completed today (feeds the done-sound pitch). On the Today list a
+  // completion records only `doneOn` and no `dueDay`, so unscheduled done tasks are
+  // not in `mainListTasks$`; count them via `doneOn` is-today across all tasks
+  // instead. Other contexts keep counting the context's own done main-list tasks.
+  flatDoneTodayNr$: Observable<number> = this.isTodayList$.pipe(
+    switchMap((isToday) =>
+      isToday
+        ? // `selectAllTasks` is already flat (parents + subtasks) — no flattenTasks needed
+          this._store$
+            .select(selectAllTasks)
+            .pipe(
+              map(
+                (tasks) =>
+                  tasks.filter(
+                    (t) => t.isDone && t.doneOn && this._dateService.isToday(t.doneOn),
+                  ).length,
+              ),
+            )
+        : this.mainListTasks$.pipe(
+            map((tasks) => flattenTasks(tasks).filter((t) => t.isDone).length),
+          ),
+    ),
     distinctUntilChanged(), // Only emit when count actually changes
   );
 

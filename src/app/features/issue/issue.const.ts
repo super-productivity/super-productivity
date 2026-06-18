@@ -27,10 +27,7 @@ import {
   CALENDAR_FORM_CFG_NEW,
   DEFAULT_CALENDAR_CFG,
 } from './providers/calendar/calendar.const';
-import {
-  DEFAULT_TRELLO_CFG,
-  TRELLO_CONFIG_FORM_SECTION,
-} from './providers/trello/trello.const';
+// Trello is now a plugin — no built-in config needed
 // Linear is now a plugin — no built-in config needed
 // ClickUp is now a plugin — no built-in config needed
 import { AZURE_DEVOPS_INITIAL_CFG } from './providers/azure-devops/azure-devops.const';
@@ -51,7 +48,7 @@ export const CALDAV_TYPE: BuiltInIssueProviderKey = 'CALDAV';
 export const OPEN_PROJECT_TYPE: BuiltInIssueProviderKey = 'OPEN_PROJECT';
 export const REDMINE_TYPE: BuiltInIssueProviderKey = 'REDMINE';
 export const ICAL_TYPE: BuiltInIssueProviderKey = 'ICAL';
-export const TRELLO_TYPE: BuiltInIssueProviderKey = 'TRELLO';
+export const TRELLO_TYPE: MigratedIssueProviderKey = 'TRELLO';
 export const CLICKUP_TYPE: MigratedIssueProviderKey = 'CLICKUP';
 export const AZURE_DEVOPS_TYPE: BuiltInIssueProviderKey = 'AZURE_DEVOPS';
 export const NEXTCLOUD_DECK_TYPE: BuiltInIssueProviderKey = 'NEXTCLOUD_DECK';
@@ -63,7 +60,6 @@ export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   CALDAV_TYPE,
   ICAL_TYPE,
   OPEN_PROJECT_TYPE,
-  TRELLO_TYPE,
   REDMINE_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
@@ -76,7 +72,6 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [CALDAV_TYPE]: 'caldav',
   [ICAL_TYPE]: 'calendar',
   [OPEN_PROJECT_TYPE]: 'open_project',
-  [TRELLO_TYPE]: 'trello',
   [REDMINE_TYPE]: 'redmine',
   [AZURE_DEVOPS_TYPE]: 'azure_devops',
   [NEXTCLOUD_DECK_TYPE]: 'nextcloud_deck',
@@ -89,7 +84,6 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [CALDAV_TYPE]: 'CalDAV',
   [ICAL_TYPE]: 'Calendar',
   [OPEN_PROJECT_TYPE]: 'OpenProject',
-  [TRELLO_TYPE]: 'Trello',
   [REDMINE_TYPE]: 'Redmine',
   [AZURE_DEVOPS_TYPE]: 'Azure DevOps',
   [NEXTCLOUD_DECK_TYPE]: 'Nextcloud Deck',
@@ -102,7 +96,6 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [CALDAV_TYPE]: DEFAULT_CALDAV_CFG,
   [ICAL_TYPE]: DEFAULT_CALENDAR_CFG,
   [OPEN_PROJECT_TYPE]: DEFAULT_OPEN_PROJECT_CFG,
-  [TRELLO_TYPE]: DEFAULT_TRELLO_CFG,
   [REDMINE_TYPE]: DEFAULT_REDMINE_CFG,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_INITIAL_CFG,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_NEXTCLOUD_DECK_CFG,
@@ -115,7 +108,6 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [CALDAV_TYPE]: CALDAV_CONFIG_FORM_SECTION,
   [ICAL_TYPE]: CALENDAR_FORM_CFG_NEW as any,
   [OPEN_PROJECT_TYPE]: OPEN_PROJECT_CONFIG_FORM_SECTION,
-  [TRELLO_TYPE]: TRELLO_CONFIG_FORM_SECTION,
   [REDMINE_TYPE]: REDMINE_CONFIG_FORM_SECTION,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_CONFIG_FORM_SECTION,
   [NEXTCLOUD_DECK_TYPE]: NEXTCLOUD_DECK_CONFIG_FORM_SECTION,
@@ -142,7 +134,6 @@ export const ISSUE_STR_MAP: Record<
     ISSUE_STR: T.F.OPEN_PROJECT.ISSUE_STRINGS.ISSUE_STR,
     ISSUES_STR: T.F.OPEN_PROJECT.ISSUE_STRINGS.ISSUES_STR,
   },
-  [TRELLO_TYPE]: DEFAULT_ISSUE_STRS,
   [REDMINE_TYPE]: DEFAULT_ISSUE_STRS,
   [AZURE_DEVOPS_TYPE]: DEFAULT_ISSUE_STRS,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_ISSUE_STRS,

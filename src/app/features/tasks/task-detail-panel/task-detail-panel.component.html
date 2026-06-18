@@ -100,9 +100,9 @@
           [innerHTML]="task().timeEstimate || 0 | msToString"
           class="time-val"
         ></span>
-        <ng-container input-additional>
-          <progress-bar [progress]="progress()"></progress-bar>
-        </ng-container>
+      </ng-container>
+      <ng-container input-additional>
+        <progress-bar [progress]="progress()"></progress-bar>
       </ng-container>
     </task-detail-item>
   }
