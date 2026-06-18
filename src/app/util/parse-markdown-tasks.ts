@@ -1,3 +1,5 @@
+import { MAX_TASK_DEPTH } from '../features/tasks/task.model';
+
 // Cap clipboard size to keep the parser from blocking the main thread on
 // pathological inputs. Tracks roughly 10k task lines at ~80 chars each.
 const MAX_INPUT_LENGTH = 800_000;
@@ -29,6 +31,7 @@ export interface ParsedMarkdownSubTask {
   title: string;
   isCompleted: boolean;
   notes?: string;
+  subTasks?: ParsedMarkdownSubTask[];
 }
 
 export interface MarkdownTaskStructure {
@@ -42,16 +45,6 @@ interface ParsedLine {
   isCompleted: boolean;
   isTaskLine: boolean;
   originalLine: string;
-}
-
-interface CollectedNestedItems {
-  items: ParsedLine[];
-  nextIndex: number;
-}
-
-interface TopLevelWalkResult<T> {
-  item: T;
-  nextIndex: number;
 }
 
 const parseLineStructure = (line: string): ParsedLine | null => {
@@ -135,15 +128,6 @@ const normalizeIndentation = (parsedLines: ParsedLine[]): void => {
   }
 };
 
-const parseNormalizedLines = (text: string): ParsedLine[] | null => {
-  const parsedLines = parseLines(text);
-  if (!parsedLines) {
-    return null;
-  }
-  normalizeIndentation(parsedLines);
-  return parsedLines;
-};
-
 // Normalize a parsed item to `<indent>- [ ] content` (or `[x]`), preserving the
 // original leading whitespace so nested depth survives the round-trip.
 const formatAsCheckboxLine = (item: ParsedLine): string => {
@@ -155,56 +139,24 @@ const formatAsCheckboxLine = (item: ParsedLine): string => {
 const buildNotesFromNestedItems = (nestedItems: ParsedLine[]): string =>
   nestedItems.map(formatAsCheckboxLine).join('\n');
 
-const createParsedTask = (line: ParsedLine): ParsedMarkdownTask => ({
+type ParsedMarkdownNode = ParsedMarkdownTask | ParsedMarkdownSubTask;
+
+const createParsedMarkdownNode = (line: ParsedLine): ParsedMarkdownNode => ({
   title: line.content,
   isCompleted: line.isCompleted,
 });
 
-const createParsedSubTask = (line: ParsedLine): ParsedMarkdownSubTask => ({
-  title: line.content,
-  isCompleted: line.isCompleted,
-});
-
-const collectNestedItems = (
-  parsedLines: ParsedLine[],
-  startIndex: number,
-  parentIndentLevel: number = 0,
-): CollectedNestedItems => {
-  const items: ParsedLine[] = [];
-  let nextIndex = startIndex;
-
-  while (
-    nextIndex < parsedLines.length &&
-    parsedLines[nextIndex].indentLevel > parentIndentLevel
-  ) {
-    items.push(parsedLines[nextIndex]);
-    nextIndex++;
-  }
-
-  return { items, nextIndex };
+const appendLineAsNote = (task: ParsedMarkdownNode, line: ParsedLine): void => {
+  const noteLine = formatAsCheckboxLine(line);
+  task.notes = task.notes ? `${task.notes}\n${noteLine}` : noteLine;
 };
 
-const walkTopLevelTasks = <T>(
-  parsedLines: ParsedLine[],
-  buildTask: (line: ParsedLine, index: number) => TopLevelWalkResult<T>,
-): T[] => {
-  const tasks: T[] = [];
-  let i = 0;
-
-  while (i < parsedLines.length) {
-    const currentLine = parsedLines[i];
-
-    if (currentLine.indentLevel === 0) {
-      const result = buildTask(currentLine, i);
-      tasks.push(result.item);
-      i = result.nextIndex;
-    } else {
-      // This preserves the previous behavior for leading orphan nested items.
-      i++;
-    }
+const removeEmptySubTaskArrays = (task: ParsedMarkdownNode): void => {
+  if (!task.subTasks?.length) {
+    delete task.subTasks;
+    return;
   }
-
-  return tasks;
+  task.subTasks.forEach(removeEmptySubTaskArrays);
 };
 
 export const convertToMarkdownNotes = (text: string): string | null => {
@@ -218,90 +170,92 @@ export const convertToMarkdownNotes = (text: string): string | null => {
 export const parseMarkdownTasksWithStructure = (
   text: string,
 ): MarkdownTaskStructure | null => {
-  const parsedLines = parseNormalizedLines(text);
+  const parsedLines = parseLines(text);
   if (!parsedLines) {
     return null;
   }
+  normalizeIndentation(parsedLines);
 
+  const tasks: ParsedMarkdownTask[] = [];
   let totalSubTasks = 0;
-  const tasks = walkTopLevelTasks(parsedLines, (currentLine, i) => {
-    const subTasks: ParsedMarkdownSubTask[] = [];
-    const task: ParsedMarkdownTask = {
-      ...createParsedTask(currentLine),
-      subTasks,
-    };
+  const stack: {
+    indentLevel: number;
+    task: ParsedMarkdownNode;
+    depth: number;
+  }[] = [];
 
-    // Look ahead for nested items and determine the first sub-task level.
-    let j = i + 1;
-    let firstSubTaskLevel: number | null = null;
-
-    while (j < parsedLines.length && parsedLines[j].indentLevel > 0) {
-      if (firstSubTaskLevel === null) {
-        firstSubTaskLevel = parsedLines[j].indentLevel;
-      }
-
-      const subLine = parsedLines[j];
-
-      if (subLine.indentLevel === firstSubTaskLevel) {
-        const subTask = createParsedSubTask(subLine);
-        const { items: deepNestedItems, nextIndex } = collectNestedItems(
-          parsedLines,
-          j + 1,
-          firstSubTaskLevel,
-        );
-
-        if (deepNestedItems.length > 0) {
-          subTask.notes = buildNotesFromNestedItems(deepNestedItems);
-        }
-
-        subTasks.push(subTask);
-        totalSubTasks++;
-        j = nextIndex;
-      } else if (subLine.indentLevel > firstSubTaskLevel) {
-        // This is a deeper nested item, should be handled by the sub-task above.
-        j++;
-      } else {
-        // Preserve the existing dip-below behavior documented in the specs.
-        break;
-      }
+  for (const line of parsedLines) {
+    while (stack.length && line.indentLevel <= stack[stack.length - 1].indentLevel) {
+      stack.pop();
     }
 
-    if (subTasks.length === 0) {
-      const { items: nestedItems, nextIndex } = collectNestedItems(parsedLines, i + 1);
+    const parent = stack[stack.length - 1];
+    const task = createParsedMarkdownNode(line);
 
-      if (nestedItems.length > 0) {
-        task.notes = buildNotesFromNestedItems(nestedItems);
+    if (!parent) {
+      // After indentation normalization, only level 0 can start a new main task.
+      if (line.indentLevel !== 0) {
+        continue;
       }
-      j = nextIndex;
+      tasks.push(task as ParsedMarkdownTask);
+      stack.push({ indentLevel: line.indentLevel, task, depth: 1 });
+    } else if (parent.depth < MAX_TASK_DEPTH) {
+      parent.task.subTasks = parent.task.subTasks || [];
+      parent.task.subTasks.push(task as ParsedMarkdownSubTask);
+      totalSubTasks++;
+      stack.push({ indentLevel: line.indentLevel, task, depth: parent.depth + 1 });
+    } else {
+      appendLineAsNote(parent.task, line);
     }
+  }
 
-    if (subTasks.length === 0) {
-      delete task.subTasks;
-    }
-
-    return { item: task, nextIndex: j };
-  });
+  tasks.forEach(removeEmptySubTaskArrays);
 
   // Return structure only if we found at least one main task
   return tasks.length > 0 ? { mainTasks: tasks, totalSubTasks } : null;
 };
 
 export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null => {
-  const parsedLines = parseNormalizedLines(text);
+  const parsedLines = parseLines(text);
   if (!parsedLines) {
     return null;
   }
+  normalizeIndentation(parsedLines);
 
-  const tasks = walkTopLevelTasks(parsedLines, (currentLine, i) => {
-    const task = createParsedTask(currentLine);
-    const { items: nestedItems, nextIndex } = collectNestedItems(parsedLines, i + 1);
+  const tasks: ParsedMarkdownTask[] = [];
+  let i = 0;
 
-    if (nestedItems.length > 0) {
-      task.notes = buildNotesFromNestedItems(nestedItems);
+  while (i < parsedLines.length) {
+    const currentLine = parsedLines[i];
+
+    // Only process top-level items (indentLevel 0) as main tasks
+    if (currentLine.indentLevel === 0) {
+      const task: ParsedMarkdownTask = {
+        title: currentLine.content,
+        isCompleted: currentLine.isCompleted,
+      };
+
+      // Look ahead for nested items (indentLevel > 0)
+      const nestedItems: ParsedLine[] = [];
+      let j = i + 1;
+
+      while (j < parsedLines.length && parsedLines[j].indentLevel > 0) {
+        nestedItems.push(parsedLines[j]);
+        j++;
+      }
+
+      // If there are nested items, add them as notes
+      if (nestedItems.length > 0) {
+        task.notes = buildNotesFromNestedItems(nestedItems);
+      }
+
+      tasks.push(task);
+      i = j; // Skip the nested items we just processed
+    } else {
+      // This shouldn't happen if we process correctly, but skip just in case
+      i++;
     }
-
-    return { item: task, nextIndex };
-  });
+  }
 
   // Return tasks only if we found at least one
   return tasks.length > 0 ? tasks : null;

@@ -130,6 +130,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   noTasksMsg = input<string | undefined>(undefined);
   isBacklog = input(false);
   isSubTaskList = input(false);
+  treeDepth = input(1);
 
   currentTaskId = toSignal(this._taskService.currentTaskId$);
   dropModelDataForList = computed<DropModelDataForList>(() => {
@@ -281,7 +282,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     // Parent tasks: allow drops to PARENT_ALLOWED_LISTS, to sections (parent-level
     // lists with a non-reserved id), or to a task's subtask list if the dragged
-    // task is not itself already a parent.
+    // task passes the shared conversion guard. The reducer applies the final
+    // depth/subtree gate because it has the full entity tree.
     const srcModelId = drag.dropContainer?.data?.listModelId;
     const srcListIdRaw = drag.dropContainer?.data?.listId;
     const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
@@ -373,9 +375,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return { listModelId, isOverRow: isLeadingPad };
     }
     // Leading-strip fallback: the `.sub-tasks` wrapper extends visually above
-    // the cdkDropList element. Each wrapper holds exactly one SUB list (the
-    // two-level nesting cap is enforced by `canApplyConvertToSubTask`), so
-    // the descendant query is unambiguous.
+    // the cdkDropList element. Each wrapper holds exactly one immediate SUB
+    // list, so the descendant query is unambiguous.
     const wrapper = element.closest<HTMLElement>('.sub-tasks');
     if (wrapper) {
       const subListEl = wrapper.querySelector<HTMLElement>(

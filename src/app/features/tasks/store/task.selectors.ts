@@ -21,6 +21,12 @@ import {
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
+import {
+  buildTaskWithSubTasks,
+  getAncestorIds,
+  getDescendantIds,
+} from '../util/task-tree.util';
+import { Dictionary } from '@ngrx/entity';
 
 export const isCalendarIssueTask = (task: Task | undefined): task is Task =>
   !!task &&
@@ -28,31 +34,23 @@ export const isCalendarIssueTask = (task: Task | undefined): task is Task =>
   (task.issueType === 'ICAL' || isPluginIssueProvider(task.issueType));
 
 const mapSubTasksToTasks = (tasksIN: Task[]): TaskWithSubTasks[] => {
-  // Create a Map for O(1) lookups instead of O(n) find() calls
-  const taskMap = new Map<string, Task>();
+  // Build an entity dictionary for O(1) lookups, then recursively resolve the
+  // tree (depth-capped at MAX_TASK_DEPTH) for every top-level task. See #2657.
+  const entities: Dictionary<Task> = {};
   for (const task of tasksIN) {
     // Guard against undefined tasks during sync operations
     if (task?.id) {
-      taskMap.set(task.id, task);
+      entities[task.id] = task;
     }
   }
 
   const result: TaskWithSubTasks[] = [];
   for (const task of tasksIN) {
     // Guard against undefined tasks during sync operations
-    if (!task) continue;
-    if (task.parentId) continue;
-
-    if (task.subTaskIds && task.subTaskIds.length > 0) {
-      const subTasks: Task[] = [];
-      for (const subTaskId of task.subTaskIds) {
-        const subTask = taskMap.get(subTaskId);
-        if (subTask) subTasks.push(subTask);
-      }
-      result.push({ ...task, subTasks });
-    } else {
-      result.push({ ...task, subTasks: [] });
+    if (!task || task.parentId) {
+      continue;
     }
+    result.push(buildTaskWithSubTasks(task, entities));
   }
   return result;
 };
@@ -63,34 +61,25 @@ export const mapSubTasksToTask = (
   if (!task) {
     return null;
   }
-  const subTasks: Task[] = [];
-  for (const id of task.subTaskIds) {
-    const subTask = s.entities[id];
-    if (subTask) {
-      subTasks.push(subTask);
-    } else {
-      devError('Task data not found for ' + id);
-    }
-  }
-  return {
-    ...task,
-    subTasks,
-  };
+  return buildTaskWithSubTasks(task, s.entities);
 };
 
 export const flattenTasks = (tasksIN: TaskWithSubTasks[]): TaskWithSubTasks[] => {
-  let flatTasks: TaskWithSubTasks[] = [];
-  tasksIN.forEach((task) => {
-    if (!task) {
-      return;
+  // Depth-first flatten of the whole tree — every node is emitted (with an empty
+  // subTasks array so the model stays identical). Recurses to any depth (#2657).
+  const flatTasks: TaskWithSubTasks[] = [];
+  const walk = (tasks: TaskWithSubTasks[]): void => {
+    for (const task of tasks) {
+      if (!task) {
+        continue;
+      }
+      flatTasks.push({ ...task, subTasks: [] });
+      if (task.subTasks?.length) {
+        walk(task.subTasks);
+      }
     }
-    flatTasks.push(task);
-    if (task.subTasks && task.subTasks.length > 0) {
-      // NOTE: in order for the model to be identical we add an empty subTasks array
-      const validSubTasks = task.subTasks.filter((t) => t !== null && t !== undefined);
-      flatTasks = flatTasks.concat(validSubTasks.map((t) => ({ ...t, subTasks: [] })));
-    }
-  });
+  };
+  walk(tasksIN);
   return flatTasks;
 };
 
@@ -151,8 +140,9 @@ export const selectStartableTasks = createSelector(
     return s.ids
       .map((id) => s.entities[id])
       .filter(
-        (task): task is Task =>
-          !!task && !task.isDone && (!!task.parentId || task.subTaskIds.length === 0),
+        // Only leaves are startable. With nesting, an intermediate node has both
+        // a parentId AND children, so we must key off "no sub-tasks", not parentId.
+        (task): task is Task => !!task && !task.isDone && task.subTaskIds.length === 0,
       );
   },
 );
@@ -294,8 +284,12 @@ export const selectOverdueTasksWithSubTasks = createSelector(
     return overdueTasks
       .filter(
         (task) =>
-          // Only show top-level tasks, or subtasks whose parent is not overdue
-          (!task.parentId || !overdueIdSet.has(task.parentId)) && !task.isDone,
+          // Show a task only if none of its ancestors is also overdue — an
+          // overdue ancestor renders the whole subtree, so showing a deeper
+          // descendant too would duplicate it (#2657: ancestor-aware, not just
+          // the direct parent).
+          !task.isDone &&
+          !getAncestorIds(task.id, taskState.entities).some((id) => overdueIdSet.has(id)),
       )
       .map((task) => {
         // Pre-compute a chronological sort key so the comparator stays allocation-free
@@ -393,15 +387,11 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
     const scheduledParentTasks: Task[] = [];
     const scheduledSubtasks: Task[] = [];
     const unscheduledParentsInToday: Task[] = [];
-    const subtasksByParentId: Record<string, Task[]> = {};
+    const entities: Dictionary<Task> = {};
 
     for (const task of allTasks) {
-      if (task.parentId) {
-        if (!subtasksByParentId.hasOwnProperty(task.parentId)) {
-          subtasksByParentId[task.parentId] = [];
-        }
-
-        subtasksByParentId[task.parentId].push(task);
+      if (task?.id) {
+        entities[task.id] = task;
       }
 
       if (!task || task.isDone || !isInToday(task)) continue;
@@ -421,25 +411,35 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
       }
     }
 
-    // Create set for O(1) lookup
-    const parentIdsWithScheduledSubtasks = new Set(
-      scheduledSubtasks.map((subtask) => subtask.parentId),
+    const unscheduledParentsById = new Map(
+      unscheduledParentsInToday.map((task) => [task.id, task]),
     );
+    const parentsWithScheduledDescendants = new Map<string, Task>();
+    for (const subtask of scheduledSubtasks) {
+      for (const ancestorId of getAncestorIds(subtask.id, entities)) {
+        const ancestor = unscheduledParentsById.get(ancestorId);
+        if (ancestor) {
+          parentsWithScheduledDescendants.set(ancestor.id, ancestor);
+          break;
+        }
+      }
+    }
 
-    // Parents to include: scheduled parents OR parents with scheduled subtasks
+    // Parents to include: scheduled parents OR TODAY parents with scheduled descendants
     const parentsToInclude = [
       ...scheduledParentTasks,
-      ...unscheduledParentsInToday.filter((t) =>
-        parentIdsWithScheduledSubtasks.has(t.id),
-      ),
+      ...parentsWithScheduledDescendants.values(),
     ];
 
     // Get IDs of parents that will be included
     const parentIdsInLaterToday = new Set(parentsToInclude.map((task) => task.id));
 
-    // Find orphaned subtasks (scheduled subtasks whose parents are NOT in Later Today)
+    // Find orphaned subtasks (scheduled subtasks none of whose ancestors are in
+    // Later Today). Ancestor-aware so a deep subtask isn't shown twice when an
+    // ancestor higher up already renders the whole subtree (#2657).
     const orphanedScheduledSubtasks = scheduledSubtasks.filter(
-      (subtask) => !parentIdsInLaterToday.has(subtask.parentId!),
+      (subtask) =>
+        !getAncestorIds(subtask.id, entities).some((id) => parentIdsInLaterToday.has(id)),
     );
 
     // Combine parents and orphaned subtasks
@@ -448,15 +448,16 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
     // Map to include subtasks for parents and sort by time
     // PERF: Pre-compute earliest times to avoid recalculating in sort comparator
     const tasksWithTimes = allTopLevelTasks.map((task) => {
-      const taskWithSubTasks = {
-        ...task,
-        subTasks: subtasksByParentId[task.id] ?? [],
-      } as TaskWithSubTasks;
+      // Render the full (depth-capped) subtree so nested sub-tasks show, matching
+      // the main list. Sort by the earliest scheduled time in the whole subtree.
+      const taskWithSubTasks = buildTaskWithSubTasks(task, entities);
 
       // Pre-compute earliest scheduled time for sorting
       const earliestTime = Math.min(
         taskWithSubTasks.dueWithTime || Infinity,
-        ...(taskWithSubTasks.subTasks || []).map((st) => st.dueWithTime || Infinity),
+        ...getDescendantIds(task.id, entities).map(
+          (id) => entities[id]?.dueWithTime || Infinity,
+        ),
       );
       return { task: taskWithSubTasks, earliestTime };
     });

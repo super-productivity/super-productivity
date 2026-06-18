@@ -441,6 +441,26 @@ describe('TaskInternalEffects', () => {
       actions$.next(toggleStart());
     });
 
+    it('should find the first nested leaf task on toggleStart', (done) => {
+      const root = createTask('root', { subTaskIds: ['mid'] });
+      const mid = createTask('mid', { parentId: 'root', subTaskIds: ['leaf'] });
+      const leaf = createTask('leaf', { parentId: 'mid', isDone: false });
+      const taskState = createTaskState([root, mid, leaf], null);
+
+      store.overrideSelector(selectTaskFeatureState, taskState);
+      store.overrideSelector(selectConfigFeatureState, createConfigState());
+      mainListTaskIds$.next(['root']);
+      store.refreshState();
+
+      effects.autoSetNextTask$.subscribe((action) => {
+        expect(action.type).toBe(setCurrentTask.type);
+        expect((action as any).id).toBe('leaf');
+        done();
+      });
+
+      actions$.next(toggleStart());
+    });
+
     it('should unset current task on toggleStart when there is a current task', (done) => {
       const task1 = createTask('task1', { isDone: false });
       const taskState = createTaskState([task1], 'task1');

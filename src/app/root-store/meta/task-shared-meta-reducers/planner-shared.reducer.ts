@@ -28,6 +28,7 @@ import {
   ADD_TASK_PANEL_ID,
   OVERDUE_LIST_ID,
 } from '../../../features/planner/planner.model';
+import { getDescendantIds } from '../../../features/tasks/util/task-tree.util';
 
 // =============================================================================
 // ACTION HANDLERS
@@ -79,13 +80,17 @@ const handleTransferTask = (
 
   if (updateNextDay) {
     const targetDays = daysCopy[newDay] || [];
+    const subTreeIds = new Set([
+      ...(task.subTaskIds || []),
+      ...getDescendantIds(task.id, state[TASK_FEATURE_NAME].entities),
+    ]);
     daysCopy[newDay] = unique([
       ...targetDays.slice(0, targetIndex),
       task.id,
       ...targetDays.slice(targetIndex),
     ])
-      // when moving a parent to the day, remove all sub-tasks
-      .filter((id: string) => !task.subTaskIds.includes(id));
+      // when moving a parent to the day, remove the whole descendant subtree
+      .filter((id: string) => !subTreeIds.has(id));
   }
 
   state = {
@@ -249,7 +254,10 @@ const handlePlanTaskForDay = (
     state = addTaskToPlannerDay(state, task.id, day, isAddToTop ? 0 : Infinity);
     // When moving a parent, remove sub-tasks from the target day
     if (task.subTaskIds.length > 0) {
-      state = removeTasksFromPlannerDays(state, task.subTaskIds);
+      state = removeTasksFromPlannerDays(
+        state,
+        getDescendantIds(task.id, state[TASK_FEATURE_NAME].entities),
+      );
     }
   }
 

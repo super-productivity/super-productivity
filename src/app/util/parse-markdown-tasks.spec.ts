@@ -293,7 +293,7 @@ describe('parseMarkdownTasksWithStructure', () => {
     });
   });
 
-  it('should handle deeply nested items with sub-task notes', () => {
+  it('should handle deeply nested items as nested sub-tasks', () => {
     const input = `* main task
   * sub task 1
     * deep note 1
@@ -310,13 +310,16 @@ describe('parseMarkdownTasksWithStructure', () => {
             {
               title: 'sub task 1',
               isCompleted: false,
-              notes: '    - [ ] deep note 1\n    - [ ] deep note 2',
+              subTasks: [
+                { title: 'deep note 1', isCompleted: false },
+                { title: 'deep note 2', isCompleted: false },
+              ],
             },
             { title: 'sub task 2', isCompleted: false },
           ],
         },
       ],
-      totalSubTasks: 2,
+      totalSubTasks: 4,
     });
   });
 
@@ -356,21 +359,16 @@ describe('parseMarkdownTasksWithStructure', () => {
             {
               title: 'sub task 2',
               isCompleted: false,
-              notes: '        - [ ] sub task 2 notes',
+              subTasks: [{ title: 'sub task 2 notes', isCompleted: false }],
             },
           ],
         },
       ],
-      totalSubTasks: 2,
+      totalSubTasks: 3,
     });
   });
 
-  // Tripwire: once a sub-task level is set, a later nested item at a *shallower*
-  // (but still > 0) level breaks out of the walk and is dropped here, whereas
-  // parseMarkdownTasks keeps it as a note (see the matching test below). This
-  // documents the divergence that a future shared top-level walker must
-  // preserve.
-  it('drops a nested item that dips below the first sub-task level', () => {
+  it('keeps a nested item that dips below the first sub-task level', () => {
     const input = `* main
     * deep
   * shallow`;
@@ -381,10 +379,51 @@ describe('parseMarkdownTasksWithStructure', () => {
         {
           title: 'main',
           isCompleted: false,
-          subTasks: [{ title: 'deep', isCompleted: false }],
+          subTasks: [
+            { title: 'deep', isCompleted: false },
+            { title: 'shallow', isCompleted: false },
+          ],
         },
       ],
-      totalSubTasks: 1,
+      totalSubTasks: 2,
+    });
+  });
+
+  it('keeps items beyond the task depth cap as notes', () => {
+    const input = `* main task
+  * level 1
+    * level 2
+      * level 3
+        * level 4`;
+
+    const result = parseMarkdownTasksWithStructure(input);
+    expect(result).toEqual({
+      mainTasks: [
+        {
+          title: 'main task',
+          isCompleted: false,
+          subTasks: [
+            {
+              title: 'level 1',
+              isCompleted: false,
+              subTasks: [
+                {
+                  title: 'level 2',
+                  isCompleted: false,
+                  subTasks: [
+                    {
+                      title: 'level 3',
+                      isCompleted: false,
+                      notes: '        - [ ] level 4',
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      totalSubTasks: 3,
     });
   });
 

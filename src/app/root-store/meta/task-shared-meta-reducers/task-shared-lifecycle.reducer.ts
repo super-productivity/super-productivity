@@ -31,8 +31,18 @@ import {
 // ACTION HANDLERS
 // =============================================================================
 
+const flattenTaskWithSubTasks = (tasks: TaskWithSubTasks[]): TaskWithSubTasks[] => {
+  const result: TaskWithSubTasks[] = [];
+  const walk = (task: TaskWithSubTasks): void => {
+    result.push(task);
+    task.subTasks?.forEach(walk);
+  };
+  tasks.forEach(walk);
+  return result;
+};
+
 const handleMoveToArchive = (state: RootState, tasks: TaskWithSubTasks[]): RootState => {
-  const taskIdsToArchive = tasks.flatMap((t) => [t.id, ...t.subTasks.map((st) => st.id)]);
+  const taskIdsToArchive = flattenTaskWithSubTasks(tasks).map((t) => t.id);
 
   // Get tag/project associations from CURRENT STATE, not payload.
   // This is critical for remote sync: the payload reflects the originating client's

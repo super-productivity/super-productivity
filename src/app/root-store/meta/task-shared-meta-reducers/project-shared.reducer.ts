@@ -12,6 +12,7 @@ import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store
 import { TimeTrackingState } from '../../../features/time-tracking/time-tracking.model';
 import { Tag } from '../../../features/tag/tag.model';
 import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
+import { getDescendantIds } from '../../../features/tasks/util/task-tree.util';
 import { unique } from '../../../util/unique';
 import {
   ActionHandlerMap,
@@ -44,8 +45,10 @@ const handleMoveToOtherProject = (
 ): RootState => {
   const taskState = state[TASK_FEATURE_NAME];
   const canonicalTask = taskState.entities[task.id] as Task | undefined;
+  // The whole subtree moves with the task, so every descendant's projectId must
+  // be updated (and removed from the old project lists), not just direct children (#2657).
   const canonicalSubTaskIds = unique([
-    ...(canonicalTask?.subTaskIds ?? []),
+    ...getDescendantIds(task.id, taskState.entities),
     ...(task.subTaskIds ?? []),
   ]);
   const currentProjectId = canonicalTask?.projectId ?? task.projectId;

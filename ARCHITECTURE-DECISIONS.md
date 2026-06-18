@@ -198,6 +198,46 @@ The atomic op's headline benefit — reversing the whole thing as one unit — w
 
 ---
 
+### 6. Task Tree Depth Cap
+
+**Status**: ✅ Active (since Issue #2657)
+
+**Decision**: Tasks use the existing adjacency-list model (`parentId` and
+`subTaskIds`) for nested subtasks, capped at `MAX_TASK_DEPTH = 4` where a
+top-level task is depth 1.
+
+**Rationale**:
+
+- Supports practical project breakdowns without changing synced storage shape
+- Avoids introducing a new operation-log action or synced enum value
+- Keeps malformed or cyclic task data bounded during selector and reducer walks
+- Preserves compatibility with existing two-level task data
+
+**Implementation**:
+
+- Tree operations use shared helpers in `task-tree.util.ts`
+- A re-parent is valid only when `targetParentDepth + movingSubtreeHeight <= 4`
+- Recursive walks must be cycle-safe via visited sets or an explicit depth budget
+- Reducers enforce the cap because UI, REST, plugins, and op-log replay can all
+  create or move tasks
+
+**Key Files**:
+
+- [`task.model.ts`](src/app/features/tasks/task.model.ts) - `MAX_TASK_DEPTH` and recursive `TaskWithSubTasks`
+- [`task-tree.util.ts`](src/app/features/tasks/util/task-tree.util.ts) - Shared tree helpers and depth gate
+- [`task.reducer.ts`](src/app/features/tasks/store/task.reducer.ts) - Authoritative reducer checks for add/move
+- [`task.reducer.util.ts`](src/app/features/tasks/store/task.reducer.util.ts) - Recursive roll-up and delete helpers
+- [`task.selectors.ts`](src/app/features/tasks/store/task.selectors.ts) - Recursive view-model construction
+
+**When to Update This Pattern**:
+
+- Changing the supported maximum task hierarchy depth
+- Adding a new task creation, move, delete, archive, or import path
+- Adding selector or report logic that walks parents or descendants
+- Changing sync/op-log behavior for task hierarchy updates
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes

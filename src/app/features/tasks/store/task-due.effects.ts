@@ -216,14 +216,24 @@ export class TaskDueEffects {
                   );
 
                   const todayTaskIdSet = new Set(todayTaskIds);
+                  const hasAncestorInToday = (taskId: string): boolean => {
+                    let parentId = taskById.get(taskId)?.parentId;
+                    const visited = new Set<string>([taskId]);
+                    while (parentId && !visited.has(parentId)) {
+                      if (todayTaskIdSet.has(parentId)) {
+                        return true;
+                      }
+                      visited.add(parentId);
+                      parentId = taskById.get(parentId)?.parentId;
+                    }
+                    return false;
+                  };
                   const missingDueTaskIds = allTasksDueToday
                     .filter((task) => !todayTaskIdSet.has(task.id))
-                    // Exclude subtasks whose parent is already in TODAY
+                    // Exclude subtasks whose ancestor is already in TODAY
                     // (preventParentAndSubTaskInTodayList$ will remove them anyway,
                     // causing an infinite add/remove loop and phantom sync changes)
-                    .filter(
-                      (task) => !task.parentId || !todayTaskIdSet.has(task.parentId),
-                    )
+                    .filter((task) => !hasAncestorInToday(task.id))
                     .map((task) => task.id);
 
                   const plannedTodayIds = new Set([

@@ -190,8 +190,17 @@ export interface TaskWithPlannedForDayIndication extends TaskWithoutReminder {
   plannedForDay: string;
 }
 
+/**
+ * Maximum task-tree depth (issue #2657). A top-level task is depth 1, so this
+ * allows 3 levels of nested sub-tasks below it. Enforced as a hard gate in the
+ * reducers (op-log replay / REST / plugins bypass the UI) and reflected in the
+ * recursive view-model builder + DnD/convert guards.
+ */
+export const MAX_TASK_DEPTH = 4;
+
 export interface TaskWithSubTasks extends Task {
-  readonly subTasks: Task[];
+  // Recursive: a sub-task may itself have sub-tasks, up to MAX_TASK_DEPTH levels.
+  readonly subTasks: TaskWithSubTasks[];
 }
 
 // make title required and add optional property for possible related (parent) task

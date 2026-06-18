@@ -998,6 +998,38 @@ describe('Task Selectors', () => {
       expect(parentTask!.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
     });
 
+    it('should build a recursive (3-level) subtask tree (#2657)', () => {
+      // task1 → subtask1 → subsub1
+      const nestedState = {
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          ids: [...mockTaskState.ids, 'subsub1'],
+          entities: {
+            ...mockTaskState.entities,
+            subtask1: { ...mockTasks.subtask1, subTaskIds: ['subsub1'] },
+            subsub1: {
+              ...mockTasks.subtask1,
+              id: 'subsub1',
+              title: 'Sub-sub 1',
+              parentId: 'subtask1',
+              subTaskIds: [],
+            },
+          },
+        },
+      };
+
+      const result = fromSelectors.selectAllTasksWithSubTasks(nestedState);
+      const task1 = result.find((t) => t.id === 'task1');
+      expect(task1!.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
+      const subtask1 = task1!.subTasks.find((st) => st.id === 'subtask1');
+      expect(subtask1!.subTasks.map((st) => st.id)).toEqual(['subsub1']);
+      // and the deepest level is a leaf
+      expect(subtask1!.subTasks[0].subTasks).toEqual([]);
+      // a deeply-nested subtask is not surfaced as a top-level task
+      expect(result.some((t) => t.id === 'subsub1')).toBe(false);
+    });
+
     it('should handle missing subtask references in selectTaskByIdWithSubTaskData', () => {
       (window.confirm as jasmine.Spy).and.returnValue(false);
       const badState = {
@@ -1020,6 +1052,45 @@ describe('Task Selectors', () => {
       expect(result.subTasks.length).toBe(2);
       expect(result.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
       (window.confirm as jasmine.Spy).and.returnValue(true);
+    });
+  });
+
+  describe('selectLaterTodayTasksWithSubTasks', () => {
+    it('should include a TODAY top-level ancestor for a scheduled deep descendant', () => {
+      const later = Date.now() + 3600000;
+      const root: Task = {
+        ...DEFAULT_TASK,
+        id: 'root',
+        title: 'Root',
+        projectId: 'project1',
+        dueDay: today,
+        subTaskIds: ['mid'],
+      };
+      const mid: Task = {
+        ...DEFAULT_TASK,
+        id: 'mid',
+        title: 'Mid',
+        projectId: 'project1',
+        parentId: 'root',
+        subTaskIds: ['leaf'],
+      };
+      const leaf: Task = {
+        ...DEFAULT_TASK,
+        id: 'leaf',
+        title: 'Leaf',
+        projectId: 'project1',
+        parentId: 'mid',
+        dueWithTime: later,
+      };
+
+      const result = fromSelectors.selectLaterTodayTasksWithSubTasks.projector(
+        [root, mid, leaf],
+        today,
+        0,
+      );
+
+      expect(result.map((task) => task.id)).toEqual(['root']);
+      expect(result[0].subTasks[0].subTasks[0].id).toBe('leaf');
     });
   });
 

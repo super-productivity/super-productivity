@@ -29,6 +29,7 @@ import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
+import { getDescendantIds } from '../../../features/tasks/util/task-tree.util';
 import {
   ActionHandlerMap,
   addTaskToList,
@@ -287,22 +288,33 @@ const handleConvertToSubTask = (
   // The `!task || !targetParent` checks also narrow the types below; the full
   // eligibility rule (incl. self-target and not-a-subtask) lives in the shared
   // guard so the section meta-reducer stays in lock-step.
-  if (!task || !targetParent || !canApplyConvertToSubTask(task, targetParent)) {
+  if (
+    !task ||
+    !targetParent ||
+    !canApplyConvertToSubTask(task, targetParent, state[TASK_FEATURE_NAME].entities)
+  ) {
     return state;
   }
 
   let updatedState = state;
+  const taskStateBeforeMove = state[TASK_FEATURE_NAME];
+  const allMovedTaskIds = unique([
+    task.id,
+    ...getDescendantIds(task.id, taskStateBeforeMove.entities),
+  ]);
 
   if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
     const project = getProject(state, task.projectId);
     updatedState = updateProject(updatedState, task.projectId, {
-      taskIds: removeTasksFromList(project.taskIds, [task.id]),
-      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, [task.id]),
+      taskIds: removeTasksFromList(project.taskIds, allMovedTaskIds),
+      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, allMovedTaskIds),
     });
   }
 
-  updatedState = removeTasksFromAllTags(updatedState, [task.id]);
-  updatedState = removeTaskFromPlannerDays(updatedState, task.id);
+  updatedState = removeTasksFromAllTags(updatedState, allMovedTaskIds);
+  allMovedTaskIds.forEach((id) => {
+    updatedState = removeTaskFromPlannerDays(updatedState, id);
+  });
 
   let taskState = updatedState[TASK_FEATURE_NAME];
   taskState = taskAdapter.updateMany(
@@ -327,6 +339,16 @@ const handleConvertToSubTask = (
           modified: Date.now(),
         },
       },
+      ...allMovedTaskIds
+        .filter((id) => id !== task.id)
+        .map(
+          (id): Update<Task> => ({
+            id,
+            changes: {
+              projectId: targetParent.projectId,
+            },
+          }),
+        ),
     ],
     taskState,
   );
@@ -349,6 +371,8 @@ const handleDeleteTask = (
   },
 ): RootState => {
   let updatedState = state;
+  const descendantIds = getDescendantIds(task.id, state[TASK_FEATURE_NAME].entities);
+  const allDeletedIds = unique([task.id, ...(task.subTaskIds || []), ...descendantIds]);
 
   // Delete task from task state using helper
   updatedState = {
@@ -363,15 +387,15 @@ const handleDeleteTask = (
   if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
     const project = getProject(state, task.projectId);
     updatedState = updateProject(updatedState, task.projectId, {
-      taskIds: removeTasksFromList(project.taskIds, [task.id]),
-      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, [task.id]),
+      taskIds: removeTasksFromList(project.taskIds, allDeletedIds),
+      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, allDeletedIds),
     });
   }
 
   // Find affected tags from CURRENT STATE, not payload — during sync the
   // receiving client may have different tag associations, so all tags are
-  // scanned (incl. the task's subtask ids) for complete cleanup.
-  return removeTasksFromAllTags(updatedState, [task.id, ...(task.subTaskIds || [])]);
+  // scanned (incl. the task's FULL subtree) for complete cleanup (#2657).
+  return removeTasksFromAllTags(updatedState, allDeletedIds);
 };
 
 const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
@@ -385,7 +409,17 @@ const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
       if (task.projectId) {
         projectIdsSet.add(task.projectId);
       }
-      return [...acc, id, ...task.subTaskIds];
+      // Recursively collect the WHOLE subtree, not just direct children (#2657).
+      const descendantIds = getDescendantIds(id, state[TASK_FEATURE_NAME].entities);
+      descendantIds.forEach((descendantId) => {
+        const descendant = state[TASK_FEATURE_NAME].entities[descendantId] as
+          | Task
+          | undefined;
+        if (descendant?.projectId) {
+          projectIdsSet.add(descendant.projectId);
+        }
+      });
+      return [...acc, id, ...descendantIds];
     }
     return [...acc, id];
   }, []);

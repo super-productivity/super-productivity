@@ -78,13 +78,13 @@ export const undoTaskDeleteMetaReducer = (
  * Creates a dictionary of all tasks to be deleted (main task + subtasks)
  */
 const createDeletedTaskEntities = (task: TaskWithSubTasks): Dictionary<Task> => {
-  return {
-    [task.id]: task,
-    ...(task.subTasks?.reduce<Dictionary<Task>>(
-      (acc, subTask) => ({ ...acc, [subTask.id]: subTask }),
-      {},
-    ) || {}),
+  const entities: Dictionary<Task> = {};
+  const walk = (taskToCapture: TaskWithSubTasks): void => {
+    entities[taskToCapture.id] = taskToCapture;
+    taskToCapture.subTasks?.forEach(walk);
   };
+  walk(task);
+  return entities;
 };
 
 /**
@@ -148,7 +148,9 @@ const captureTaskDeletePayload = (
   task: TaskWithSubTasks,
 ): RestoreDeletedTaskPayload => {
   const deletedTaskEntities = createDeletedTaskEntities(task);
-  const allDeletedTasks = [task, ...(task.subTasks || [])];
+  const allDeletedTasks = Object.values(deletedTaskEntities).filter(
+    (taskEntity): taskEntity is Task => !!taskEntity,
+  );
   const tagTaskIdMap = buildTagTaskIdMap(state, allDeletedTasks);
 
   // Handle subtask deletion - capture parent context

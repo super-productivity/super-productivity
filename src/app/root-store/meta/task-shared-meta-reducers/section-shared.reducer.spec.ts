@@ -205,7 +205,7 @@ describe('sectionSharedMetaReducer', () => {
   });
 
   it('keeps section membership when convertToSubTask is rejected by task eligibility', () => {
-    const state = stateWith({ parent: {}, t1: { subTaskIds: ['child'] }, child: {} }, [
+    const state = stateWith({ parent: {}, t1: { repeatCfgId: 'repeat-1' } }, [
       {
         id: 's1',
         contextId: 'p1',
@@ -253,7 +253,8 @@ describe('sectionSharedMetaReducer', () => {
     expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
   });
 
-  it('keeps section membership when the target parent is itself a subtask', () => {
+  it('removes a task from sections when nesting under a subtask within max depth (#2657)', () => {
+    // parentSub is a depth-2 subtask; nesting t1 under it → depth 3, allowed.
     const state = stateWith(
       {
         grandparent: { subTaskIds: ['parentSub'] },
@@ -276,6 +277,42 @@ describe('sectionSharedMetaReducer', () => {
       TaskSharedActions.convertToSubTask({
         taskId: 't1',
         targetParentId: 'parentSub',
+        afterTaskId: null,
+      }),
+    );
+
+    const updated = (mockReducer.calls.mostRecent().args[0] as any)[
+      SECTION_FEATURE_NAME
+    ] as SectionState;
+    expect(updated.entities['s1']?.taskIds).toEqual([]);
+  });
+
+  it('keeps section membership when nesting would exceed max depth (#2657)', () => {
+    // l4 sits at depth 4; nesting t1 under it would create depth 5, rejected.
+    const state = stateWith(
+      {
+        l1: { subTaskIds: ['l2'] },
+        l2: { parentId: 'l1', subTaskIds: ['l3'] },
+        l3: { parentId: 'l2', subTaskIds: ['l4'] },
+        l4: { parentId: 'l3' },
+        t1: {},
+      },
+      [
+        {
+          id: 's1',
+          contextId: 'p1',
+          contextType: WorkContextType.PROJECT,
+          title: 'A',
+          taskIds: ['t1'],
+        },
+      ],
+    );
+
+    metaReducer(
+      state,
+      TaskSharedActions.convertToSubTask({
+        taskId: 't1',
+        targetParentId: 'l4',
         afterTaskId: null,
       }),
     );

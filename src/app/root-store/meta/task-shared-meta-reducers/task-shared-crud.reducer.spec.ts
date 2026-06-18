@@ -14,6 +14,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { IN_PROGRESS_TAG } from '../../../features/tag/tag.const';
 import {
   createBaseState,
+  createMockProject,
   createMockTag,
   createMockTask,
   createStateWithExistingTasks,
@@ -837,12 +838,46 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
-    it('should not convert a task that already has subtasks', () => {
-      const testState = createConvertToSubTaskState({ subTaskIds: ['child-task'] });
+    it('should convert a task with subtasks when the subtree fits max depth', () => {
+      const childTask = createMockTask({
+        id: 'child-task',
+        parentId: 'task1',
+        projectId: 'project1',
+        tagIds: [],
+      });
+      const testState = createConvertToSubTaskState({
+        subTaskIds: ['child-task'],
+      });
+      const testStateWithChild: RootState = {
+        ...testState,
+        [TASK_FEATURE_NAME]: {
+          ...testState[TASK_FEATURE_NAME],
+          ids: ['parent-task', 'task1', 'child-task'],
+          entities: {
+            ...testState[TASK_FEATURE_NAME].entities,
+            'child-task': childTask,
+          },
+        },
+      };
       const action = createConvertToSubTaskAction();
 
-      metaReducer(testState, action);
-      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+      metaReducer(testStateWithChild, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', {
+            parentId: 'parent-task',
+            projectId: 'project1',
+            tagIds: [],
+          }),
+          ...expectTaskUpdate('child-task', {
+            projectId: 'project1',
+          }),
+          ...expectTaskUpdate('parent-task', { subTaskIds: ['task1'] }),
+        },
+        action,
+        mockReducer,
+        testStateWithChild,
+      );
     });
 
     it('should not convert scheduled, repeating, or issue-linked tasks', () => {
@@ -866,10 +901,95 @@ describe('taskSharedCrudMetaReducer', () => {
       });
     });
 
-    it('should not convert under a target parent that is itself a subtask', () => {
-      // Nesting under a subtask would create a third level the UI cannot render
-      // (orphaning the task) and leave the grandparent's time aggregation stale.
+    it('should convert under a subtask when within max depth (#2657)', () => {
+      // parent-task is a depth-2 subtask; nesting task1 under it → depth 3, allowed.
       const testState = createConvertToSubTaskState({}, { parentId: 'grandparent' });
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      // The conversion is applied, so the reducer is NOT called with the unchanged state.
+      expect(mockReducer).not.toHaveBeenCalledWith(testState, action);
+    });
+
+    it('should move descendant project ids when converting across projects (#2657)', () => {
+      const childTask = createMockTask({
+        id: 'child-task',
+        parentId: 'task1',
+        projectId: 'project1',
+        tagIds: [],
+      });
+      const base = createConvertToSubTaskState(
+        { projectId: 'project1', subTaskIds: ['child-task'] },
+        { projectId: 'project2' },
+      );
+      const testState: RootState = {
+        ...base,
+        [TASK_FEATURE_NAME]: {
+          ...base[TASK_FEATURE_NAME],
+          ids: ['parent-task', 'task1', 'child-task'],
+          entities: {
+            ...base[TASK_FEATURE_NAME].entities,
+            'child-task': childTask,
+          },
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ...base[PROJECT_FEATURE_NAME],
+          ids: ['project1', 'project2'],
+          entities: {
+            ...base[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...base[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['task1'],
+              backlogTaskIds: ['task1'],
+            } as Project,
+            project2: createMockProject({
+              id: 'project2',
+              taskIds: ['parent-task'],
+              backlogTaskIds: [],
+            }),
+          },
+        },
+      };
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', {
+            taskIds: [],
+            backlogTaskIds: [],
+          }),
+          ...expectTaskUpdate('task1', {
+            parentId: 'parent-task',
+            projectId: 'project2',
+          }),
+          ...expectTaskUpdate('child-task', {
+            projectId: 'project2',
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should not convert when nesting would exceed max depth (#2657)', () => {
+      // parent-task sits at depth 4 (l1→l2→l3→parent-task); nesting task1 under
+      // it would create depth 5, which the depth gate rejects.
+      const base = createConvertToSubTaskState({}, { parentId: 'l3' });
+      const testState: RootState = {
+        ...base,
+        [TASK_FEATURE_NAME]: {
+          ...base[TASK_FEATURE_NAME],
+          ids: ['l1', 'l2', 'l3', 'parent-task', 'task1'],
+          entities: {
+            ...base[TASK_FEATURE_NAME].entities,
+            l1: createMockTask({ id: 'l1', subTaskIds: ['l2'] }),
+            l2: createMockTask({ id: 'l2', parentId: 'l1', subTaskIds: ['l3'] }),
+            l3: createMockTask({ id: 'l3', parentId: 'l2', subTaskIds: ['parent-task'] }),
+          },
+        },
+      };
       const action = createConvertToSubTaskAction();
 
       metaReducer(testState, action);
@@ -937,7 +1057,10 @@ describe('taskSharedCrudMetaReducer', () => {
       const action = createDeleteAction({
         id: 'task1',
         subTaskIds: ['subtask1'],
-        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task],
+        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task].map((t) => ({
+          ...t,
+          subTasks: [],
+        })),
       });
 
       metaReducer(testState, action);
@@ -977,7 +1100,10 @@ describe('taskSharedCrudMetaReducer', () => {
       const action = createDeleteAction({
         projectId: '',
         subTaskIds: ['subtask1'],
-        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task],
+        subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task].map((t) => ({
+          ...t,
+          subTasks: [],
+        })),
       });
 
       metaReducer(testState, action);

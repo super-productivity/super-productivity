@@ -7,6 +7,7 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
+import { getDescendantIds } from '../../../features/tasks/util/task-tree.util';
 import { ActionHandlerMap } from './task-shared-helpers';
 import {
   deleteTag,
@@ -155,9 +156,8 @@ const removeOrphanedTasks = (
     const parent = taskState.entities[parentId];
     if (parent) {
       allTaskIdsToRemove.push(parentId);
-      if (parent.subTaskIds?.length) {
-        allTaskIdsToRemove.push(...parent.subTaskIds);
-      }
+      // Remove the whole subtree, not just direct children (#2657).
+      allTaskIdsToRemove.push(...getDescendantIds(parentId, taskState.entities));
     }
   }
 

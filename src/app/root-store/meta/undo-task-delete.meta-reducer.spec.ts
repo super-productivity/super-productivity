@@ -33,10 +33,10 @@ describe('undoTaskDeleteMetaReducer', () => {
   });
 
   const createMockTaskWithSubTasks = (
-    overrides: Partial<TaskWithSubTasks> = {},
+    overrides: Partial<Omit<TaskWithSubTasks, 'subTasks'>> & { subTasks?: Task[] } = {},
   ): TaskWithSubTasks => ({
     ...createMockTask(overrides),
-    subTasks: overrides.subTasks || [],
+    subTasks: (overrides.subTasks ?? []).map((t) => ({ ...t, subTasks: [] })),
   });
 
   const createMockProject = (overrides: Partial<Project> = {}): Project => ({
@@ -217,6 +217,55 @@ describe('undoTaskDeleteMetaReducer', () => {
       // Check tag associations are captured
       expect(payload!.tagTaskIdMap['tag2']).toContain('sub1');
       expect(payload!.tagTaskIdMap['tag3']).toContain('sub2');
+    });
+
+    it('should capture nested subtask information', () => {
+      const grandchild = {
+        ...createMockTask({
+          id: 'grandchild',
+          parentId: 'sub1',
+          tagIds: ['tag3'],
+        }),
+        subTasks: [],
+      } as TaskWithSubTasks;
+      const subTask = {
+        ...createMockTask({
+          id: 'sub1',
+          parentId: 'task1',
+          tagIds: ['tag2'],
+          subTaskIds: ['grandchild'],
+        }),
+        subTasks: [grandchild],
+      } as TaskWithSubTasks;
+      const task = {
+        ...createMockTask({
+          id: 'task1',
+          subTaskIds: ['sub1'],
+        }),
+        subTasks: [subTask],
+      } as TaskWithSubTasks;
+      const state = createMockState({
+        taskEntities: {
+          task1: task,
+          sub1: subTask,
+          grandchild,
+        },
+        tagEntities: {
+          tag1: createMockTag({ taskIds: ['task1'] }),
+          tag2: createMockTag({ id: 'tag2', taskIds: ['sub1'] }),
+          tag3: createMockTag({ id: 'tag3', taskIds: ['grandchild'] }),
+          [TODAY_TAG.id]: { ...TODAY_TAG, taskIds: ['task1', 'sub1', 'grandchild'] },
+        },
+      });
+
+      const action = TaskSharedActions.deleteTask({ task });
+      metaReducer(state, action);
+      const payload = getLastDeletePayload();
+
+      expect(payload!.deletedTaskEntities['task1']).toBeDefined();
+      expect(payload!.deletedTaskEntities['sub1']).toBeDefined();
+      expect(payload!.deletedTaskEntities['grandchild']).toBeDefined();
+      expect(payload!.tagTaskIdMap['tag3']).toContain('grandchild');
     });
 
     it('should handle task with undefined subTasks', () => {

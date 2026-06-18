@@ -14,6 +14,7 @@ import { selectTodayTaskIds } from '../../work-context/store/work-context.select
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DateService } from '../../../core/date/date.service';
+import { selectTaskEntities } from './task.selectors';
 
 @Injectable()
 export class TaskRelatedModelEffects {
@@ -38,14 +39,27 @@ export class TaskRelatedModelEffects {
         ofType(TimeTrackingActions.addTimeSpent),
         // PERF: Skip during hydration/sync to avoid selector evaluation overhead
         filter(() => !this._hydrationState.isApplyingRemoteOps()),
-        withLatestFrom(this._store.select(selectTodayTaskIds)),
-        filter(
-          ([{ task }, todayTaskIds]) =>
+        withLatestFrom(
+          this._store.select(selectTodayTaskIds),
+          this._store.select(selectTaskEntities),
+        ),
+        filter(([{ task }, todayTaskIds, entities]) => {
+          const todayTaskIdSet = new Set(todayTaskIds);
+          let parentId = task.parentId;
+          const visited = new Set<string>([task.id]);
+          while (parentId && !visited.has(parentId)) {
+            if (todayTaskIdSet.has(parentId)) {
+              return false;
+            }
+            visited.add(parentId);
+            parentId = entities[parentId]?.parentId;
+          }
+          return (
             !task.dueDay &&
             typeof task.dueWithTime !== 'number' &&
-            !todayTaskIds.includes(task.id) &&
-            (!task.parentId || !todayTaskIds.includes(task.parentId)),
-        ),
+            !todayTaskIdSet.has(task.id)
+          );
+        }),
         map(([{ task }]) =>
           TaskSharedActions.planTasksForToday({
             taskIds: [task.id],

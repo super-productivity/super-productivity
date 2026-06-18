@@ -33,7 +33,7 @@ describe('taskSharedLifecycleMetaReducer', () => {
     subTasks: Task[] = [],
   ): TaskWithSubTasks => ({
     ...createMockTask(taskOverrides),
-    subTasks,
+    subTasks: subTasks.map((t) => ({ ...t, subTasks: [] })),
   });
 
   beforeEach(() => {
@@ -183,6 +183,62 @@ describe('taskSharedLifecycleMetaReducer', () => {
           ...expectTagUpdates({
             tag1: { taskIds: ['keep-task'] },
             tag2: { taskIds: ['keep-task'] },
+            TODAY: { taskIds: ['keep-task'] },
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should remove nested descendants from projects and tags', () => {
+      const testState = createStateWithExistingTasks(
+        ['parent-task', 'subtask1', 'grandchild1', 'keep-task'],
+        [],
+        ['parent-task', 'subtask1', 'grandchild1', 'keep-task'],
+        ['parent-task', 'subtask1', 'grandchild1', 'keep-task'],
+      );
+
+      const grandchild1 = createMockTask({
+        id: 'grandchild1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        parentId: 'subtask1',
+      });
+      const subtask1 = {
+        ...createMockTask({
+          id: 'subtask1',
+          projectId: 'project1',
+          tagIds: ['tag1'],
+          parentId: 'parent-task',
+          subTaskIds: ['grandchild1'],
+        }),
+        subTasks: [grandchild1],
+      } as TaskWithSubTasks;
+      const parentTask = {
+        ...createMockTask({
+          id: 'parent-task',
+          projectId: 'project1',
+          tagIds: ['tag1'],
+          subTaskIds: ['subtask1'],
+        }),
+        subTasks: [subtask1],
+      } as TaskWithSubTasks;
+
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = subtask1;
+      testState[TASK_FEATURE_NAME].entities['grandchild1'] = grandchild1;
+
+      const action = createArchiveAction([parentTask]);
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', {
+            taskIds: ['keep-task'],
+          }),
+          ...expectTagUpdates({
+            tag1: { taskIds: ['keep-task'] },
             TODAY: { taskIds: ['keep-task'] },
           }),
         },

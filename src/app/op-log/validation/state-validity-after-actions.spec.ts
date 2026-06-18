@@ -357,7 +357,7 @@ describe('State Validity After Actions', () => {
 
         const taskWithSubtasks: TaskWithSubTasks = {
           ...parentTask,
-          subTasks: [sub1, sub2],
+          subTasks: [sub1, sub2].map((t) => ({ ...t, subTasks: [] })),
         };
 
         const action = TaskSharedActions.deleteTask({

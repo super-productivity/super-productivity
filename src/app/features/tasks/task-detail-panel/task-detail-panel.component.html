@@ -40,20 +40,23 @@
                 [listModelId]="task().id || ''"
                 [parentId]="task().id || ''"
                 [tasks]="task().subTasks || []"
+                [treeDepth]="taskDepth() + 1"
                 listId="SUB"
               ></task-list>
             }
           </div>
         }
-        <div class="add-btn-wrapper">
-          <button
-            (click)="addSubTask()"
-            mat-button
-          >
-            <mat-icon>add</mat-icon>
-            <span>{{ T.F.TASK.ADDITIONAL_INFO.ADD_SUB_TASK | translate }}</span>
-          </button>
-        </div>
+        @if (!isAtMaxTaskDepth()) {
+          <div class="add-btn-wrapper">
+            <button
+              (click)="addSubTask()"
+              mat-button
+            >
+              <mat-icon>add</mat-icon>
+              <span>{{ T.F.TASK.ADDITIONAL_INFO.ADD_SUB_TASK | translate }}</span>
+            </button>
+          </div>
+        }
       </ng-container>
     </task-detail-item>
   }

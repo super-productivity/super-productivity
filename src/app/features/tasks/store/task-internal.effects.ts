@@ -23,6 +23,7 @@ import {
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
 } from '../../project/store/project.actions';
+import { getDescendantIds } from '../util/task-tree.util';
 import { DateService } from '../../../core/date/date.service';
 
 @Injectable()
@@ -220,36 +221,32 @@ export class TaskInternalEffects {
     const { entities } = state;
 
     const filterUndoneNotCurrent = (id: string): boolean =>
-      !(entities[id] as Task).isDone && id !== oldCurrentId;
+      !!entities[id] && !(entities[id] as Task).isDone && id !== oldCurrentId;
     const flattenToSelectable = (arr: string[]): string[] =>
       arr.reduce((acc: string[], next: string) => {
-        return (entities[next] as Task).subTaskIds.length > 0
-          ? acc.concat((entities[next] as Task).subTaskIds)
+        const task = entities[next] as Task | undefined;
+        if (!task) {
+          return acc;
+        }
+        return task.subTaskIds.length > 0
+          ? acc.concat(
+              getDescendantIds(next, entities).filter(
+                (id) => !!entities[id] && (entities[id] as Task).subTaskIds.length === 0,
+              ),
+            )
           : acc.concat(next);
       }, []);
 
     if (oldCurrentId) {
-      const oldCurTask = entities[oldCurrentId];
-      if (oldCurTask && oldCurTask.parentId) {
-        (entities[oldCurTask.parentId] as Task).subTaskIds.some((id) => {
-          return id !== oldCurrentId && !(entities[id] as Task).isDone
-            ? (nextId = id) && true // assign !!!
-            : false;
-        });
-      }
-
-      if (!nextId) {
-        const oldCurIndex = todaysTaskIds.indexOf(oldCurrentId);
-        const mainTasksBefore = todaysTaskIds.slice(0, oldCurIndex);
-        const mainTasksAfter = todaysTaskIds.slice(oldCurIndex + 1);
-        const selectableBefore = flattenToSelectable(mainTasksBefore);
-        const selectableAfter = flattenToSelectable(mainTasksAfter);
-        nextId =
-          selectableAfter.find(filterUndoneNotCurrent) ||
-          selectableBefore.reverse().find(filterUndoneNotCurrent) ||
-          null;
-        nextId = Array.isArray(nextId) ? nextId[0] : nextId;
-      }
+      const selectable = flattenToSelectable(todaysTaskIds);
+      const oldCurIndex = selectable.indexOf(oldCurrentId);
+      const selectableBefore = oldCurIndex >= 0 ? selectable.slice(0, oldCurIndex) : [];
+      const selectableAfter =
+        oldCurIndex >= 0 ? selectable.slice(oldCurIndex + 1) : selectable;
+      nextId =
+        selectableAfter.find(filterUndoneNotCurrent) ||
+        selectableBefore.reverse().find(filterUndoneNotCurrent) ||
+        null;
     } else {
       const lastTask = state.lastCurrentTaskId && entities[state.lastCurrentTaskId];
       const isLastSelectable =
@@ -260,9 +257,7 @@ export class TaskInternalEffects {
       if (isLastSelectable) {
         nextId = state.lastCurrentTaskId;
       } else {
-        const selectable =
-          flattenToSelectable(todaysTaskIds).find(filterUndoneNotCurrent);
-        nextId = Array.isArray(selectable) ? selectable[0] : selectable;
+        nextId = flattenToSelectable(todaysTaskIds).find(filterUndoneNotCurrent) ?? null;
       }
     }
 

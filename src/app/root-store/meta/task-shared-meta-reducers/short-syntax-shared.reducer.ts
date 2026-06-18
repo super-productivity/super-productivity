@@ -28,9 +28,10 @@ import {
 } from './task-shared-helpers';
 import { filterOutId } from '../../../util/filter-out-id';
 import {
-  reCalcTimeEstimateForParentIfParent,
+  reCalcTimeEstimateForAncestors,
   updateTimeSpentForTask,
 } from '../../../features/tasks/store/task.reducer.util';
+import { getDescendantIds } from '../../../features/tasks/util/task-tree.util';
 
 // Type for mutable task changes within the reducer
 type MutableTaskChanges = { -readonly [K in keyof Task]?: Task[K] };
@@ -147,7 +148,7 @@ const handleApplyShortSyntax = (
 
   // Recalculate parent's timeEstimate if this task has a parent and timeEstimate was changed
   if (hasTimeEstimateChange && currentTask.parentId) {
-    taskState = reCalcTimeEstimateForParentIfParent(currentTask.parentId, taskState);
+    taskState = reCalcTimeEstimateForAncestors(currentTask.parentId, taskState);
   }
 
   updatedState = { ...updatedState, [TASK_FEATURE_NAME]: taskState };
@@ -165,7 +166,8 @@ const moveTaskToProject = (
   targetProjectId: string,
 ): RootState => {
   let updatedState = state;
-  const allTaskIds = unique([task.id, ...(task.subTaskIds ?? [])]);
+  const descendantIds = getDescendantIds(task.id, state[TASK_FEATURE_NAME].entities);
+  const allTaskIds = unique([task.id, ...descendantIds]);
 
   // Remove from current project if exists
   if (currentProjectId && state[PROJECT_FEATURE_NAME].entities[currentProjectId]) {
@@ -184,9 +186,9 @@ const moveTaskToProject = (
     });
   }
 
-  // Update subtasks projectId
-  if (task.subTaskIds?.length) {
-    const subTaskUpdates: Update<Task>[] = task.subTaskIds.map((id) => ({
+  // Update descendant projectId
+  if (descendantIds.length) {
+    const subTaskUpdates: Update<Task>[] = descendantIds.map((id) => ({
       id,
       changes: { projectId: targetProjectId },
     }));

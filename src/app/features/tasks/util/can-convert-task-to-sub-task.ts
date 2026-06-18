@@ -1,4 +1,6 @@
+import { Dictionary } from '@ngrx/entity';
 import { Task } from '../task.model';
+import { canNestUnder } from './task-tree.util';
 
 type ConvertibleTaskFields = Pick<
   Task,
@@ -15,7 +17,6 @@ type ConvertibleTaskFields = Pick<
 
 export const canConvertTaskToSubTask = (task: ConvertibleTaskFields): boolean =>
   !task.parentId &&
-  !task.subTaskIds?.length &&
   !task.repeatCfgId &&
   !task.issueId &&
   !task.issueProviderId &&
@@ -29,16 +30,15 @@ export const canConvertTaskToSubTask = (task: ConvertibleTaskFields): boolean =>
  * looked-up) task and target parent. Used by BOTH the section and crud
  * meta-reducers so their guards stay in lock-step — if they diverge, one
  * reducer can strip the task from its section while the other leaves it
- * top-level. Rejects a missing target, self-nesting, and nesting under a task
- * that is itself a subtask (the UI renders only two levels, so deeper nesting
- * would orphan the task and leave parent time aggregation stale).
+ * top-level. Rejects a missing target, self-nesting, nesting under a
+ * descendant (cycle), and any nesting that would exceed MAX_TASK_DEPTH (#2657).
  */
 export const canApplyConvertToSubTask = (
   task: (ConvertibleTaskFields & Pick<Task, 'id'>) | undefined,
   targetParent: Pick<Task, 'id' | 'parentId'> | undefined,
+  entities: Dictionary<Task>,
 ): boolean =>
   !!task &&
   !!targetParent &&
-  task.id !== targetParent.id &&
-  !targetParent.parentId &&
-  canConvertTaskToSubTask(task);
+  canConvertTaskToSubTask(task) &&
+  canNestUnder(task.id, targetParent.id, entities);
