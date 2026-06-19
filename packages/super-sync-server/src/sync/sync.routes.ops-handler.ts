@@ -92,8 +92,8 @@ export const uploadOpsHandler = async (
       `[user:${userId}] Upload: ${ops.length} ops from client ${clientId.slice(0, 8)}...`,
     );
 
-    // Rate limit check BEFORE deduplication to prevent bypass
-    // (attacker could retry with same requestId to skip rate limiting)
+    // Post-auth per-user fairness limit, separate from the route-level per-IP
+    // backstop. Check BEFORE deduplication so requestId retries cannot bypass it.
     if (syncService.isRateLimited(userId)) {
       Logger.audit({
         event: 'RATE_LIMITED',

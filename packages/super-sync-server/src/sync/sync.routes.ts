@@ -72,6 +72,8 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.addHook('preHandler', authenticate);
 
   // POST /api/sync/ops - Upload operations
+  // Route-level limiting is a pre-auth per-IP backstop for upload floods before
+  // auth/DB work. uploadOpsHandler applies the separate per-user fairness limit.
   fastify.post<{ Body: UploadOpsRequest }>(
     '/ops',
     {
