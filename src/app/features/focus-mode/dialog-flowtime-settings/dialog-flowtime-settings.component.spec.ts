@@ -123,6 +123,110 @@ describe('DialogFlowtimeSettingsComponent', () => {
     });
   });
 
+  // Footgun guard: the preservation only works while every level of the
+  // breakRules `repeat` opts out of Formly's hide-reset. A future field added
+  // without `resetOnHide: false` would silently re-introduce the #7581 wipe.
+  // This assertion is deterministic (no async hide settling) and fails fast.
+  describe('field config opts out of hide-reset at every level', () => {
+    it('sets resetOnHide:false on every hideable break field', () => {
+      const fields = component.fields() as any[];
+      const byKey = (key: string): any => fields.find((f) => f.key === key);
+
+      expect(byKey('breakPercentage').resetOnHide)
+        .withContext('breakPercentage')
+        .toBe(false);
+
+      const breakRules = byKey('breakRules');
+      expect(breakRules.resetOnHide).withContext('breakRules field').toBe(false);
+      expect(breakRules.fieldArray.resetOnHide)
+        .withContext('breakRules.fieldArray')
+        .toBe(false);
+      breakRules.fieldArray.fieldGroup.forEach((inner: any) => {
+        expect(inner.resetOnHide)
+          .withContext(`breakRules row field "${inner.key}"`)
+          .toBe(false);
+      });
+    });
+  });
+
+  // Regression: switching break mode hides the rule/percentage section. Without
+  // `resetOnHide: false` on every level of the `repeat` (field, fieldArray and
+  // each inner input), Formly strips the hidden rule rows' values, wiping the
+  // user's break rules on a Rule -> Ratio -> Rule round-trip (issue #7581).
+  // These drive the real `breakMode` control rather than calling internal model
+  // setters, so they fail the way the bug actually reproduces in the dialog.
+  describe('break-mode switch preserves hidden values', () => {
+    const switchMode = (mode: 'ratio' | 'rule'): void => {
+      (component.form.get('breakMode') as any).setValue(mode);
+      fixture.detectChanges();
+    };
+    const rulesCtrl = (): any => component.form.get('breakRules');
+
+    it('preserves a single rule across Rule -> Ratio -> Rule', () => {
+      const expected = JSON.stringify(component.model().breakRules);
+      switchMode('ratio');
+      switchMode('rule');
+      expect(JSON.stringify(component.model().breakRules))
+        .withContext('model')
+        .toEqual(expected);
+      expect(JSON.stringify(rulesCtrl().value)).withContext('form').toEqual(expected);
+    });
+
+    it('preserves two rules across the round-trip', () => {
+      component.model.set({
+        ...component.model(),
+        breakRules: [
+          { minDuration: 0, maxDuration: 25, breakDuration: 5 },
+          { minDuration: 25, maxDuration: 60, breakDuration: 10 },
+        ],
+      });
+      fixture.detectChanges();
+      const expected = JSON.stringify(component.model().breakRules);
+      switchMode('ratio');
+      switchMode('rule');
+      expect(JSON.stringify(component.model().breakRules))
+        .withContext('model with two rules')
+        .toEqual(expected);
+    });
+
+    it('preserves an edited rule value across the round-trip', () => {
+      rulesCtrl().at(0).get('maxDuration').setValue(40);
+      rulesCtrl().at(0).get('breakDuration').setValue(12);
+      fixture.detectChanges();
+      switchMode('ratio');
+      switchMode('rule');
+      expect(rulesCtrl().at(0).value)
+        .withContext('edited values survive')
+        .toEqual({ minDuration: 0, maxDuration: 40, breakDuration: 12 });
+    });
+
+    it('lets the user clear a field right after the switch (no snap-back)', () => {
+      switchMode('ratio');
+      switchMode('rule');
+      rulesCtrl().at(0).get('minDuration').setValue(null);
+      fixture.detectChanges();
+      expect(rulesCtrl().at(0).get('minDuration').value)
+        .withContext('cleared field stays cleared')
+        .toBe(null);
+    });
+
+    it('save() after the round-trip persists the original rule in ms', () => {
+      switchMode('ratio');
+      switchMode('rule');
+      component.save();
+      const saved = globalConfigServiceMock.updateSection.calls.mostRecent().args[1];
+      expect(saved.breakRules).toEqual([
+        { minDuration: 0, maxDuration: 1500000, breakDuration: 300000 },
+      ]);
+    });
+
+    it('keeps the form valid in rule mode (hidden required percentage does not block)', () => {
+      switchMode('ratio');
+      switchMode('rule');
+      expect(component.form.valid).withContext('form.valid in rule mode').toBe(true);
+    });
+  });
+
   describe('validator', () => {
     it('should mark rule row invalid if maxDuration < minDuration', () => {
       const breakRules = component.form.get('breakRules') as any;
