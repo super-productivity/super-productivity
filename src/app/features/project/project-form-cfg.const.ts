@@ -40,14 +40,6 @@ export const CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG: ConfigFormSection<CreatePr
         },
       },
       {
-        key: 'isEnableBacklog',
-        type: 'checkbox',
-        defaultValue: false,
-        templateOptions: {
-          label: T.F.PROJECT.FORM_BASIC.L_ENABLE_BACKLOG,
-        },
-      },
-      {
         // Transient form-only field (not persisted on the Project). When checked
         // on create, the dialog provisions a Plainspace space + bound issue
         // provider. See docs/plainspace-integration-plan.md §6.
@@ -60,6 +52,14 @@ export const CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG: ConfigFormSection<CreatePr
         templateOptions: {
           label: T.PLAINSPACE.SHARE_LABEL,
           description: T.PLAINSPACE.SHARE_DESCRIPTION,
+        },
+      },
+      {
+        key: 'isEnableBacklog',
+        type: 'checkbox',
+        defaultValue: false,
+        templateOptions: {
+          label: T.F.PROJECT.FORM_BASIC.L_ENABLE_BACKLOG,
         },
       },
     ],
