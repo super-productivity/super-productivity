@@ -1,0 +1,41 @@
+name: 'Setup Electron Build'
+description: >
+  Shared setup for Electron build/package jobs: Node 22, the git-over-HTTPS
+  workaround, and the npm + electron-binary caches. Does NOT run `npm i` —
+  callers run it themselves (with a retry) because some jobs install platform
+  workarounds immediately before it.
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      with:
+        node-version: 22
+
+    # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+    - name: Reconfigure git to use HTTP authentication
+      shell: bash
+      run: >
+        git config --global url."https://github.com/".insteadOf
+        ssh://git@github.com/
+
+    - name: Get npm cache directory
+      id: npm-cache-dir
+      shell: bash
+      run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        # npm registry tarballs + electron's prebuilt binary. Caching the
+        # binary lets warm runs skip its GitHub download — the flaky step that
+        # times out (ETIMEDOUT) and fails the job. electron's cache dir is
+        # OS-specific, so list all three; actions/cache ignores the paths that
+        # don't exist on the current runner.
+        path: |
+          ${{ steps.npm-cache-dir.outputs.dir }}
+          ~/.cache/electron
+          ~/Library/Caches/electron
+          ~/AppData/Local/electron/Cache
+        key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node22-
