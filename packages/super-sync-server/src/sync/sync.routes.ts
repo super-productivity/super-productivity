@@ -6,7 +6,6 @@ import { Logger } from '../logger';
 import {
   UploadOpsRequest,
   DownloadOpsResponse,
-  SnapshotResponse,
   SyncStatusResponse,
   SYNC_ERROR_CODES,
 } from './sync.types';
@@ -22,7 +21,6 @@ import {
   MAX_RAW_BODY_SIZE_OPS,
   MAX_RAW_BODY_SIZE_SNAPSHOT,
 } from './sync.routes.payload';
-import { applyStorageUsageDelta } from './sync.routes.quota';
 import { uploadOpsHandler } from './sync.routes.ops-handler';
 import { uploadSnapshotHandler } from './sync.routes.snapshot-handler';
 
@@ -179,65 +177,6 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
     },
   );
 
-  // GET /api/sync/snapshot - Get full state snapshot
-  // generateSnapshot() handles caching internally via sequence-based freshness:
-  // returns cached snapshot if up-to-date, only replays ops when new ones exist.
-  // Rate limited: Snapshot generation is CPU-intensive (can replay up to 100k ops)
-  fastify.get(
-    '/snapshot',
-    {
-      config: {
-        rateLimit: {
-          max: 10,
-          timeWindow: '5 minutes',
-        },
-      },
-    },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      try {
-        const userId = getAuthUser(req).userId;
-        const syncService = getSyncService();
-
-        Logger.info(`[user:${userId}] Snapshot requested`);
-        // B5: Cap cache growth at the user's remaining quota so a client
-        // already at/near quota cannot use GET /snapshot to keep growing
-        // `snapshotData`. Uses the cheap cached counter — if it's stale-high
-        // we may skip a cache write that would have fit; the snapshot itself
-        // is still returned to the client either way. The post-write hook
-        // keeps the counter consistent with what actually landed on disk.
-        const storageInfo = await syncService.getStorageInfo(userId);
-        const remainingQuota = Math.max(
-          0,
-          storageInfo.storageQuotaBytes - storageInfo.storageUsedBytes,
-        );
-        // Keep the storage counter in sync with snapshotData rewrites; without
-        // this hook GET /snapshot can grow up to MAX_SNAPSHOT_SIZE_BYTES of
-        // cached data with no quota accounting.
-        const snapshot = await syncService.generateSnapshot(
-          userId,
-          (deltaBytes) =>
-            applyStorageUsageDelta(userId, deltaBytes, 'after generateSnapshot'),
-          remainingQuota,
-        );
-        Logger.info(`[user:${userId}] Snapshot ready (seq=${snapshot.serverSeq})`);
-        return reply.send(snapshot as SnapshotResponse);
-      } catch (err) {
-        if (err instanceof EncryptedOpsNotSupportedError) {
-          Logger.info(
-            `[user:${getAuthUser(req).userId}] Snapshot blocked due to encrypted ops (count=${err.encryptedOpCount})`,
-          );
-          return reply.status(400).send({
-            error: ENCRYPTED_OPS_CLIENT_MESSAGE,
-            errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
-          });
-        }
-
-        Logger.error(`Get snapshot error: ${errorMessage(err)}`);
-        return reply.status(500).send({ error: 'Internal server error' });
-      }
-    },
-  );
-
   // POST /api/sync/snapshot - Upload full state
   // Supports gzip-compressed request bodies via Content-Encoding: gzip header
   // B8: per-user rate limit — uploads are expensive (up to 30MB body,
@@ -264,7 +203,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
     uploadSnapshotHandler,
   );
 
-  // GET /api/sync/status - Get sync status
+  // GET /api/sync/status - Get sync status (diagnostic — not used by the production client)
   fastify.get(
     '/status',
     {

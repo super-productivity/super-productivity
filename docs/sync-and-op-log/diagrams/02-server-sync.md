@@ -88,8 +88,7 @@ graph TB
             DownAPI["GET /api/sync/ops<br/>━━━━━━━━━━━━━━━<br/>Download operations<br/>Query: sinceSeq, limit"]:::api
             OpsAPI["POST /api/sync/ops<br/>━━━━━━━━━━━━━━━<br/>Upload operations<br/>Body: ops[], clientId"]:::api
             SnapshotAPI["POST /api/sync/snapshot<br/>━━━━━━━━━━━━━━━<br/>Upload full state<br/>Body: state, reason"]:::api
-            GetSnapshotAPI["GET /api/sync/snapshot<br/>━━━━━━━━━━━━━━━<br/>Get full state"]:::api
-            StatusAPI["GET /api/sync/status<br/>━━━━━━━━━━━━━━━<br/>Check sync status"]:::api
+            StatusAPI["GET /api/sync/status<br/>━━━━━━━━━━━━━━━<br/>Check sync status (diagnostic)"]:::api
             RestoreAPI["GET /api/sync/restore/:seq<br/>━━━━━━━━━━━━━━━<br/>Restore to point"]:::api
         end
 
@@ -156,8 +155,6 @@ graph TB
     %% CONNECTIONS: Read endpoints -> Database
     DownAPI -.->|"SELECT ops > sinceSeq"| OpsTable
     DownAPI -.->|"SELECT lastSeq"| SyncState
-    GetSnapshotAPI -.->|"SELECT snapshot"| SyncState
-    GetSnapshotAPI -.->|"SELECT (replay)"| OpsTable
     StatusAPI -.->|"SELECT"| SyncState
     StatusAPI -.->|"COUNT"| Devices
     RestoreAPI -.->|"SELECT (replay)"| OpsTable
@@ -179,8 +176,7 @@ graph TB
 | `/api/sync/ops`            | POST   | Upload operations               | INSERT ops, UPDATE lastSeq, UPSERT device, UPSERT tombstone (if DEL) |
 | `/api/sync/ops?sinceSeq=N` | GET    | Download operations             | SELECT ops, SELECT lastSeq, find latest snapshot (skip optimization) |
 | `/api/sync/snapshot`       | POST   | Upload full state (SYNC_IMPORT) | Same as POST /ops + UPDATE snapshot cache                            |
-| `/api/sync/snapshot`       | GET    | Get full state                  | SELECT snapshot (or replay ops if stale)                             |
-| `/api/sync/status`         | GET    | Check sync status               | SELECT lastSeq, COUNT devices                                        |
+| `/api/sync/status`         | GET    | Check sync status (diagnostic)  | SELECT lastSeq, COUNT devices                                        |
 | `/api/sync/restore-points` | GET    | List restore points             | SELECT ops (filter SYNC_IMPORT, BACKUP_IMPORT, REPAIR)               |
 | `/api/sync/restore/:seq`   | GET    | Restore to specific point       | SELECT ops, replay to targetSeq                                      |
 

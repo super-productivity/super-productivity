@@ -333,49 +333,6 @@ describe('Sync Routes', () => {
     });
   });
 
-  describe('GET /api/sync/snapshot - Get Snapshot', () => {
-    beforeEach(async () => {
-      // Upload some operations
-      await app.inject({
-        method: 'POST',
-        url: '/api/sync/ops',
-        headers: { authorization: `Bearer ${authToken}` },
-        payload: {
-          ops: [
-            createOp(clientId, {
-              entityId: 't1',
-              payload: { title: 'Task 1', done: false },
-            }),
-          ],
-          clientId,
-        },
-      });
-    });
-
-    it('should return current state snapshot', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/sync/snapshot',
-        headers: { authorization: `Bearer ${authToken}` },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.serverSeq).toBe(1);
-      expect(body.state).toBeDefined();
-      expect(body.generatedAt).toBeDefined();
-    });
-
-    it('should return 401 without authorization', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/sync/snapshot',
-      });
-
-      expect(response.statusCode).toBe(401);
-    });
-  });
-
   describe('POST /api/sync/snapshot - Upload Snapshot', () => {
     it('should upload snapshot successfully', async () => {
       const response = await app.inject({
@@ -595,33 +552,31 @@ describe('Multi-User Isolation', () => {
       },
     });
 
-    // Get user 1's snapshot
-    const user1Snapshot = await app.inject({
+    // User 1 should only see their operation
+    const user1Response = await app.inject({
       method: 'GET',
-      url: '/api/sync/snapshot',
+      url: '/api/sync/ops?sinceSeq=0',
       headers: { authorization: `Bearer ${user1Token}` },
     });
 
-    const user1State = user1Snapshot.json().state as Record<
-      string,
-      Record<string, { title: string }>
-    >;
-    expect(user1State.TASK['user1-task']).toBeDefined();
-    expect(user1State.TASK['user2-task']).toBeUndefined();
+    expect(user1Response.statusCode).toBe(200);
+    const user1Body = user1Response.json();
+    expect(user1Body.ops).toHaveLength(1);
+    expect(user1Body.ops[0].op.entityId).toBe('user1-task');
+    expect(user1Body.ops[0].op.payload.title).toBe('User 1 Task');
 
-    // Get user 2's snapshot
-    const user2Snapshot = await app.inject({
+    // User 2 should only see their operation
+    const user2Response = await app.inject({
       method: 'GET',
-      url: '/api/sync/snapshot',
+      url: '/api/sync/ops?sinceSeq=0',
       headers: { authorization: `Bearer ${user2Token}` },
     });
 
-    const user2State = user2Snapshot.json().state as Record<
-      string,
-      Record<string, { title: string }>
-    >;
-    expect(user2State.TASK['user2-task']).toBeDefined();
-    expect(user2State.TASK['user1-task']).toBeUndefined();
+    expect(user2Response.statusCode).toBe(200);
+    const user2Body = user2Response.json();
+    expect(user2Body.ops).toHaveLength(1);
+    expect(user2Body.ops[0].op.entityId).toBe('user2-task');
+    expect(user2Body.ops[0].op.payload.title).toBe('User 2 Task');
   });
 
   it('should isolate sync status between users', async () => {

@@ -278,8 +278,8 @@ export class SnapshotService {
    * `onCacheDelta` is invoked after the transaction commits with the byte
    * change applied to the `snapshotData` column when the cache was rewritten.
    * Callers should use it to keep the storage usage counter in sync with
-   * on-disk reality — otherwise `GET /snapshot` can grow `snapshotData` by up
-   * to ~MAX_SNAPSHOT_SIZE_BYTES without the counter noticing.
+   * on-disk reality — otherwise the cache can grow `snapshotData` by up to
+   * ~MAX_SNAPSHOT_SIZE_BYTES without the counter noticing.
    *
    * `maxCacheBytes` (B5) caps how large the persisted cache blob may be.
    * When the freshly compressed snapshot would exceed this cap (typically set

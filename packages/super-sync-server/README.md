@@ -261,17 +261,9 @@ Get changes from other devices.
 GET /api/sync/ops?sinceSeq=123
 ```
 
-#### 3. Get Snapshot
+#### 3. Sync Status (diagnostic)
 
-Get the full current state (optimized).
-
-```http
-GET /api/sync/snapshot
-```
-
-#### 4. Sync Status
-
-Check pending operations and device status.
+Check sync status and storage info. Not used by the production client — intended for operator/debugging use.
 
 ```http
 GET /api/sync/status

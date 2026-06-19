@@ -437,15 +437,6 @@ describe('Sync System Fixes', () => {
       expect(snapshotBody.accepted).toBe(true);
       expect(cacheSnapshotSpy).not.toHaveBeenCalled();
 
-      const serverSnapshotResponse = await app.inject({
-        method: 'GET',
-        url: '/api/sync/snapshot',
-        headers: { authorization: `Bearer ${authToken}` },
-      });
-
-      expect(serverSnapshotResponse.statusCode).toBe(400);
-      expect(serverSnapshotResponse.json().errorCode).toBe('ENCRYPTED_OPS_NOT_SUPPORTED');
-
       // Download ops and verify the SYNC_IMPORT has isPayloadEncrypted
       const downloadResponse = await app.inject({
         method: 'GET',
