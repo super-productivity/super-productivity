@@ -67,7 +67,10 @@ import {
   type WorkContextThemeCfg,
 } from './features/work-context/work-context.model';
 import { SectionService } from './features/section/section.service';
-import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
+import {
+  DialogEditSectionComponent,
+  EditSectionDialogResult,
+} from './features/section/dialog-edit-section/dialog-edit-section.component';
 import { TODAY_TAG } from './features/tag/tag.const';
 import { normalizeBackgroundImageBlur } from './features/work-context/work-context.const';
 import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
@@ -479,13 +482,14 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const ctxId = this.workContextService.activeWorkContextId;
     const ctxType = this.workContextService.activeWorkContextType;
     if (!ctxId || !ctxType) return;
-    const title = await firstValueFrom(
+    const result = await firstValueFrom(
       this._matDialog
-        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .open(DialogEditSectionComponent, { data: {} })
         .afterClosed(),
     );
-    if (typeof title === 'string' && title.trim()) {
-      this._sectionService.addSection(title, ctxId, ctxType);
+    if (result) {
+      const { title, tagFilterIds, tagFilterMode } = result as EditSectionDialogResult;
+      this._sectionService.addSection(title, ctxId, ctxType, tagFilterIds, tagFilterMode);
     }
   }
 
