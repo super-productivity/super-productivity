@@ -243,7 +243,7 @@ export class TaskReminderEffects {
           ids.forEach((id) => {
             try {
               const notificationId = generateNotificationId(id);
-              this._cancelNativeReminder(notificationId);
+              androidInterface.cancelNativeReminder?.(notificationId);
             } catch (e) {
               TaskLog.err('Failed to cancel native reminder:', e);
             }
@@ -333,9 +333,4 @@ export class TaskReminderEffects {
         ),
       { dispatch: false },
     );
-
-  private _cancelNativeReminder(notificationId: number): void {
-    const activeAndroidInterface = androidInterface || (window as any).SUPAndroid;
-    activeAndroidInterface?.cancelNativeReminder?.(notificationId);
-  }
 }
