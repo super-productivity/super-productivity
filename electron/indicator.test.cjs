@@ -251,13 +251,48 @@ test('initIndicator uses NativeImage for Linux tray creation and updates', () =>
     undefined,
   );
 
+  // On Linux the running icon stays static (no progress-animation frames) to
+  // avoid StatusNotifierItem flicker (#4905).
   assert.equal(traySetImageCalls.at(-1).kind, 'native-image');
   assert.match(
     traySetImageCalls.at(-1).iconPath,
-    /\/icons\/indicator\/running-anim-d\/3\.png$/,
+    /\/icons\/indicator\/running-d\.png$/,
   );
 
   beforeQuitHandler();
+});
+
+test('non-Linux platforms keep the running progress animation', () => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'darwin',
+  });
+  const { initIndicator } = loadIndicatorModule();
+
+  initIndicator({
+    showApp: () => {},
+    quitApp: () => {},
+    ICONS_FOLDER: '/icons/',
+    forceDarkTray: false,
+    app: { on: () => {} },
+  });
+
+  const currentTaskUpdated = ipcHandlers.get('CURRENT_TASK_UPDATED');
+  currentTaskUpdated(
+    {},
+    { id: 'T1', title: 'Task', timeSpent: 5 * 60000, timeEstimate: 25 * 60000 },
+    false,
+    0,
+    false,
+    0,
+    undefined,
+  );
+
+  // macOS uses the black (`-l`) template icon and still animates progress.
+  assert.match(
+    traySetImageCalls.at(-1).iconPath,
+    /\/icons\/indicator\/running-anim-l\/3\.png$/,
+  );
 });
 
 test('initIndicator falls back to icon path if NativeImage creation is empty', () => {
