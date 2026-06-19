@@ -19,7 +19,10 @@ import { MatMenuModule } from '@angular/material/menu';
 
 import { TaskService } from '../tasks/task.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
-import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
+import {
+  DialogEditSectionComponent,
+  EditSectionDialogResult,
+} from '../section/dialog-edit-section/dialog-edit-section.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
@@ -281,20 +284,45 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     // any section.
     const taskById = new Map(tasks.map((t) => [t.id, t]));
     const dict: Record<string, TaskWithSubTasks[]> = {};
+    // Tracks all task IDs placed in at least one section (by manual placement
+    // or tag filter). These are excluded from the unsectioned list.
     const inSection = new Set<string>();
+
     for (const s of sections) {
       const list: TaskWithSubTasks[] = [];
+      const addedToList = new Set<string>();
+
+      // Manual placement (drag-drop order is preserved via taskIds)
       for (const tId of s.taskIds ?? []) {
         const t = taskById.get(tId);
         if (t) {
           list.push(t);
+          addedToList.add(tId);
           inSection.add(tId);
         }
       }
+
+      // Tag filter: append any task whose tags match, unless already added above.
+      // A task can appear in multiple sections when its tags match more than one.
+      if (s.tagFilterIds?.length) {
+        for (const t of tasks) {
+          if (addedToList.has(t.id)) continue;
+          const matches =
+            s.tagFilterMode === 'AND'
+              ? s.tagFilterIds.every((tid) => t.tagIds.includes(tid))
+              : s.tagFilterIds.some((tid) => t.tagIds.includes(tid));
+          if (matches) {
+            list.push(t);
+            addedToList.add(t.id);
+            inSection.add(t.id);
+          }
+        }
+      }
+
       dict[s.id] = list;
     }
-    const noSection = tasks.filter((t) => !inSection.has(t.id));
 
+    const noSection = tasks.filter((t) => !inSection.has(t.id));
     return { dict, noSection };
   });
 
@@ -480,19 +508,20 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       });
   }
 
-  editSection(id: string, title: string): void {
+  editSection(section: Section): void {
     this._matDialog
-      .open(DialogPromptComponent, {
-        data: {
-          placeholder: T.WW.ADD_SECTION_TITLE,
-          txtValue: title,
-        },
+      .open(DialogEditSectionComponent, {
+        data: { section },
       })
       .afterClosed()
       .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe((newTitle: string | undefined) => {
-        if (newTitle?.trim()) {
-          this.sectionService.updateSection(id, { title: newTitle });
+      .subscribe((result: EditSectionDialogResult | undefined) => {
+        if (result) {
+          this.sectionService.updateSection(section.id, {
+            title: result.title,
+            tagFilterIds: result.tagFilterIds,
+            tagFilterMode: result.tagFilterMode,
+          });
         }
       });
   }

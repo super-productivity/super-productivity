@@ -1,0 +1,64 @@
+<mat-dialog-content>
+  <form
+    #formEl="ngForm"
+    (ngSubmit)="formEl.valid && close(true)"
+  >
+    <mat-form-field class="full-width">
+      <mat-label>{{ T.WW.ADD_SECTION_TITLE | translate }}</mat-label>
+      <input
+        [(ngModel)]="title"
+        name="title"
+        matInput
+        required
+        type="text"
+      />
+    </mat-form-field>
+
+    <chip-list-input
+      [label]="T.WW.SECTION_TAG_FILTER | translate"
+      [suggestions]="allTags()"
+      [model]="tagFilterIds()"
+      (addItem)="addTag($event)"
+      (removeItem)="removeTag($event)"
+    ></chip-list-input>
+
+    @if (showFilterMode()) {
+      <mat-radio-group
+        class="filter-mode-group"
+        [value]="tagFilterMode()"
+        (change)="onFilterModeChange($event)"
+      >
+        <mat-radio-button value="OR">{{
+          T.WW.SECTION_TAG_FILTER_MODE_OR | translate
+        }}</mat-radio-button>
+        <mat-radio-button value="AND">{{
+          T.WW.SECTION_TAG_FILTER_MODE_AND | translate
+        }}</mat-radio-button>
+      </mat-radio-group>
+    }
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <div class="wrap-buttons">
+    <button
+      (click)="close(false)"
+      class="btn btn-primary submit-button"
+      mat-button
+      type="button"
+    >
+      <mat-icon>close</mat-icon>
+      {{ T.G.CANCEL | translate }}
+    </button>
+
+    <button
+      (click)="close(true)"
+      class="btn btn-primary submit-button"
+      color="primary"
+      mat-stroked-button
+    >
+      <mat-icon>check</mat-icon>
+      {{ T.G.SAVE | translate }}
+    </button>
+  </div>
+</mat-dialog-actions>

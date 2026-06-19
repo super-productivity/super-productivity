@@ -8,6 +8,8 @@ export interface Section {
   title: string;
   isExpanded?: boolean;
   taskIds: string[];
+  tagFilterIds?: string[];
+  tagFilterMode?: 'OR' | 'AND';
 }
 
 export interface SectionState extends EntityState<Section> {

@@ -40,6 +40,8 @@ export class SectionService {
     title: string,
     contextId: string,
     contextType: WorkContextType,
+    tagFilterIds: string[] = [],
+    tagFilterMode: 'OR' | 'AND' = 'OR',
   ): string | null {
     if (!isValidSectionContext(contextId, contextType)) return null;
     const id = nanoid();
@@ -52,6 +54,8 @@ export class SectionService {
           title: sanitizeSectionTitle(title),
           isExpanded: true,
           taskIds: [],
+          tagFilterIds,
+          tagFilterMode,
         },
       }),
     );

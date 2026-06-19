@@ -31,7 +31,10 @@ import {
   ResolveUnfinishedTasksChoice,
 } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
 import { SectionService } from '../../features/section/section.service';
-import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
+import {
+  DialogEditSectionComponent,
+  EditSectionDialogResult,
+} from '../../features/section/dialog-edit-section/dialog-edit-section.component';
 import { MatMenuItem } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
@@ -308,28 +311,22 @@ export class WorkContextMenuComponent implements OnInit {
 
   addSection(): void {
     this._matDialog
-      .open(DialogPromptComponent, {
-        // Omit `message` to match the Add Tag pattern — the dialog
-        // collapses its outer padding when there's no message text
-        // (`dialog-prompt.scss: mat-dialog-content.isNoMsg`).
-        // Use a descriptive placeholder ("Add Section") rather than a
-        // generic "Title" so screen readers and visual users get the
-        // dialog's purpose without a separate title element.
-        data: {
-          placeholder: T.WW.ADD_SECTION_TITLE,
-        },
+      .open(DialogEditSectionComponent, {
+        data: {},
       })
       // NOTE: do NOT pipe takeUntilDestroyed here. This component lives inside
       // a <mat-menu>; the menu (and component) is destroyed the moment the
       // dialog opens, which would unsubscribe before afterClosed() emits.
       // MatDialog cleans up its own subscription when the dialog closes.
       .afterClosed()
-      .subscribe((title: string) => {
-        if (title?.trim()) {
+      .subscribe((result: EditSectionDialogResult | undefined) => {
+        if (result) {
           this._sectionService.addSection(
-            title,
+            result.title,
             this.contextId,
             this.isForProject ? WorkContextType.PROJECT : WorkContextType.TAG,
+            result.tagFilterIds,
+            result.tagFilterMode,
           );
         }
       });
