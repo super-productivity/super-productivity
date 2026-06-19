@@ -486,6 +486,32 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1']);
     });
 
+    it('should not duplicate already rejected local ops while adding superseded pending ops', async () => {
+      const now = Date.now();
+      const conflicts: EntityConflict[] = [
+        createConflict(
+          'task-1',
+          [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+          [createOpWithTimestamp('remote-1', 'client-b', now)],
+        ),
+      ];
+      mockOpLogStore.getUnsyncedByEntity.and.resolveTo(
+        new Map([
+          [
+            'TASK:task-1',
+            [
+              createOpWithTimestamp('local-1', 'client-a', now - 1000),
+              createOpWithTimestamp('local-2', 'client-a', now - 500),
+            ],
+          ],
+        ]),
+      );
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1', 'local-2']);
+    });
+
     it('should handle multiple conflicts in single batch', async () => {
       const now = Date.now();
       const conflicts: EntityConflict[] = [

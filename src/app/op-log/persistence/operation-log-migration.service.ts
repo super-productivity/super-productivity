@@ -111,7 +111,7 @@ export class OperationLogMigrationService {
           `OperationLogMigrationService: Found ${allOps.length} orphan operations. ` +
             `Clearing them before legacy migration.`,
         );
-        await this.opLogStore.deleteOpsWhere(() => true);
+        await this.opLogStore.clearAllOperations();
       } else {
         // Case 2: No legacy data - these are legitimate user operations from a fresh
         // install. Let the hydrator replay them. No migration needed.

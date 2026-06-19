@@ -17,6 +17,7 @@ import {
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { OpType } from '../core/operation.types';
 import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
+import { INBOX_PROJECT } from '../../features/project/project.const';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 
@@ -259,6 +260,64 @@ describe('ServerMigrationService', () => {
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
     });
 
+    it('should skip if state only has the default INBOX project', async () => {
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
+        Promise.resolve({
+          task: { ids: [], entities: {} },
+          project: {
+            ids: [INBOX_PROJECT.id],
+            entities: { [INBOX_PROJECT.id]: INBOX_PROJECT },
+          },
+          tag: { ids: [], entities: {} },
+          note: { ids: [], entities: {} },
+        } as any),
+      );
+
+      await service.handleServerMigration(defaultProvider);
+
+      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+    });
+
+    it('should proceed if state has notes', async () => {
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
+        Promise.resolve({
+          task: { ids: [], entities: {} },
+          project: {
+            ids: [INBOX_PROJECT.id],
+            entities: { [INBOX_PROJECT.id]: INBOX_PROJECT },
+          },
+          tag: { ids: [], entities: {} },
+          note: { ids: ['note-1'], entities: { 'note-1': { id: 'note-1' } } },
+        } as any),
+      );
+
+      await service.handleServerMigration(defaultProvider);
+
+      expect(opLogStoreSpy.append).toHaveBeenCalled();
+    });
+
+    it('should proceed if non-entity sync state differs from defaults', async () => {
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
+        Promise.resolve({
+          task: { ids: [], entities: {} },
+          project: {
+            ids: [INBOX_PROJECT.id],
+            entities: { [INBOX_PROJECT.id]: INBOX_PROJECT },
+          },
+          tag: { ids: [], entities: {} },
+          note: { ids: [], entities: {} },
+          planner: {
+            days: { '2026-06-19': ['task-1'] },
+            addPlannedTasksDialogLastShown: undefined,
+          },
+        } as any),
+      );
+
+      await service.handleServerMigration(defaultProvider);
+
+      expect(opLogStoreSpy.append).toHaveBeenCalled();
+    });
+
     it('should abort if state validation fails', async () => {
       validateStateServiceSpy.validateAndRepair.and.resolveTo({
         isValid: false,
@@ -335,11 +394,13 @@ describe('ServerMigrationService', () => {
     });
 
     it('should proceed if state has tasks', async () => {
-      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
-        task: { ids: ['task-1'], entities: { 'task-1': { id: 'task-1' } } },
-        project: { ids: [], entities: {} },
-        tag: { ids: [], entities: {} },
-      } as any);
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
+        Promise.resolve({
+          task: { ids: ['task-1'], entities: { 'task-1': { id: 'task-1' } } },
+          project: { ids: [], entities: {} },
+          tag: { ids: [], entities: {} },
+        } as any),
+      );
 
       await service.handleServerMigration(defaultProvider);
 
@@ -347,11 +408,13 @@ describe('ServerMigrationService', () => {
     });
 
     it('should proceed if state has projects', async () => {
-      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
-        task: { ids: [], entities: {} },
-        project: { ids: ['proj-1'], entities: { 'proj-1': { id: 'proj-1' } } },
-        tag: { ids: [], entities: {} },
-      } as any);
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
+        Promise.resolve({
+          task: { ids: [], entities: {} },
+          project: { ids: ['proj-1'], entities: { 'proj-1': { id: 'proj-1' } } },
+          tag: { ids: [], entities: {} },
+        } as any),
+      );
 
       await service.handleServerMigration(defaultProvider);
 
@@ -359,11 +422,16 @@ describe('ServerMigrationService', () => {
     });
 
     it('should proceed if state has user-created tags', async () => {
-      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
-        task: { ids: [], entities: {} },
-        project: { ids: [], entities: {} },
-        tag: { ids: ['user-tag-1'], entities: { 'user-tag-1': { id: 'user-tag-1' } } },
-      } as any);
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
+        Promise.resolve({
+          task: { ids: [], entities: {} },
+          project: { ids: [], entities: {} },
+          tag: {
+            ids: ['user-tag-1'],
+            entities: { 'user-tag-1': { id: 'user-tag-1' } },
+          },
+        } as any),
+      );
 
       await service.handleServerMigration(defaultProvider);
 
@@ -371,7 +439,7 @@ describe('ServerMigrationService', () => {
     });
   });
 
-  describe('_isEmptyState (tested via handleServerMigration)', () => {
+  describe('empty-state detection (tested via handleServerMigration)', () => {
     it('should treat null state as empty', async () => {
       stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
         Promise.resolve(null as any),
@@ -403,7 +471,7 @@ describe('ServerMigrationService', () => {
     });
   });
 
-  describe('_hasNoUserCreatedTags (tested via handleServerMigration)', () => {
+  describe('system-tag empty-state detection (tested via handleServerMigration)', () => {
     it('should identify system tags correctly', async () => {
       for (const systemTagId of SYSTEM_TAG_IDS) {
         opLogStoreSpy.append.calls.reset();

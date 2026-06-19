@@ -481,6 +481,141 @@ describe('OperationLogDownloadService', () => {
         );
       }));
 
+      it('should clear a pending clock drift retry when a newer check supersedes it', fakeAsync(() => {
+        const driftMs = CLOCK_DRIFT_THRESHOLD_MS + 60000;
+        const initialTime = Date.now();
+        const staleDriftedServerTime = initialTime - driftMs;
+        spyOn(Date, 'now').and.returnValue(initialTime);
+
+        mockApiProvider.downloadOps.and.returnValues(
+          Promise.resolve({
+            ops: [
+              {
+                serverSeq: 1,
+                receivedAt: staleDriftedServerTime,
+                op: {
+                  id: 'op-1',
+                  clientId: 'c1',
+                  actionType: '[Task] Add' as ActionType,
+                  opType: OpType.Create,
+                  entityType: 'TASK',
+                  payload: {},
+                  vectorClock: {},
+                  timestamp: initialTime,
+                  schemaVersion: 1,
+                },
+              },
+            ],
+            hasMore: false,
+            latestSeq: 1,
+            serverTime: staleDriftedServerTime,
+          }),
+          Promise.resolve({
+            ops: [
+              {
+                serverSeq: 2,
+                receivedAt: initialTime,
+                op: {
+                  id: 'op-2',
+                  clientId: 'c1',
+                  actionType: '[Task] Update' as ActionType,
+                  opType: OpType.Update,
+                  entityType: 'TASK',
+                  payload: {},
+                  vectorClock: {},
+                  timestamp: initialTime,
+                  schemaVersion: 1,
+                },
+              },
+            ],
+            hasMore: false,
+            latestSeq: 2,
+            serverTime: initialTime,
+          }),
+        );
+
+        service.downloadRemoteOps(mockApiProvider);
+        tick();
+        service.downloadRemoteOps(mockApiProvider);
+        tick();
+        flush();
+
+        expect(OpLog.warn).not.toHaveBeenCalled();
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+      }));
+
+      it('should not postpone a pending clock drift retry when drift persists', fakeAsync(() => {
+        const driftMs = CLOCK_DRIFT_THRESHOLD_MS + 60000;
+        const initialTime = Date.now();
+        const firstServerTime = initialTime - driftMs;
+        const secondServerTime = initialTime - driftMs - 1000;
+        spyOn(Date, 'now').and.returnValue(initialTime);
+
+        mockApiProvider.downloadOps.and.returnValues(
+          Promise.resolve({
+            ops: [
+              {
+                serverSeq: 1,
+                receivedAt: firstServerTime,
+                op: {
+                  id: 'op-1',
+                  clientId: 'c1',
+                  actionType: '[Task] Add' as ActionType,
+                  opType: OpType.Create,
+                  entityType: 'TASK',
+                  payload: {},
+                  vectorClock: {},
+                  timestamp: initialTime,
+                  schemaVersion: 1,
+                },
+              },
+            ],
+            hasMore: false,
+            latestSeq: 1,
+            serverTime: firstServerTime,
+          }),
+          Promise.resolve({
+            ops: [
+              {
+                serverSeq: 2,
+                receivedAt: secondServerTime,
+                op: {
+                  id: 'op-2',
+                  clientId: 'c1',
+                  actionType: '[Task] Update' as ActionType,
+                  opType: OpType.Update,
+                  entityType: 'TASK',
+                  payload: {},
+                  vectorClock: {},
+                  timestamp: initialTime,
+                  schemaVersion: 1,
+                },
+              },
+            ],
+            hasMore: false,
+            latestSeq: 2,
+            serverTime: secondServerTime,
+          }),
+        );
+
+        service.downloadRemoteOps(mockApiProvider);
+        tick();
+        tick(500);
+
+        service.downloadRemoteOps(mockApiProvider);
+        tick();
+        tick(500);
+
+        expect(OpLog.warn).toHaveBeenCalledWith(
+          'OperationLogDownloadService: Clock drift detected',
+          jasmine.objectContaining({
+            driftMinutes: jasmine.any(String),
+            direction: 'client ahead',
+          }),
+        );
+        expect(mockSnackService.open).toHaveBeenCalledTimes(1);
+      }));
+
       it('should skip clock drift check when serverTime is not provided (backwards compatibility)', fakeAsync(() => {
         // Old servers may not provide serverTime. In this case, we should NOT
         // check clock drift at all because using receivedAt would give false positives.

@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
+import { deepEqual } from '@sp/sync-core';
 import { firstValueFrom } from 'rxjs';
 import { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
@@ -20,9 +21,37 @@ import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service'
 import { ActionType, Operation, OpType, SyncImportReason } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
 import { OpLog } from '../../core/log';
-import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { DialogServerMigrationConfirmComponent } from './dialog-server-migration-confirm/dialog-server-migration-confirm.component';
+import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
+import { MODEL_CONFIGS } from '../model/model-config';
+
+const MEANINGFUL_ENTITY_STATE_KEYS = new Set(['task', 'project', 'tag', 'note']);
+
+const hasServerMigrationStateData = (state: unknown): boolean => {
+  if (!state || typeof state !== 'object') {
+    return false;
+  }
+  const s = state as Record<string, unknown>;
+
+  if (hasMeaningfulStateData(s)) {
+    return true;
+  }
+
+  for (const [key, config] of Object.entries(MODEL_CONFIGS)) {
+    if (MEANINGFUL_ENTITY_STATE_KEYS.has(key)) {
+      continue;
+    }
+    if (!Object.prototype.hasOwnProperty.call(s, key) || s[key] === undefined) {
+      continue;
+    }
+    if (!deepEqual(s[key], config.defaultData)) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 /**
  * Service responsible for handling server migration scenarios.
@@ -178,7 +207,7 @@ export class ServerMigrationService {
       >;
 
     // Skip if local state is effectively empty
-    if (this._isEmptyState(currentState)) {
+    if (!hasServerMigrationStateData(currentState)) {
       OpLog.warn('ServerMigrationService: Skipping SYNC_IMPORT - local state is empty.');
       return;
     }
@@ -287,43 +316,5 @@ export class ServerMigrationService {
     } finally {
       stopWaiting();
     }
-  }
-
-  /**
-   * Checks if the state is effectively empty (no meaningful data to sync).
-   * An empty state has no tasks, projects, or user-created tags.
-   */
-  private _isEmptyState(state: unknown): boolean {
-    if (!state || typeof state !== 'object') {
-      return true;
-    }
-
-    const s = state as Record<string, unknown>;
-
-    // Check for meaningful data in key entity collections
-    const taskState = s['task'] as { ids?: unknown[] } | undefined;
-    const projectState = s['project'] as { ids?: unknown[] } | undefined;
-    const tagState = s['tag'] as { ids?: (string | unknown)[] } | undefined;
-
-    const hasNoTasks = !taskState?.ids || taskState.ids.length === 0;
-    const hasNoProjects = !projectState?.ids || projectState.ids.length === 0;
-    const hasNoUserTags = this._hasNoUserCreatedTags(tagState?.ids);
-
-    // Consider empty if there are no tasks, projects, or user-defined tags
-    return hasNoTasks && hasNoProjects && hasNoUserTags;
-  }
-
-  /**
-   * Checks if there are no user-created tags.
-   * System tags (TODAY, URGENT, IMPORTANT, IN_PROGRESS) are excluded from the count.
-   */
-  private _hasNoUserCreatedTags(tagIds: (string | unknown)[] | undefined): boolean {
-    if (!tagIds || tagIds.length === 0) {
-      return true;
-    }
-    const userTagCount = tagIds.filter(
-      (id) => typeof id === 'string' && !SYSTEM_TAG_IDS.has(id),
-    ).length;
-    return userTagCount === 0;
   }
 }

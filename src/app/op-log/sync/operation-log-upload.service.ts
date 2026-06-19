@@ -229,15 +229,18 @@ export class OperationLogUploadService {
 
       // Convert to SyncOperation format. Local-only operations remain in the
       // local op-log for replay, but are acknowledged locally instead of uploaded.
-      const syncOpPairs = regularOps
-        .map((entry) => ({ entry, syncOp: this._entryToSyncOp(entry) }))
-        .filter(
-          (pair): pair is { entry: OperationLogEntry; syncOp: SyncOperation } =>
-            pair.syncOp !== null,
-        );
-      const localOnlySeqs = regularOps
-        .filter((entry) => !syncOpPairs.some((pair) => pair.entry.seq === entry.seq))
-        .map((entry) => entry.seq);
+      let syncOps: SyncOperation[] = [];
+      const uploadEntries: OperationLogEntry[] = [];
+      const localOnlySeqs: number[] = [];
+      for (const entry of regularOps) {
+        const syncOp = this._entryToSyncOp(entry);
+        if (syncOp === null) {
+          localOnlySeqs.push(entry.seq);
+        } else {
+          syncOps.push(syncOp);
+          uploadEntries.push(entry);
+        }
+      }
       if (localOnlySeqs.length > 0) {
         await this.opLogStore.markSynced(localOnlySeqs);
         uploadedCount += localOnlySeqs.length;
@@ -245,12 +248,9 @@ export class OperationLogUploadService {
           `OperationLogUploadService: Marked ${localOnlySeqs.length} local-only op(s) as synced without upload`,
         );
       }
-      if (syncOpPairs.length === 0) {
+      if (syncOps.length === 0) {
         return;
       }
-
-      let syncOps: SyncOperation[] = syncOpPairs.map((pair) => pair.syncOp);
-      const uploadEntries = syncOpPairs.map((pair) => pair.entry);
 
       // Encrypt payloads if E2E encryption is enabled
       if (isEncryptionEnabled && encryptKey) {
@@ -281,12 +281,10 @@ export class OperationLogUploadService {
         }
 
         // Mark successfully accepted ops as synced
+        const entrySeqByOpId = new Map(entries.map((entry) => [entry.op.id, entry.seq]));
         const acceptedSeqs = response.results
           .filter((r) => r.accepted)
-          .map((r) => {
-            const entry = entries.find((e) => e.op.id === r.opId);
-            return entry?.seq;
-          })
+          .map((r) => entrySeqByOpId.get(r.opId))
           .filter((seq): seq is number => seq !== undefined);
 
         if (acceptedSeqs.length > 0) {
