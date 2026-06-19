@@ -24,7 +24,6 @@ import {
   JIRA_TYPE,
   OPEN_PROJECT_TYPE,
   REDMINE_TYPE,
-  AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
   PLAINSPACE_TYPE,
 } from './issue.const';
@@ -42,7 +41,7 @@ import { OpenProjectCommonInterfacesService } from './providers/open-project/ope
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 // Linear is now a plugin — no built-in service needed
 // ClickUp is now a plugin — no built-in service needed
-import { AzureDevOpsCommonInterfacesService } from './providers/azure-devops/azure-devops-common-interfaces.service';
+// Azure DevOps is now a plugin — no built-in service needed
 import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
 import { PlainspaceCommonInterfacesService } from './providers/plainspace/plainspace-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -78,7 +77,6 @@ export class IssueService {
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
   private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
-  private _azureDevOpsCommonInterfaceService = inject(AzureDevOpsCommonInterfacesService);
   private _nextcloudDeckCommonInterfaceService = inject(
     NextcloudDeckCommonInterfacesService,
   );
@@ -103,7 +101,6 @@ export class IssueService {
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
     [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
-    [AZURE_DEVOPS_TYPE]: this._azureDevOpsCommonInterfaceService,
     [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
     [PLAINSPACE_TYPE]: this._plainspaceCommonInterfaceService,
   };

@@ -193,6 +193,87 @@ describe('issueProviderReducer loadAllData migration', () => {
     });
   });
 
+  describe('AZURE_DEVOPS → azure-devops-issue-provider', () => {
+    const legacyAzure = {
+      id: 'ap1',
+      issueProviderKey: 'AZURE_DEVOPS',
+      isEnabled: true,
+      host: 'https://dev.azure.com/my-org',
+      token: 'azure_pat',
+      organization: 'my-org',
+      project: 'My Project',
+      scope: 'created-by-me',
+      autoImportLimit: 100,
+    };
+
+    it('moves connection fields into pluginConfig and sets pluginId', () => {
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ ap1: legacyAzure }),
+      );
+      const migrated = state.entities['ap1'] as unknown as Record<string, unknown>;
+      expect(migrated['pluginId']).toBe('azure-devops-issue-provider');
+      expect(migrated['pluginConfig']).toEqual({
+        project: 'My Project',
+        host: 'https://dev.azure.com/my-org',
+        token: 'azure_pat',
+        organization: 'my-org',
+        scope: 'created-by-me',
+        autoImportLimit: 100,
+      });
+    });
+
+    it('preserves legacy top-level fields for older clients', () => {
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ ap1: legacyAzure }),
+      );
+      const migrated = state.entities['ap1'] as unknown as Record<string, unknown>;
+      expect(migrated['host']).toBe('https://dev.azure.com/my-org');
+      expect(migrated['project']).toBe('My Project');
+      expect(migrated['issueProviderKey']).toBe('AZURE_DEVOPS');
+    });
+
+    it('defaults optional scope/limit/org fields', () => {
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({
+          ap1: {
+            id: 'ap1',
+            issueProviderKey: 'AZURE_DEVOPS',
+            host: 'https://dev.azure.com/o',
+            project: 'P',
+            token: 't',
+          },
+        }),
+      );
+      const cfg = (state.entities['ap1'] as unknown as Record<string, unknown>)[
+        'pluginConfig'
+      ] as Record<string, unknown>;
+      expect(cfg).toEqual({
+        project: 'P',
+        host: 'https://dev.azure.com/o',
+        token: 't',
+        organization: '',
+        scope: 'assigned-to-me',
+        autoImportLimit: 50,
+      });
+    });
+
+    it('is idempotent — already-migrated providers are left untouched', () => {
+      const already = {
+        ...legacyAzure,
+        pluginId: 'azure-devops-issue-provider',
+        pluginConfig: { project: 'P', host: 'h', token: 't' },
+      };
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ ap1: already }),
+      );
+      expect(state.entities['ap1'] as unknown).toBe(already);
+    });
+  });
+
   it('returns state unchanged when no legacy providers need migration', () => {
     const action = loadWith({
       jp1: { id: 'jp1', issueProviderKey: 'JIRA', isEnabled: true },

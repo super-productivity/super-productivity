@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "HOST": "Host (Organisations- oder Sammlungs-URL)",
+    "HOST_DESC": "Verwende die vollständige Azure DevOps-URL, z. B. https://dev.azure.com/your-org oder https://server:8080/tfs/DefaultCollection.",
+    "PROJECT": "Projekt",
+    "TOKEN": "Persönliches Zugriffstoken",
+    "SCOPE": "Umfang (nur automatischer Import)",
+    "SCOPE_ALL": "Alle",
+    "SCOPE_CREATED": "Von mir erstellt",
+    "SCOPE_ASSIGNED": "Mir zugewiesen",
+    "AUTO_IMPORT_LIMIT": "Automatisches Importlimit",
+    "AUTO_IMPORT_LIMIT_DESC": "Maximale Anzahl von Azure DevOps Work Items, die für den automatischen Backlog-Import abgerufen werden. Max. {{max}}."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Zusammenfassung",
+    "STATUS": "Status",
+    "ASSIGNEE": "Zuständiger",
+    "DUE_DATE": "Fälligkeitsdatum",
+    "PRIORITY": "Priorität",
+    "DESCRIPTION": "Beschreibung"
+  },
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list Azure DevOps work items for a project in the task creation panel. They are shown as suggestions and link back to the work item.</p><p>In addition, you can automatically import open work items. Provide a Personal Access Token with work-item read access.</p>"
+}

@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "HOST": "Хост (URL-адреса організації або колекції)",
+    "HOST_DESC": "Використовуйте повну URL-адресу Azure DevOps, наприклад https://dev.azure.com/your-org або https://server:8080/tfs/DefaultCollection.",
+    "PROJECT": "Проект",
+    "TOKEN": "Персональний токен доступу",
+    "SCOPE": "Область застосування (лише для автоматичного імпорту)",
+    "SCOPE_ALL": "Усі",
+    "SCOPE_CREATED": "Створено мною",
+    "SCOPE_ASSIGNED": "Призначено мені",
+    "AUTO_IMPORT_LIMIT": "Ліміт автоматичного імпорту",
+    "AUTO_IMPORT_LIMIT_DESC": "Максимальна кількість робочих елементів Azure DevOps для автоматичного імпорту журналу обробки. Макс. {{max}}."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Підсумок",
+    "STATUS": "Статус",
+    "ASSIGNEE": "Виконавець",
+    "DUE_DATE": "Термін виконання",
+    "PRIORITY": "Пріоритет",
+    "DESCRIPTION": "Опис"
+  },
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list Azure DevOps work items for a project in the task creation panel. They are shown as suggestions and link back to the work item.</p><p>In addition, you can automatically import open work items. Provide a Personal Access Token with work-item read access.</p>"
+}
