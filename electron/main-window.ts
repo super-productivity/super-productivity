@@ -16,7 +16,7 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { readFileSync, stat, writeFileSync } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC, IS_GNOME_DESKTOP } from './common.const';
+import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
@@ -148,10 +148,12 @@ export const createWindow = async ({
   const userPrefersCustomWindowTitleBar =
     persistedIsUseCustomWindowTitleBar ??
     legacyIsUseObsidianStyleHeader ??
-    !IS_GNOME_DESKTOP;
-  // GNOME + Wayland combinations can miss native controls when titleBarStyle is hidden.
-  // Force native decorations on GNOME to keep window controls available.
-  const isUseCustomWindowTitleBar = IS_GNOME_DESKTOP
+    !IS_GNOME_WAYLAND;
+  // GNOME + Wayland can't render the Window-Controls-Overlay when titleBarStyle
+  // is 'hidden', leaving the window with no min/max/close controls. Force native
+  // decorations only for that combination; GNOME-on-X11 and every other desktop
+  // honor the user's preference. Keep in sync with global-theme.service.ts.
+  const isUseCustomWindowTitleBar = IS_GNOME_WAYLAND
     ? false
     : userPrefersCustomWindowTitleBar;
   // On macOS use 'hiddenInset' so AppKit positions the traffic lights at the

@@ -9,7 +9,7 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { BodyClass, IS_ELECTRON, IS_GNOME_DESKTOP } from '../../app.constants';
+import { BodyClass, IS_ELECTRON, IS_GNOME_WAYLAND } from '../../app.constants';
 import { IS_MAC } from '../../util/is-mac';
 import { distinctUntilChanged, map, startWith, switchMap, take } from 'rxjs/operators';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
@@ -93,8 +93,22 @@ export class GlobalThemeService {
   private _iosViewportChangeRaf: number | null = null;
 
   private _isCustomWindowTitleBarEnabled(): boolean {
+    // The main process (main-window.ts) force-disables the custom title bar on
+    // GNOME+Wayland because the Window-Controls-Overlay won't render there.
+    // Mirror that here so we never lay the custom header on top of native
+    // decorations, which would produce a doubled header.
+    if (IS_GNOME_WAYLAND) {
+      return false;
+    }
+    // Default ON to match main-window's `?? !IS_GNOME_WAYLAND` default.
+    // KNOWN RESIDUAL: main-window also honors the legacy `isUseObsidianStyleHeader`
+    // SimpleStore field, which is never mirrored into global config, so it isn't
+    // visible here. A user who explicitly disabled the *old* header and never set
+    // the new toggle gets native decorations + custom header (doubled). This is a
+    // pre-existing divergence (already present for non-GNOME) and is self-healing:
+    // the now-visible Misc toggle lets them turn the custom header off.
     const misc = this._globalConfigService.misc();
-    return misc?.isUseCustomWindowTitleBar ?? !IS_GNOME_DESKTOP;
+    return misc?.isUseCustomWindowTitleBar ?? true;
   }
 
   darkMode = signal<DarkModeCfg>(
