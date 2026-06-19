@@ -302,6 +302,7 @@ vi.mock('../src/db', async () => {
 });
 
 import { initSyncService, getSyncService } from '../src/sync/sync.service';
+import { OperationDownloadService } from '../src/sync/services/operation-download.service';
 import {
   Operation,
   SYNC_ERROR_CODES,
@@ -313,6 +314,7 @@ describe('Conflict Detection', () => {
   const userId = 1;
   const clientA = 'client-a';
   const clientB = 'client-b';
+  let operationDownloadService: OperationDownloadService;
 
   const createOp = (overrides: Partial<Operation> & { entityId: string }): Operation => ({
     id: uuidv7(),
@@ -340,6 +342,7 @@ describe('Conflict Detection', () => {
 
     vi.clearAllMocks();
     initSyncService();
+    operationDownloadService = new OperationDownloadService();
   });
 
   describe('Vector Clock Comparison', () => {
@@ -860,7 +863,7 @@ describe('Conflict Detection', () => {
       // Verify the clock was pruned to MAX_VECTOR_CLOCK_SIZE (20) before storage.
       // clientA ('client-a') is not in the clock, so only the MAX most active
       // clients are kept (the ones with highest counters).
-      const ops = await service.getOpsSince(userId, 0);
+      const ops = await operationDownloadService.getOpsSince(userId, 0);
       const storedClock = ops[0].op.vectorClock;
       expect(Object.keys(storedClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
       // The most active clients should be preserved (top MAX entries by counter)
@@ -890,7 +893,7 @@ describe('Conflict Detection', () => {
       expect(result[0].accepted).toBe(true);
 
       // Verify the clock was pruned to MAX_VECTOR_CLOCK_SIZE
-      const ops = await service.getOpsSince(userId, 0);
+      const ops = await operationDownloadService.getOpsSince(userId, 0);
       const storedClock = ops[0].op.vectorClock;
       expect(Object.keys(storedClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
       // clientA should be preserved despite having the lowest counter
@@ -944,7 +947,7 @@ describe('Conflict Detection', () => {
       expect(resolvedResult[0].accepted).toBe(true);
 
       // Verify the stored clock was pruned to MAX after acceptance
-      const ops = await service.getOpsSince(userId, 0);
+      const ops = await operationDownloadService.getOpsSince(userId, 0);
       const latestOp = ops.find((o: any) => o.op.id === resolvedOp.id);
       expect(latestOp).toBeDefined();
       const storedClock = latestOp!.op.vectorClock;
