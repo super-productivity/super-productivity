@@ -109,17 +109,18 @@ const dueOf = (fields: AzureWorkItemFields): string =>
 
 const mapReduced = (item: AzureWorkItem): PluginSearchResult => {
   const fields = item.fields;
-  const state = String(fields['System.State'] || '');
+  const summary = summaryOf(item);
   const due = dueOf(fields);
   return {
     id: String(item.id),
-    title: summaryOf(item),
+    title: summary,
     url: item._links?.html?.href,
-    status: state,
+    // is-issue-done reads `status` to strike through done items in the search
+    // list. add-task leaves isDone unset (no `state` here), matching built-in.
+    status: String(fields['System.State'] || ''),
 
-    // Extended fields for display, isDone mapping and add-task data.
-    summary: summaryOf(item),
-    state,
+    // Extended fields for display + add-task data.
+    summary,
     assignee: fields['System.AssignedTo']?.displayName,
     lastUpdated: toMs(fields['System.ChangedDate']),
     priority: fields['Microsoft.VSTS.Common.Priority'] as number | undefined,
@@ -131,20 +132,21 @@ const mapReduced = (item: AzureWorkItem): PluginSearchResult => {
 
 const mapIssue = (item: AzureWorkItem): PluginIssue => {
   const fields = item.fields;
-  const state = String(fields['System.State'] || '');
+  const summary = summaryOf(item);
   const due = dueOf(fields);
   return {
     id: String(item.id),
-    title: summaryOf(item),
+    title: summary,
     body: (fields['System.Description'] as string) || '',
     url: item._links?.html?.href,
-    state,
+    // `state` is the canonical status field — drives issueDisplay, fieldMappings
+    // (isDone) and extractSyncValues.
+    state: String(fields['System.State'] || ''),
     lastUpdated: toMs(fields['System.ChangedDate']),
     assignee: fields['System.AssignedTo']?.displayName,
 
-    // Extended fields for display + isDone mapping.
-    summary: summaryOf(item),
-    status: state,
+    // Extended fields for display.
+    summary,
     priority: fields['Microsoft.VSTS.Common.Priority'] as number | undefined,
     due,
   };
@@ -313,7 +315,7 @@ PluginAPI.registerIssueProvider({
 
   issueDisplay: [
     { field: 'summary', label: t('DISPLAY.SUMMARY'), type: 'link', linkField: 'url' },
-    { field: 'status', label: t('DISPLAY.STATUS'), type: 'text', hideEmpty: true },
+    { field: 'state', label: t('DISPLAY.STATUS'), type: 'text', hideEmpty: true },
     { field: 'assignee', label: t('DISPLAY.ASSIGNEE'), type: 'text', hideEmpty: true },
     { field: 'due', label: t('DISPLAY.DUE_DATE'), type: 'text', hideEmpty: true },
     { field: 'priority', label: t('DISPLAY.PRIORITY'), type: 'text', hideEmpty: true },
