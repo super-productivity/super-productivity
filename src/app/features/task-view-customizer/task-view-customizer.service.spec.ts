@@ -357,7 +357,7 @@ describe('TaskViewCustomizerService', () => {
     ]);
   });
 
-  it('should sort by tag using the primary tag (sidebar order), with untagged last', () => {
+  it('should sort by primary-tag sidebar order, keeping manual order within a tag', () => {
     (service as unknown as { _allTags: Tag[] })._allTags = [
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
@@ -385,14 +385,23 @@ describe('TaskViewCustomizerService', () => {
       desc: service['applySort'](arr, SORT_OPTION_TYPE.tag, SORT_ORDER.DESC),
     };
 
+    // Tag groups follow sidebar order ([Tag B, Tag A]) and flip with the
+    // direction, but within a group the input (manual) order is preserved -
+    // it does NOT re-sort by task title, so DESC is not a plain reverse.
     const resultAsc = [
       'Beta(Tag B)',
       'Third Task(Tag A, Tag B)',
       'Alpha(Tag A)',
-      'Aardvark(-)',
       'Zebra(-)',
+      'Aardvark(-)',
     ];
-    const resultDesc = [...resultAsc].reverse();
+    const resultDesc = [
+      'Zebra(-)',
+      'Aardvark(-)',
+      'Alpha(Tag A)',
+      'Beta(Tag B)',
+      'Third Task(Tag A, Tag B)',
+    ];
 
     expect(sorted.asc.map((t) => t.id)).toEqual(resultAsc);
     expect(sorted.desc.map((t) => t.id)).toEqual(resultDesc);
@@ -472,7 +481,7 @@ describe('TaskViewCustomizerService', () => {
     ]);
   });
 
-  it('should sort by title for tasks with the same primary tag', () => {
+  it('should keep manual order for tasks with the same primary tag', () => {
     const samePrimary: TaskWithSubTasks[] = [
       {
         id: 'tA',
@@ -505,7 +514,8 @@ describe('TaskViewCustomizerService', () => {
     ];
     const sorted = service['applySort'](samePrimary, SORT_OPTION_TYPE.tag);
 
-    expect(sorted.map((t) => t.id)).toEqual(['tB', 'tA']);
+    // Input order is preserved (tA before tB) rather than re-sorted by title.
+    expect(sorted.map((t) => t.id)).toEqual(['tA', 'tB']);
   });
 
   it('should group by tag', () => {
