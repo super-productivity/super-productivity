@@ -4,7 +4,7 @@ import {
   MiscConfig,
 } from '../global-config.model';
 import { T } from '../../../t.const';
-import { IS_ELECTRON, IS_GNOME_DESKTOP } from '../../../app.constants';
+import { IS_ELECTRON, IS_GNOME_WAYLAND } from '../../../app.constants';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 
 export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
@@ -102,21 +102,21 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_TRAY_SHOW_CURRENT_COUNTDOWN,
       },
     },
-    ...((IS_ELECTRON && !IS_GNOME_DESKTOP
+    ...((IS_ELECTRON && !IS_GNOME_WAYLAND
       ? [
           {
             key: 'isUseCustomWindowTitleBar',
             type: 'checkbox',
             // Display-only default: seed the checkbox so it reflects the actual
             // window state on a fresh install (the custom title bar is on by
-            // default here -- this field is only shown on non-GNOME Electron, see
-            // the enclosing guard). formly seeds the control without an initial
-            // modelChange, so nothing is persisted on load.
+            // default here -- this field is hidden only on GNOME+Wayland, where the
+            // main process force-disables it, see the enclosing guard). formly seeds
+            // the control without an initial modelChange, so nothing is persisted on load.
             // KNOWN RESIDUAL (#7891): saving any *other* Misc setting emits the
             // whole model and persists this seeded value too. We accept that over a
             // persisted DEFAULT_GLOBAL_CONFIG default, which would be pushed to
             // Electron on *every* launch and override a legacy `isUseObsidianStyleHeader`
-            // choice. So a pre-2025-12 non-GNOME user who had disabled the old
+            // choice. So a pre-2025-12 user who had disabled the old
             // header may see it re-enabled after editing Misc settings (reversible here).
             defaultValue: true,
             templateOptions: {

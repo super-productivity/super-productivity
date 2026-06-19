@@ -117,6 +117,14 @@
     <mat-icon svgIcon="nextcloud_deck"></mat-icon>
     <span>Nextcloud Deck</span>
   </button>
+  <button
+    class="provider-tile focus-ring"
+    type="button"
+    (click)="openSetupDialog('PLAINSPACE')"
+  >
+    <mat-icon svgIcon="plainspace"></mat-icon>
+    <span>Plainspace</span>
+  </button>
   @for (provider of pluginProviders; track provider.pluginId) {
     <button
       class="provider-tile focus-ring"

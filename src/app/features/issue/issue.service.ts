@@ -26,6 +26,7 @@ import {
   REDMINE_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
+  PLAINSPACE_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
@@ -43,6 +44,7 @@ import { RedmineCommonInterfacesService } from './providers/redmine/redmine-comm
 // ClickUp is now a plugin — no built-in service needed
 import { AzureDevOpsCommonInterfacesService } from './providers/azure-devops/azure-devops-common-interfaces.service';
 import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
+import { PlainspaceCommonInterfacesService } from './providers/plainspace/plainspace-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
@@ -80,6 +82,7 @@ export class IssueService {
   private _nextcloudDeckCommonInterfaceService = inject(
     NextcloudDeckCommonInterfacesService,
   );
+  private _plainspaceCommonInterfaceService = inject(PlainspaceCommonInterfacesService);
   private _calendarCommonInterfaceService = inject(CalendarCommonInterfacesService);
   private _issueProviderService = inject(IssueProviderService);
   private _workContextService = inject(WorkContextService);
@@ -102,6 +105,7 @@ export class IssueService {
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
     [AZURE_DEVOPS_TYPE]: this._azureDevOpsCommonInterfaceService,
     [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
+    [PLAINSPACE_TYPE]: this._plainspaceCommonInterfaceService,
   };
 
   ISSUE_REFRESH_MAP: {
@@ -654,7 +658,7 @@ export class IssueService {
         const subTaskData = this._getAddTaskData(issueProviderKey, subtask);
         const { title: subTaskTitle, ...subTaskAdditional } = subTaskData;
 
-        await this._taskService.addSubTaskTo(parentTaskId, {
+        this._taskService.addSubTaskTo(parentTaskId, {
           title: subTaskTitle,
           issueType: issueProviderKey,
           issueProviderId: issueProviderId,
@@ -703,7 +707,7 @@ export class IssueService {
     // sub-task (has a parentId), attach to its root parent so the new task
     // becomes a sibling of the parent rather than a grandchild.
     const effectiveParentId = parentTask.task.parentId || parentTask.task.id;
-    const taskId = await this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
+    const taskId = this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
     return { taskId, parentTaskId: effectiveParentId };
   }
 

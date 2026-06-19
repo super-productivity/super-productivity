@@ -11,6 +11,10 @@ import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
+import { NotifyService } from '../../../core/notify/notify.service';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { BannerId } from '../../../core/banner/banner.model';
+import { T } from '../../../t.const';
 import * as actions from './focus-mode.actions';
 import * as selectors from './focus-mode.selectors';
 import { FocusModeMode, FocusScreen, TimerState } from '../focus-mode.model';
@@ -36,6 +40,7 @@ describe('FocusModeEffects', () => {
   let metricServiceMock: any;
   let bannerServiceMock: any;
   let hydrationStateServiceMock: any;
+  let notifyServiceMock: any;
   let currentTaskId$: BehaviorSubject<string | null>;
 
   const createMockTimer = (overrides: Partial<TimerState> = {}): TimerState => ({
@@ -99,6 +104,10 @@ describe('FocusModeEffects', () => {
       otherNoBreakTIme$: new BehaviorSubject<number>(0),
     };
 
+    notifyServiceMock = {
+      notify: jasmine.createSpy('notify').and.resolveTo(undefined),
+    };
+
     TestBed.configureTestingModule({
       providers: [
         FocusModeEffects,
@@ -137,6 +146,8 @@ describe('FocusModeEffects', () => {
         },
         { provide: HydrationStateService, useValue: hydrationStateServiceMock },
         { provide: TakeABreakService, useValue: takeABreakServiceMock },
+        { provide: NotifyService, useValue: notifyServiceMock },
+        { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: false },
         {
           provide: GlobalTrackingIntervalService,
           useValue: {
@@ -1041,6 +1052,197 @@ describe('FocusModeEffects', () => {
       effects.logFocusSession$.subscribe();
 
       expect(metricServiceMock.logFocusSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('surfaceSessionDoneOnCompletion$', () => {
+    // The effect is non-dispatching (dispatch:false); it has side effects only
+    // (notify + banner). Subscribing drives the tap; `complete` fires after the
+    // single `of(...)` action, by which point the side effects have run.
+    const run = (done: DoneFn, assertFn: () => void): void => {
+      effects.surfaceSessionDoneOnCompletion$.subscribe({
+        complete: () => {
+          assertFn();
+          done();
+        },
+      });
+    };
+
+    const expectExcluded = (done: DoneFn): void =>
+      run(done, () => {
+        expect(notifyServiceMock.notify).not.toHaveBeenCalled();
+        expect(bannerServiceMock.open).not.toHaveBeenCalled();
+      });
+
+    it('should banner + notify when Countdown auto-completes with the overlay hidden and app unfocused', (done) => {
+      spyOn(document, 'hasFocus').and.returnValue(false);
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.overrideSelector(selectors.selectIsOverlayShown, false);
+      store.refreshState();
+
+      run(done, () => {
+        expect(notifyServiceMock.notify).toHaveBeenCalledTimes(1);
+        expect(
+          notifyServiceMock.notify.calls.mostRecent().args[0].translateParams,
+        ).toEqual({ duration: '25m' });
+        expect(bannerServiceMock.open).toHaveBeenCalledTimes(1);
+        expect(bannerServiceMock.open.calls.mostRecent().args[0].id).toBe(
+          BannerId.FocusModeSessionDone,
+        );
+      });
+    });
+
+    it('banner action opens the overlay (it does not itself start a session)', (done) => {
+      spyOn(document, 'hasFocus').and.returnValue(true);
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.overrideSelector(selectors.selectIsOverlayShown, false);
+      store.refreshState();
+      const dispatchSpy = spyOn(store, 'dispatch');
+
+      run(done, () => {
+        const banner = bannerServiceMock.open.calls.mostRecent().args[0];
+        expect(banner.action.label).toBe(T.F.FOCUS_MODE.SESSION_COMPLETED_BANNER_ACTION);
+        banner.action.fn();
+        expect(dispatchSpy).toHaveBeenCalledWith(actions.showFocusOverlay());
+      });
+    });
+
+    it('should banner but NOT notify when the overlay is hidden and the app is focused', (done) => {
+      spyOn(document, 'hasFocus').and.returnValue(true);
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.overrideSelector(selectors.selectIsOverlayShown, false);
+      store.refreshState();
+
+      run(done, () => {
+        expect(notifyServiceMock.notify).not.toHaveBeenCalled();
+        expect(bannerServiceMock.open).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('should NOT banner when the overlay is already shown (SessionDone is already visible)', (done) => {
+      spyOn(document, 'hasFocus').and.returnValue(true);
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.overrideSelector(selectors.selectIsOverlayShown, true);
+      store.refreshState();
+
+      run(done, () => {
+        expect(bannerServiceMock.open).not.toHaveBeenCalled();
+        expect(notifyServiceMock.notify).not.toHaveBeenCalled();
+      });
+    });
+
+    it('should notify (overlay shown, app unfocused) without a banner', (done) => {
+      spyOn(document, 'hasFocus').and.returnValue(false);
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.overrideSelector(selectors.selectLastSessionDuration, 25 * 60 * 1000);
+      store.overrideSelector(selectors.selectIsOverlayShown, true);
+      store.refreshState();
+
+      run(done, () => {
+        expect(notifyServiceMock.notify).toHaveBeenCalledTimes(1);
+        expect(bannerServiceMock.open).not.toHaveBeenCalled();
+      });
+    });
+
+    it('should NOT fire on manual end (user-initiated, not silent)', (done) => {
+      actions$ = of(actions.completeFocusSession({ isManual: true }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.refreshState();
+      expectExcluded(done);
+    });
+
+    it('should NOT fire for Pomodoro (it transitions into a surfaced break, not a silent stop)', (done) => {
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.refreshState();
+      expectExcluded(done);
+    });
+
+    it('should NOT fire for Flowtime (it only ever stops on explicit user action)', (done) => {
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+      store.refreshState();
+      expectExcluded(done);
+    });
+  });
+
+  // Self-contained module: Android needs IS_ANDROID_WEB_VIEW_TOKEN === true, which
+  // must be set before FocusModeEffects is constructed, so it can't reuse the
+  // shared beforeEach instance (built with the token false).
+  describe('surfaceSessionDoneOnCompletion$ on Android', () => {
+    let androidEffects: FocusModeEffects;
+    let androidNotify: jasmine.Spy;
+    let androidBannerOpen: jasmine.Spy;
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      androidNotify = jasmine.createSpy('notify').and.resolveTo(undefined);
+      androidBannerOpen = jasmine.createSpy('open');
+      TestBed.configureTestingModule({
+        providers: [
+          FocusModeEffects,
+          provideMockActions(() => actions$),
+          provideMockStore({
+            selectors: [
+              { selector: selectors.selectMode, value: FocusModeMode.Countdown },
+              {
+                selector: selectors.selectLastSessionDuration,
+                value: 25 * 60 * 1000,
+              },
+              { selector: selectors.selectIsOverlayShown, value: false },
+            ],
+          }),
+          { provide: FocusModeStrategyFactory, useValue: { getStrategy: () => ({}) } },
+          { provide: GlobalConfigService, useValue: { sound: () => ({ volume: 0 }) } },
+          {
+            provide: TaskService,
+            useValue: { currentTaskId$: new BehaviorSubject<string | null>(null) },
+          },
+          {
+            provide: BannerService,
+            useValue: { open: androidBannerOpen, dismiss: () => {} },
+          },
+          { provide: MetricService, useValue: { logFocusSession: () => {} } },
+          { provide: FocusModeStorageService, useValue: {} },
+          {
+            provide: HydrationStateService,
+            useValue: { isApplyingRemoteOps: () => false },
+          },
+          {
+            provide: TakeABreakService,
+            useValue: { otherNoBreakTIme$: new BehaviorSubject<number>(0) },
+          },
+          { provide: NotifyService, useValue: { notify: androidNotify } },
+          {
+            provide: GlobalTrackingIntervalService,
+            useValue: { todayStr$: new BehaviorSubject<string>('2024-01-19') },
+          },
+          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+        ],
+      });
+      androidEffects = TestBed.inject(FocusModeEffects);
+    });
+
+    it('should banner but NOT notify on Android (native posts the completion notification)', (done) => {
+      spyOn(document, 'hasFocus').and.returnValue(false);
+      actions$ = of(actions.completeFocusSession({ isManual: false }));
+
+      androidEffects.surfaceSessionDoneOnCompletion$.subscribe({
+        complete: () => {
+          expect(androidNotify).not.toHaveBeenCalled();
+          expect(androidBannerOpen).toHaveBeenCalledTimes(1);
+          done();
+        },
+      });
     });
   });
 

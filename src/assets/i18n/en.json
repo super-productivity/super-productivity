@@ -368,6 +368,9 @@
       "SELECT_TASK_FIRST": "Select a task first to start tracking",
       "SELECT_TASK_TO_FOCUS": "Select task to focus",
       "SESSION_COMPLETED": "Focus session completed!",
+      "SESSION_COMPLETED_BANNER": "Focus session complete — you worked for {{duration}}.",
+      "SESSION_COMPLETED_BANNER_ACTION": "What's next?",
+      "SESSION_COMPLETED_NOTIFICATION_BODY": "You worked for {{duration}}.",
       "SHORT_BREAK": "Short break",
       "SHORT_BREAK_TITLE": "Short break",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Show/hide task notes and attachments",
@@ -1730,6 +1733,7 @@
         "ESTIMATE_EXCEEDED": "Time estimate exceeded for \"{{title}}\""
       },
       "CMP": {
+        "ADD_SUB_TASK_PLACEHOLDER": "Add subtask...",
         "ADD_SUB_TASK": "Add subtask",
         "ADD_TO_MY_DAY": "Add to Today",
         "ADD_TO_PROJECT": "Add to a project",
@@ -2823,6 +2827,56 @@
     "TIME_SPENT_ESTIMATE_TITLE": "Time Spent: Total time spent today. Archived tasks not included. – Time Estimated: Time estimated for tasks worked on today minus the time already spent on them on other days.",
     "TIME_SPENT_TODAY_BY_TAG": "Time Spent today by Tag",
     "WEEK": "Week"
+  },
+  "PLAINSPACE": {
+    "CLAIM": "Claim",
+    "CLAIM_FAILED": "Couldn't claim this task — it may have just been claimed by someone else, or you're offline.",
+    "CLAIM_POOL_TITLE": "Available to claim",
+    "CLAIM_SUCCESS": "Task claimed and added to your list.",
+    "CONNECT": {
+      "CONNECT": "Connect",
+      "CONNECTING": "Connecting…",
+      "EMAIL_HINT": "A Space needs a verified email before it can create tokens.",
+      "INTRO": "Paste a Plainspace API token to import the tasks assigned to you and to share projects. Creating one in Plainspace only takes a moment:",
+      "INVALID": "That token didn't work. Make sure you copied the whole token (it starts with \"pat_\") and try again.",
+      "OPEN_LINK": "Open Plainspace",
+      "STEP_1": "Open Plainspace and pick one of your Spaces (or create one).",
+      "STEP_2": "Open the People panel, then expand Advanced → API tokens.",
+      "STEP_3": "Name a token (e.g. \"Super Productivity\") and create it.",
+      "STEP_4": "Copy the token and paste it below.",
+      "TITLE": "Connect to Plainspace",
+      "TOKEN_LABEL": "API token",
+      "TOKEN_PLACEHOLDER": "pat_…"
+    },
+    "FORM": {
+      "HOST": "Plainspace host",
+      "SPACE_ID": "Space ID",
+      "SPACE_ID_DESCRIPTION": "The space this provider syncs with — paste the id or the slug shown in the space URL (plainspace.org/<slug>/…).",
+      "TOKEN": "API token",
+      "TOKEN_DESCRIPTION": "Personal API token (starts with \"pat_\"). In Plainspace, open a Space → People → Advanced → API tokens to create one."
+    },
+    "FORM_SECTION": {
+      "HELP": "Connect a Plainspace space with a personal API token to import tasks assigned to you and claim unclaimed tasks.",
+      "TITLE": "Plainspace"
+    },
+    "LOGIN_REQUIRED": "A Plainspace API token is required to share a project.",
+    "NO_UNCLAIMED": "No unclaimed tasks right now.",
+    "OPEN_IN_PLAINSPACE": "Open in Plainspace",
+    "RECURRING": "Recurring task",
+    "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",
+    "SHARE_FAILED": "Could not share this project on Plainspace.",
+    "SHARE_LABEL": "Collaborate on this project on Plainspace (Beta)",
+    "SHARE_SUCCESS": "Project shared on Plainspace. Tasks assigned to you will import automatically.",
+    "SPACE_PICKER": {
+      "CREATE_NEW": "Create new space",
+      "ERROR": "Couldn't reach Plainspace. Check your connection and that your token is still valid, then try again.",
+      "INTRO": "Link an existing space to import the tasks assigned to you, or create a new one.",
+      "LINK": "Link space",
+      "LOADING": "Loading your spaces…",
+      "NONE": "You don't have any spaces yet — create one to get started.",
+      "SELECT_LABEL": "Existing space",
+      "TITLE": "Choose a Plainspace space"
+    }
   },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",

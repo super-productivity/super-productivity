@@ -1,0 +1,37 @@
+@if (tasks().length) {
+  @for (task of tasks(); track task.id) {
+    <div class="claim-task">
+      <span class="title">{{ task.title }}</span>
+      @if (task.isRecurring) {
+        <mat-icon
+          class="recurring-icon"
+          [matTooltip]="T.PLAINSPACE.RECURRING | translate"
+          >repeat</mat-icon
+        >
+      }
+      @if (task.url) {
+        <a
+          class="open-link"
+          mat-icon-button
+          [href]="task.url"
+          target="_blank"
+          rel="noopener"
+          [matTooltip]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
+        >
+          <mat-icon>open_in_new</mat-icon>
+        </a>
+      }
+      <button
+        mat-stroked-button
+        color="primary"
+        [disabled]="claimingIds().has(task.id)"
+        (click)="claim(task)"
+      >
+        <mat-icon>add</mat-icon>
+        {{ T.PLAINSPACE.CLAIM | translate }}
+      </button>
+    </div>
+  }
+} @else {
+  <div class="no-tasks">{{ T.PLAINSPACE.NO_UNCLAIMED | translate }}</div>
+}

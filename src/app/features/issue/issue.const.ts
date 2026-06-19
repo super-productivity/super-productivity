@@ -34,6 +34,10 @@ import { AZURE_DEVOPS_INITIAL_CFG } from './providers/azure-devops/azure-devops.
 import { DEFAULT_NEXTCLOUD_DECK_CFG } from './providers/nextcloud-deck/nextcloud-deck.const';
 import { AZURE_DEVOPS_CONFIG_FORM_SECTION } from './providers/azure-devops/azure-devops-cfg-form.const';
 import { NEXTCLOUD_DECK_CONFIG_FORM_SECTION } from './providers/nextcloud-deck/nextcloud-deck.const';
+import {
+  DEFAULT_PLAINSPACE_CFG,
+  PLAINSPACE_CONFIG_FORM_SECTION,
+} from './providers/plainspace/plainspace.const';
 
 export const DELAY_BEFORE_ISSUE_POLLING = 8000;
 
@@ -48,6 +52,7 @@ export const TRELLO_TYPE: MigratedIssueProviderKey = 'TRELLO';
 export const CLICKUP_TYPE: MigratedIssueProviderKey = 'CLICKUP';
 export const AZURE_DEVOPS_TYPE: BuiltInIssueProviderKey = 'AZURE_DEVOPS';
 export const NEXTCLOUD_DECK_TYPE: BuiltInIssueProviderKey = 'NEXTCLOUD_DECK';
+export const PLAINSPACE_TYPE: BuiltInIssueProviderKey = 'PLAINSPACE';
 
 export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   GITLAB_TYPE,
@@ -58,6 +63,7 @@ export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   REDMINE_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
+  PLAINSPACE_TYPE,
 ] as const;
 
 export const ISSUE_PROVIDER_ICON_MAP = {
@@ -69,6 +75,7 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [REDMINE_TYPE]: 'redmine',
   [AZURE_DEVOPS_TYPE]: 'azure_devops',
   [NEXTCLOUD_DECK_TYPE]: 'nextcloud_deck',
+  [PLAINSPACE_TYPE]: 'plainspace',
 } as const;
 
 export const ISSUE_PROVIDER_HUMANIZED = {
@@ -80,6 +87,7 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [REDMINE_TYPE]: 'Redmine',
   [AZURE_DEVOPS_TYPE]: 'Azure DevOps',
   [NEXTCLOUD_DECK_TYPE]: 'Nextcloud Deck',
+  [PLAINSPACE_TYPE]: 'Plainspace',
 } as const;
 
 export const DEFAULT_ISSUE_PROVIDER_CFGS = {
@@ -91,6 +99,7 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [REDMINE_TYPE]: DEFAULT_REDMINE_CFG,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_INITIAL_CFG,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_NEXTCLOUD_DECK_CFG,
+  [PLAINSPACE_TYPE]: DEFAULT_PLAINSPACE_CFG,
 } as const;
 
 export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
@@ -102,6 +111,7 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [REDMINE_TYPE]: REDMINE_CONFIG_FORM_SECTION,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_CONFIG_FORM_SECTION,
   [NEXTCLOUD_DECK_TYPE]: NEXTCLOUD_DECK_CONFIG_FORM_SECTION,
+  [PLAINSPACE_TYPE]: PLAINSPACE_CONFIG_FORM_SECTION,
 } as const;
 
 export const DEFAULT_ISSUE_STRS: { ISSUE_STR: string; ISSUES_STR: string } = {
@@ -127,6 +137,7 @@ export const ISSUE_STR_MAP: Record<
   [REDMINE_TYPE]: DEFAULT_ISSUE_STRS,
   [AZURE_DEVOPS_TYPE]: DEFAULT_ISSUE_STRS,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_ISSUE_STRS,
+  [PLAINSPACE_TYPE]: DEFAULT_ISSUE_STRS,
 } as const;
 
 export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<

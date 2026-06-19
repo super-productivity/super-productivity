@@ -28,6 +28,8 @@ import {
   NextcloudDeckIssue,
   NextcloudDeckIssueReduced,
 } from './providers/nextcloud-deck/nextcloud-deck-issue.model';
+import { PlainspaceCfg } from './providers/plainspace/plainspace.model';
+import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
 import {
   PluginIssue,
   PluginSearchResult,
@@ -46,7 +48,8 @@ export type BuiltInIssueProviderKey =
   | 'OPEN_PROJECT'
   | 'REDMINE'
   | 'AZURE_DEVOPS'
-  | 'NEXTCLOUD_DECK';
+  | 'NEXTCLOUD_DECK'
+  | 'PLAINSPACE';
 
 // Keys migrated from built-in to plugin — still valid as IssueProviderKey
 export type MigratedIssueProviderKey =
@@ -80,6 +83,7 @@ const BUILT_IN_KEYS: ReadonlySet<string> = new Set<BuiltInIssueProviderKey>([
   'REDMINE',
   'AZURE_DEVOPS',
   'NEXTCLOUD_DECK',
+  'PLAINSPACE',
 ]);
 
 const MIGRATED_KEYS: ReadonlySet<string> = new Set<MigratedIssueProviderKey>([
@@ -102,7 +106,8 @@ export type IssueIntegrationCfg =
   | OpenProjectCfg
   | RedmineCfg
   | AzureDevOpsCfg
-  | NextcloudDeckCfg;
+  | NextcloudDeckCfg
+  | PlainspaceCfg;
 
 export enum IssueLocalState {
   OPEN = 'OPEN',
@@ -120,6 +125,7 @@ export interface IssueIntegrationCfgs {
   REDMINE?: RedmineCfg;
   AZURE_DEVOPS?: AzureDevOpsCfg;
   NEXTCLOUD_DECK?: NextcloudDeckCfg;
+  PLAINSPACE?: PlainspaceCfg;
 }
 
 export type IssueData =
@@ -131,6 +137,7 @@ export type IssueData =
   | RedmineIssue
   | AzureDevOpsIssue
   | NextcloudDeckIssue
+  | PlainspaceIssue
   | PluginIssue;
 
 export type IssueDataReduced =
@@ -142,6 +149,7 @@ export type IssueDataReduced =
   | RedmineIssue
   | AzureDevOpsIssueReduced
   | NextcloudDeckIssueReduced
+  | PlainspaceIssue
   | PluginSearchResult;
 
 export type IssueDataReducedMap = {
@@ -161,11 +169,13 @@ export type IssueDataReducedMap = {
                 ? AzureDevOpsIssueReduced
                 : K extends 'NEXTCLOUD_DECK'
                   ? NextcloudDeckIssueReduced
-                  : K extends MigratedIssueProviderKey
-                    ? PluginSearchResult
-                    : K extends PluginIssueProviderKey
+                  : K extends 'PLAINSPACE'
+                    ? PlainspaceIssue
+                    : K extends MigratedIssueProviderKey
                       ? PluginSearchResult
-                      : never;
+                      : K extends PluginIssueProviderKey
+                        ? PluginSearchResult
+                        : never;
 };
 
 // TODO: add issue model to the IssueDataReducedMap
@@ -267,6 +277,10 @@ export interface IssueProviderNextcloudDeck extends IssueProviderBase, Nextcloud
   issueProviderKey: 'NEXTCLOUD_DECK';
 }
 
+export interface IssueProviderPlainspace extends IssueProviderBase, PlainspaceCfg {
+  issueProviderKey: 'PLAINSPACE';
+}
+
 export interface IssueProviderPluginType extends IssueProviderBase {
   issueProviderKey: PluginIssueProviderKey | MigratedIssueProviderKey;
   pluginId: string;
@@ -286,6 +300,7 @@ export type IssueProvider =
   | IssueProviderLinear
   | IssueProviderAzureDevOps
   | IssueProviderNextcloudDeck
+  | IssueProviderPlainspace
   | IssueProviderPluginType;
 
 export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
@@ -312,8 +327,10 @@ export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
                       ? IssueProviderAzureDevOps
                       : T extends 'NEXTCLOUD_DECK'
                         ? IssueProviderNextcloudDeck
-                        : T extends PluginIssueProviderKey
-                          ? IssueProviderPluginType
-                          : T extends MigratedIssueProviderKey
+                        : T extends 'PLAINSPACE'
+                          ? IssueProviderPlainspace
+                          : T extends PluginIssueProviderKey
                             ? IssueProviderPluginType
-                            : never;
+                            : T extends MigratedIssueProviderKey
+                              ? IssueProviderPluginType
+                              : never;

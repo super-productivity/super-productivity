@@ -29,6 +29,7 @@ import { BannerService } from '../../../core/banner/banner.service';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
+import { NotifyService } from '../../../core/notify/notify.service';
 import * as actions from './focus-mode.actions';
 import { FocusModeMode, FocusScreen, TimerState } from '../focus-mode.model';
 import {
@@ -112,6 +113,7 @@ describe('FocusMode Bug #6064: Without break timer reset on break start', () => 
         { provide: MetricService, useValue: metricServiceMock },
         { provide: FocusModeStorageService, useValue: {} },
         { provide: TakeABreakService, useValue: takeABreakServiceMock },
+        { provide: NotifyService, useValue: { notify: jasmine.createSpy('notify') } },
       ],
     });
 

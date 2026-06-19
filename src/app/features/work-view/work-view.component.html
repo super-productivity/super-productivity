@@ -380,6 +380,31 @@
             </div>
           }
 
+          @if (isShowClaimPool()) {
+            <div
+              @expand
+              class="collapsible-section"
+            >
+              <collapsible
+                [title]="
+                  (T.PLAINSPACE.CLAIM_POOL_TITLE | translate) +
+                  ' (' +
+                  unclaimedTasks().length +
+                  ')'
+                "
+                [isExpanded]="!isClaimPoolHidden()"
+                (isExpandedChange)="isClaimPoolHidden.set(!$event)"
+                [isIconBefore]="true"
+                [isGroup]="true"
+              >
+                <plainspace-claim-pool
+                  [tasks]="unclaimedTasks()"
+                  [projectId]="workContextService.activeWorkContextId || ''"
+                ></plainspace-claim-pool>
+              </collapsible>
+            </div>
+          }
+
           @if (isOnTodayList() && isFinishDayEnabled()) {
             <finish-day-btn [hasDoneTasks]="hasDoneTasks()"></finish-day-btn>
           }

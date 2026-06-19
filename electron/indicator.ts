@@ -559,7 +559,12 @@ function createContextMenu(msg?: string): Menu {
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function getRunningIconPath(progress?: number): string {
   const suf = shouldUseDarkColors ? '-d' : '-l';
-  if (typeof progress === 'number' && progress > 0 && isFinite(progress)) {
+  // Linux StatusNotifierItem hosts redraw the whole tray item on every
+  // Tray.setImage(); cycling through the 16 progress-animation frames makes the
+  // icon visibly flicker between a full and a partial ring (#4905). Show a single
+  // static running icon there instead — elapsed/remaining time still shows in the
+  // tray context-menu label (and the title/OS taskbar where the host supports it).
+  if (!IS_LINUX && typeof progress === 'number' && progress > 0 && isFinite(progress)) {
     const f = Math.min(Math.round(progress * 15), 15);
     return DIR + `running-anim${suf}/${f || 0}.png`;
   }

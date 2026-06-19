@@ -1,0 +1,17 @@
+:host {
+  display: block;
+  max-width: 440px;
+}
+
+.intro {
+  margin-top: 0;
+}
+
+.space-field {
+  width: 100%;
+}
+
+.error {
+  margin-top: 0;
+  color: var(--c-warn);
+}

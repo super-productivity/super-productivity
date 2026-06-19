@@ -18,6 +18,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MarkdownModule } from 'ngx-markdown';
 import { DEFAULT_TASK, TaskWithSubTasks } from '../task.model';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
+import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 
 const MOCK_TASK: TaskWithSubTasks = {
   ...(DEFAULT_TASK as TaskWithSubTasks),
@@ -338,6 +339,7 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 describe('TaskDetailPanelComponent add sub-task', () => {
   let component: TaskDetailPanelComponent;
   let addSubTaskToSpy: jasmine.Spy;
+  let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
 
   const keydown = (key: string, target: HTMLElement): KeyboardEvent => {
     const ev = new KeyboardEvent('keydown', {
@@ -351,6 +353,10 @@ describe('TaskDetailPanelComponent add sub-task', () => {
 
   beforeEach(async () => {
     addSubTaskToSpy = jasmine.createSpy('addSubTaskTo').and.returnValue('new-sub-id');
+    addSubtaskInputServiceSpy = jasmine.createSpyObj<AddSubtaskInputService>(
+      'AddSubtaskInputService',
+      ['requestOpen'],
+    );
 
     await TestBed.configureTestingModule({
       imports: [TaskDetailPanelComponent],
@@ -368,6 +374,7 @@ describe('TaskDetailPanelComponent add sub-task', () => {
             focusTaskById: () => undefined,
           },
         },
+        { provide: AddSubtaskInputService, useValue: addSubtaskInputServiceSpy },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: {} },
@@ -398,9 +405,10 @@ describe('TaskDetailPanelComponent add sub-task', () => {
     fixture.detectChanges();
   });
 
-  it('adds a sub-task to the shown task', () => {
+  it('requests the inline subtask input for the shown task', () => {
     component.addSubTask();
-    expect(addSubTaskToSpy).toHaveBeenCalledWith('P');
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('P');
+    expect(addSubTaskToSpy).not.toHaveBeenCalled();
   });
 
   it('routes the add-subtask shortcut to addSubTask (with prevent/stopPropagation)', () => {

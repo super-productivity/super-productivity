@@ -45,6 +45,12 @@ interface ClientCache {
   calendars: Map<string, Calendar>;
 }
 
+interface CalendarHomeLike {
+  displayname?: string;
+  url: string;
+  findAllCalendars: () => Promise<Calendar[]>;
+}
+
 interface CalDavTaskData {
   data: string;
   url: string;
@@ -74,12 +80,51 @@ export class CaldavClientService {
     );
   }
 
-  private static _getCalendarUriFromUrl(url: string): string {
-    if (url.endsWith('/')) {
-      url = url.substring(0, url.length - 1);
-    }
+  private static _normalizeCalDavPath(value: string): string {
+    return value.replace(/\/+$/, '');
+  }
 
-    return url.substring(url.lastIndexOf('/') + 1);
+  private static _getCalendarUriFromUrl(url: string): string {
+    const normalizedUrl = CaldavClientService._normalizeCalDavPath(url);
+    return normalizedUrl.substring(normalizedUrl.lastIndexOf('/') + 1);
+  }
+
+  private static _isSameCalDavPath(a: string, b: string): boolean {
+    return (
+      CaldavClientService._normalizeCalDavPath(a) ===
+      CaldavClientService._normalizeCalDavPath(b)
+    );
+  }
+
+  private static _matchesCalendarDisplayName(
+    item: { displayname?: string },
+    resource: string,
+  ): boolean {
+    return item.displayname === resource;
+  }
+
+  private static _matchesCalendarUri(item: { url: string }, resource: string): boolean {
+    return CaldavClientService._getCalendarUriFromUrl(item.url) === resource;
+  }
+
+  private static _findMatchingCalendar(
+    calendars: Calendar[],
+    resource: string,
+    calendarHome: CalendarHomeLike,
+  ): Calendar | undefined {
+    const concreteCalendars = calendars.filter(
+      (item) => !CaldavClientService._isSameCalDavPath(item.url, calendarHome.url),
+    );
+    const displayNameMatch = concreteCalendars.find((item) =>
+      CaldavClientService._matchesCalendarDisplayName(item, resource),
+    );
+
+    return (
+      displayNameMatch ??
+      concreteCalendars.find((item) =>
+        CaldavClientService._matchesCalendarUri(item, resource),
+      )
+    );
   }
 
   private static async _getAllTodos(
@@ -258,19 +303,32 @@ export class CaldavClientService {
       return clientCache.calendars.get(resource);
     }
 
-    const calendars = await clientCache.client.calendarHomes[0]
-      .findAllCalendars()
-      .catch((err) => this._handleNetErr(err));
+    let lastCalendarHomeError: unknown;
 
-    const calendar = calendars.find(
-      (item: Calendar) =>
-        (item.displayname || CaldavClientService._getCalendarUriFromUrl(item.url)) ===
+    for (const calendarHome of clientCache.client.calendarHomes as CalendarHomeLike[]) {
+      const calendars = await calendarHome.findAllCalendars().catch((err: unknown) => {
+        lastCalendarHomeError = err;
+        return null;
+      });
+
+      if (!calendars) {
+        continue;
+      }
+
+      const calendar = CaldavClientService._findMatchingCalendar(
+        calendars,
         resource,
-    );
+        calendarHome,
+      );
 
-    if (calendar !== undefined) {
-      clientCache.calendars.set(resource, calendar);
-      return calendar;
+      if (calendar !== undefined) {
+        clientCache.calendars.set(resource, calendar);
+        return calendar;
+      }
+    }
+
+    if (lastCalendarHomeError) {
+      this._handleNetErr(lastCalendarHomeError);
     }
 
     this._snackService.open({

@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
@@ -23,11 +23,13 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { TranslateService } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { PlannerService } from '../../planner/planner.service';
+import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 
 describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
   let component: TaskComponent;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
   let storeSpy: jasmine.SpyObj<Store>;
 
   const createSubTask = (title: string): TaskWithSubTasks =>
@@ -93,6 +95,13 @@ describe('TaskComponent shortcut handling', () => {
         subTaskIds: [],
       } as unknown as TaskWithSubTasks),
     );
+    addSubtaskInputServiceSpy = jasmine.createSpyObj<AddSubtaskInputService>(
+      'AddSubtaskInputService',
+      ['requestOpen', 'consume'],
+      {
+        openRequest: signal(null),
+      },
+    );
     storeSpy = jasmine.createSpyObj<Store>('Store', ['dispatch', 'select']);
     storeSpy.select.and.returnValue(of(new Set<string>()));
 
@@ -154,6 +163,7 @@ describe('TaskComponent shortcut handling', () => {
             lastFocusedTaskComponent: signal<unknown | null>(null),
           },
         },
+        { provide: AddSubtaskInputService, useValue: addSubtaskInputServiceSpy },
         {
           provide: DateService,
           useValue: jasmine.createSpyObj(
@@ -201,19 +211,16 @@ describe('TaskComponent shortcut handling', () => {
     fixture.componentRef.setInput('task', createSubTask(''));
     fixture.componentRef.setInput('isInSubTaskList', true);
     fixture.componentRef.setInput('isBacklog', false);
-
-    spyOn<any>(component, '_getPreviousTaskEl').and.returnValue(undefined);
-    spyOn<any>(component, '_focusTaskHost').and.stub();
   });
 
-  it('deletes on Escape for freshly created empty subtask', () => {
+  it('does not delete an empty subtask on Escape', () => {
     component.updateTaskTitleIfChanged({
       newVal: '',
       wasChanged: false,
       submitTrigger: 'escape',
     });
 
-    expect(taskServiceSpy.remove).toHaveBeenCalledWith(component.task());
+    expect(taskServiceSpy.remove).not.toHaveBeenCalled();
   });
 
   // Guards against a future revert to a direct _matDialog.open that would
@@ -254,7 +261,7 @@ describe('TaskComponent shortcut handling', () => {
     expect(taskServiceSpy.remove).not.toHaveBeenCalled();
   });
 
-  it('adds a sibling subtask on Mod+Enter when editing a subtask', () => {
+  it('opens the parent draft input on Mod+Enter when editing a subtask', () => {
     fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
 
     component.updateTaskTitleIfChanged({
@@ -263,10 +270,11 @@ describe('TaskComponent shortcut handling', () => {
       submitTrigger: 'modEnter',
     });
 
-    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('parent-1');
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
-  it('adds a child subtask on Mod+Enter when editing a top-level task', () => {
+  it('opens the child draft input on Mod+Enter when editing a top-level task', () => {
     fixture.componentRef.setInput('task', createTopLevelTask('Top-level task'));
 
     component.updateTaskTitleIfChanged({
@@ -275,10 +283,11 @@ describe('TaskComponent shortcut handling', () => {
       submitTrigger: 'modEnter',
     });
 
-    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('top-1');
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
-  it('persists the typed title before spawning a sibling on Mod+Enter', () => {
+  it('persists the typed title before opening a sibling draft input on Mod+Enter', () => {
     fixture.componentRef.setInput('task', createSubTask(''));
 
     component.updateTaskTitleIfChanged({
@@ -290,10 +299,59 @@ describe('TaskComponent shortcut handling', () => {
     expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', {
       title: 'New subtask',
     });
-    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('parent-1');
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('parent-1');
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
-  it('expands hidden subtasks before adding when the parent has HideAll set', () => {
+  it('does not spawn a sibling on plain Enter when editing an existing subtask', () => {
+    fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'Renamed subtask',
+      wasChanged: true,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', {
+      title: 'Renamed subtask',
+    });
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(addSubtaskInputServiceSpy.requestOpen).not.toHaveBeenCalled();
+  });
+
+  it('does not spawn a sibling on plain Enter when saving a previously empty subtask', () => {
+    fixture.componentRef.setInput('task', createSubTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'New subtask',
+      wasChanged: true,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', {
+      title: 'New subtask',
+    });
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(addSubtaskInputServiceSpy.requestOpen).not.toHaveBeenCalled();
+  });
+
+  it('does not spawn a child on plain Enter when editing a top-level task', () => {
+    fixture.componentRef.setInput('task', createTopLevelTask(''));
+
+    component.updateTaskTitleIfChanged({
+      newVal: 'New top-level task title',
+      wasChanged: true,
+      submitTrigger: 'enter',
+    });
+
+    expect(taskServiceSpy.update).toHaveBeenCalledWith('top-1', {
+      title: 'New top-level task title',
+    });
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(addSubtaskInputServiceSpy.requestOpen).not.toHaveBeenCalled();
+  });
+
+  it('expands hidden subtasks before opening the child draft input', () => {
     const parent = {
       ...createTopLevelTask('Parent'),
       _hideSubTasksMode: HideSubTasksMode.HideAll,
@@ -307,10 +365,11 @@ describe('TaskComponent shortcut handling', () => {
     });
 
     expect(taskServiceSpy.showSubTasks).toHaveBeenCalledWith('top-1');
-    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('top-1');
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
-  it('does not expand subtasks when only HideDone is set (new task is not done)', () => {
+  it('does not expand subtasks when only HideDone is set', () => {
     const parent = {
       ...createTopLevelTask('Parent'),
       _hideSubTasksMode: HideSubTasksMode.HideDone,
@@ -324,7 +383,8 @@ describe('TaskComponent shortcut handling', () => {
     });
 
     expect(taskServiceSpy.showSubTasks).not.toHaveBeenCalled();
-    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('top-1');
+    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
   it('does not expand subtasks when subtasks are already visible', () => {
@@ -337,66 +397,16 @@ describe('TaskComponent shortcut handling', () => {
     });
 
     expect(taskServiceSpy.showSubTasks).not.toHaveBeenCalled();
-    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledWith('top-1');
-  });
-
-  it('focuses an existing empty child instead of spawning a new one (parent)', () => {
-    taskServiceSpy.getByIdWithSubTaskData$.and.returnValue(
-      of({
-        ...DEFAULT_TASK,
-        id: 'top-1',
-        title: 'Parent',
-        subTasks: [
-          { ...DEFAULT_TASK, id: 'child-1', title: 'Filled', parentId: 'top-1' },
-          { ...DEFAULT_TASK, id: 'child-2', title: '', parentId: 'top-1' },
-        ],
-        subTaskIds: ['child-1', 'child-2'],
-      } as unknown as TaskWithSubTasks),
-    );
-    fixture.componentRef.setInput('task', createTopLevelTask('Parent'));
-
-    component.updateTaskTitleIfChanged({
-      newVal: 'Parent',
-      wasChanged: false,
-      submitTrigger: 'modEnter',
-    });
-
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('top-1');
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
-  it('focuses an existing empty sibling instead of spawning a new one (subtask)', () => {
-    taskServiceSpy.getByIdWithSubTaskData$.and.returnValue(
-      of({
-        ...DEFAULT_TASK,
-        id: 'parent-1',
-        title: 'Parent',
-        subTasks: [
-          { ...DEFAULT_TASK, id: 'sub-1', title: 'Existing', parentId: 'parent-1' },
-          { ...DEFAULT_TASK, id: 'sub-2', title: '', parentId: 'parent-1' },
-        ],
-        subTaskIds: ['sub-1', 'sub-2'],
-      } as unknown as TaskWithSubTasks),
-    );
-    fixture.componentRef.setInput('task', createSubTask('Existing'));
+  it('opens the draft input when addSubTask is called directly', () => {
+    fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
 
-    component.updateTaskTitleIfChanged({
-      newVal: 'Existing',
-      wasChanged: false,
-      submitTrigger: 'modEnter',
-    });
+    component.addSubTask();
 
-    expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
-  });
-
-  it('no-ops on Mod+Enter when current subtask is the only empty one', () => {
-    fixture.componentRef.setInput('task', createSubTask(''));
-
-    component.updateTaskTitleIfChanged({
-      newVal: '',
-      wasChanged: false,
-      submitTrigger: 'modEnter',
-    });
-
+    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('parent-1');
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
   });
 
@@ -510,5 +520,41 @@ describe('TaskComponent shortcut handling', () => {
         }),
       );
     });
+  });
+
+  describe('add-subtask input close', () => {
+    it('returns focus to the originating task when cancelled via Escape', fakeAsync(() => {
+      const focusByIdSpy = spyOn<any>(component, '_focusTaskById');
+      component['_subtaskInputOriginTaskId'] = 'origin-1';
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('escape');
+      tick();
+
+      expect(component.isAddSubtaskInputVisible()).toBe(false);
+      expect(focusByIdSpy).toHaveBeenCalledWith('origin-1');
+    }));
+
+    it('falls back to this row when no origin task was captured', fakeAsync(() => {
+      const focusByIdSpy = spyOn<any>(component, '_focusTaskById');
+      component['_subtaskInputOriginTaskId'] = null;
+
+      component.onAddSubtaskInputClosed('escape');
+      tick();
+
+      expect(focusByIdSpy).toHaveBeenCalledWith(component.task().id);
+    }));
+
+    it('does not refocus any task when closed via blur', fakeAsync(() => {
+      const focusByIdSpy = spyOn<any>(component, '_focusTaskById');
+      component['_subtaskInputOriginTaskId'] = 'origin-1';
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('blur');
+      tick();
+
+      expect(component.isAddSubtaskInputVisible()).toBe(false);
+      expect(focusByIdSpy).not.toHaveBeenCalled();
+    }));
   });
 });

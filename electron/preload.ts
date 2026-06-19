@@ -6,6 +6,7 @@ import {
   webUtils,
 } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
+import { IS_GNOME_DESKTOP, IS_GNOME_WAYLAND } from './common.const';
 import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
 import {
   getDistChannel,
@@ -29,25 +30,6 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
   channel,
   ...args
 ) => ipcRenderer.invoke(channel, ...args);
-
-const isGnomeDesktop = (): boolean => {
-  if (process.platform !== 'linux') {
-    return false;
-  }
-
-  const desktopValues = [
-    process.env.XDG_CURRENT_DESKTOP,
-    process.env.XDG_SESSION_DESKTOP,
-    process.env.DESKTOP_SESSION,
-    process.env.GNOME_SHELL_SESSION_MODE,
-  ]
-    .filter((value): value is string => !!value)
-    .map((value) => value.toLowerCase());
-
-  return desktopValues.some(
-    (value) => value.includes('gnome') || value.includes('ubuntu'),
-  );
-};
 
 const ea: ElectronAPI = {
   on: (
@@ -108,7 +90,8 @@ const ea: ElectronAPI = {
   },
   getZoomFactor: () => webFrame.getZoomFactor(),
   isLinux: () => process.platform === 'linux',
-  isGnomeDesktop,
+  isGnomeDesktop: () => IS_GNOME_DESKTOP,
+  isGnomeWayland: () => IS_GNOME_WAYLAND,
   isMacOS: () => process.platform === 'darwin',
   isAppleSilicon: () => process.platform === 'darwin' && process.arch === 'arm64',
   isSnap: () => process && process.env && !!process.env.SNAP,

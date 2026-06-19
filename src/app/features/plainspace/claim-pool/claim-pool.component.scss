@@ -1,0 +1,44 @@
+:host {
+  display: block;
+  padding: 0 var(--s);
+}
+
+.claim-task {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  padding: var(--s-half) var(--s);
+  border-bottom: 1px solid var(--extra-border-color);
+  color: var(--text-color);
+}
+
+.title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.open-link {
+  flex-shrink: 0;
+  opacity: 0.6;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.recurring-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  opacity: 0.6;
+  color: var(--text-color-muted);
+}
+
+.no-tasks {
+  padding: var(--s);
+  color: var(--text-color-muted);
+  font-style: italic;
+}
