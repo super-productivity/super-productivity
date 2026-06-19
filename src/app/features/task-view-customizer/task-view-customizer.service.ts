@@ -331,8 +331,10 @@ export class TaskViewCustomizerService {
     };
 
     // Order by the primary tag's sidebar position. Equal ranks (same tag group)
-    // return 0 so the stable sort keeps the user's manual ordering within a tag
-    // instead of re-sorting it by task title. (#8486)
+    // return 0, so the stable sort keeps the user's manual ordering within a tag
+    // instead of re-sorting it by task title (#8486). Note this makes DESC flip
+    // only the group order, not the order within a group - that asymmetry is
+    // intentional; re-sorting within a group would bring the bug back.
     const sortByTagRank = (a: TaskWithSubTasks, b: TaskWithSubTasks): number =>
       (getPrimaryTagRank(a) - getPrimaryTagRank(b)) * factor;
 
