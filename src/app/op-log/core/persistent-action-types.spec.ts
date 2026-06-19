@@ -36,6 +36,9 @@ describe('Persistent Action Types Stability', () => {
       expect(TaskSharedActions.planTasksForToday.type).toBe(
         '[Task Shared] planTasksForToday',
       );
+      expect(TaskSharedActions.unscheduleTasks.type).toBe(
+        '[Task Shared] unscheduleTasks',
+      );
     });
 
     it('Project actions should have stable types', () => {

@@ -185,6 +185,107 @@ describe('taskSharedSchedulingMetaReducer', () => {
     });
   });
 
+  describe('unscheduleTasks action', () => {
+    it('should clear scheduling fields for multiple scheduled undone tasks', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['task1', 'task2']);
+      const now = Date.now();
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueDay: '2024-06-14',
+        dueWithTime: undefined,
+        remindAt: now,
+      });
+      testState[TASK_FEATURE_NAME].entities.task2 = createMockTask({
+        id: 'task2',
+        dueDay: undefined,
+        dueWithTime: now,
+        remindAt: now,
+      });
+
+      const action = TaskSharedActions.unscheduleTasks({
+        taskIds: ['task1', 'task2'],
+      });
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1.dueDay).toBeUndefined();
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1.dueWithTime).toBeUndefined();
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1.remindAt).toBeUndefined();
+      expect(updatedState[TASK_FEATURE_NAME].entities.task2.dueDay).toBeUndefined();
+      expect(updatedState[TASK_FEATURE_NAME].entities.task2.dueWithTime).toBeUndefined();
+      expect(updatedState[TASK_FEATURE_NAME].entities.task2.remindAt).toBeUndefined();
+    });
+
+    it('should remove affected tasks from Today tag and planner days', () => {
+      const testState = createStateWithExistingTasks(
+        [],
+        [],
+        [],
+        ['task1', 'task2', 'keep-task'],
+      );
+      testState.planner = {
+        ...testState.planner,
+        days: {
+          '2024-06-14': ['task1', 'keep-task'],
+          '2024-06-15': ['task2', 'other-task'],
+        },
+      };
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueDay: '2024-06-14',
+      });
+      testState[TASK_FEATURE_NAME].entities.task2 = createMockTask({
+        id: 'task2',
+        dueDay: '2024-06-15',
+      });
+
+      const action = TaskSharedActions.unscheduleTasks({
+        taskIds: ['task1', 'task2'],
+      });
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+
+      expect(updatedState[TAG_FEATURE_NAME].entities.TODAY.taskIds).toEqual([
+        'keep-task',
+      ]);
+      expect(updatedState.planner.days['2024-06-14']).toEqual(['keep-task']);
+      expect(updatedState.planner.days['2024-06-15']).toEqual(['other-task']);
+    });
+
+    it('should ignore missing, done, and already unscheduled tasks', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['scheduled', 'done']);
+      testState[TASK_FEATURE_NAME].entities.scheduled = createMockTask({
+        id: 'scheduled',
+        dueDay: '2024-06-14',
+      });
+      testState[TASK_FEATURE_NAME].entities.done = createMockTask({
+        id: 'done',
+        dueDay: '2024-06-14',
+        isDone: true,
+      });
+      testState[TASK_FEATURE_NAME].entities.unscheduled = createMockTask({
+        id: 'unscheduled',
+        dueDay: undefined,
+        dueWithTime: undefined,
+        remindAt: undefined,
+      });
+      testState[TASK_FEATURE_NAME].ids.push('unscheduled');
+
+      const action = TaskSharedActions.unscheduleTasks({
+        taskIds: ['scheduled', 'done', 'unscheduled', 'missing'],
+      });
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+
+      expect(updatedState[TASK_FEATURE_NAME].entities.scheduled.dueDay).toBeUndefined();
+      expect(updatedState[TASK_FEATURE_NAME].entities.done.dueDay).toBe('2024-06-14');
+      expect(updatedState[TAG_FEATURE_NAME].entities.TODAY.taskIds).toEqual(['done']);
+    });
+  });
+
   describe('dismissReminderOnly action', () => {
     it('should only clear remindAt and preserve dueDay and dueWithTime', () => {
       const now = Date.now();

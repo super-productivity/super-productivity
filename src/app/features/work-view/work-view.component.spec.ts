@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -28,6 +29,7 @@ import {
   selectTaskRepeatCfgsByTagId,
 } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TODAY_TAG } from '../tag/tag.const';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 
 /**
  * Tests for the constructor effect() in WorkViewComponent that deselects the
@@ -273,6 +275,160 @@ describe('WorkViewComponent', () => {
       TestBed.flushEffects();
 
       expect(setSelectedId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulk overdue actions', () => {
+    let store: MockStore;
+    let dialog: jasmine.SpyObj<MatDialog>;
+
+    const createComponent = async (
+      overdueTasks: TaskWithSubTasks[],
+    ): Promise<WorkViewComponent> => {
+      dialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
+
+      TestBed.configureTestingModule({
+        imports: [WorkViewComponent, TranslateModule.forRoot()],
+        providers: [
+          provideNoopAnimations(),
+          provideMockStore({ initialState: {} }),
+          {
+            provide: TaskService,
+            useValue: {
+              selectedTaskId: signal<string | null>(null),
+              setSelectedId: () => {},
+              moveToArchive: () => Promise.resolve(),
+            },
+          },
+          { provide: TakeABreakService, useValue: { resetTimer: () => {} } },
+          {
+            provide: LayoutService,
+            useValue: {
+              isXs: signal(false),
+              isWorkViewScrolled: { set: () => {} },
+              showAddTaskBar: () => {},
+            },
+          },
+          {
+            provide: TaskViewCustomizerService,
+            useValue: {
+              customizeUndoneTasks: () => of({ list: [] as TaskWithSubTasks[] }),
+              isCustomized: signal(false),
+            },
+          },
+          {
+            provide: WorkContextService,
+            useValue: {
+              activeWorkContextId: TODAY_TAG.id,
+              undoneTasks$: of([]),
+              todayRemainingInProject$: of(0),
+              estimateRemainingToday$: of(0),
+              workingToday$: of(0),
+              isTodayList$: of(true),
+              activeWorkContextId$: of(TODAY_TAG.id),
+              activeWorkContextTypeAndId$: of({
+                activeType: 'TAG',
+                activeId: TODAY_TAG.id,
+              }),
+              activeWorkContext$: of({ id: TODAY_TAG.id, type: 'TAG' }),
+              isActiveWorkContextProject$: of(false),
+              isContextChanging$: of(false),
+            },
+          },
+          {
+            provide: PluginBridgeService,
+            useValue: { workContextEmbedPluginId: signal(null) },
+          },
+          { provide: ProjectService, useValue: { onMoveToBacklog$: of() } },
+          {
+            provide: SectionService,
+            useValue: {
+              getSectionsByContextId$: () => of([] as readonly Section[]),
+            },
+          },
+          { provide: SnackService, useValue: { open: () => {} } },
+          {
+            provide: GlobalConfigService,
+            useValue: {
+              appFeatures: signal({ isFinishDayEnabled: false }),
+              cfg: () => ({}),
+            },
+          },
+          { provide: MatDialog, useValue: dialog },
+          { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
+        ],
+      });
+      TestBed.overrideComponent(WorkViewComponent, {
+        set: { template: '', imports: [], styles: [''] },
+      });
+
+      store = TestBed.inject(MockStore);
+      store.overrideSelector(selectOverdueTasksWithSubTasks, overdueTasks);
+      store.overrideSelector(selectLaterTodayTasksWithSubTasks, []);
+      store.overrideSelector(selectTaskRepeatCfgsByProjectId, []);
+      store.overrideSelector(selectTaskRepeatCfgsByTagId, []);
+      spyOn(store, 'dispatch');
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', []);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+      return fixture.componentInstance;
+    };
+
+    it('dispatches unscheduleTasks immediately for up to five overdue tasks', async () => {
+      const cmp = await createComponent([buildTask('task1'), buildTask('task2')]);
+
+      cmp.unscheduleAllOverdue();
+
+      expect(dialog.open).not.toHaveBeenCalled();
+      expect(store.dispatch).toHaveBeenCalledOnceWith(
+        TaskSharedActions.unscheduleTasks({ taskIds: ['task1', 'task2'] }),
+      );
+    });
+
+    it('confirms before dispatching when more than five overdue tasks are affected', async () => {
+      const cmp = await createComponent([
+        buildTask('task1'),
+        buildTask('task2'),
+        buildTask('task3'),
+        buildTask('task4'),
+        buildTask('task5'),
+        buildTask('task6'),
+      ]);
+      dialog.open.and.returnValue({
+        afterClosed: () => of(true),
+      } as unknown as ReturnType<MatDialog['open']>);
+
+      cmp.unscheduleAllOverdue();
+
+      expect(dialog.open).toHaveBeenCalled();
+      expect(store.dispatch).toHaveBeenCalledOnceWith(
+        TaskSharedActions.unscheduleTasks({
+          taskIds: ['task1', 'task2', 'task3', 'task4', 'task5', 'task6'],
+        }),
+      );
+    });
+
+    it('does not dispatch when bulk unschedule confirmation is cancelled', async () => {
+      const cmp = await createComponent([
+        buildTask('task1'),
+        buildTask('task2'),
+        buildTask('task3'),
+        buildTask('task4'),
+        buildTask('task5'),
+        buildTask('task6'),
+      ]);
+      dialog.open.and.returnValue({
+        afterClosed: () => of(false),
+      } as unknown as ReturnType<MatDialog['open']>);
+
+      cmp.unscheduleAllOverdue();
+
+      expect(dialog.open).toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 

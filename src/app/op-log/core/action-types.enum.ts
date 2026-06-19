@@ -57,6 +57,7 @@ export enum ActionType {
   TASK_SHARED_SCHEDULE_WITH_TIME = '[Task Shared] scheduleTaskWithTime',
   TASK_SHARED_RESCHEDULE_WITH_TIME = '[Task Shared] reScheduleTaskWithTime',
   TASK_SHARED_UNSCHEDULE = '[Task Shared] unscheduleTask',
+  TASK_SHARED_UNSCHEDULE_MULTIPLE = '[Task Shared] unscheduleTasks',
   TASK_SHARED_DISMISS_REMINDER = '[Task Shared] dismissReminderOnly',
   TASK_SHARED_UPDATE_MULTIPLE = '[Task Shared] updateTasks',
   TASK_SHARED_MOVE_TO_PROJECT = '[Task Shared] moveToOtherProject',

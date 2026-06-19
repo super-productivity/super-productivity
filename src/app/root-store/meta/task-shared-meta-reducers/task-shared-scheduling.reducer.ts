@@ -158,6 +158,56 @@ const handleUnScheduleTask = (
   ]);
 };
 
+const handleUnScheduleTasks = (state: RootState, taskIds: string[]): RootState => {
+  const taskIdsToUnschedule = taskIds.filter((taskId) => {
+    const task = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
+    return (
+      !!task &&
+      !task.isDone &&
+      (task.dueDay !== undefined ||
+        task.dueWithTime !== undefined ||
+        task.remindAt !== undefined)
+    );
+  });
+
+  if (taskIdsToUnschedule.length === 0) {
+    return state;
+  }
+
+  let updatedState: RootState = {
+    ...state,
+    [TASK_FEATURE_NAME]: taskAdapter.updateMany(
+      taskIdsToUnschedule.map((taskId): Update<Task> => {
+        return {
+          id: taskId,
+          changes: {
+            dueDay: undefined,
+            dueWithTime: undefined,
+            remindAt: undefined,
+          },
+        };
+      }),
+      state[TASK_FEATURE_NAME],
+    ),
+  };
+
+  const todayTag = getTag(updatedState, TODAY_TAG.id);
+  const updatedTodayTaskIds = removeTasksFromList(todayTag.taskIds, taskIdsToUnschedule);
+
+  if (updatedTodayTaskIds.length !== todayTag.taskIds.length) {
+    updatedState = updateTags(updatedState, [
+      {
+        id: TODAY_TAG.id,
+        changes: {
+          taskIds: updatedTodayTaskIds,
+        },
+      },
+    ]);
+  }
+
+  return removeTasksFromPlannerDays(updatedState, taskIdsToUnschedule);
+};
+
 const handleDismissReminderOnly = (state: RootState, taskId: string): RootState => {
   // Only clear remindAt (the reminder notification) but keep dueWithTime, dueDay, and Today tag
   return {
@@ -336,6 +386,10 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
       typeof TaskSharedActions.unscheduleTask
     >;
     return handleUnScheduleTask(state, id, isLeaveInToday);
+  },
+  [TaskSharedActions.unscheduleTasks.type]: () => {
+    const { taskIds } = action as ReturnType<typeof TaskSharedActions.unscheduleTasks>;
+    return handleUnScheduleTasks(state, taskIds);
   },
   [TaskSharedActions.dismissReminderOnly.type]: () => {
     const { id } = action as ReturnType<typeof TaskSharedActions.dismissReminderOnly>;
