@@ -39,7 +39,11 @@ export interface BaseIssueProviderCfg {
   isEnabled: boolean;
 }
 
-// Built-in issue provider keys (strict union for type safety)
+// Built-in issue provider keys (strict union for type safety).
+// NOTE: adding a key here is forward-compatible for OLDER clients only because
+// `isForwardCompatibleProviderKeyError` (op-log/validation/validation-fn.ts) tolerates
+// unknown provider-key values during sync validation. Without that, an older build's
+// typia validator would treat a synced task/provider using the new key as corruption.
 export type BuiltInIssueProviderKey =
   | 'JIRA'
   | 'GITLAB'

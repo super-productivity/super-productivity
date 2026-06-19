@@ -11,7 +11,7 @@ import { ProjectState } from '../../features/project/project.model';
 import { SectionState } from '../../features/section/section.model';
 import { MenuTreeState } from '../../features/menu-tree/store/menu-tree.model';
 import { TaskState } from '../../features/tasks/task.model';
-import { createValidate } from 'typia';
+import { createValidate, IValidation } from 'typia';
 import { TagState } from '../../features/tag/tag.model';
 import { SimpleCounterState } from '../../features/simple-counter/simple-counter.model';
 import { Reminder } from '../../features/reminder/reminder.model';
@@ -55,6 +55,85 @@ const _validateTimeTracking = createValidate<TimeTrackingState>();
 const _validatePluginUserData = createValidate<PluginUserDataState>();
 const _validatePluginMetadata = createValidate<PluginMetaDataState>();
 const _validateSection = createValidate<SectionState>();
+
+/**
+ * `Task.issueType` and `IssueProvider.issueProviderKey` are validated against the
+ * `IssueProviderKey` union, a set typia compiles into a *closed* membership check at
+ * build time. That set is open-ended by design: new built-in providers (e.g. the
+ * Plainspace integration, #8424) and plugin providers (`plugin:${string}`) keep being
+ * added. When a newer client syncs a task/provider using a key an older client's build
+ * does not know yet, typia would otherwise report the unknown — but well-formed —
+ * value as data corruption. That surfaces a "repair your data?" dialog; declining it
+ * wedges sync (state never marked IN_SYNC) and accepting it risks mangling valid data.
+ * An unknown *string* provider key is a forward-compatible value, not damage, so we
+ * drop those specific errors and carry the value through untouched.
+ *
+ * typia reports the two fields with different error shapes (both verified against the
+ * real validator in the spec), so we match both:
+ *  1. `Task.issueType` is a plain optional union field → the error is AT the field,
+ *     `value` is the unknown string, `expected` is the union (identified by its
+ *     `plugin:${string}` branch).
+ *  2. `IssueProvider` is a *discriminated union* keyed on `issueProviderKey` → an
+ *     unknown discriminant produces a parent-OBJECT error (`value` is the whole
+ *     entity, `expected` lists the member type names, NOT a `.issueProviderKey`
+ *     path). We tolerate it when that object carries a non-empty string
+ *     `issueProviderKey` and `expected` names the union via its
+ *     `IssueProviderPluginType` member.
+ *
+ * Either way a non-string key (null/number/object) stays a corruption error, and a
+ * known-but-malformed entity fails on its own child-field errors (not these), so
+ * genuine damage is never masked.
+ *
+ * shortcut: matched by typia error shape — if more open-ended enums appear, prefer
+ * typing them as opaque strings in the synced model over extending this matcher.
+ */
+const _ISSUE_TYPE_PATH_RE = /\.issueType$/;
+
+const _hasUnknownStringProviderKey = (value: unknown): boolean =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { issueProviderKey?: unknown }).issueProviderKey === 'string' &&
+  (value as { issueProviderKey: string }).issueProviderKey.length > 0;
+
+export const isForwardCompatibleProviderKeyError = (err: IValidation.IError): boolean => {
+  // (1) Task.issueType — scalar union field, error reported at the field itself.
+  if (
+    typeof err.value === 'string' &&
+    err.value.length > 0 &&
+    _ISSUE_TYPE_PATH_RE.test(err.path) &&
+    err.expected.includes('plugin:')
+  ) {
+    return true;
+  }
+  // (2) IssueProvider — discriminated union, unknown discriminant reported as a
+  //     parent-object error. Only the IssueProvider union names IssueProviderPluginType.
+  return (
+    err.expected.includes('IssueProviderPluginType') &&
+    _hasUnknownStringProviderKey(err.value)
+  );
+};
+
+/**
+ * Strips forward-compatible provider-key errors from a typia result, recomputing
+ * `success` if those were the only failures. See {@link isForwardCompatibleProviderKeyError}.
+ */
+const _relaxForwardCompatibleErrors = <R>(
+  result: ValidationResult<R>,
+): ValidationResult<R> => {
+  if (result.success) {
+    return result;
+  }
+  const remaining = result.errors.filter(
+    (err) => !isForwardCompatibleProviderKeyError(err),
+  );
+  if (remaining.length === result.errors.length) {
+    return result;
+  }
+  if (remaining.length === 0) {
+    return { success: true, data: result.data as R };
+  }
+  return { ...result, errors: remaining };
+};
 
 export const validateAllData = <R>(
   d: AppDataComplete | R,
@@ -132,7 +211,7 @@ const validateArchiveModel = <R>(
   d: ArchiveModel | R,
   context: 'archiveYoung' | 'archiveOld',
 ): ValidationResult<ArchiveModel> => {
-  const r = _validateArchive(d);
+  const r = _relaxForwardCompatibleErrors(_validateArchive(d));
   if (!r.success) {
     logValidationFailure(context, r, d);
   }
@@ -154,11 +233,12 @@ export const validateAppDataProperty = <K extends keyof AppDataComplete>(
 };
 
 const _wrapValidate = <R>(
-  result: ValidationResult<R>,
+  rawResult: ValidationResult<R>,
   d?: unknown,
   isEntityCheck = false,
   context = 'unknown',
 ): ValidationResult<R> => {
+  const result = _relaxForwardCompatibleErrors(rawResult);
   if (!result.success) {
     logValidationFailure(context, result, d, isEntityCheck);
   }
