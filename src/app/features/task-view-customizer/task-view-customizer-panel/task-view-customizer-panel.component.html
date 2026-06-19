@@ -243,23 +243,34 @@
   <div
     class="menu-input-wrapper"
     (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
   >
-    <mat-form-field
-      class="menu-input"
-      subscriptSizing="dynamic"
-    >
-      <input
-        matInput
-        [ngModel]="
-          customizerService.selectedFilter().preset === OPTIONS.filter.types.tag
-            ? customizerService.selectedFilter().preset
-            : ''
-        "
-        (ngModelChange)="onFilterInputChange(OPTIONS.filter.types.tag, $event)"
-        [placeholder]="T.F.TASK_VIEW.CUSTOMIZER.ENTER_TAG | translate"
-        (keydown.enter)="$event.stopPropagation()"
-      />
-    </mat-form-field>
+    <chip-list-input
+      [label]="T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG | translate"
+      [suggestions]="allTags()"
+      [model]="tagFilterIds()"
+      (addItem)="addTagFilter($event)"
+      (removeItem)="removeTagFilter($event)"
+    ></chip-list-input>
+
+    @if (tagFilterIds().length >= 2) {
+      <div class="tag-filter-mode-toggle">
+        <button
+          mat-button
+          [class.is-active]="tagFilterMode() === 'OR'"
+          (click)="setTagFilterMode('OR')"
+        >
+          {{ T.F.TASK_VIEW.CUSTOMIZER.TAG_FILTER_OR | translate }}
+        </button>
+        <button
+          mat-button
+          [class.is-active]="tagFilterMode() === 'AND'"
+          (click)="setTagFilterMode('AND')"
+        >
+          {{ T.F.TASK_VIEW.CUSTOMIZER.TAG_FILTER_AND | translate }}
+        </button>
+      </div>
+    }
   </div>
 </mat-menu>
 

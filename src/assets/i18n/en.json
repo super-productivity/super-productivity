@@ -2033,6 +2033,8 @@
         "FILTER_SCHEDULED_DATE": "Scheduled Date",
         "FILTER_TAG": "Tag",
         "FILTER_TIME_SPENT": "Time Spent",
+        "TAG_FILTER_OR": "Any tag (OR)",
+        "TAG_FILTER_AND": "All tags (AND)",
         "GROUP_BY": "Group By",
         "GROUP_DEADLINE": "Deadline",
         "GROUP_DEADLINE_NONE": "No deadline",
