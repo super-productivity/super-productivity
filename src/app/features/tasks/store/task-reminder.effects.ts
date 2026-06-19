@@ -234,6 +234,7 @@ export class TaskReminderEffects {
         ofType(
           TaskSharedActions.reScheduleTaskWithTime,
           TaskSharedActions.planTasksForToday,
+          TaskSharedActions.unscheduleTasks,
           PlannerActions.planTaskForDay,
         ),
         filter(() => this._isAndroidWebView),
@@ -242,7 +243,7 @@ export class TaskReminderEffects {
           ids.forEach((id) => {
             try {
               const notificationId = generateNotificationId(id);
-              androidInterface.cancelNativeReminder?.(notificationId);
+              this._cancelNativeReminder(notificationId);
             } catch (e) {
               TaskLog.err('Failed to cancel native reminder:', e);
             }
@@ -332,4 +333,9 @@ export class TaskReminderEffects {
         ),
       { dispatch: false },
     );
+
+  private _cancelNativeReminder(notificationId: number): void {
+    const activeAndroidInterface = androidInterface || (window as any).SUPAndroid;
+    activeAndroidInterface?.cancelNativeReminder?.(notificationId);
+  }
 }

@@ -17,6 +17,7 @@ import { createBaseState } from '../../../root-store/meta/task-shared-meta-reduc
 import { RootState } from '../../../root-store/root-state';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import { plannerFeatureKey } from '../../planner/store/planner.reducer';
+import { generateNotificationId } from '../../android/android-notification-id.util';
 
 describe('TaskReminderEffects', () => {
   let actions$: Observable<Action>;
@@ -494,6 +495,7 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
 describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () => {
   let actions$: Observable<Action>;
   let effects: TaskReminderEffects;
+  let cancelNativeReminderSpy: jasmine.Spy;
 
   const mockTask: Task = {
     ...DEFAULT_TASK,
@@ -505,6 +507,11 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
 
   describe('when IS_ANDROID_WEB_VIEW_TOKEN is true', () => {
     beforeEach(() => {
+      cancelNativeReminderSpy = jasmine.createSpy('cancelNativeReminder');
+      (window as any).SUPAndroid = {
+        cancelNativeReminder: cancelNativeReminderSpy,
+      };
+
       TestBed.configureTestingModule({
         providers: [
           TaskReminderEffects,
@@ -527,6 +534,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
       });
 
       effects = TestBed.inject(TaskReminderEffects);
+    });
+
+    afterEach(() => {
+      delete (window as any).SUPAndroid;
     });
 
     it('should pass through reScheduleTaskWithTime action when on Android', (done) => {
@@ -562,6 +573,28 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
       });
     });
 
+    it('should cancel native reminders for unscheduleTasks action when on Android', (done) => {
+      const action = TaskSharedActions.unscheduleTasks({
+        taskIds: ['task-1', 'task-2'],
+      });
+      actions$ = of(action);
+
+      effects.cancelNativeReminderOnDialogAction$.subscribe({
+        next: (emittedAction) => {
+          expect(emittedAction).toBe(action);
+          expect(cancelNativeReminderSpy).toHaveBeenCalledWith(
+            generateNotificationId('task-1'),
+          );
+          expect(cancelNativeReminderSpy).toHaveBeenCalledWith(
+            generateNotificationId('task-2'),
+          );
+          expect(cancelNativeReminderSpy).toHaveBeenCalledTimes(2);
+          done();
+        },
+        error: done.fail,
+      });
+    });
+
     it('should pass through planTaskForDay action when on Android', (done) => {
       const action = PlannerActions.planTaskForDay({
         task: mockTask,
@@ -581,6 +614,11 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
 
   describe('when IS_ANDROID_WEB_VIEW_TOKEN is false', () => {
     beforeEach(() => {
+      cancelNativeReminderSpy = jasmine.createSpy('cancelNativeReminder');
+      (window as any).SUPAndroid = {
+        cancelNativeReminder: cancelNativeReminderSpy,
+      };
+
       TestBed.configureTestingModule({
         providers: [
           TaskReminderEffects,
@@ -605,6 +643,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
       effects = TestBed.inject(TaskReminderEffects);
     });
 
+    afterEach(() => {
+      delete (window as any).SUPAndroid;
+    });
+
     it('should filter out actions when not on Android', (done) => {
       const action = TaskSharedActions.reScheduleTaskWithTime({
         task: mockTask,
@@ -621,6 +663,25 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
         },
         complete: () => {
           expect(emitted).toBe(false);
+          done();
+        },
+      });
+    });
+
+    it('should filter out unscheduleTasks action and not cancel reminders when not on Android', (done) => {
+      const action = TaskSharedActions.unscheduleTasks({
+        taskIds: ['task-1', 'task-2'],
+      });
+      actions$ = of(action);
+
+      let emitted = false;
+      effects.cancelNativeReminderOnDialogAction$.subscribe({
+        next: () => {
+          emitted = true;
+        },
+        complete: () => {
+          expect(emitted).toBe(false);
+          expect(cancelNativeReminderSpy).not.toHaveBeenCalled();
           done();
         },
       });
