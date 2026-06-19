@@ -85,8 +85,7 @@ export const uploadOpsHandler = async (
         .send(createValidationErrorResponse(parseResult.error.issues));
     }
 
-    const { ops, clientId, lastKnownServerSeq, requestId, isCleanSlate } =
-      parseResult.data;
+    const { ops, clientId, lastKnownServerSeq, requestId } = parseResult.data;
     const syncService = getSyncService();
 
     Logger.info(
@@ -191,7 +190,6 @@ export const uploadOpsHandler = async (
           userId,
           clientId,
           ops as unknown as Operation[],
-          isCleanSlate,
         );
 
         return uploadResults;
