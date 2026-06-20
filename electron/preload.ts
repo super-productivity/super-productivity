@@ -270,7 +270,8 @@ const ea: ElectronAPI = {
   },
 
   // Plugin OAuth
-  pluginOAuthPrepare: () => _invoke('PLUGIN_OAUTH_PREPARE') as Promise<{ port: number }>,
+  pluginOAuthPrepare: (port?: number) =>
+    _invoke('PLUGIN_OAUTH_PREPARE', port) as Promise<{ port: number }>,
   pluginOAuthStart: (url: string) => _send('PLUGIN_OAUTH_START', { url }),
   onPluginOAuthCb: (
     listener: (data: { code?: string; error?: string; state?: string }) => void,

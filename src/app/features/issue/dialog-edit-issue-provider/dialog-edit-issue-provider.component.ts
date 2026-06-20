@@ -5,7 +5,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -61,17 +61,25 @@ import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provi
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
+import { applyPluginOAuthOverrides } from './plugin-oauth-config-overrides.util';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 // Trello is now a plugin — board selection is a dynamic `loadOptions` select field
 // ClickUp is now a plugin — no built-in config component needed
 import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
 import { TaskService } from '../../tasks/task.service';
 import { firstValueFrom } from 'rxjs';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.const';
 import { TagService } from '../../tag/tag.service';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { unique } from '../../../util/unique';
+import {
+  getPluginConfigDependencyState,
+  resetPluginDependentSelections,
+  type PluginConfigDependencyState,
+} from './plugin-config-dependent-options.util';
+import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
 
 @Component({
   selector: 'dialog-edit-issue-provider',
@@ -115,6 +123,8 @@ export class DialogEditIssueProviderComponent {
   optionsLoadState = signal<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
   form = new FormGroup({});
   showLoadOptionsButton = false;
+  private _lastPluginDependencyState: PluginConfigDependencyState | null = null;
+  private _isReloadingPluginOptions = false;
 
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _pluginBridge = inject(PluginBridgeService);
@@ -204,6 +214,7 @@ export class DialogEditIssueProviderComponent {
   }
 
   constructor() {
+    this._watchPluginDependencyChanges();
     this._initOAuthAndOptions().catch((err) => {
       IssueLog.err(
         '[DialogEditIssueProvider] OAuth init failed',
@@ -266,22 +277,11 @@ export class DialogEditIssueProviderComponent {
   }
 
   updateModel(model: Partial<IssueProvider>): void {
-    // NOTE: this currently throws an error when loading issue point stuff for jira
     try {
-      Object.keys(model).forEach((key) => {
-        if (key !== 'isEnabled') {
-          this.model![key] = model[key];
-        }
-      });
+      this.model = mergeIssueProviderModelUpdates(this.model, model);
     } catch (e) {
       devError(e);
-      const updates: any = {};
-      Object.keys(model).forEach((key) => {
-        if (key !== 'isEnabled') {
-          updates[key] = model[key as keyof IssueProvider];
-        }
-      });
-      this.model = { ...this.model, ...updates };
+      this.model = mergeIssueProviderModelUpdates(this.model, model);
     }
 
     this.isConnectionWorks.set(false);
@@ -365,9 +365,10 @@ export class DialogEditIssueProviderComponent {
     if (!pluginId) {
       return;
     }
+    const effectiveOAuthConfig = this._withPluginOAuthOverrides(oauthConfig);
     this.isOAuthConnecting.set(true);
     try {
-      await this._pluginBridge.startOAuthFlow(pluginId, oauthConfig);
+      await this._pluginBridge.startOAuthFlow(pluginId, effectiveOAuthConfig);
     } catch (e) {
       const detail = (e instanceof Error ? e.message : String(e))
         .replace(/\s+/g, ' ')
@@ -478,6 +479,75 @@ export class DialogEditIssueProviderComponent {
       : { ...this.model };
     this._cdr.detectChanges();
     return !anyFailed;
+  }
+
+  private _watchPluginDependencyChanges(): void {
+    if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
+      return;
+    }
+
+    this._lastPluginDependencyState = getPluginConfigDependencyState(
+      ((this.model as Record<string, unknown>)['pluginConfig'] || {}) as Record<
+        string,
+        unknown
+      >,
+    );
+
+    this.form.valueChanges
+      .pipe(
+        map(() =>
+          getPluginConfigDependencyState(
+            ((this.model as Record<string, unknown>)['pluginConfig'] || {}) as Record<
+              string,
+              unknown
+            >,
+          ),
+        ),
+        distinctUntilChanged(
+          (a, b) => a.accountId === b.accountId && a.bucketId === b.bucketId,
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((nextState) => {
+        void this._handlePluginDependencyChange(nextState);
+      });
+  }
+
+  private async _handlePluginDependencyChange(
+    nextState: PluginConfigDependencyState,
+  ): Promise<void> {
+    const prevState = this._lastPluginDependencyState;
+    this._lastPluginDependencyState = nextState;
+    if (!prevState || this._isReloadingPluginOptions || !this.isOAuthConnected()) {
+      return;
+    }
+
+    const accountChanged = prevState.accountId !== nextState.accountId;
+    const bucketChanged = prevState.bucketId !== nextState.bucketId;
+    if (!accountChanged && !bucketChanged) {
+      return;
+    }
+
+    const currentPluginConfig = ((this.model as Record<string, unknown>)[
+      'pluginConfig'
+    ] || {}) as Record<string, unknown>;
+    const nextPluginConfig = resetPluginDependentSelections(
+      prevState,
+      nextState,
+      currentPluginConfig,
+    );
+
+    this._isReloadingPluginOptions = true;
+    try {
+      this.model = {
+        ...this.model,
+        pluginConfig: nextPluginConfig,
+      };
+      this.form.patchValue({ pluginConfig: nextPluginConfig }, { emitEvent: false });
+      await this.loadDynamicOptions();
+    } finally {
+      this._isReloadingPluginOptions = false;
+    }
   }
 
   private _findFormlyField(
@@ -731,6 +801,16 @@ export class DialogEditIssueProviderComponent {
       props: { label: T.F.ISSUE.TWO_WAY_SYNC.SECTION },
       fieldGroup: syncFields,
     };
+  }
+
+  private _withPluginOAuthOverrides(oauthConfig: OAuthFlowConfig): OAuthFlowConfig {
+    return applyPluginOAuthOverrides(
+      oauthConfig,
+      ((this.model as Record<string, unknown>)['pluginConfig'] || {}) as Record<
+        string,
+        unknown
+      >,
+    );
   }
 
   private _getOAuthButtons(): {

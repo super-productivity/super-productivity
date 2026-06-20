@@ -408,6 +408,11 @@ export interface OAuthFlowConfig {
   scopes: string[];
   /** Additional query parameters to append to the authorization URL (e.g. access_type, prompt). */
   extraAuthParams?: Record<string, string>;
+  /**
+   * Optional redirect URI override for providers or user-supplied OAuth apps
+   * that require an exact pre-registered callback instead of the host default.
+   */
+  redirectUri?: string;
 }
 
 export interface OAuthTokenResult {

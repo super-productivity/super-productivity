@@ -34,62 +34,72 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
   // Prepare: start a loopback HTTP server and return the port.
   // Google Desktop OAuth requires http://127.0.0.1:<port> redirect URIs
   // and blocks embedded webviews, so we open the system browser instead.
-  ipcMain.handle(IPC.PLUGIN_OAUTH_PREPARE, async (): Promise<{ port: number }> => {
-    cleanupServer();
+  ipcMain.handle(
+    IPC.PLUGIN_OAUTH_PREPARE,
+    async (_event, requestedPort?: number): Promise<{ port: number }> => {
+      cleanupServer();
 
-    return new Promise<{ port: number }>((resolve, reject) => {
-      let handled = false;
+      return new Promise<{ port: number }>((resolve, reject) => {
+        let handled = false;
 
-      const server = createServer((req, res) => {
-        if (handled) {
+        const server = createServer((req, res) => {
+          if (handled) {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(SUCCESS_HTML);
+            return;
+          }
+          handled = true;
+
+          const url = new URL(req.url!, `http://${LOOPBACK_HOST}`);
+          const code = url.searchParams.get('code');
+          const error = url.searchParams.get('error');
+          const state = url.searchParams.get('state');
+
           // eslint-disable-next-line @typescript-eslint/naming-convention
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end(SUCCESS_HTML);
-          return;
-        }
-        handled = true;
 
-        const url = new URL(req.url!, `http://${LOOPBACK_HOST}`);
-        const code = url.searchParams.get('code');
-        const error = url.searchParams.get('error');
-        const state = url.searchParams.get('state');
+          mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, { code, error, state });
 
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(SUCCESS_HTML);
+          // Re-focus the main window after auth completes
+          if (!mainWin.isDestroyed()) {
+            mainWin.show();
+            mainWin.focus();
+          }
 
-        mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, { code, error, state });
+          cleanupServer();
+        });
 
-        // Re-focus the main window after auth completes
-        if (!mainWin.isDestroyed()) {
-          mainWin.show();
-          mainWin.focus();
-        }
+        const port =
+          typeof requestedPort === 'number' &&
+          Number.isInteger(requestedPort) &&
+          requestedPort > 0
+            ? requestedPort
+            : 0;
 
-        cleanupServer();
+        server.listen(port, LOOPBACK_HOST, () => {
+          const addr = server.address();
+          if (addr && typeof addr !== 'string') {
+            loopbackServer = server;
+            oauthTimeoutId = setTimeout(() => {
+              log('Plugin OAuth: Timeout – closing abandoned loopback server');
+              cleanupServer();
+            }, OAUTH_TIMEOUT_MS);
+            log(`Plugin OAuth: Loopback server listening on port ${addr.port}`);
+            resolve({ port: addr.port });
+          } else {
+            server.close();
+            reject(new Error('Failed to start OAuth loopback server'));
+          }
+        });
+
+        server.on('error', (err) => {
+          reject(err);
+        });
       });
-
-      server.listen(0, LOOPBACK_HOST, () => {
-        const addr = server.address();
-        if (addr && typeof addr !== 'string') {
-          loopbackServer = server;
-          oauthTimeoutId = setTimeout(() => {
-            log('Plugin OAuth: Timeout – closing abandoned loopback server');
-            cleanupServer();
-          }, OAUTH_TIMEOUT_MS);
-          log(`Plugin OAuth: Loopback server listening on port ${addr.port}`);
-          resolve({ port: addr.port });
-        } else {
-          server.close();
-          reject(new Error('Failed to start OAuth loopback server'));
-        }
-      });
-
-      server.on('error', (err) => {
-        reject(err);
-      });
-    });
-  });
+    },
+  );
 
   // Open the auth URL in the system browser (not an embedded webview).
   // Google blocks OAuth in embedded browsers (Electron BrowserWindow).

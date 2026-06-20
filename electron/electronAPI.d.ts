@@ -268,7 +268,7 @@ export interface ElectronAPI {
   consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 
   // Plugin OAuth
-  pluginOAuthPrepare(): Promise<{ port: number }>;
+  pluginOAuthPrepare(port?: number): Promise<{ port: number }>;
   pluginOAuthStart(url: string): void;
   onPluginOAuthCb(
     listener: (data: { code?: string; error?: string; state?: string }) => void,

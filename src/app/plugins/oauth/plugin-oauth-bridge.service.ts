@@ -2,11 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { OAuthFlowConfig, OAuthTokenResult } from '@super-productivity/plugin-api';
 import { PluginOAuthService } from './plugin-oauth.service';
-import {
-  saveOAuthTokens,
-  loadOAuthTokens,
-  deleteOAuthTokens,
-} from './plugin-oauth-token-store';
+import * as pluginOAuthTokenStore from './plugin-oauth-token-store';
 import { IS_ELECTRON } from '../../app.constants';
 import {
   IS_NATIVE_PLATFORM,
@@ -73,7 +69,9 @@ export class PluginOAuthBridgeService {
       return config;
     })();
 
-    const redirectUri = await this._pluginOAuthService.getRedirectUri();
+    const redirectUri = await this._pluginOAuthService.prepareRedirectUri(
+      effectiveConfig.redirectUri,
+    );
     const { url, codeVerifier, state } = await this._pluginOAuthService.buildAuthUrl(
       effectiveConfig,
       redirectUri,
@@ -166,7 +164,10 @@ export class PluginOAuthBridgeService {
     const serialized = this._pluginOAuthService.serializeTokens(pluginId);
     if (serialized) {
       try {
-        await saveOAuthTokens(this._oauthPersistenceKey(pluginId), serialized);
+        await pluginOAuthTokenStore.saveOAuthTokens(
+          this._oauthPersistenceKey(pluginId),
+          serialized,
+        );
       } catch (error) {
         PluginLog.err('PluginOAuthBridge: Failed to persist OAuth tokens:', error);
       }
@@ -175,7 +176,9 @@ export class PluginOAuthBridgeService {
 
   private async _restoreOAuthTokens(pluginId: string): Promise<void> {
     try {
-      const serialized = await loadOAuthTokens(this._oauthPersistenceKey(pluginId));
+      const serialized = await pluginOAuthTokenStore.loadOAuthTokens(
+        this._oauthPersistenceKey(pluginId),
+      );
       if (serialized) {
         this._pluginOAuthService.restoreTokens(pluginId, serialized);
       }
@@ -186,7 +189,7 @@ export class PluginOAuthBridgeService {
 
   private async _clearPersistedOAuthTokens(pluginId: string): Promise<void> {
     try {
-      await deleteOAuthTokens(this._oauthPersistenceKey(pluginId));
+      await pluginOAuthTokenStore.deleteOAuthTokens(this._oauthPersistenceKey(pluginId));
     } catch (error) {
       PluginLog.err('PluginOAuthBridge: Failed to clear persisted OAuth tokens:', error);
     }

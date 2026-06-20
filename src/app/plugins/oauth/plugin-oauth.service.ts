@@ -37,12 +37,14 @@ export class PluginOAuthService {
   /** Emits the pluginId when a token refresh fails and in-memory tokens are cleared. */
   tokenInvalidated$ = new Subject<string>();
 
-  async getRedirectUri(): Promise<string> {
+  async prepareRedirectUri(redirectUri?: string): Promise<string> {
     if (IS_ELECTRON) {
-      // Google Desktop OAuth requires loopback redirect URIs (http://127.0.0.1:<port>).
-      // Start a temporary loopback server in the main process and use its port.
-      const { port } = await window.ea.pluginOAuthPrepare();
-      return `http://127.0.0.1:${port}`;
+      const loopbackPort = this._getElectronLoopbackPort(redirectUri);
+      const { port } = await window.ea.pluginOAuthPrepare(loopbackPort);
+      return redirectUri || `http://127.0.0.1:${port}`;
+    }
+    if (redirectUri) {
+      return redirectUri;
     }
     if (IS_NATIVE_PLATFORM) {
       // Scheme must match the platform's app identifier:
@@ -96,6 +98,25 @@ export class PluginOAuthService {
   validateOAuthConfig(config: OAuthFlowConfig): void {
     this._validateHttpsUrl(config.authUrl, 'authUrl');
     this._validateHttpsUrl(config.tokenUrl, 'tokenUrl');
+  }
+
+  private _getElectronLoopbackPort(redirectUri?: string): number | undefined {
+    if (!redirectUri) {
+      return undefined;
+    }
+
+    try {
+      const parsed = new URL(redirectUri);
+      const isLoopbackHost =
+        parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+      if (parsed.protocol !== 'http:' || !isLoopbackHost || !parsed.port) {
+        return undefined;
+      }
+      const port = Number(parsed.port);
+      return Number.isInteger(port) && port > 0 ? port : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private _validateHttpsUrl(url: string, label: string): void {

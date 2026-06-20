@@ -431,9 +431,11 @@ export class PluginBridgeService implements OnDestroy {
     const name = manifest?.name ?? pluginId;
     const humanReadableName = issueProviderCfg?.humanReadableName ?? name;
     const customIconName = `plugin-${pluginId}-icon`;
-    const icon = this._globalThemeService.hasPluginIcon(customIconName)
-      ? customIconName
-      : (issueProviderCfg?.icon ?? 'extension');
+    const icon =
+      issueProviderCfg?.icon ??
+      (this._globalThemeService.hasPluginIcon(customIconName)
+        ? customIconName
+        : 'extension');
     const pollIntervalMs = issueProviderCfg?.pollIntervalMs ?? 0;
     const issueStrings = issueProviderCfg?.issueStrings ?? {
       singular: 'Issue',
