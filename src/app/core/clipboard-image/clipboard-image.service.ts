@@ -8,10 +8,14 @@ import { MIME_TYPE_EXTENSIONS } from '../../../../electron/shared-with-frontend/
 import { Log } from '../log';
 
 // Windows paths (e.g. C:/...) have no leading slash, so file:// + C:/... yields
-// file://C:/... which fails the canonical file:///  check. Always emit file:///<path>.
-const pathToFileUrl = (filePath: string): string => {
+// file://C:/... which fails the canonical file:/// check. Always emit file:///<path>.
+// encodeURI encodes spaces (common in Windows usernames) so the markdown parser
+// does not split the URL at the first space character.
+export const pathToFileUrl = (filePath: string): string => {
   const normalized = filePath.replace(/\\/g, '/');
-  return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`;
+  return normalized.startsWith('/')
+    ? `file://${encodeURI(normalized)}`
+    : `file:///${encodeURI(normalized)}`;
 };
 
 const DB_NAME = 'sp-clipboard-images';
@@ -113,8 +117,8 @@ export class ClipboardImageService {
               if (filePath) {
                 // Copy to clipboard-images dir so the URL lands in our controlled
                 // directory and can be resolved to a blob: URL before rendering.
-                // Using the original path directly produces a file:/// URL that
-                // Angular's DomSanitizer strips from <img src> bindings.
+                // Chromium blocks http://localhost → file:// subresource loads
+                // regardless of CSP, so we must convert to a same-origin blob: URL.
                 const basePath = await this._getElectronImagePath();
                 const copyResult = await window.ea.copyClipboardImageFile(
                   basePath,
@@ -318,8 +322,9 @@ export class ClipboardImageService {
       }
     }
 
-    // Electron: Angular's DomSanitizer strips file: scheme from <img src>, so
-    // file:/// clipboard-image paths must be converted to blob: URLs before rendering.
+    // Electron: Chromium blocks http://localhost → file:// cross-origin subresource
+    // loads regardless of CSP, so file:/// clipboard-image paths must be converted
+    // to blob: URLs (same-origin) before the markdown HTML is rendered.
     if (IS_ELECTRON) {
       const fileClipPattern =
         /file:\/\/\/[^)\s"]*\/clipboard-images\/[^)\s"/]+\.[a-z]{2,5}/g;
@@ -624,8 +629,12 @@ export class ClipboardImageService {
   }
 
   private async _deleteImageElectron(id: string): Promise<boolean> {
-    // Clean up cache entry (file:// URLs don't need revocation)
-    this._blobUrlCache.delete(id);
+    const cacheKey = `electron-file:${id}`;
+    const cached = this._blobUrlCache.get(cacheKey);
+    if (cached) {
+      URL.revokeObjectURL(cached);
+      this._blobUrlCache.delete(cacheKey);
+    }
 
     const basePath = await this._getElectronImagePath();
     return window.ea.deleteClipboardImage(basePath, id);
