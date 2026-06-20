@@ -85,20 +85,6 @@
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android blocked the persistent time tracking notification. Time is still tracked in the app, but background recovery may be unavailable. Check notification permission and battery/background restrictions.",
       "OPEN_NOTIFICATION_SETTINGS": "Open settings"
     },
-    "AZURE_DEVOPS": {
-      "FORM": {
-        "HOST": "Host (Organisations- oder Sammlungs-URL)",
-        "HOST_DESCRIPTION": "Verwende die vollständige Azure DevOps-URL, z. B. https://dev.azure.com/your-org oder https://server:8080/tfs/DefaultCollection.",
-        "AUTO_IMPORT_LIMIT": "Automatisches Importlimit",
-        "AUTO_IMPORT_LIMIT_DESCRIPTION": "Maximale Anzahl von Azure DevOps Work Items, die für den automatischen Backlog-Import abgerufen werden. Max. {{max}}.",
-        "PROJECT": "Projekt",
-        "SCOPE": "Umfang (nur automatischer Import)",
-        "SCOPE_ALL": "Alle",
-        "SCOPE_ASSIGNED": "Mir zugewiesen",
-        "SCOPE_CREATED": "Von mir erstellt",
-        "TOKEN": "Persönliches Zugriffstoken"
-      }
-    },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "Dieser Anhang ist nur auf dem Gerät verfügbar, auf dem er hinzugefügt wurde.",
       "DIALOG_EDIT": {

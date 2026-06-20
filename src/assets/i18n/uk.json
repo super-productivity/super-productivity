@@ -85,20 +85,6 @@
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android заблокував сповіщення про постійне відстеження часу. Час все ще відстежується в додатку, але фонове відновлення може бути недоступним. Перевірте дозвіл на сповіщення та обмеження щодо використання батареї/фонового режиму.",
       "OPEN_NOTIFICATION_SETTINGS": "Відкрити налаштування"
     },
-    "AZURE_DEVOPS": {
-      "FORM": {
-        "HOST": "Хост (URL-адреса організації або колекції)",
-        "HOST_DESCRIPTION": "Використовуйте повну URL-адресу Azure DevOps, наприклад https://dev.azure.com/your-org або https://server:8080/tfs/DefaultCollection.",
-        "AUTO_IMPORT_LIMIT": "Ліміт автоматичного імпорту",
-        "AUTO_IMPORT_LIMIT_DESCRIPTION": "Максимальна кількість робочих елементів Azure DevOps для автоматичного імпорту журналу обробки. Макс. {{max}}.",
-        "PROJECT": "Проект",
-        "SCOPE": "Область застосування (лише для автоматичного імпорту)",
-        "SCOPE_ALL": "Усі",
-        "SCOPE_ASSIGNED": "Призначено мені",
-        "SCOPE_CREATED": "Створено мною",
-        "TOKEN": "Персональний токен доступу"
-      }
-    },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "Цей вкладений файл доступний лише на тому пристрої, на який його було додано.",
       "DIALOG_EDIT": {
