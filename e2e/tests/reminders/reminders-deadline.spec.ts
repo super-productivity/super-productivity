@@ -83,12 +83,11 @@ test.describe('Deadline Reminders', () => {
     const dueForText = await dueForEl.textContent();
     expect(dueForText!.trim().length).toBeGreaterThan(0);
 
-    // Dismiss by marking the task as done (now in the overflow "More actions" menu)
+    // Dismiss by marking the task as done (footer icon button)
     await page
       .locator(REMINDER_DIALOG)
-      .locator('button[aria-label="More actions"]')
+      .locator('button[aria-label="Mark as done"]')
       .click();
-    await page.getByRole('menuitem', { name: 'Done' }).click();
 
     // Wait for the reminder dialog to close
     await page.locator(REMINDER_DIALOG).waitFor({ state: 'hidden', timeout: 10000 });
@@ -157,8 +156,7 @@ test.describe('Deadline Reminders', () => {
     await page.locator('.cdk-overlay-backdrop').last().click({ force: true });
     await expect(reminderDialog).toBeVisible();
 
-    await reminderDialog.locator('button[aria-label="More actions"]').click();
-    await page.getByRole('menuitem', { name: 'Done' }).click();
+    await reminderDialog.locator('button[aria-label="Mark as done"]').click();
     await reminderDialog.waitFor({ state: 'hidden', timeout: 10000 });
 
     // Poll over a window longer than the 10s reminder worker tick. If the
