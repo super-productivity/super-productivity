@@ -54,6 +54,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
     isLocalRestApiEnabled: false,
+    localRestApiBindAddress: '127.0.0.1',
     isTrayShowCurrentCountdown: true,
     startOfNextDay: 0,
     startOfNextDayTime: '00:00',

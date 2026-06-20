@@ -48,6 +48,20 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
               description: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED_HINT,
             },
           },
+          {
+            key: 'localRestApiBindAddress',
+            type: 'select',
+            defaultValue: '127.0.0.1',
+            hideExpression: '!model.isLocalRestApiEnabled',
+            templateOptions: {
+              label: T.GCF.MISC.LOCAL_REST_API_BIND_ADDRESS,
+              description: T.GCF.MISC.LOCAL_REST_API_BIND_ADDRESS_HINT,
+              options: [
+                { value: '127.0.0.1', label: 'localhost (127.0.0.1)' },
+                { value: '0.0.0.0', label: 'All interfaces (0.0.0.0)' },
+              ],
+            },
+          },
         ]
       : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     {

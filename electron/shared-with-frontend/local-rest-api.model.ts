@@ -1,8 +1,13 @@
-export const LOCAL_REST_API_HOST = '127.0.0.1';
+export const LOCAL_REST_API_DEFAULT_HOST = '127.0.0.1';
 export const LOCAL_REST_API_PORT = 3876;
 export const LOCAL_REST_API_TIMEOUT_MS = 15000;
 export const LOCAL_REST_API_MAX_BODY_BYTES = 1024 * 1024;
 export const LOCAL_REST_API_MAX_CONCURRENT_REQUESTS = 50;
+
+export const LOCAL_REST_API_BIND_ADDRESS_OPTIONS = [
+  { value: '127.0.0.1', label: 'localhost (127.0.0.1) — secure' },
+  { value: '0.0.0.0', label: 'All interfaces (0.0.0.0)' },
+] as const;
 
 export interface LocalRestApiRequestPayload {
   requestId: string;

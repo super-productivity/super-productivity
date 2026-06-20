@@ -6,11 +6,11 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady, getWin } from './main-window';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import {
-  LOCAL_REST_API_HOST,
   LOCAL_REST_API_MAX_BODY_BYTES,
   LOCAL_REST_API_MAX_CONCURRENT_REQUESTS,
   LOCAL_REST_API_PORT,
   LOCAL_REST_API_TIMEOUT_MS,
+  LOCAL_REST_API_DEFAULT_HOST,
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
@@ -24,6 +24,7 @@ let server: Server | null = null;
 let isInitialized = false;
 let isEnabled = false;
 let isListening = false;
+let currentBindAddress = LOCAL_REST_API_DEFAULT_HOST;
 const pendingRequests = new Map<
   string,
   {
@@ -108,10 +109,10 @@ const handleResponse = (_event: unknown, payload: LocalRestApiResponsePayload): 
   pending.resolve(payload);
 };
 
-const ALLOWED_HOSTS = new Set([
-  `${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
+const getAllowedHosts = (): Set<string> => new Set([
+  `${currentBindAddress}:${LOCAL_REST_API_PORT}`,
   `localhost:${LOCAL_REST_API_PORT}`,
-  LOCAL_REST_API_HOST,
+  currentBindAddress,
   'localhost',
 ]);
 
@@ -124,7 +125,7 @@ const handleHttpRequest = async (
 ): Promise<void> => {
   // Block DNS rebinding: reject requests with unexpected Host headers
   const host = req.headers.host;
-  if (!host || !ALLOWED_HOSTS.has(host)) {
+  if (!host || !getAllowedHosts().has(host)) {
     writeJson(res, 403, {
       ok: false,
       error: {
@@ -163,7 +164,7 @@ const handleHttpRequest = async (
     return;
   }
 
-  const requestUrl = new URL(req.url ?? '/', `http://${LOCAL_REST_API_HOST}`);
+  const requestUrl = new URL(req.url ?? '/', `http://${currentBindAddress}`);
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && requestUrl.pathname === '/health') {
@@ -249,15 +250,16 @@ export const initLocalRestApi = (): void => {
   }
 };
 
-const startServer = (): void => {
+const startServer = (bindAddress?: string): void => {
   if (!server || isListening) {
     return;
   }
 
-  server.listen(LOCAL_REST_API_PORT, LOCAL_REST_API_HOST, () => {
+  currentBindAddress = bindAddress ?? LOCAL_REST_API_DEFAULT_HOST;
+  server.listen(LOCAL_REST_API_PORT, currentBindAddress, () => {
     isListening = true;
     log(
-      `[local-rest-api] Listening on http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
+      `[local-rest-api] Listening on http://${currentBindAddress}:${LOCAL_REST_API_PORT}`,
     );
   });
 };
@@ -281,9 +283,20 @@ const stopServer = (): void => {
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   const isForcedForDev = isForceEnabledForDev();
   const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
+  const nextBindAddress = cfg.misc.localRestApiBindAddress || LOCAL_REST_API_DEFAULT_HOST;
+
+  // If the server is already listening but the bind address changed, restart it.
+  if (nextEnabled && isListening && nextBindAddress !== currentBindAddress) {
+    stopServer();
+    isEnabled = true;
+    currentBindAddress = nextBindAddress;
+    startServer(nextBindAddress);
+    return;
+  }
+
   if (nextEnabled === isEnabled) {
     if (nextEnabled && !isListening) {
-      startServer();
+      startServer(nextBindAddress);
     } else if (!nextEnabled && isListening) {
       stopServer();
     }
@@ -291,8 +304,9 @@ export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   }
 
   isEnabled = nextEnabled;
+  currentBindAddress = nextBindAddress;
   if (isEnabled) {
-    startServer();
+    startServer(nextBindAddress);
   } else {
     stopServer();
   }
