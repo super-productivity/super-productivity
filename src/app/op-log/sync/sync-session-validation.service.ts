@@ -7,7 +7,6 @@ import { SyncLog } from '../../core/log';
  *
  * A "sync session" is a single top-level sync operation:
  * - `SyncWrapperService._sync()`
- * - `SyncWrapperService._forceDownload()`
  * - `WsTriggeredDownloadService._downloadOps()`
  * - `ImmediateUploadService._performUpload()`
  *

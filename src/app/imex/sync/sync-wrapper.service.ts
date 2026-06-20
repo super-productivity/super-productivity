@@ -36,13 +36,9 @@ import {
   ConflictReason,
   DecryptError,
   DecryptNoPasswordError,
-  LockPresentError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
-  NoRemoteModelFile,
   PotentialCorsError,
-  RevMismatchForModelError,
-  SyncInvalidTimeValuesError,
   SyncProviderId,
   SyncStatus,
   toSyncProviderId,
@@ -58,10 +54,6 @@ import { ReminderService } from '../../features/reminder/reminder.service';
 
 import { DialogHandleDecryptErrorComponent } from './dialog-handle-decrypt-error/dialog-handle-decrypt-error.component';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
-import {
-  DialogSyncErrorComponent,
-  DialogSyncErrorResult,
-} from './dialog-sync-error/dialog-sync-error.component';
 import { SyncLog } from '../../core/log';
 import { promiseTimeout } from '../../util/promise-timeout';
 import { devError } from '../../util/dev-error';
@@ -90,11 +82,9 @@ type CompletedUploadOutcome = Extract<UploadOutcome, { kind: 'completed' }>;
  * back to its origin without diff-archaeology.
  */
 export type ForceUploadTriggerSource =
-  | 'LockPresentError'
   | 'EmptyRemoteBodySPError'
   | 'JsonParseError'
   | 'LegacySyncFormatDetectedError'
-  | 'DialogSyncError'
   | 'DecryptError'
   | 'unknown';
 
@@ -719,29 +709,6 @@ export class SyncWrapperService {
           });
         }
         return 'HANDLED_ERROR';
-      } else if (error instanceof SyncInvalidTimeValuesError) {
-        // Handle async dialog result properly to avoid silent error swallowing
-        this._handleIncoherentTimestampsDialog();
-        return 'HANDLED_ERROR';
-      } else if (
-        error instanceof RevMismatchForModelError ||
-        error instanceof NoRemoteModelFile
-      ) {
-        SyncLog.log(error, Object.keys(error));
-        // Extract modelId safely with proper type validation
-        const modelId = this._extractModelIdFromError(error);
-        // Handle async dialog result properly to avoid silent error swallowing
-        this._handleIncompleteSyncDialog(modelId);
-        return 'HANDLED_ERROR';
-      } else if (error instanceof LockPresentError) {
-        this._snackService.open({
-          // TODO translate
-          msg: T.F.SYNC.S.ERROR_DATA_IS_CURRENTLY_WRITTEN,
-          type: 'ERROR',
-          actionFn: async () => this.forceUpload('LockPresentError'),
-          actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
-        });
-        return 'HANDLED_ERROR';
       } else if (error instanceof EmptyRemoteBodySPError) {
         // Remote file returned an empty body (e.g. Koofr WebDAV corrupted file).
         // Force overwrite is safe: local data is intact, remote is empty.
@@ -965,7 +932,7 @@ export class SyncWrapperService {
     await this.runWithSyncBlocked(async () => {
       // #8309: claim the sync cycle so this flow's setLastServerSeq bookkeeping
       // and session-validation latch are isolated from the immediate-upload /
-      // WS-download side channels, mirroring _forceDownload. runWithSyncBlocked
+      // WS-download side channels. runWithSyncBlocked
       // has already drained any main sync and set isEncryptionOperationInProgress
       // (which the side channels honour), so the only thing that could hold the
       // guard here is a short-lived side channel; skip-and-let-the-user-retry
@@ -998,65 +965,6 @@ export class SyncWrapperService {
         });
       } finally {
         this._syncCycleGuard.end();
-      }
-    });
-  }
-
-  private async _forceDownload(): Promise<void> {
-    SyncLog.log('SyncWrapperService: forceDownload called - downloading remote state');
-
-    await this.runWithSyncBlocked(async () => {
-      // #8309: claim the sync cycle so this flow's conflict-gate / session
-      // latch are isolated from the immediate-upload / WS-download side
-      // channels. runWithSyncBlocked has already drained any main sync and set
-      // isEncryptionOperationInProgress, so the only thing that could hold the
-      // guard here is a short-lived side channel; skip-and-let-the-user-retry
-      // rather than block.
-      if (!this._syncCycleGuard.tryBegin()) {
-        SyncLog.log('Force download skipped: another sync cycle is in progress');
-        return;
-      }
-      try {
-        await this._forceDownloadInner();
-      } finally {
-        this._syncCycleGuard.end();
-      }
-    });
-  }
-
-  private async _forceDownloadInner(): Promise<void> {
-    // Open a session-validation scope — read after forceDownloadRemoteState
-    // returns so a corrupt downloaded state is reported as ERROR. (#7330)
-    await this._sessionValidation.withSession(async () => {
-      try {
-        const rawProvider = this._providerManager.getActiveProvider();
-        const syncCapableProvider =
-          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
-
-        if (!syncCapableProvider) {
-          SyncLog.warn(
-            'SyncWrapperService: Cannot force download - provider not available',
-          );
-          return;
-        }
-
-        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        if (this._sessionValidation.hasFailed()) {
-          SyncLog.err(
-            'SyncWrapperService: Force download applied but post-sync validation failed; reporting ERROR',
-          );
-          this._providerManager.setSyncStatus('ERROR');
-        } else {
-          this._providerManager.setSyncStatus('IN_SYNC');
-        }
-        SyncLog.log('SyncWrapperService: Force download complete');
-      } catch (error) {
-        SyncLog.err('SyncWrapperService: Force download failed:', error);
-        const errStr = getSyncErrorStr(error);
-        this._snackService.open({
-          msg: errStr,
-          type: 'ERROR',
-        });
       }
     });
   }
@@ -1127,68 +1035,10 @@ export class SyncWrapperService {
     return { wasConfigured: false };
   }
 
-  /**
-   * Handle incoherent timestamps dialog with proper async error handling.
-   * Uses fire-and-forget pattern but logs errors instead of swallowing them.
-   */
   private async _openSyncCfgDialog(): Promise<void> {
     const { DialogSyncCfgComponent } =
       await import('./dialog-sync-cfg/dialog-sync-cfg.component');
     this._matDialog.open(DialogSyncCfgComponent);
-  }
-
-  private _handleIncoherentTimestampsDialog(): void {
-    this._openSyncErrorDialog({ type: 'incoherent-timestamps' });
-  }
-
-  private _handleIncompleteSyncDialog(modelId: string | undefined): void {
-    this._openSyncErrorDialog({ type: 'incomplete-sync', modelId });
-  }
-
-  private _openSyncErrorDialog(data: {
-    type: 'incomplete-sync' | 'incoherent-timestamps';
-    modelId?: string;
-  }): void {
-    const dialogRef = this._matDialog.open(DialogSyncErrorComponent, {
-      data,
-      disableClose: true,
-    });
-
-    firstValueFrom(dialogRef.afterClosed())
-      .then(async (res: DialogSyncErrorResult) => {
-        if (res === 'FORCE_UPDATE_REMOTE') {
-          await this.forceUpload('DialogSyncError');
-        } else if (res === 'FORCE_UPDATE_LOCAL') {
-          await this._forceDownload();
-        }
-      })
-      .catch((err) => {
-        SyncLog.err('Error handling sync error dialog result:', err);
-        this._snackService.open({
-          type: 'ERROR',
-          msg: T.F.SYNC.S.DIALOG_RESULT_ERROR,
-        });
-      });
-  }
-
-  /**
-   * Safely extract modelId from error with proper type validation.
-   */
-  private _extractModelIdFromError(
-    error: RevMismatchForModelError | NoRemoteModelFile,
-  ): string | undefined {
-    if (!error.additionalLog) {
-      return undefined;
-    }
-    // Handle both array and string formats
-    if (Array.isArray(error.additionalLog) && error.additionalLog.length > 0) {
-      const firstItem = error.additionalLog[0];
-      return typeof firstItem === 'string' ? firstItem : undefined;
-    }
-    if (typeof error.additionalLog === 'string') {
-      return error.additionalLog;
-    }
-    return undefined;
   }
 
   /**

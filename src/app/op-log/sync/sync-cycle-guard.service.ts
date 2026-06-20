@@ -1,9 +1,8 @@
 import { Injectable } from '@angular/core';
 
 /**
- * In-tab mutual-exclusion guard for the four top-level sync entry points:
+ * In-tab mutual-exclusion guard for the three top-level sync entry points:
  * - `SyncWrapperService.sync()`        (periodic / user-triggered full sync)
- * - `SyncWrapperService._forceDownload()` (sync-error dialog recovery)
  * - `ImmediateUploadService._performUpload()` (side channel)
  * - `WsTriggeredDownloadService._downloadOps()` (side channel)
  *

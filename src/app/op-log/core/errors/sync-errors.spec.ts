@@ -51,20 +51,16 @@ describe('sync errors', () => {
     expect((OpLog.log as jasmine.Spy).calls.count()).toBe(0);
   });
 
-  it('does not log JSON parse data samples or raw original errors', () => {
+  it('does not log on construction for JsonParseError (privacy invariant)', () => {
     new JsonParseError(
       new SyntaxError('Unexpected token SECRET at position 6'),
       '{"a":"secret value"}',
     );
 
-    const errText = JSON.stringify((OpLog.err as jasmine.Spy).calls.allArgs());
-    expect(errText).toContain('JsonParseError');
-    expect(errText).toContain('dataLength');
-    expect(errText).not.toContain('SECRET');
-    expect(errText).not.toContain('secret value');
+    expect((OpLog.err as jasmine.Spy).calls.count()).toBe(0);
   });
 
-  it('logs model validation diagnostics without validation payloads', () => {
+  it('does not log on construction for ModelValidationError (privacy invariant)', () => {
     const validationResult = {
       success: false,
       errors: [
@@ -83,15 +79,10 @@ describe('sync errors', () => {
       e: new Error('secret validation failure'),
     });
 
-    const logText = JSON.stringify((OpLog.log as jasmine.Spy).calls.allArgs());
-    expect(logText).toContain('ModelValidationError');
-    expect(logText).toContain('task-id-1');
-    expect(logText).toContain('validationErrorCount');
-    expect(logText).not.toContain('secret title');
-    expect(logText).not.toContain('secret validation failure');
+    expect((OpLog.log as jasmine.Spy).calls.count()).toBe(0);
   });
 
-  it('logs data validation diagnostics without validation payloads', () => {
+  it('does not log on construction for DataValidationFailedError (privacy invariant)', () => {
     const validationResult = {
       success: false,
       errors: [
@@ -105,10 +96,6 @@ describe('sync errors', () => {
 
     new DataValidationFailedError(validationResult);
 
-    const logText = JSON.stringify((OpLog.log as jasmine.Spy).calls.allArgs());
-    expect(logText).toContain('DataValidationFailedError');
-    expect(logText).toContain('validationErrorCount');
-    expect(logText).toContain('$input.notes');
-    expect(logText).not.toContain('secret note text');
+    expect((OpLog.log as jasmine.Spy).calls.count()).toBe(0);
   });
 });

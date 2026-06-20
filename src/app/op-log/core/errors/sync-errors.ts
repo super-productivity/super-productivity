@@ -1,12 +1,10 @@
 import { IValidation } from 'typia';
 import type { SyncFilePrefixInvalidPrefixDetails } from '@sp/sync-core';
-import { toSyncLogError } from '@sp/sync-core';
 import {
   AdditionalLogErrorBase as PackageAdditionalLogErrorBase,
   extractErrorMessage as packageExtractErrorMessage,
 } from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
-import { OP_LOG_SYNC_LOGGER } from '../sync-logger.adapter';
 
 // Re-export provider-shared error classes from @sp/sync-providers.
 // Single class definition per error is critical for `instanceof` checks
@@ -46,20 +44,6 @@ const getValidationErrors = (
   return undefined;
 };
 
-const getValidationErrorPathSummary = (
-  validationResult?: IValidation<unknown>,
-): string | undefined => {
-  const errors = getValidationErrors(validationResult);
-  if (!errors) return undefined;
-
-  const pathSummary = errors
-    .slice(0, 3)
-    .map((error) => error.path)
-    .filter(Boolean)
-    .join(', ');
-  return pathSummary || undefined;
-};
-
 // AdditionalLogErrorBase is provided by @sp/sync-providers (without the
 // previous constructor-time logging side effect). The remaining app-only
 // errors below extend it; they MUST log at the catch site via
@@ -71,16 +55,6 @@ const AdditionalLogErrorBase = PackageAdditionalLogErrorBase;
 
 export class ImpossibleError extends Error {
   override name = ' ImpossibleError';
-}
-
-// --------------APP-SIDE-ONLY API ERRORS--------------
-
-export class NoEtagAPIError extends AdditionalLogErrorBase {
-  override name = ' NoEtagAPIError';
-}
-
-export class FileExistsAPIError extends Error {
-  override name = ' FileExistsAPIError';
 }
 
 // --------------OTHER SYNC ERRORS--------------
@@ -127,41 +101,8 @@ export class LockAcquisitionTimeoutError extends Error {
   }
 }
 
-export class RevMismatchForModelError extends AdditionalLogErrorBase<string> {
-  override name = 'RevMismatchForModelError';
-}
-
 export class UnknownSyncStateError extends Error {
   override name = 'UnknownSyncStateError';
-}
-
-export class SyncInvalidTimeValuesError extends AdditionalLogErrorBase {
-  override name = 'SyncInvalidTimeValuesError';
-}
-
-export class RevMapModelMismatchErrorOnDownload extends AdditionalLogErrorBase {
-  override name = 'RevMapModelMismatchErrorOnDownload';
-}
-
-export class RevMapModelMismatchErrorOnUpload extends AdditionalLogErrorBase {
-  override name = 'RevMapModelMismatchErrorOnUpload';
-}
-
-export class NoRemoteModelFile extends AdditionalLogErrorBase<string> {
-  override name = 'NoRemoteModelFile';
-}
-
-export class NoRemoteMetaFile extends Error {
-  override name = 'NoRemoteMetaFile';
-}
-
-// --------------LOCKFILE ERRORS--------------
-export class LockPresentError extends Error {
-  override name = 'LockPresentError';
-}
-
-export class LockFromLocalClientPresentError extends Error {
-  override name = 'LockFromLocalClientPresentError';
 }
 
 // -----ENCRYPTION & COMPRESSION----
@@ -238,12 +179,6 @@ export class JsonParseError extends Error {
       const end = Math.min(dataStr.length, position + 50);
       this.dataSample = `...${dataStr.substring(start, end)}...`;
     }
-
-    OP_LOG_SYNC_LOGGER.err('JsonParseError', toSyncLogError(originalError), {
-      position: this.position,
-      dataLength: dataStr?.length,
-      hasDataSample: this.dataSample !== undefined,
-    });
   }
 }
 
@@ -258,14 +193,6 @@ export class DBNotInitializedError extends Error {
 
 export class InvalidMetaError extends AdditionalLogErrorBase {
   override name = 'InvalidMetaError';
-}
-
-export class MetaNotReadyError extends AdditionalLogErrorBase {
-  override name = 'MetaNotReadyError';
-}
-
-export class InvalidRevMapError extends AdditionalLogErrorBase {
-  override name = 'InvalidRevMapError';
 }
 
 export class ModelIdWithoutCtrlError extends AdditionalLogErrorBase {
@@ -303,15 +230,6 @@ export class ModelValidationError extends Error {
     e?: unknown;
   }) {
     super('ModelValidationError');
-    OP_LOG_SYNC_LOGGER.log('ModelValidationError', {
-      id: params.id,
-      hasValidationResult: params.validationResult !== undefined,
-      validationErrorCount: getValidationErrors(params.validationResult)?.length,
-      validationPathSummary: getValidationErrorPathSummary(params.validationResult),
-      hasAdditionalError: params.e !== undefined,
-      additionalErrorName:
-        params.e !== undefined ? toSyncLogError(params.e).name : undefined,
-    });
 
     if (params.validationResult) {
       try {
@@ -320,12 +238,8 @@ export class ModelValidationError extends Error {
           const str = JSON.stringify(errors);
           this.additionalLog = `Model: ${params.id}, Errors: ${str.substring(0, 400)}`;
         }
-      } catch (e) {
-        OP_LOG_SYNC_LOGGER.err(
-          'Error stringifying validation errors',
-          toSyncLogError(e),
-          { id: params.id },
-        );
+      } catch {
+        // Ignore stringification errors
       }
     }
   }
@@ -338,10 +252,6 @@ export class DataValidationFailedError extends Error {
   constructor(validationResult: IValidation<unknown>) {
     const errorSummary = DataValidationFailedError._buildErrorSummary(validationResult);
     super(errorSummary);
-    OP_LOG_SYNC_LOGGER.log('DataValidationFailedError', {
-      validationErrorCount: getValidationErrors(validationResult)?.length,
-      validationPathSummary: getValidationErrorPathSummary(validationResult),
-    });
 
     try {
       const errors = getValidationErrors(validationResult);
@@ -349,8 +259,8 @@ export class DataValidationFailedError extends Error {
         const str = JSON.stringify(errors);
         this.additionalLog = str.substring(0, 400);
       }
-    } catch (e) {
-      OP_LOG_SYNC_LOGGER.err('Failed to stringify validation errors', toSyncLogError(e));
+    } catch {
+      // Ignore stringification errors
     }
   }
 

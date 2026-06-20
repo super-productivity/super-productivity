@@ -1261,20 +1261,6 @@
         "OK": "Download Remote Data",
         "TITLE": "Initial Sync"
       },
-      "D_INCOMPLETE_SYNC": {
-        "BTN_CLOSE_APP": "Close App",
-        "BTN_DOWNLOAD_BACKUP": "Download Local Backup",
-        "BTN_FORCE_DOWNLOAD": "Force Download Remote",
-        "BTN_FORCE_UPLOAD": "Force Upload Local",
-        "INCOHERENT_P1": "The date of your remote data is from the future",
-        "INCOHERENT_P2": "You should check the time configured on your systems!",
-        "P1": "The remote sync data is incoherent!",
-        "P2": "Affected model:",
-        "T3": "You have 2 Options:",
-        "T4": "1. Go to your other device and complete the sync there.",
-        "T5": "2. Or you can overwrite the remote data with your local one. All remote changes will\n    be lost!",
-        "T6": "Creating a backup of the data you overwrite is recommended!!!"
-      },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Save & Enable Sync",
         "TITLE": "Configure Sync"
@@ -1522,14 +1508,12 @@
         "DATA_REPAIRED": "Sync cleanup: {{count}} reference(s) resolved",
         "DECRYPTION_FAILED": "Failed to decrypt synced data. Please check your encryption password.",
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved. Please reload to recover.",
-        "DIALOG_RESULT_ERROR": "An error occurred while processing the sync dialog. Please try again.",
         "DISABLE_ENCRYPTION_FAILED": "Failed to disable encryption: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Failed to enable encryption: {{message}}",
         "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Encryption was disabled on another device. Your sync settings have been updated.",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
         "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Encryption is required for SuperSync. Please set an encryption password to continue syncing.",
         "ERROR_CORS": "WebDAV Sync Error: Network request failed.\n\nThis may be a CORS issue. Please ensure:\n• Your WebDAV server allows Cross-Origin requests\n• The server URL is correct and accessible\n• You have a working internet connection",
-        "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Remote Data is currently being written",
         "ERROR_PAYLOAD_TOO_LARGE": "Sync Error: Your data is too large to upload.\n\nThis happens when you have many archived tasks. Your data was NOT synced!\n\nPlease contact support for assistance.",
         "ERROR_PERMISSION": "File access denied. Please check your filesystem permissions.",
         "ERROR_PERMISSION_FLATPAK": "File access denied. Grant filesystem permission via Flatseal or use a path inside ~/.var/app/",

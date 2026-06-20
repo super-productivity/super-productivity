@@ -121,9 +121,6 @@ flowchart LR
     TYPE -->|DecryptNoPasswordError| PWD_DLG[Enter Password dialog]
     TYPE -->|DecryptError| DEC_DLG[Decrypt Error dialog]
     TYPE -->|LocalDataConflictError| CONF_DLG[SyncConflictDialog]
-    TYPE -->|RevMismatchForModelError<br/>NoRemoteModelFile| INC_DLG["Incomplete sync" dialog:<br/>Force Upload / Force Download]
-    TYPE -->|SyncInvalidTimeValuesError| TIME_DLG["Incoherent timestamps" dialog:<br/>Force Upload / Force Download]
-    TYPE -->|LockPresentError| LOCK[Snackbar + Force Overwrite action]
     TYPE -->|PotentialCorsError| CORS[CORS error snackbar]
     TYPE -->|AuthFail / MissingCredentials| AUTH[Auth error snackbar<br/>+ Configure action]
     TYPE -->|WebCryptoNotAvailable| CRYPTO[WebCrypto snackbar]
@@ -134,7 +131,7 @@ flowchart LR
     classDef dialog fill:#48f,stroke:#26d,color:#fff
     classDef snack fill:#f90,stroke:#b60,color:#fff
 
-    class PWD_DLG,DEC_DLG,CONF_DLG,INC_DLG,TIME_DLG dialog
+    class PWD_DLG,DEC_DLG,CONF_DLG dialog
     class LOCK,CORS,AUTH,CRYPTO,TIMEOUT,PERM,GENERIC snack
 ```
 
@@ -148,16 +145,16 @@ flowchart LR
 
 ## Key Differences from SuperSync
 
-| Aspect | File-Based (Dropbox, WebDAV, LocalFile) | SuperSync |
-|--------|----------------------------------------|-----------|
-| **Transport** | Downloads/uploads a single `sync-data.json` file | Paginated API (server-side op log) |
-| **Snapshot path** | Full `snapshotState` on seq 0 download, with its own conflict-checking flow | No snapshot concept — all ops are incremental |
-| **Gap detection** | Adapter detects syncVersion reset / snapshot replacement / partial trimming → re-download from seq 0 | Server handles gap detection internally |
-| **Server migration** | Gap on empty server → `needsFullStateUpload` → `handleServerMigration()` | Same concept but detected via different mechanism |
-| **Upload retry** | Rev matching (ETag) + exponential backoff with jitter | Server rejection codes (`CONFLICT_CONCURRENT`) |
-| **Piggybacking** | Not applicable — no server to piggyback. Concurrent changes are discovered on re-download during retry. | Server returns piggybacked ops in upload response |
-| **Post-sync encryption prompt** | Not applicable | Prompts user to set password or disable sync |
-| **File-based error types** | `RevMismatchForModelError`, `NoRemoteModelFile`, `SyncInvalidTimeValuesError`, `LockPresentError`, `PotentialCorsError` | Not applicable |
+| Aspect                          | File-Based (Dropbox, WebDAV, LocalFile)                                                                 | SuperSync                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Transport**                   | Downloads/uploads a single `sync-data.json` file                                                        | Paginated API (server-side op log)                |
+| **Snapshot path**               | Full `snapshotState` on seq 0 download, with its own conflict-checking flow                             | No snapshot concept — all ops are incremental     |
+| **Gap detection**               | Adapter detects syncVersion reset / snapshot replacement / partial trimming → re-download from seq 0    | Server handles gap detection internally           |
+| **Server migration**            | Gap on empty server → `needsFullStateUpload` → `handleServerMigration()`                                | Same concept but detected via different mechanism |
+| **Upload retry**                | Rev matching (ETag) + exponential backoff with jitter                                                   | Server rejection codes (`CONFLICT_CONCURRENT`)    |
+| **Piggybacking**                | Not applicable — no server to piggyback. Concurrent changes are discovered on re-download during retry. | Server returns piggybacked ops in upload response |
+| **Post-sync encryption prompt** | Not applicable                                                                                          | Prompts user to set password or disable sync      |
+| **File-based error types**      | `PotentialCorsError`, `LegacySyncFormatDetectedError`, `SyncDataCorruptedError`                         | Not applicable                                    |
 
 ## Notes
 
@@ -169,9 +166,9 @@ flowchart LR
 
 ## Key Source Files
 
-| File | Role |
-|------|------|
-| `src/app/imex/sync/sync-wrapper.service.ts` | Top-level orchestration + error handling |
-| `src/app/op-log/sync/operation-log-sync.service.ts` | Download/upload orchestration, fresh client checks, SYNC_IMPORT handling |
-| `src/app/op-log/sync/operation-log-download.service.ts` | Download + internal gap detection |
-| `src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts` | File adapter (rev matching, gap detection, snapshot upload) |
+| File                                                                          | Role                                                                     |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `src/app/imex/sync/sync-wrapper.service.ts`                                   | Top-level orchestration + error handling                                 |
+| `src/app/op-log/sync/operation-log-sync.service.ts`                           | Download/upload orchestration, fresh client checks, SYNC_IMPORT handling |
+| `src/app/op-log/sync/operation-log-download.service.ts`                       | Download + internal gap detection                                        |
+| `src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts` | File adapter (rev matching, gap detection, snapshot upload)              |
