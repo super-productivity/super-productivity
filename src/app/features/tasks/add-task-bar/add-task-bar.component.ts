@@ -26,8 +26,9 @@ import { AsyncPipe } from '@angular/common';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { TaskCopy, TaskReminderOptionId } from '../task.model';
+import { TaskCopy } from '../task.model';
 import { TaskService } from '../task.service';
+import { TaskBuilderService } from '../task-builder.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContext, WorkContextType } from '../../work-context/work-context.model';
 import { ProjectService } from '../../project/project.service';
@@ -42,7 +43,6 @@ import {
   map,
   startWith,
   switchMap,
-  timeout,
   withLatestFrom,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
@@ -64,15 +64,7 @@ import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
-import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
-import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
-import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
-import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
-import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
@@ -85,6 +77,8 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
+import { buildAddTaskPayload } from './add-task-payload-builder';
+import { isQuickAddWindowMode } from '../../../util/is-quick-add-window-mode';
 
 @Component({
   selector: 'add-task-bar',
@@ -116,6 +110,7 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
 })
 export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _taskService = inject(TaskService);
+  private readonly _taskBuilderService = inject(TaskBuilderService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
@@ -127,7 +122,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _translateService = inject(TranslateService);
   private readonly _store = inject(Store);
-  private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _markdownPasteService = inject(MarkdownPasteService);
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
@@ -421,12 +415,17 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     try {
       const state = currentState;
       let finalTagIds = [...state.tagIds, ...state.tagIdsFromTxt];
+      let newTagTitles: string[] | undefined;
 
       if (this.hasNewTags()) {
         const shouldCreateNewTags = await this._confirmNewTags();
         if (shouldCreateNewTags) {
-          const newTagIds = await this._createNewTags(state.newTagTitles);
-          finalTagIds = [...finalTagIds, ...newTagIds];
+          if (isQuickAddWindowMode()) {
+            newTagTitles = state.newTagTitles;
+          } else {
+            const newTagIds = await this._createNewTags(state.newTagTitles);
+            finalTagIds = [...finalTagIds, ...newTagIds];
+          }
         }
       }
 
@@ -436,133 +435,24 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         finalTagIds = finalTagIds.filter((tagId) => !tagsToRemoveList.includes(tagId));
       }
 
-      const additionalFields = this.additionalFields();
-      const taskData: Partial<TaskCopy> = {
-        ...additionalFields,
-        projectId: state.projectId,
-        tagIds: additionalFields?.tagIds
-          ? unique([...finalTagIds, ...additionalFields.tagIds])
-          : finalTagIds,
-        // needs to be 0
-        timeEstimate: state.estimate || 0,
-        attachments:
-          state.attachments.length > 0
-            ? state.attachments
-            : additionalFields?.attachments || [],
-      };
-
-      const note = this.stateService.noteTxt().trim();
-      if (note) {
-        taskData.notes = note;
-      }
-
-      if (state.spent) {
-        taskData.timeSpentOnDay = state.spent;
-      }
-
-      if (state.deadlineDate) {
-        if (state.deadlineTime && isValidSplitTime(state.deadlineTime)) {
-          const deadlineDateObj = dateStrToUtcDate(state.deadlineDate);
-          const deadlineTimestamp = getDateTimeFromClockString(
-            state.deadlineTime,
-            deadlineDateObj,
-          );
-          taskData.deadlineWithTime = deadlineTimestamp;
-          if (
-            state.deadlineRemindOption &&
-            state.deadlineRemindOption !== TaskReminderOptionId.DoNotRemind
-          ) {
-            taskData.deadlineRemindAt = remindOptionToMilliseconds(
-              deadlineTimestamp,
-              state.deadlineRemindOption,
-            );
-          }
-        } else {
-          taskData.deadlineDay = state.deadlineDate;
-        }
-      }
-
-      if (state.date) {
-        // Parse date components to create date in local timezone
-        // This avoids timezone issues when parsing date strings like "2024-01-15"
-        const [year, month, day] = state.date.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-
-        if (state.time) {
-          // TODO we need to add unit tests to confirm this works
-          const [hours, minutes] = state.time.split(':').map(Number);
-          date.setHours(hours, minutes, 0, 0);
-          taskData.dueWithTime = date.getTime();
-          taskData.hasPlannedTime = true;
-        } else {
-          taskData.dueDay = state.date;
-        }
-      } else if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
-        // When a repeat preset is selected without an explicit date, set dueDay to today
-        // so the first task instance appears as today's occurrence instead of staying in inbox
-        taskData.dueDay = this._dateService.todayStr();
-      } else {
-        // Explicitly set dueDay to undefined when no date is selected
-        // This prevents automatic assignment of today's date in TODAY context
-        taskData.dueDay = undefined;
-      }
-
-      const taskId = this._taskService.add(
-        title,
-        this.isAddToBacklog(),
-        taskData,
-        this.isAddToBottom(),
-      );
-
-      // Resolve remind option once for both scheduleTask and repeat config paths
-      const resolvedRemindOption =
+      const defaultRemindOption =
         state.remindOption ??
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
         DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
-
-      // Skip scheduleTask for timed repeat tasks — the addRepeatCfgToTaskUpdateTask$
-      // effect already handles scheduling via scheduleTaskWithTime, so calling both
-      // would cause double-scheduling.
-      const isTimedRepeatTask =
-        !!state.repeatQuickSetting &&
-        state.repeatQuickSetting !== 'CUSTOM' &&
-        !!state.time;
-      if (taskData.dueWithTime && !isTimedRepeatTask) {
-        this._taskService
-          .getByIdOnce$(taskId)
-          .pipe(timeout(1000))
-          .subscribe((task) => {
-            this._taskService.scheduleTask(
-              task,
-              taskData.dueWithTime!,
-              resolvedRemindOption,
-              this.isAddToBacklog(),
-            );
-          });
-      }
-
-      // Create repeat config if a repeat setting was selected
-      if (state.repeatQuickSetting) {
-        if (state.repeatQuickSetting === 'CUSTOM') {
-          this._openRepeatDialogForTask(taskId, resolvedRemindOption);
-        } else {
-          const startDate = state.date || this._dateService.todayStr();
-          const referenceDate = dateStrToUtcDate(startDate);
-          const quickSettingUpdates =
-            getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
-          this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
-            ...DEFAULT_TASK_REPEAT_CFG,
-            startDate,
-            ...quickSettingUpdates,
-            title,
-            quickSetting: state.repeatQuickSetting,
-            tagIds: taskData.tagIds ?? [],
-            defaultEstimate: state.estimate || 0,
-            startTime: state.time || undefined,
-            remindAt: state.time ? resolvedRemindOption : undefined,
-          });
-        }
-      }
+      const taskId = await this._taskBuilderService.addTask(
+        buildAddTaskPayload({
+          title,
+          state,
+          note: this.stateService.noteTxt().trim(),
+          isAddToBacklog: this.isAddToBacklog(),
+          isAddToBottom: this.isAddToBottom(),
+          todayStr: this._dateService.todayStr(),
+          defaultRemindOption,
+          finalTagIds,
+          additionalFields: this.additionalFields(),
+          newTagTitles,
+        }),
+      );
 
       this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });
       this._resetAfterAdd();
@@ -823,31 +713,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       newTagIds.push(tagId);
     }
     return newTagIds;
-  }
-
-  private _openRepeatDialogForTask(
-    taskId: string,
-    remindOption: TaskReminderOptionId,
-  ): void {
-    this._taskService
-      .getByIdOnce$(taskId)
-      .pipe(timeout(1000), takeUntilDestroyed(this._destroyRef))
-      .subscribe({
-        next: async (task) => {
-          const { DialogEditTaskRepeatCfgComponent } =
-            await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
-          this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
-            data: { task, defaultRemindOption: remindOption },
-          });
-        },
-        error: (err) => {
-          Log.error('Failed to open repeat dialog', err);
-          this._snackService.open({
-            type: 'ERROR',
-            msg: T.F.TASK_REPEAT.SNACK_REPEAT_DIALOG_FAIL,
-          });
-        },
-      });
   }
 
   private _resetAfterAdd(): void {

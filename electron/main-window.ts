@@ -71,6 +71,8 @@ export const getWin = (): BrowserWindow => {
   return mainWinModule.win;
 };
 
+export const getWinSafe = (): BrowserWindow | undefined => mainWinModule.win;
+
 // How long the "quit requested" intent survives before auto-clearing.
 // Long enough to cover normal before-close IPC (sync, finish-day prompt);
 // short enough that if the user cancels finish-day and then clicks the
@@ -368,6 +370,14 @@ export const createWindow = async ({
   mainWinModule.win = mainWin;
 
   // listen for app ready
+  mainWin.webContents.on(
+    'did-start-navigation',
+    (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) {
+        mainWinModule.isAppReady = false;
+      }
+    },
+  );
   ipcMain.on(IPC.APP_READY, () => {
     mainWinModule.isAppReady = true;
     // Signal the GPU startup guard that the full boot chain completed

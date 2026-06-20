@@ -1,4 +1,4 @@
-@if (resolvedBgImage(); as bgImage) {
+@if (!isQuickAddWindowMode && resolvedBgImage(); as bgImage) {
   <div
     [style.background]="'url(' + bgImage + ')'"
     [style.filter]="bgImageBlurFilter()"
@@ -13,22 +13,23 @@
 <!--TODO move inside page container somehow -->
 @if (layoutService.isShowAddTaskBar()) {
   <add-task-bar
-    (closed)="layoutService.hideAddTaskBar()"
-    (done)="layoutService.hideAddTaskBar()"
+    (closed)="onAddTaskBarClosed()"
+    (done)="onAddTaskBarDone()"
     (afterTaskAdd)="onTaskAdded($event)"
     [isGlobalBarVariant]="true"
     class="global"
   ></add-task-bar>
 }
-@if (layoutService.isShowAddTaskBar()) {
+@if (layoutService.isShowAddTaskBar() && !isQuickAddWindowMode) {
   <div
-    (click)="layoutService.hideAddTaskBar()"
+    (click)="onAddTaskBarClosed()"
     @fade
     class="backdrop"
   ></div>
 }
 <!-- -->
-@if (isShowFocusOverlay()) {
+@if (isQuickAddWindowMode) {
+} @else if (isShowFocusOverlay()) {
   @defer (on immediate) {
     <focus-mode-overlay @warp></focus-mode-overlay>
   }
@@ -80,19 +81,19 @@
 }
 <!-- -->
 
-@if (isShowOnboardingPresets()) {
+@if (isShowOnboardingPresets() && !isQuickAddWindowMode) {
   <onboarding-preset-selection
     (presetSelected)="onPresetSelected()"
     (dismissed)="onOnboardingDismissed()"
   ></onboarding-preset-selection>
 }
 
-@if (onboardingHintService.currentStep()) {
+@if (onboardingHintService.currentStep() && !isQuickAddWindowMode) {
   <onboarding-hint></onboarding-hint>
 }
 
 <!-- Background context menu -->
-@if (routeWrapper) {
+@if (routeWrapper && !isQuickAddWindowMode) {
   <context-menu
     [contextMenu]="backgroundContextMenu"
     [rightClickTriggerEl]="routeWrapper.nativeElement"

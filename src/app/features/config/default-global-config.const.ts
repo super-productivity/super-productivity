@@ -132,6 +132,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     globalToggleTaskStart: null,
     globalAddNote: null,
     globalAddTask: null,
+    globalTaskQuickAdd: null,
     globalToggleTaskWidget: null,
     addNewTask: 'Shift+A',
     addNewProject: 'Shift+P',

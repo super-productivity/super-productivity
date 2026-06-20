@@ -14,7 +14,7 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { TaskWidgetSettingsService } from './features/config/task-widget-settings.service';
@@ -83,6 +83,8 @@ import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.c
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
+import { QuickAddTaskSubmitService } from './features/tasks/quick-add-task-submit.service';
+import { isQuickAddWindowMode } from './util/is-quick-add-window-mode';
 
 const ONBOARDING_PRESET_EXIT_DELAY = 1000;
 const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
@@ -175,10 +177,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
   private _browserTitleService = inject(BrowserTitleService);
+  private _quickAddTaskSubmitService = inject(QuickAddTaskSubmitService);
   private _hasShownLegacyFileBgSnack = false;
+  private _isQuickAddWindowDataReady = false;
   readonly T = T;
   readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
+  readonly isQuickAddWindowMode = isQuickAddWindowMode();
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
   @ViewChild(RouterOutlet) private _routerOutlet?: RouterOutlet;
@@ -235,7 +240,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   constructor() {
     this._startupService.init();
+    this._quickAddTaskSubmitService.init();
     void this._materialIconsLoaderService.ensureFontReady();
+    this._initQuickAddWindowMode();
 
     // Skip onboarding for existing users with data
     if (this.isShowOnboardingPresets()) {
@@ -437,8 +444,19 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {
+    if (this.isQuickAddWindowMode) {
+      return;
+    }
     this.layoutService.setPendingFocusTaskId(taskId);
     this.layoutService.scrollToNewTask(taskId);
+  }
+
+  onAddTaskBarClosed(): void {
+    this._hideAddTaskBarOrCloseQuickAddWindow();
+  }
+
+  onAddTaskBarDone(): void {
+    this._hideAddTaskBarOrCloseQuickAddWindow();
   }
 
   readonly bgOverlayOpacity = computed((): number => {
@@ -544,6 +562,39 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this._subs.unsubscribe();
+  }
+
+  private _initQuickAddWindowMode(): void {
+    if (!this.isQuickAddWindowMode) {
+      return;
+    }
+
+    document.documentElement.classList.add('isQuickAddHud');
+    document.body.classList.add('isQuickAddHud');
+    this.isShowOnboardingPresets.set(false);
+
+    this._dataInitStateService.isAllDataLoadedInitially$
+      .pipe(first(), takeUntilDestroyed(this._destroyRef))
+      .subscribe(() => {
+        this._isQuickAddWindowDataReady = true;
+        this.layoutService.showAddTaskBar();
+      });
+
+    if (IS_ELECTRON) {
+      const unsubscribeQuickAddOpened = window.ea.onQuickAddOpened(() => {
+        if (this._isQuickAddWindowDataReady) {
+          this.layoutService.showAddTaskBar();
+        }
+      });
+      this._destroyRef.onDestroy(unsubscribeQuickAddOpened);
+    }
+  }
+
+  private _hideAddTaskBarOrCloseQuickAddWindow(): void {
+    this.layoutService.hideAddTaskBar();
+    if (this.isQuickAddWindowMode && IS_ELECTRON) {
+      window.ea.closeQuickAdd();
+    }
   }
 
   /**

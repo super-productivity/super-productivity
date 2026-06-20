@@ -205,6 +205,20 @@ body {
   }
 }
 
+html.isQuickAddHud,
+body.isQuickAddHud {
+  background: transparent !important;
+}
+
+body.isQuickAddHud {
+  overflow: hidden;
+  border: 0 !important;
+
+  &:before {
+    display: none !important;
+  }
+}
+
 .page-wrapper {
   padding: var(--s) var(--s) calc(var(--s) * 9);
 

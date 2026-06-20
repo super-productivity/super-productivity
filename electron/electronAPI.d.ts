@@ -19,6 +19,10 @@ import {
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import type {
+  AddTaskPayload,
+  AddTaskSubmitResult,
+} from '../src/app/features/tasks/add-task-bar/add-task-payload-builder';
 
 export interface PluginNodeExecutionElectronApi {
   requestGrant(pluginId: string): Promise<{ token: string } | null>;
@@ -196,6 +200,8 @@ export interface ElectronAPI {
 
   showEmojiPanel(): void;
 
+  openSystemKeyboardSettings(): void;
+
   relaunch(): void;
 
   exit(exitCode: number): void;
@@ -209,6 +215,14 @@ export interface ElectronAPI {
   lockScreen(): void;
 
   informAboutAppReady(): void;
+
+  informQuickAddTaskSubmitBridgeReady(): void;
+
+  showQuickAdd(): void;
+
+  closeQuickAdd(): void;
+
+  submitQuickAddTask(payload: AddTaskPayload): Promise<AddTaskSubmitResult>;
 
   scheduleRegisterBeforeClose(id: string): void;
 
@@ -262,6 +276,14 @@ export interface ElectronAPI {
   ): void;
 
   onSwitchTask(listener: (taskId: string) => void): void;
+
+  onQuickAddOpened(listener: () => void): () => void;
+
+  onQuickAddTaskSubmitRequest(
+    listener: (requestId: string, payload: AddTaskPayload) => void,
+  ): () => void;
+
+  sendQuickAddTaskSubmitResponse(requestId: string, result: AddTaskSubmitResult): void;
 
   exec(command: string): void;
 

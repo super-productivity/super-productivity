@@ -21,6 +21,10 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import type {
+  AddTaskPayload,
+  AddTaskSubmitResult,
+} from '../src/app/features/tasks/add-task-bar/add-task-payload-builder';
 
 let pluginNodeExecutionApiConsumed = false;
 
@@ -170,7 +174,14 @@ const ea: ElectronAPI = {
   reloadMainWin: () => _send('RELOAD_MAIN_WIN'),
   openDevTools: () => _send('OPEN_DEV_TOOLS'),
   showEmojiPanel: () => _send('SHOW_EMOJI_PANEL'),
+  openSystemKeyboardSettings: () => _send(IPC.OPEN_SYSTEM_KEYBOARD_SETTINGS),
   informAboutAppReady: () => _send('APP_READY'),
+  informQuickAddTaskSubmitBridgeReady: () =>
+    _send(IPC.QUICK_ADD_TASK_SUBMIT_BRIDGE_READY),
+  showQuickAdd: () => _send(IPC.QUICK_ADD_SHOW),
+  closeQuickAdd: () => _send(IPC.QUICK_ADD_CLOSE),
+  submitQuickAddTask: (payload: AddTaskPayload) =>
+    _invoke(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST, payload) as Promise<AddTaskSubmitResult>,
 
   openPath: (path: string) => _send('OPEN_PATH', path),
   openExternalUrl: (url: string) => _send('OPEN_EXTERNAL', url),
@@ -237,6 +248,26 @@ const ea: ElectronAPI = {
     // Because the standard 'on' method doesn't strip out the event arg like we need
     ipcRenderer.on('SWITCH_TASK', (_: any, taskId: string) => listener(taskId));
   },
+
+  onQuickAddOpened: (listener: () => void) => {
+    const ipcListener = (): void => listener();
+    ipcRenderer.on(IPC.QUICK_ADD_OPENED, ipcListener);
+    return () => ipcRenderer.off(IPC.QUICK_ADD_OPENED, ipcListener);
+  },
+
+  onQuickAddTaskSubmitRequest: (
+    listener: (requestId: string, payload: AddTaskPayload) => void,
+  ) => {
+    const ipcListener = (
+      _: unknown,
+      request: { requestId: string; payload: AddTaskPayload },
+    ): void => listener(request.requestId, request.payload);
+    ipcRenderer.on(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST, ipcListener);
+    return () => ipcRenderer.off(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST, ipcListener);
+  },
+
+  sendQuickAddTaskSubmitResponse: (requestId: string, result: AddTaskSubmitResult) =>
+    _send(IPC.QUICK_ADD_TASK_SUBMIT_RESPONSE, { requestId, payload: result }),
 
   // Plugin API
   consumePluginNodeExecutionApi: () => {
