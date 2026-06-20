@@ -19,6 +19,7 @@ import { of } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { addSubTask } from '../../store/task.actions';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { Project } from '../../../project/project.model';
 import { Tag } from '../../../tag/tag.model';
 import { DEFAULT_TASK, Task } from '../../task.model';
@@ -44,6 +45,7 @@ describe('TaskContextMenuInnerComponent', () => {
   let component: TaskContextMenuInnerComponent;
   let fixture: ComponentFixture<TaskContextMenuInnerComponent>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let addSubtaskInputService: jasmine.SpyObj<AddSubtaskInputService>;
   let store: MockStore;
 
   beforeEach(async () => {
@@ -53,6 +55,10 @@ describe('TaskContextMenuInnerComponent', () => {
       'currentTaskId',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
+    addSubtaskInputService = jasmine.createSpyObj<AddSubtaskInputService>(
+      'AddSubtaskInputService',
+      ['requestOpen'],
+    );
 
     await TestBed.configureTestingModule({
       imports: [
@@ -63,6 +69,7 @@ describe('TaskContextMenuInnerComponent', () => {
       providers: [
         provideMockStore(),
         { provide: TaskService, useValue: taskService },
+        { provide: AddSubtaskInputService, useValue: addSubtaskInputService },
         {
           provide: TaskRepeatCfgService,
           useValue: { getTaskRepeatCfgById$: () => of(null) },
@@ -289,6 +296,22 @@ describe('TaskContextMenuInnerComponent', () => {
       component.focusFirstSubmenuItem(menu);
 
       expect(menu.focusFirstItem).toHaveBeenCalledWith('program');
+    });
+  });
+
+  describe('addSubTask()', () => {
+    it('requests the inline subtask input for the parent task', () => {
+      component.task = {
+        id: 'SUB_ID',
+        title: 'Subtask',
+        parentId: 'PARENT_ID',
+        tagIds: [],
+        subTaskIds: [],
+      } as any;
+
+      component.addSubTask();
+
+      expect(addSubtaskInputService.requestOpen).toHaveBeenCalledWith('PARENT_ID');
     });
   });
 });

@@ -79,7 +79,6 @@ export const SuperSyncUploadOpsRequestSchema = z.object({
   clientId: SuperSyncClientIdSchema,
   lastKnownServerSeq: z.number().optional(),
   requestId: SuperSyncRequestIdSchema.optional(),
-  isCleanSlate: z.boolean().optional(),
 });
 
 export const SuperSyncDownloadOpsQuerySchema = z.object({

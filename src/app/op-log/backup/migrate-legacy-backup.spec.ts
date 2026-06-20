@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { isLegacyBackupData, migrateLegacyBackup } from './migrate-legacy-backup';
 import { INBOX_PROJECT } from '../../features/project/project.const';
+import { createValidAppData } from '../validation/state-validity-test-utils';
+import { validateFull } from '../validation/validation-fn';
+import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import fixture from './test-fixtures/legacy-v10-backup.json';
 
 /**
@@ -129,6 +133,7 @@ const createModernBackup = (): Record<string, any> => ({
   globalConfig: { misc: { isDisableInitialDialog: true }, sync: { isEnabled: false } },
   note: { ids: [], entities: {}, todayOrder: [] },
   simpleCounter: { ids: [], entities: {} },
+  section: { ids: [], entities: {} },
   taskRepeatCfg: { ids: [], entities: {} },
   metric: { ids: [], entities: {} },
   planner: { days: {} },
@@ -151,26 +156,7 @@ const createModernBackup = (): Record<string, any> => ({
   },
 });
 
-const V17_REQUIRED_KEYS = [
-  'project',
-  'menuTree',
-  'globalConfig',
-  'planner',
-  'boards',
-  'note',
-  'issueProvider',
-  'metric',
-  'task',
-  'tag',
-  'simpleCounter',
-  'taskRepeatCfg',
-  'reminders',
-  'timeTracking',
-  'pluginUserData',
-  'pluginMetadata',
-  'archiveYoung',
-  'archiveOld',
-];
+const V17_REQUIRED_KEYS = Object.keys(MODEL_CONFIGS);
 
 const LEGACY_KEYS = [
   'bookmark',
@@ -180,6 +166,33 @@ const LEGACY_KEYS = [
   'lastLocalSyncModelChange',
   'lastArchiveUpdate',
 ];
+
+const createLegacyDetectedValidAppData = (): Record<string, any> => {
+  const data = structuredClone(createValidAppData()) as Record<string, any>;
+  const project = data.project.entities.INBOX!;
+  project.id = 'project-1';
+  project.title = 'Project';
+  delete data.project.entities.INBOX;
+  data.project.entities['project-1'] = project;
+  data.project.ids = ['project-1'];
+  data.menuTree.projectTree[0].id = 'project-1';
+  data.improvement = { ids: [], entities: {}, hiddenImprovementBannerItems: [] };
+  return data;
+};
+
+const expectValidWithoutRepair = (data: AppDataComplete): void => {
+  const validationResult = validateFull(data);
+  const validationError =
+    'errors' in validationResult.typiaResult
+      ? validationResult.typiaResult.errors
+          .map((error) => `${error.path}: ${error.expected}`)
+          .join('\n')
+      : validationResult.crossModelError;
+
+  expect(validationResult.isValid)
+    .withContext(validationError || '')
+    .toBe(true);
+};
 
 describe('migrate-legacy-backup', () => {
   describe('isLegacyBackupData', () => {
@@ -221,6 +234,39 @@ describe('migrate-legacy-backup', () => {
       for (const key of V17_REQUIRED_KEYS) {
         expect(key in result).toBe(true);
       }
+    });
+
+    it('should add missing section to legacy-detected data before full validation', () => {
+      const data = createLegacyDetectedValidAppData();
+      delete data.section;
+
+      const result = migrateLegacyBackup(data);
+
+      expect(result.section).toEqual(MODEL_CONFIGS.section.defaultData!);
+      expectValidWithoutRepair(result);
+    });
+
+    it('should preserve existing section data while stripping legacy keys', () => {
+      const data = createLegacyDetectedValidAppData();
+      data.section = {
+        ids: ['section-1'],
+        entities: {
+          'section-1': {
+            id: 'section-1',
+            contextId: 'project-1',
+            contextType: WorkContextType.PROJECT,
+            title: 'Focus',
+            taskIds: [],
+          },
+        },
+      };
+
+      const result = migrateLegacyBackup(data);
+
+      expect(result.section.ids).toEqual(['section-1']);
+      expect(result.section.entities['section-1']?.title).toBe('Focus');
+      expect('improvement' in (result as unknown as Record<string, unknown>)).toBe(false);
+      expectValidWithoutRepair(result);
     });
 
     it('should strip all legacy keys', () => {

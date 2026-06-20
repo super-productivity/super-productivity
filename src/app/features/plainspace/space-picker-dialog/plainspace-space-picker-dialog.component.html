@@ -1,0 +1,48 @@
+<h2 mat-dialog-title>{{ T.PLAINSPACE.SPACE_PICKER.TITLE | translate }}</h2>
+
+<mat-dialog-content>
+  @if (isLoading()) {
+    <p>{{ T.PLAINSPACE.SPACE_PICKER.LOADING | translate }}</p>
+  } @else if (hasError()) {
+    <p class="error">{{ T.PLAINSPACE.SPACE_PICKER.ERROR | translate }}</p>
+  } @else if (spaces().length) {
+    <p class="intro">{{ T.PLAINSPACE.SPACE_PICKER.INTRO | translate }}</p>
+
+    <mat-form-field class="space-field">
+      <mat-label>{{ T.PLAINSPACE.SPACE_PICKER.SELECT_LABEL | translate }}</mat-label>
+      <mat-select [(ngModel)]="selectedSpaceId">
+        @for (space of spaces(); track space.id) {
+          <mat-option [value]="space.id">{{ space.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  } @else {
+    <p>{{ T.PLAINSPACE.SPACE_PICKER.NONE | translate }}</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    (click)="cancel()"
+  >
+    {{ T.G.CANCEL | translate }}
+  </button>
+  <button
+    mat-stroked-button
+    [disabled]="hasError()"
+    (click)="createNew()"
+  >
+    {{ T.PLAINSPACE.SPACE_PICKER.CREATE_NEW | translate }}
+  </button>
+  @if (spaces().length) {
+    <button
+      mat-flat-button
+      color="primary"
+      [disabled]="!selectedSpaceId"
+      (click)="link()"
+    >
+      {{ T.PLAINSPACE.SPACE_PICKER.LINK | translate }}
+    </button>
+  }
+</mat-dialog-actions>

@@ -18,7 +18,6 @@ import {
   ServerOperation,
   UploadOpsResponse,
   DownloadOpsResponse,
-  SnapshotResponse,
 } from '../../src/sync/sync.types';
 
 const JWT_SECRET = 'super-sync-dev-secret-do-not-use-in-production';
@@ -158,23 +157,6 @@ class SimulatedClient {
     }
 
     return allOps;
-  }
-
-  /** Gets snapshot from server */
-  async getSnapshot(): Promise<SnapshotResponse> {
-    const response = await this.app.inject({
-      method: 'GET',
-      url: '/api/sync/snapshot',
-      headers: { authorization: `Bearer ${this.authToken}` },
-    });
-
-    expect(response.statusCode).toBe(200);
-    const body = response.json() as SnapshotResponse;
-
-    // Update our sequence to snapshot's seq
-    this.lastKnownSeq = body.serverSeq;
-
-    return body;
   }
 
   /** Applies remote operations to local state */
@@ -420,27 +402,6 @@ describe('Multi-Client Sync Integration', () => {
   });
 
   describe('Fresh Client Bootstrap', () => {
-    it('should allow fresh client to get snapshot after other clients uploaded', async () => {
-      const clientA = new SimulatedClient(app, userId);
-
-      // Client A uploads several operations
-      clientA.createOp('CRT', 'TASK', 'task-1', { title: 'Task 1' });
-      clientA.createOp('CRT', 'TASK', 'task-2', { title: 'Task 2' });
-      clientA.createOp('UPD', 'TASK', 'task-1', { title: 'Task 1 Updated' });
-      clientA.createOp('DEL', 'TASK', 'task-2', null);
-      await clientA.upload();
-
-      // Fresh client requests snapshot
-      const freshClient = new SimulatedClient(app, userId);
-      const snapshot = await freshClient.getSnapshot();
-
-      expect(snapshot.serverSeq).toBe(4);
-      expect(snapshot.state).toBeDefined();
-      // State should have task-1 (updated) but NOT task-2 (deleted)
-      const state = snapshot.state as Record<string, unknown>;
-      // Note: actual state structure depends on snapshot reconstruction logic
-    });
-
     it('should allow fresh client to continue with ops after snapshot', async () => {
       const clientA = new SimulatedClient(app, userId);
 
@@ -448,15 +409,15 @@ describe('Multi-Client Sync Integration', () => {
       clientA.createOp('CRT', 'TASK', 'task-1', { title: 'Task 1' });
       await clientA.upload();
 
-      // Fresh client gets snapshot
+      // Fresh client bootstraps by downloading all existing ops
       const freshClient = new SimulatedClient(app, userId);
-      await freshClient.getSnapshot();
+      await freshClient.downloadAll(false);
 
       // Client A adds more ops
       clientA.createOp('CRT', 'TASK', 'task-2', { title: 'Task 2' });
       await clientA.upload();
 
-      // Fresh client downloads ops since snapshot (don't exclude any client)
+      // Fresh client downloads ops since bootstrap (don't exclude any client)
       const downloaded = await freshClient.download(false);
 
       expect(downloaded.ops).toHaveLength(1);
@@ -1194,21 +1155,23 @@ describe('Gzip Compressed Snapshot Integration', () => {
 
     console.log(`Snapshot accepted at serverSeq: ${result.serverSeq}`);
 
-    // Client B should be able to download the snapshot
-    const snapshotResponse = await app.inject({
+    // Client B should be able to download the snapshot's SYNC_IMPORT op
+    const downloadResponse = await app.inject({
       method: 'GET',
-      url: '/api/sync/snapshot',
+      url: '/api/sync/ops?sinceSeq=0',
       headers: { authorization: `Bearer ${clientB.authToken}` },
     });
 
-    expect(snapshotResponse.statusCode).toBe(200);
-    const snapshot = snapshotResponse.json();
+    expect(downloadResponse.statusCode).toBe(200);
+    const downloadBody = downloadResponse.json();
+    const syncImportOp = downloadBody.ops.find(
+      (op: { op: { opType: string }; serverSeq: number }) =>
+        op.op.opType === 'SYNC_IMPORT',
+    );
+    expect(syncImportOp).toBeDefined();
+    expect(syncImportOp.serverSeq).toBe(result.serverSeq);
 
-    // Verify the state was correctly stored and retrieved
-    expect(snapshot.state).toBeDefined();
-    expect(snapshot.serverSeq).toBe(result.serverSeq);
-
-    console.log('Client B successfully retrieved snapshot from server');
+    console.log('Client B successfully retrieved snapshot SYNC_IMPORT op from server');
   });
 
   /**

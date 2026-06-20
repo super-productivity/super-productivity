@@ -18,38 +18,27 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: 22
-      # required because setting via env.TZ does not work on windows
       - name: Check out Git repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
-      - name: Reconfigure git to use HTTP authentication
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        shell: bash
-        run: |
-          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
-        with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node22-
 
-      - name: Workaround for nx issue
-        run: npm install @nx/nx-win32-x64-msvc
+      - name: Setup Electron build environment
+        uses: ./.github/actions/setup-electron-build
 
+      # @nx/nx-win32-x64-msvc isn't in package.json (npm's optional-dep bug
+      # skips it), so install it explicitly. That install and `npm i` both run
+      # electron's flaky postinstall binary download, so retry the whole thing
+      # — dropping node_modules/electron between tries forces the postinstall
+      # to re-run (npm skips it for a present package).
       - name: Install npm Packages
-        #  if: steps.npm-cache.outputs.cache-hit != 'true'
-        run: npm i
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: npm install @nx/nx-win32-x64-msvc && npm i || { rm -rf node_modules/electron; exit 1; }
 
       - name: Build Frontend & Electron TS
         run: npm run buildAllElectron:noTests:prod
@@ -74,42 +63,32 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - name: Check out Git repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          node-version: 22
+          persist-credentials: false
+
       - name: Echo is Release
         run: echo "IS_RELEASE $IS_RELEASE, ${{ startsWith(github.ref, 'refs/tags/v') }}"
         env:
           IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      - name: Check out Git repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          persist-credentials: false
-      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
-      - name: Reconfigure git to use HTTP authentication
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
+      - name: Setup Electron build environment
+        uses: ./.github/actions/setup-electron-build
 
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        run: |
-          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
-        with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node22-
-
-      - name: Workaround for nx issue and dmg licence issue
-        run: npm install @nx/nx-darwin-arm64 dmg-license
-
+      # @nx/nx-darwin-arm64 + dmg-license aren't in package.json (npm's
+      # optional-dep bug skips them), so install them explicitly. That install
+      # and `npm i` both run electron's flaky postinstall binary download, so
+      # retry the whole thing — dropping node_modules/electron between tries
+      # forces the postinstall to re-run (npm skips it for a present package).
       - name: Install npm Packages
-        #  if: steps.npm-cache.outputs.cache-hit != 'true'
-        run: npm i
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: npm install @nx/nx-darwin-arm64 dmg-license && npm i || { rm -rf node_modules/electron; exit 1; }
 
       - run: 'echo "$PROVISION_PROFILE" | base64 --decode > embedded.provisionprofile'
         shell: bash

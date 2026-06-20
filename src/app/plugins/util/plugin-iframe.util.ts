@@ -20,10 +20,19 @@ export interface PluginIframeConfig {
   boundMethods?: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
 }
 
-// Keep iframe plugin UIs on an opaque origin. `allow-same-origin` would let blob
-// iframes access `window.parent.ea` and bypass the filtered postMessage bridge.
+// `allow-same-origin` is required: without it the iframe runs on an opaque origin
+// that does NOT paint when the host page is served over file:// (packaged desktop),
+// blanking every plugin UI (#8467) — even though scripts run and the DOM builds.
+//
+// The trade-off is that a same-origin iframe can read `window.parent.ea` directly,
+// bypassing the filtered postMessage bridge. That gap is accepted for now because it
+// only affects explicitly-installed plugins and the same `window.ea` reach already
+// exists via the background `plugin.js` runner (new Function in the host renderer);
+// the most dangerous capability (nodeExecution) stays gated by main-process consent.
+// The durable fix that restores opaque-origin isolation AND rendering is serving the
+// renderer from a registered `app://` scheme instead of file:// (tracked separately).
 export const PLUGIN_IFRAME_SANDBOX =
-  'allow-scripts allow-forms allow-popups allow-modals';
+  'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
 
 const ALLOWED_IFRAME_API_METHODS = new Set([
   'getTasks',
@@ -546,12 +555,10 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
  * Build the full HTML document for a plugin UI iframe: the plugin's index.html
  * with the host CSS and the postMessage API bridge injected.
  *
- * Returned as a string for `iframe.srcdoc`, NOT a `blob:` URL. srcdoc content is
- * parsed inline, so the iframe loads under its sandbox-assigned opaque origin
- * even on packaged `file://` builds. A `blob:` URL created by the host inherits
- * the host origin, and an opaque-origin iframe (no `allow-same-origin`) cannot
- * fetch it — which blanks the plugin UI on desktop. srcdoc avoids that
- * cross-origin fetch entirely. See PLUGIN_IFRAME_SANDBOX.
+ * Returned as a string for `iframe.srcdoc`, NOT a `blob:` URL: srcdoc is parsed
+ * inline, so there is no blob URL lifecycle to track and revoke. The iframe is
+ * same-origin with the host (see PLUGIN_IFRAME_SANDBOX — `allow-same-origin` is
+ * required so it renders on packaged `file://` builds).
  */
 export const buildPluginIframeHtml = (config: PluginIframeConfig): string => {
   const apiScript = createPluginApiScript(config);

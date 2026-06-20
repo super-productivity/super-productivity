@@ -2247,10 +2247,6 @@ curl -X POST http://localhost:1900/api/sync/ops \
 curl -X GET "http://localhost:1900/api/sync/ops?sinceSeq=0&limit=10" \
   -H "Authorization: Bearer $TOKEN"
 
-# Test snapshot generation
-curl -X GET http://localhost:1900/api/sync/snapshot \
-  -H "Authorization: Bearer $TOKEN"
-
 # Test restore point creation
 curl -X POST http://localhost:1900/api/sync/restore \
   -H "Authorization: Bearer $TOKEN"

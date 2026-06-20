@@ -11,8 +11,7 @@ import {
 } from './providers/open-project/open-project-issue.model';
 import { RedmineCfg } from './providers/redmine/redmine.model';
 import { RedmineIssue } from './providers/redmine/redmine-issue.model';
-import { TrelloCfg } from './providers/trello/trello.model';
-import { TrelloIssue, TrelloIssueReduced } from './providers/trello/trello-issue.model';
+// Trello is now a plugin — no built-in Cfg/Issue types needed
 import { EntityState } from '@ngrx/entity';
 import {
   CalendarProviderCfg,
@@ -29,6 +28,8 @@ import {
   NextcloudDeckIssue,
   NextcloudDeckIssueReduced,
 } from './providers/nextcloud-deck/nextcloud-deck-issue.model';
+import { PlainspaceCfg } from './providers/plainspace/plainspace.model';
+import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
 import {
   PluginIssue,
   PluginSearchResult,
@@ -38,20 +39,29 @@ export interface BaseIssueProviderCfg {
   isEnabled: boolean;
 }
 
-// Built-in issue provider keys (strict union for type safety)
+// Built-in issue provider keys (strict union for type safety).
+// NOTE: adding a key here is forward-compatible for OLDER clients only because
+// `isForwardCompatibleProviderKeyError` (op-log/validation/validation-fn.ts) tolerates
+// unknown provider-key values during sync validation. Without that, an older build's
+// typia validator would treat a synced task/provider using the new key as corruption.
 export type BuiltInIssueProviderKey =
   | 'JIRA'
   | 'GITLAB'
   | 'CALDAV'
   | 'ICAL'
   | 'OPEN_PROJECT'
-  | 'TRELLO'
   | 'REDMINE'
   | 'AZURE_DEVOPS'
-  | 'NEXTCLOUD_DECK';
+  | 'NEXTCLOUD_DECK'
+  | 'PLAINSPACE';
 
 // Keys migrated from built-in to plugin — still valid as IssueProviderKey
-export type MigratedIssueProviderKey = 'GITHUB' | 'CLICKUP' | 'GITEA' | 'LINEAR';
+export type MigratedIssueProviderKey =
+  | 'GITHUB'
+  | 'CLICKUP'
+  | 'GITEA'
+  | 'LINEAR'
+  | 'TRELLO';
 
 // Plugin issue provider keys use a 'plugin:' prefix to avoid collision
 export type PluginIssueProviderKey = `plugin:${string}`;
@@ -74,10 +84,10 @@ const BUILT_IN_KEYS: ReadonlySet<string> = new Set<BuiltInIssueProviderKey>([
   'CALDAV',
   'ICAL',
   'OPEN_PROJECT',
-  'TRELLO',
   'REDMINE',
   'AZURE_DEVOPS',
   'NEXTCLOUD_DECK',
+  'PLAINSPACE',
 ]);
 
 const MIGRATED_KEYS: ReadonlySet<string> = new Set<MigratedIssueProviderKey>([
@@ -85,6 +95,7 @@ const MIGRATED_KEYS: ReadonlySet<string> = new Set<MigratedIssueProviderKey>([
   'CLICKUP',
   'GITEA',
   'LINEAR',
+  'TRELLO',
 ]);
 
 export const isValidIssueProviderKey = (key: string): key is IssueProviderKey => {
@@ -97,10 +108,10 @@ export type IssueIntegrationCfg =
   | CaldavCfg
   | CalendarProviderCfg
   | OpenProjectCfg
-  | TrelloCfg
   | RedmineCfg
   | AzureDevOpsCfg
-  | NextcloudDeckCfg;
+  | NextcloudDeckCfg
+  | PlainspaceCfg;
 
 export enum IssueLocalState {
   OPEN = 'OPEN',
@@ -115,10 +126,10 @@ export interface IssueIntegrationCfgs {
   CALDAV?: CaldavCfg;
   CALENDAR?: CalendarProviderCfg;
   OPEN_PROJECT?: OpenProjectCfg;
-  TRELLO?: TrelloCfg;
   REDMINE?: RedmineCfg;
   AZURE_DEVOPS?: AzureDevOpsCfg;
   NEXTCLOUD_DECK?: NextcloudDeckCfg;
+  PLAINSPACE?: PlainspaceCfg;
 }
 
 export type IssueData =
@@ -128,9 +139,9 @@ export type IssueData =
   | ICalIssue
   | OpenProjectWorkPackage
   | RedmineIssue
-  | TrelloIssue
   | AzureDevOpsIssue
   | NextcloudDeckIssue
+  | PlainspaceIssue
   | PluginIssue;
 
 export type IssueDataReduced =
@@ -140,9 +151,9 @@ export type IssueDataReduced =
   | CaldavIssueReduced
   | ICalIssueReduced
   | RedmineIssue
-  | TrelloIssueReduced
   | AzureDevOpsIssueReduced
   | NextcloudDeckIssueReduced
+  | PlainspaceIssue
   | PluginSearchResult;
 
 export type IssueDataReducedMap = {
@@ -156,14 +167,14 @@ export type IssueDataReducedMap = {
           ? ICalIssueReduced
           : K extends 'OPEN_PROJECT'
             ? OpenProjectWorkPackageReduced
-            : K extends 'TRELLO'
-              ? TrelloIssueReduced
-              : K extends 'REDMINE'
-                ? RedmineIssue
-                : K extends 'AZURE_DEVOPS'
-                  ? AzureDevOpsIssueReduced
-                  : K extends 'NEXTCLOUD_DECK'
-                    ? NextcloudDeckIssueReduced
+            : K extends 'REDMINE'
+              ? RedmineIssue
+              : K extends 'AZURE_DEVOPS'
+                ? AzureDevOpsIssueReduced
+                : K extends 'NEXTCLOUD_DECK'
+                  ? NextcloudDeckIssueReduced
+                  : K extends 'PLAINSPACE'
+                    ? PlainspaceIssue
                     : K extends MigratedIssueProviderKey
                       ? PluginSearchResult
                       : K extends PluginIssueProviderKey
@@ -250,8 +261,10 @@ export interface IssueProviderCalendar extends IssueProviderBase, CalendarProvid
   issueProviderKey: 'ICAL';
 }
 
-export interface IssueProviderTrello extends IssueProviderBase, TrelloCfg {
+export interface IssueProviderTrello extends IssueProviderBase {
   issueProviderKey: 'TRELLO';
+  pluginId: string;
+  pluginConfig: Record<string, unknown>;
 }
 
 export interface IssueProviderLinear extends IssueProviderBase {
@@ -266,6 +279,10 @@ export interface IssueProviderAzureDevOps extends IssueProviderBase, AzureDevOps
 
 export interface IssueProviderNextcloudDeck extends IssueProviderBase, NextcloudDeckCfg {
   issueProviderKey: 'NEXTCLOUD_DECK';
+}
+
+export interface IssueProviderPlainspace extends IssueProviderBase, PlainspaceCfg {
+  issueProviderKey: 'PLAINSPACE';
 }
 
 export interface IssueProviderPluginType extends IssueProviderBase {
@@ -287,6 +304,7 @@ export type IssueProvider =
   | IssueProviderLinear
   | IssueProviderAzureDevOps
   | IssueProviderNextcloudDeck
+  | IssueProviderPlainspace
   | IssueProviderPluginType;
 
 export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
@@ -313,8 +331,10 @@ export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
                       ? IssueProviderAzureDevOps
                       : T extends 'NEXTCLOUD_DECK'
                         ? IssueProviderNextcloudDeck
-                        : T extends PluginIssueProviderKey
-                          ? IssueProviderPluginType
-                          : T extends MigratedIssueProviderKey
+                        : T extends 'PLAINSPACE'
+                          ? IssueProviderPlainspace
+                          : T extends PluginIssueProviderKey
                             ? IssueProviderPluginType
-                            : never;
+                            : T extends MigratedIssueProviderKey
+                              ? IssueProviderPluginType
+                              : never;

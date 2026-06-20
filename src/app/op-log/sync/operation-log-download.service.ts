@@ -58,12 +58,18 @@ export class OperationLogDownloadService implements OnDestroy {
 
   /** Timeout handle for clock drift retry check (cleaned up on destroy) */
   private clockDriftTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private clockDriftRetryServerTimestamp: number | null = null;
 
   ngOnDestroy(): void {
+    this._clearClockDriftTimeout();
+  }
+
+  private _clearClockDriftTimeout(): void {
     if (this.clockDriftTimeoutId) {
       clearTimeout(this.clockDriftTimeoutId);
       this.clockDriftTimeoutId = null;
     }
+    this.clockDriftRetryServerTimestamp = null;
   }
 
   async downloadRemoteOps(
@@ -463,33 +469,45 @@ export class OperationLogDownloadService implements OnDestroy {
       return;
     }
 
-    const getDriftMinutes = (): number => Math.abs(Date.now() - serverTimestamp) / 60000;
+    const getDriftMinutes = (timestamp: number): number =>
+      Math.abs(Date.now() - timestamp) / 60000;
     const thresholdMinutes = CLOCK_DRIFT_THRESHOLD_MS / 60000;
 
-    const driftMinutes = getDriftMinutes();
+    const driftMinutes = getDriftMinutes(serverTimestamp);
 
-    if (driftMinutes > thresholdMinutes) {
-      // Retry after 1 second - clock may sync after device wake-up
-      this.clockDriftTimeoutId = setTimeout(() => {
-        this.clockDriftTimeoutId = null;
-        if (this.hasWarnedClockDrift) {
-          return;
-        }
-        const retryDriftMinutes = getDriftMinutes();
-        if (retryDriftMinutes > thresholdMinutes) {
-          this.hasWarnedClockDrift = true;
-          const retryDrift = Date.now() - serverTimestamp;
-          OpLog.warn('OperationLogDownloadService: Clock drift detected', {
-            driftMinutes: retryDriftMinutes.toFixed(1),
-            direction: retryDrift > 0 ? 'client ahead' : 'client behind',
-          });
-          this.snackService.open({
-            type: 'ERROR',
-            msg: T.F.SYNC.S.CLOCK_DRIFT_WARNING,
-            translateParams: { minutes: Math.round(retryDriftMinutes) },
-          });
-        }
-      }, 1000);
+    if (driftMinutes <= thresholdMinutes) {
+      this._clearClockDriftTimeout();
+      return;
     }
+
+    this.clockDriftRetryServerTimestamp = serverTimestamp;
+
+    if (this.clockDriftTimeoutId) {
+      return;
+    }
+
+    // Retry after 1 second - clock may sync after device wake-up
+    this.clockDriftTimeoutId = setTimeout(() => {
+      this.clockDriftTimeoutId = null;
+      const retryServerTimestamp = this.clockDriftRetryServerTimestamp;
+      this.clockDriftRetryServerTimestamp = null;
+      if (this.hasWarnedClockDrift || retryServerTimestamp === null) {
+        return;
+      }
+      const retryDriftMinutes = getDriftMinutes(retryServerTimestamp);
+      if (retryDriftMinutes > thresholdMinutes) {
+        this.hasWarnedClockDrift = true;
+        const retryDrift = Date.now() - retryServerTimestamp;
+        OpLog.warn('OperationLogDownloadService: Clock drift detected', {
+          driftMinutes: retryDriftMinutes.toFixed(1),
+          direction: retryDrift > 0 ? 'client ahead' : 'client behind',
+        });
+        this.snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.CLOCK_DRIFT_WARNING,
+          translateParams: { minutes: Math.round(retryDriftMinutes) },
+        });
+      }
+    }, 1000);
   }
 }

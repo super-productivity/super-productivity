@@ -263,7 +263,6 @@ export interface UploadOpsRequest {
   clientId: string;
   lastKnownServerSeq?: number;
   requestId?: string; // For request deduplication on retries
-  isCleanSlate?: boolean; // If true, server deletes all user data before accepting ops
 }
 
 export interface UploadResult {

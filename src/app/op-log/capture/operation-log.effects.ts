@@ -36,6 +36,8 @@ interface WriteOperationOptions {
   callerHoldsOperationLogLock?: boolean;
 }
 
+const KNOWN_ACTION_TYPES: ReadonlySet<string> = new Set(Object.values(ActionType));
+
 /**
  * NgRx Effects for persisting application state changes as operations to the
  * `OperationLogStoreService`. It listens for specific NgRx actions marked
@@ -193,7 +195,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
 
     // Validate action type exists in ActionType enum
     // This catches mismatches during development when new actions are added but not registered
-    if (!Object.values(ActionType).includes(action.type as ActionType)) {
+    if (!KNOWN_ACTION_TYPES.has(action.type)) {
       devError(
         `[OperationLogEffects] Unknown action type: ${action.type} - not in ActionType enum`,
       );

@@ -29,6 +29,7 @@ describe('OperationLogMigrationService', () => {
       'loadStateCache',
       'getOpsAfterSeq',
       'deleteOpsWhere',
+      'clearAllOperations',
       'append',
       'getLastSeq',
       'saveStateCache',
@@ -188,7 +189,7 @@ describe('OperationLogMigrationService', () => {
             source: 'local',
           },
         ]);
-        mockOpLogStore.deleteOpsWhere.and.resolveTo();
+        mockOpLogStore.clearAllOperations.and.resolveTo();
         // Legacy data exists - orphan ops should be cleared before migration
         mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
         // Lock acquisition fails - prevents migration from proceeding (test focuses on clearing)
@@ -199,7 +200,8 @@ describe('OperationLogMigrationService', () => {
         expect(OpLog.warn).toHaveBeenCalledWith(
           jasmine.stringContaining('Found 2 orphan operations'),
         );
-        expect(mockOpLogStore.deleteOpsWhere).toHaveBeenCalled();
+        expect(mockOpLogStore.clearAllOperations).toHaveBeenCalled();
+        expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
         expect(mockLegacyPfDb.hasUsableEntityData).toHaveBeenCalled();
       });
 

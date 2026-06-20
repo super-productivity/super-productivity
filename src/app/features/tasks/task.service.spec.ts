@@ -438,6 +438,22 @@ describe('TaskService', () => {
       );
       expect(id).toBeTruthy();
     });
+
+    it('should not focus the new subtask when it already has a title', () => {
+      spyOn(service, 'focusTaskById');
+
+      service.addSubTaskTo('parent-1', { title: 'Subtask' });
+
+      expect(service.focusTaskById).not.toHaveBeenCalled();
+    });
+
+    it('should focus the new subtask for editing when it is empty', () => {
+      spyOn(service, 'focusTaskById');
+
+      const id = service.addSubTaskTo('parent-1');
+
+      expect(service.focusTaskById).toHaveBeenCalledWith(id, true);
+    });
   });
 
   describe('moveToArchive', () => {

@@ -90,6 +90,8 @@ import { dragDelayForTouch } from '../../util/input-intent';
 import { DateService } from '../../core/date/date.service';
 import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
+import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
+import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
 
 // Stable reference used as the toSignal initial value below so the deselect
 // effect can tell "the customized list hasn't emitted yet" apart from a
@@ -129,6 +131,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
     PluginIndexComponent,
+    PlainspaceClaimPoolComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -220,6 +223,18 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
+  // Claim pool is tucked away (collapsed) by default.
+  isClaimPoolHidden = signal(
+    localStorage.getItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN) !== 'false',
+  );
+
+  // Unclaimed Plainspace tasks for a shared project, fed from project-task-page
+  // (PlainspaceClaimPoolService). Read-only until claimed; never enters the SP
+  // task store / op-log sync. Empty for non-shared projects and tags.
+  readonly unclaimedTasks = input<PlainspaceSharedTask[]>([]);
+  isShowClaimPool = computed(
+    () => this.isProjectContext() && this.unclaimedTasks().length > 0,
+  );
 
   repeatCfgsForContext = toSignal(
     this.workContextService.activeWorkContextTypeAndId$.pipe(
@@ -394,6 +409,15 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         localStorage.setItem(LS.REPEAT_CFGS_HIDDEN, 'true');
       } else {
         localStorage.removeItem(LS.REPEAT_CFGS_HIDDEN);
+      }
+    });
+
+    effect(() => {
+      // Persist 'false' when expanded; default (absent) means collapsed.
+      if (this.isClaimPoolHidden()) {
+        localStorage.removeItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN);
+      } else {
+        localStorage.setItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN, 'false');
       }
     });
 

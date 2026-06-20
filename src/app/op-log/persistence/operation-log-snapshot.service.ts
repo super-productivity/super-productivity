@@ -90,10 +90,12 @@ export class OperationLogSnapshotService {
    *
    * Additionally, lastSeq is read BEFORE the state snapshot so the worst
    * interleaving degrades to re-replay rather than a missed op. Most op types
-   * are idempotent on re-replay (entity-adapter CRUD/move/reorder), but
-   * syncTimeSpent is additive (task.reducer.ts line 261) — a re-replay would
-   * inflate that day's tracked time by one interval. In practice this edge is
-   * unlikely (save runs only during hydration) and strictly better than op-loss.
+   * are idempotent on re-replay (entity-adapter CRUD/move/reorder), but some
+   * persistent ops accumulate onto current state and double-apply on re-replay
+   * (e.g. time-tracking/counter deltas and the plain-append branches of project
+   * task moves). This edge is unlikely (the save runs only during hydration) and
+   * strictly better than op-loss. The audited op list and a truly-lossless
+   * capture (quiesce the op-write queue before reading) are tracked in #8469.
    */
   async saveCurrentStateAsSnapshot(): Promise<void> {
     try {

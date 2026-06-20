@@ -357,7 +357,7 @@ describe('TaskViewCustomizerService', () => {
     ]);
   });
 
-  it('should sort by tag using the primary tag (sidebar order), with untagged last', () => {
+  it('should sort by primary-tag sidebar order, keeping manual order within a tag', () => {
     (service as unknown as { _allTags: Tag[] })._allTags = [
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
@@ -378,21 +378,39 @@ describe('TaskViewCustomizerService', () => {
         attachments: [],
       },
     ];
-    const arr: TaskWithSubTasks[] = [...mockTasks, ...extra];
+    // Input order is deliberately anti-alphabetical within each tag group
+    // (Third Task before Beta in Tag B; Zebra before Aardvark when untagged) so
+    // the assertions fail under the old by-title tie-break, not just by luck.
+    const arr: TaskWithSubTasks[] = [
+      mockTasks[0], // Alpha (Tag A)
+      mockTasks[2], // Third Task (Tag A, Tag B) -> primary Tag B
+      mockTasks[1], // Beta (Tag B)
+      mockTasks[3], // Zebra (untagged)
+      ...extra, // Aardvark (untagged)
+    ];
 
     const sorted = {
       asc: service['applySort'](arr, SORT_OPTION_TYPE.tag, SORT_ORDER.ASC),
       desc: service['applySort'](arr, SORT_OPTION_TYPE.tag, SORT_ORDER.DESC),
     };
 
+    // Tag groups follow sidebar order ([Tag B, Tag A]) and flip with the
+    // direction, but within a group the input (manual) order is preserved -
+    // it does NOT re-sort by task title, so DESC is not a plain reverse.
     const resultAsc = [
-      'Beta(Tag B)',
       'Third Task(Tag A, Tag B)',
+      'Beta(Tag B)',
       'Alpha(Tag A)',
-      'Aardvark(-)',
       'Zebra(-)',
+      'Aardvark(-)',
     ];
-    const resultDesc = [...resultAsc].reverse();
+    const resultDesc = [
+      'Zebra(-)',
+      'Aardvark(-)',
+      'Alpha(Tag A)',
+      'Third Task(Tag A, Tag B)',
+      'Beta(Tag B)',
+    ];
 
     expect(sorted.asc.map((t) => t.id)).toEqual(resultAsc);
     expect(sorted.desc.map((t) => t.id)).toEqual(resultDesc);
@@ -472,7 +490,7 @@ describe('TaskViewCustomizerService', () => {
     ]);
   });
 
-  it('should sort by title for tasks with the same primary tag', () => {
+  it('should keep manual order for tasks with the same primary tag', () => {
     const samePrimary: TaskWithSubTasks[] = [
       {
         id: 'tA',
@@ -503,9 +521,14 @@ describe('TaskViewCustomizerService', () => {
         attachments: [],
       },
     ];
-    const sorted = service['applySort'](samePrimary, SORT_OPTION_TYPE.tag);
+    const asc = service['applySort'](samePrimary, SORT_OPTION_TYPE.tag, SORT_ORDER.ASC);
+    const desc = service['applySort'](samePrimary, SORT_OPTION_TYPE.tag, SORT_ORDER.DESC);
 
-    expect(sorted.map((t) => t.id)).toEqual(['tB', 'tA']);
+    // Input order is preserved (tA="Zed" before tB="Alpha2") rather than re-sorted
+    // by title, and the direction does not re-order within a tag: ASC === DESC.
+    // (Under the old by-title tie-break these would differ: ASC=[tB,tA], DESC=[tA,tB].)
+    expect(asc.map((t) => t.id)).toEqual(['tA', 'tB']);
+    expect(desc.map((t) => t.id)).toEqual(['tA', 'tB']);
   });
 
   it('should group by tag', () => {

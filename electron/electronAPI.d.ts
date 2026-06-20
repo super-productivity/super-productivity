@@ -136,6 +136,8 @@ export interface ElectronAPI {
 
   isGnomeDesktop(): boolean;
 
+  isGnomeWayland(): boolean;
+
   isMacOS(): boolean;
 
   isAppleSilicon(): boolean;

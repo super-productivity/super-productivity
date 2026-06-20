@@ -1,0 +1,56 @@
+{
+  "id": "trello-issue-provider",
+  "name": "Trello Issues",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "13.0.0",
+  "description": "Trello issue provider plugin",
+  "author": "Super Productivity",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": [],
+  "hooks": [],
+  "i18n": {
+    "languages": [
+      "ar",
+      "cs",
+      "de",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fr",
+      "hr",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nb",
+      "nl",
+      "pl",
+      "pt-br",
+      "pt",
+      "ro-md",
+      "ro",
+      "ru",
+      "sk",
+      "sv",
+      "tr",
+      "uk",
+      "vi",
+      "zh-tw",
+      "zh"
+    ]
+  },
+  "issueProvider": {
+    "pollIntervalMs": 300000,
+    "icon": "trello",
+    "humanReadableName": "Trello",
+    "issueProviderKey": "TRELLO",
+    "issueStrings": {
+      "singular": "Issue",
+      "plural": "Issues"
+    }
+  }
+}

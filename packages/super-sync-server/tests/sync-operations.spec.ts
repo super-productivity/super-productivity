@@ -543,10 +543,14 @@ vi.mock('../src/db', async () => {
 });
 
 import { initSyncService, getSyncService } from '../src/sync/sync.service';
+import { DeviceService } from '../src/sync/services/device.service';
+import { OperationDownloadService } from '../src/sync/services/operation-download.service';
 
 describe('Sync Operations', () => {
   const userId = 1;
   const clientId = 'test-client';
+  let deviceService: DeviceService;
+  let operationDownloadService: OperationDownloadService;
 
   const createOp = (
     entityId: string,
@@ -576,6 +580,8 @@ describe('Sync Operations', () => {
       createdAt: new Date(),
     });
     initSyncService();
+    deviceService = new DeviceService();
+    operationDownloadService = new OperationDownloadService();
   });
 
   describe('Full-state op upload', () => {
@@ -963,7 +969,7 @@ describe('Sync Operations', () => {
       expect(result.affectedUserIds).toContain(userId);
 
       // Verify correct operation was deleted
-      const ops = await service.getOpsSince(userId, 0);
+      const ops = await operationDownloadService.getOpsSince(userId, 0);
       expect(ops.length).toBe(1);
       expect(ops[0].serverSeq).toBe(2);
     });
@@ -1097,24 +1103,24 @@ describe('Sync Operations', () => {
     });
   });
 
-  describe('Device Ownership', () => {
+  describe('DeviceService ownership after sync upload', () => {
     it('should track device ownership after upload', async () => {
       const service = getSyncService();
 
       // Before upload, device is not registered
-      expect(await service.isDeviceOwner(userId, clientId)).toBe(false);
+      expect(await deviceService.isDeviceOwner(userId, clientId)).toBe(false);
 
       // Upload creates device entry
       await service.uploadOps(userId, clientId, [createOp('task-1', 'CRT')]);
 
       // Now device should be owned by user
-      expect(await service.isDeviceOwner(userId, clientId)).toBe(true);
+      expect(await deviceService.isDeviceOwner(userId, clientId)).toBe(true);
     });
 
     it('should return false for non-existent device', async () => {
-      const service = getSyncService();
-
-      expect(await service.isDeviceOwner(userId, 'non-existent-device')).toBe(false);
+      expect(await deviceService.isDeviceOwner(userId, 'non-existent-device')).toBe(
+        false,
+      );
     });
 
     it('should track device ownership per user', async () => {
@@ -1124,11 +1130,11 @@ describe('Sync Operations', () => {
       await service.uploadOps(userId, clientId, [createOp('task-1', 'CRT')]);
 
       // Device should not be owned by user 2
-      expect(await service.isDeviceOwner(2, clientId)).toBe(false);
+      expect(await deviceService.isDeviceOwner(2, clientId)).toBe(false);
     });
   });
 
-  describe('User ID Retrieval', () => {
+  describe('DeviceService user ID retrieval after sync upload', () => {
     it('should return all user IDs with sync state', async () => {
       const service = getSyncService();
 
@@ -1153,7 +1159,7 @@ describe('Sync Operations', () => {
       await service.uploadOps(2, 'client-2', [createOp('task-1', 'CRT')]);
       // User 3 has no sync state
 
-      const userIds = await service.getAllUserIds();
+      const userIds = await deviceService.getAllUserIds();
 
       expect(userIds).toContain(1);
       expect(userIds).toContain(2);

@@ -121,6 +121,78 @@ describe('issueProviderReducer loadAllData migration', () => {
     });
   });
 
+  describe('TRELLO → trello-issue-provider', () => {
+    const legacyTrello = {
+      id: 'tp1',
+      issueProviderKey: 'TRELLO',
+      isEnabled: true,
+      apiKey: 'trello_key',
+      token: 'trello_token',
+      boardId: 'board-123',
+      boardName: 'My Board',
+      filterUsername: 'johndoe',
+    };
+
+    it('moves connection fields into pluginConfig and sets pluginId', () => {
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ tp1: legacyTrello }),
+      );
+      const migrated = state.entities['tp1'] as unknown as Record<string, unknown>;
+      expect(migrated['pluginId']).toBe('trello-issue-provider');
+      expect(migrated['pluginConfig']).toEqual({
+        boardName: 'My Board',
+        apiKey: 'trello_key',
+        token: 'trello_token',
+        boardId: 'board-123',
+        filterUsername: 'johndoe',
+      });
+    });
+
+    it('preserves legacy top-level fields for older clients', () => {
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ tp1: legacyTrello }),
+      );
+      const migrated = state.entities['tp1'] as unknown as Record<string, unknown>;
+      expect(migrated['boardId']).toBe('board-123');
+      expect(migrated['boardName']).toBe('My Board');
+      expect(migrated['issueProviderKey']).toBe('TRELLO');
+    });
+
+    it('defaults optional board/username fields to empty strings', () => {
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({
+          tp1: { id: 'tp1', issueProviderKey: 'TRELLO', apiKey: 'k', token: 't' },
+        }),
+      );
+      const cfg = (state.entities['tp1'] as unknown as Record<string, unknown>)[
+        'pluginConfig'
+      ] as Record<string, unknown>;
+      expect(cfg).toEqual({
+        boardName: '',
+        apiKey: 'k',
+        token: 't',
+        boardId: '',
+        filterUsername: '',
+      });
+    });
+
+    it('is idempotent — already-migrated providers are left untouched', () => {
+      const already = {
+        ...legacyTrello,
+        pluginId: 'trello-issue-provider',
+        pluginConfig: { apiKey: 'x', token: 'y', boardId: 'z' },
+      };
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ tp1: already }),
+      );
+      expect(state.entities['tp1'] as unknown).toBe(already);
+    });
+  });
+
   it('returns state unchanged when no legacy providers need migration', () => {
     const action = loadWith({
       jp1: { id: 'jp1', issueProviderKey: 'JIRA', isEnabled: true },

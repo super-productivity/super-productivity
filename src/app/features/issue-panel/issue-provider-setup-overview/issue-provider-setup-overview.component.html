@@ -65,14 +65,8 @@
     <mat-icon svgIcon="jira"></mat-icon>
     <span>Jira</span>
   </button>
-  <button
-    class="provider-tile focus-ring"
-    type="button"
-    (click)="openSetupDialog('TRELLO')"
-  >
-    <mat-icon svgIcon="trello"></mat-icon>
-    <span>Trello</span>
-  </button>
+  <!-- Trello is a bundled plugin now — rendered via the
+       pluginProviders / disabledPluginProviders loops below (like GitHub). -->
   <button
     class="provider-tile focus-ring"
     type="button"
@@ -122,6 +116,14 @@
   >
     <mat-icon svgIcon="nextcloud_deck"></mat-icon>
     <span>Nextcloud Deck</span>
+  </button>
+  <button
+    class="provider-tile focus-ring"
+    type="button"
+    (click)="openSetupDialog('PLAINSPACE')"
+  >
+    <mat-icon svgIcon="plainspace"></mat-icon>
+    <span>Plainspace</span>
   </button>
   @for (provider of pluginProviders; track provider.pluginId) {
     <button

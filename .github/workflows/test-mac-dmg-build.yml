@@ -14,30 +14,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Reconfigure git to use HTTP authentication
-        run: |
-          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+      - name: Setup Electron build environment
+        uses: ./.github/actions/setup-electron-build
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: 22
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: npm-cache
-        with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node22-
-
-      - name: Install native helpers
-        run: npm install @nx/nx-darwin-arm64 dmg-license
-
+      # @nx/nx-darwin-arm64 + dmg-license aren't in package.json (npm's
+      # optional-dep bug skips them), so install them explicitly. That install
+      # and `npm i` both run electron's flaky postinstall binary download, so
+      # retry the whole thing — dropping node_modules/electron between tries
+      # forces the postinstall to re-run (npm skips it for a present package).
       - name: Install npm packages
-        run: npm i
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: npm install @nx/nx-darwin-arm64 dmg-license && npm i || { rm -rf node_modules/electron; exit 1; }
 
       - name: Decode provisioning profile
         shell: bash

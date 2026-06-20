@@ -269,8 +269,8 @@ flowchart LR
 flowchart TB
     subgraph Endpoints["Sync API Endpoints"]
         OpsEndpoint["/api/sync/ops<br/>POST: Upload ops<br/>GET: Download ops"]
-        SnapshotEndpoint["/api/sync/snapshot<br/>POST: Upload full state<br/>GET: Download full state"]
-        StatusEndpoint["/api/sync/status<br/>GET: Sync status info"]
+        SnapshotEndpoint["/api/sync/snapshot<br/>POST: Upload full state"]
+        StatusEndpoint["/api/sync/status<br/>GET: Sync status info (diagnostic)"]
     end
 
     subgraph Tables["Database Tables"]
@@ -349,38 +349,11 @@ sequenceDiagram
     Note over Client,Server: Client pages through with<br/>sinceSeq = last received server_seq<br/>until hasMore = false
 ```
 
-## 1.11 Get Snapshot - GET /api/sync/snapshot
+## 1.11 Get Snapshot (removed)
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Server
-    participant DB as PostgreSQL
+`GET /api/sync/snapshot` has been retired. No production client ever called this endpoint — snapshot data is delivered through `POST /api/sync/snapshot` (upload) and `GET /api/sync/ops` (download with piggyback).
 
-    Client->>Server: GET /api/sync/snapshot
-
-    Server->>DB: Get user_sync_state
-    DB-->>Server: {snapshot_data, last_snapshot_seq}
-
-    alt Snapshot exists and fresh
-        Server->>Server: Decompress snapshot_data
-        Server-->>Client: {state, serverSeq, fromCache: true}
-    else No snapshot or stale
-        Server->>DB: BEGIN TRANSACTION
-        Server->>DB: SELECT all ops for user<br/>ORDER BY server_seq
-        alt Too many ops > 100k
-            Server-->>Client: 500 Too many operations
-        else
-            Server->>Server: Replay ops to build state
-            Server->>Server: Compress state with gzip
-            Server->>DB: UPDATE user_sync_state<br/>SET snapshot_data, last_snapshot_seq
-            Server->>DB: COMMIT
-            Server-->>Client: {state, serverSeq, fromCache: false}
-        end
-    end
-
-    Note over Client,Server: Client uses snapshot when<br/>gapDetected=true from download<br/>or on first sync
-```
+The on-demand generation code (`generateSnapshot()`) is preserved internally for POST /snapshot cache management.
 
 ## 1.11b Upload Snapshot - POST /api/sync/snapshot
 
@@ -432,7 +405,7 @@ flowchart TB
     style Regular fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
 ```
 
-## 1.12 Get Status - GET /api/sync/status
+## 1.12 Get Status - GET /api/sync/status (diagnostic)
 
 ```mermaid
 sequenceDiagram
@@ -904,9 +877,9 @@ sequenceDiagram
     Server-->>OpLog: {ops, hasMore, latestSeq, gapDetected}
 
     alt Gap Detected
-        OpLog->>Server: GET /api/sync/snapshot
-        Server-->>OpLog: {state, serverSeq}
-        OpLog->>IDB: Save snapshot to state_cache
+        OpLog->>Server: Download all ops sinceSeq=0
+        Server-->>OpLog: {ops, latestSeq}
+        OpLog->>IDB: Store all ops
         OpLog->>NgRx: Dispatch loadAllData state
     else Normal Download
         loop For each remote op
@@ -947,7 +920,7 @@ flowchart TB
         Poll[Poll for new ops]
         SendDownload[GET /api/sync/ops]
         CheckGap{Gap?}
-        GetSnapshot[GET /api/sync/snapshot]
+        DownloadAll[Download all ops]
         ApplyRemote[Apply remote ops]
         UpdateSeq[Update lastServerSeq]
     end

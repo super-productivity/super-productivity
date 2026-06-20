@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "API_KEY": "Trello API key",
+    "API_KEY_DESC": "Insert the Trello API key here.",
+    "TOKEN": "Trello API token",
+    "TOKEN_DESC": "Insert the Trello API token here.",
+    "BOARD": "Trello board",
+    "BOARD_DESC": "Select the board to search and import cards from. Enter your API key and token first, then the list loads.",
+    "FILTER_USERNAME": "Filter by Trello username",
+    "FILTER_USERNAME_DESC": "If provided, only imports cards assigned to this Trello username.",
+    "HOW_TO_GET_TOKEN": "Comment obtenir un jeton ?"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Résumé",
+    "STATUS": "Statut",
+    "DUE_DATE": "Date d'échéance",
+    "LABELS": "Étiquettes",
+    "ASSIGNEE": "Bénéficiaire",
+    "ATTACHMENTS": "Pièces jointes",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Configure Super Productivity to list and import cards from a Trello board in the task creation panel. Generate an API key and token at <a href=\"https://trello.com/power-ups/admin\">trello.com/power-ups/admin</a>, then load and select your board. See the <a href=\"https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/\">Trello REST API docs</a> for details.</p>"
+}

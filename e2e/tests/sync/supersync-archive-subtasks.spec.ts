@@ -47,13 +47,16 @@ const addSubtask = async (
   await page.waitForTimeout(100); // Let focus settle
   await parentTask.press('a');
 
-  // Wait for the textarea to appear and be focused
-  const textarea = page.locator('task-title textarea');
-  await textarea.waitFor({ state: 'visible', timeout: 5000 });
-  await textarea.fill(subtaskTitle);
+  // 'a' opens the inline subtask draft input; type + Enter to commit.
+  const draftInput = page.locator('.e2e-add-subtask-input');
+  await draftInput.waitFor({ state: 'visible', timeout: 5000 });
+  await draftInput.fill(subtaskTitle);
   await page.keyboard.press('Enter');
+  // The draft stays open for rapid entry; close it for a clean state.
+  await page.keyboard.press('Escape');
+  await draftInput.waitFor({ state: 'detached', timeout: 5000 });
 
-  // Wait for subtask to be visible and textarea to close
+  // Wait for subtask to be visible
   await waitForTask(page, subtaskTitle);
   await page.waitForTimeout(200); // Let UI settle
 };

@@ -306,6 +306,7 @@ export class ConflictResolutionService {
       remoteWinnerAffectedEntityKeys,
     } = lwwPartitions;
     const localOpsToReject = [...lwwPartitions.localOpsToReject];
+    const localOpsToRejectSet = new Set(localOpsToReject);
 
     for (const resolution of resolutions) {
       // Note: localWinOp is undefined for archive-wins sibling conflicts
@@ -357,8 +358,9 @@ export class ConflictResolutionService {
       for (const entityKey of remoteWinnerAffectedEntityKeys) {
         const pendingOps = pendingByEntity.get(entityKey) || [];
         for (const op of pendingOps) {
-          if (!localOpsToReject.includes(op.id)) {
+          if (!localOpsToRejectSet.has(op.id)) {
             localOpsToReject.push(op.id);
+            localOpsToRejectSet.add(op.id);
             OpLog.normal(
               `ConflictResolutionService: Also rejecting superseded op ${op.id} for entity ${entityKey}`,
             );

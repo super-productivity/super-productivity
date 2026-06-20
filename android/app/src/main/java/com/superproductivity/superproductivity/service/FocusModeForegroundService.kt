@@ -342,7 +342,12 @@ class FocusModeForegroundService : Service() {
         Log.d(TAG, "Timer completed! isBreak=$isBreak, title=$title")
         hasNotifiedCompletion = true
 
-        // Show high-priority completion notification with sound
+        // Show high-priority completion notification with sound.
+        // Cross-layer contract: the web layer (focus-mode.effects.ts
+        // surfaceSessionDoneOnCompletion$) deliberately suppresses its own
+        // completion notification on Android (IS_ANDROID_WEB_VIEW) so the user
+        // gets exactly one. If this native notification is ever removed or gated,
+        // update that effect too or Android users get no completion alert.
         val completionTitle = if (isBreak) "Break Complete" else "Session Complete"
         val completionMessage = if (isBreak) {
             "Time to get back to work!"

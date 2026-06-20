@@ -1,0 +1,12 @@
+<input
+  #inputEl
+  class="add-subtask-input e2e-add-subtask-input"
+  [ngModel]="titleDraft()"
+  (ngModelChange)="titleDraft.set($event)"
+  [placeholder]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
+  [attr.aria-label]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
+  (blur)="onBlur()"
+  (keydown)="onKeydown($event)"
+  matInput
+  spellcheck="false"
+/>

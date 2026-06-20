@@ -311,59 +311,39 @@ export class TaskViewCustomizerService {
 
     const tagsInSidebarOrder = this._tagsInSidebarOrder();
     const tagOrderById = new Map(tagsInSidebarOrder.map((tag, index) => [tag.id, index]));
-    const tagById = new Map(this._allTags.map((tag) => [tag.id, tag]));
     const unknownTagRank = tagsInSidebarOrder.length;
     const noTagRank = unknownTagRank + 1;
-    const getPrimaryTagSortInfo = (
-      task: TaskWithSubTasks,
-    ): { rank: number; title: string | null } => {
+
+    // A task is placed by its highest-priority tag = the one with the lowest
+    // sidebar (menu-tree) index. Unknown tag ids rank after all known tags,
+    // untagged tasks last. (#8400)
+    const getPrimaryTagRank = (task: TaskWithSubTasks): number => {
       if (!task.tagIds?.length) {
-        return { rank: noTagRank, title: null };
+        return noTagRank;
       }
 
-      let best: { rank: number; title: string | null } | null = null;
-
-      task.tagIds.forEach((tagId) => {
-        const tag = tagById.get(tagId);
+      let min = unknownTagRank;
+      for (const tagId of task.tagIds) {
         const rank = tagOrderById.get(tagId) ?? unknownTagRank;
-        const candidate = { rank, title: tag?.title ?? null };
-
-        if (
-          !best ||
-          candidate.rank < best.rank ||
-          (candidate.rank === best.rank &&
-            candidate.title !== null &&
-            best.title !== null &&
-            sortByTitle(candidate.title, best.title) < 0)
-        ) {
-          best = candidate;
-        }
-      });
-
-      return best ?? { rank: unknownTagRank, title: null };
+        if (rank < min) min = rank;
+      }
+      return min;
     };
 
-    const sortByTagTitle = (a: TaskWithSubTasks, b: TaskWithSubTasks): number => {
-      const aTag = getPrimaryTagSortInfo(a);
-      const bTag = getPrimaryTagSortInfo(b);
-
-      if (aTag.rank !== bTag.rank) {
-        return (aTag.rank - bTag.rank) * factor;
-      }
-
-      if (aTag.title && bTag.title && aTag.title !== bTag.title) {
-        return sortByTitle(aTag.title, bTag.title, factor);
-      }
-
-      return sortByTitle(a.title, b.title, factor);
-    };
+    // Order by the primary tag's sidebar position. Equal ranks (same tag group)
+    // return 0, so the stable sort keeps the user's manual ordering within a tag
+    // instead of re-sorting it by task title (#8486). Note this makes DESC flip
+    // only the group order, not the order within a group - that asymmetry is
+    // intentional; re-sorting within a group would bring the bug back.
+    const sortByTagRank = (a: TaskWithSubTasks, b: TaskWithSubTasks): number =>
+      (getPrimaryTagRank(a) - getPrimaryTagRank(b)) * factor;
 
     switch (sortType) {
       case SORT_OPTION_TYPE.name:
         return tasksCopy.sort((a, b) => sortByTitle(a.title, b.title, factor));
 
       case SORT_OPTION_TYPE.tag: {
-        return tasksCopy.sort(sortByTagTitle);
+        return tasksCopy.sort(sortByTagRank);
       }
 
       case SORT_OPTION_TYPE.creationDate:

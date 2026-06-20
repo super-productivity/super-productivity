@@ -63,14 +63,14 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
         return issueProvider.projectId;
       case 'OPEN_PROJECT':
         return issueProvider.projectId;
-      case 'TRELLO':
-        return issueProvider.boardName || issueProvider.boardId;
       case 'NEXTCLOUD_DECK':
         return issueProvider.selectedBoardTitle
           ? `Deck: ${issueProvider.selectedBoardTitle}`
           : undefined;
       case 'AZURE_DEVOPS':
         return issueProvider.project || undefined;
+      case 'PLAINSPACE':
+        return issueProvider.spaceId || undefined;
       default:
         return undefined;
     }
@@ -137,13 +137,11 @@ export const getIssueProviderInitials = (
 
     case 'GITLAB':
       return getRepoInitials(issueProvider.project);
-    case 'TRELLO':
-      return (issueProvider.boardName || issueProvider.boardId)
-        ?.substring(0, 2)
-        ?.toUpperCase();
     case 'NEXTCLOUD_DECK':
       return issueProvider.selectedBoardTitle?.substring(0, 2)?.toUpperCase();
     case 'AZURE_DEVOPS':
       return issueProvider.project?.substring(0, 2)?.toUpperCase() || 'AD';
+    case 'PLAINSPACE':
+      return issueProvider.spaceId?.substring(0, 2)?.toUpperCase() || 'PS';
   }
 };

@@ -123,9 +123,16 @@ export class DialogFlowtimeSettingsComponent {
         ],
       },
     },
+    // `breakPercentage` (ratio mode) and `breakRules` (rule mode) hide each
+    // other when the mode switches. `resetOnHide: false` keeps Formly from
+    // wiping the hidden side's values, preserving them across mode switches.
+    // For the `repeat` it must be set at every level — field, fieldArray and
+    // each inner input — otherwise Formly keeps the rows but strips their
+    // values. See issue #7581.
     {
       key: 'breakPercentage',
       type: 'input',
+      resetOnHide: false,
       expressions: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'props.disabled': this._disabledWhenBreaksOff,
@@ -145,6 +152,7 @@ export class DialogFlowtimeSettingsComponent {
       className: 'flowtime-break-rules',
       description: T.F.FOCUS_MODE.FLOWTIME_BREAK_RULES_DESC,
       type: 'repeat',
+      resetOnHide: false,
       expressions: {
         hide: (field: FormlyFieldConfig) => field.parent?.model?.breakMode !== 'rule',
       },
@@ -158,6 +166,7 @@ export class DialogFlowtimeSettingsComponent {
       },
       fieldArray: {
         fieldGroupClassName: 'formly-row',
+        resetOnHide: false,
         validators: {
           minMaxDuration: {
             expression: (control: AbstractControl) => {
@@ -176,6 +185,7 @@ export class DialogFlowtimeSettingsComponent {
           {
             key: 'minDuration',
             type: 'input',
+            resetOnHide: false,
             expressions: {
               // eslint-disable-next-line @typescript-eslint/naming-convention
               'props.disabled': this._disabledWhenBreaksOff,
@@ -191,6 +201,7 @@ export class DialogFlowtimeSettingsComponent {
           {
             key: 'maxDuration',
             type: 'input',
+            resetOnHide: false,
             expressions: {
               // eslint-disable-next-line @typescript-eslint/naming-convention
               'props.disabled': this._disabledWhenBreaksOff,
@@ -205,6 +216,7 @@ export class DialogFlowtimeSettingsComponent {
           {
             key: 'breakDuration',
             type: 'input',
+            resetOnHide: false,
             expressions: {
               // eslint-disable-next-line @typescript-eslint/naming-convention
               'props.disabled': this._disabledWhenBreaksOff,

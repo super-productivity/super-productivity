@@ -1670,11 +1670,14 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientA.page.waitForTimeout(100);
       await parentTask.press('a'); // Add subtask shortcut
 
-      // Wait for textarea and fill subtask name
-      const textarea = clientA.page.locator('task-title textarea');
-      await textarea.waitFor({ state: 'visible', timeout: 5000 });
-      await textarea.fill(subtaskName);
+      // 'a' opens the inline subtask draft input; type + Enter to commit.
+      const draftInput = clientA.page.locator('.e2e-add-subtask-input');
+      await draftInput.waitFor({ state: 'visible', timeout: 5000 });
+      await draftInput.fill(subtaskName);
       await clientA.page.keyboard.press('Enter');
+      // The draft stays open for rapid entry; close it for a clean state.
+      await clientA.page.keyboard.press('Escape');
+      await draftInput.waitFor({ state: 'detached', timeout: 5000 });
       await waitForTask(clientA.page, subtaskName);
       await clientA.page.waitForTimeout(300);
       console.log('[OrphanSubtask] Created parent with subtask on Client A');

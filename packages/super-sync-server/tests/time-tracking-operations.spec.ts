@@ -411,10 +411,12 @@ vi.mock('../src/db', async () => {
 });
 
 import { initSyncService, getSyncService } from '../src/sync/sync.service';
+import { OperationDownloadService } from '../src/sync/services/operation-download.service';
 
 describe('TIME_TRACKING Operations', () => {
   const userId = 1;
   const clientId = 'time-tracking-client';
+  let operationDownloadService: OperationDownloadService;
 
   /**
    * Creates a TIME_TRACKING operation with the standard structure.
@@ -459,6 +461,7 @@ describe('TIME_TRACKING Operations', () => {
       createdAt: new Date(),
     });
     initSyncService();
+    operationDownloadService = new OperationDownloadService();
   });
 
   describe('Operation Upload', () => {
@@ -814,7 +817,7 @@ describe('TIME_TRACKING Operations', () => {
       await service.uploadOps(userId, clientId, [op]);
 
       // Another client downloads - getOpsSince returns { op: Operation, serverSeq }[]
-      const downloadedOps = await service.getOpsSince(userId, 0);
+      const downloadedOps = await operationDownloadService.getOpsSince(userId, 0);
 
       expect(downloadedOps).toHaveLength(1);
       expect(downloadedOps[0].op.entityType).toBe('TIME_TRACKING');
@@ -833,7 +836,7 @@ describe('TIME_TRACKING Operations', () => {
 
       await service.uploadOps(userId, clientId, [op]);
 
-      const downloadedOps = await service.getOpsSince(userId, 0);
+      const downloadedOps = await operationDownloadService.getOpsSince(userId, 0);
 
       expect(downloadedOps[0].op.payload).toEqual({
         contextType: 'PROJECT',

@@ -177,6 +177,31 @@ describe('OperationLogUploadService', () => {
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1, 2]);
       });
 
+      it('should mark accepted seqs correctly when server results are out of order', async () => {
+        const pendingOps = [
+          createMockEntry(1, 'op-1', 'client-1'),
+          createMockEntry(2, 'op-2', 'client-1'),
+          createMockEntry(3, 'op-3', 'client-1'),
+        ];
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve(pendingOps));
+        mockApiProvider.uploadOps.and.returnValue(
+          Promise.resolve({
+            results: [
+              { opId: 'op-3', accepted: true },
+              { opId: 'op-1', accepted: true },
+              { opId: 'op-2', accepted: false, error: 'conflict' },
+            ],
+            latestSeq: 10,
+            newOps: [],
+          }),
+        );
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(result.uploadedCount).toBe(2);
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([3, 1]);
+      });
+
       it('should strip local sync schedule settings from regular config ops before upload', async () => {
         const entry = createMockEntry(1, 'op-1', 'client-1');
         entry.op.actionType = ActionType.GLOBAL_CONFIG_UPDATE_SECTION;

@@ -19,7 +19,6 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { ICalIssueReduced } from './providers/calendar/calendar.model';
 import { SnackParams } from '../../core/snack/snack.model';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { TrelloCommonInterfacesService } from './providers/trello/trello-common-interfaces.service';
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
@@ -154,7 +153,6 @@ describe('IssueService', () => {
         { provide: GlobalProgressBarService, useValue: globalProgressBarServiceSpy },
         { provide: NavigateToTaskService, useValue: navigateToTaskServiceSpy },
         { provide: JiraCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: TrelloCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: GitlabCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: CaldavCommonInterfacesService, useValue: mockCommonInterfaceService },
         {

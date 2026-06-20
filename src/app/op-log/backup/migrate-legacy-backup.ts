@@ -27,7 +27,6 @@ import { plannerInitialState } from '../../features/planner/store/planner.reduce
 import { issueProviderInitialState } from '../../features/issue/store/issue-provider.reducer';
 import { menuTreeInitialState } from '../../features/menu-tree/store/menu-tree.reducer';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
-import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { TTWorkContextSessionMap } from '../../features/time-tracking/time-tracking.model';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import {
@@ -39,15 +38,13 @@ import { isTodayWithOffset } from '../../util/is-today.util';
 // Matches DateService.setStartOfNextDayDiff semantics for legacy backup normalization.
 import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 import { LanguageCode } from '../../core/locale.constants';
-import {
-  initialPluginUserDataState,
-  initialPluginMetaDataState,
-} from '../../plugins/plugin-persistence.model';
-import { AppDataComplete } from '../model/model-config';
+import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
 import { OpLog } from '../../core/log';
 import { migrateLegacyTaskRemindersIntoTasks } from '../../features/reminder/migrate-legacy-task-reminders.util';
 
 const LEGACY_INBOX_PROJECT_ID = 'INBOX' as const;
+const APP_DATA_MODEL_KEYS = Object.keys(MODEL_CONFIGS) as (keyof AppDataComplete)[];
+const V17_VALID_KEYS = new Set<keyof AppDataComplete>(APP_DATA_MODEL_KEYS);
 
 /**
  * Detects whether the incoming data is a legacy (pre-v14) backup that needs
@@ -775,43 +772,10 @@ function _migration45LowercaseLanguageCodes(
 // ---------------------------------------------------------------------------
 
 function _ensureV17Defaults(data: Record<string, any>): Record<string, any> {
-  if (!data.issueProvider) {
-    data.issueProvider = issueProviderInitialState;
-  }
-  if (!data.boards) {
-    data.boards = initialBoardsState;
-  }
-  if (!data.planner) {
-    data.planner = plannerInitialState;
-  }
-  if (!data.menuTree) {
-    data.menuTree = menuTreeInitialState;
-  }
-  if (!data.timeTracking) {
-    data.timeTracking = initialTimeTrackingState;
-  }
-  if (!data.pluginUserData) {
-    data.pluginUserData = initialPluginUserDataState;
-  }
-  if (!data.pluginMetadata) {
-    data.pluginMetadata = initialPluginMetaDataState;
-  }
-  if (!data.reminders) {
-    data.reminders = [];
-  }
-  if (!data.archiveYoung) {
-    data.archiveYoung = {
-      task: { ids: [], entities: {} },
-      timeTracking: initialTimeTrackingState,
-      lastTimeTrackingFlush: 0,
-    };
-  }
-  if (!data.archiveOld) {
-    data.archiveOld = {
-      task: { ids: [], entities: {} },
-      timeTracking: initialTimeTrackingState,
-      lastTimeTrackingFlush: 0,
-    };
+  for (const key of APP_DATA_MODEL_KEYS) {
+    if (!data[key]) {
+      data[key] = structuredClone(MODEL_CONFIGS[key].defaultData);
+    }
   }
   return data;
 }
@@ -820,31 +784,10 @@ function _ensureV17Defaults(data: Record<string, any>): Record<string, any> {
 // Final: strip keys that are not part of v17's AppDataComplete
 // ---------------------------------------------------------------------------
 
-const V17_VALID_KEYS = new Set([
-  'project',
-  'menuTree',
-  'globalConfig',
-  'planner',
-  'boards',
-  'note',
-  'issueProvider',
-  'metric',
-  'task',
-  'tag',
-  'simpleCounter',
-  'taskRepeatCfg',
-  'reminders',
-  'timeTracking',
-  'pluginUserData',
-  'pluginMetadata',
-  'archiveYoung',
-  'archiveOld',
-]);
-
 function _stripLegacyKeys(data: Record<string, any>): Record<string, any> {
   const stripped: Record<string, any> = {};
   for (const key of Object.keys(data)) {
-    if (V17_VALID_KEYS.has(key)) {
+    if (V17_VALID_KEYS.has(key as keyof AppDataComplete)) {
       stripped[key] = data[key];
     } else {
       OpLog.log(`migrateLegacyBackup: Stripping legacy key "${key}"`);

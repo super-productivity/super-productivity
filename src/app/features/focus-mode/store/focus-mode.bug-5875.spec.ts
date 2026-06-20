@@ -33,6 +33,7 @@ import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
+import { NotifyService } from '../../../core/notify/notify.service';
 import * as actions from './focus-mode.actions';
 import * as selectors from './focus-mode.selectors';
 import { FocusModeMode, FocusScreen, TimerState } from '../focus-mode.model';
@@ -133,6 +134,7 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
           useValue: { setLastCountdownDuration: jasmine.createSpy() },
         },
         { provide: TakeABreakService, useValue: takeABreakServiceMock },
+        { provide: NotifyService, useValue: { notify: jasmine.createSpy('notify') } },
         {
           provide: GlobalTrackingIntervalService,
           useValue: {

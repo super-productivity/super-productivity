@@ -120,6 +120,31 @@ export const issueProviderReducer = createReducer(
           },
         } as unknown as IssueProvider;
       }
+
+      // Migrate pre-plugin TRELLO providers to plugin shape
+      if (
+        provider &&
+        provider['issueProviderKey'] === 'TRELLO' &&
+        !provider['pluginConfig']
+      ) {
+        needsMigration = true;
+        // TODO: Remove legacy field preservation after a few releases.
+        // Spread original provider so legacy fields (apiKey, token, boardId, etc.)
+        // survive for older clients that haven't upgraded yet. boardName is listed
+        // first so the provider tooltip/initials (which show the first non-secret
+        // config string) keep displaying the board name.
+        migratedEntities[id] = {
+          ...provider,
+          pluginId: 'trello-issue-provider',
+          pluginConfig: {
+            boardName: provider['boardName'] ?? '',
+            apiKey: provider['apiKey'] ?? '',
+            token: provider['token'] ?? '',
+            boardId: provider['boardId'] ?? '',
+            filterUsername: provider['filterUsername'] ?? '',
+          },
+        } as unknown as IssueProvider;
+      }
     }
     if (!needsMigration) {
       return state;
