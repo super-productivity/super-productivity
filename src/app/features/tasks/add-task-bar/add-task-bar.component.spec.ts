@@ -263,6 +263,11 @@ describe('AddTaskBarComponent', () => {
     component = fixture.componentInstance;
   });
 
+  afterEach(() => {
+    document.body.classList.remove('isQuickAddHud');
+    document.documentElement.classList.remove('isQuickAddHud');
+  });
+
   describe('onTaskSuggestionSelected', () => {
     it('plans existing tasks for the provided planner day instead of moving them to today', async () => {
       // Set component input using fixture.componentRef.setInput for planForDay
@@ -431,6 +436,21 @@ describe('AddTaskBarComponent', () => {
       const taskData = mockTaskService.add.calls.mostRecent()
         .args[2] as Partial<TaskCopy>;
       expect(taskData.notes).toBeUndefined();
+    });
+
+    it('should collapse the note panel after adding a task in quick-add mode', async () => {
+      document.body.classList.add('isQuickAddHud');
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      component.stateService.isNoteExpanded.set(true);
+      component.stateService.noteTxt.set('remember the oat milk');
+
+      await component.addTask();
+
+      expect(component.stateService.noteTxt()).toBe('');
+      expect(component.stateService.isNoteExpanded()).toBe(false);
     });
   });
 

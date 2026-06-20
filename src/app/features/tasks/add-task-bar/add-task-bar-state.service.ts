@@ -183,7 +183,7 @@ export class AddTaskBarStateService {
     }
   }
 
-  resetAfterAdd(): void {
+  resetAfterAdd(options: { isCollapseNote?: boolean } = {}): void {
     // Only clear input text and tags, preserve project, date, and estimate
     this._taskInputState.update((state) => ({
       ...state,
@@ -201,7 +201,14 @@ export class AddTaskBarStateService {
     // Clear the note text but keep the panel expanded so consecutive
     // note-tasks stay convenient (mirrors how project/date are preserved).
     this.noteTxt.set('');
+    if (options.isCollapseNote) {
+      this.isNoteExpanded.set(false);
+    }
     // Keep isAutoDetected as is to preserve project selection
+  }
+
+  collapseTransientPanels(): void {
+    this.isNoteExpanded.set(false);
   }
 
   setAutoDetectedProjectId(projectId: string): void {

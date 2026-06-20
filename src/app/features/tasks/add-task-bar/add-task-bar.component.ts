@@ -70,7 +70,7 @@ import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { Log } from '../../../core/log';
 import { TODAY_TAG } from '../../tag/tag.const';
-import { BodyClass } from '../../../app.constants';
+import { BodyClass, IS_ELECTRON } from '../../../app.constants';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -281,6 +281,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._setupDefaultDate();
     this._setupTextParsing();
     this._setupSuggestions();
+    this._setupQuickAddWindowLifecycle();
 
     document.body.classList.add(BodyClass.isAddTaskBarOpen);
   }
@@ -386,6 +387,18 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           this.onTaskSuggestionActivated(null);
         }
       });
+  }
+
+  private _setupQuickAddWindowLifecycle(): void {
+    if (!IS_ELECTRON || !isQuickAddWindowMode()) {
+      return;
+    }
+
+    const unsubscribeQuickAddOpened = window.ea.onQuickAddOpened(() => {
+      this.stateService.collapseTransientPanels();
+      this.focusInput(true);
+    });
+    this._destroyRef.onDestroy(unsubscribeQuickAddOpened);
   }
 
   // Public methods
@@ -716,7 +729,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private _resetAfterAdd(): void {
-    this.stateService.resetAfterAdd();
+    this.stateService.resetAfterAdd({ isCollapseNote: isQuickAddWindowMode() });
     if (this._defaultTagIds.length > 0) {
       this.stateService.updateTagIds(this._defaultTagIds);
     }
