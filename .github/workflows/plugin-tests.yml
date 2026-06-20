@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           # Plugins that have an `npm test` script configured.
-          PLUGINS=(automations caldav-calendar-provider clickup-issue-provider google-calendar-provider sync-md)
+          PLUGINS=(automations azure-devops-issue-provider caldav-calendar-provider clickup-issue-provider google-calendar-provider sync-md)
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             CHANGED=$(printf '%s\n' "${PLUGINS[@]}")

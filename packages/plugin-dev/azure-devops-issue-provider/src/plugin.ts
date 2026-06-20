@@ -45,6 +45,7 @@ interface AzureDevOpsConfig {
   token?: string;
   scope?: AzureScope;
   autoImportLimit?: number | string;
+  autoImportWiql?: string;
 }
 
 // Azure DevOps work item fields use dotted names like 'System.Title'.
@@ -184,6 +185,31 @@ const runWiqlAndFetch = async (
   return res?.value || [];
 };
 
+// Build the WIQL query used for auto backlog import. When the user provides a
+// custom WIQL it fully replaces the generated query — they own scope, the state
+// filter and ordering (e.g. to filter by iteration/area path or work item type,
+// or to match custom done-state names). Empty -> the default scope-based query,
+// fully backward compatible.
+const backlogQuery = (cfg: AzureDevOpsConfig): string => {
+  const custom = (cfg.autoImportWiql || '').trim();
+  if (custom) {
+    return custom;
+  }
+  const project = escapeWiql(cfg.project);
+  // Default to the built-in's 'assigned-to-me' when scope is unset (the plugin
+  // form has no default-value mechanism for selects).
+  const scope: AzureScope = cfg.scope || 'assigned-to-me';
+  let query =
+    `Select [System.Id] From WorkItems Where [System.TeamProject] = '${project}' ` +
+    `AND [System.State] <> 'Closed' AND [System.State] <> 'Done' AND [System.State] <> 'Removed'`;
+  if (scope === 'assigned-to-me') {
+    query += ` AND [System.AssignedTo] = @Me`;
+  } else if (scope === 'created-by-me') {
+    query += ` AND [System.CreatedBy] = @Me`;
+  }
+  return query;
+};
+
 PluginAPI.registerIssueProvider({
   configFields: [
     {
@@ -221,6 +247,13 @@ PluginAPI.registerIssueProvider({
       type: 'input',
       label: t('CFG.AUTO_IMPORT_LIMIT'),
       description: t('CFG.AUTO_IMPORT_LIMIT_DESC', { max: MAX_WORK_ITEM_LIMIT }),
+      advanced: true,
+    },
+    {
+      key: 'autoImportWiql',
+      type: 'textarea',
+      label: t('CFG.AUTO_IMPORT_WIQL'),
+      description: t('CFG.AUTO_IMPORT_WIQL_DESC'),
       advanced: true,
     },
   ],
@@ -297,18 +330,7 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
     const cfg = config as unknown as AzureDevOpsConfig;
-    const project = escapeWiql(cfg.project);
-    // Default to the built-in's 'assigned-to-me' when scope is unset (the plugin
-    // form has no default-value mechanism for selects).
-    const scope: AzureScope = cfg.scope || 'assigned-to-me';
-    let query =
-      `Select [System.Id] From WorkItems Where [System.TeamProject] = '${project}' ` +
-      `AND [System.State] <> 'Closed' AND [System.State] <> 'Done' AND [System.State] <> 'Removed'`;
-    if (scope === 'assigned-to-me') {
-      query += ` AND [System.AssignedTo] = @Me`;
-    } else if (scope === 'created-by-me') {
-      query += ` AND [System.CreatedBy] = @Me`;
-    }
+    const query = backlogQuery(cfg);
     const items = await runWiqlAndFetch(cfg, http, query, clampLimit(cfg));
     return items.map(mapReduced);
   },

@@ -9,7 +9,9 @@
     "SCOPE_CREATED": "Created by me",
     "SCOPE_ASSIGNED": "Assigned to me",
     "AUTO_IMPORT_LIMIT": "Auto import limit",
-    "AUTO_IMPORT_LIMIT_DESC": "Maximum number of Azure DevOps work items to fetch for automatic backlog import. Max {{max}}."
+    "AUTO_IMPORT_LIMIT_DESC": "Maximum number of Azure DevOps work items to fetch for automatic backlog import. Max {{max}}.",
+    "AUTO_IMPORT_WIQL": "Auto import WIQL query (Auto Import only)",
+    "AUTO_IMPORT_WIQL_DESC": "Optional. When set, this WIQL query fully replaces the auto import query, so you control the scope, state filter and ordering (Scope above is ignored). Useful to filter by Iteration Path, Area Path or work item type, or to match custom done-state names. Leave empty to use the Scope setting. Use a flat WorkItems query, e.g. Select [System.Id] From WorkItems Where [System.TeamProject] = 'MyProject' AND [System.IterationPath] = 'MyProject\\Sprint 1' AND [System.State] <> 'Closed'."
   },
   "DISPLAY": {
     "SUMMARY": "Summary",
