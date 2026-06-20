@@ -49,6 +49,11 @@ import {
 import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
 import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
 
+// `testWebdavConnection` reports a 404 (auth ok, wrong DAV path) via this
+// HTTP status; the package-side `WebDavHttpStatus` enum is not exported to
+// the app, so the discriminator value is named locally instead of inlined.
+const HTTP_NOT_FOUND = 404;
+
 @Component({
   selector: 'dialog-sync-cfg',
   templateUrl: './dialog-sync-cfg.component.html',
@@ -232,14 +237,25 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       });
       return;
     }
-    await this._testWebDavConnection({
-      ...cfg,
-      baseUrl: NextcloudProvider.buildBaseUrl(cfg),
-      userName: NextcloudProvider.getAuthUserName(cfg),
-    } as WebdavPrivateCfg);
+    await this._testWebDavConnection(
+      {
+        ...cfg,
+        baseUrl: NextcloudProvider.buildBaseUrl(cfg),
+        userName: NextcloudProvider.getAuthUserName(cfg),
+      } as WebdavPrivateCfg,
+      // A 404 on the Nextcloud base root means auth succeeded but the DAV
+      // path /remote.php/dav/files/<userName>/ doesn't exist — i.e. the
+      // "Username" field holds an email/display name instead of the
+      // account's user ID. Surface that instead of the cryptic bare-host
+      // message users misread as a stripped URL (issue #7617).
+      T.F.SYNC.FORM.NEXTCLOUD.S_TEST_FAIL_USER_NOT_FOUND,
+    );
   }
 
-  private async _testWebDavConnection(webDavCfg: WebdavPrivateCfg): Promise<void> {
+  private async _testWebDavConnection(
+    webDavCfg: WebdavPrivateCfg,
+    notFoundMsg?: string,
+  ): Promise<void> {
     if (
       !webDavCfg?.baseUrl ||
       !webDavCfg?.userName ||
@@ -255,22 +271,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
 
     try {
       const result = await testWebdavConnection(webDavCfg);
-      if (result.success) {
-        this._snackService.open({
-          type: 'SUCCESS',
-          msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_SUCCESS,
-          translateParams: { url: result.fullUrl },
-        });
-      } else {
-        this._snackService.open({
-          type: 'ERROR',
-          msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
-          translateParams: {
-            error: result.error || 'Unknown error',
-            url: result.fullUrl,
-          },
-        });
-      }
+      this._reportWebdavTestResult(result, notFoundMsg);
     } catch (e) {
       this._snackService.open({
         type: 'ERROR',
@@ -278,6 +279,40 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         translateParams: {
           error: e instanceof Error ? e.message : 'Unexpected error',
           url: (webDavCfg.baseUrl as string) || 'N/A',
+        },
+      });
+    }
+  }
+
+  /**
+   * Open the success/failure snack for a connection-test result. When
+   * `notFoundMsg` is given (Nextcloud) and the failure is a 404, show that
+   * provider-specific hint instead of the generic message — a base-root 404
+   * means auth worked but the DAV user-id path is wrong (issue #7617).
+   */
+  private _reportWebdavTestResult(
+    result: { success: boolean; error?: string; fullUrl: string; errorCode?: number },
+    notFoundMsg?: string,
+  ): void {
+    if (result.success) {
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_SUCCESS,
+        translateParams: { url: result.fullUrl },
+      });
+    } else if (notFoundMsg && result.errorCode === HTTP_NOT_FOUND) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: notFoundMsg,
+        translateParams: { url: result.fullUrl },
+      });
+    } else {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
+        translateParams: {
+          error: result.error || 'Unknown error',
+          url: result.fullUrl,
         },
       });
     }

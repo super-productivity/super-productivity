@@ -14,7 +14,7 @@ import { APP_WEBDAV_NATIVE_HTTP } from './capacitor-webdav-http/app-webdav-nativ
  */
 export const testWebdavConnection = (
   cfg: WebdavPrivateCfg,
-): Promise<{ success: boolean; error?: string; fullUrl: string }> =>
+): Promise<{ success: boolean; error?: string; fullUrl: string; errorCode?: number }> =>
   packageTestWebdavConnection(cfg, {
     logger: OP_LOG_SYNC_LOGGER,
     platformInfo: APP_PROVIDER_PLATFORM_INFO,

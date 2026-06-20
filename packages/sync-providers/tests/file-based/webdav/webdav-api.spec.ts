@@ -303,14 +303,36 @@ describe('WebdavApi', () => {
       expect(r.success).toBe(false);
     });
 
-    // Safety invariant for #7617: relaxing the folder check must NOT let a
-    // bad password through. A 401 on the base root surfaces as
-    // AuthFailSPError and must still fail the test.
-    it('returns success: false on bad credentials (401 → AuthFailSPError)', async () => {
+    // Issue #7617 follow-up: a 404 must surface a readable, actionable
+    // message + a 404 errorCode discriminator (so the Nextcloud UI can show
+    // its "Username is not your email" hint). The old behaviour leaked the
+    // bare scrubbed host as the message, which users misread as a stripped
+    // URL. The message must NOT echo the host/URL.
+    it('maps a 404 to a readable message + errorCode 404 (not the bare host)', async () => {
       const adapter = makeAdapter();
-      adapter.request.mockRejectedValue(new AuthFailSPError());
+      adapter.request.mockRejectedValue(
+        new RemoteFileNotFoundAPIError('dav.example.com'),
+      );
       const r = await makeApi(adapter).testConnection(cfg);
       expect(r.success).toBe(false);
+      expect(r.errorCode).toBe(404);
+      expect(r.error).toContain('404');
+      expect(r.error).not.toBe('dav.example.com');
+      expect(r.error).not.toContain('dav.example.com');
+    });
+
+    // Safety invariant for #7617: relaxing the folder check must NOT let a
+    // bad password through. A 401 on the base root surfaces as
+    // AuthFailSPError and must still fail the test (its readable message
+    // passes through unchanged; only the 404 case is remapped).
+    it('returns success: false on bad credentials (401 → AuthFailSPError)', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValue(
+        new AuthFailSPError('Authentication failed (HTTP 401)'),
+      );
+      const r = await makeApi(adapter).testConnection(cfg);
+      expect(r.success).toBe(false);
+      expect(r.error).toContain('401');
     });
 
     it('returns success: false with user-facing error + fullUrl on failure', async () => {

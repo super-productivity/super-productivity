@@ -28,7 +28,7 @@ export interface TestWebdavConnectionDeps {
 export const testWebdavConnection = async (
   cfg: WebdavPrivateCfg,
   deps: TestWebdavConnectionDeps,
-): Promise<{ success: boolean; error?: string; fullUrl: string }> => {
+): Promise<{ success: boolean; error?: string; fullUrl: string; errorCode?: number }> => {
   const httpAdapter = new WebDavHttpAdapter({
     logger: deps.logger,
     platformInfo: deps.platformInfo,
